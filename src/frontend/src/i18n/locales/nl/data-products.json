@@ -49,14 +49,32 @@
   },
   "upload": {
     "success": "Upload Succesvol",
-    "successMessage": "{{filename}} succesvol verwerkt. {{count}} product(en) verwerkt.",
+    "successMessage_one": "{{filename}} succesvol verwerkt. {{count}} product verwerkt.",
+    "successMessage_other": "{{filename}} succesvol verwerkt. {{count}} producten verwerkt.",
+    "successMessage_files_one": "{{files}} bestanden succesvol verwerkt. {{count}} product verwerkt.",
+    "successMessage_files_other": "{{files}} bestanden succesvol verwerkt. {{count}} producten verwerkt.",
+    "partialSuccess": "Geïmporteerd met problemen",
     "failed": "Upload Mislukt",
     "unexpectedError": "Er is een onverwachte fout opgetreden tijdens het uploaden.",
     "uploading": "Uploaden...",
     "tooltipTitle": "Dataproduct Uploaden (ODPS formaat)",
     "tooltipDescription": "Accepteert YAML of JSON bestanden die het ODPS (Open Data Product Standard) schema volgen.",
     "tooltipHint": "Voor Datacontracten (ODCS), gebruik in plaats daarvan de Datacontracten pagina.",
-    "odcsHint": "Hint: Deze pagina is voor Dataproducten (ODPS formaat). Als je een Datacontract (ODCS formaat) probeert te uploaden, gebruik dan in plaats daarvan de Datacontracten pagina."
+    "odcsHint": "Hint: Deze pagina is voor Dataproducten (ODPS formaat). Als je een Datacontract (ODCS formaat) probeert te uploaden, gebruik dan in plaats daarvan de Datacontracten pagina.",
+    "dialogTitle": "Dataproducten uploaden",
+    "dialogDescription": "Selecteer een of meer ODPS-bestanden (YAML/JSON). Elk bestand kan één product of een array bevatten.",
+    "createMissingDomains": "Ontbrekende domeinen aanmaken",
+    "createMissingDomainsHint": "Maakt domeinen die nog niet bestaan automatisch aan. Uit: domeinen zonder overeenkomst blijven niet toegewezen (het origineel blijft bewaard).",
+    "adoptIds": "ID's uit het bestand overnemen",
+    "adoptIdsHint": "Gebruikt een geldige, niet-conflicterende UUID uit het bestand als primaire sleutel, zodat koppelingen tussen entiteiten de import overleven.",
+    "duplicatesAsNew": "Dubbele ID's als nieuwe kopieën importeren",
+    "duplicatesAsNewHint": "Uit (standaard): een product waarvan de ID al bestaat, wordt overgeslagen. Aan: het wordt geïmporteerd als nieuwe kopie met een nieuwe ID.",
+    "dropActive": "Zet het bestand/de bestanden hier neer",
+    "dropInactive": "Sleep productbestand(en) hierheen of klik om te selecteren",
+    "supportedFormats": "Ondersteunde formaten: JSON of YAML (ODPS)",
+    "orPasteOdps": "Of plak ODPS-JSON",
+    "pasteOdpsPlaceholder": "Plak hier de ODPS-product-JSON",
+    "importJsonButton": "JSON importeren"
   },
   "genie": {
     "noSelection": "Geen Selectie",
@@ -354,7 +372,8 @@
       "deleteSupportChannel": "Dit supportkanaal verwijderen?",
       "unlinkContract": "Contract ontkoppelen van deze levering?",
       "createGenieSpace": "Een Genie Space aanmaken voor \"{{name}}\"?"
-    }
+    },
+    "contractDangling": "Contract bestaat niet meer"
   },
   "form": {
     "createTitle": "Dataproduct Aanmaken",
@@ -522,7 +541,8 @@
       "failedToSerialize": "Serialiseren van UI-status naar JSON mislukt.",
       "unexpectedError": "Er is een onverwachte fout opgetreden."
     },
-    "syntaxErrorLabel": "Syntaxisfout:"
+    "syntaxErrorLabel": "Syntaxisfout:",
+    "statusChangeHint": "De status wijzig je met Status wijzigen op de pagina, dat de overgang controleert en de workflows voor statuswijziging uitvoert."
   },
   "import": {
     "title": "Dataproduct Importeren",
@@ -658,14 +678,26 @@
       "certLevelRequired": "Selecteer een certificeringsniveau"
     },
     "errors": {
-      "cannotRequest": "Kan geen {{requestType}} aanvragen voor een product met status '{{productStatus}}'",
-      "failedToSubmit": "Verzenden van verzoek mislukt"
+      "cannotRequest": "\"{{requestType}}\" is niet beschikbaar voor een product met status {{productStatus}}.",
+      "failedToSubmit": "Verzenden van verzoek mislukt",
+      "notProductOwner": "Alleen de eigenaren van het product of een beheerder kunnen een review ervan aanvragen."
     },
     "toast": {
       "statusChanged": "Status Gewijzigd",
       "statusChangedDesc": "Productstatus gewijzigd van \"{{fromStatus}}\" naar \"{{toStatus}}\".",
       "requestSubmitted": "Verzoek Verzonden",
-      "requestSubmittedDesc": "Je {{type}}-verzoek is verzonden en je wordt op de hoogte gebracht van de beslissing."
+      "requestSubmittedDesc": "Je {{type}}-verzoek is verzonden en je wordt op de hoogte gebracht van de beslissing.",
+      "workflowFailed": "Verzoek verzonden, maar de workflow is mislukt",
+      "workflowFailedDesc": "Niemand is gevraagd te beslissen over je {{type}}-verzoek: de workflow \"{{workflow}}\" kon niet starten. Neem contact op met een beheerder.",
+      "requestTypes": {
+        "access": "toegangs",
+        "review": "review",
+        "publish": "publicatie",
+        "certify": "certificerings",
+        "status_change": "statuswijzigings"
+      },
+      "workflowPartiallyFailed": "Sommige aanvraagworkflows zijn mislukt",
+      "workflowPartiallyFailedDesc": "Een van de {{type}}-aanvraagworkflows is mislukt: {{workflows}}. Andere goedkeuringen kunnen nog in behandeling zijn."
     },
     "labels": {
       "requestType": "Verzoektype",
@@ -899,7 +931,8 @@
       "createNewContract": "Nieuw contract aanmaken",
       "linkContract": "Contract koppelen",
       "linking": "Koppelen..."
-    }
+    },
+    "statusFilterNote": "Alleen contracten met de status 'active' of 'approved' worden getoond. Kies een specifieke versie: contracten met dezelfde naam tonen hun versie ernaast."
   },
   "hierarchy": {
     "title": "Datahiërarchie",
@@ -1056,8 +1089,10 @@
     "versionPlaceholder": "bijv. v1.1, v2.0-beta",
     "createButton": "Versie aanmaken",
     "errors": {
-      "versionEmpty": "Versiestring mag niet leeg zijn."
-    }
+      "versionEmpty": "Versiestring mag niet leeg zijn.",
+      "versionFormat": "\"{{version}}\" heeft niet de vorm X.Y.Z (bijvoorbeeld 2.0.0)."
+    },
+    "versionPlaceholderSemver": "bijv. 2.0.0"
   },
   "graphView": {
     "unnamedProduct": "Naamloos Product",

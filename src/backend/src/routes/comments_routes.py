@@ -1,12 +1,13 @@
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import PermissionChecker, get_user_groups, is_user_admin, get_user_team_role_overrides
-from src.common.config import get_settings, Settings
+from src.common.authorization import (
+    PermissionChecker, is_user_feature_admin, get_user_team_role_overrides,
+)
 from src.controller.comments_manager import CommentsManager
 from src.controller.change_log_manager import change_log_manager
 from src.common.manager_dependencies import get_comments_manager, get_settings_manager
@@ -16,6 +17,18 @@ from src.repositories.teams_repository import team_repo
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
+
+async def _is_comments_admin(current_user, request: Request) -> bool:
+    """Whether the caller administers comments.
+
+    Admin means a workspace admin group or an Ontos role with ADMIN on the
+    comments feature, as the FEATURE_ID comment below promises.
+    """
+    return await is_user_feature_admin(
+        current_user.email, list(current_user.groups or []), FEATURE_ID, request
+    )
+
+
 router = APIRouter(prefix="/api", tags=["Comments"])
 
 # Comments feature - cross-cutting feature for social interaction
@@ -23,18 +36,23 @@ router = APIRouter(prefix="/api", tags=["Comments"])
 FEATURE_ID = "comments"
 
 
-@router.post("/entities/{entity_type}/{entity_id}/comments", response_model=Comment, status_code=status.HTTP_201_CREATED)
-async def create_comment(
+# -----------------------------------------------------------------------------
+# Shared handler bodies for the entity comment/timeline endpoints. Each is
+# exposed twice: as a path-param route and as a "by-iri" route taking
+# ?entity_id=, because Starlette decodes %2F before routing and IRI entity
+# ids (e.g. ontology concepts) contain '/'.
+# -----------------------------------------------------------------------------
+
+async def _create_comment_impl(
     entity_type: str,
     entity_id: str,
     payload: CommentCreate,
     request: Request,
-    db: DBSessionDep,
-    current_user: CurrentUserDep,
-    audit_manager: AuditManagerDep,
-    audit_user: AuditCurrentUserDep,
-    manager: CommentsManager = Depends(get_comments_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    db: Session,
+    current_user,
+    audit_manager,
+    audit_user,
+    manager: CommentsManager,
 ):
     """Create a comment on an entity."""
     success = False
@@ -57,8 +75,8 @@ async def create_comment(
             )
 
         # Get user's groups and check admin status
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        user_groups = list(current_user.groups or [])
+        is_admin = await _is_comments_admin(current_user, request)
         
         # Get user's teams (for validation if needed)
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
@@ -96,22 +114,20 @@ async def create_comment(
         )
 
 
-@router.get("/entities/{entity_type}/{entity_id}/comments", response_model=CommentListResponse)
-async def list_comments(
+async def _list_comments_impl(
     entity_type: str,
     entity_id: str,
     request: Request,
-    db: DBSessionDep,
-    current_user: CurrentUserDep,
-    project_id: Optional[str] = Query(None, description="Filter by project context"),
-    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
-    manager: CommentsManager = Depends(get_comments_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    db: Session,
+    current_user,
+    project_id: Optional[str],
+    include_deleted: bool,
+    manager: CommentsManager,
 ):
     """List comments for an entity, filtered by project context and user's visibility permissions."""
     try:
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email, request)
+        user_groups = list(current_user.groups or [])
 
         # Get user's teams for team-based audience filtering
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
@@ -133,8 +149,7 @@ async def list_comments(
 
         # Only admins can see deleted comments
         if include_deleted:
-            is_admin = is_user_admin(user_groups, get_settings())
-            if not is_admin:
+            if not await _is_comments_admin(current_user, request):
                 include_deleted = False
 
         return manager.list_comments(
@@ -156,26 +171,23 @@ async def list_comments(
         raise HTTPException(status_code=500, detail="Failed to list comments")
 
 
-@router.get("/entities/{entity_type}/{entity_id}/timeline/count")
-async def get_entity_timeline_count(
+async def _get_entity_timeline_count_impl(
     entity_type: str,
     entity_id: str,
     request: Request,
-    db: DBSessionDep,
-    current_user: CurrentUserDep,
-    project_id: Optional[str] = Query(None, description="Filter by project context"),
-    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
-    filter_type: str = Query("all", description="Filter type: 'all', 'comments', 'changes'"),
-    manager: CommentsManager = Depends(get_comments_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    db: Session,
+    current_user,
+    project_id: Optional[str],
+    include_deleted: bool,
+    filter_type: str,
+    manager: CommentsManager,
 ):
     """Get count of timeline entries for an entity without fetching full data."""
     try:
         total_count = 0
 
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        user_groups = list(current_user.groups or [])
 
         # Get user's teams and app role
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
@@ -193,7 +205,7 @@ async def get_entity_timeline_count(
 
         if filter_type in ("all", "comments"):
             # Get comments count
-            if include_deleted and not is_admin:
+            if include_deleted and not await _is_comments_admin(current_user, request):
                 include_deleted = False
 
             comments_response = manager.list_comments(
@@ -232,27 +244,24 @@ async def get_entity_timeline_count(
         raise HTTPException(status_code=500, detail="Failed to get timeline count")
 
 
-@router.get("/entities/{entity_type}/{entity_id}/timeline")
-async def get_entity_timeline(
+async def _get_entity_timeline_impl(
     entity_type: str,
     entity_id: str,
     request: Request,
-    db: DBSessionDep,
-    current_user: CurrentUserDep,
-    project_id: Optional[str] = Query(None, description="Filter by project context"),
-    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
-    filter_type: str = Query("all", description="Filter type: 'all', 'comments', 'changes'"),
-    limit: int = Query(100, ge=1, le=1000, description="Max number of entries"),
-    manager: CommentsManager = Depends(get_comments_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    db: Session,
+    current_user,
+    project_id: Optional[str],
+    include_deleted: bool,
+    filter_type: str,
+    limit: int,
+    manager: CommentsManager,
 ):
     """Get a unified timeline of comments and change log entries for an entity."""
     try:
         timeline_entries = []
 
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        user_groups = list(current_user.groups or [])
 
         # Get user's teams and app role
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
@@ -270,7 +279,7 @@ async def get_entity_timeline(
 
         if filter_type in ("all", "comments"):
             # Get comments
-            if include_deleted and not is_admin:
+            if include_deleted and not await _is_comments_admin(current_user, request):
                 include_deleted = False
 
             comments_response = manager.list_comments(
@@ -356,6 +365,144 @@ async def get_entity_timeline(
         raise HTTPException(status_code=500, detail="Failed to get timeline")
 
 
+# By-IRI variants: registered BEFORE the path-param routes so the literal
+# 'by-iri' segment is never captured as an entity_id.
+@router.post("/entities/{entity_type}/by-iri/comments", response_model=Comment, status_code=status.HTTP_201_CREATED)
+async def create_comment_by_iri(
+    entity_type: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
+    payload: CommentCreate,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
+    manager: CommentsManager = Depends(get_comments_manager),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Create a comment on an entity (entity id as ?entity_id=, for IRIs containing '/')."""
+    return await _create_comment_impl(entity_type, entity_id, payload, request, db, current_user, audit_manager, audit_user, manager)
+
+
+@router.get("/entities/{entity_type}/by-iri/comments", response_model=CommentListResponse)
+async def list_comments_by_iri(
+    entity_type: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    project_id: Optional[str] = Query(None, description="Filter by project context"),
+    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
+    manager: CommentsManager = Depends(get_comments_manager),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """List comments for an entity, filtered by project context and user's visibility permissions (entity id as ?entity_id=, for IRIs containing '/')."""
+    return await _list_comments_impl(entity_type, entity_id, request, db, current_user, project_id, include_deleted, manager)
+
+
+@router.get("/entities/{entity_type}/by-iri/timeline/count")
+async def get_entity_timeline_count_by_iri(
+    entity_type: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    project_id: Optional[str] = Query(None, description="Filter by project context"),
+    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
+    filter_type: str = Query("all", description="Filter type: 'all', 'comments', 'changes'"),
+    manager: CommentsManager = Depends(get_comments_manager),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Get count of timeline entries for an entity without fetching full data (entity id as ?entity_id=, for IRIs containing '/')."""
+    return await _get_entity_timeline_count_impl(entity_type, entity_id, request, db, current_user, project_id, include_deleted, filter_type, manager)
+
+
+@router.get("/entities/{entity_type}/by-iri/timeline")
+async def get_entity_timeline_by_iri(
+    entity_type: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    project_id: Optional[str] = Query(None, description="Filter by project context"),
+    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
+    filter_type: str = Query("all", description="Filter type: 'all', 'comments', 'changes'"),
+    limit: int = Query(100, ge=1, le=1000, description="Max number of entries"),
+    manager: CommentsManager = Depends(get_comments_manager),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Get a unified timeline of comments and change log entries for an entity (entity id as ?entity_id=, for IRIs containing '/')."""
+    return await _get_entity_timeline_impl(entity_type, entity_id, request, db, current_user, project_id, include_deleted, filter_type, limit, manager)
+
+
+@router.post("/entities/{entity_type}/{entity_id}/comments", response_model=Comment, status_code=status.HTTP_201_CREATED)
+async def create_comment(
+    entity_type: str,
+    entity_id: str,
+    payload: CommentCreate,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
+    manager: CommentsManager = Depends(get_comments_manager),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Create a comment on an entity."""
+    return await _create_comment_impl(entity_type, entity_id, payload, request, db, current_user, audit_manager, audit_user, manager)
+
+
+@router.get("/entities/{entity_type}/{entity_id}/comments", response_model=CommentListResponse)
+async def list_comments(
+    entity_type: str,
+    entity_id: str,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    project_id: Optional[str] = Query(None, description="Filter by project context"),
+    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
+    manager: CommentsManager = Depends(get_comments_manager),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """List comments for an entity, filtered by project context and user's visibility permissions."""
+    return await _list_comments_impl(entity_type, entity_id, request, db, current_user, project_id, include_deleted, manager)
+
+
+@router.get("/entities/{entity_type}/{entity_id}/timeline/count")
+async def get_entity_timeline_count(
+    entity_type: str,
+    entity_id: str,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    project_id: Optional[str] = Query(None, description="Filter by project context"),
+    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
+    filter_type: str = Query("all", description="Filter type: 'all', 'comments', 'changes'"),
+    manager: CommentsManager = Depends(get_comments_manager),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Get count of timeline entries for an entity without fetching full data."""
+    return await _get_entity_timeline_count_impl(entity_type, entity_id, request, db, current_user, project_id, include_deleted, filter_type, manager)
+
+
+@router.get("/entities/{entity_type}/{entity_id}/timeline")
+async def get_entity_timeline(
+    entity_type: str,
+    entity_id: str,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    project_id: Optional[str] = Query(None, description="Filter by project context"),
+    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
+    filter_type: str = Query("all", description="Filter type: 'all', 'comments', 'changes'"),
+    limit: int = Query(100, ge=1, le=1000, description="Max number of entries"),
+    manager: CommentsManager = Depends(get_comments_manager),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Get a unified timeline of comments and change log entries for an entity."""
+    return await _get_entity_timeline_impl(entity_type, entity_id, request, db, current_user, project_id, include_deleted, filter_type, limit, manager)
+
+
 @router.get("/comments/{comment_id}", response_model=Comment)
 async def get_comment(
     comment_id: str,
@@ -392,9 +539,7 @@ async def update_comment(
     }
 
     try:
-        # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        is_admin = await _is_comments_admin(current_user, request)
 
         updated = manager.update_comment(
             db,
@@ -453,9 +598,7 @@ async def delete_comment(
     }
 
     try:
-        # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        is_admin = await _is_comments_admin(current_user, request)
 
         # Only admins can hard delete
         if hard_delete and not is_admin:
@@ -509,9 +652,7 @@ async def check_comment_permissions(
 ):
     """Check if current user can modify a specific comment."""
     try:
-        # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        is_admin = await _is_comments_admin(current_user, request)
         
         can_modify = manager.can_user_modify_comment(
             db,

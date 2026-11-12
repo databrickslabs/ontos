@@ -70,7 +70,7 @@ async def list_mdm_configs(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: Optional[int] = Query(None, ge=1),
     manager: MdmManager = MdmManagerDep,
     _: bool = Depends(PermissionChecker(MDM_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ):
@@ -464,7 +464,7 @@ async def list_match_candidates(
     run_id: str,
     status: Optional[str] = Query(None, description="Filter by status"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: Optional[int] = Query(None, ge=1),
     manager: MdmManager = MdmManagerDep,
     _: bool = Depends(PermissionChecker(MDM_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ):

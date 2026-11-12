@@ -6,7 +6,7 @@ These are different from Databricks job workflows - these are internal process a
 """
 
 import uuid
-from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, func, TIMESTAMP, Float
+from sqlalchemy import text, Column, String, Text, Boolean, Integer, ForeignKey, func, TIMESTAMP, Float
 from sqlalchemy.orm import relationship
 
 from src.common.database import Base
@@ -38,6 +38,9 @@ class ProcessWorkflowDb(Base):
     # Status
     is_active = Column(Boolean, nullable=False, default=True)
     is_default = Column(Boolean, nullable=False, default=False)
+    # A user changed this default's definition (PUT /api/workflows/{id}); "Reload All
+    # Defaults" keeps it. Set by user updates, cleared by the default loader's reset.
+    is_customized = Column(Boolean, nullable=False, default=False, server_default=text('false'))
     
     # Version for optimistic locking
     version = Column(Integer, nullable=False, default=1)
@@ -103,7 +106,9 @@ class WorkflowStepDb(Base):
 
     # Relationships
     workflow = relationship("ProcessWorkflowDb", back_populates="steps")
-    step_executions = relationship("WorkflowStepExecutionDb", back_populates="step", cascade="all, delete-orphan")
+    # A step's results outlive it (ON DELETE SET NULL): they keep step_key and
+    # step_name, so an execution still shows a step that was later removed.
+    step_executions = relationship("WorkflowStepExecutionDb", back_populates="step", passive_deletes=True)
 
     def __repr__(self):
         return f"<WorkflowStepDb(id='{self.id}', step_id='{self.step_id}', type='{self.step_type}')>"
@@ -160,7 +165,11 @@ class WorkflowStepExecutionDb(Base):
 
     # Foreign keys
     execution_id = Column(String, ForeignKey('workflow_executions.id', ondelete='CASCADE'), nullable=False, index=True)
-    step_id = Column(String, ForeignKey('workflow_steps.id', ondelete='CASCADE'), nullable=False, index=True)
+    # The step's row id; null once the step is removed from the workflow
+    step_id = Column(String, ForeignKey('workflow_steps.id', ondelete='SET NULL'), nullable=True, index=True)
+    # The step's step_id and name when it ran, kept if the step is removed
+    step_key = Column(String(100), nullable=True)
+    step_name = Column(String(255), nullable=True)
 
     # Execution status: pending, running, succeeded, failed, skipped
     status = Column(String(50), nullable=False, default='pending')

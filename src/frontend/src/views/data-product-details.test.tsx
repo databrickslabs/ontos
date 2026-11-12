@@ -32,6 +32,7 @@ describe('PORT_TO_ASSET_PREDICATE', () => {
     expect(PORT_TO_ASSET_PREDICATE).toEqual({
       Table: 'portHasTable',
       View: 'portHasView',
+      'Metric View': 'portHasView',
       Dataset: 'portHasDataset',
       APIEndpoint: 'portHasEndpoint',
       MLModel: 'portHasModel',
@@ -61,6 +62,7 @@ describe('selectPortAssetPredicate', () => {
   it.each([
     ['Table', 'portHasTable'],
     ['View', 'portHasView'],
+    ['Metric View', 'portHasView'],
     ['Dataset', 'portHasDataset'],
     ['APIEndpoint', 'portHasEndpoint'],
     ['MLModel', 'portHasModel'],
@@ -91,6 +93,7 @@ describe('buildLinkAssetRequestBody', () => {
   it.each([
     ['Table', 'portHasTable'],
     ['View', 'portHasView'],
+    ['Metric View', 'portHasView'],
     ['Dataset', 'portHasDataset'],
     ['APIEndpoint', 'portHasEndpoint'],
     ['MLModel', 'portHasModel'],

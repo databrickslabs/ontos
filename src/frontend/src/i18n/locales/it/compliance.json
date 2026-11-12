@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "Impossibile caricare i criteri di conformità",
     "loadRunResultsFailed": "Impossibile caricare i risultati dell'esecuzione",
     "policyNotFound": "Criterio di conformità non trovato.",
-    "runNotFound": "Esecuzione non trovata."
+    "runNotFound": "Esecuzione non trovata.",
+    "runningPolicy": "Errore durante l'esecuzione della policy"
   },
   "results": {
     "passed": "Superato",
@@ -77,7 +78,8 @@
       "passedExamples": "Esempi superati",
       "failedExamples": "Esempi non superati",
       "noPassedExamples": "Nessun esempio superato in questa esecuzione",
-      "noFailures": "Nessun errore in questa esecuzione"
+      "noFailures": "Nessun errore in questa esecuzione",
+      "errorLabel": "Errore:"
     },
     "runsList": {
       "title": "Esecuzioni",
@@ -100,7 +102,8 @@
     "scoreLabel": "Punteggio:",
     "passedLabel": "Superati:",
     "failedLabel": "Non superati:",
-    "startedLabel": "Avviata il: {{date}}"
+    "startedLabel": "Avviata il: {{date}}",
+    "errorLabel": "Errore:"
   },
   "toast": {
     "policySaved": "Policy '{{name}}' salvata con successo",
@@ -166,5 +169,17 @@
   "ruleWarnings": {
     "unsupported_match_type": "Il tipo '{{type}}' di MATCH non è supportato, quindi la regola non valuta alcuna entità. Tipi supportati: {{supported}}, oppure Object per tutti.",
     "missing_assert": "La regola non ha una clausola ASSERT, quindi ogni entità risulta conforme."
+  },
+  "runErrors": {
+    "entities_load_failed": "Non è stato possibile caricare le entità {{entityType}}, quindi non è stato possibile valutare la regola.",
+    "rule_parse_failed": "Impossibile interpretare la regola: {{detail}}",
+    "workspace_client_unavailable": "Il workspace Databricks non è disponibile e questa regola controlla oggetti di Unity Catalog, quindi non è stato possibile eseguirla.",
+    "tags_load_failed": "Non è stato possibile caricare i tag delle entità {{entityType}}, quindi non è stato possibile valutare la regola."
+  },
+  "saveErrors": {
+    "rule_trailing_input": "La regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Tutto ciò che segue verrebbe ignorato e la regola verificherebbe meno di quanto dichiara. Rimuovila o correggi la sintassi."
+  },
+  "runWarnings": {
+    "rule_trailing_input": "Questa regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Viene ignorata durante l'esecuzione, quindi la regola potrebbe verificare meno di quanto dichiara. Modifica la regola per correggerla."
   }
 }

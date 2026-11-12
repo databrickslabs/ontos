@@ -7,6 +7,7 @@ import {
   FolderOpen,
   Table,
   Layout,
+  BarChart3,
   FolderKanban,
   Pencil,
   Trash2,
@@ -51,10 +52,14 @@ import remarkGfm from 'remark-gfm';
 import { useCopilotContext } from '@/hooks/use-copilot-context';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
 
+// Tables and views can be previewed; a metric view only answers queries
+// that aggregate its measures, so it has no data preview.
+const hasViewableData = (type?: string) => type === 'table' || type === 'view';
+
 interface CatalogItem {
   id: string;
   name: string;
-  type: 'catalog' | 'schema' | 'table' | 'view';
+  type: 'catalog' | 'schema' | 'table' | 'view' | 'metric';
   children: CatalogItem[];
   hasChildren: boolean;
 }
@@ -581,6 +586,8 @@ const CatalogCommander: React.FC = () => {
         return <Table className="h-4 w-4 text-orange-500" />;
       case 'view':
         return <Layout className="h-4 w-4 text-purple-500" />;
+      case 'metric':
+        return <BarChart3 className="h-4 w-4 text-amber-500" />;
       default:
         return null;
     }
@@ -631,7 +638,7 @@ const CatalogCommander: React.FC = () => {
         <div className="flex gap-2">
           <Button
             onClick={() => handleViewDataset(getSelectedNodeDetails()?.id || '')}
-            disabled={!selectedItems.length || getSelectedNodeDetails()?.type !== 'table'}
+            disabled={!selectedItems.length || !hasViewableData(getSelectedNodeDetails()?.type)}
             variant="outline"
             size="sm"
             className="h-9"
@@ -1141,7 +1148,7 @@ const CatalogCommander: React.FC = () => {
                                   <span className="text-sm text-muted-foreground">{t('labels.fullPath')}</span>
                                   <code className="text-xs bg-muted p-2 rounded border break-all col-span-2 font-mono">{node.id}</code>
                                 </div>
-                                {node.type === 'table' && (
+                                {hasViewableData(node.type) && (
                                   <>
                                     <Separator />
                                     <div className="flex items-center justify-between">

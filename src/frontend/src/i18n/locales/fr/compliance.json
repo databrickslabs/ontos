@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "Échec du chargement des politiques de conformité",
     "loadRunResultsFailed": "Échec du chargement des résultats d'exécution",
     "policyNotFound": "Politique de conformité introuvable.",
-    "runNotFound": "Exécution introuvable."
+    "runNotFound": "Exécution introuvable.",
+    "runningPolicy": "Erreur lors de l'exécution de la politique"
   },
   "results": {
     "passed": "Réussi",
@@ -77,7 +78,8 @@
       "passedExamples": "Exemples réussis",
       "failedExamples": "Exemples échoués",
       "noPassedExamples": "Aucun exemple réussi dans cette exécution",
-      "noFailures": "Aucun échec dans cette exécution"
+      "noFailures": "Aucun échec dans cette exécution",
+      "errorLabel": "Erreur :"
     },
     "runsList": {
       "title": "Exécutions",
@@ -100,7 +102,8 @@
     "scoreLabel": "Score :",
     "passedLabel": "Réussis :",
     "failedLabel": "Échoués :",
-    "startedLabel": "Démarrée : {{date}}"
+    "startedLabel": "Démarrée : {{date}}",
+    "errorLabel": "Erreur :"
   },
   "toast": {
     "policySaved": "Politique '{{name}}' enregistrée avec succès",
@@ -166,5 +169,17 @@
   "ruleWarnings": {
     "unsupported_match_type": "Le type '{{type}}' de MATCH n'est pas pris en charge : la règle n'évalue aucune entité. Types pris en charge : {{supported}}, ou Object pour tous.",
     "missing_assert": "La règle n'a pas de clause ASSERT : toutes les entités sont conformes."
+  },
+  "runErrors": {
+    "entities_load_failed": "Les entités {{entityType}} n'ont pas pu être chargées ; la règle n'a donc pas pu être évaluée.",
+    "rule_parse_failed": "La règle n'a pas pu être analysée : {{detail}}",
+    "workspace_client_unavailable": "L'espace de travail Databricks n'est pas disponible et cette règle vérifie des objets Unity Catalog ; elle n'a donc pas pu s'exécuter.",
+    "tags_load_failed": "Les tags des entités {{entityType}} n'ont pas pu être chargés ; la règle n'a donc pas pu être évaluée."
+  },
+  "saveErrors": {
+    "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe."
+  },
+  "runWarnings": {
+    "rule_trailing_input": "Cette règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Il est ignoré à l'exécution, donc la règle peut vérifier moins que ce qu'elle indique. Modifiez la règle pour le corriger."
   }
 }

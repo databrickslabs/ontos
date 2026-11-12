@@ -49,14 +49,32 @@
   },
   "upload": {
     "success": "アップロード成功",
-    "successMessage": "{{filename}}の処理が完了しました。{{count}}個の製品が処理されました。",
+    "successMessage_one": "{{filename}}の処理が完了しました。{{count}}個の製品が処理されました。",
+    "successMessage_other": "{{filename}}の処理が完了しました。{{count}}個の製品が処理されました。",
+    "successMessage_files_one": "{{files}}個のファイルの処理が完了しました。{{count}}個の製品が処理されました。",
+    "successMessage_files_other": "{{files}}個のファイルの処理が完了しました。{{count}}個の製品が処理されました。",
+    "partialSuccess": "問題ありでインポートしました",
     "failed": "アップロード失敗",
     "unexpectedError": "アップロード中に予期しないエラーが発生しました。",
     "uploading": "アップロード中...",
     "tooltipTitle": "データ製品をアップロード (ODPS形式)",
     "tooltipDescription": "ODPS (Open Data Product Standard) スキーマに準拠したYAMLまたはJSONファイルを受け付けます。",
     "tooltipHint": "データ契約 (ODCS) については、データ契約ページを使用してください。",
-    "odcsHint": "ヒント: このページはデータ製品 (ODPS形式) 用です。データ契約 (ODCS形式) をアップロードしようとしている場合は、代わりにデータ契約ページを使用してください。"
+    "odcsHint": "ヒント: このページはデータ製品 (ODPS形式) 用です。データ契約 (ODCS形式) をアップロードしようとしている場合は、代わりにデータ契約ページを使用してください。",
+    "dialogTitle": "データプロダクトをアップロード",
+    "dialogDescription": "1 つ以上の ODPS ファイル（YAML/JSON）を選択してください。各ファイルにはプロダクトを 1 つ、または配列で含めることができます。",
+    "createMissingDomains": "不足しているドメインを作成",
+    "createMissingDomainsHint": "存在しないドメインを自動作成します。オフ: 一致しないドメインは未割り当てのままになります（元の値は保持されます）。",
+    "adoptIds": "ファイルの ID を使用",
+    "adoptIdsHint": "ファイル内の有効で重複しない UUID を主キーとして再利用し、エンティティ間のリンクがインポート後も保たれるようにします。",
+    "duplicatesAsNew": "重複した ID を新しいコピーとしてインポート",
+    "duplicatesAsNewHint": "オフ（既定）: ID が既に存在するプロダクトはスキップされます。オン: 新しい ID の新しいコピーとしてインポートされます。",
+    "dropActive": "ここにファイルをドロップ",
+    "dropInactive": "ここにプロダクトファイルをドラッグ＆ドロップするか、クリックして選択してください",
+    "supportedFormats": "対応形式: JSON または YAML（ODPS）",
+    "orPasteOdps": "または ODPS JSON を貼り付け",
+    "pasteOdpsPlaceholder": "ここに ODPS プロダクトの JSON を貼り付け",
+    "importJsonButton": "JSON をインポート"
   },
   "genie": {
     "noSelection": "選択なし",
@@ -354,7 +372,8 @@
       "deleteSupportChannel": "このサポートチャネルを削除しますか？",
       "unlinkContract": "このデリバラブルから契約のリンクを解除しますか？",
       "createGenieSpace": "\"{{name}}\" の Genie Space を作成しますか？"
-    }
+    },
+    "contractDangling": "契約はもう存在しません"
   },
   "form": {
     "createTitle": "データ製品を作成",
@@ -522,7 +541,8 @@
       "failedToSerialize": "UI の状態を JSON にシリアライズできませんでした。",
       "unexpectedError": "予期しないエラーが発生しました。"
     },
-    "syntaxErrorLabel": "構文エラー:"
+    "syntaxErrorLabel": "構文エラー:",
+    "statusChangeHint": "ステータスはページの「ステータスを変更」で変更します。遷移を確認し、ステータス変更ワークフローを実行します。"
   },
   "import": {
     "title": "データ製品をインポート",
@@ -658,14 +678,26 @@
       "certLevelRequired": "認定レベルを選択してください"
     },
     "errors": {
-      "cannotRequest": "ステータスが '{{productStatus}}' の製品に対して {{requestType}} をリクエストできません",
-      "failedToSubmit": "リクエストの送信に失敗しました"
+      "cannotRequest": "「{{requestType}}」はステータス {{productStatus}} のプロダクトでは利用できません。",
+      "failedToSubmit": "リクエストの送信に失敗しました",
+      "notProductOwner": "このプロダクトのレビューを依頼できるのは、プロダクトのオーナーまたは管理者のみです。"
     },
     "toast": {
       "statusChanged": "ステータスを変更しました",
       "statusChangedDesc": "製品のステータスが \"{{fromStatus}}\" から \"{{toStatus}}\" に変更されました。",
       "requestSubmitted": "リクエストを送信しました",
-      "requestSubmittedDesc": "{{type}} のリクエストが送信されました。決定について通知されます。"
+      "requestSubmittedDesc": "{{type}} のリクエストが送信されました。決定について通知されます。",
+      "workflowFailed": "リクエストは送信されましたが、ワークフローが失敗しました",
+      "workflowFailedDesc": "{{type}} のリクエストの判断を依頼された人はいません。ワークフロー「{{workflow}}」を開始できませんでした。管理者に連絡してください。",
+      "requestTypes": {
+        "access": "アクセス",
+        "review": "レビュー",
+        "publish": "公開",
+        "certify": "認定",
+        "status_change": "ステータス変更"
+      },
+      "workflowPartiallyFailed": "いくつかのリクエストワークフローが失敗しました",
+      "workflowPartiallyFailedDesc": "{{type}}リクエストワークフローの1つが失敗しました: {{workflows}}。他の承認はまだ保留中である可能性があります。"
     },
     "labels": {
       "requestType": "リクエストの種類",
@@ -899,7 +931,8 @@
       "createNewContract": "新しい契約を作成",
       "linkContract": "契約をリンク",
       "linking": "リンク中..."
-    }
+    },
+    "statusFilterNote": "「active」または「approved」ステータスのコントラクトのみ表示されます。特定のバージョンを選んでください。同名のコントラクトにはバージョンが並べて表示されます。"
   },
   "hierarchy": {
     "title": "データ階層",
@@ -1056,8 +1089,10 @@
     "versionPlaceholder": "例: v1.1, v2.0-beta",
     "createButton": "バージョンを作成",
     "errors": {
-      "versionEmpty": "バージョン文字列は空にできません。"
-    }
+      "versionEmpty": "バージョン文字列は空にできません。",
+      "versionFormat": "「{{version}}」は X.Y.Z の形式ではありません（例: 2.0.0）。"
+    },
+    "versionPlaceholderSemver": "例: 2.0.0"
   },
   "graphView": {
     "unnamedProduct": "名前のない製品",

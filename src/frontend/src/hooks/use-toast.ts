@@ -191,4 +191,9 @@ function useToast() {
   }
 }
 
-export { useToast, toast }
+/** Unmount a toast immediately, skipping the exit animation and the remove delay. */
+function removeToast(toastId: string) {
+  dispatch({ type: "REMOVE_TOAST", toastId })
+}
+
+export { useToast, toast, removeToast }

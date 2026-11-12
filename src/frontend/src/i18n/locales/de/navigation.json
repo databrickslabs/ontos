@@ -19,11 +19,20 @@
   },
   "warning": {
     "title": "Systemwarnung",
-    "workspaceFailed": "Verbindung zum Databricks-Workspace fehlgeschlagen. Einige Funktionen sind möglicherweise nicht verfügbar."
+    "workspaceFailed": "Verbindung zum Databricks-Workspace fehlgeschlagen. Einige Funktionen sind möglicherweise nicht verfügbar.",
+    "stillUnavailable": "Der Workspace ist weiterhin nicht erreichbar. Versuchen Sie es später erneut."
   },
   "routeError": {
     "title": "Etwas ist schiefgelaufen",
     "body": "Beim Rendern dieser Seite ist ein unerwarteter Fehler aufgetreten. Sie können es erneut versuchen oder zur Startseite zurückkehren.",
     "goHome": "Zur Startseite"
+  },
+  "health": {
+    "issues": {
+      "workspace_client_unavailable": "Der Databricks-Workspace-Client konnte nicht erstellt werden. Die Ursache steht in den Serverprotokollen.",
+      "manager_init_failed": "Einige Dienste konnten nicht initialisiert werden. Die Ursache steht in den Serverprotokollen.",
+      "seeding_failed": "Standardrollen, -teams oder -projekte konnten nicht erstellt werden. Die Ursache steht in den Serverprotokollen.",
+      "database_unavailable": "Die Metadatendatenbank konnte nicht initialisiert werden. Die Ursache steht in den Serverprotokollen."
+    }
   }
 }

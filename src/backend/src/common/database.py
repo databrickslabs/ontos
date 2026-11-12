@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import pool
-from sqlalchemy.engine import Connection, URL
+from sqlalchemy.engine import Connection, URL, make_url
 
 from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
@@ -707,7 +707,7 @@ def init_db() -> None:
         connect_args = {}
 
         logger.info("Connecting to database...")
-        logger.info(f"> Database URL: {db_url}")
+        logger.info(f"> Database URL: {make_url(db_url).render_as_string(hide_password=True)}")
         logger.info(f"> Connect args: {connect_args}")
         logger.info(f"> Pool settings: size={settings.DB_POOL_SIZE}, max_overflow={settings.DB_MAX_OVERFLOW}, "
                    f"timeout={settings.DB_POOL_TIMEOUT}s, recycle={settings.DB_POOL_RECYCLE}s")

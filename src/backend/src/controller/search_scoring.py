@@ -352,6 +352,27 @@ def _project_fields(result: Dict[str, Any], fields: Optional[List[str]]) -> Dict
     return {k: v for k, v in result.items() if k in allowed}
 
 
+def match_ids(
+    items: Iterable[SearchIndexItem],
+    query: str,
+    config: SearchConfig,
+    *,
+    type_filter: Optional[str] = None,
+    filters: Optional[Dict[str, Optional[str]]] = None,
+    allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
+) -> List[str]:
+    """Ids of the items ``search_index`` would match (unpaginated, no result rows)."""
+    allowed = {t: set(ids) for t, ids in (allowed_ids_by_type or {}).items()}
+    candidates = [
+        it for it in items
+        if (it.type not in allowed or it.id in allowed[it.type])
+        and _passes_filters(it, type_filter, filters)
+    ]
+    if is_list_query(query):
+        return [it.id for it in candidates]
+    return [s.item.id for s in score_and_rank(candidates, query, config)]
+
+
 def search_index(
     items: Iterable[SearchIndexItem],
     query: str,
@@ -363,6 +384,8 @@ def search_index(
     offset: int = 0,
     include_facets: bool = True,
     fields: Optional[List[str]] = None,
+    allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
+    allowed_features: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Search/list index items for MCP tools: paginated, faceted, filtered.
 
@@ -374,6 +397,12 @@ def search_index(
     - ``fields=[...]`` narrows each result row to the requested keys plus
       ``id``, so an agent in a "then fetch details" flow doesn't pay for
       description/tags/owner on every call.
+    - ``allowed_features``: when given, only items of these features (as the
+      Postgres backend and ``/api/search``).
+    - ``allowed_ids_by_type`` (index type -> index ids): an item of a listed
+      type is kept only when its id is listed (e.g. the products the caller may
+      read). Applied with the filters, so dropped items are in neither the page,
+      ``total_count``, ``has_more`` nor the facets.
 
     Returns a dict with ``results``, ``total_count``, ``returned``, ``offset``,
     ``limit``, ``has_more``, ``facets`` and ``query``.
@@ -381,7 +410,14 @@ def search_index(
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
 
-    candidates = [it for it in items if _passes_filters(it, type_filter, filters)]
+    allowed = {t: set(ids) for t, ids in (allowed_ids_by_type or {}).items()}
+    features = None if allowed_features is None else set(allowed_features)
+    candidates = [
+        it for it in items
+        if (it.type not in allowed or it.id in allowed[it.type])
+        and (features is None or it.feature_id in features)
+        and _passes_filters(it, type_filter, filters)
+    ]
 
     if is_list_query(query):
         ranked = sorted(candidates, key=lambda it: (it.title or "").lower())

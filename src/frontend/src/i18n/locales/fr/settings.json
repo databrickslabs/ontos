@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "Identité de l'instance",
+      "id": {
+        "label": "ID de l'instance",
+        "help": "Identifiant stable de cette instance Ontos, apposé sur les entités exportées. Par défaut : {{default}}. Videz le champ pour rétablir la valeur par défaut.",
+        "invalid": "Utilisez 1 à 128 lettres, chiffres, \".\", \"_\", \":\" ou \"-\", en commençant par une lettre ou un chiffre."
+      },
+      "name": {
+        "label": "Nom de l'instance",
+        "help": "Nom lisible de cette instance. Par défaut : {{default}}. Videz le champ pour rétablir la valeur par défaut.",
+        "invalid": "Utilisez 128 caractères au maximum, sans caractères de contrôle."
+      }
+    },
     "auditLog": {
       "label": "Répertoire des journaux d'audit",
       "placeholder": "audit_logs",
@@ -210,7 +223,8 @@
       "repoUrl": "https://github.com/votre-org/votre-repo.git",
       "branch": "main",
       "token": "ghp_... ou similaire",
-      "username": "x-access-token"
+      "username": "x-access-token",
+      "tokenSaved": "Enregistré. Laissez vide pour le conserver."
     },
     "cloneButton": "Cloner le dépôt",
     "currentCommit": "Commit",
@@ -235,7 +249,8 @@
       "pushError": "Échec de l'envoi des modifications",
       "pushSuccess": "Modifications poussées avec succès",
       "saveError": "Échec de l'enregistrement des paramètres Git",
-      "saveSuccess": "Paramètres Git enregistrés"
+      "saveSuccess": "Paramètres Git enregistrés",
+      "tokenRemoved": "Jeton enregistré supprimé"
     },
     "pendingChanges": "Modifications en attente",
     "pullButton": "Récupérer",
@@ -250,7 +265,15 @@
       "notConfigured": "Non configuré"
     },
     "viewChangesButton": "Voir les modifications",
-    "volumePath": "Chemin du volume"
+    "volumePath": "Chemin du volume",
+    "workingCopy": "Copie de travail",
+    "workingCopyNote": "Le volume n'est pas monté ici : la copie de travail est sur le disque local de l'app et chaque fichier exporté est aussi écrit dans le volume. Après un redémarrage de l'app, clonez à nouveau le dépôt : les commits poussés sont conservés sur le dépôt distant.",
+    "volumeSyncWarningTitle": "Export non écrit dans le volume",
+    "errors": {
+      "git_volume_invalid": "Le paramètre de volume « {{value}} » ne désigne pas un volume Unity Catalog. Utilisez /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> ou un nom de volume avec le catalogue et le schéma définis dans les paramètres généraux.",
+      "git_volume_sync_failed": "Impossible d'écrire {{path}} dans le volume. La modification est dans le dépôt et est poussée comme d'habitude ; vérifiez que l'app peut écrire dans le volume (WRITE VOLUME)."
+    },
+    "removeTokenButton": "Supprimer le jeton enregistré"
   },
   "nav": {
     "groups": {
@@ -408,6 +431,15 @@
       "featurePermissions": {
         "title": "Autorisations de fonctionnalités",
         "description": "Configurer les niveaux d'accès pour chaque fonctionnalité de l'application."
+      },
+      "navigation": {
+        "help": "Les fonctionnalités non cochées n'apparaissent pas dans les menus de ce rôle (barre latérale, actions rapides de l'accueil, À propos). Masquer ne change que ce que les menus affichent, pas les autorisations : les pages restent accessibles par lien avec le même niveau d'accès.",
+        "accessColumn": "Niveau d'accès",
+        "column": "Afficher dans la navigation",
+        "showFeature": "Afficher {{feature}} dans la navigation",
+        "noAccessHint": "Aucun accès : la fonctionnalité n'apparaît pas dans les menus",
+        "adminHint": "Le rôle administrateur affiche toujours toutes les fonctionnalités",
+        "unknownFeatures": "Des fonctionnalités inconnues ne peuvent pas être masquées de la navigation : {{features}}"
       },
       "groups": {
         "discover": "Découvrir",
@@ -945,6 +977,13 @@
         "productName": "Nom du produit",
         "productVersion": "Version du produit",
         "productStatus": "Statut du produit"
+      },
+      "lifecycle": {
+        "title": "Tag de statut du cycle de vie",
+        "descriptionProduct": "Ajoute à chaque table le statut du cycle de vie du produit de données qui l'utilise. Sur une table utilisée par plusieurs produits, le meilleur statut l'emporte (active d'abord, retired en dernier).",
+        "descriptionContract": "Ajoute à chaque table le statut du cycle de vie du contrat de données qui l'utilise. Sur une table utilisée par plusieurs contrats, le meilleur statut l'emporte (active d'abord, retired en dernier).",
+        "valueLabel": "Valeur du tag :",
+        "sharedKeyHint": "Lorsque les tags de statut du produit et du contrat sont activés avec la même clé, c'est le statut du produit qui est écrit."
       }
     },
     "entityPatterns": {

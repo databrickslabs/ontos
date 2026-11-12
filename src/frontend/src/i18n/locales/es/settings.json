@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "Identidad de la instancia",
+      "id": {
+        "label": "ID de la instancia",
+        "help": "Identificador estable de esta instancia de Ontos, incluido en las entidades exportadas. Valor predeterminado: {{default}}. Vacía el campo para restaurarlo.",
+        "invalid": "Usa de 1 a 128 letras, dígitos, \".\", \"_\", \":\" o \"-\", y empieza por una letra o un dígito."
+      },
+      "name": {
+        "label": "Nombre de la instancia",
+        "help": "Nombre legible de esta instancia. Valor predeterminado: {{default}}. Vacía el campo para restaurarlo.",
+        "invalid": "Usa como máximo 128 caracteres, sin caracteres de control."
+      }
+    },
     "auditLog": {
       "label": "Directorio de logs de auditoría",
       "placeholder": "audit_logs",
@@ -210,7 +223,8 @@
       "repoUrl": "https://github.com/su-org/su-repo.git",
       "branch": "main",
       "token": "ghp_... o similar",
-      "username": "x-access-token"
+      "username": "x-access-token",
+      "tokenSaved": "Guardado. Déjalo vacío para conservarlo."
     },
     "cloneButton": "Clonar repositorio",
     "currentCommit": "Confirmar",
@@ -235,7 +249,8 @@
       "pushError": "No se pudieron enviar los cambios",
       "pushSuccess": "Cambios enviados correctamente",
       "saveError": "No se pudo guardar la configuración de Git",
-      "saveSuccess": "Configuración de Git guardada"
+      "saveSuccess": "Configuración de Git guardada",
+      "tokenRemoved": "Token guardado eliminado"
     },
     "pendingChanges": "Cambios pendientes",
     "pullButton": "Extraer",
@@ -250,7 +265,15 @@
       "notConfigured": "Sin configurar"
     },
     "viewChangesButton": "Ver cambios",
-    "volumePath": "Ruta del volumen"
+    "volumePath": "Ruta del volumen",
+    "workingCopy": "Copia de trabajo",
+    "workingCopyNote": "El volumen no está montado aquí, así que la copia de trabajo está en el disco local de la app y cada archivo exportado también se escribe en el volumen. Cuando la app se reinicie, vuelve a clonar el repositorio: los commits enviados se conservan en el remoto.",
+    "volumeSyncWarningTitle": "Exportación no escrita en el volumen",
+    "errors": {
+      "git_volume_invalid": "La configuración de volumen \"{{value}}\" no indica un volumen de Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> o el nombre de un volumen con el catálogo y el esquema definidos en la configuración general.",
+      "git_volume_sync_failed": "No se pudo escribir {{path}} en el volumen. El cambio está en el repositorio y se envía como siempre; comprueba que la app pueda escribir en el volumen (WRITE VOLUME)."
+    },
+    "removeTokenButton": "Eliminar token guardado"
   },
   "nav": {
     "groups": {
@@ -408,6 +431,15 @@
       "featurePermissions": {
         "title": "Permisos de funciones",
         "description": "Configurar niveles de acceso para cada función en la aplicación."
+      },
+      "navigation": {
+        "help": "Las funciones sin marcar quedan fuera de los menús de este rol (barra lateral, acciones rápidas del inicio, Acerca de). Ocultar solo cambia lo que muestran los menús, no los permisos: las páginas siguen accesibles por enlace con el mismo nivel de acceso.",
+        "accessColumn": "Nivel de acceso",
+        "column": "Mostrar en la navegación",
+        "showFeature": "Mostrar {{feature}} en la navegación",
+        "noAccessHint": "Sin acceso: la función no aparece en los menús",
+        "adminHint": "El rol de administrador siempre muestra todas las funciones",
+        "unknownFeatures": "Las funciones desconocidas no se pueden ocultar de la navegación: {{features}}"
       },
       "groups": {
         "discover": "Descubrir",
@@ -945,6 +977,13 @@
         "productName": "Nombre del producto",
         "productVersion": "Versión del producto",
         "productStatus": "Estado del producto"
+      },
+      "lifecycle": {
+        "title": "Etiqueta de estado del ciclo de vida",
+        "descriptionProduct": "Etiqueta cada tabla con el estado del ciclo de vida del producto de datos que la usa. En una tabla usada por varios productos, gana el mejor estado (active primero, retired al final).",
+        "descriptionContract": "Etiqueta cada tabla con el estado del ciclo de vida del contrato de datos que la usa. En una tabla usada por varios contratos, gana el mejor estado (active primero, retired al final).",
+        "valueLabel": "Valor de la etiqueta:",
+        "sharedKeyHint": "Cuando las etiquetas de estado del producto y del contrato están activadas con la misma clave, se escribe el estado del producto."
       }
     },
     "entityPatterns": {

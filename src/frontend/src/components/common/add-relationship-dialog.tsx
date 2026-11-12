@@ -24,6 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { useFormatLabel } from '@/lib/format-label';
+import { getTargetTypeName } from '@/lib/relationship-type';
 import { AssetTypeRead } from '@/types/asset';
 import type { RelationshipDefinition } from '@/types/ontology-schema';
 
@@ -249,7 +250,7 @@ export function AddRelationshipDialog({
   const fetchAssetTypes = useCallback(async () => {
     setTypesLoading(true);
     try {
-      const response = await apiGet<AssetTypeRead[]>('/api/asset-types?limit=100');
+      const response = await apiGet<AssetTypeRead[]>('/api/asset-types');
       if (!response.error && Array.isArray(response.data)) {
         setAssetTypes(response.data.filter(t => t.status === 'active'));
       }
@@ -362,9 +363,7 @@ export function AddRelationshipDialog({
     if (!selectedTarget || !selectedRelType || !selectedRelDef) return;
     setCreateLoading(true);
     try {
-      const tType = selectedRelDef.target_type_label
-        || selectedRelDef.target_type_iri?.split('#')[1]
-        || selectedTarget.type;
+      const tType = getTargetTypeName(selectedRelDef) || selectedTarget.type;
       const payload = {
         source_type: entityType,
         source_id: entityId,

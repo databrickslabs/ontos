@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { reviewStatusLabel } from '@/lib/status-labels';
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, AlertCircle, ClipboardCheck, ChevronDown, Trash2 } from 'lucide-react';
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
@@ -18,6 +19,7 @@ import { DataAssetReviewRequest, ReviewRequestStatus } from '@/types/data-asset-
 // Import the Create Dialog
 import CreateReviewRequestDialog from '@/components/data-asset-reviews/create-review-request-dialog';
 import { useProjectContext } from '@/stores/project-store';
+import { deleteOrThrow } from '@/lib/delete-or-throw';
 
 // Helper function to check API response (reuse if available globally)
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null }, name: string): T => {
@@ -90,7 +92,7 @@ export default function DataAssetReviews() {
             return;
         }
         try {
-            await deleteApi(`/api/data-asset-reviews/${id}`);
+            await deleteOrThrow(deleteApi, `/api/data-asset-reviews/${id}`);
             toast({ title: t('common:toast.success'), description: t('data-asset-reviews:toast.requestDeleted') });
             fetchRequests(); // Refresh list
         } catch (err: any) {
@@ -137,7 +139,7 @@ export default function DataAssetReviews() {
                 </Button>
             ),
             cell: ({ row }) => (
-                <Badge variant={getStatusColor(row.original.status)}>{row.original.status}</Badge>
+                <Badge variant={getStatusColor(row.original.status)}>{reviewStatusLabel(row.original.status, t)}</Badge>
             ),
         },
         {

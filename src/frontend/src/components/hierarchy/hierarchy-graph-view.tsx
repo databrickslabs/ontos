@@ -43,6 +43,10 @@ const TYPE_COLOR: Record<string, { bg: string; border: string; text: string }> =
   Dataset:        { bg: 'bg-amber-500/10',   border: 'border-amber-500/40',   text: 'text-amber-600 dark:text-amber-400' },
   Table:          { bg: 'bg-orange-500/10',  border: 'border-orange-500/40',  text: 'text-orange-600 dark:text-orange-400' },
   View:           { bg: 'bg-teal-500/10',    border: 'border-teal-500/40',    text: 'text-teal-600 dark:text-teal-400' },
+  // A Metric View is a View (ontos:MetricView is a subclass of ontos:View)
+  'Metric View': {
+    bg: 'bg-teal-500/10', border: 'border-teal-500/40', text: 'text-teal-600 dark:text-teal-400',
+  },
   Column:         { bg: 'bg-slate-500/10',   border: 'border-slate-500/40',   text: 'text-slate-600 dark:text-slate-400' },
   Schema:         { bg: 'bg-violet-500/10',  border: 'border-violet-500/40',  text: 'text-violet-600 dark:text-violet-400' },
   DataContract:   { bg: 'bg-pink-500/10',    border: 'border-pink-500/40',    text: 'text-pink-600 dark:text-pink-400' },
@@ -277,6 +281,7 @@ export function HierarchyGraphView({ rootNode, className }: HierarchyGraphViewPr
               Dataset: '#f59e0b',
               Table: '#f97316',
               View: '#14b8a6',
+              'Metric View': '#14b8a6',
               Column: '#64748b',
               Schema: '#8b5cf6',
               DataContract: '#ec4899',

@@ -54,7 +54,9 @@
     "uploadError": "Error al subir el contrato",
     "uploadFailed": "Error en la subida",
     "uploadOdpsHint": "\n\nSugerencia: Esta página es para Contratos de Datos (formato ODCS). Si intentas subir un Producto de Datos (formato ODPS), usa la página de Productos de Datos.",
-    "uploadSuccess": "Contrato subido correctamente"
+    "uploadSuccess": "Contrato subido correctamente",
+    "uploadSuccessCount_one": "{{count}} contrato importado correctamente",
+    "uploadSuccessCount_other": "{{count}} contratos importados correctamente"
   },
   "status": {
     "draft": "Borrador",
@@ -69,6 +71,15 @@
     "retired": "Retirado",
     "published": "Publicado",
     "archived": "Archivado"
+  },
+  "statusDescriptions": {
+    "draft": "En desarrollo, aún no enviado a revisión",
+    "proposed": "Enviado para su revisión",
+    "under_review": "En revisión por el data steward",
+    "approved": "Aprobado por el steward, listo para activar",
+    "active": "En uso en producción, gobierna activos de datos",
+    "deprecated": "Aún disponible, pero marcado para su retirada",
+    "retired": "Ya no se usa, archivado"
   },
   "details": {
     "backToList": "Volver a la Lista",
@@ -187,7 +198,8 @@
     "validationErrorTitle": "Error de validación",
     "nameRequired": "El nombre del contrato es obligatorio",
     "versionRequired": "La versión es obligatoria",
-    "saveError": "Error al guardar el contrato"
+    "saveError": "Error al guardar el contrato",
+    "statusChangeHint": "El estado cambia con Cambiar estado en la página, que comprueba la transición y ejecuta los workflows de cambio de estado."
   },
   "import": {
     "title": "Importar Contrato de Datos",
@@ -209,7 +221,14 @@
     "importedTitle": "Importado",
     "importedSuccess": "JSON de ODCS importado correctamente",
     "importOdcsError": "Error al importar el JSON de ODCS",
-    "importJsonButton": "Importar JSON"
+    "importJsonButton": "Importar JSON",
+    "uploadDescription": "Selecciona uno o más archivos ODCS (YAML/JSON). Cada archivo puede contener un único contrato o un array.",
+    "createMissingDomains": "Crear dominios que faltan",
+    "createMissingDomainsHint": "Crea automáticamente los dominios que no existen. Desactivado: los dominios sin coincidencia quedan sin asignar (se conserva el original).",
+    "adoptIds": "Adoptar los ID del archivo",
+    "adoptIdsHint": "Reutiliza un UUID válido y sin colisiones del archivo como clave primaria para que los vínculos entre entidades se conserven al importar.",
+    "duplicatesAsNew": "Importar ID duplicados como copias nuevas",
+    "duplicatesAsNewHint": "Desactivado (predeterminado): se omite una entidad cuyo ID ya existe. Activado: se importa como copia nueva con un ID nuevo."
   },
   "editor": {
     "title": "Editor de Contrato",
@@ -266,6 +285,8 @@
       "domain": "Dominio",
       "project": "Proyecto",
       "projectIdTitle": "ID del proyecto: {{id}}",
+      "dataProduct": "Producto de datos",
+      "dataProductIdTitle": "ID del producto: {{id}}",
       "tenant": "Inquilino",
       "team": "Equipo",
       "teamIdTitle": "ID del equipo: {{id}}",
@@ -325,7 +346,7 @@
       "createProduct": "Crear producto de datos",
       "noneYet": "Aún no hay productos de datos vinculados",
       "emptyHint": "Crea un producto de datos que use este contrato para gobernar un entregable",
-      "statusRequirement": "El contrato debe estar en estado 'activo', 'aprobado' o 'certificado'",
+      "statusRequirement": "El contrato debe estar en estado 'activo' o 'aprobado'",
       "unnamedProduct": "Producto sin nombre",
       "deliverables_one": "Entregable: {{ports}}",
       "deliverables_other": "Entregables: {{ports}}"
@@ -496,11 +517,12 @@
       "deleteSchemaAuthDefFailed": "Error al eliminar la definición autorizada del esquema",
       "createPropertyAuthDefFailed": "Error al crear la definición autorizada de la propiedad",
       "updatePropertyAuthDefFailed": "Error al actualizar la definición autorizada de la propiedad",
-      "approveFailedStatus": "Error al aprobar ({{status}})",
+      "invalidTransition": "El contrato ahora está en {{fromStatus}} y ya no se puede aprobar ni rechazar. Recargue la página para ver su estado actual.",
       "approveFailed": "Error al aprobar",
-      "rejectFailedStatus": "Error al rechazar ({{status}})",
       "rejectFailed": "Error al rechazar",
-      "startProfilingFailed": "Error al iniciar el perfilado"
+      "startProfilingFailed": "Error al iniciar el perfilado",
+      "invalidVersionFormat": "\"{{version}}\" no es una versión válida: una nueva versión tiene la forma X.Y.Z, por ejemplo 2.0.0.",
+      "draftVersionFormat": "La versión \"{{version}}\" de este contrato no tiene la forma X.Y.Z, así que no se puede crear un borrador personal a partir de ella. Crea una nueva versión (por ejemplo 2.0.0)."
     }
   },
   "list": {
@@ -1062,7 +1084,7 @@
     "statusLabel": "Estado:",
     "requestTypeLabel": "Tipo de solicitud *",
     "notAvailableForStatus": "No disponible para el estado '{{status}}'",
-    "cannotRequest": "No se puede solicitar {{type}} para un contrato con estado '{{status}}'",
+    "cannotRequest": "\"{{type}}\" no está disponible para un contrato con estado {{status}}.",
     "messageOptionalLabel": "Mensaje (opcional)",
     "changingStatus": "Cambiando el estado...",
     "sendingRequest": "Enviando solicitud...",
@@ -1123,6 +1145,14 @@
       "requestDescription": "Solicita aprobación para cambiar el estado del ciclo de vida de este contrato.",
       "currentStatusLabel": "Estado actual:",
       "recommendedLabel": "Recomendado:",
+      "recommended": {
+        "draft": "Envíalo a revisión (Propuesto) cuando esté listo",
+        "proposed": "Espera a que el steward lo pase a En revisión",
+        "under_review": "El steward aprobará o pedirá cambios",
+        "approved": "Actívalo cuando esté listo para gobernar datos de producción",
+        "active": "Márcalo como obsoleto al planificar su retirada; usa el panel de certificación para certificar",
+        "deprecated": "Retíralo cuando ya no se use"
+      },
       "selectTargetLabel": "Selecciona el estado de destino *",
       "chooseTargetPlaceholder": "Elige el estado de destino...",
       "terminalStateLabel": "Estado terminal:",
@@ -1145,11 +1175,24 @@
       "statusChangedTitle": "Estado cambiado",
       "statusChangedDescription": "El estado del contrato cambió de \"{{from}}\" a \"{{to}}\".",
       "submittedTitle": "Solicitud enviada",
-      "submittedDescription": "Tu solicitud de {{type}} se ha enviado y se te notificará la decisión."
+      "submittedDescription": "Tu solicitud de {{type}} se ha enviado y se te notificará la decisión.",
+      "workflowFailedTitle": "Solicitud enviada, pero su flujo de trabajo falló",
+      "workflowFailedDescription": "No se pidió a nadie que decidiera sobre tu solicitud de {{type}}: el flujo de trabajo \"{{workflow}}\" no pudo iniciarse. Contacta con un administrador.",
+      "requestTypes": {
+        "access": "acceso",
+        "review": "revisión",
+        "deploy": "despliegue",
+        "publish": "publicación",
+        "certify": "certificación",
+        "status_change": "cambio de estado"
+      },
+      "workflowPartiallyFailedTitle": "Algunos flujos de trabajo de solicitud fallaron",
+      "workflowPartiallyFailedDescription": "Uno de los flujos de trabajo de solicitud de {{type}} falló: {{workflows}}. Otras aprobaciones pueden estar pendientes."
     },
     "errors": {
       "submitFailed": "Error al enviar la solicitud",
-      "loadPolicyFailed": "Error al cargar la política de despliegue"
+      "loadPolicyFailed": "Error al cargar la política de despliegue",
+      "reviewSchemaRequired": "El contrato necesita un esquema antes de proponerse para revisión."
     }
   },
   "deployRequest": {

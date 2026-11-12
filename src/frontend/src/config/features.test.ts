@@ -5,6 +5,8 @@ import {
   getFeatureNameByPath,
   getNavigationGroups,
   getLandingPageFeatures,
+  getNavFeatureId,
+  isHiddenInNav,
 } from './features';
 
 describe('features config', () => {
@@ -75,6 +77,38 @@ describe('features config', () => {
     it('returns only landing GA features', () => {
       const landing = getLandingPageFeatures(['ga']);
       expect(landing.every((f) => f.showInLanding && f.maturity === 'ga')).toBe(true);
+    });
+
+    it('leaves out the features hidden from navigation (#1325)', () => {
+      const ids = (hidden: string[]) => getLandingPageFeatures(['ga'], hidden).map((f) => f.id);
+      expect(ids([])).toEqual(expect.arrayContaining(['data-contracts', 'concepts']));
+      // concepts is gated by the semantic-models role feature.
+      expect(ids(['data-contracts', 'semantic-models'])).not.toEqual(
+        expect.arrayContaining(['data-contracts']),
+      );
+      expect(ids(['data-contracts', 'semantic-models'])).not.toContain('concepts');
+    });
+  });
+
+  describe('hidden navigation features (#1325)', () => {
+    const navIds = (hidden: ReadonlySet<string> | string[]) =>
+      getNavigationGroups(['ga', 'beta', 'alpha'], hidden).flatMap((g) => g.items.map((i) => i.id));
+
+    it('uses the permission id of an entry as its role feature id', () => {
+      const marketplace = features.find((f) => f.id === 'marketplace')!;
+      expect(getNavFeatureId(marketplace)).toBe('data-products');
+      expect(isHiddenInNav(marketplace, ['data-products'])).toBe(true);
+      expect(isHiddenInNav(marketplace, new Set(['marketplace']))).toBe(false);
+    });
+
+    it('drops hidden entries from the groups, from an array or a set', () => {
+      expect(navIds([])).toContain('data-contracts');
+      for (const hidden of [['data-contracts', 'assets'], new Set(['data-contracts', 'assets'])]) {
+        const ids = navIds(hidden);
+        expect(ids).not.toContain('data-contracts');
+        expect(ids).not.toContain('assets');
+        expect(ids).toContain('data-catalog');
+      }
     });
   });
 });

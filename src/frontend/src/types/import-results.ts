@@ -12,7 +12,17 @@ export interface ImportItemResult {
   entity_id?: string | null;
   name?: string | null;
   status: ImportItemStatus;
+  /** Skip reason, error detail, or a note on a created entity. */
   message?: string | null;
+  /** Code of the message, translated by the UI when known. */
+  code?: string | null;
+  params?: Record<string, unknown> | null;
+  /** Further coded notes when an item has more than one. */
+  notes?: {
+    code?: string | null;
+    params?: Record<string, unknown> | null;
+    message?: string | null;
+  }[] | null;
 }
 
 export interface BatchImportResult {
@@ -24,10 +34,18 @@ export interface BatchImportResult {
   created_ids: string[];
 }
 
-/** Build a concise human summary line, e.g. "3 created, 1 skipped, 2 failed". */
-export function summarizeImport(result: BatchImportResult): string {
-  const parts = [`${result.created} created`];
-  if (result.skipped) parts.push(`${result.skipped} skipped`);
-  if (result.failed) parts.push(`${result.failed} failed`);
-  return parts.join(', ');
+/**
+ * The summary line of an import in the user's language, e.g. "Created: 3,
+ * skipped: 1, failed: 2." One whole sentence per combination of counts.
+ */
+export function summarizeImport(
+  result: BatchImportResult,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const key = `created${result.skipped ? 'Skipped' : ''}${result.failed ? 'Failed' : ''}`;
+  return t(`common:importSummary.${key}`, {
+    created: result.created,
+    skipped: result.skipped,
+    failed: result.failed,
+  });
 }

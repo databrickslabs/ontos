@@ -13,7 +13,10 @@
     "deletingEstate": "Errore nell'Eliminazione dell'Estate",
     "triggeringSync": "Errore nell'Avvio della Sincronizzazione",
     "validationError": "Errore di Validazione",
-    "validationMessage": "Compila tutti i campi obbligatori: Nome, Descrizione, URL Workspace, Nome Metastore, Tipo Cloud e Tipo Connessione."
+    "validationMessage": "Compila tutti i campi obbligatori: Nome, Descrizione, URL Workspace, Nome Metastore, Tipo Cloud e Tipo Connessione.",
+    "codes": {
+      "estate_name_conflict": "Esiste già un estate chiamato \"{{name}}\"."
+    }
   },
   "toast": {
     "estateCreated": "Estate creato con successo",
@@ -102,7 +105,6 @@
     "backToEstateManager": "Torna al Gestore Estate",
     "backToListButton": "Torna all'Elenco",
     "configureSyncJob": "Configura Job di Sincronizzazione",
-    "editNotImplemented": "Funzionalità di Modifica Estate da implementare",
     "syncEnabled": "Sincronizzazione Abilitata",
     "syncDisabled": "Sincronizzazione Disabilitata",
     "never": "Mai",
@@ -121,15 +123,16 @@
       "noEstateData": "I dati dell'estate non sono disponibili per aggiungere una politica."
     },
     "policies": {
-      "title": "Politiche di Condivisione",
       "add": "Aggiungi Politica",
-      "sectionDescription": "Definisci regole per condividere Prodotti Dati specifici o termini di Modelli Semantici con questo estate. Le risorse condivise saranno accessibili tramite il tipo di connessione configurato.",
       "resourceTypeLabel": "Tipo di Risorsa:",
       "rulesLabel": "Regole ({{count}}):",
-      "filterBy": "Filtra per",
-      "whereValue": "dove il valore",
+      "ruleText": {
+        "equals": "Filtra per <b>{{filterType}}</b> dove il valore è uguale a <b>'{{value}}'</b>",
+        "contains": "Filtra per <b>{{filterType}}</b> dove il valore contiene <b>'{{value}}'</b>",
+        "starts_with": "Filtra per <b>{{filterType}}</b> dove il valore inizia con <b>'{{value}}'</b>",
+        "regex": "Filtra per <b>{{filterType}}</b> dove il valore corrisponde all'espressione regolare <b>'{{value}}'</b>"
+      },
       "noRules": "Nessuna regola definita per questa politica.",
-      "emptyTitle": "Nessuna politica di condivisione definita per questo estate.",
       "emptyHint": "Clicca su \"Aggiungi Politica\" per iniziare a condividere risorse.",
       "editPolicyAlert": "Modifica politica: {{name}}",
       "deletePolicyAlert": "Elimina politica: {{name}}",
@@ -137,7 +140,17 @@
       "addedDescription": "La politica di condivisione \"{{name}}\" è stata aggiunta con successo.",
       "addErrorTitle": "Errore nell'Aggiunta della Politica",
       "addErrorDescription": "Impossibile salvare la nuova politica di condivisione. Riprova.",
-      "saveFailedNoData": "Impossibile salvare la politica. Il server non ha restituito dati."
+      "saveFailedNoData": "Impossibile salvare la politica. Il server non ha restituito dati.",
+      "export": {
+        "title": "Policy di esportazione",
+        "sectionDescription": "Ciò che questa istanza condivide con questo estate.",
+        "emptyTitle": "Nessuna policy di esportazione definita per questo estate."
+      },
+      "import": {
+        "title": "Policy di importazione",
+        "sectionDescription": "Ciò che questa istanza accetta da questo estate.",
+        "emptyTitle": "Nessuna policy di importazione definita per questo estate."
+      }
     },
     "overview": {
       "title": "Panoramica Estate",
@@ -181,6 +194,12 @@
       "filterType": "es. tag, dominio, stato",
       "value": "es. finance, Attivo"
     },
+    "operators": {
+      "equals": "È uguale a",
+      "contains": "Contiene",
+      "starts_with": "Inizia con",
+      "regex": "Corrisponde alla regex"
+    },
     "validation": {
       "nameMin": "Il nome della politica deve contenere almeno 3 caratteri",
       "filterTypeRequired": "Il tipo di filtro è obbligatorio",
@@ -192,5 +211,12 @@
       "submittedDescription": "La politica di condivisione \"{{name}}\" è in fase di elaborazione.",
       "addErrorDescription": "Impossibile aggiungere la politica di condivisione. Controlla la console per i dettagli."
     }
+  },
+  "resourceTypes": {
+    "data_product": "Prodotto dati",
+    "data_contract": "Contratto dati",
+    "business_term": "Termine di business",
+    "data_domain": "Dominio dati",
+    "concept": "Concetto"
   }
 }

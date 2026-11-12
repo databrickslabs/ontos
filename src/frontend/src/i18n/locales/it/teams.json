@@ -54,6 +54,7 @@
       "createdDescription": "Il team \"{{name}}\" è stato creato con successo.",
       "updatedDescription": "Il team \"{{name}}\" è stato aggiornato con successo.",
       "createFailedTitle": "Creazione del team non riuscita",
+      "membersFailedTitle": "Team creato, ma non è stato possibile salvare i membri",
       "updateFailedTitle": "Aggiornamento del team non riuscito",
       "failedDescription": "Si è verificato un errore imprevisto."
     }

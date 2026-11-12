@@ -57,7 +57,9 @@ class TestRequestStewardReview:
         assert contract.status == "proposed"
 
         # The steward-facing surface: proposed contracts appear in the queue.
-        queue = ApprovalsManager().get_approvals_queue(db_session)
+        queue = ApprovalsManager().get_approvals_queue(
+            db_session, can_see_contract=lambda c: True, can_see_product=lambda p: True,
+        )
         queued_ids = {c["id"] for c in queue["contracts"]}
         assert draft_contract in queued_ids
 

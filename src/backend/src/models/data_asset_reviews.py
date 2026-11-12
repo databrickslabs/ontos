@@ -36,7 +36,7 @@ class AssetType(str, Enum):
     NOTEBOOK = "notebook"
     JOB = "job"
     PIPELINE = "pipeline"
-    METRIC = "metric"  # UC Metrics (AI/BI)
+    METRIC = "metric"  # Unity Catalog metric views
     
     # Cross-platform streaming
     STREAM = "stream"
@@ -64,10 +64,30 @@ class AssetType(str, Enum):
     # Knowledge system assets
     KNOWLEDGE_CONCEPT = "knowledge_concept"
     KNOWLEDGE_COLLECTION = "knowledge_collection"
+
+    # Bulk RDF-upload changeset awaiting ONE aggregate approval (P3).
+    # FQN format: concept-changeset://{preview_token} — the reviewed-asset id is
+    # the held UploadPreviewDb token, which is what apply-on-approval needs.
+    CONCEPT_CHANGESET = "concept_changeset"
     
     # Generic/external
     EXTERNAL = "external"
     OTHER = "other"
+
+
+# App entities are reviewed under ``<prefix><entity id>`` instead of a UC name.
+APP_ENTITY_FQN_PREFIXES = {
+    'contract:': AssetType.DATA_CONTRACT,
+    'product:': AssetType.DATA_PRODUCT,
+}
+
+
+def app_entity_asset_type(fqn: str) -> Optional[AssetType]:
+    """The asset type of an app entity FQN (``product:<id>``, ``contract:<id>``), else None."""
+    for prefix, asset_type in APP_ENTITY_FQN_PREFIXES.items():
+        if fqn.startswith(prefix):
+            return asset_type
+    return None
 
 # --- Pydantic Models --- #
 

@@ -31,9 +31,12 @@
       "special": "Especiais",
       "requesterOriginalUser": "Solicitante (usuário original)",
       "ownerEntityOwner": "Proprietário (proprietário da entidade)",
+      "domainOwners": "Responsáveis pelo domínio",
+      "contractApprovers": "Aprovadores do contrato",
       "appRoles": "Papéis do aplicativo",
       "businessRoles": "Papéis de negócio",
-      "noGroups": "Nenhum grupo"
+      "noGroups": "Nenhum grupo",
+      "assetOwners": "Proprietários do ativo"
     },
     "messages": {
       "loadWorkflowFailed": "Falha ao carregar fluxo de trabalho",
@@ -43,7 +46,8 @@
       "createdSuccess": "Fluxo de trabalho criado com sucesso",
       "updatedSuccess": "Fluxo de trabalho atualizado com sucesso",
       "createFailed": "Falha ao criar fluxo de trabalho: {{error}}",
-      "updateFailed": "Falha ao atualizar fluxo de trabalho: {{error}}"
+      "updateFailed": "Falha ao atualizar fluxo de trabalho: {{error}}",
+      "stepConfigInvalid": "Etapa \"{{step}}\": {{issue}}"
     },
     "badges": {
       "default": "Padrão",
@@ -90,6 +94,13 @@
       "generate_pdf": "Gerar PDF",
       "deliver": "Entregar"
     },
+    "layout": {
+      "rearrange": "Reorganizar",
+      "rearrangeHint": "Organizar todas as etapas automaticamente",
+      "confirmTitle": "Reorganizar todas as etapas?",
+      "confirmDescription": "As etapas são organizadas automaticamente. Seu layout atual é substituído ao salvar.",
+      "confirmAction": "Reorganizar"
+    },
     "discard": {
       "description": "Você tem alterações não salvas neste fluxo de trabalho. Se sair agora, suas alterações serão perdidas.",
       "stay": "Permanecer",
@@ -101,7 +112,25 @@
       "fromStatusPlaceholder": "ex.: draft",
       "toStatus": "Status de destino",
       "toStatusPlaceholder": "ex.: active",
-      "descriptionPlaceholder": "Descrição do fluxo de trabalho"
+      "descriptionPlaceholder": "Descrição do fluxo de trabalho",
+      "failClosed": "Recusar a transição se este gate não puder ser avaliado",
+      "failClosedHint": "Fail closed: quando a avaliação deste gate gera um erro (e não uma falha normal), a mudança de status é recusada. Desligado (fail open), a mudança acontece e o erro é registrado no log e na auditoria.",
+      "disabledFor": {
+        "title": "Desligado para",
+        "hint": "Este gate não roda para os domínios, produtos de dados e contratos de dados listados aqui (um domínio cobre seus produtos e contratos). Cada vez que ele é pulado, isso fica no log e na auditoria.",
+        "domains": "Domínios",
+        "dataProducts": "Produtos de dados",
+        "dataContracts": "Contratos de dados",
+        "none": "Nenhum",
+        "selectedCount_one": "{{count}} selecionado",
+        "selectedCount_other": "{{count}} selecionados",
+        "search": "Buscar...",
+        "noResults": "Nada encontrado.",
+        "remove": "Remover {{name}}",
+        "notFound": "{{id}} (não existe mais)",
+        "missingOnSave_one": "O gate está desligado para {{count}} item que não existe mais. Remova-o e salve de novo.",
+        "missingOnSave_other": "O gate está desligado para {{count}} itens que não existem mais. Remova-os e salve de novo."
+      }
     },
     "stepConfig": {
       "title": "Configuração da etapa",
@@ -167,7 +196,9 @@
         "validationPassed": "Validação aprovada",
         "productApproved": "Produto aprovado",
         "productRejected": "Produto rejeitado",
-        "piiDetected": "PII detectada"
+        "piiDetected": "PII detectada",
+        "entityDeprecated": "Aviso de obsolescência",
+        "entityRetired": "Aviso de aposentadoria"
       },
       "customMessage": "Mensagem personalizada",
       "customMessagePlaceholder": "Substituir mensagem do modelo. Suporta ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
@@ -188,13 +219,28 @@
       "selectSource": "Selecionar origem",
       "sourceCurrentUser": "Usuário atual",
       "sourceProjectName": "Nome do projeto",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Valor",
+      "modeFixed": "Valor fixo",
+      "modeSource": "Valor da execução",
+      "modeNone": "Sem valor",
+      "fixedValue": "Valor da tag",
+      "fixedValuePlaceholder": "ex.: confidencial",
+      "selectValue": "Selecione um valor",
+      "noValueHelp": "A tag é atribuída sem valor. Um valor que a entidade já tenha para esta tag é mantido.",
+      "sourceEntityName": "Nome da entidade",
+      "tagNotFound": "Nenhuma tag tem este nome. A etapa então só a define para as etapas seguintes da execução.",
+      "fixedValueRequired": "Insira um valor ou escolha \"Sem valor\" para atribuir a tag sem valor."
     },
     "approval": {
       "approversRole": "Aprovadores (papel)",
       "selectRole": "Selecionar papel",
       "additionalApproversAria": "Aprovadores adicionais",
-      "timeoutDays": "Tempo limite (dias)"
+      "timeoutDays": "Tempo limite (dias)",
+      "timeoutDaysHelp": "0 significa sem tempo limite; deixe vazio para o padrão (7 dias).",
+      "requireAll": "Exigir todos os aprovadores",
+      "requireAllHelp": "Cada aprovador decide: um usuário por si mesmo, qualquer membro por um grupo ou papel. Qualquer rejeição reprova a etapa.",
+      "timeoutNotEnforced": "Ainda não aplicado: uma aprovação pendente não expira."
     },
     "assetReview": {
       "reviewerRole": "Papel do revisor",
@@ -241,6 +287,66 @@
       "timeoutSeconds": "Tempo limite (segundos)",
       "retryCount": "Número de tentativas",
       "retryHelp": "Número de novas tentativas em caso de falha (0-5)."
+    },
+    "conditional": {
+      "condition": "Condição",
+      "placeholder": "obj.status = 'active' AND NOT HAS_TAG('pii')",
+      "branchHelp": "Quando a condição é verdadeira, o workflow segue o ramo Pass; quando é falsa, o ramo Fail.",
+      "fieldsHelp": "Escreva uma expressão da Compliance DSL sem MATCH nem ASSERT. Os campos da entidade são lidos como obj.<campo>; compare com =, não ==.",
+      "examplesTitle": "Exemplos",
+      "errors": {
+        "condition_required": "Informe uma condição.",
+        "condition_syntax_error": "A condição não pôde ser interpretada (linha {{line}}, coluna {{column}}).",
+        "condition_trailing_input": "\"{{token}}\" inesperado depois da condição (linha {{line}}, coluna {{column}}). Una condições com AND ou OR.",
+        "condition_too_long": "A condição tem mais de {{maximum}} caracteres. Encurte-a ou divida-a em várias etapas.",
+        "condition_too_complex": "A condição tem aninhamento profundo demais para ser verificada. Remova alguns parênteses ou divida-a em várias etapas."
+      }
+    },
+    "script": {
+      "language": "Linguagem",
+      "languages": {
+        "python": "Python",
+        "sql": "SQL"
+      },
+      "code": "Código",
+      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
+      "timeout": "Tempo limite (segundos)",
+      "timeoutHelp": "A etapa falha quando o script roda por mais tempo que isso.",
+      "variablesTitle": "Variáveis disponíveis",
+      "pythonVariables": {
+        "entity": "Os dados da entidade (um dicionário)",
+        "entity_type": "O tipo da entidade",
+        "entity_id": "O ID da entidade",
+        "entity_name": "O nome da entidade",
+        "user_email": "E-mail do usuário que disparou o workflow",
+        "step_results": "Resultados das etapas que já rodaram, por ID da etapa"
+      },
+      "pythonResultHelp": "Defina result para escolher o ramo: result = {'passed': False, 'message': '...'} segue o ramo Fail; sem result a etapa passa. Só há built-ins básicos: sem imports, arquivos ou rede.",
+      "sqlHelp": "Roda no SQL warehouse definido em Configurações. Os marcadores ${variable} são substituídos antes de a instrução rodar; a etapa passa quando a instrução termina com sucesso. A instrução espera até 50 segundos.",
+      "errors": {
+        "script_code_required": "Informe o código do script.",
+        "script_timeout_invalid": "Informe um número inteiro de segundos, no mínimo {{minimum}}.",
+        "script_language_unsupported": "A linguagem \"{{language}}\" não é suportada. Suportadas: {{supported}}."
+      }
+    },
+    "validationIssues": {
+      "stepsRequired": "Um workflow precisa de pelo menos uma etapa.",
+      "duplicateStepIds": "Duas etapas têm o mesmo ID.",
+      "stepUnknownReference": "A etapa \"{{step}}\" aponta o ramo de {{branch}} para \"{{target}}\", que não está no workflow.",
+      "stepConfigMissing": "Faltam configurações obrigatórias na etapa \"{{step}}\": {{fields}}.",
+      "assignTagValueSourceUnknown": "A etapa \"{{step}}\" usa a fonte de valor desconhecida \"{{source}}\".",
+      "policyCheckPolicyMissing": "A etapa \"{{step}}\" precisa de uma política de conformidade existente. Selecione uma nas configurações da etapa.",
+      "branch": {
+        "on_pass": "sucesso",
+        "on_fail": "falha"
+      }
+    },
+    "edgeLabels": {
+      "pass": "Aprovado",
+      "fail": "Reprovado",
+      "true": "Verdadeiro",
+      "false": "Falso"
     }
   },
   "approvalResponse": {
@@ -270,7 +376,58 @@
       "processFailed": "Falha ao processar aprovação.",
       "processFailedRetry": "Falha ao processar aprovação. Tente novamente.",
       "entityApproved": "{{name}} foi aprovado.",
-      "entityRejected": "{{name}} foi rejeitado."
+      "entityRejected": "{{name}} foi rejeitado.",
+      "decisionRecorded": "Decisão registrada",
+      "waitingForApprovers_one": "Aguardando mais {{count}} aprovador.",
+      "waitingForApprovers_other": "Aguardando mais {{count}} aprovadores."
+    },
+    "errors": {
+      "own_owner_approval": "Esta aprovação cabe aos proprietários; você não pode aprovar a sua própria solicitação.",
+      "own_change_request_approval": "Você não pode aprovar a sua própria solicitação de alteração.",
+      "approval_already_decided": "Você já decidiu esta aprovação.",
+      "approval_not_an_approver": "Somente os aprovadores desta etapa podem decidi-la.",
+      "approval_no_longer_pending": "Esta aprovação já foi decidida."
+    },
+    "entityTypes": {
+      "entity": "Entidade",
+      "data_product": "Produto de dados",
+      "data_contract": "Contrato de dados",
+      "data_domain": "Domínio de dados",
+      "data_asset_review": "Revisão de ativos de dados",
+      "access_grant": "Concessão de acesso",
+      "asset": "Ativo",
+      "ontology_concept": "Conceito",
+      "concept": "Conceito"
+    },
+    "fields": {
+      "product_id": "ID do produto",
+      "product_name": "Nome do produto",
+      "contract_id": "ID do contrato",
+      "contract_name": "Nome do contrato",
+      "status": "Status",
+      "from_status": "Status de origem",
+      "to_status": "Status de destino",
+      "target_status": "Status solicitado",
+      "current_status": "Status atual",
+      "justification": "Justificativa",
+      "sunset_date": "Data de desativação",
+      "replacement_id": "ID do substituto",
+      "replacement_name": "Substituto",
+      "requested_scope": "Escopo solicitado",
+      "publication_scope": "Escopo de publicação",
+      "requester": "Solicitante",
+      "requester_message": "Mensagem do solicitante",
+      "reviewer_email": "Revisor",
+      "requested_certification_level": "Nível de certificação solicitado",
+      "certification_level": "Nível de certificação",
+      "certification_notes": "Notas de certificação",
+      "asset_count": "Número de ativos",
+      "asset_fqns": "Ativos",
+      "domain_id": "ID do domínio",
+      "project_id": "ID do projeto",
+      "project_name": "Projeto",
+      "name": "Nome",
+      "notes": "Notas"
     }
   },
   "approvalWizard": {
@@ -360,9 +517,22 @@
     "titleFallback": "Execução do fluxo de trabalho",
     "executionId": "ID da execução: {{id}}...",
     "stepsProgress": "{{done}}/{{total}} etapas",
+    "stepsProgressWithRemoved_one": "{{done}}/{{total}} etapas (+{{count}} removida)",
+    "stepsProgressWithRemoved_other": "{{done}}/{{total}} etapas (+{{count}} removidas)",
     "triggeredBy": "Acionado por: {{user}}",
     "workflowSteps": "Etapas do fluxo de trabalho",
     "loadDefinitionFailed": "Falha ao carregar definição do fluxo de trabalho",
+    "removedSteps": "Etapas removidas",
+    "removedStepsHint": "Estas etapas rodaram nesta execução e depois foram removidas do workflow.",
+    "stepErrors": {
+      "rule_where_evaluation_failed": "Não foi possível avaliar a cláusula WHERE da política '{{policyName}}' em {{entityType}} {{entityId}}",
+      "approval_rejected": "Solicitação negada",
+      "output_port_contracts_missing": "Não é possível publicar: as portas de saída {{ports}} precisam ter contratos de dados atribuídos",
+      "output_port_contracts_unapproved": "Não é possível publicar: estas portas de saída têm contratos não aprovados: {{ports}}. Os contratos precisam ser aprovados primeiro.",
+      "rule_entity_load_failed": "Não foi possível carregar {{entityType}} {{entityId}} para avaliar a regra",
+      "rule_entity_not_found": "{{entityType}} {{entityId}} não foi encontrado, então a regra não pode ser avaliada",
+      "cancelled_by_admin": "Cancelado por um administrador ({{by}})"
+    },
     "states": {
       "pending": "Pendente",
       "running": "Em execução",
@@ -370,6 +540,18 @@
       "failed": "Falhou",
       "skipped": "Ignorada",
       "waiting": "Aguardando"
+    },
+    "conditionalBranch": {
+      "true": "A condição foi verdadeira: seguiu o ramo verdadeiro",
+      "false": "A condição foi falsa: seguiu o ramo falso"
+    },
+    "executionStates": {
+      "pending": "Pendente",
+      "running": "Em execução",
+      "paused": "Pausada",
+      "succeeded": "Concluída",
+      "failed": "Falhou",
+      "cancelled": "Cancelada"
     },
     "summary": {
       "entity": "Entidade",
@@ -393,6 +575,8 @@
     "policyLabel": "Política: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Nenhuma política selecionada",
+    "policyHint": "Sugerida: {{name}}",
+    "policyUnknown": "Política desconhecida ou inativa: {{id}}",
     "reviewerLabel": "Revisor:",
     "notSet": "Não definido",
     "connectionLabel": "Conexão: {{name}}",
@@ -431,6 +615,25 @@
     "endpointHint": "Endpoint de backend que retorna JSON",
     "addField": "Adicionar campo"
   },
+  "runDialog": {
+    "menuLabel": "Executar",
+    "title": "Executar \"{{name}}\"",
+    "description": "Inicie este fluxo de trabalho manual para uma entidade. Ele será executado agora, em seu nome.",
+    "entityType": "Tipo de entidade",
+    "entity": "Entidade",
+    "selectEntity": "Selecione uma entidade",
+    "loading": "Carregando...",
+    "noEntities": "Nada para selecionar.",
+    "listFailed": "Não foi possível carregar a lista; informe o ID manualmente.",
+    "entityId": "ID da entidade",
+    "entityIdPlaceholder": "ex.: main.sales.orders",
+    "entityIdHelp": "O ID ou nome completo da entidade para a qual o fluxo de trabalho deve ser executado.",
+    "run": "Executar",
+    "failed": "Não foi possível iniciar o fluxo de trabalho.",
+    "resultStatus": "Resultado",
+    "viewExecution": "Ver execução",
+    "resultEntity": "{{type}}: {{name}}"
+  },
   "templateVars": {
     "copiedToClipboard": "{{placeholder}} copiado para a área de transferência.",
     "copyFailed": "Falha ao copiar",
@@ -452,6 +655,16 @@
     "matches_one": "{{count}} correspondência",
     "matches_other": "{{count}} correspondências",
     "noMatch": "Nenhuma variável corresponde"
+  },
+  "triggerEntityChecks": {
+    "unknownBadge": "Tipo de entidade desconhecido: {{type}}",
+    "removeUnknown": "Remover {{type}}",
+    "unknownNotice_one": "Este gatilho lista um tipo de entidade que não existe mais. Ele não corresponde a nada: remova-o para alterar o gatilho.",
+    "unknownNotice_other": "Este gatilho lista {{count}} tipos de entidade que não existem mais. Eles não correspondem a nada: remova-os para alterar o gatilho.",
+    "unknownOnSave": "O gatilho lista o tipo de entidade desconhecido \"{{type}}\": remova-o nas configurações do gatilho para alterar o gatilho.",
+    "unsupportedOnSave": "\"{{trigger}}\" nunca é acionado para {{type}}: escolha um tipo de entidade que este gatilho suporta.",
+    "pickKnownType": "Escolha pelo menos um tipo de entidade. Sem nenhum, este workflow seria acionado para todas as entidades.",
+    "requiredOnSave": "Escolha pelo menos um tipo de entidade para o gatilho: nenhum dos tipos dele dispara (não existem mais, ou este gatilho nunca dispara para eles), e uma lista vazia faria com que fosse acionado para todas as entidades."
   },
   "triggerPicker": {
     "label": "Acionado em",
@@ -489,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "Fluxos de trabalho padrão",
       "newOnly": "Carregar somente novos",
-      "reloadAll": "Recarregar todos os padrões"
+      "reloadAll": "Recarregar todos os padrões",
+      "confirmTitle": "Recarregar todos os fluxos de trabalho padrão?",
+      "confirmDescription": "Cada fluxo de trabalho padrão é redefinido para a definição original: descrição, gatilho, escopo, etapas e sua disposição. O estado ativo não muda. Os padrões que você ou outro administrador editou são mantidos, a menos que você também os redefina abaixo.",
+      "includeEdited": "Redefinir também os fluxos padrão editados (as alterações serão perdidas)",
+      "confirmAction": "Recarregar",
+      "keptEdited": "Editados mantidos: {{names}}.",
+      "result": "Criados: {{created}}, atualizados: {{updated}}, ignorados: {{skipped}}."
     },
     "badges": {
       "default": "Padrão",
@@ -552,7 +771,12 @@
       "duplicateTitle": "Duplicar fluxo de trabalho",
       "duplicateDescription": "Criar uma cópia de \"{{name}}\" com um novo nome.",
       "deleteExecutionTitle": "Excluir execução",
-      "deleteExecutionDescription": "Tem certeza de que deseja excluir esta execução de fluxo de trabalho? Esta ação não pode ser desfeita."
+      "deleteExecutionDescription": "Tem certeza de que deseja excluir esta execução de fluxo de trabalho? Esta ação não pode ser desfeita.",
+      "activationOverlapTitle": "Outro workflow corresponde ao mesmo evento",
+      "activationOverlapDescription": "Os workflows abaixo também seriam executados no mesmo evento. Revise-os e cancele ou ative mesmo assim.",
+      "activationOverlapDetails": "Gatilho: {{trigger}} · Entidades: {{entities}}",
+      "allEntities": "todas as entidades",
+      "activateAnyway": "Ativar mesmo assim"
     },
     "placeholders": {
       "newWorkflowName": "Nome do novo fluxo de trabalho"
@@ -599,6 +823,7 @@
       "loadDefaultsFailed": "Falha ao carregar fluxos de trabalho padrão",
       "cancelSuccess": "Execução cancelada com sucesso",
       "cancelFailed": "Falha ao cancelar execução",
+      "approvalCancelled": "Aprovação cancelada. O fluxo de trabalho seguiu o caminho de rejeição; status: {{status}}.",
       "retryStarted": "Nova tentativa de execução iniciada",
       "retryFailed": "Falha ao tentar executar novamente",
       "executionDeleteSuccess": "Execução excluída com sucesso",
@@ -609,6 +834,7 @@
       "approveFailed": "Falha ao aprovar fluxo de trabalho",
       "rejectResumeSuccess": "Fluxo de trabalho rejeitado e retomado",
       "rejectFailed": "Falha ao rejeitar fluxo de trabalho",
+      "forceDecisionRequireAll": "Somente os aprovadores podem decidir esta etapa (todos precisam decidir). Em vez disso, você pode cancelar a execução.",
       "noChanges": "Nenhuma alteração",
       "allAlreadyEnabled": "Todos os fluxos de trabalho selecionados já estão habilitados.",
       "allAlreadyDisabled": "Todos os fluxos de trabalho selecionados já estão desabilitados.",

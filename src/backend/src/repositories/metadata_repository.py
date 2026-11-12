@@ -18,7 +18,21 @@ from src.models.metadata import (
 )
 
 
+def _remove_all_for_entity(db: Session, model, *, entity_type: str, entity_id: str) -> int:
+    """Delete every row of ``model`` stored for an entity (used when the entity is deleted)."""
+    return (
+        db.query(model)
+        .filter(model.entity_type == entity_type, model.entity_id == entity_id)
+        .delete(synchronize_session=False)
+    )
+
+
 class RichTextRepository(CRUDBase[RichTextMetadataDb, RichTextCreate, RichTextUpdate]):
+    def remove_all_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> int:
+        return _remove_all_for_entity(
+            db, RichTextMetadataDb, entity_type=entity_type, entity_id=entity_id,
+        )
+
     def list_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> List[RichTextMetadataDb]:
         """List rich texts directly attached to an entity (not shared assets attached via junction)."""
         return (
@@ -63,6 +77,11 @@ class RichTextRepository(CRUDBase[RichTextMetadataDb, RichTextCreate, RichTextUp
 
 
 class LinkRepository(CRUDBase[LinkMetadataDb, LinkCreate, LinkUpdate]):
+    def remove_all_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> int:
+        return _remove_all_for_entity(
+            db, LinkMetadataDb, entity_type=entity_type, entity_id=entity_id,
+        )
+
     def list_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> List[LinkMetadataDb]:
         """List links directly attached to an entity."""
         return (
@@ -107,6 +126,21 @@ class LinkRepository(CRUDBase[LinkMetadataDb, LinkCreate, LinkUpdate]):
 
 
 class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCreate]):
+    def remove_all_for_entity(
+        self, db: Session, *, entity_type: str, entity_id: str,
+    ) -> List[str]:
+        """Delete the entity's documents; returns the volume paths of their files."""
+        paths = [
+            path for (path,) in db.query(DocumentMetadataDb.storage_path).filter(
+                DocumentMetadataDb.entity_type == entity_type,
+                DocumentMetadataDb.entity_id == entity_id,
+            )
+        ]
+        _remove_all_for_entity(
+            db, DocumentMetadataDb, entity_type=entity_type, entity_id=entity_id,
+        )
+        return paths
+
     def list_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> List[DocumentMetadataDb]:
         """List documents directly attached to an entity."""
         return (
@@ -153,6 +187,11 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
 class MetadataAttachmentRepository(CRUDBase[MetadataAttachmentDb, MetadataAttachmentCreate, MetadataAttachmentCreate]):
     """Repository for managing metadata attachments (shared asset links)."""
     
+    def remove_all_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> int:
+        return _remove_all_for_entity(
+            db, MetadataAttachmentDb, entity_type=entity_type, entity_id=entity_id,
+        )
+
     def list_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> List[MetadataAttachmentDb]:
         """List all attachments for an entity."""
         return (

@@ -11,8 +11,13 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
+from src.common.uc_table_columns import table_column_fields
 
 logger = get_logger(__name__)
+
+
+class EntityLoadError(RuntimeError):
+    """Data a rule needs could not be loaded, so the run must not pass."""
 
 
 @dataclass
@@ -47,6 +52,10 @@ class EntityLoader(ABC):
             Entity dictionaries
         """
         pass
+
+
+# Unity Catalog table types that are views. The exact type stays in `table_type`.
+VIEW_TABLE_TYPES = ('VIEW', 'MATERIALIZED_VIEW', 'METRIC_VIEW')
 
 
 class UnityCatalogLoader(EntityLoader):
@@ -110,8 +119,12 @@ class UnityCatalogLoader(EntityLoader):
                                     catalog_name=catalog.name,
                                     schema_name=schema.name
                                 ):
+                                    # The SDK returns a TableType enum; rules compare strings.
                                     table_type_raw = getattr(table, 'table_type', 'TABLE')
-                                    entity_type = 'view' if table_type_raw == 'VIEW' else 'table'
+                                    table_type_raw = getattr(
+                                        table_type_raw, 'value', table_type_raw)
+                                    is_view = table_type_raw in VIEW_TABLE_TYPES
+                                    entity_type = 'view' if is_view else 'table'
 
                                     if entity_type not in entity_types:
                                         continue
@@ -129,6 +142,7 @@ class UnityCatalogLoader(EntityLoader):
                                         'created_at': getattr(table, 'created_at', None),
                                         'updated_at': getattr(table, 'updated_at', None),
                                         'storage_location': getattr(table, 'storage_location', None),
+                                        **table_column_fields(table),
                                     }
                             except Exception:
                                 logger.exception(f"Failed to list tables for schema {catalog.name}.{schema.name}")
@@ -194,6 +208,25 @@ class UnityCatalogLoader(EntityLoader):
             logger.exception("Failed to load UC entities")
 
 
+def tag_values(tags: List[Any]) -> Dict[str, Any]:
+    """An entity's assigned tags as rules read them (``HAS_TAG`` / ``TAG``).
+
+    Keyed by fully qualified name (``namespace/name``) and, when no other
+    namespace has a tag of that name on the entity, by name; the value is the
+    assigned value, or True when the tag has none.
+    """
+    namespaces_by_name: Dict[str, set] = {}
+    for tag in tags:
+        namespaces_by_name.setdefault(tag.tag_name, set()).add(tag.fully_qualified_name)
+    values: Dict[str, Any] = {}
+    for tag in tags:
+        value = tag.assigned_value if tag.assigned_value is not None else True
+        values[tag.fully_qualified_name] = value
+        if len(namespaces_by_name[tag.tag_name]) == 1:
+            values[tag.tag_name] = value
+    return values
+
+
 class AppEntityLoader(EntityLoader):
     """Load entities from application database."""
 
@@ -207,90 +240,154 @@ class AppEntityLoader(EntityLoader):
     def get_supported_types(self) -> List[str]:
         return list(self.SUPPORTED_TYPES)
 
+    def _tags_by_entity(self, entity_type: str, entity_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Assigned tags per entity, for HAS_TAG / TAG in rules.
+
+        Each tag is keyed by its fully qualified name (``namespace/name``) and,
+        when no other namespace has a tag of the same name on that entity, by
+        its name; the value is the assigned value, or True when the tag has
+        none. A failed lookup raises EntityLoadError: without the tags, rules
+        on them would pass or match nothing as if the entities were untagged.
+        """
+        if not entity_ids:
+            return {}
+        try:
+            from src.repositories.tags_repository import entity_tag_repo
+            # In a savepoint: on Postgres a failed query aborts the transaction,
+            # and the run could not then be recorded as failed.
+            with self.db.begin_nested():
+                assigned = entity_tag_repo.get_assigned_tags_for_entities(
+                    self.db, entity_ids=entity_ids, entity_type=entity_type
+                )
+        except Exception as e:
+            logger.exception("Failed to load tags of %s entities for compliance", entity_type)
+            error = EntityLoadError(f"Could not load the tags of {entity_type} entities")
+            # A code the UI translates; the message stays the fallback
+            error.error_code, error.error_params = 'tags_load_failed', {'entityType': entity_type}
+            raise error from e
+        return {str(entity_id): tag_values(tags) for entity_id, tags in assigned.items()}
+
+    def _load(self, entity_type: str, query):
+        """Rows of one entity type, read by ``query()`` in a savepoint.
+
+        A failure raises EntityLoadError: the rules on that type must fail,
+        not pass with no entities to check, as they did when the table didn't
+        match the schema the code expects (#813). The savepoint keeps the
+        session usable on Postgres, so the run can still be recorded as failed.
+        """
+        try:
+            with self.db.begin_nested():
+                return query()
+        except Exception as e:
+            logger.exception("Failed to load %s entities for compliance", entity_type)
+            error = EntityLoadError(f"Could not load the {entity_type} entities")
+            # A code the UI translates; the message stays the fallback
+            error.error_code, error.error_params = 'entities_load_failed', {'entityType': entity_type}
+            raise error from e
+
+    def _rows(self, repo, entity_id: Optional[str], **kwargs) -> List[Any]:
+        """The rows load_entities reads: all of them, or the one with ``entity_id``."""
+        if entity_id is None:
+            return repo.get_multi(self.db, limit=1000, **kwargs)
+        # Session.get, not repo.get: the repositories roll the whole
+        # transaction back on an error, past the savepoint of _load.
+        row = self.db.get(repo.model, entity_id)
+        return [row] if row is not None else []
+
+    def load_entity(self, entity_type: str, entity_id: str) -> Optional[Dict[str, Any]]:
+        """One entity as load_entities gives it to a rule, or None if it doesn't exist."""
+        return next(self.load_entities([entity_type], entity_id=entity_id), None)
+
     def load_entities(
         self,
         entity_types: List[str],
-        batch_size: int = 100
+        batch_size: int = 100,
+        entity_id: Optional[str] = None,
     ) -> Iterator[Dict[str, Any]]:
         """Load app entities from database.
 
         NOTE: repositories expose get_multi() (CRUDBase), not list(); the Db
         models carry owner_team_id/domain_id rather than owner/domain/tags
-        attributes. Each entity type loads in its own try block so a failure
-        in one type cannot silently suppress every other type.
+        attributes. Only the types a rule matches are loaded; a type that
+        can't be loaded raises EntityLoadError (see _load). With ``entity_id``
+        only that entity is read (a workflow policy check, see load_entity).
         """
         # Data Products
         if 'data_product' in entity_types:
-            try:
-                from src.repositories.data_products_repository import data_product_repo
-                from src.repositories.entity_domain_association_repository import entity_domain_repo
+            from src.repositories.data_products_repository import data_product_repo
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+
+            def products_and_domains():
                 # is_admin: the products repo is fail-closed per caller scope;
                 # compliance evaluates system-wide and its route is already
                 # permission-checked, so it must see every product.
-                products = data_product_repo.get_multi(self.db, limit=1000, is_admin=True)
+                products = self._rows(data_product_repo, entity_id, is_admin=True)
                 # Domain moved to the entity_domain_associations junction; batch-load the
                 # primary domain name per product (the legacy `domain` column was dropped).
-                domains_map = entity_domain_repo.get_domains_for_entities(
+                domains = entity_domain_repo.get_domains_for_entities(
                     self.db, entity_type="data_product", entity_ids=[str(p.id) for p in products]
                 ) if products else {}
-                for product in products:
-                    assigned = domains_map.get(str(product.id), [])
-                    primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
-                    yield {
-                        'type': 'data_product',
-                        'id': product.id,
-                        'name': product.name,
-                        'description': getattr(product, 'description_purpose', None)
-                                       or getattr(product, 'description', None),
-                        'domain': primary_domain,
-                        'status': product.status,
-                        'version': getattr(product, 'version', None),
-                        'owner': getattr(product, 'owner_team_id', None),
-                        'tags': {},
-                        'created_at': getattr(product, 'created_at', None),
-                        'updated_at': getattr(product, 'updated_at', None),
-                    }
-            except Exception:
-                logger.exception("Failed to load data products for compliance")
+                return products, domains
+
+            products, domains_map = self._load('data_product', products_and_domains)
+            tags_map = self._tags_by_entity('data_product', [str(p.id) for p in products])
+            for product in products:
+                assigned = domains_map.get(str(product.id), [])
+                primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
+                yield {
+                    'type': 'data_product',
+                    'id': product.id,
+                    'name': product.name,
+                    # As for contracts, the purpose text (description is the
+                    # ODPS description row, None when the product has none)
+                    'description': getattr(product.description, 'purpose', None),
+                    'domain': primary_domain,
+                    'status': product.status,
+                    'version': getattr(product, 'version', None),
+                    'owner': getattr(product, 'owner_team_id', None),
+                    'tags': tags_map.get(str(product.id), {}),
+                    'created_at': getattr(product, 'created_at', None),
+                    'updated_at': getattr(product, 'updated_at', None),
+                }
 
         # Data Contracts
         if 'data_contract' in entity_types:
-            try:
-                from src.repositories.data_contracts_repository import data_contract_repo
-                for contract in data_contract_repo.get_multi(self.db, limit=1000):
-                    yield {
-                        'type': 'data_contract',
-                        'id': contract.id,
-                        'name': contract.name,
-                        'description': getattr(contract, 'description_purpose', None),
-                        'status': contract.status,
-                        'version': getattr(contract, 'version', None),
-                        'owner': getattr(contract, 'owner_team_id', None),
-                        'domain': getattr(contract, 'domain_id', None),
-                        'tags': {},
-                        'created_at': getattr(contract, 'created_at', None),
-                        'updated_at': getattr(contract, 'updated_at', None),
-                    }
-            except Exception:
-                logger.exception("Failed to load data contracts for compliance")
+            from src.repositories.data_contracts_repository import data_contract_repo
+            contracts = self._load(
+                'data_contract', lambda: self._rows(data_contract_repo, entity_id)
+            )
+            tags_map = self._tags_by_entity('data_contract', [str(c.id) for c in contracts])
+            for contract in contracts:
+                yield {
+                    'type': 'data_contract',
+                    'id': contract.id,
+                    'name': contract.name,
+                    'description': getattr(contract, 'description_purpose', None),
+                    'status': contract.status,
+                    'version': getattr(contract, 'version', None),
+                    'owner': getattr(contract, 'owner_team_id', None),
+                    'domain': getattr(contract, 'domain_id', None),
+                    'tags': tags_map.get(str(contract.id), {}),
+                    'created_at': getattr(contract, 'created_at', None),
+                    'updated_at': getattr(contract, 'updated_at', None),
+                }
 
         # Domains
         if 'domain' in entity_types:
-            try:
-                from src.repositories.data_domain_repository import data_domain_repo
-                for domain in data_domain_repo.get_multi(self.db, limit=1000):
-                    yield {
-                        'type': 'domain',
-                        'id': domain.id,
-                        'name': domain.name,
-                        'description': getattr(domain, 'description', None),
-                        'owner': getattr(domain, 'owner_team_id', None),
-                        'tags': {},
-                        'created_at': getattr(domain, 'created_at', None),
-                        'updated_at': getattr(domain, 'updated_at', None),
-                    }
-            except Exception:
-                logger.exception("Failed to load domains for compliance")
+            from src.repositories.data_domain_repository import data_domain_repo
+            domains = self._load('domain', lambda: self._rows(data_domain_repo, entity_id))
+            tags_map = self._tags_by_entity('data_domain', [str(d.id) for d in domains])
+            for domain in domains:
+                yield {
+                    'type': 'domain',
+                    'id': domain.id,
+                    'name': domain.name,
+                    'description': getattr(domain, 'description', None),
+                    'owner': getattr(domain, 'owner_team_id', None),
+                    'tags': tags_map.get(str(domain.id), {}),
+                    'created_at': getattr(domain, 'created_at', None),
+                    'updated_at': getattr(domain, 'updated_at', None),
+                }
 
         # Glossary Terms - Now stored as RDF concepts in KnowledgeCollections
         # Compliance checks for glossary terms should query the semantic models manager
@@ -301,22 +398,21 @@ class AppEntityLoader(EntityLoader):
 
         # Reviews
         if 'review' in entity_types:
-            try:
-                from src.repositories.data_asset_reviews_repository import data_asset_review_repo
-                for review in data_asset_review_repo.get_multi(self.db, limit=1000):
-                    yield {
-                        'type': 'review',
-                        'id': review.id,
-                        'asset_id': getattr(review, 'asset_id', None),
-                        'asset_type': getattr(review, 'asset_type', None),
-                        'status': review.status,
-                        'reviewer': getattr(review, 'reviewer', None),
-                        'requester': getattr(review, 'requester', None),
-                        'created_at': getattr(review, 'created_at', None),
-                        'updated_at': getattr(review, 'updated_at', None),
-                    }
-            except Exception:
-                logger.exception("Failed to load reviews for compliance")
+            from src.repositories.data_asset_reviews_repository import data_asset_review_repo
+            reviews = self._load('review', lambda: self._rows(data_asset_review_repo, entity_id))
+            for review in reviews:
+                yield {
+                    'type': 'review',
+                    'id': review.id,
+                    # No asset_id / asset_type: a review covers many assets
+                    # (review.assets), and a key that is always None would
+                    # hide a workflow payload value of the same name.
+                    'status': review.status,
+                    'reviewer': review.reviewer_email,
+                    'requester': review.requester_email,
+                    'created_at': getattr(review, 'created_at', None),
+                    'updated_at': getattr(review, 'updated_at', None),
+                }
 
 
 class EntityIterator:
@@ -465,7 +561,8 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
     """Check a policy rule before it is saved.
 
     Raises:
-        ValueError: The rule does not parse.
+        ValueError: The rule does not parse, or has trailing input after its
+            last clause (a ``CodedValueError`` with the position).
 
     Returns:
         Warnings for rules that parse but cannot work as written, each with a
@@ -474,9 +571,9 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
     """
     from src.common.compliance_dsl import parse_rule
 
-    parsed = parse_rule(rule)
+    parsed = parse_rule(rule, strict=True)
     warnings: List[Dict[str, Any]] = []
-    entity_filter = parse_entity_filter(rule)
+    entity_filter = parse_entity_filter(rule, parsed=parsed)
     known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
     # A rule without MATCH is valid: maturity gates and workflow policy checks
     # evaluate it against one given entity.

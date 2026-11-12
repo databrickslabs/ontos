@@ -158,5 +158,71 @@
     "metadataLoadFailed": "Metadata load failed",
     "couldNotLoadMetadata": "Could not load metadata.",
     "editTeamLoadError": "Failed to load team details for editing."
+  },
+  "sync": {
+    "title": "Sync Domains",
+    "description": "Import Unity Catalog domains into Ontos, or export your domains to Unity Catalog. UC supports two levels (domains and subdomains); deeper domains are skipped.",
+    "direction": {
+      "title": "Direction",
+      "description": "Which way to sync",
+      "importLabel": "Import from Unity Catalog",
+      "importHint": "Create/link Ontos domains from UC",
+      "exportLabel": "Export to Unity Catalog",
+      "exportHint": "Publish Ontos domains to UC"
+    },
+    "target": {
+      "importTitle": "Place under",
+      "exportTitle": "Anchor",
+      "importHint": "Ontos domain to place imported UC roots under.",
+      "exportHint": "Its children become UC roots; grandchildren become subdomains.",
+      "importTopLevel": "Top level (no parent)",
+      "exportTopLevel": "Top-level domains"
+    },
+    "actions": {
+      "preview": "Preview",
+      "apply": "Apply"
+    },
+    "panel": {
+      "resultTitle": "Sync Result",
+      "previewTitle": "Preview",
+      "importFlow": "Unity Catalog → Ontos",
+      "exportFlow": "Ontos → Unity Catalog"
+    },
+    "emptyHint": "Choose a direction and click <b>Preview</b> to see what would change.",
+    "warnings": "Warnings",
+    "errorsTitle": "Errors",
+    "nothingToSync": "Nothing to sync.",
+    "level": "L{{level}}",
+    "actionLabels": {
+      "create": "Create",
+      "match": "Match",
+      "skip": "Skip",
+      "error": "Error"
+    },
+    "toasts": {
+      "previewFailed": "Preview failed",
+      "syncFailed": "Sync failed",
+      "syncComplete": "Sync complete"
+    },
+    "summary": "Created: {{created}}, matched: {{matched}}, skipped: {{skipped}}.",
+    "summaryWithErrors": "Created: {{created}}, matched: {{matched}}, skipped: {{skipped}}, errors: {{errors}}.",
+    "plan": {
+      "toCreate_one": "{{count}} to create",
+      "toCreate_other": "{{count}} to create",
+      "toMatch_one": "{{count}} to match",
+      "toMatch_other": "{{count}} to match",
+      "toSkip_one": "{{count}} to skip",
+      "toSkip_other": "{{count}} to skip"
+    },
+    "result": {
+      "created_one": "{{count}} created",
+      "created_other": "{{count}} created",
+      "matched_one": "{{count}} matched",
+      "matched_other": "{{count}} matched",
+      "skipped_one": "{{count}} skipped",
+      "skipped_other": "{{count}} skipped",
+      "errors_one": "{{count}} error",
+      "errors_other": "{{count}} errors"
+    }
   }
 }

@@ -340,23 +340,76 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
-('01100001-0004-4000-8000-000000000001', 'UNECE R155 Cybersecurity', 'Verify vehicle data pipelines meet UNECE WP.29 R155 cybersecurity management system requirements',
-'Vehicle data pipeline lacks cybersecurity controls. UNECE R155 requires documented threat analysis and risk assessment (TARA) for all vehicle data interfaces.',
-'MATCH (d:DataPipeline) WHERE d.domain IN [''Connected Vehicles'', ''Autonomous Driving''] ASSERT d.has_tara = true AND d.encryption_in_transit = true', 'Security', 'critical', true, NOW(), NOW()),
+('01100001-0004-4000-8000-000000000001', 'UNECE R155 Scope Tagging', 'Verify connected and autonomous vehicle data products are tagged as in UNECE R155 CSMS scope',
+'Connected or autonomous vehicle data product is not in R155 scope. UNECE R155 requires threat analysis and risk assessment (TARA) for all vehicle data interfaces.',
+'MATCH (p:data_product) WHERE p.domain IN [''Connected Vehicles'', ''Autonomous Driving''] ASSERT HAS_TAG(''r155-in-scope'')', 'Security', 'critical', true, NOW(), NOW()),
 
-('01100002-0004-4000-8000-000000000002', 'IATF 16949 PPAP Compliance', 'Ensure all production parts have approved PPAP submissions at the required level',
-'Part is in production without approved PPAP. IATF 16949 Section 8.3.4.4 requires PPAP approval before production shipment. Interim approval requires documented containment plan.',
-'MATCH (p:Part) WHERE p.production_status = ''active'' ASSERT p.ppap_status IN [''approved'', ''interim_approved'']', 'Data Quality', 'critical', true, NOW(), NOW()),
+('01100002-0004-4000-8000-000000000002', 'Supplier and BOM Contracts Active', 'Ensure supplier and BOM data contracts are active before series production',
+'Supplier or BOM data contract is not active. IATF 16949 Section 8.3.4.4 requires approved PPAP data before production shipment.',
+'MATCH (c:data_contract) WHERE c.name CONTAINS ''Supplier'' OR c.name CONTAINS ''BOM'' ASSERT c.status = ''active''', 'Data Quality', 'critical', true, NOW(), NOW()),
 
-('01100003-0004-4000-8000-000000000003', 'GDPR Vehicle Data Privacy', 'Verify that vehicle telematics data containing PII is processed in compliance with GDPR/CCPA',
-'Telematics dataset contains PII without proper consent tracking or anonymization. Vehicle location traces, driving behavior, and diagnostic data linked to VIN require explicit consent or pseudonymization.',
-'MATCH (d:Dataset) WHERE d.contains_vehicle_pii = true ASSERT d.consent_mechanism IS NOT NULL AND d.retention_days <= 730', 'Governance', 'high', true, NOW(), NOW()),
+('01100003-0004-4000-8000-000000000003', 'Connected Services in R155 Scope', 'Verify connected-services data products are tagged as in R155 scope (cybersecurity and privacy controls)',
+'Connected-services data product is not in R155 scope. Vehicle location traces and driving behavior linked to a VIN are personal data and need documented controls under GDPR/CCPA.',
+'MATCH (p:data_product) WHERE HAS_TAG(''connected-services'') ASSERT HAS_TAG(''r155-in-scope'')', 'Governance', 'high', true, NOW(), NOW()),
 
-('01100004-0004-4000-8000-000000000004', 'ISO 26262 Data Integrity', 'Ensure ADAS training and validation datasets meet ISO 26262 functional safety data integrity requirements',
-'ADAS dataset lacks functional safety traceability. ISO 26262 Part 8 requires documented data management plans, integrity checks, and traceability for safety-relevant data used in ASIL-rated systems.',
-'MATCH (d:Dataset) WHERE d.domain = ''Autonomous Driving'' AND d.safety_relevant = true ASSERT d.asil_rating IS NOT NULL AND d.integrity_checksum IS NOT NULL', 'Governance', 'critical', true, NOW(), NOW())
+('01100004-0004-4000-8000-000000000004', 'ISO 26262 ASIL Classification', 'Ensure autonomous driving data products carry an ISO 26262 ASIL classification',
+'Autonomous driving data product has no ASIL classification. ISO 26262 Part 8 requires functional safety classification and traceability for ADAS training and validation data.',
+'MATCH (p:data_product) WHERE p.domain = ''Autonomous Driving'' ASSERT HAS_TAG(''asil-d'') OR HAS_TAG(''asil-b'')', 'Governance', 'critical', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
+
+-- Installs that loaded an earlier version of this preset keep their policy rows
+-- (ON CONFLICT DO NOTHING above). Upgrade those rows in place, but only while
+-- the rule is still the one shipped before, and only the texts that still have
+-- their shipped value, so policies an admin edited are left alone.
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'UNECE R155 Cybersecurity'
+    THEN 'UNECE R155 Scope Tagging' ELSE name END,
+  description = CASE WHEN description = 'Verify vehicle data pipelines meet UNECE WP.29 R155 cybersecurity management system requirements'
+    THEN 'Verify connected and autonomous vehicle data products are tagged as in UNECE R155 CSMS scope' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Vehicle data pipeline lacks cybersecurity controls. UNECE R155 requires documented threat analysis and risk assessment (TARA) for all vehicle data interfaces.'
+    THEN 'Connected or autonomous vehicle data product is not in R155 scope. UNECE R155 requires threat analysis and risk assessment (TARA) for all vehicle data interfaces.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain IN [''Connected Vehicles'', ''Autonomous Driving''] ASSERT HAS_TAG(''r155-in-scope'')',
+  updated_at = NOW()
+WHERE id = '01100001-0004-4000-8000-000000000001'
+  AND rule = 'MATCH (d:DataPipeline) WHERE d.domain IN [''Connected Vehicles'', ''Autonomous Driving''] ASSERT d.has_tara = true AND d.encryption_in_transit = true';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'IATF 16949 PPAP Compliance'
+    THEN 'Supplier and BOM Contracts Active' ELSE name END,
+  description = CASE WHEN description = 'Ensure all production parts have approved PPAP submissions at the required level'
+    THEN 'Ensure supplier and BOM data contracts are active before series production' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Part is in production without approved PPAP. IATF 16949 Section 8.3.4.4 requires PPAP approval before production shipment. Interim approval requires documented containment plan.'
+    THEN 'Supplier or BOM data contract is not active. IATF 16949 Section 8.3.4.4 requires approved PPAP data before production shipment.' ELSE failure_message END,
+  rule = 'MATCH (c:data_contract) WHERE c.name CONTAINS ''Supplier'' OR c.name CONTAINS ''BOM'' ASSERT c.status = ''active''',
+  updated_at = NOW()
+WHERE id = '01100002-0004-4000-8000-000000000002'
+  AND rule = 'MATCH (p:Part) WHERE p.production_status = ''active'' ASSERT p.ppap_status IN [''approved'', ''interim_approved'']';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'GDPR Vehicle Data Privacy'
+    THEN 'Connected Services in R155 Scope' ELSE name END,
+  description = CASE WHEN description = 'Verify that vehicle telematics data containing PII is processed in compliance with GDPR/CCPA'
+    THEN 'Verify connected-services data products are tagged as in R155 scope (cybersecurity and privacy controls)' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Telematics dataset contains PII without proper consent tracking or anonymization. Vehicle location traces, driving behavior, and diagnostic data linked to VIN require explicit consent or pseudonymization.'
+    THEN 'Connected-services data product is not in R155 scope. Vehicle location traces and driving behavior linked to a VIN are personal data and need documented controls under GDPR/CCPA.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE HAS_TAG(''connected-services'') ASSERT HAS_TAG(''r155-in-scope'')',
+  updated_at = NOW()
+WHERE id = '01100003-0004-4000-8000-000000000003'
+  AND rule = 'MATCH (d:Dataset) WHERE d.contains_vehicle_pii = true ASSERT d.consent_mechanism IS NOT NULL AND d.retention_days <= 730';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'ISO 26262 Data Integrity'
+    THEN 'ISO 26262 ASIL Classification' ELSE name END,
+  description = CASE WHEN description = 'Ensure ADAS training and validation datasets meet ISO 26262 functional safety data integrity requirements'
+    THEN 'Ensure autonomous driving data products carry an ISO 26262 ASIL classification' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'ADAS dataset lacks functional safety traceability. ISO 26262 Part 8 requires documented data management plans, integrity checks, and traceability for safety-relevant data used in ASIL-rated systems.'
+    THEN 'Autonomous driving data product has no ASIL classification. ISO 26262 Part 8 requires functional safety classification and traceability for ADAS training and validation data.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain = ''Autonomous Driving'' ASSERT HAS_TAG(''asil-d'') OR HAS_TAG(''asil-b'')',
+  updated_at = NOW()
+WHERE id = '01100004-0004-4000-8000-000000000004'
+  AND rule = 'MATCH (d:Dataset) WHERE d.domain = ''Autonomous Driving'' AND d.safety_relevant = true ASSERT d.asil_rating IS NOT NULL AND d.integrity_checksum IS NOT NULL';
+
 
 
 -- ============================================================================
@@ -645,10 +698,10 @@ ON CONFLICT (tag_id, entity_id, entity_type) DO NOTHING;
 
 INSERT INTO process_workflows (id, name, description, trigger_config, scope_config, is_active, is_default, version, created_by, updated_by, created_at, updated_at) VALUES
 ('02a00101-0004-4000-8000-000000000001', 'OTA / Connected Services Release Gate',
- 'Multi-stage approval gate before any connected-vehicle release: cybersecurity review, functional safety sign-off, program manager approval.',
+ 'Multi-stage approval gate before any connected-vehicle release: cybersecurity review, functional safety sign-off, program manager approval. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.',
  '{"type": "before_publish", "entity_types": ["data_product"]}',
  '{"type": "domain", "ids": ["00000002-0004-4000-8000-000000000002"]}',
- true, true, 1, 'system@demo', 'system@demo', NOW(), NOW())
+ false, true, 1, 'system@demo', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, on_pass, on_fail, "order", position, created_at, updated_at) VALUES
@@ -666,22 +719,45 @@ INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, o
  'approve',       'reject', 3, '{"x": 500, "y": 100}', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+-- The pre-publish gates ship inactive (#996): their before_publish trigger does not
+-- exist yet, so they never run. In installs that still hold a shipped gate (its shipped
+-- name, trigger and description, still active), deactivate it, then add the note to the
+-- description of a shipped gate that is inactive. A gate an admin renamed, re-triggered,
+-- re-described, or re-activated after this change is left alone.
+UPDATE process_workflows SET is_active = false
+WHERE id = '02a00101-0004-4000-8000-000000000001'
+  AND name = 'OTA / Connected Services Release Gate'
+  AND trigger_config = '{"type": "before_publish", "entity_types": ["data_product"]}'
+  AND description = 'Multi-stage approval gate before any connected-vehicle release: cybersecurity review, functional safety sign-off, program manager approval.'
+  AND is_active = true;
+
+UPDATE process_workflows SET description = 'Multi-stage approval gate before any connected-vehicle release: cybersecurity review, functional safety sign-off, program manager approval. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.'
+WHERE id = '02a00101-0004-4000-8000-000000000001'
+  AND description = 'Multi-stage approval gate before any connected-vehicle release: cybersecurity review, functional safety sign-off, program manager approval.'
+  AND is_active = false;
+
 
 -- ============================================================================
 -- 19. COMPLIANCE RUNS + RESULTS (AUTO)
 -- ============================================================================
 
 INSERT INTO compliance_runs (id, policy_id, status, started_at, finished_at, success_count, failure_count, score) VALUES
-('01200101-0004-4000-8000-000000000001', '01100001-0004-4000-8000-000000000001', 'completed', NOW() - INTERVAL '6 days', NOW() - INTERVAL '6 days' + INTERVAL '11 minutes', 4, 1, 0.800),
-('01200102-0004-4000-8000-000000000002', '01100002-0004-4000-8000-000000000002', 'completed', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days' + INTERVAL '9 minutes',  3, 0, 1.000),
-('01200103-0004-4000-8000-000000000003', '01100004-0004-4000-8000-000000000004', 'completed', NOW() - INTERVAL '1 days', NOW() - INTERVAL '1 days' + INTERVAL '5 minutes',  2, 1, 0.667)
-ON CONFLICT (id) DO NOTHING;
+('01200101-0004-4000-8000-000000000001', '01100001-0004-4000-8000-000000000001', 'succeeded', NOW() - INTERVAL '6 days', NOW() - INTERVAL '6 days' + INTERVAL '11 minutes', 1, 1, 50),
+('01200102-0004-4000-8000-000000000002', '01100002-0004-4000-8000-000000000002', 'succeeded', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days' + INTERVAL '9 minutes', 1, 1, 50),
+('01200103-0004-4000-8000-000000000003', '01100004-0004-4000-8000-000000000004', 'succeeded', NOW() - INTERVAL '1 days', NOW() - INTERVAL '1 days' + INTERVAL '5 minutes', 1, 0, 100)
+ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, success_count = EXCLUDED.success_count,
+  failure_count = EXCLUDED.failure_count, score = EXCLUDED.score;
+
+-- Sample results of a real run of each policy above. A load replaces the ones an earlier
+-- version of this preset inserted for the same sample runs.
+DELETE FROM compliance_results WHERE run_id IN ('01200101-0004-4000-8000-000000000001', '01200102-0004-4000-8000-000000000002', '01200103-0004-4000-8000-000000000003');
 
 INSERT INTO compliance_results (id, run_id, object_type, object_id, object_name, passed, message, created_at) VALUES
-('01300101-0004-4000-8000-000000000001', '01200101-0004-4000-8000-000000000001', 'data_product', '00700001-0004-4000-8000-000000000001', 'Connected Vehicle Analytics v1', true,  'CSMS controls validated for telematics pipeline.', NOW() - INTERVAL '6 days'),
-('01300102-0004-4000-8000-000000000002', '01200101-0004-4000-8000-000000000001', 'data_product', '00700005-0004-4000-8000-000000000005', 'Vehicle Configuration Intelligence v1', false, 'Threat model for OTA backend not refreshed in last 12 months.', NOW() - INTERVAL '6 days'),
-('01300103-0004-4000-8000-000000000003', '01200102-0004-4000-8000-000000000002', 'data_product', '00700003-0004-4000-8000-000000000003', 'Supplier Quality Scorecard v1',         true,  'PPAP coverage at 100% for active production parts.', NOW() - INTERVAL '3 days'),
-('01300104-0004-4000-8000-000000000004', '01200103-0004-4000-8000-000000000003', 'data_product', '00700002-0004-4000-8000-000000000002', 'ADAS Training Data Pipeline v1',        false, 'One scenario subset lacks ASIL-D evidence package.', NOW() - INTERVAL '1 days')
+('01300101-0004-4000-8000-000000000001', '01200101-0004-4000-8000-000000000001', 'data_product', '00700002-0004-4000-8000-000000000002', 'ADAS Training Data Pipeline v1', false, 'Assertion failed for data_product ADAS Training Data Pipeline v1', NOW() - INTERVAL '6 days'),
+('01300102-0004-4000-8000-000000000002', '01200101-0004-4000-8000-000000000001', 'data_product', '00700001-0004-4000-8000-000000000001', 'Connected Vehicle Analytics v1', true, NULL, NOW() - INTERVAL '6 days'),
+('01300103-0004-4000-8000-000000000003', '01200102-0004-4000-8000-000000000002', 'data_contract', '00400003-0004-4000-8000-000000000003', 'Supplier Quality Contract', true, NULL, NOW() - INTERVAL '3 days'),
+('01300104-0004-4000-8000-000000000004', '01200102-0004-4000-8000-000000000002', 'data_contract', '00400005-0004-4000-8000-000000000005', 'Vehicle Configuration & BOM Contract', false, 'Assertion failed for data_contract Vehicle Configuration & BOM Contract', NOW() - INTERVAL '3 days'),
+('01300105-0004-4000-8000-000000000005', '01200103-0004-4000-8000-000000000003', 'data_product', '00700002-0004-4000-8000-000000000002', 'ADAS Training Data Pipeline v1', true, NULL, NOW() - INTERVAL '1 days')
 ON CONFLICT (id) DO NOTHING;
 
 

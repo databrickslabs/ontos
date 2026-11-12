@@ -25,15 +25,15 @@
   },
   "concepts": {
     "name": "Concepts",
-    "description": "Parcourir, rechercher et gérer les concepts métier, collections et hiérarchies."
+    "description": "Parcourir, rechercher et gérer les concepts métier, schémas de concepts et hiérarchies."
   },
   "semantic-models": {
     "name": "Navigateur de concepts",
     "description": "Explorez les termes du glossaire métier, concepts et leurs relations."
   },
   "collections": {
-    "name": "Collections de concepts",
-    "description": "Organisez les concepts et actifs en collections logiques."
+    "name": "Schémas de concepts",
+    "description": "Organisez les concepts et actifs en schémas logiques."
   },
   "process-workflows": {
     "name": "Workflows",

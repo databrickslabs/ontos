@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { asyncRunProgressText, asyncRunStatusLabel } from '@/lib/schema-import-run-text';
 import {
   Loader2,
   CheckCircle2,
@@ -257,13 +258,13 @@ export default function ImportPreviewDialog({
           error_count: 0,
         });
         toast({
-          title: 'Import started',
-          description: 'Running in the background — progress appears here and in your notifications.',
+          title: t('database-schema:preview.async.started'),
+          description: t('database-schema:preview.async.startedDescription'),
         });
       }
     } catch (err) {
       console.error('Async import failed to start:', err);
-      toast({ title: 'Could not start background import', description: String(err), variant: 'destructive' });
+      toast({ title: t('database-schema:preview.async.startFailed'), description: String(err), variant: 'destructive' });
     } finally {
       setIsStartingAsync(false);
     }
@@ -293,11 +294,19 @@ export default function ImportPreviewDialog({
           if (resp.data.result) setImportResult(resp.data.result);
           if (resp.data.status === 'completed') {
             toast({
-              title: 'Import complete',
-              description: `Created ${resp.data.created_count}, skipped ${resp.data.skipped_count}, errors ${resp.data.error_count}`,
+              title: t('database-schema:preview.importComplete'),
+              description: t('database-schema:preview.importCompleteSummary', {
+                created: resp.data.created_count,
+                skipped: resp.data.skipped_count,
+                errors: resp.data.error_count,
+              }),
             });
           } else if (resp.data.status === 'failed') {
-            toast({ title: 'Import failed', description: resp.data.error || 'See run details', variant: 'destructive' });
+            toast({
+              title: t('database-schema:preview.importFailed'),
+              description: resp.data.error || t('database-schema:preview.async.seeRunDetails'),
+              variant: 'destructive',
+            });
           }
         }
       } catch (err) {
@@ -658,19 +667,17 @@ export default function ImportPreviewDialog({
                 {(asyncRun.status === 'pending' || asyncRun.status === 'running') && (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 )}
-                <span className="font-medium capitalize">{asyncRun.status}</span>
+                <span className="font-medium">{asyncRunStatusLabel(asyncRun.status, t)}</span>
                 {asyncRun.total_items ? (
                   <span className="text-muted-foreground">
-                    — {asyncRun.processed_items}/{asyncRun.total_items} processed
-                    ({asyncRun.created_count} created, {asyncRun.skipped_count} skipped
-                    {asyncRun.error_count ? `, ${asyncRun.error_count} errors` : ''})
+                    {asyncRunProgressText(asyncRun, t)}
                   </span>
                 ) : (
-                  <span className="text-muted-foreground">{asyncRun.progress_message || 'Starting…'}</span>
+                  <span className="text-muted-foreground">{asyncRun.progress_message || t('database-schema:preview.async.starting')}</span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                You can close this dialog — the import keeps running and completion is reported in your notifications.
+                {t('database-schema:preview.async.closeHint')}
               </p>
             </div>
           )}
@@ -683,10 +690,10 @@ export default function ImportPreviewDialog({
             ) : asyncRun && (asyncRun.status === 'pending' || asyncRun.status === 'running') ? (
               <>
                 <Button variant="outline" onClick={cancelAsyncImport}>
-                  Cancel import
+                  {t('database-schema:preview.async.cancel')}
                 </Button>
                 <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                  Close (keep running)
+                  {t('database-schema:preview.async.closeKeepRunning')}
                 </Button>
               </>
             ) : (
@@ -701,7 +708,7 @@ export default function ImportPreviewDialog({
                     disabled={isStartingAsync || isImporting || toCreate === 0}
                   >
                     {isStartingAsync && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Run in background
+                    {t('database-schema:preview.async.runInBackground')}
                   </Button>
                 )}
                 <Button

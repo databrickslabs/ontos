@@ -23,5 +23,10 @@
     "title": "Errore",
     "message": "Si è verificato un errore imprevisto.",
     "retry": "Riprova"
+  },
+  "internalError": "Si è verificato un errore imprevisto. I dettagli sono nel log del server (id dell'errore {{errorId}}).",
+  "userTokenRequired": "Questa richiesta richiede il tuo token di accesso Databricks, ma non ne è stato ricevuto nessuno. Ricarica la pagina; se il problema persiste, chiedi a un amministratore di abilitare l'autorizzazione utente per l'app.",
+  "subscription": {
+    "productNotSubscribable": "Impossibile sottoscrivere '{{productName}}': il suo stato è '{{status}}'. Solo i prodotti attivi accettano nuove sottoscrizioni."
   }
 }

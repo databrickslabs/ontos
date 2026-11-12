@@ -35,6 +35,18 @@ describe('humanizeRdfFilename', () => {
     expect(humanizeRdfFilename('')).toBe('');
   });
 
+  it('title-cases a short all-caps-looking token that contains a digit', () => {
+    // 'API2' is <=4 chars and upper-cased, but /^[A-Z]+$/ fails on the digit,
+    // so it is NOT preserved as an acronym and falls through to title case.
+    expect(humanizeRdfFilename('api2.owl')).toBe('Api2');
+  });
+
+  it('preserves a short pure-uppercase token that is not in the acronym set', () => {
+    // 'XYZ' is <=4, all letters, all caps -> preserved verbatim (not in
+    // PRESERVED_CASE_TOKENS, but the generic short-all-caps rule keeps it).
+    expect(humanizeRdfFilename('XYZ.ttl')).toBe('XYZ');
+  });
+
   it('returns input unchanged when cleaning would yield empty', () => {
     // Stripping the only RDF extension leaves no name to humanize, so we
     // fall back to the raw input so callers can gracefully handle it.

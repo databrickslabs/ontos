@@ -99,9 +99,40 @@
       "upstream": "Amont",
       "both": "Les deux",
       "downstream": "Aval",
-      "breadth": "Largeur :",
-      "nesting": "Imbrication :",
-      "entitiesEdges": "{{nodes}} entités · {{edges}} arêtes"
+      "entitiesEdges": "{{nodes}} entités · {{edges}} arêtes",
+      "view": "Affichage",
+      "layers": "Couches",
+      "edges": "Relations",
+      "edgeLabels": "Libellés des liens",
+      "resetView": "Réinitialiser l'affichage",
+      "openEntity": "Ouvrir",
+      "clearSelection": "Effacer la sélection",
+      "selectHint": "Cliquez sur un nœud pour suivre son chemin · double-clic pour ouvrir",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "Flux de données",
+        "implementation": "Implémenté par",
+        "crossContainment": "Contient (entre couches)",
+        "governance": "Gouvernance",
+        "semantic": "Sémantique / concepts"
+      },
+      "focusPath": "Focaliser le chemin",
+      "showContext": "Tout afficher",
+      "minimap": "Mini-carte",
+      "zoomIn": "Zoom avant",
+      "zoomOut": "Zoom arrière",
+      "fitView": "Ajuster à la vue",
+      "depth": "Profondeur :",
+      "depthAll": "Tout",
+      "depthHint": "Sauts de relation suivis dans chaque direction. Le contenu (ports, schéma, colonnes) ne compte pas.",
+      "detailHint": "Lignes affichées dans les cartes. Les lignes du chemin sélectionné sont toujours affichées.",
+      "detailLevels": {
+        "entities": "Entités",
+        "structure": "Structure",
+        "fields": "Champs"
+      },
+      "truncated": "Tronqué",
+      "truncatedHint": "Trop d’entités : seule une partie est affichée. Réduisez la profondeur ou ouvrez une entité plus précise."
     },
     "legendPanel": {
       "entityTypes": "Types d'entités",
@@ -109,7 +140,8 @@
       "dataFlow": "Flux de données",
       "containment": "Confinement",
       "governance": "Gouvernance",
-      "semantic": "Sémantique"
+      "semantic": "Sémantique",
+      "implementation": "Implémenté par"
     },
     "dev": {
       "entityTypeLabel": "Type d'entité :",
@@ -118,6 +150,31 @@
       "entityIdPlaceholder": "par ex. uuid",
       "load": "Charger",
       "emptyHint": "Saisissez un type et un ID d'entité ci-dessus, puis cliquez sur Charger"
+    },
+    "relationships": {
+      "describes": "décrit",
+      "hasOutputPort": "a un port de sortie",
+      "portHasContract": "régi par",
+      "portHasAsset": "expose",
+      "hasSchemaObject": "a un schéma",
+      "hasProperty": "a une propriété",
+      "implementedBy": "implémenté par",
+      "dependsOn": "dépend de",
+      "hasDataset": "a un jeu de données",
+      "hasTable": "a une table",
+      "hasView": "a une vue",
+      "hasColumn": "a une colonne",
+      "governedBy": "régi par",
+      "implementsContract": "implémente le contrat",
+      "consumesFrom": "consomme depuis",
+      "producesTo": "produit vers",
+      "derivedFrom": "dérivé de",
+      "replacedBy": "remplacé par",
+      "exposes": "expose",
+      "relatesTo": "se rapporte à",
+      "hasTerm": "a un terme",
+      "attachedPolicy": "politique attachée",
+      "belongsToDomain": "appartient au domaine"
     }
   },
   "hierarchy": {

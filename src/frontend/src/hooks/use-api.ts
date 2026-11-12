@@ -1,9 +1,32 @@
 import { useState, useCallback } from 'react';
+import { serverErrorText } from '@/lib/server-error-text';
 
 export interface ApiResponse<T> {
   data: T;
   error?: string | null;
+  /** Stable code of a structured error (`detail: {code, message}`), to translate `error`. */
+  errorCode?: string | null;
+  /** Parameters of a structured error (`detail.params`), for the translated text. */
+  errorParams?: Record<string, unknown> | null;
 }
+
+const hasObjectDetail = (errorBody: any): boolean =>
+  Boolean(errorBody?.detail) && typeof errorBody.detail === 'object' && !Array.isArray(errorBody.detail);
+
+// A server error carries its code next to a text `detail` (`{detail, code, params}`).
+const errorCodeOf = (errorBody: any): string | null =>
+  hasObjectDetail(errorBody)
+    ? errorBody.detail.code ?? null
+    : typeof errorBody?.code === 'string' ? errorBody.code : null;
+
+const errorParamsOf = (errorBody: any): Record<string, unknown> | null => {
+  const params = hasObjectDetail(errorBody) ? errorBody.detail.params : errorBody?.params;
+  return params && typeof params === 'object' && !Array.isArray(params) ? params : null;
+};
+
+/** The error text to show: an app-wide server error in the user's language. */
+const errorTextOf = (errorBody: any, errorMsg: string): string =>
+  serverErrorText(errorBody) ?? errorMsg;
 
 export const useApi = () => {
   const [loading, setLoading] = useState(false);
@@ -49,7 +72,7 @@ export const useApi = () => {
           errorMsg = JSON.stringify(errorBody) || `HTTP error! status: ${response.status}`;
         }
         console.error("[useApi] GET error response from", url, "(", response.status, "):", errorBody);
-        return { data: {} as T, error: errorMsg };
+        return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
       }
 
       // Handle successful responses (response.ok is true)
@@ -170,7 +193,7 @@ export const useApi = () => {
           }
 
           console.error("[useApi] POST error response from", url, "(", response.status, "):", errorBody);
-          return { data: {} as T, error: errorMsg };
+          return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
       }
 
       // --- Handle Successful Response (response.ok is true) --- 
@@ -250,7 +273,7 @@ export const useApi = () => {
         }
 
         console.error("[useApi] PUT error response from", url, "(", response.status, "):", errorBody);
-        return { data: {} as T, error: errorMsg };
+        return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
       }
       
       // Handle successful response
@@ -309,7 +332,7 @@ export const useApi = () => {
         }
 
         console.error("[useApi] PATCH error response from", url, "(", response.status, "):", errorBody);
-        return { data: {} as T, error: errorMsg };
+        return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
       }
 
       const data = await response.json();
@@ -363,6 +386,7 @@ export const useApi = () => {
             errorMsg = JSON.stringify(errorBody) || `HTTP error! status: ${response.status}`;
           }
           console.error("[useApi] DELETE error response from", url, "(", response.status, "):", errorBody);
+          errorMsg = errorTextOf(errorBody, errorMsg ?? '');
       } else {
           // Success - check if there's response data (some DELETE endpoints return data)
           const contentType = response.headers.get('Content-Type');

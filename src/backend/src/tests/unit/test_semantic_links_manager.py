@@ -164,16 +164,14 @@ class TestSemanticLinksManager:
         assert result.iri == "http://example.com/schema/Product"
         assert result.label == "Product"
 
-    def test_to_api_without_label_resolves_name(self, manager, sample_link_db, mock_db):
-        """Test converting DB object to API model resolves name when no label."""
+    def test_to_api_without_label_uses_iri_tail(self, manager, sample_link_db, mock_db):
+        """A missing concept label falls back to the IRI's readable local name."""
         sample_link_db.label = None
-        mock_result = Mock()
-        mock_result.__getitem__ = Mock(return_value="Resolved Name")
-        mock_db.execute.return_value.fetchone.return_value = mock_result
 
         result = manager._to_api(sample_link_db)
 
-        assert result.label == "Resolved Name"
+        assert result.label == "Product"
+        mock_db.execute.assert_not_called()
 
     # List for Entity Tests
 
@@ -304,8 +302,15 @@ class TestSemanticLinksManager:
         assert isinstance(result, EntitySemanticLink)
         assert result.entity_id == "entity-123"
         mock_repo.create.assert_called_once()
-        manager._db.flush.assert_called_once()
+        manager._db.commit.assert_called_once()
         manager._db.refresh.assert_called_once()
+        manager._semantic_models_manager.add_entity_semantic_link_to_graph.assert_called_once_with(
+            "data_product",
+            "entity-123",
+            "http://example.com/schema/Product",
+            created_by="user@example.com",
+        )
+        manager._semantic_models_manager._invalidate_cache.assert_called_once()
 
     @patch('src.controller.semantic_links_manager.change_log_manager')
     @patch('src.controller.semantic_links_manager.entity_semantic_links_repo')
@@ -367,6 +372,12 @@ class TestSemanticLinksManager:
 
         assert result is True
         mock_repo.remove.assert_called_once_with(manager._db, id="1")
+        manager._semantic_models_manager.remove_entity_semantic_link_from_graph.assert_called_once_with(
+            "data_product",
+            "entity-123",
+            "http://example.com/schema/Product",
+        )
+        manager._semantic_models_manager._invalidate_cache.assert_called_once()
 
     @patch('src.controller.semantic_links_manager.entity_semantic_links_repo')
     def test_remove_link_not_found(self, mock_repo, manager):
@@ -376,6 +387,8 @@ class TestSemanticLinksManager:
         result = manager.remove("nonexistent", removed_by="user@example.com")
 
         assert result is False
+        manager._semantic_models_manager.remove_entity_semantic_link_from_graph.assert_not_called()
+        manager._semantic_models_manager._invalidate_cache.assert_not_called()
 
     @patch('src.controller.semantic_links_manager.change_log_manager')
     @patch('src.controller.semantic_links_manager.entity_semantic_links_repo')

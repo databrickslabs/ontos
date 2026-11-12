@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from databricks.sdk import WorkspaceClient
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.exc import IntegrityError
 
@@ -13,6 +14,7 @@ from src.models.assets import (
     AssetRelationshipCreate, AssetRelationshipRead,
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteResult,
+    PHYSICAL_TABLE_ASSET_TYPES, with_internal_properties,
 )
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
 from src.common.errors import ConflictError, NotFoundError, ValidationError
@@ -20,6 +22,8 @@ from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.database import get_session_factory
 from src.controller.change_log_manager import change_log_manager
+from src.controller.costs_manager import CostsManager
+from src.controller.metadata_manager import MetadataManager
 
 logger = get_logger(__name__)
 
@@ -32,6 +36,8 @@ class AssetsManager(SearchableAsset):
         self._asset_repo = asset_repo
         self._rel_repo = asset_relationship_repo
         self._ontology = ontology_schema_manager
+        self._metadata_manager = MetadataManager()
+        self._costs_manager = CostsManager()
         logger.debug("AssetsManager initialized (ontology validation=%s).", self._ontology is not None)
 
     # --- Helpers ---
@@ -156,14 +162,14 @@ class AssetsManager(SearchableAsset):
         return self._type_to_read(db, db_type)
 
     def get_all_asset_types(
-        self, db: Session, *, skip: int = 0, limit: int = 100,
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None,
         category: Optional[str] = None, status: Optional[str] = None
     ) -> List[AssetTypeRead]:
         db_types = self._type_repo.get_multi_filtered(db, skip=skip, limit=limit, category=category, status=status)
         return [self._type_to_read(db, t) for t in db_types]
 
     def get_asset_types_summary(self, db: Session) -> List[AssetTypeSummary]:
-        db_types = self._type_repo.get_multi_filtered(db, limit=1000)
+        db_types = self._type_repo.get_multi_filtered(db)
         return [self._type_to_summary(t) for t in db_types]
 
     def update_asset_type(self, db: Session, *, type_id: UUID, type_in: AssetTypeUpdate, current_user_id: str) -> AssetTypeRead:
@@ -286,9 +292,7 @@ class AssetsManager(SearchableAsset):
         if is_admin:
             return None
         try:
-            products = data_products_manager.list_products(
-                skip=0, limit=10_000, is_admin=True,
-            )
+            products = data_products_manager.list_products(is_admin=True)
             products = [p for p in products if is_visible_consumer(p)]
         except Exception:
             logger.exception("Failed to list accessible data products for scoping")
@@ -383,6 +387,10 @@ class AssetsManager(SearchableAsset):
             self._validate_properties(db, effective_type_id, asset_in.properties)
 
         update_data = asset_in.model_dump(exclude_unset=True)
+        if update_data.get('properties') is not None:
+            # Clients never see the internal keys, so they can't send them back
+            update_data['properties'] = with_internal_properties(
+                update_data['properties'], db_asset.properties)
         domains_provided = 'domain_ids' in update_data
         domain_ids = update_data.pop('domain_ids', None) or []
         primary_domain_id = update_data.pop('primary_domain_id', None)
@@ -418,14 +426,109 @@ class AssetsManager(SearchableAsset):
                 raise ConflictError("Asset identity conflict.")
             raise
 
-    def delete_asset(self, db: Session, *, asset_id: UUID, current_user_id: str = "system") -> AssetRead:
+    def retype_asset(
+        self, db: Session, *, asset_id: UUID, from_type: str, to_type: str,
+        current_user_id: str, commit: bool = True,
+    ) -> int:
+        """Change an asset's type and the type name its entity_relationships rows carry.
+
+        entity_relationships stores the asset type name in source_type / target_type, so
+        both change together (one commit, with the change-log entry). With
+        ``commit=False`` nothing is committed: the caller's transaction (or savepoint)
+        keeps or drops the change. Does nothing unless the asset currently has
+        ``from_type``. Returns the number of rows rewritten, or -1 when nothing changed.
+        """
+        from src.repositories.entity_relationships_repository import entity_relationship_repo
+
+        db_asset = self._asset_repo.get(db, asset_id)
+        new_type = self._type_repo.get_by_name(db, name=to_type)
+        if not db_asset or not new_type or not db_asset.asset_type:
+            return -1
+        if db_asset.asset_type.name != from_type:
+            return -1
+
+        entity_id = str(db_asset.id)
+        rewritten = 0
+        for rel in entity_relationship_repo.get_for_entity(
+                db, entity_type=from_type, entity_id=entity_id):
+            source_type = to_type if rel.source_id == entity_id else rel.source_type
+            target_type = to_type if rel.target_id == entity_id else rel.target_type
+            duplicate = entity_relationship_repo.find_existing(
+                db, source_type=source_type, source_id=rel.source_id,
+                target_type=target_type, target_id=rel.target_id,
+                relationship_type=rel.relationship_type,
+            )
+            if duplicate is not None:
+                db.delete(rel)  # the same link already exists under the new type
+            else:
+                rel.source_type, rel.target_type = source_type, target_type
+            rewritten += 1
+        db_asset.asset_type_id = new_type.id
+        db.flush()
+        change_log_manager.log_change_with_details(
+            db,
+            entity_type="asset",
+            entity_id=entity_id,
+            action="retyped",
+            username=current_user_id,
+            details={
+                "location": db_asset.location,
+                "from_type": from_type,
+                "to_type": to_type,
+                "relationships_rewritten": rewritten,
+            },
+            commit=commit,
+        )
+        db.refresh(db_asset)
+        self._update_search_index(db_asset)
+        logger.info(
+            "Retyped asset %s (%s) from %s to %s; %d relationship rows rewritten",
+            entity_id, db_asset.location, from_type, to_type, rewritten,
+        )
+        return rewritten
+
+    def _remove_asset_with_data(
+        self, db: Session, asset_id: UUID, ws: Optional[WorkspaceClient] = None,
+    ) -> Dict[str, int]:
+        """Delete an asset and what is stored for it (#1343), in the caller's transaction.
+
+        Removes its domain associations, notes, links, documents, attachments
+        and cost items (rows with ``entity_type == "asset"`` and its id), then
+        the asset row, all in one savepoint: if any of it fails, none of it
+        stays (a cascade goes on with the next asset, whose commit would
+        otherwise keep this asset's partial deletes). The documents' files
+        are deleted from the volume once the transaction commits (kept if it
+        rolls back); a file that can't be deleted is logged, never raised.
+        Returns the number of rows removed per kind, for the change log.
+        """
+        entity_id = str(asset_id)
+        with db.begin_nested():
+            removed: Dict[str, int] = {
+                "domains": entity_domain_repo.remove_all_for_entity(
+                    db, entity_type="asset", entity_id=entity_id,
+                ),
+            }
+            metadata_counts, paths = self._metadata_manager.remove_all_for_entity(
+                db, entity_type="asset", entity_id=entity_id,
+            )
+            removed.update(metadata_counts)
+            removed["cost_items"] = self._costs_manager.remove_all_for_entity(
+                db, entity_type="asset", entity_id=entity_id,
+            )
+            self._asset_repo.remove(db=db, id=asset_id)
+        self._metadata_manager.delete_document_files_after_commit(db, paths, ws)
+        return removed
+
+    def delete_asset(
+        self, db: Session, *, asset_id: UUID, current_user_id: str = "system",
+        ws: Optional[WorkspaceClient] = None,
+    ) -> AssetRead:
         db_asset = self._asset_repo.get_with_relationships(db, asset_id)
         if not db_asset:
             raise NotFoundError(f"Asset '{asset_id}' not found.")
 
         read = self._asset_to_read(db_asset)
-        entity_domain_repo.remove_all_for_entity(db, entity_type="asset", entity_id=str(asset_id))
-        self._asset_repo.remove(db=db, id=asset_id)
+        removed = self._remove_asset_with_data(db, asset_id, ws)
         self._notify_index_remove(f"asset::{asset_id}")
         logger.info(f"Deleted asset '{read.name}' (id: {asset_id})")
         try:
@@ -435,7 +538,8 @@ class AssetsManager(SearchableAsset):
                 entity_id=str(asset_id),
                 action="deleted",
                 username=current_user_id,
-                details={"name": read.name, "asset_type": read.asset_type_name},
+                details={"name": read.name, "asset_type": read.asset_type_name,
+                         "removed": removed},
             )
         except Exception as e:
             logger.warning(f"Failed to log change for asset deletion: {e}")
@@ -486,6 +590,7 @@ class AssetsManager(SearchableAsset):
 
     def cascade_delete_assets(
         self, db: Session, *, asset_ids: List[UUID], current_user_id: str = "system",
+        ws: Optional[WorkspaceClient] = None,
     ) -> CascadeDeleteResult:
         """Delete multiple assets in leaf-first order within a single transaction."""
         ordered = self._topological_sort_for_delete(db, asset_ids)
@@ -498,7 +603,7 @@ class AssetsManager(SearchableAsset):
                     continue
                 name = db_asset.name
                 type_name = db_asset.asset_type.name if db_asset.asset_type else None
-                self._asset_repo.remove(db=db, id=aid)
+                removed = self._remove_asset_with_data(db, aid, ws)
                 self._notify_index_remove(f"asset::{aid}")
                 logger.info(f"Cascade-deleted asset '{name}' (id: {aid})")
                 try:
@@ -508,7 +613,7 @@ class AssetsManager(SearchableAsset):
                         entity_id=str(aid),
                         action="deleted",
                         username=current_user_id,
-                        details={"name": name, "asset_type": type_name},
+                        details={"name": name, "asset_type": type_name, "removed": removed},
                     )
                 except Exception as e:
                     logger.warning(f"Failed to log change for cascade-deleted asset {aid}: {e}")
@@ -665,7 +770,7 @@ class AssetsManager(SearchableAsset):
     # Infer schema from asset hierarchy
     # ------------------------------------------------------------------
 
-    _TABLE_LIKE_TYPES = {"Table", "View", "Dataset"}
+    _TABLE_LIKE_TYPES = {*PHYSICAL_TABLE_ASSET_TYPES, "Dataset"}
     _CONTAINER_TYPES = {"Schema", "Catalog"}
 
     def infer_schema_from_asset(

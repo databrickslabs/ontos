@@ -4,8 +4,10 @@ from fastapi import APIRouter, FastAPI, HTTPException, Depends, Body, Query, Req
 
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import PermissionChecker
-from src.controller.compliance_manager import ComplianceManager
+from src.common.authorization import PermissionChecker, user_has_feature_level
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
+from src.controller.compliance_manager import ComplianceManager, rule_changes_tags
 from src.models.compliance import (
     CompliancePolicy,
     CompliancePolicyCreate,
@@ -62,6 +64,23 @@ async def get_policy(
     return policy
 
 
+def require_tag_write_for_tag_actions(rule: Optional[str], auth_manager, current_user) -> None:
+    """ASSIGN_TAG / REMOVE_TAG change tag associations, so saving or running a
+    rule that uses them needs write access to tags, as the tag routes do.
+
+    Scheduled runs have no acting user; they run rules saved by users who had
+    that access.
+    """
+    if rule_changes_tags(rule) and not user_has_feature_level(
+        auth_manager, current_user, 'tags', FeatureAccessLevel.READ_WRITE
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="This policy assigns or removes tags (ASSIGN_TAG / REMOVE_TAG); "
+                   "saving or running it requires write access to tags",
+        )
+
+
 @router.post("/compliance/policies")
 async def create_policy(
     request: Request,
@@ -69,9 +88,11 @@ async def create_policy(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     policy: CompliancePolicyCreate = Body(...),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     warnings = _check_rule(policy.rule)
+    require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
     created = manager.create_policy(
         db, 
         policy, 
@@ -112,14 +133,16 @@ async def update_policy(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     policy: CompliancePolicy = Body(...),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     # Only a changed rule is checked: an older policy with an invalid rule
     # can still be renamed, disabled or recategorised
     existing = manager.get_policy(db, policy_id)
-    warnings = (
-        _check_rule(policy.rule) if existing is None or existing.rule != policy.rule else []
-    )
+    rule_changed = existing is None or existing.rule != policy.rule
+    warnings = _check_rule(policy.rule) if rule_changed else []
+    if rule_changed:
+        require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
     updated = manager.update_policy(
         db, 
         policy_id, 
@@ -187,6 +210,29 @@ async def delete_policy(
     return {"status": "success"}
 
 
+def _json_params(value):
+    import json
+
+    try:
+        return json.loads(value) if value else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _run_error_code(run) -> dict:
+    """The run's error code and parameters, which the UI translates."""
+    return {'error_code': run.error_code, 'error_params': _json_params(run.error_params)}
+
+
+def _run_codes(run) -> dict:
+    """The run's error and warning codes and their parameters, which the UI translates."""
+    return {
+        **_run_error_code(run),
+        'warning_code': run.warning_code,
+        'warning_params': _json_params(run.warning_params),
+    }
+
+
 @router.post("/compliance/policies/{policy_id}/runs")
 async def run_policy(
     policy_id: str,
@@ -195,11 +241,13 @@ async def run_policy(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     payload: ComplianceRunRequest = Body(default=ComplianceRunRequest()),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     policy = manager.get_policy(db, policy_id)
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
+    require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
 
     # For now, implement inline only; async can be backed by Databricks job later
     run = manager.run_policy_inline(
@@ -229,6 +277,7 @@ async def run_policy(
         'failure_count': run.failure_count,
         'score': run.score,
         'error_message': run.error_message,
+        **_run_codes(run),
     }
 
 
@@ -253,6 +302,7 @@ async def list_runs(
             'failure_count': r.failure_count,
             'score': r.score,
             'error_message': r.error_message,
+            **_run_codes(r),
         } for r in runs
     ]
 
@@ -279,6 +329,7 @@ async def get_run_results(
             'failure_count': run.failure_count,
             'score': run.score,
             'error_message': run.error_message,
+            **_run_codes(run),
         },
         'results': [
             {

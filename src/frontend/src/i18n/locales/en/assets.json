@@ -149,6 +149,118 @@
       "relationships": "Relationships",
       "lineage": "Lineage",
       "impact": "Impact Analysis"
+    },
+    "metricView": {
+      "title": "Metric view",
+      "loading": "Loading the metric view",
+      "loadError": "The metric view definition could not be loaded.",
+      "userTokenRequired": "This metric view is read from Unity Catalog with your own access, and your Databricks sign-in isn't available in this session.",
+      "state": {
+        "drift": {
+          "label": "Definition",
+          "in_sync": "Matches the baseline",
+          "drifted": "Changed since the baseline",
+          "unknown": "Not compared",
+          "driftedHint": "The definition in Unity Catalog differs from the baseline in Ontos. Ontos does not change it.",
+          "unknownHint": "The definition could not be compared with the baseline."
+        },
+        "baseline": {
+          "recorded": "Baseline recorded on {{date}} from the first definition read; no change has been approved yet.",
+          "approved": "Baseline approved on {{date}}.",
+          "none": "No baseline yet.",
+          "digest": "digest {{digest}}"
+        },
+        "lastChecked": "Checked {{date}}",
+        "refresh": {
+          "label": "Refresh",
+          "succeeded": "Succeeded",
+          "failed": "Failed",
+          "running": "Running",
+          "canceled": "Canceled",
+          "unknown": "Unknown",
+          "lastStarted": "Last refresh started {{date}}",
+          "schedule": "Schedule: {{schedule}}",
+          "noSchedule": "No schedule: refreshes are started manually.",
+          "openPipeline": "Open pipeline",
+          "failedTitle": "The last refresh failed",
+          "failedHint": "Check the pipeline for the cause.",
+          "notAvailable": "The refresh state could not be read."
+        }
+      },
+      "changeRequests": {
+        "title": "Change requests",
+        "propose": "Propose change",
+        "empty": "No change requests yet.",
+        "loadError": "The change requests could not be loaded.",
+        "requestedBy": "Requested by {{user}} on {{date}}",
+        "decidedBy": "Decided by {{user}} on {{date}}",
+        "inReview": "Waiting for approval: the approvers were notified.",
+        "delivered": "Delivered ({{modes}}). It becomes the baseline once Unity Catalog has this definition.",
+        "applied": "Applied in Unity Catalog on {{date}}: this definition is now the baseline.",
+        "statement": "Statement to apply",
+        "submit": "Submit for review",
+        "cancel": "Cancel request",
+        "status": {
+          "draft": "Draft",
+          "in_review": "In review",
+          "approved": "Approved",
+          "rejected": "Rejected",
+          "delivered": "Delivered",
+          "failed": "Delivery failed",
+          "cancelled": "Cancelled"
+        },
+        "deliveryModes": {
+          "indirect": "files in Git",
+          "manual": "notification to the owners"
+        },
+        "securedKinds": {
+          "row_filter": "row filter",
+          "column_mask": "column mask",
+          "abac_policy": "ABAC policy"
+        },
+        "dialog": {
+          "title": "Propose a definition change",
+          "description": "Edit the YAML definition of the metric view. The change is reviewed and approved before it is delivered; Ontos does not apply it to Unity Catalog.",
+          "definition": "YAML definition",
+          "justification": "Justification",
+          "justificationPlaceholder": "Why is this change needed?",
+          "saveDraft": "Save as draft",
+          "saveAndSubmit": "Save and submit for review"
+        },
+        "errors": {
+          "generic": "The action failed."
+        },
+        "codes": {
+          "metric_view_definition_invalid_yaml": "The YAML is not valid (line {{line}}, column {{column}}).",
+          "metric_view_definition_invalid": "The definition is not a valid metric view definition.",
+          "metric_view_definition_source_missing": "The definition has no source.",
+          "metric_view_definition_dollar_quote": "The definition can't contain $$: it is delivered between $$.",
+          "metric_view_duplicate_field": "The field name {{field}} is used more than once.",
+          "metric_view_definition_unchanged": "The proposed definition is the same as the current one.",
+          "metric_view_base_unreadable": "The current definition can't be parsed, so no change can be proposed against it.",
+          "metric_view_base_stale": "The metric view changed in Unity Catalog since this draft was written. Write a new draft.",
+          "metric_view_owner_changed": "The owner of this materialized metric view changed since the draft was written. Write a new draft.",
+          "metric_view_materialized_group_owner": "A materialized metric view can't be owned by a group ({{owner}}).",
+          "metric_view_materialized_source_secured": "A materialized metric view can't use the source {{source}}: it has a {{kind}}.",
+          "metric_view_change_request_not_found": "The change request was not found.",
+          "metric_view_change_request_not_requester": "Only the requester can do this.",
+          "metric_view_change_request_not_draft": "Only a draft can be submitted.",
+          "metric_view_change_request_not_cancellable": "This change request can no longer be cancelled.",
+          "metric_view_change_no_approval": "No active workflow asks for an approval of this change, so it stays a draft. An admin can activate one in Workflows.",
+          "metric_view_not_found": "The metric view was not found in Unity Catalog, or access was denied.",
+          "user_token_required": "Reading Unity Catalog needs your Databricks sign-in.",
+          "user_client_unavailable": "Your Databricks connection could not be created.",
+          "own_change_request_approval": "The requester can't approve their own change request.",
+          "metric_view_delivery_git_unavailable": "The Git repository for Indirect delivery is not available.",
+          "metric_view_delivery_write_failed": "The definition could not be written to the Git repository.",
+          "metric_view_delivery_restore_failed": "The definition could not be written to the Git repository, and these files could not be put back as they were: {{files}}.",
+          "metric_view_delivery_notification_failed": "The owners could not be notified.",
+          "metric_view_delivery_no_recipient": "Nobody could be notified to run the statement.",
+          "metric_view_delivery_failed": "The change could not be delivered.",
+          "metric_view_linked_field_removed": "The field {{field}} has concept links ({{links}}) and is removed.",
+          "metric_view_source_not_checked": "The source {{source}} could not be checked for row filters, column masks and ABAC policies."
+        }
+      }
     }
   },
   "explorer": {

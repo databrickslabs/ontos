@@ -316,7 +316,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
             notes: notes || null,
         };
         try {
-            const response = await post<DataAssetReviewRequest>('/api/data-asset-reviews/', payload);
+            const response = await post<DataAssetReviewRequest>('/api/data-asset-reviews', payload);
             const newRequest = checkApiResponse(response, 'Create Review Request');
             onSubmitSuccess(newRequest);
         } catch (err: any) {

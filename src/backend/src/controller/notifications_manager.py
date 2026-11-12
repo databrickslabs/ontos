@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any, List, Optional, Dict
+from typing import Any, Callable, List, Optional, Dict
 import json
 
 from sqlalchemy.orm import Session # Import Session for type hinting
@@ -22,6 +22,68 @@ logger = get_logger(__name__)
 
 class NotificationNotFoundError(Exception):
     """Raised when a notification is not found."""
+
+
+class _RecipientMembership:
+    """Which notification recipients one user is: the user (email or
+    username, ignoring case), a member of a group, or a member of an app role
+    through its groups or its individually assigned users (``assigned_users``,
+    #760). A role with neither falls back to the admins. Built once per user
+    and check, so the roles are loaded once.
+    """
+
+    def __init__(self, user_info: UserInfo, roles: List[Any], roles_loaded: bool = True):
+        self.roles_loaded = roles_loaded
+        self._groups = set(user_info.groups or [])
+        self._identities = {
+            str(v).strip().lower() for v in (user_info.email, user_info.username) if v
+        }
+        # Role ids are UUIDs, notifications store the text form
+        self.role_by_id: Dict[str, Any] = {str(role.id): role for role in roles}
+        self._role_by_name: Dict[str, Any] = {}
+        for role in roles:
+            self._role_by_name[role.name] = role
+            # Normalized variants (legacy recipients store a role name)
+            self._role_by_name[role.name.lower().replace(' ', '')] = role
+            self._role_by_name[''.join(word.capitalize() for word in role.name.split())] = role
+        admin_role = self._role_by_name.get('Admin')
+        self.is_admin = bool(admin_role is not None and self._assigned_to(admin_role))
+
+    def _assigned_to(self, role: Any) -> bool:
+        if self._groups.intersection(role.assigned_groups or []):
+            return True
+        users = {str(u).strip().lower() for u in (getattr(role, 'assigned_users', None) or [])}
+        return bool(self._identities.intersection(users))
+
+    def member_of(self, role: Any) -> bool:
+        """Assigned to the role; a role nobody is assigned to: the admins."""
+        if role.assigned_groups or getattr(role, 'assigned_users', None):
+            return self._assigned_to(role)
+        return self.is_admin
+
+    def is_user(self, recipient: Optional[str]) -> bool:
+        """Whether the recipient names the user (email or username)."""
+        return bool(recipient) and recipient.strip().lower() in self._identities
+
+    def role_of(self, recipient: Optional[str], recipient_role_id: Optional[str]) -> Optional[Any]:
+        """The app role a recipient names: by id, else by name (legacy)."""
+        if recipient_role_id and str(recipient_role_id) in self.role_by_id:
+            return self.role_by_id[str(recipient_role_id)]
+        return self._role_by_name.get(recipient) if recipient else None
+
+    def is_recipient(self, recipient: Optional[str], recipient_role_id: Optional[str]) -> bool:
+        """Whether the user is this recipient, without the broadcast and admin
+        fallbacks of the access check."""
+        if not (recipient or recipient_role_id):
+            return False
+        if self.is_user(recipient):
+            return True
+        role = self.role_of(recipient, recipient_role_id)
+        if role is not None:
+            return self.member_of(role)
+        # Group picked as a recipient / approver (the Workflow Designer's
+        # principal picker stores the group name)
+        return bool(not recipient_role_id and recipient in self._groups)
 
 class NotificationsManager:
     def __init__(self, settings_manager: 'SettingsManager'):
@@ -65,78 +127,18 @@ class NotificationsManager:
             # Return only broadcast notifications if no user info
             return [n for n in all_notifications_api if not n.recipient]
 
-        user_groups = set(user_info.groups or [])
-        user_email = user_info.email
-        user_name = user_info.username  # Also check username for matching
-
-        # Pre-fetch all role definitions for efficient lookup
-        # Create multiple mappings: by UUID, by name, and flexible name variants
-        try:
-            all_roles = self._settings_manager.list_app_roles()
-            role_by_id: Dict[str, 'AppRole'] = {}  # UUID -> role
-            role_by_name: Dict[str, 'AppRole'] = {}  # Name variants -> role
-            for role in all_roles:
-                # Map by UUID
-                role_by_id[role.id] = role
-                # Map by exact name
-                role_by_name[role.name] = role
-                # Also map by normalized name (no spaces, lowercase) for flexible matching
-                normalized = role.name.lower().replace(' ', '')
-                role_by_name[normalized] = role
-                # Also try CamelCase variant
-                camel_case = ''.join(word.capitalize() for word in role.name.split())
-                role_by_name[camel_case] = role
-        except Exception as e:
-            logger.error(f"Failed to retrieve roles for notification filtering: {e}")
-            role_by_id = {}
-            role_by_name = {}
-
-        # Check if user is an admin (member of Admin role's groups)
-        is_admin = False
-        admin_role = role_by_name.get('Admin')
-        if admin_role and admin_role.assigned_groups:
-            is_admin = any(group in user_groups for group in admin_role.assigned_groups)
-
+        membership = self._membership(user_info, "notification filtering")
         filtered_notifications = []
         for n in all_notifications_api:
-            is_recipient = False
-            target_role = None
-            recipient = n.recipient
-            
-            # Check recipient_role_id first (new, preferred method)
-            if n.recipient_role_id and n.recipient_role_id in role_by_id:
-                target_role = role_by_id[n.recipient_role_id]
+            target_role = membership.role_of(n.recipient, n.recipient_role_id)
+            if target_role is not None:
                 # Populate role name for display
                 n.recipient_role_name = target_role.name
-            
-            if not recipient and not target_role:  # Broadcast
-                is_recipient = True
-            elif user_email and recipient == user_email:  # Direct email match
-                is_recipient = True
-            elif user_name and recipient == user_name:  # Direct username match
-                is_recipient = True
-            elif target_role:  # Role matched by UUID
-                if target_role.assigned_groups:
-                    if any(group in user_groups for group in target_role.assigned_groups):
-                        is_recipient = True
-                else:
-                    # Role has NO groups assigned - show to admins as fallback
-                    if is_admin:
-                        is_recipient = True
-            elif recipient in role_by_name:  # Legacy: recipient matches role name
-                target_role = role_by_name[recipient]
-                n.recipient_role_name = target_role.name  # Populate for display
-                if target_role.assigned_groups:
-                    if any(group in user_groups for group in target_role.assigned_groups):
-                        is_recipient = True
-                else:
-                    # Role has NO groups assigned - show to admins as fallback
-                    if is_admin:
-                        is_recipient = True
-
-            if is_recipient:
+            # Broadcast: no recipient and no known role
+            broadcast = not n.recipient and membership.role_of(None, n.recipient_role_id) is None
+            if broadcast or membership.is_recipient(n.recipient, n.recipient_role_id):
                 # Admins can delete any notification they can see
-                if is_admin:
+                if membership.is_admin:
                     n.can_delete = True
                 filtered_notifications.append(n)
 
@@ -145,92 +147,80 @@ class NotificationsManager:
 
         return filtered_notifications
 
-    def can_user_access_notification(self, db: Session, notification: Notification, user_info: UserInfo) -> bool:
+    def can_user_access_notification(
+        self, db: Session, notification: Notification, user_info: UserInfo,
+        *, strict: bool = False,
+    ) -> bool:
         """Check if a user can access/modify a specific notification.
         
-        Uses the same logic as get_notifications for role-based access checks.
+        Uses the same logic as get_notifications for role-based access checks
+        (``_RecipientMembership``), plus admins, who access any notification.
         
         Args:
             db: Database session
             notification: The notification to check access for
             user_info: The user's info including email and groups
+            strict: Fail closed, for decisions that grant access to something
+                else (#1117): no broadcast, nothing when the roles can't be
+                read, and when ``recipient_role_id`` names no app role (a
+                business role, or a deleted role) only the user the
+                notification names, not the admins. The default (the bell)
+                treats an unresolvable role as a broadcast.
             
         Returns:
             True if user can access the notification, False otherwise
         """
         if not user_info:
             return False
-            
-        user_groups = set(user_info.groups or [])
-        user_email = user_info.email
-        user_name = user_info.username
-        
-        # Pre-fetch all role definitions for efficient lookup
-        try:
-            all_roles = self._settings_manager.list_app_roles()
-            role_by_id: Dict[str, Any] = {}
-            role_by_name: Dict[str, Any] = {}
-            for role in all_roles:
-                role_by_id[role.id] = role
-                role_by_name[role.name] = role
-                # Normalized variants
-                normalized = role.name.lower().replace(' ', '')
-                role_by_name[normalized] = role
-                camel_case = ''.join(word.capitalize() for word in role.name.split())
-                role_by_name[camel_case] = role
-        except Exception as e:
-            logger.error(f"Failed to retrieve roles for notification access check: {e}")
-            role_by_id = {}
-            role_by_name = {}
-        
-        # Check if user is an admin
-        is_admin = False
-        admin_role = role_by_name.get('Admin')
-        if admin_role and admin_role.assigned_groups:
-            is_admin = any(group in user_groups for group in admin_role.assigned_groups)
-        
+        membership = self._membership(user_info, "notification access check")
+        if strict and not membership.roles_loaded:
+            return False
         recipient = notification.recipient
-        target_role = None
-        
-        # Check recipient_role_id first (new, preferred method)
-        if notification.recipient_role_id and notification.recipient_role_id in role_by_id:
-            target_role = role_by_id[notification.recipient_role_id]
-        
+        role_id = notification.recipient_role_id
+        if strict and role_id and membership.role_of(None, role_id) is None:
+            # Not an app role: only the person the notification names. A
+            # business role's notification names its owner; a role that no
+            # longer exists names its role and so addresses nobody.
+            return membership.is_user(recipient)
         # Broadcast notification - anyone can access
-        if not recipient and not target_role:
+        if not recipient and membership.role_of(None, role_id) is None:
+            return not strict
+        if membership.is_recipient(recipient, role_id):
             return True
-        
-        # Direct email match
-        if user_email and recipient == user_email:
-            return True
-        
-        # Direct username match
-        if user_name and recipient == user_name:
-            return True
-        
-        # Role matched by UUID
-        if target_role:
-            if target_role.assigned_groups:
-                if any(group in user_groups for group in target_role.assigned_groups):
-                    return True
-            elif is_admin:
-                # Role has NO groups assigned - allow admins as fallback
-                return True
-        
-        # Legacy: recipient matches role name
-        if recipient in role_by_name:
-            target_role = role_by_name[recipient]
-            if target_role.assigned_groups:
-                if any(group in user_groups for group in target_role.assigned_groups):
-                    return True
-            elif is_admin:
-                return True
-        
         # Admins can access any notification
-        if is_admin:
-            return True
-        
-        return False
+        return membership.is_admin
+
+    def _membership(self, user_info: UserInfo, purpose: str) -> _RecipientMembership:
+        """The user's recipient membership, with the roles loaded once."""
+        try:
+            roles = list(self._settings_manager.list_app_roles())
+        except Exception:
+            logger.error("Failed to retrieve roles for %s", purpose, exc_info=True)
+            return _RecipientMembership(user_info, [], roles_loaded=False)
+        return _RecipientMembership(user_info, roles)
+
+    def recipient_matcher(
+        self, user_info: Optional[UserInfo],
+    ) -> Callable[[Optional[str], Optional[str]], bool]:
+        """``user_is_recipient`` for one user and many recipients, loading the
+        roles once (e.g. the targets of a require_all approval, #1119)."""
+        if not user_info:
+            return lambda recipient, recipient_role_id: False
+        return self._membership(user_info, "the recipient check").is_recipient
+
+    def user_is_recipient(
+        self, recipient: Optional[str], recipient_role_id: Optional[str], user_info: UserInfo,
+    ) -> bool:
+        """Whether the user is this recipient: the user, a member of the group,
+        or a member of the role (by id, or by name for legacy recipients),
+        through the role's groups or its assigned users.
+
+        As ``can_user_access_notification`` without its admin and broadcast
+        fallbacks: an admin is a recipient only of the Admin role, or of a role
+        nobody is assigned to. Used to tell which approver a decision is for
+        (#1119).
+        """
+        return self.recipient_matcher(user_info)(recipient, recipient_role_id)
 
     async def create_user_notification(
         self,
@@ -339,8 +329,10 @@ class NotificationsManager:
             # Fail open: a duplicate notification is preferable to silently dropping a request.
             return False
 
-    def handle_actionable_notification(self, db: Session, action_type: str, action_payload: Dict) -> bool:
-        """Finds notifications by action type/payload and marks them as read using the repository."""
+    def handle_actionable_notification(
+        self, db: Session, action_type: str, action_payload: Dict,
+    ) -> bool:
+        """Finds notifications by action type/payload and marks them as read."""
         logger.debug(f"Attempting to handle notification: type={action_type}, payload={action_payload}")
         try:
             # Assuming repo has a method to find by action (might need creating)

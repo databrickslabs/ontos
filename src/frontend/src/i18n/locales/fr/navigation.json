@@ -19,11 +19,20 @@
   },
   "warning": {
     "title": "Avertissement système",
-    "workspaceFailed": "Échec de la connexion à l'espace de travail Databricks. Certaines fonctionnalités peuvent être indisponibles."
+    "workspaceFailed": "Échec de la connexion à l'espace de travail Databricks. Certaines fonctionnalités peuvent être indisponibles.",
+    "stillUnavailable": "Le workspace est toujours inaccessible. Réessayez plus tard."
   },
   "routeError": {
     "title": "Une erreur s'est produite",
     "body": "Une erreur inattendue s'est produite lors de l'affichage de cette page. Vous pouvez réessayer ou revenir à la page d'accueil.",
     "goHome": "Accueil"
+  },
+  "health": {
+    "issues": {
+      "workspace_client_unavailable": "Le client du workspace Databricks n'a pas pu être créé. La cause figure dans les journaux du serveur.",
+      "manager_init_failed": "Certains services n'ont pas pu être initialisés. La cause figure dans les journaux du serveur.",
+      "seeding_failed": "Les rôles, équipes ou projets par défaut n'ont pas pu être créés. La cause figure dans les journaux du serveur.",
+      "database_unavailable": "La base de données de métadonnées n'a pas pu être initialisée. La cause figure dans les journaux du serveur."
+    }
   }
 }

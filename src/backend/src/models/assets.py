@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.models.domain_associations import AssignedDomain
 
@@ -73,7 +73,7 @@ class UnifiedAssetType(str, Enum):
     # -------------------------------------------------------------------------
     # Unity Catalog / Databricks - Semantic Assets (NEW)
     # -------------------------------------------------------------------------
-    UC_METRIC = "uc_metric"  # Unity Catalog metrics (AI/BI)
+    UC_METRIC = "uc_metric"  # Unity Catalog metric views (table_type METRIC_VIEW)
     
     # -------------------------------------------------------------------------
     # Snowflake - Structural Containers
@@ -542,6 +542,38 @@ class AssetTypeCategory(str, Enum):
     CUSTOM = "custom"
 
 
+# Name of the persisted asset type seeded from ontos:MetricView (a subclass of
+# ontos:View). Imported Unity Catalog metric views get this type.
+METRIC_VIEW_ASSET_TYPE = "Metric View"
+
+# Persisted asset types that are tables with columns: Table, View and its
+# Metric View subclass. Used where Ontos lists or matches physical tables.
+PHYSICAL_TABLE_ASSET_TYPES = ("Table", "View", METRIC_VIEW_ASSET_TYPE)
+
+# The property of a Metric View asset holding its parsed spec and the fingerprints
+# of its measures (#1263). It holds the view's definition, which only users who can
+# read the view in Unity Catalog may see, so asset reads and exports leave it out.
+METRIC_VIEW_PROPERTY = "metric_view"
+INTERNAL_PROPERTY_KEYS = frozenset({METRIC_VIEW_PROPERTY})
+
+
+def public_properties(properties: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """An asset's properties without the keys Ontos keeps for itself."""
+    if not properties or not any(k in properties for k in INTERNAL_PROPERTY_KEYS):
+        return properties
+    return {k: v for k, v in properties.items() if k not in INTERNAL_PROPERTY_KEYS}
+
+
+def with_internal_properties(
+    new: Optional[Dict[str, Any]], current: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """``new`` properties, keeping the internal keys of ``current`` (never sent to clients)."""
+    kept = {k: v for k, v in (current or {}).items() if k in INTERNAL_PROPERTY_KEYS}
+    if new is None or not kept:
+        return new
+    return {**new, **kept}
+
+
 class AssetStatus(str, Enum):
     """Asset lifecycle status. Aligned with EntityStatus."""
     DRAFT = "draft"
@@ -664,6 +696,11 @@ class AssetRead(AssetBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("properties")
+    @classmethod
+    def _without_internal_properties(cls, value):
+        return public_properties(value)
 
 
 class AssetSummary(BaseModel):

@@ -1,0 +1,32 @@
+name: do-not-merge
+
+# Fail while a PR carries the `do-not-merge` label (fork CI mirror PRs from
+# scripts/fork-sync-pr.sh, or any PR a maintainer wants to hold). A label
+# alone does not stop the merge queue; this check does once it is marked
+# required in the development ruleset. It only reads the event payload.
+
+on:
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize, reopened]
+  # Required checks must also report on merge groups, or the queue waits on
+  # them. A PR can only be queued once its PR-level run passed (no label).
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  check-label:
+    name: no do-not-merge label
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Fail if the PR is labeled do-not-merge
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'do-not-merge')
+        run: |
+          echo "::error title=do-not-merge::This PR has the do-not-merge label. Remove it to merge."
+          exit 1
+      - name: Pass
+        run: echo "No do-not-merge label."

@@ -20,7 +20,10 @@ from src.common.unity_catalog_utils import (
     create_table_safe,
     ensure_catalog_and_schema_exist,
 )
-from src.controller.self_service_manager import SelfServiceManager
+from src.controller.self_service_manager import (
+    SandboxLocationNotAllowedError,
+    SelfServiceManager,
+)
 from src.db_models.compliance import CompliancePolicyDb
 from src.repositories.teams_repository import team_repo
 from src.repositories.projects_repository import project_repo
@@ -648,6 +651,10 @@ async def deploy_contract(
 ):
     """Deploy a data contract to Unity Catalog by creating its physical dataset(s).
 
+    Every target catalog/schema must pass the sandbox allowlist (as for
+    /self-service/create); otherwise nothing is created and the answer is 403
+    with the code ``sandbox_location_not_allowed``.
+
     Optional body keys:
       defaultCatalog: string
       defaultSchema: string
@@ -670,7 +677,9 @@ async def deploy_contract(
         default_catalog = (body.get('defaultCatalog') or '').strip()
         default_schema = (body.get('defaultSchema') or '').strip()
 
-        created: List[str] = []
+        # Resolve and validate every target first, so a refused object stops the
+        # whole deploy before anything is created.
+        targets: List[Tuple[Any, str, str, str]] = []
         for sobj in (contract.schema_objects or []):
             # Resolve physical name or build from defaults
             physical_name = getattr(sobj, 'physical_name', None) or ''
@@ -692,7 +701,17 @@ async def deploy_contract(
                 table_name = sanitize_uc_identifier(table_name)
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=f"Invalid identifier in physical name: {e}")
+            targets.append((sobj, catalog_name, schema_name, table_name))
 
+        # Same sandbox allowlist as the other self-service creation paths
+        settings = get_settings()
+        for _, catalog_name, schema_name, _ in targets:
+            if not _is_sandbox_allowed(settings, catalog_name, schema_name):
+                err = SandboxLocationNotAllowedError(catalog_name, schema_name)
+                raise HTTPException(status_code=403, detail=str(err)) from err
+
+        created: List[str] = []
+        for sobj, catalog_name, schema_name, table_name in targets:
             # Ensure parent catalog and schema exist using shared utility
             catalog_name, full_schema_name = ensure_catalog_and_schema_exist(
                 ws=ws,

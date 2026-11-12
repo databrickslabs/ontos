@@ -1,0 +1,42 @@
+{
+  "blocked": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geblokkeerd door een workflow: {{reasons}}",
+  "reasons": {
+    "waitingForApproval": "wacht op goedkeuring ({{step}})",
+    "entityLoadFailed": "{{entityType}} {{entityId}} kon niet worden geladen om de regel te evalueren",
+    "entityNotFound": "{{entityType}} {{entityId}} is niet gevonden, dus de regel kan niet worden geëvalueerd",
+    "whereEvaluationFailed": "de WHERE-clausule van beleid '{{policyName}}' kon niet worden geëvalueerd op {{entityType}} {{entityId}}",
+    "validationFailed": "de workflowvalidatie is mislukt",
+    "status": {
+      "failed": "mislukt",
+      "cancelled": "geannuleerd",
+      "pending": "in afwachting",
+      "running": "bezig"
+    }
+  },
+  "requiresTransition": "Een bewerking kan de status niet wijzigen van {{fromStatus}} naar {{toStatus}}. Gebruik Status wijzigen, dat de overgang controleert en de workflows voor statuswijziging uitvoert.",
+  "certifiedIsNotAStatus": "Gecertificeerd is geen status: certificering stel je in met Certificeren, op een actieve entiteit.",
+  "invalidStatus": "{{status}} is geen levenscyclusstatus. Gebruik een van: {{allowed}}.",
+  "gateError": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geweigerd: de workflowpoort {{workflows}} kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren.",
+  "gateErrorUnnamed": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geweigerd: een workflowpoort kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren.",
+  "certifiedDeprecationRequiresApproval": "{{name}} is gecertificeerd en kan daarom alleen via een goedgekeurde statuswijzigingsaanvraag worden uitgefaseerd. Vraag in plaats daarvan de statuswijziging aan.",
+  "requestInstead": "Statuswijziging aanvragen",
+  "certifiedGuard": {
+    "title": "Bescherming tegen uitfaseren van gecertificeerde items",
+    "description": "Een gecertificeerd dataproduct of datacontract kan alleen via een goedgekeurde statuswijzigingsaanvraag worden uitgefaseerd. De bescherming geldt overal, tenzij u haar hieronder uitschakelt.",
+    "hint": "De bescherming geldt niet voor de hier vermelde domeinen, dataproducten en datacontracten (een domein omvat zijn producten en contracten): hun gecertificeerde items worden direct uitgefaseerd. Elke overgeslagen controle wordt gelogd en geaudit.",
+    "saved": "Bescherming tegen uitfaseren van gecertificeerde items opgeslagen",
+    "saveFailed": "De bescherming tegen uitfaseren van gecertificeerde items kon niet worden opgeslagen",
+    "loadFailed": "De bescherming tegen uitfaseren van gecertificeerde items kon niet worden geladen",
+    "notFound": "{{id}} bestaat niet meer. Verwijder het en sla opnieuw op.",
+    "missingOnSave_one": "De bescherming is uitgeschakeld voor {{count}} item dat niet meer bestaat. Verwijder het en sla opnieuw op.",
+    "missingOnSave_other": "De bescherming is uitgeschakeld voor {{count}} items die niet meer bestaan. Verwijder ze en sla opnieuw op.",
+    "readOnly": "Alleen beheerders van certificeringsniveaus kunnen de bescherming wijzigen."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} is gecertificeerd: alleen een beheerder van deze functie kan het uitfaseren goedkeuren.",
+    "no_pending_request": "{{name}} is gecertificeerd: goedkeuren vereist een openstaande statuswijzigingsaanvraag voor deze wijziging, en die is er niet.",
+    "target_mismatch": "{{name}} is gecertificeerd: de openstaande aanvraag vraagt een andere status, dus deze goedkeuring geldt er niet voor.",
+    "self_approval": "{{name}} is gecertificeerd: u hebt deze aanvraag gedaan, dus iemand anders moet hem goedkeuren.",
+    "no_approver": "{{name}} is gecertificeerd: het uitfaseren vereist de beslissing van een goedkeurder van de aanvraag."
+  }
+}

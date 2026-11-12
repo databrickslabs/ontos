@@ -22,6 +22,7 @@ export type TriggerType =
   | 'on_request_publish'
   | 'on_request_deploy'
   | 'on_request_status_change'
+  | 'on_request_definition_change'
   | 'on_request_certify'
   | 'on_certify'
   | 'on_decertify'
@@ -68,7 +69,11 @@ export type EntityType =
   | 'data_asset_review'
   | 'job'
   | 'subscription'
-  | 'user';
+  | 'user'
+  | 'ontology_concept'
+  | 'ontology_collection'
+  | 'concept_changeset'
+  | 'metric_view';
 
 export type ScopeType = 'all' | 'project' | 'catalog' | 'domain';
 
@@ -115,13 +120,28 @@ export type StepExecutionStatus =
   | 'failed'
   | 'skipped';
 
+// What a before_status_change gate does when evaluating it raises
+export type GateErrorMode = 'fail_open' | 'fail_closed';
+
+// Entities a before_status_change gate is switched off for (a domain covers its products and contracts)
+export interface GateExemptions {
+  domains: string[];
+  data_products: string[];
+  data_contracts: string[];
+}
+
 // Trigger configuration
 export interface WorkflowTrigger {
   type: TriggerType;
   entity_types: EntityType[];
+  /** Stored types this version doesn't know (a removed type): they match no event */
+  unknown_entity_types?: string[];
   from_status?: string;
   to_status?: string;
   schedule?: string;
+  /** before_status_change only; the backend defaults to fail_open */
+  on_error?: GateErrorMode;
+  disabled_for?: GateExemptions;
 }
 
 // Scope configuration
@@ -354,6 +374,12 @@ export interface ProcessWorkflow {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  /**
+   * Read only: stored trigger entity types that match no event, coded
+   * `stored_entity_type_unknown` / `stored_entity_type_unsupported`
+   * (params `triggerType`, `entityType`). The workflow is kept as stored.
+   */
+  trigger_warnings?: { code: string; message: string; params: Record<string, unknown> }[];
 }
 
 export interface ProcessWorkflowCreate {
@@ -391,7 +417,11 @@ export interface TriggerContext {
 // Step execution result
 export interface WorkflowStepExecutionResult {
   id: string;
-  step_id: string;
+  // The step's row id; null once the step was removed from the workflow
+  step_id: string | null;
+  // The step's step_id and name when it ran, kept if the step is removed
+  step_key?: string | null;
+  step_name?: string | null;
   status: StepExecutionStatus;
   passed?: boolean;
   result_data?: Record<string, unknown>;
@@ -412,6 +442,9 @@ export interface WorkflowExecution {
   success_count: number;
   failure_count: number;
   error_message?: string;
+  // Code of error_message when it is a failed step's coded error
+  error_code?: string | null;
+  error_params?: Record<string, unknown> | null;
   started_at?: string;
   finished_at?: string;
   triggered_by?: string;
@@ -438,6 +471,10 @@ export interface WorkflowValidationResult {
   valid: boolean;
   errors: string[];
   warnings: string[];
+  /** The same errors with a code and params each (translated by the designer). */
+  issues?: { code: string; message: string; params: Record<string, unknown> }[];
+  /** The same warnings with a code and params each. */
+  warning_issues?: { code: string; message: string; params: Record<string, unknown> }[];
 }
 
 // API responses

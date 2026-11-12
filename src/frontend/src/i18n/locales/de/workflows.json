@@ -31,9 +31,12 @@
       "special": "Speziell",
       "requesterOriginalUser": "Antragsteller (ursprünglicher Benutzer)",
       "ownerEntityOwner": "Eigentümer (Entity-Eigentümer)",
+      "domainOwners": "Domänenverantwortliche",
+      "contractApprovers": "Vertragsgenehmiger",
       "appRoles": "App-Rollen",
       "businessRoles": "Geschäftsrollen",
-      "noGroups": "Keine Gruppen"
+      "noGroups": "Keine Gruppen",
+      "assetOwners": "Asset-Eigentümer"
     },
     "messages": {
       "loadWorkflowFailed": "Workflow konnte nicht geladen werden",
@@ -43,7 +46,8 @@
       "createdSuccess": "Workflow erfolgreich erstellt",
       "updatedSuccess": "Workflow erfolgreich aktualisiert",
       "createFailed": "Workflow konnte nicht erstellt werden: {{error}}",
-      "updateFailed": "Workflow konnte nicht aktualisiert werden: {{error}}"
+      "updateFailed": "Workflow konnte nicht aktualisiert werden: {{error}}",
+      "stepConfigInvalid": "Schritt \"{{step}}\": {{issue}}"
     },
     "badges": {
       "default": "Standard",
@@ -90,6 +94,13 @@
       "generate_pdf": "PDF generieren",
       "deliver": "Zustellen"
     },
+    "layout": {
+      "rearrange": "Neu anordnen",
+      "rearrangeHint": "Alle Schritte automatisch anordnen",
+      "confirmTitle": "Alle Schritte neu anordnen?",
+      "confirmDescription": "Die Schritte werden automatisch angeordnet. Ihr aktuelles Layout wird beim Speichern ersetzt.",
+      "confirmAction": "Neu anordnen"
+    },
     "discard": {
       "description": "Sie haben nicht gespeicherte Änderungen an diesem Workflow. Wenn Sie jetzt verlassen, gehen Ihre Änderungen verloren.",
       "stay": "Bleiben",
@@ -101,7 +112,25 @@
       "fromStatusPlaceholder": "z. B. draft",
       "toStatus": "Zu Status",
       "toStatusPlaceholder": "z. B. active",
-      "descriptionPlaceholder": "Workflow-Beschreibung"
+      "descriptionPlaceholder": "Workflow-Beschreibung",
+      "failClosed": "Übergang ablehnen, wenn dieses Gate nicht ausgewertet werden kann",
+      "failClosedHint": "Fail closed: Wenn bei der Auswertung dieses Gates ein Fehler auftritt (kein normales Fehlschlagen), wird die Statusänderung abgelehnt. Aus (fail open) wird die Änderung durchgeführt und der Fehler protokolliert und auditiert.",
+      "disabledFor": {
+        "title": "Deaktiviert für",
+        "hint": "Dieses Gate läuft nicht für die hier aufgeführten Domänen, Datenprodukte und Datenverträge (eine Domäne umfasst ihre Produkte und Verträge). Jedes Überspringen wird protokolliert und auditiert.",
+        "domains": "Domänen",
+        "dataProducts": "Datenprodukte",
+        "dataContracts": "Datenverträge",
+        "none": "Keine",
+        "selectedCount_one": "{{count}} ausgewählt",
+        "selectedCount_other": "{{count}} ausgewählt",
+        "search": "Suchen...",
+        "noResults": "Nichts gefunden.",
+        "remove": "{{name}} entfernen",
+        "notFound": "{{id}} (existiert nicht mehr)",
+        "missingOnSave_one": "Das Gate ist für {{count}} Eintrag abgeschaltet, der nicht mehr existiert. Entfernen Sie ihn und speichern Sie erneut.",
+        "missingOnSave_other": "Das Gate ist für {{count}} Einträge abgeschaltet, die nicht mehr existieren. Entfernen Sie sie und speichern Sie erneut."
+      }
     },
     "stepConfig": {
       "title": "Schritt-Konfiguration",
@@ -167,7 +196,9 @@
         "validationPassed": "Validierung bestanden",
         "productApproved": "Produkt genehmigt",
         "productRejected": "Produkt abgelehnt",
-        "piiDetected": "PII erkannt"
+        "piiDetected": "PII erkannt",
+        "entityDeprecated": "Hinweis: veraltet",
+        "entityRetired": "Hinweis: stillgelegt"
       },
       "customMessage": "Benutzerdefinierte Nachricht",
       "customMessagePlaceholder": "Vorlagennachricht überschreiben. Unterstützt ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
@@ -188,13 +219,28 @@
       "selectSource": "Quelle auswählen",
       "sourceCurrentUser": "Aktueller Benutzer",
       "sourceProjectName": "Projektname",
-      "sourceTimestamp": "Zeitstempel"
+      "sourceTimestamp": "Zeitstempel",
+      "valueMode": "Wert",
+      "modeFixed": "Fester Wert",
+      "modeSource": "Wert aus dem Lauf",
+      "modeNone": "Kein Wert",
+      "fixedValue": "Tag-Wert",
+      "fixedValuePlaceholder": "z. B. vertraulich",
+      "selectValue": "Wert auswählen",
+      "noValueHelp": "Das Tag wird ohne Wert zugewiesen. Ein Wert, den die Entität für dieses Tag bereits hat, bleibt erhalten.",
+      "sourceEntityName": "Entitätsname",
+      "tagNotFound": "Kein Tag hat diesen Namen. Der Schritt setzt es dann nur für die folgenden Schritte des Laufs.",
+      "fixedValueRequired": "Geben Sie einen Wert ein oder wählen Sie „Kein Wert“, um das Tag ohne Wert zuzuweisen."
     },
     "approval": {
       "approversRole": "Genehmiger (Rolle)",
       "selectRole": "Rolle auswählen",
       "additionalApproversAria": "Zusätzliche Genehmiger",
-      "timeoutDays": "Zeitlimit (Tage)"
+      "timeoutDays": "Zeitlimit (Tage)",
+      "timeoutDaysHelp": "0 bedeutet kein Zeitlimit; leer lassen für den Standardwert (7 Tage).",
+      "requireAll": "Alle Genehmigenden erforderlich",
+      "requireAllHelp": "Jeder Genehmigende entscheidet: ein Benutzer für sich selbst, ein beliebiges Mitglied für eine Gruppe oder Rolle. Jede Ablehnung lässt den Schritt fehlschlagen.",
+      "timeoutNotEnforced": "Noch nicht durchgesetzt: Eine ausstehende Genehmigung läuft nicht ab."
     },
     "assetReview": {
       "reviewerRole": "Prüferrolle",
@@ -241,6 +287,66 @@
       "timeoutSeconds": "Zeitlimit (Sekunden)",
       "retryCount": "Anzahl Wiederholungen",
       "retryHelp": "Anzahl der Wiederholungen bei Fehler (0-5)."
+    },
+    "conditional": {
+      "condition": "Bedingung",
+      "placeholder": "obj.status = 'active' AND NOT HAS_TAG('pii')",
+      "branchHelp": "Ist die Bedingung wahr, folgt der Workflow dem Pass-Zweig; ist sie falsch, dem Fail-Zweig.",
+      "fieldsHelp": "Schreiben Sie einen Compliance-DSL-Ausdruck ohne MATCH oder ASSERT. Felder der Entität werden als obj.<feld> gelesen; vergleichen Sie mit =, nicht ==.",
+      "examplesTitle": "Beispiele",
+      "errors": {
+        "condition_required": "Geben Sie eine Bedingung ein.",
+        "condition_syntax_error": "Die Bedingung kann nicht geparst werden (Zeile {{line}}, Spalte {{column}}).",
+        "condition_trailing_input": "Unerwartetes \"{{token}}\" nach der Bedingung (Zeile {{line}}, Spalte {{column}}). Verknüpfen Sie Bedingungen mit AND oder OR.",
+        "condition_too_long": "Die Bedingung ist länger als {{maximum}} Zeichen. Kürzen Sie sie oder teilen Sie sie auf mehrere Schritte auf.",
+        "condition_too_complex": "Die Bedingung ist zu tief verschachtelt, um sie zu prüfen. Entfernen Sie einige Klammern oder teilen Sie sie auf mehrere Schritte auf."
+      }
+    },
+    "script": {
+      "language": "Sprache",
+      "languages": {
+        "python": "Python",
+        "sql": "SQL"
+      },
+      "code": "Code",
+      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
+      "timeout": "Zeitlimit (Sekunden)",
+      "timeoutHelp": "Der Schritt schlägt fehl, wenn das Skript länger läuft.",
+      "variablesTitle": "Verfügbare Variablen",
+      "pythonVariables": {
+        "entity": "Die Daten der Entität (ein Dictionary)",
+        "entity_type": "Der Typ der Entität",
+        "entity_id": "Die ID der Entität",
+        "entity_name": "Der Name der Entität",
+        "user_email": "E-Mail des Benutzers, der den Workflow ausgelöst hat",
+        "step_results": "Ergebnisse der bereits ausgeführten Schritte, nach Schritt-ID"
+      },
+      "pythonResultHelp": "Setzen Sie result, um den Zweig zu wählen: result = {'passed': False, 'message': '...'} folgt dem Fail-Zweig; ohne result ist der Schritt erfolgreich. Nur grundlegende Built-ins sind verfügbar: keine Imports, Dateien oder Netzwerk.",
+      "sqlHelp": "Läuft auf dem in den Einstellungen festgelegten SQL Warehouse. ${variable}-Platzhalter werden vor der Ausführung ersetzt; der Schritt ist erfolgreich, wenn die Anweisung erfolgreich ist. Die Anweisung wartet bis zu 50 Sekunden.",
+      "errors": {
+        "script_code_required": "Geben Sie den Code des Skripts ein.",
+        "script_timeout_invalid": "Geben Sie eine ganze Zahl an Sekunden ein, mindestens {{minimum}}.",
+        "script_language_unsupported": "Die Sprache \"{{language}}\" wird nicht unterstützt. Unterstützt: {{supported}}."
+      }
+    },
+    "validationIssues": {
+      "stepsRequired": "Ein Workflow braucht mindestens einen Schritt.",
+      "duplicateStepIds": "Zwei Schritte haben dieselbe ID.",
+      "stepUnknownReference": "Schritt \"{{step}}\" verweist mit seinem {{branch}}-Zweig auf \"{{target}}\", der nicht im Workflow ist.",
+      "stepConfigMissing": "Bei Schritt \"{{step}}\" fehlen Pflichteinstellungen: {{fields}}.",
+      "assignTagValueSourceUnknown": "Schritt „{{step}}“ verwendet die unbekannte Wertquelle „{{source}}“.",
+      "policyCheckPolicyMissing": "Der Schritt \"{{step}}\" benötigt eine vorhandene Compliance-Richtlinie. Wählen Sie in den Schritteinstellungen eine aus.",
+      "branch": {
+        "on_pass": "Erfolgs",
+        "on_fail": "Fehler"
+      }
+    },
+    "edgeLabels": {
+      "pass": "Bestanden",
+      "fail": "Fehlgeschlagen",
+      "true": "Wahr",
+      "false": "Falsch"
     }
   },
   "approvalResponse": {
@@ -270,7 +376,58 @@
       "processFailed": "Genehmigung konnte nicht verarbeitet werden.",
       "processFailedRetry": "Genehmigung konnte nicht verarbeitet werden. Bitte versuchen Sie es erneut.",
       "entityApproved": "{{name}} wurde genehmigt.",
-      "entityRejected": "{{name}} wurde abgelehnt."
+      "entityRejected": "{{name}} wurde abgelehnt.",
+      "decisionRecorded": "Entscheidung erfasst",
+      "waitingForApprovers_one": "Es fehlt noch {{count}} Genehmigender.",
+      "waitingForApprovers_other": "Es fehlen noch {{count}} Genehmigende."
+    },
+    "errors": {
+      "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen.",
+      "own_change_request_approval": "Sie können Ihre eigene Änderungsanfrage nicht genehmigen.",
+      "approval_already_decided": "Sie haben über diese Genehmigung bereits entschieden.",
+      "approval_not_an_approver": "Nur die Genehmigenden dieses Schritts können darüber entscheiden.",
+      "approval_no_longer_pending": "Über diese Genehmigung wurde bereits entschieden."
+    },
+    "entityTypes": {
+      "entity": "Entität",
+      "data_product": "Datenprodukt",
+      "data_contract": "Datenvertrag",
+      "data_domain": "Datendomäne",
+      "data_asset_review": "Prüfung von Daten-Assets",
+      "access_grant": "Zugriffsberechtigung",
+      "asset": "Asset",
+      "ontology_concept": "Konzept",
+      "concept": "Konzept"
+    },
+    "fields": {
+      "product_id": "Produkt-ID",
+      "product_name": "Produktname",
+      "contract_id": "Vertrags-ID",
+      "contract_name": "Vertragsname",
+      "status": "Status",
+      "from_status": "Ausgangsstatus",
+      "to_status": "Zielstatus",
+      "target_status": "Angeforderter Status",
+      "current_status": "Aktueller Status",
+      "justification": "Begründung",
+      "sunset_date": "Auslaufdatum",
+      "replacement_id": "Ersatz-ID",
+      "replacement_name": "Ersatz",
+      "requested_scope": "Angeforderter Umfang",
+      "publication_scope": "Veröffentlichungsumfang",
+      "requester": "Antragsteller",
+      "requester_message": "Nachricht des Antragstellers",
+      "reviewer_email": "Prüfer",
+      "requested_certification_level": "Angeforderte Zertifizierungsstufe",
+      "certification_level": "Zertifizierungsstufe",
+      "certification_notes": "Zertifizierungsnotizen",
+      "asset_count": "Anzahl der Assets",
+      "asset_fqns": "Assets",
+      "domain_id": "Domänen-ID",
+      "project_id": "Projekt-ID",
+      "project_name": "Projekt",
+      "name": "Name",
+      "notes": "Notizen"
     }
   },
   "approvalWizard": {
@@ -360,9 +517,22 @@
     "titleFallback": "Workflow-Ausführung",
     "executionId": "Ausführungs-ID: {{id}}...",
     "stepsProgress": "{{done}}/{{total}} Schritte",
+    "stepsProgressWithRemoved_one": "{{done}}/{{total}} Schritte (+{{count}} entfernt)",
+    "stepsProgressWithRemoved_other": "{{done}}/{{total}} Schritte (+{{count}} entfernt)",
     "triggeredBy": "Ausgelöst von: {{user}}",
     "workflowSteps": "Workflow-Schritte",
     "loadDefinitionFailed": "Workflow-Definition konnte nicht geladen werden",
+    "removedSteps": "Entfernte Schritte",
+    "removedStepsHint": "Diese Schritte liefen in dieser Ausführung und wurden später aus dem Workflow entfernt.",
+    "stepErrors": {
+      "rule_where_evaluation_failed": "Die WHERE-Klausel der Richtlinie '{{policyName}}' konnte für {{entityType}} {{entityId}} nicht ausgewertet werden",
+      "approval_rejected": "Anfrage abgelehnt",
+      "output_port_contracts_missing": "Veröffentlichung nicht möglich: Den Ausgabeports {{ports}} müssen Datenverträge zugewiesen sein",
+      "output_port_contracts_unapproved": "Veröffentlichung nicht möglich: Diese Ausgabeports haben nicht genehmigte Verträge: {{ports}}. Die Verträge müssen zuerst genehmigt werden.",
+      "rule_entity_load_failed": "{{entityType}} {{entityId}} konnte nicht geladen werden, um die Regel auszuwerten",
+      "rule_entity_not_found": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden",
+      "cancelled_by_admin": "Von einem Administrator abgebrochen ({{by}})"
+    },
     "states": {
       "pending": "Ausstehend",
       "running": "Wird ausgeführt",
@@ -370,6 +540,18 @@
       "failed": "Fehlgeschlagen",
       "skipped": "Übersprungen",
       "waiting": "Wartet"
+    },
+    "conditionalBranch": {
+      "true": "Bedingung war wahr: Wahr-Zweig ausgeführt",
+      "false": "Bedingung war falsch: Falsch-Zweig ausgeführt"
+    },
+    "executionStates": {
+      "pending": "Ausstehend",
+      "running": "Läuft",
+      "paused": "Pausiert",
+      "succeeded": "Erfolgreich",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen"
     },
     "summary": {
       "entity": "Entität",
@@ -393,6 +575,8 @@
     "policyLabel": "Richtlinie: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Keine Richtlinie ausgewählt",
+    "policyHint": "Vorschlag: {{name}}",
+    "policyUnknown": "Unbekannte oder inaktive Richtlinie: {{id}}",
     "reviewerLabel": "Prüfer:",
     "notSet": "Nicht festgelegt",
     "connectionLabel": "Verbindung: {{name}}",
@@ -431,6 +615,25 @@
     "endpointHint": "Backend-Endpunkt, der JSON zurückgibt",
     "addField": "Feld hinzufügen"
   },
+  "runDialog": {
+    "menuLabel": "Ausführen",
+    "title": "„{{name}}“ ausführen",
+    "description": "Startet diesen manuellen Workflow für eine Entität. Er läuft jetzt, in Ihrem Namen.",
+    "entityType": "Entitätstyp",
+    "entity": "Entität",
+    "selectEntity": "Entität auswählen",
+    "loading": "Wird geladen...",
+    "noEntities": "Keine Einträge zur Auswahl vorhanden.",
+    "listFailed": "Die Liste konnte nicht geladen werden. Geben Sie stattdessen die ID ein.",
+    "entityId": "Entitäts-ID",
+    "entityIdPlaceholder": "z. B. main.sales.orders",
+    "entityIdHelp": "Die ID oder der vollständige Name der Entität, für die der Workflow laufen soll.",
+    "run": "Ausführen",
+    "failed": "Der Workflow konnte nicht gestartet werden.",
+    "resultStatus": "Ergebnis",
+    "viewExecution": "Ausführung anzeigen",
+    "resultEntity": "{{type}}: {{name}}"
+  },
   "templateVars": {
     "copiedToClipboard": "{{placeholder}} in die Zwischenablage kopiert.",
     "copyFailed": "Kopieren fehlgeschlagen",
@@ -452,6 +655,16 @@
     "matches_one": "{{count}} Treffer",
     "matches_other": "{{count}} Treffer",
     "noMatch": "Keine Variablen stimmen überein"
+  },
+  "triggerEntityChecks": {
+    "unknownBadge": "Unbekannter Entity-Typ: {{type}}",
+    "removeUnknown": "{{type}} entfernen",
+    "unknownNotice_one": "Dieser Trigger enthält einen Entity-Typ, der nicht mehr existiert. Er trifft auf nichts zu: Entfernen Sie ihn, um den Trigger zu ändern.",
+    "unknownNotice_other": "Dieser Trigger enthält {{count}} Entity-Typen, die nicht mehr existieren. Sie treffen auf nichts zu: Entfernen Sie sie, um den Trigger zu ändern.",
+    "unknownOnSave": "Der Trigger enthält den unbekannten Entity-Typ \"{{type}}\": Entfernen Sie ihn in der Trigger-Konfiguration, um den Trigger zu ändern.",
+    "unsupportedOnSave": "\"{{trigger}}\" wird für {{type}} nie ausgelöst: Wählen Sie einen Entity-Typ, den dieser Trigger unterstützt.",
+    "pickKnownType": "Wählen Sie mindestens einen Entity-Typ. Ohne einen würde dieser Workflow für jede Entity ausgelöst.",
+    "requiredOnSave": "Wählen Sie mindestens einen Entity-Typ für den Trigger: Keiner seiner Typen löst ihn aus (sie existieren nicht mehr, oder dieser Trigger wird für sie nie ausgelöst), und eine leere Liste würde ihn für jede Entity auslösen."
   },
   "triggerPicker": {
     "label": "Wird ausgelöst bei",
@@ -489,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "Standard-Workflows",
       "newOnly": "Nur neue laden",
-      "reloadAll": "Alle Standardwerte neu laden"
+      "reloadAll": "Alle Standardwerte neu laden",
+      "confirmTitle": "Alle Standard-Workflows neu laden?",
+      "confirmDescription": "Jeder Standard-Workflow wird auf seine ausgelieferte Definition zurückgesetzt: Beschreibung, Auslöser, Geltungsbereich, Schritte und deren Anordnung. Ob ein Workflow aktiv ist, ändert sich nicht. Standard-Workflows, die Sie oder ein anderer Admin bearbeitet haben, bleiben erhalten, außer Sie setzen sie unten ebenfalls zurück.",
+      "includeEdited": "Auch bearbeitete Standard-Workflows zurücksetzen (ihre Änderungen gehen verloren)",
+      "confirmAction": "Neu laden",
+      "keptEdited": "Bearbeitete beibehalten: {{names}}.",
+      "result": "Erstellt: {{created}}, aktualisiert: {{updated}}, übersprungen: {{skipped}}."
     },
     "badges": {
       "default": "Standard",
@@ -552,7 +771,12 @@
       "duplicateTitle": "Workflow duplizieren",
       "duplicateDescription": "Erstellen Sie eine Kopie von \"{{name}}\" mit einem neuen Namen.",
       "deleteExecutionTitle": "Ausführung löschen",
-      "deleteExecutionDescription": "Möchten Sie diese Workflow-Ausführung wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden."
+      "deleteExecutionDescription": "Möchten Sie diese Workflow-Ausführung wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "activationOverlapTitle": "Ein anderer Workflow reagiert auf dasselbe Ereignis",
+      "activationOverlapDescription": "Die folgenden Workflows würden beim selben Ereignis ebenfalls ausgeführt. Prüfen Sie sie und brechen Sie ab oder aktivieren Sie trotzdem.",
+      "activationOverlapDetails": "Auslöser: {{trigger}} · Entitäten: {{entities}}",
+      "allEntities": "alle Entitäten",
+      "activateAnyway": "Trotzdem aktivieren"
     },
     "placeholders": {
       "newWorkflowName": "Neuer Workflow-Name"
@@ -599,6 +823,7 @@
       "loadDefaultsFailed": "Standard-Workflows konnten nicht geladen werden",
       "cancelSuccess": "Ausführung erfolgreich abgebrochen",
       "cancelFailed": "Ausführung konnte nicht abgebrochen werden",
+      "approvalCancelled": "Genehmigung abgebrochen. Der Workflow ist seinem Ablehnungspfad gefolgt; Status: {{status}}.",
       "retryStarted": "Wiederholung der Ausführung gestartet",
       "retryFailed": "Ausführung konnte nicht wiederholt werden",
       "executionDeleteSuccess": "Ausführung erfolgreich gelöscht",
@@ -609,6 +834,7 @@
       "approveFailed": "Workflow konnte nicht genehmigt werden",
       "rejectResumeSuccess": "Workflow abgelehnt und fortgesetzt",
       "rejectFailed": "Workflow konnte nicht abgelehnt werden",
+      "forceDecisionRequireAll": "Nur die Genehmigenden können diesen Schritt entscheiden (alle müssen entscheiden). Sie können die Ausführung stattdessen abbrechen.",
       "noChanges": "Keine Änderungen",
       "allAlreadyEnabled": "Alle ausgewählten Workflows sind bereits aktiviert.",
       "allAlreadyDisabled": "Alle ausgewählten Workflows sind bereits deaktiviert.",

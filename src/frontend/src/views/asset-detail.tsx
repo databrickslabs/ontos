@@ -34,6 +34,7 @@ import EntityCostsPanel from '@/components/costs/entity-costs-panel';
 import EntityQualityPanel from '@/components/quality/entity-quality-panel';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
+import AssetMetricViewCard, { mayBeMetricView } from '@/components/assets/asset-metric-view-card';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
@@ -513,6 +514,11 @@ export default function AssetDetailView() {
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {/* A Unity Catalog metric view: its fields and their concept links */}
+          {mayBeMetricView(asset) && (
+            <AssetMetricViewCard assetId={asset.id} assetTypeName={asset.asset_type_name} />
           )}
 
           {/* Properties (non-type-specific fields) */}

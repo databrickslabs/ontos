@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from src.controller.data_contracts_manager import DataContractsManager
+from src.controller.data_contracts_manager import DataContractsManager, InvalidVersionFormatError
 from src.common.dependencies import (
     DBSessionDep,
     AuditManagerDep,
@@ -50,13 +50,19 @@ from src.models.data_contracts_api import (
     DataContractCommentCreate,
     DataContractCommentRead,
 )
+from src.common.api_errors import CodedValueError
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
+from src.common.authorization import has_feature_permission
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
+from src.common.api_errors import CodedValueError
 from src.common.features import FeatureAccessLevel
+from src.common.lifecycle_status import check_status_unchanged
+from src.controller.lifecycle_fields import LIFECYCLE_AUDIT_ACTIONS, LifecycleFieldError
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
+from src.models.data_products import DeprecationPayload
 from src.common.upload_limits import read_uploads_capped
 from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
@@ -87,6 +93,62 @@ def get_jobs_manager(request: Request):
     """Retrieves the JobsManager instance from app.state."""
     return getattr(request.app.state, 'jobs_manager', None)
 
+
+async def contract_read_scope(
+    request: Request, db: DBSessionDep, current_user: CurrentUserDep
+) -> dict:
+    """The caller's inputs to the contract read rule (PRD #442).
+
+    Admin comes from the role-aware check, not just workspace-group membership:
+    a user whose admin rights come from an Ontos role sees every contract, as
+    in the data-products listing. The owning teams are resolved for everyone
+    else so the manager can tell whether the caller is elevated for a family.
+    """
+    from src.common.authorization import is_user_feature_admin
+
+    user_groups = current_user.groups if current_user else []
+    caller_email = current_user.email if current_user else None
+    is_admin = await is_user_feature_admin(
+        user_email=caller_email,
+        user_groups=user_groups,
+        feature_id='data-contracts',
+        request=request,
+    )
+    caller_team_ids: Set[str] = set()
+    if not is_admin and current_user:
+        try:
+            from src.controller.teams_manager import teams_manager
+            user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
+            caller_team_ids = {t.id for t in user_teams if getattr(t, "id", None)}
+        except Exception:
+            # Best-effort: a failed team lookup downgrades the caller to
+            # consumer visibility, which is the safe fail-closed default.
+            logger.exception(
+                "Failed to resolve teams for %s; falling back to consumer visibility",
+                caller_email,
+            )
+    return {
+        "is_admin": is_admin,
+        "caller_email": caller_email,
+        "caller_team_ids": caller_team_ids,
+    }
+
+
+async def readable_contract(
+    contract_id: str,
+    db: DBSessionDep,
+    scope: dict = Depends(contract_read_scope),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+) -> DataContractDb:
+    """The path's contract, when the caller may read it (the same rule as the list).
+
+    A contract the caller can't read answers the same 404 as a missing one.
+    """
+    contract = data_contract_repo.get(db, id=contract_id)
+    if contract is None or not manager.can_read_contract(db, contract, **scope):
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return contract
+
  
 
 @router.get('/data-contracts', response_model=list[DataContractSummary])
@@ -115,46 +177,16 @@ async def get_contracts(
     is already permitted to see.
     """
     try:
-        # Determine admin via the role-aware check, not just workspace-group
-        # membership. A user whose admin rights come from an Ontos role (rather
-        # than the workspace ``admins`` group) must still bypass the PRD #442
-        # visibility filter — exactly as the data-products listing does. The
-        # narrower ``is_user_admin`` used here previously let such role-based
-        # admins fall through to consumer visibility, hiding their own draft/
-        # proposed contracts (e.g. a freshly uploaded draft would never appear).
-        from src.common.authorization import is_user_feature_admin
-        user_groups = current_user.groups if current_user else []
-        is_admin = await is_user_feature_admin(
-            user_email=current_user.email if current_user else None,
-            user_groups=user_groups,
-            feature_id='data-contracts',
-            request=request,
-        )
+        # Role-aware admin and the caller's owning teams: the same read scope
+        # as the single-contract routes (see ``contract_read_scope``).
+        scope = await contract_read_scope(request, db, current_user)
 
         logger.info(
-            f"User {current_user.email if current_user else 'unknown'} fetching contracts "
-            f"(project_id: {project_id}, domain_id: {domain_id}, is_admin: {is_admin}, "
-            f"include_history: {include_history})"
+            "User %s fetching contracts (project_id: %s, domain_id: %s, is_admin: %s, "
+            "include_history: %s)",
+            current_user.email if current_user else 'unknown',
+            project_id, domain_id, scope['is_admin'], include_history,
         )
-
-        # Resolve the caller's owning teams once so the manager can compute
-        # elevated visibility for their contracts (PRD #442 role-aware rank).
-        caller_email = current_user.email if current_user else None
-        caller_team_ids: Set[str] = set()
-        if not is_admin and current_user:
-            try:
-                from src.controller.teams_manager import teams_manager
-                user_teams = teams_manager.get_teams_for_user(
-                    db, caller_email, user_groups
-                )
-                caller_team_ids = {t.id for t in user_teams if getattr(t, "id", None)}
-            except Exception:
-                # Best-effort: a failed team lookup downgrades the caller to
-                # consumer visibility, which is the safe fail-closed default.
-                logger.exception(
-                    f"Failed to resolve teams for {caller_email}; "
-                    "falling back to consumer visibility"
-                )
 
         domain_ids_list = [d.strip() for d in domain_ids.split(",") if d.strip()] if domain_ids else None
         result = manager.list_contracts_from_db(
@@ -163,10 +195,8 @@ async def get_contracts(
             domain_ids=domain_ids_list,
             project_id=project_id,
             status=status,
-            is_admin=is_admin,
             include_history=include_history,
-            caller_email=caller_email,
-            caller_team_ids=caller_team_ids,
+            **scope,
         )
         return result
     except Exception as e:
@@ -189,7 +219,8 @@ async def get_contract(
     contract_id: str,
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get a specific data contract with full ODCS structure"""
     contract = data_contract_repo.get_with_all(db, id=contract_id)
@@ -200,6 +231,101 @@ async def get_contract(
 
 
 # --- Lifecycle Transition Endpoints (minimal) ---
+
+def _decide_waiting_review_workflows(
+    db, contract_id: str, approved: bool, user_email: Optional[str],
+) -> int:
+    """Pass a review decided on the contract page on to its review workflows.
+
+    A review request starts the contract's ``on_request_review`` workflows,
+    which pause at an approval step. Approving or rejecting the contract on
+    its page decides the same review, so those executions are resumed with
+    that decision (their remaining steps, e.g. telling the requester, run)
+    and their approval notifications are marked handled. Otherwise they stay
+    paused and keep asking for an approval that was already given (#963).
+
+    Returns the number of executions resumed. A failure is logged and does
+    not undo the status change.
+    """
+    from src.common.workflow_executor import WorkflowExecutor
+    from src.db_models.process_workflows import WorkflowExecutionDb, WorkflowStepDb
+    from src.models.process_workflows import TriggerType
+    from src.routes.workflows_routes import _mark_step_notifications_handled
+
+    # The text filters (quoted values, so another id that contains this one
+    # doesn't match) and the join on the current approval step narrow the
+    # candidates in SQL; the JSON checks below are the exact ones.
+    paused = db.query(WorkflowExecutionDb).join(
+        WorkflowStepDb,
+        (WorkflowStepDb.workflow_id == WorkflowExecutionDb.workflow_id)
+        & (WorkflowStepDb.step_id == WorkflowExecutionDb.current_step_id),
+    ).filter(
+        WorkflowExecutionDb.status == 'paused',
+        WorkflowStepDb.step_type == 'approval',
+        WorkflowExecutionDb.trigger_context.contains(json.dumps(contract_id)),
+        WorkflowExecutionDb.trigger_context.contains(
+            json.dumps(TriggerType.ON_REQUEST_REVIEW.value)
+        ),
+    ).all()
+    waiting = []
+    for execution in paused:
+        try:
+            context = json.loads(execution.trigger_context or '{}')
+        except ValueError:
+            continue
+        if (
+            context.get('entity_type') == 'data_contract'
+            and context.get('entity_id') == contract_id
+            and context.get('trigger_type') == TriggerType.ON_REQUEST_REVIEW.value
+        ):
+            waiting.append((execution.id, execution.current_step_id))
+
+    resumed = 0
+    decision = 'approved' if approved else 'rejected'
+    for execution_id, step_id in waiting:
+        try:
+            WorkflowExecutor(db).resume_workflow(
+                execution_id=execution_id,
+                step_result=approved,
+                # `decided_on` is the stable code; the message is the English
+                # fallback shown where no translation exists.
+                result_data={
+                    'decision': decision,
+                    'decided_on': 'contract_page',
+                    'message': f'Review {decision} on the contract page',
+                    'reason': f'Review {decision} on the contract page',
+                },
+                user_email=user_email,
+            )
+            _mark_step_notifications_handled(db, execution_id, step_id, approved, user_email)
+            db.commit()
+            resumed += 1
+        except Exception:
+            # The status change is already committed; only this resume is undone.
+            db.rollback()
+            logger.exception(
+                "Could not resume review workflow execution %s of contract %s",
+                execution_id, contract_id,
+            )
+    return resumed
+
+
+class InvalidReviewDecisionError(CodedValueError):
+    """A contract approved or rejected while its status no longer allows it.
+
+    The message is the one these routes always answered with; the code and the
+    statuses let the UI say it in the user's language.
+    """
+
+    code = 'invalid_status_transition'
+
+    def __init__(self, from_status: Optional[str], to_status: str):
+        super().__init__(
+            f"Invalid transition from {from_status} to {to_status.upper()}",
+            fromStatus=(from_status or '').lower(),
+            toStatus=to_status,
+        )
+
 
 @router.post('/data-contracts/{contract_id}/approve')
 async def approve_contract(
@@ -219,7 +345,7 @@ async def approve_contract(
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
         if from_status not in ('proposed', 'under_review'):
-            raise HTTPException(status_code=409, detail=f"Invalid transition from {contract.status} to APPROVED")
+            raise InvalidReviewDecisionError(contract.status, 'approved')
         
         # Business logic now in manager
         updated = manager.transition_status(
@@ -227,6 +353,9 @@ async def approve_contract(
             contract_id=contract_id,
             new_status='approved',
             current_user=current_user.username if current_user else None
+        )
+        _decide_waiting_review_workflows(
+            db, contract_id, True, current_user.email if current_user else None,
         )
         
         # Audit
@@ -270,7 +399,7 @@ async def reject_contract(
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
         if from_status not in ('proposed', 'under_review'):
-            raise HTTPException(status_code=409, detail=f"Invalid transition from {contract.status} to DRAFT")
+            raise InvalidReviewDecisionError(contract.status, 'draft')
         
         # Business logic now in manager (ODCS: rejected contracts return to draft)
         updated = manager.transition_status(
@@ -278,6 +407,9 @@ async def reject_contract(
             contract_id=contract_id,
             new_status='draft',
             current_user=current_user.username if current_user else None
+        )
+        _decide_waiting_review_workflows(
+            db, contract_id, False, current_user.email if current_user else None,
         )
         
         # Audit
@@ -301,7 +433,8 @@ async def reject_contract(
         raise HTTPException(status_code=500, detail="Failed to reject contract")
 
 
-class ChangeStatusPayload(BaseModel):
+class ChangeStatusPayload(DeprecationPayload):
+    """Target status; the deprecation fields are used when it is ``deprecated``."""
     new_status: str
 
 
@@ -319,15 +452,8 @@ async def change_contract_status(
     """
     Change contract status. Validates transition is allowed per ODCS lifecycle.
     
-    Valid transitions:
-    - draft → proposed, deprecated
-    - proposed → draft, under_review, deprecated
-    - under_review → draft, approved, deprecated
-    - approved → active, draft, deprecated
-    - active → certified, deprecated
-    - certified → deprecated, active
-    - deprecated → retired, active
-    - retired → (terminal state, no transitions)
+    Valid transitions: ``DATA_CONTRACT_TRANSITIONS`` (src.models.lifecycle).
+    Certification is a separate field (``/certify``), not a status.
     """
     try:
         contract = data_contract_repo.get(db, id=contract_id)
@@ -341,18 +467,25 @@ async def change_contract_status(
             db=db,
             contract_id=contract_id,
             new_status=new_status,
-            current_user=current_user.username if current_user else None
+            current_user=current_user.username if current_user else None,
+            deprecation=payload.deprecation_details(),
         )
         
         # Audit
+        lifecycle_audit = {
+            'deprecation_reason': updated.deprecation_reason,
+            'sunset_date': updated.sunset_date.isoformat() if updated.sunset_date else None,
+            'replacement_contract_id': updated.replacement_contract_id,
+        } if new_status == 'deprecated' else {}
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'anonymous',
             ip_address=request.client.host if request.client else None,
             feature='data-contracts',
-            action='CHANGE_STATUS',
+            action=LIFECYCLE_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
             success=True,
-            details={'contract_id': contract_id, 'from': from_status, 'to': updated.status}
+            details={'contract_id': contract_id, 'from': from_status, 'to': updated.status,
+                     **lifecycle_audit},
         )
         return {'status': updated.status, 'from': from_status, 'to': updated.status}
     except ValueError as e:
@@ -386,6 +519,9 @@ class RequestStatusChangePayload(BaseModel):
     target_status: str
     justification: str
     current_status: Optional[str] = None
+    # Requested deprecation: sunset date (YYYY-MM-DD, UTC) and replacement contract
+    sunset_date: Optional[str] = None
+    replacement_id: Optional[str] = None
 
 
 class HandleStatusChangePayload(BaseModel):
@@ -569,7 +705,9 @@ async def request_status_change(
             target_status=payload.target_status,
             justification=payload.justification,
             requester_email=current_user.email if current_user else None,
-            current_user=current_user.username if current_user else None
+            current_user=current_user.username if current_user else None,
+            sunset_date=payload.sunset_date,
+            replacement_id=payload.replacement_id,
         )
         
         # Audit
@@ -589,6 +727,11 @@ async def request_status_change(
         
         return result
         
+    except CodedValueError as e:
+        # The app's own refusal (e.g. a replacement that doesn't exist): its
+        # code, never the 404 of a missing contract
+        logger.info("Refused status change request for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Request status change validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (403 if "denied" in str(e).lower() or "permission" in str(e).lower() else 409)
@@ -656,6 +799,10 @@ async def handle_steward_review_response(
         
     except ValueError as e:
         logger.error("Handle review validation error for contract_id=%s: %s", contract_id, e)
+        if isinstance(e, CodedValueError):
+            # e.g. a before_status_change gate refused the decision: send its
+            # code and parameters so the UI can explain it
+            raise HTTPException(status_code=409, detail=str(e))
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
         raise HTTPException(status_code=error_status, detail="Invalid review response")
     except HTTPException:
@@ -1145,18 +1292,42 @@ async def handle_status_change_response(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Handle a status change request decision (approve/deny/clarify)."""
+    """Handle a status change request decision (approve/deny/clarify).
+
+    Deprecating a certified contract this way needs Admin on data contracts
+    (certified guard).
+    """
+    from src.controller.certified_deprecation_guard import (
+        approved_status_change, handle_decision_refusal, pending_request_id, record_decision,
+    )
+    by_admin = await has_feature_permission(
+        'data-contracts', FeatureAccessLevel.ADMIN, current_user, request,
+    )
+    # Counts for the certified guard only as an admin's approval of a pending
+    # request made by someone else
+    refusal = handle_decision_refusal(
+        db, 'data_contract', contract_id, payload.target_status, by_admin,
+        current_user.email if current_user else None,
+        current_user.username if current_user else None,
+    )
+    request_id = pending_request_id(db, 'data_contract', contract_id)
     try:
-        result = manager.handle_status_change_response(
-            db=db,
-            notifications_manager=notifications,
-            contract_id=contract_id,
-            approver_email=current_user.email if current_user else None,
-            decision=payload.decision,
-            target_status=payload.target_status,
-            requester_email=payload.requester_email,
-            message=payload.message,
-            current_user=current_user.username if current_user else None
+        with approved_status_change('data_contract', contract_id, refusal):
+            result = manager.handle_status_change_response(
+                db=db,
+                notifications_manager=notifications,
+                contract_id=contract_id,
+                approver_email=current_user.email if current_user else None,
+                decision=payload.decision,
+                target_status=payload.target_status,
+                requester_email=payload.requester_email,
+                message=payload.message,
+                current_user=current_user.username if current_user else None
+            )
+        # The decision ends the request it was about
+        record_decision(
+            db, 'data_contract', contract_id, request_id, payload.decision,
+            current_user.username if current_user else None,
         )
         
         # Audit
@@ -1176,9 +1347,16 @@ async def handle_status_change_response(
         
         return result
         
+    except LifecycleFieldError as e:
+        # The requested deprecation no longer holds (e.g. its replacement is
+        # gone): 400 with the code, never the 404 of a missing contract
+        logger.info("Refused status change decision for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Handle status change validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
+        from src.controller.certified_deprecation_guard import guard_refusal_status
+        error_status = guard_refusal_status(e, error_status)
         raise HTTPException(status_code=error_status, detail=str(e))
     except HTTPException:
         raise
@@ -1252,6 +1430,10 @@ async def create_contract(
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
         return manager._build_contract_api_model(db, created_with_relations)
 
+    except CodedValueError as e:
+        # A status that isn't a lifecycle status (src.common.lifecycle_status)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error creating contract: %s", e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
@@ -1302,6 +1484,10 @@ async def update_contract(
         db_obj = data_contract_repo.get(db, id=contract_id)
         if not db_obj:
             raise HTTPException(status_code=404, detail="Contract not found")
+
+        # Before the before_update workflows run: a status change goes through
+        # change-status (the manager checks it again for the other callers).
+        check_status_unchanged(db_obj.status, contract_data.status)
             
         if db_obj.project_id:
             from src.controller.projects_manager import projects_manager
@@ -1417,6 +1603,10 @@ async def update_contract(
         updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
         return manager._build_contract_api_model(db, updated_with_relations)
 
+    except CodedValueError as e:
+        # A status change sent with the update (src.common.lifecycle_status)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error updating contract %s: %s", contract_id, e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
@@ -1729,7 +1919,8 @@ async def import_odcs_json(
 async def get_contract_schemas(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """List schema objects for a contract (names + property counts, no properties loaded)."""
     from sqlalchemy import func as sa_func
@@ -1850,13 +2041,15 @@ async def get_schema_properties(
     db: DBSessionDep,
     skip: int = 0,
     limit: int = 50,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get paginated properties for a specific schema object.
 
     Use limit=0 to return all properties without pagination (e.g. for the edit dialog).
     """
     from sqlalchemy import func as sa_func
+    from src.utils.property_custom_properties import SCHEMA_PROPERTY_ORDER
 
     schema_obj = (
         db.query(SchemaObjectDb)
@@ -1871,11 +2064,13 @@ async def get_schema_properties(
     query = (
         db.query(SchemaPropertyDb)
         .filter(SchemaPropertyDb.object_id == schema_obj.id)
-        .order_by(SchemaPropertyDb.name)
+        .order_by(*SCHEMA_PROPERTY_ORDER)  # the contract's column order
     )
     if limit > 0:
         query = query.offset(skip).limit(limit)
     props = query.all()
+    from src.utils.property_custom_properties import custom_properties_by_property
+    custom_props = custom_properties_by_property(db, [p.id for p in props])
 
     items = []
     for p in props:
@@ -1891,7 +2086,8 @@ async def get_schema_properties(
             "physicalType": p.physical_type,
             "required": p.required,
             "unique": p.unique,
-            "primaryKey": p.primary_key,
+            # Rows stored before `primary_key` was set only have the position
+            "primaryKey": bool(p.primary_key) or (p.primary_key_position is not None and p.primary_key_position >= 0),
             "primaryKeyPosition": p.primary_key_position,
             "partitioned": p.partitioned,
             "partitionKeyPosition": p.partition_key_position,
@@ -1904,6 +2100,7 @@ async def get_schema_properties(
             "transformSourceObjects": p.transform_source_objects,
             "transformDescription": p.transform_description,
             "encryptedName": p.encrypted_name,
+            "customProperties": custom_props.get(p.id, {}),
         }
         item.update(options)
         items.append(item)
@@ -1912,7 +2109,13 @@ async def get_schema_properties(
 
 
 @router.get('/data-contracts/{contract_id}/odcs/export')
-async def export_odcs(contract_id: str, db: DBSessionDep, manager: DataContractsManager = Depends(get_data_contracts_manager), _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
+async def export_odcs(
+    contract_id: str,
+    db: DBSessionDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
+):
     try:
         from fastapi.responses import Response
 
@@ -1936,9 +2139,11 @@ async def export_odcs(contract_id: str, db: DBSessionDep, manager: DataContracts
                 'Content-Type': 'application/x-yaml; charset=utf-8'
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception("Failed to list versions for contract %s", contract_id)
-        raise HTTPException(status_code=500, detail="Failed to list versions")
+        logger.exception("Failed to export contract %s as ODCS", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to export the contract")
 
 @router.post('/data-contracts/{contract_id}/link-assets', response_model=dict)
 async def auto_link_contract_schema_to_assets(
@@ -1972,6 +2177,7 @@ async def get_contract_entity_relationships(
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get entity relationships involving this contract (incoming governedBy, etc.)."""
     try:
@@ -2041,7 +2247,12 @@ async def add_comment(
 
 
 @router.get('/data-contracts/{contract_id}/comments', response_model=list[DataContractCommentRead])
-async def list_comments(contract_id: str, db: DBSessionDep, _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
+async def list_comments(
+    contract_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
+):
     try:
         comments = db.query(DataContractCommentDb).filter(DataContractCommentDb.contract_id == contract_id).order_by(DataContractCommentDb.created_at.asc()).all()
         return [
@@ -2177,7 +2388,8 @@ async def get_profile_runs(
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     jobs_manager = Depends(get_jobs_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get profiling runs for a contract with suggestion counts."""
     try:
@@ -2201,7 +2413,8 @@ async def get_suggestions(
     run_id: str,
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get quality check suggestions for a profiling run."""
     try:
@@ -2330,7 +2543,8 @@ async def reject_suggestions(
 async def get_custom_properties(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all custom properties for a contract."""
     from src.repositories.data_contracts_repository import custom_property_repo
@@ -2483,7 +2697,8 @@ async def delete_custom_property(
 async def get_support_channels(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all support channels for a contract."""
     from src.repositories.data_contracts_repository import support_channel_repo
@@ -2639,7 +2854,8 @@ async def delete_support_channel(
 async def get_pricing(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get pricing for a contract (returns empty object if not set)."""
     from src.repositories.data_contracts_repository import pricing_repo
@@ -2722,7 +2938,8 @@ async def update_pricing(
 async def get_roles(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all roles for a contract (with nested properties)."""
     from src.repositories.data_contracts_repository import role_repo
@@ -2923,7 +3140,8 @@ async def delete_role(
 async def get_contract_authoritative_definitions(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all authoritative definitions for a contract."""
     from src.repositories.data_contracts_repository import contract_authoritative_definition_repo
@@ -3091,7 +3309,8 @@ async def get_schema_authoritative_definitions(
     contract_id: str,
     schema_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all authoritative definitions for a schema object.
     
@@ -3109,18 +3328,16 @@ async def get_schema_authoritative_definitions(
     try:
         # Check if schema_id is a UUID or a name
         uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
-        actual_schema_id = schema_id
-        
-        if not uuid_pattern.match(schema_id):
-            # Treat as schema name, look up the actual ID
-            schema_obj = db.query(SchemaObjectDb).filter(
-                SchemaObjectDb.contract_id == contract_id,
-                SchemaObjectDb.name == schema_id
-            ).first()
-            if not schema_obj:
-                raise HTTPException(status_code=404, detail=f"Schema '{schema_id}' not found")
-            actual_schema_id = schema_obj.id
-        
+        by_id = bool(uuid_pattern.match(schema_id))
+        # Either way the schema must belong to this contract
+        schema_obj = db.query(SchemaObjectDb).filter(
+            SchemaObjectDb.contract_id == contract_id,
+            (SchemaObjectDb.id if by_id else SchemaObjectDb.name) == schema_id,
+        ).first()
+        if not schema_obj:
+            raise HTTPException(status_code=404, detail=f"Schema '{schema_id}' not found")
+        actual_schema_id = schema_obj.id
+
         definitions = schema_authoritative_definition_repo.get_by_schema(db=db, schema_id=actual_schema_id)
         return [AuthoritativeDefinitionRead.model_validate(d).model_dump() for d in definitions]
     except HTTPException:
@@ -3284,7 +3501,8 @@ async def get_property_authoritative_definitions(
     schema_id: str,
     property_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all authoritative definitions for a schema property."""
     from src.repositories.data_contracts_repository import property_authoritative_definition_repo
@@ -3293,6 +3511,15 @@ async def get_property_authoritative_definitions(
     contract = data_contract_repo.get(db, id=contract_id)
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
+
+    # The property must belong to one of this contract's schema objects
+    owned = db.query(SchemaPropertyDb.id).join(
+        SchemaObjectDb, SchemaPropertyDb.object_id == SchemaObjectDb.id
+    ).filter(
+        SchemaPropertyDb.id == property_id, SchemaObjectDb.contract_id == contract_id
+    ).first()
+    if not owned:
+        raise HTTPException(status_code=404, detail="Property not found")
 
     try:
         definitions = property_authoritative_definition_repo.get_by_property(db=db, property_id=property_id)
@@ -3457,7 +3684,8 @@ async def delete_property_authoritative_definition(
 async def get_contract_tags(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all tags for a specific contract."""
     from src.repositories.data_contracts_repository import contract_tag_repo
@@ -3648,27 +3876,25 @@ async def delete_contract_tag(
 async def get_contract_versions(
     contract_id: str,
     db: DBSessionDep,
-    current_user: AuditCurrentUserDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
+    scope: dict = Depends(contract_read_scope),
 ):
-    """Get every visible version of a contract's family, newest first.
+    """Get every version of a contract's family the caller may read, newest first.
 
     Grouped by ``version_family_id`` (PRD #442): one indexed equality
     lookup returns every member, regardless of which clone path produced
-    them. Personal drafts owned by other users are hidden.
+    them. Each version is filtered by the same read rule as the list.
     """
     try:
-        from src.common.authorization import is_user_admin
-        from src.common.config import get_settings
-        user_email = current_user.username if current_user else None
-        is_admin = is_user_admin(current_user.groups if current_user else [], get_settings())
         contracts = manager.get_contract_versions(
             db=db,
             contract_id=contract_id,
-            user_email=user_email,
-            is_admin=is_admin,
+            user_email=scope["caller_email"],
+            is_admin=scope["is_admin"],
         )
+        contracts = manager.readable_contracts(db, contracts, **scope)
 
         # Map directly to a shape matching the frontend VersionSelector's
         # ContractVersion type — keeps the response tight and skips the
@@ -3822,6 +4048,9 @@ async def clone_contract_for_new_version(
         from src.models.data_contracts_api import DataContractRead
         return DataContractRead.model_validate(new_contract, from_attributes=True).model_dump()
 
+    except InvalidVersionFormatError as e:
+        # Sent with its code and the version, so the page can say it in the user's language
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error cloning contract %s: %s", contract_id, e)
         raise HTTPException(status_code=400, detail="Invalid contract data")
@@ -3864,14 +4093,24 @@ async def get_contract_version_history(
     contract_id: str,
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
+    scope: dict = Depends(contract_read_scope),
 ):
-    """Get version history lineage for a contract with parent-child relationships."""
+    """Get version history lineage for a contract with parent-child relationships.
+
+    The parent, children and siblings follow the same read rule as the list.
+    """
     try:
         from src.models.data_contracts_api import DataContractRead
 
         # Business logic now in manager
         history = manager.get_version_history(db=db, contract_id=contract_id)
+        parent = history["parent"]
+        if parent is not None and not manager.can_read_contract(db, parent, **scope):
+            history["parent"] = None
+        for key in ("children", "siblings"):
+            history[key] = manager.readable_contracts(db, history[key], **scope)
 
         # Convert database objects to API models. `from_attributes=True` is required
         # so Pydantic v2 propagates ORM-attribute validation into nested config models
@@ -4014,7 +4253,8 @@ async def get_diff_from_parent(
     contract_id: str,
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Compare a contract to its parent and get version suggestion.
     
@@ -4209,7 +4449,8 @@ async def list_schema_relationships(
     contract_id: str,
     schema_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     schema_obj = db.query(SchemaObjectDb).filter(
         SchemaObjectDb.id == schema_id,
@@ -4311,11 +4552,15 @@ async def list_property_relationships(
     schema_id: str,
     prop_id: str,
     db: DBSessionDep = None,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
-    prop = db.query(SchemaPropertyDb).filter(
+    prop = db.query(SchemaPropertyDb).join(
+        SchemaObjectDb, SchemaPropertyDb.object_id == SchemaObjectDb.id
+    ).filter(
         SchemaPropertyDb.id == prop_id,
-        SchemaPropertyDb.object_id == schema_id
+        SchemaPropertyDb.object_id == schema_id,
+        SchemaObjectDb.contract_id == contract_id,
     ).first()
     if not prop:
         raise HTTPException(404, "Property not found")
@@ -4409,7 +4654,8 @@ async def delete_property_relationship(
 async def get_team_metadata(
     contract_id: str,
     db: DBSessionDep = None,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     contract = data_contract_repo.get(db, id=contract_id)
     if not contract:

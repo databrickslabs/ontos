@@ -35,6 +35,7 @@ import { useTeams } from '@/hooks/use-teams';
 import TagSelector from '@/components/ui/tag-selector';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 import { useProjectContext } from '@/stores/project-store';
+import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error';
 
 /**
  * ODPS v1.0.0 Data Product Creation Dialog
@@ -236,8 +237,10 @@ export default function DataProductCreateDialog({
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || t('data-products:form.updateError'));
+          const body = await response.json().catch(() => null);
+          throw new Error(statusChangeErrorText(
+            apiErrorOf(body, t('data-products:form.updateError')), t, 'data-products',
+          ));
         }
 
         const updatedProduct: DataProduct = await response.json();
@@ -304,8 +307,10 @@ export default function DataProductCreateDialog({
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || t('data-products:form.createError'));
+          const body = await response.json().catch(() => null);
+          throw new Error(statusChangeErrorText(
+            apiErrorOf(body, t('data-products:form.createError')), t, 'data-products',
+          ));
         }
 
         const createdProduct: DataProduct = await response.json();
@@ -391,6 +396,7 @@ export default function DataProductCreateDialog({
               <Select
                 value={form.watch('status')}
                 onValueChange={(value) => form.setValue('status', value)}
+                disabled={mode === 'edit'}
               >
                 <SelectTrigger id="status">
                   <SelectValue />
@@ -398,11 +404,16 @@ export default function DataProductCreateDialog({
                 <SelectContent>
                   {Object.values(DataProductStatus).map((status) => (
                     <SelectItem key={status} value={status}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                      {t(`data-products:status.${status}`, status.charAt(0).toUpperCase() + status.slice(1))}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {mode === 'edit' && (
+                <p className="text-xs text-muted-foreground">
+                  {t('data-products:form.statusChangeHint')}
+                </p>
+              )}
               {form.formState.errors.status && (
                 <p className="text-sm text-red-500">{form.formState.errors.status.message}</p>
               )}

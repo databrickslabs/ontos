@@ -158,5 +158,71 @@
     "metadataLoadFailed": "Laden der Metadaten fehlgeschlagen",
     "couldNotLoadMetadata": "Metadaten konnten nicht geladen werden.",
     "editTeamLoadError": "Teamdetails zum Bearbeiten konnten nicht geladen werden."
+  },
+  "sync": {
+    "title": "Domänen synchronisieren",
+    "description": "Importieren Sie Unity-Catalog-Domänen in Ontos oder exportieren Sie Ihre Domänen nach Unity Catalog. UC unterstützt zwei Ebenen (Domänen und Subdomänen); tiefere Domänen werden übersprungen.",
+    "direction": {
+      "title": "Richtung",
+      "description": "In welche Richtung synchronisiert wird",
+      "importLabel": "Aus Unity Catalog importieren",
+      "importHint": "Ontos-Domänen aus UC erstellen/verknüpfen",
+      "exportLabel": "Nach Unity Catalog exportieren",
+      "exportHint": "Ontos-Domänen in UC veröffentlichen"
+    },
+    "target": {
+      "importTitle": "Einordnen unter",
+      "exportTitle": "Anker",
+      "importHint": "Ontos-Domäne, unter der die importierten UC-Wurzeln eingeordnet werden.",
+      "exportHint": "Ihre Kinder werden zu UC-Wurzeln, ihre Enkel zu Subdomänen.",
+      "importTopLevel": "Oberste Ebene (ohne übergeordnete Domäne)",
+      "exportTopLevel": "Domänen der obersten Ebene"
+    },
+    "actions": {
+      "preview": "Vorschau anzeigen",
+      "apply": "Anwenden"
+    },
+    "panel": {
+      "resultTitle": "Synchronisierungsergebnis",
+      "previewTitle": "Vorschau",
+      "importFlow": "Unity Catalog → Ontos",
+      "exportFlow": "Ontos → Unity Catalog"
+    },
+    "emptyHint": "Wählen Sie eine Richtung und klicken Sie auf <b>Vorschau anzeigen</b>, um zu sehen, was sich ändern würde.",
+    "warnings": "Warnungen",
+    "errorsTitle": "Fehler",
+    "nothingToSync": "Nichts zu synchronisieren.",
+    "level": "E{{level}}",
+    "actionLabels": {
+      "create": "Erstellen",
+      "match": "Verknüpfen",
+      "skip": "Überspringen",
+      "error": "Fehler"
+    },
+    "toasts": {
+      "previewFailed": "Vorschau fehlgeschlagen",
+      "syncFailed": "Synchronisierung fehlgeschlagen",
+      "syncComplete": "Synchronisierung abgeschlossen"
+    },
+    "summary": "Erstellt: {{created}}, verknüpft: {{matched}}, übersprungen: {{skipped}}.",
+    "summaryWithErrors": "Erstellt: {{created}}, verknüpft: {{matched}}, übersprungen: {{skipped}}, Fehler: {{errors}}.",
+    "plan": {
+      "toCreate_one": "{{count}} zu erstellen",
+      "toCreate_other": "{{count}} zu erstellen",
+      "toMatch_one": "{{count}} zu verknüpfen",
+      "toMatch_other": "{{count}} zu verknüpfen",
+      "toSkip_one": "{{count}} zu überspringen",
+      "toSkip_other": "{{count}} zu überspringen"
+    },
+    "result": {
+      "created_one": "{{count}} erstellt",
+      "created_other": "{{count}} erstellt",
+      "matched_one": "{{count}} verknüpft",
+      "matched_other": "{{count}} verknüpft",
+      "skipped_one": "{{count}} übersprungen",
+      "skipped_other": "{{count}} übersprungen",
+      "errors_one": "{{count}} Fehler",
+      "errors_other": "{{count}} Fehler"
+    }
   }
 }

@@ -54,7 +54,9 @@
     "uploadError": "Vertrag konnte nicht hochgeladen werden",
     "uploadFailed": "Hochladen fehlgeschlagen",
     "uploadOdpsHint": "\n\nHinweis: Diese Seite ist für Datenverträge (ODCS-Format). Wenn Sie ein Datenprodukt (ODPS-Format) hochladen möchten, verwenden Sie stattdessen die Seite Datenprodukte.",
-    "uploadSuccess": "Vertrag erfolgreich hochgeladen"
+    "uploadSuccess": "Vertrag erfolgreich hochgeladen",
+    "uploadSuccessCount_one": "{{count}} Vertrag erfolgreich importiert",
+    "uploadSuccessCount_other": "{{count}} Verträge erfolgreich importiert"
   },
   "status": {
     "draft": "Entwurf",
@@ -69,6 +71,15 @@
     "retired": "Stillgelegt",
     "published": "Veröffentlicht",
     "archived": "Archiviert"
+  },
+  "statusDescriptions": {
+    "draft": "In Entwicklung, noch nicht zur Prüfung eingereicht",
+    "proposed": "Zur Prüfung eingereicht",
+    "under_review": "Wird vom Data Steward geprüft",
+    "approved": "Vom Steward genehmigt, bereit zur Aktivierung",
+    "active": "In Produktion, regelt Datenbestände",
+    "deprecated": "Noch verfügbar, aber zur Außerbetriebnahme vorgesehen",
+    "retired": "Nicht mehr in Verwendung, archiviert"
   },
   "details": {
     "backToList": "Zurück zur Liste",
@@ -187,7 +198,8 @@
     "validationErrorTitle": "Validierungsfehler",
     "nameRequired": "Vertragsname ist erforderlich",
     "versionRequired": "Version ist erforderlich",
-    "saveError": "Vertrag konnte nicht gespeichert werden"
+    "saveError": "Vertrag konnte nicht gespeichert werden",
+    "statusChangeHint": "Der Status wird mit Status ändern auf der Seite geändert, das den Übergang prüft und die Statusänderungs-Workflows ausführt."
   },
   "import": {
     "title": "Datenvertrag importieren",
@@ -209,7 +221,14 @@
     "importedTitle": "Importiert",
     "importedSuccess": "ODCS-JSON erfolgreich importiert",
     "importOdcsError": "ODCS-JSON konnte nicht importiert werden",
-    "importJsonButton": "JSON importieren"
+    "importJsonButton": "JSON importieren",
+    "uploadDescription": "Wählen Sie eine oder mehrere ODCS-Dateien (YAML/JSON). Jede Datei kann einen einzelnen Vertrag oder ein Array enthalten.",
+    "createMissingDomains": "Fehlende Domänen anlegen",
+    "createMissingDomainsHint": "Nicht vorhandene Domänen automatisch anlegen. Aus: nicht zugeordnete Domänen bleiben leer (der Originalwert bleibt erhalten).",
+    "adoptIds": "IDs aus der Datei übernehmen",
+    "adoptIdsHint": "Eine gültige, nicht kollidierende UUID aus der Datei als Primärschlüssel verwenden, damit Verknüpfungen zwischen Entitäten den Import überstehen.",
+    "duplicatesAsNew": "Doppelte IDs als neue Kopien importieren",
+    "duplicatesAsNewHint": "Aus (Standard): Eine Entität, deren ID bereits existiert, wird übersprungen. An: Sie wird als neue Kopie mit neuer ID importiert."
   },
   "editor": {
     "title": "Vertrags-Editor",
@@ -266,6 +285,8 @@
       "domain": "Domäne",
       "project": "Projekt",
       "projectIdTitle": "Projekt-ID: {{id}}",
+      "dataProduct": "Datenprodukt",
+      "dataProductIdTitle": "Produkt-ID: {{id}}",
       "tenant": "Mandant",
       "team": "Team",
       "teamIdTitle": "Team-ID: {{id}}",
@@ -325,7 +346,7 @@
       "createProduct": "Datenprodukt erstellen",
       "noneYet": "Noch keine verknüpften Datenprodukte",
       "emptyHint": "Erstellen Sie ein Datenprodukt, das diesen Vertrag zur Steuerung eines Lieferobjekts verwendet",
-      "statusRequirement": "Der Vertrag muss den Status 'active', 'approved' oder 'certified' haben",
+      "statusRequirement": "Der Vertrag muss den Status 'active' oder 'approved' haben",
       "unnamedProduct": "Unbenanntes Produkt",
       "deliverables_one": "Lieferobjekt: {{ports}}",
       "deliverables_other": "Lieferobjekte: {{ports}}"
@@ -496,11 +517,12 @@
       "deleteSchemaAuthDefFailed": "Verbindliche Schemadefinition konnte nicht gelöscht werden",
       "createPropertyAuthDefFailed": "Verbindliche Eigenschaftsdefinition konnte nicht erstellt werden",
       "updatePropertyAuthDefFailed": "Verbindliche Eigenschaftsdefinition konnte nicht aktualisiert werden",
-      "approveFailedStatus": "Genehmigung fehlgeschlagen ({{status}})",
+      "invalidTransition": "Der Vertrag ist jetzt {{fromStatus}} und kann nicht mehr genehmigt oder abgelehnt werden. Laden Sie die Seite neu, um den aktuellen Status zu sehen.",
       "approveFailed": "Genehmigung fehlgeschlagen",
-      "rejectFailedStatus": "Ablehnung fehlgeschlagen ({{status}})",
       "rejectFailed": "Ablehnung fehlgeschlagen",
-      "startProfilingFailed": "Profilierung konnte nicht gestartet werden"
+      "startProfilingFailed": "Profilierung konnte nicht gestartet werden",
+      "invalidVersionFormat": "\"{{version}}\" ist keine gültige Version: Eine neue Version hat die Form X.Y.Z, zum Beispiel 2.0.0.",
+      "draftVersionFormat": "Die Version \"{{version}}\" dieses Vertrags hat nicht die Form X.Y.Z, daher kann kein persönlicher Entwurf daraus erstellt werden. Erstellen Sie stattdessen eine neue Version (zum Beispiel 2.0.0)."
     }
   },
   "list": {
@@ -1062,7 +1084,7 @@
     "statusLabel": "Status:",
     "requestTypeLabel": "Anfragetyp *",
     "notAvailableForStatus": "Nicht verfügbar für Status '{{status}}'",
-    "cannotRequest": "{{type}} kann für einen Vertrag mit Status '{{status}}' nicht angefordert werden",
+    "cannotRequest": "\"{{type}}\" ist für einen Vertrag mit Status {{status}} nicht verfügbar.",
     "messageOptionalLabel": "Nachricht (optional)",
     "changingStatus": "Status wird geändert...",
     "sendingRequest": "Anfrage wird gesendet...",
@@ -1123,6 +1145,14 @@
       "requestDescription": "Beantragen Sie die Genehmigung zur Änderung des Lebenszyklusstatus dieses Vertrags.",
       "currentStatusLabel": "Aktueller Status:",
       "recommendedLabel": "Empfohlen:",
+      "recommended": {
+        "draft": "Zur Prüfung einreichen (Vorgeschlagen), sobald bereit",
+        "proposed": "Warten, bis der Steward auf In Prüfung setzt",
+        "under_review": "Der Steward genehmigt oder fordert Änderungen an",
+        "approved": "Aktivieren, sobald er Produktionsdaten regeln soll",
+        "active": "Bei geplanter Außerbetriebnahme als veraltet markieren; für die Zertifizierung das Zertifizierungs-Panel verwenden",
+        "deprecated": "Außer Betrieb nehmen, wenn nicht mehr verwendet"
+      },
       "selectTargetLabel": "Zielstatus auswählen *",
       "chooseTargetPlaceholder": "Zielstatus auswählen...",
       "terminalStateLabel": "Endstatus:",
@@ -1145,11 +1175,24 @@
       "statusChangedTitle": "Status geändert",
       "statusChangedDescription": "Vertragsstatus von \"{{from}}\" auf \"{{to}}\" geändert.",
       "submittedTitle": "Anfrage eingereicht",
-      "submittedDescription": "Ihre {{type}}-Anfrage wurde eingereicht und Sie werden über die Entscheidung informiert."
+      "submittedDescription": "Ihre {{type}}-Anfrage wurde eingereicht und Sie werden über die Entscheidung informiert.",
+      "workflowFailedTitle": "Anfrage gesendet, aber ihr Workflow ist fehlgeschlagen",
+      "workflowFailedDescription": "Niemand wurde gebeten, über Ihre {{type}}-Anfrage zu entscheiden: Der Workflow \"{{workflow}}\" konnte nicht gestartet werden. Bitte wenden Sie sich an einen Administrator.",
+      "requestTypes": {
+        "access": "Zugriffs",
+        "review": "Review",
+        "deploy": "Bereitstellungs",
+        "publish": "Veröffentlichungs",
+        "certify": "Zertifizierungs",
+        "status_change": "Statusänderungs"
+      },
+      "workflowPartiallyFailedTitle": "Einige Anfrage-Workflows sind fehlgeschlagen",
+      "workflowPartiallyFailedDescription": "Einer der {{type}}-Anfrage-Workflows ist fehlgeschlagen: {{workflows}}. Andere Genehmigungen stehen möglicherweise noch aus."
     },
     "errors": {
       "submitFailed": "Anfrage konnte nicht eingereicht werden",
-      "loadPolicyFailed": "Bereitstellungsrichtlinie konnte nicht geladen werden"
+      "loadPolicyFailed": "Bereitstellungsrichtlinie konnte nicht geladen werden",
+      "reviewSchemaRequired": "Ein Vertrag braucht ein Schema, bevor er zur Prüfung vorgeschlagen werden kann."
     }
   },
   "deployRequest": {

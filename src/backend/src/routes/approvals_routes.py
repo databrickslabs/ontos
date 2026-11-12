@@ -71,6 +71,16 @@ def _resolve_trigger_type_for_session(db, session_id: str) -> Optional[str]:
     return _resolve_trigger_type_for_workflow(db, session.workflow_id)
 
 
+def _resolve_entity_type_for_session(db, session_id: str) -> Optional[str]:
+    """Look up the entity_type recorded on an existing wizard session so the
+    permission gate can pick the entity-aware feature (e.g.
+    for_request_status_change on ontology_concept -> semantic-models)."""
+    session = agreement_wizard_sessions_repo.get(db, session_id)
+    if not session:
+        return None
+    return getattr(session, "entity_type", None)
+
+
 @router.get('/approvals/sessions')
 async def list_approval_sessions(
     limit: int = Query(50, ge=1, le=100),
@@ -90,14 +100,44 @@ async def list_approval_sessions(
 
 @router.get('/approvals/queue')
 async def get_approvals_queue(
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
     manager: ApprovalsManager = Depends(get_approvals_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
 ):
-    """Get all items awaiting approval (contracts, products, etc.)."""
+    """Items awaiting approval (contracts, products) that the caller may open (#1117).
+
+    Each entry links to the entity's page, so it is listed only when that page
+    would show it: the queue must not disclose a draft whose page answers 404.
+
+    * A product: the caller has data-products read and may read the product by
+      id (``_caller_can_read_product``: published, data-products admin, owner,
+      or pending reviewer of an open review or approval).
+    * A contract: ``GET /api/data-contracts/{id}`` has no gate beyond
+      data-contracts read, which this route already requires, so every caller
+      who reaches it sees the contracts.
+    """
+    from src.common.authorization import has_feature_permission
+    from src.routes.data_product_routes import _caller_can_read_product
+
     try:
-        return manager.get_approvals_queue(db)
+        reads_products = await has_feature_permission(
+            'data-products', FeatureAccessLevel.READ_ONLY, current_user, request,
+        )
+    except HTTPException:
+        logger.exception("Approvals queue: data-products permission check failed; hiding products")
+        reads_products = False
+
+    def can_see_product(product) -> bool:
+        return reads_products and _caller_can_read_product(
+            request, db, current_user, None, product,
+        )
+
+    try:
+        return manager.get_approvals_queue(
+            db, can_see_contract=lambda contract: True, can_see_product=can_see_product,
+        )
     except Exception as e:
         logger.exception("Failed to build approvals queue")
         raise HTTPException(status_code=500, detail="Failed to build approvals queue")
@@ -157,8 +197,11 @@ async def create_approval_session(
         # Skip the unknown-trigger 400: missing workflow falls through to the
         # manager call below, which surfaces a better 400/404 from the
         # underlying ValueError. raise_on_unknown=False keeps that contract.
+        # entity_type (from the request body) selects the entity-aware gate for
+        # shared triggers (e.g. for_request_status_change on ontology_concept).
         await enforce_wizard_permission(
-            trigger_type, user_details, request, raise_on_unknown=False,
+            trigger_type, user_details, request,
+            entity_type=body.entity_type, raise_on_unknown=False,
         )
     try:
         created_by = current_user.email if current_user else None
@@ -210,8 +253,10 @@ async def submit_approval_step(
     """
     trigger_type = _resolve_trigger_type_for_session(db, session_id)
     if trigger_type:
+        entity_type = _resolve_entity_type_for_session(db, session_id)
         await enforce_wizard_permission(
-            trigger_type, user_details, request, raise_on_unknown=False,
+            trigger_type, user_details, request,
+            entity_type=entity_type, raise_on_unknown=False,
         )
     try:
         created_by = current_user.email if current_user else None
@@ -240,8 +285,10 @@ async def abort_approval_session(
     """
     trigger_type = _resolve_trigger_type_for_session(db, session_id)
     if trigger_type:
+        entity_type = _resolve_entity_type_for_session(db, session_id)
         await enforce_wizard_permission(
-            trigger_type, user_details, request, raise_on_unknown=False,
+            trigger_type, user_details, request,
+            entity_type=entity_type, raise_on_unknown=False,
         )
     ok = wizard_manager.abort_session(session_id)
     if not ok:

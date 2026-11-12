@@ -10,7 +10,8 @@ from sqlalchemy import select, distinct, or_, and_
 from typing import Iterable, List, Optional, Any, Dict, Set, Union
 import json
 
-from src.common.repository import CRUDBase
+from src.common.repository import CRUDBase, coerce_uuid
+from src.common.version_visibility import not_others_personal_draft
 from src.db_models.domain_associations import EntityDomainAssociationDb
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.data_products import (
@@ -63,6 +64,16 @@ def _serialize_custom_property_value(value: Any) -> Optional[str]:
     if isinstance(value, str):
         return value
     return json.dumps(value)
+
+
+def _port_type_of(port: Dict[str, Any], default: Optional[str]) -> Optional[str]:
+    """Port type from an update payload.
+
+    ``model_dump(by_alias=True)`` names the key ``port_type``; plain dict payloads
+    may use ``type``.
+    """
+    value = port.get('port_type', port.get('type'))
+    return default if value is None else value
 
 
 class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProductUpdate]):
@@ -174,7 +185,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         description=port.description,
                         port_type=port.type,
                         contract_id=port.contractId,
-                        delivery_method_id=port.deliveryMethodId,
+                        delivery_method_id=coerce_uuid(port.deliveryMethodId),
                         asset_type=port.assetType,
                         asset_identifier=port.assetIdentifier,
                         status=port.status,
@@ -378,7 +389,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         port_obj.name = port_dict['name']
                         port_obj.version = port_dict['version']
                         port_obj.description = port_dict.get('description')
-                        port_obj.port_type = port_dict.get('type')
+                        if 'port_type' in port_dict or 'type' in port_dict:
+                            port_obj.port_type = _port_type_of(port_dict, None)
                         port_obj.contract_id = port_dict.get('contract_id')
                         # Preserve existing delivery_method_id on partial updates: only
                         # write if the caller explicitly included the key. Caller can still
@@ -387,7 +399,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         # method field (e.g. a name/description edit) would silently NULL
                         # the FK on every save.
                         if 'delivery_method_id' in port_dict:
-                            port_obj.delivery_method_id = port_dict.get('delivery_method_id')
+                            port_obj.delivery_method_id = coerce_uuid(
+                                port_dict.get('delivery_method_id'))
                         port_obj.asset_type = port_dict.get('asset_type')
                         port_obj.asset_identifier = port_dict.get('asset_identifier')
                         port_obj.status = port_dict.get('status')
@@ -413,9 +426,9 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                             name=port_dict['name'],
                             version=port_dict['version'],
                             description=port_dict.get('description'),
-                            port_type=port_dict.get('type'),
+                            port_type=_port_type_of(port_dict, None),
                             contract_id=port_dict.get('contract_id'),
-                            delivery_method_id=port_dict.get('delivery_method_id'),
+                            delivery_method_id=coerce_uuid(port_dict.get('delivery_method_id')),
                             asset_type=port_dict.get('asset_type'),
                             asset_identifier=port_dict.get('asset_identifier'),
                             status=port_dict.get('status'),
@@ -446,7 +459,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                     mgmt_obj = ManagementPortDb(
                         name=mgmt_dict['name'],
                         content=mgmt_dict['content'],
-                        port_type=mgmt_dict.get('type', 'rest'),
+                        port_type=_port_type_of(mgmt_dict, 'rest'),
                         url=mgmt_dict.get('url'),
                         channel=mgmt_dict.get('channel'),
                         description=mgmt_dict.get('description')
@@ -550,7 +563,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         db: Session,
         *,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         project_id: Optional[str] = None,
         is_admin: bool = False,
         caller_email: Optional[str] = None,
@@ -575,7 +588,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         Args:
             db: Database session
             skip: Number of records to skip
-            limit: Maximum number of records to return
+            limit: Maximum number of records to return (``None`` = no limit)
             project_id: Optional query-param project filter (applied AFTER
                 scoping, as a narrowing filter). Ignored when ``is_admin``.
             is_admin: If True, return all products regardless of scope.
@@ -970,8 +983,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         """Return every version in a family that's visible to the caller, newest first.
 
         Visibility rules:
-          - Personal drafts (draft_owner_id IS NOT NULL) are visible only to
-            their owner, regardless of role.
+          - Personal drafts (``draft`` status with a draft_owner_id) are
+            visible only to their owner, regardless of role.
+          - The owner stamp hides no row in any other status: an active or
+            deprecated version that still carries another user's
+            draft_owner_id is listed for everyone.
           - Admins see everything; other users see all non-personal-draft rows.
 
         Args:
@@ -986,12 +1002,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         try:
             query = db.query(self.model).filter(self.model.version_family_id == family_id)
             if not is_admin:
-                query = query.filter(
-                    or_(
-                        self.model.draft_owner_id.is_(None),
-                        self.model.draft_owner_id == user_email,
-                    )
-                )
+                # Hide other users' personal drafts.
+                query = query.filter(not_others_personal_draft(self.model, user_email))
             return query.order_by(self.model.created_at.desc()).all()
         except Exception as e:
             logger.error(f"Error fetching family versions for {family_id}: {e}", exc_info=True)
@@ -1158,7 +1170,7 @@ class DataProductSubscriptionRepository:
         *,
         product_id: str,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[DataProductSubscriptionDb]:
         """Get all subscribers for a product."""
         logger.debug(f"Fetching subscribers for product {product_id}")
@@ -1178,7 +1190,7 @@ class DataProductSubscriptionRepository:
         *,
         subscriber_email: str,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[DataProductSubscriptionDb]:
         """Get all subscriptions for a user."""
         logger.debug(f"Fetching subscriptions for user {subscriber_email}")

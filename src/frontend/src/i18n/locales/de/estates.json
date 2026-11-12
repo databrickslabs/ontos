@@ -13,7 +13,10 @@
     "deletingEstate": "Fehler beim Löschen des Estates",
     "triggeringSync": "Fehler beim Auslösen der Synchronisierung",
     "validationError": "Validierungsfehler",
-    "validationMessage": "Bitte füllen Sie alle erforderlichen Felder aus: Name, Beschreibung, Workspace-URL, Metastore-Name, Cloud-Typ und Verbindungstyp."
+    "validationMessage": "Bitte füllen Sie alle erforderlichen Felder aus: Name, Beschreibung, Workspace-URL, Metastore-Name, Cloud-Typ und Verbindungstyp.",
+    "codes": {
+      "estate_name_conflict": "Ein Estate mit dem Namen \"{{name}}\" existiert bereits."
+    }
   },
   "toast": {
     "estateCreated": "Estate erfolgreich erstellt",
@@ -102,7 +105,6 @@
     "backToEstateManager": "Zurück zum Estate-Manager",
     "backToListButton": "Zurück zur Liste",
     "configureSyncJob": "Synchronisierungsjob konfigurieren",
-    "editNotImplemented": "Funktion zum Bearbeiten von Estates wird noch implementiert",
     "syncEnabled": "Synchronisierung aktiviert",
     "syncDisabled": "Synchronisierung deaktiviert",
     "never": "Nie",
@@ -121,15 +123,16 @@
       "noEstateData": "Estate-Daten sind nicht verfügbar, um eine Richtlinie hinzuzufügen."
     },
     "policies": {
-      "title": "Freigaberichtlinien",
       "add": "Richtlinie hinzufügen",
-      "sectionDescription": "Definieren Sie Regeln, um bestimmte Datenprodukte oder Begriffe aus semantischen Modellen für dieses Estate freizugeben. Freigegebene Ressourcen sind über den konfigurierten Verbindungstyp zugänglich.",
       "resourceTypeLabel": "Ressourcentyp:",
       "rulesLabel": "Regeln ({{count}}):",
-      "filterBy": "Filtern nach",
-      "whereValue": "wobei Wert",
+      "ruleText": {
+        "equals": "Nach <b>{{filterType}}</b> filtern, wobei der Wert gleich <b>'{{value}}'</b> ist",
+        "contains": "Nach <b>{{filterType}}</b> filtern, wobei der Wert <b>'{{value}}'</b> enthält",
+        "starts_with": "Nach <b>{{filterType}}</b> filtern, wobei der Wert mit <b>'{{value}}'</b> beginnt",
+        "regex": "Nach <b>{{filterType}}</b> filtern, wobei der Wert dem regulären Ausdruck <b>'{{value}}'</b> entspricht"
+      },
       "noRules": "Für diese Richtlinie sind keine Regeln definiert.",
-      "emptyTitle": "Für dieses Estate sind keine Freigaberichtlinien definiert.",
       "emptyHint": "Klicken Sie auf \"Richtlinie hinzufügen\", um mit der Freigabe von Ressourcen zu beginnen.",
       "editPolicyAlert": "Richtlinie bearbeiten: {{name}}",
       "deletePolicyAlert": "Richtlinie löschen: {{name}}",
@@ -137,7 +140,17 @@
       "addedDescription": "Freigaberichtlinie \"{{name}}\" wurde erfolgreich hinzugefügt.",
       "addErrorTitle": "Fehler beim Hinzufügen der Richtlinie",
       "addErrorDescription": "Die neue Freigaberichtlinie konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
-      "saveFailedNoData": "Richtlinie konnte nicht gespeichert werden. Server hat keine Daten zurückgegeben."
+      "saveFailedNoData": "Richtlinie konnte nicht gespeichert werden. Server hat keine Daten zurückgegeben.",
+      "export": {
+        "title": "Exportrichtlinien",
+        "sectionDescription": "Was diese Instanz für dieses Estate freigibt.",
+        "emptyTitle": "Für dieses Estate sind keine Exportrichtlinien definiert."
+      },
+      "import": {
+        "title": "Importrichtlinien",
+        "sectionDescription": "Was diese Instanz von diesem Estate übernimmt.",
+        "emptyTitle": "Für dieses Estate sind keine Importrichtlinien definiert."
+      }
     },
     "overview": {
       "title": "Estate-Übersicht",
@@ -181,6 +194,12 @@
       "filterType": "z. B. Tag, Domäne, Status",
       "value": "z. B. finance, Active"
     },
+    "operators": {
+      "equals": "Ist gleich",
+      "contains": "Enthält",
+      "starts_with": "Beginnt mit",
+      "regex": "Entspricht Regex"
+    },
     "validation": {
       "nameMin": "Der Richtlinienname muss mindestens 3 Zeichen lang sein",
       "filterTypeRequired": "Filtertyp ist erforderlich",
@@ -192,5 +211,12 @@
       "submittedDescription": "Freigaberichtlinie \"{{name}}\" wird verarbeitet.",
       "addErrorDescription": "Freigaberichtlinie konnte nicht hinzugefügt werden. Details finden Sie in der Konsole."
     }
+  },
+  "resourceTypes": {
+    "data_product": "Datenprodukt",
+    "data_contract": "Datenvertrag",
+    "business_term": "Geschäftsbegriff",
+    "data_domain": "Datendomäne",
+    "concept": "Konzept"
   }
 }

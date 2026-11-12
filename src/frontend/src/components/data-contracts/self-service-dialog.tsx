@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,7 @@ type Props = {
 
 export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }: Props) {
   const { t } = useTranslation(['data-contracts', 'common']);
+  const defaultWorkflowText = useDefaultWorkflowText();
   const { currentProject } = useProjectContext();
 
   const [createType, setCreateType] = useState<CreateType>('table');
@@ -220,7 +222,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
                         ) : (
                           <XCircle className="h-4 w-4 text-destructive" />
                         )}
-                        {wf.workflow_name}
+                        {defaultWorkflowText(wf.workflow_name)}
                         <Badge variant="outline" className="ml-auto">{wf.status}</Badge>
                       </div>
                       {wf.step_results && wf.step_results.filter(s => !s.passed).length > 0 && (

@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { deleteOrThrow } from '@/lib/delete-or-throw';
+import { subscribeResponseErrorText } from '@/lib/subscribe-error';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import DeprecationNotice from '@/components/common/deprecation-notice';
 import { useTranslation } from 'react-i18next';
 import { DataProduct, InputPort, OutputPort, ManagementPort, TeamMember, Support, SubscriptionResponse, SubscribersListResponse } from '@/types/data-product';
 import DataProductCreateDialog from '@/components/data-products/data-product-create-dialog';
@@ -252,6 +255,8 @@ export function isProductActive(status: string | undefined | null): boolean {
 export const PORT_TO_ASSET_PREDICATE: Readonly<Record<string, string>> = {
   Table: 'portHasTable',
   View: 'portHasView',
+  // ontos:MetricView is a subclass of ontos:View, so a port delivers it as a view
+  'Metric View': 'portHasView',
   Dataset: 'portHasDataset',
   APIEndpoint: 'portHasEndpoint',
   MLModel: 'portHasModel',
@@ -735,7 +740,7 @@ export default function DataProductDetails() {
     if (!confirm(t('data-products:details.confirms.deleteProduct', { name: product.name }))) return;
 
     try {
-      await deleteApi(`/api/data-products/${productId}`);
+      await deleteOrThrow(deleteApi, `/api/data-products/${productId}`);
       toast({ title: t('common:toast.success'), description: t('data-products:details.deleteSuccess') });
       navigate(listPath);
     } catch (err) {
@@ -772,7 +777,7 @@ export default function DataProductDetails() {
     if (!confirm(t('data-products:details.confirms.discardDraft'))) return;
     setIsDiscarding(true);
     try {
-      await deleteApi(`/api/data-products/${productId}/discard`);
+      await deleteOrThrow(deleteApi, `/api/data-products/${productId}/discard`);
       toast({ title: t('data-products:details.toasts.draftDiscardedTitle'), description: t('data-products:details.toasts.draftDiscardedMessage') });
       // Navigate back to products list or parent product
       if (product.parentProductId) {
@@ -810,6 +815,14 @@ export default function DataProductDetails() {
     setSubscriptionLoading(true);
     try {
       const response = await post<SubscriptionResponse>(`/api/data-products/${productId}/subscribe`, {});
+      if (response.error) {
+        toast({
+          title: t('common:toast.error'),
+          description: subscribeResponseErrorText(response, t, 'Failed to subscribe'),
+          variant: 'destructive',
+        });
+        return;
+      }
       if (response.data) {
         setSubscriptionStatus(response.data);
         toast({ title: t('data-products:details.toasts.subscribedTitle'), description: t('data-products:details.toasts.subscribedMessage') });
@@ -872,7 +885,7 @@ export default function DataProductDetails() {
   };
 
   // Check if product is subscribable (active or certified)
-  const isSubscribable = product?.status && ['active', 'certified'].includes(product.status.toLowerCase());
+  const isSubscribable = product?.status && product.status.toLowerCase() === 'active';
 
   // Helper function to update product with 409 handling
   const updateProduct = async (updatedProduct: DataProduct, forceUpdate: boolean = false) => {
@@ -1602,6 +1615,13 @@ export default function DataProductDetails() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            <DeprecationNotice
+              entityType="data_product"
+              status={product.status}
+              reason={product.deprecation_reason}
+              sunsetDate={product.sunset_date}
+              replacementId={product.replacement_product_id}
+            />
             <div className="grid md:grid-cols-3 gap-x-6 gap-y-2">
               <div className="flex items-center gap-2">
                 <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.version')}:</Label>

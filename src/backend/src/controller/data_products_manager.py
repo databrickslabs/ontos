@@ -7,10 +7,14 @@ Handles product creation, updates, versioning, contract integration, and search 
 
 import asyncio
 import uuid
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Any, Set
 from uuid import UUID
 from pathlib import Path
+
+from src.common.api_errors import CodedValueError
+from src.common.notification_i18n import notification_i18n_data
 
 SOURCE_ID_PROPERTY = "sourceId"
 # Reserved id round-trip keys (#853). ontosOriginalId folds in the legacy sourceId
@@ -26,6 +30,36 @@ def _is_valid_uuid(value: str) -> bool:
         return True
     except (ValueError, AttributeError):
         return False
+
+
+class ProductNotSubscribableError(CodedValueError):
+    """A product is not in a subscribable status (only active is).
+
+    ``str()`` is the English message; ``code`` and ``params`` (the status
+    and optional replacement product info) let the UI show it in the user's
+    language.
+    """
+
+    code = 'product_not_subscribable'
+
+    def __init__(
+        self,
+        status: str,
+        product_name: Optional[str] = None,
+        replacement_product_id: Optional[str] = None,
+        replacement_product_name: Optional[str] = None,
+    ):
+        message = (
+            f"Cannot subscribe to {product_name or 'product'} in status "
+            f"'{status}'. Product must be in one of: active"
+        )
+        super().__init__(
+            message,
+            status=status,
+            productName=product_name or '',
+            replacementProductId=replacement_product_id or '',
+            replacementProductName=replacement_product_name or '',
+        )
 
 
 def _canonical_uuid(value: str) -> Optional[str]:
@@ -59,7 +93,7 @@ def _upsert_custom_property(data: Dict[str, Any], prop: str, value: Any) -> None
 import yaml
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import ResourceClosedError, SQLAlchemyError
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound, PermissionDenied
@@ -86,17 +120,43 @@ from src.models.data_products import (
     SubscriberInfo,
     SubscribersListResponse,
     OnBehalfOf,
+    ONTOS_PORT_STATUS_PROPERTY,
 )
+from src.models.assets import public_properties
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.entity_kind import classify_import_entity, describe_import_entity
+from src.common.api_errors import CodedValueError
+from src.common.lifecycle_status import (
+    PRODUCT_STATUSES,
+    check_status_unchanged,
+    import_status,
+    normalize_new_status,
+)
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
+from src.common.uc_tag_sync_trigger import request_uc_tag_sync_after_transition
 from src.repositories.teams_repository import team_repo
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.controller.domain_export_adapter import (
     domain_export_adapter,
     ONTOS_ORIGINAL_DOMAIN_PROPERTY,
     original_domain_strings_from_props,
+)
+from src.controller.lifecycle_fields import (
+    DeprecationDetails,
+    ImportedLifecycleError,
+    ImportLinks,
+    add_import_notes,
+    apply_lifecycle_fields,
+    check_lifecycle_fields,
+    imported_lifecycle_columns,
+    lifecycle_custom_properties,
+    lifecycle_trigger_data,
+    peek_lifecycle_replacement,
+    pop_lifecycle_custom_properties,
+    requested_deprecation,
+    audit_approved_lifecycle_change,
+    set_lifecycle_columns,
 )
 from src.repositories.genie_spaces_repository import genie_space_repo
 from src.models.genie_spaces import GenieSpaceCreate
@@ -247,8 +307,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         preserve_source_id: bool = False,
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
+        import_links: Optional[ImportLinks] = None,
+        workflow_user: Optional[str] = None,
     ) -> DataProductApi:
         """Creates a new ODPS v1.0.0 data product via the repository.
+
+        Fires the ``on_create`` workflows once the product is created, for every
+        caller (POST /data-products, the assistant tool, the ODPS import, a product
+        from a contract).
 
         Args:
             product_data: Dictionary containing product data
@@ -263,6 +329,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 non-colliding UUID in the payload is adopted as the primary key so
                 YAML-expressed cross-entity links survive import. Otherwise (or on a
                 non-UUID / colliding id) a fresh UUID is generated as before.
+            import_links: Set by an ODPS import, which commits the product in its
+                savepoint and records it in ``import_links`` (here it is only
+                flushed). The ontos* lifecycle properties
+                then set the lifecycle columns, with replacements resolved among
+                the entities of the same import. Otherwise they're ignored, since
+                those columns only change through a status transition.
+            workflow_user: Who the ``on_create`` workflows run for; defaults to ``user``
+                (the REST routes stamp the username and fire for the email).
         """
         from src.controller.delivery_service import DeliveryChangeType
 
@@ -318,6 +392,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_data.setdefault('apiVersion', 'v1.0.0')
             product_data.setdefault('kind', 'DataProduct')
             product_data.setdefault('status', DataProductStatus.DRAFT.value)
+            # A new product starts in one of the lifecycle statuses; `certified`
+            # is certification_level, set by the certify action.
+            product_data['status'] = normalize_new_status(
+                product_data.get('status'), PRODUCT_STATUSES
+            )
 
             # Stamp the creator as the single-user owner when no other owner is
             # supplied. Without this, a freshly created product has no
@@ -334,6 +413,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ):
                 product_data['draft_owner_id'] = user
 
+            # Lifecycle fields exported as ontos* customProperties map back to
+            # columns on import, checked before anything is created
+            lifecycle_props = pop_lifecycle_custom_properties(product_data.get('customProperties'))
+            lifecycle_columns = {}
+            if import_links is not None and lifecycle_props:
+                lifecycle_columns = imported_lifecycle_columns(
+                    db_session, 'data_product', product_data['id'], lifecycle_props,
+                    links=import_links, source_id=incoming_id,
+                )
+
             # Validate
             try:
                 product_api_model = DataProductCreate(**product_data)
@@ -346,6 +435,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Create via repository
             created_db_obj = self._repo.create(db=db_session, obj_in=product_api_model)
+            if lifecycle_columns:
+                set_lifecycle_columns(created_db_obj, lifecycle_columns)
+                db_session.flush()
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
             # or legacy single `domain` id/name).
@@ -361,31 +453,42 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Handle tag assignments
             if tags_data and self._tags_manager:
                 try:
-                    self._assign_tags_to_product(created_db_obj.id, tags_data)
+                    # An import commits each product once it is complete
+                    self._assign_tags_to_product(
+                        created_db_obj.id, tags_data, commit=import_links is None,
+                    )
                 except Exception as e:
                     logger.error(f"Failed to assign tags to product {created_db_obj.id}: {e}")
 
             # Load product with tags
             result = self._load_product_with_tags(created_db_obj, db=db_session)
             
-            # Log to change log for timeline
+            # Log to change log for timeline. An import commits each product
+            # once it is complete: there the entry is only flushed, in a
+            # savepoint, so a failed write doesn't abort the import's
+            # transaction (Postgres).
+            importing = import_links is not None
             try:
                 from src.controller.change_log_manager import change_log_manager
-                change_log_manager.log_change_with_details(
-                    db_session,
-                    entity_type="data_product",
-                    entity_id=str(created_db_obj.id),
-                    action="CREATE",
-                    username=user,
-                    details={
-                        "name": result.name,
-                        "status": result.status.value if hasattr(result.status, 'value') else result.status,
-                        "summary": f"Product '{result.name}' created" + (f" by {user}" if user else ""),
+                details = {
+                    "name": result.name,
+                    "status": getattr(result.status, 'value', result.status),
+                    "summary": f"Product '{result.name}' created" + (f" by {user}" if user else ""),
+                    # Imported lifecycle fields, as a deprecation records them
+                    **{
+                        column: value.isoformat() if hasattr(value, 'isoformat') else value
+                        for column, value in lifecycle_columns.items()
                     },
-                )
+                }
+                with db_session.begin_nested() if importing else nullcontext():
+                    change_log_manager.log_change_with_details(
+                        db_session, entity_type="data_product",
+                        entity_id=str(created_db_obj.id), action="CREATE", username=user,
+                        details=details, commit=not importing,
+                    )
             except Exception as log_err:
                 logger.warning(f"Failed to log change for product creation: {log_err}")
-            
+
             # Queue delivery for active modes
             self._queue_delivery(
                 entity=created_db_obj,
@@ -395,6 +498,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             
             self._update_search_index(result)
+            self._fire_create_trigger(db_session, result, workflow_user or user)
             return result
 
         except SQLAlchemyError as e:
@@ -421,7 +525,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     def list_products(
         self,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         project_id: Optional[str] = None,
         is_admin: bool = False,
         caller_email: Optional[str] = None,
@@ -441,8 +545,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         intentionally return an empty list — fail-closed.
 
         Args:
-            skip: Number of records to skip
-            limit: Maximum number of records to return
+            skip: Number of visible products to skip
+            limit: Maximum number of products to return (``None`` = all).
+                Applied after the visibility filter and family collapse, so
+                a page never comes back short because hidden rows or older
+                versions used up the limit (#1295).
             project_id: Optional project ID to filter by (ignored if is_admin=True)
             is_admin: If True, return all products regardless of scope
             caller_email: Caller email — matched against ``draft_owner_id``
@@ -455,8 +562,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         try:
             products_db = self._repo.get_multi(
                 db=self._db,
-                skip=skip,
-                limit=limit,
                 project_id=project_id,
                 is_admin=is_admin,
                 caller_email=caller_email,
@@ -545,6 +650,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     is_admin=is_admin,
                 )
 
+            if skip or limit is not None:
+                end = skip + limit if limit is not None else None
+                products_db = products_db[skip:end]
+
             # Batch-load domains once for the whole page (avoids N+1: every sibling
             # list path batches via get_domains_for_entities).
             domains_map = entity_domain_repo.get_domains_for_entities(
@@ -626,8 +735,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         db: Optional[Session] = None,
         user: Optional[str] = None,
         background_tasks: Optional[Any] = None,
+        workflow_user: Optional[str] = None,
     ) -> Optional[DataProductApi]:
         """Update an existing ODPS v1.0.0 data product.
+
+        Fires the ``on_update`` workflows once the product is updated (PUT
+        /data-products/{id}, the assistant tool), with the fields sent.
         
         Args:
             product_id: ID of product to update
@@ -635,6 +748,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db: Optional database session. If not provided, uses self._db
             user: Optional user who updated the product (for delivery tracking)
             background_tasks: Optional FastAPI BackgroundTasks for async delivery
+            workflow_user: Who the ``on_update`` workflows run for; defaults to ``user``
         """
         from src.controller.delivery_service import DeliveryChangeType
         
@@ -664,6 +778,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if not db_obj:
                 logger.warning(f"Attempted to update non-existent product: {product_id}")
                 return None
+
+            # The status changes only through transition_status (change-status,
+            # request-status-change), which runs the gates; an update may only
+            # repeat it.
+            check_status_unchanged(db_obj.status, product_data_dict.get('status'))
 
             # Update via repository
             updated_db_obj = self._repo.update(db=db_session, db_obj=db_obj, obj_in=product_update_model)
@@ -716,6 +835,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             
             self._update_search_index(result)
+            self._fire_update_trigger(
+                db_session, result, product_data_dict, workflow_user or user
+            )
             return result
 
         except SQLAlchemyError as e:
@@ -726,6 +848,77 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.error(f"Value error updating ODPS product {product_id}: {e}")
             db_session.rollback()
             raise
+
+    def check_update_allowed(
+        self,
+        product_db: Any,
+        user_email: Optional[str],
+        user_groups: List[str],
+        db: Optional[Session] = None,
+        caller_team_ids: Optional[List[str]] = None,
+        is_feature_admin: bool = False,
+    ) -> None:
+        """Raise ``PermissionError`` unless the caller may edit ``product_db``.
+
+        The ownership cascade of ``update_product_with_auth`` (documented
+        there), shared with the assistant's update tool. ``product_db`` needs
+        ``id``, ``project_id``, ``owner_team_id`` and ``draft_owner_id``.
+        """
+        from src.controller.projects_manager import projects_manager
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+
+        db_session = db if db is not None else self._db
+        settings = get_settings()
+
+        # Admin always allowed (short-circuit, also matches existing
+        # is_user_project_member behavior). This covers both workspace
+        # admins (group-based) and callers whose *feature-level*
+        # data-products permission is ADMIN — e.g. an in-app role override
+        # that grants data-products=Admin. The latter is resolved by the
+        # route (which has access to the effective-permissions/role
+        # machinery) and passed in as ``is_feature_admin``; without it an
+        # in-app admin who isn't the object owner was wrongly denied
+        # (ONT-CUJ-015).
+        if is_feature_admin or is_user_admin(user_groups, settings):
+            logger.debug("User %s is admin — bypassing ownership cascade", user_email)
+            return
+
+        authorized = False
+
+        # 1. Project membership (preserves prior fast-path semantics)
+        if product_db.project_id:
+            if projects_manager.is_user_project_member(
+                db=db_session,
+                user_identifier=user_email,
+                user_groups=user_groups,
+                project_id=product_db.project_id,
+                settings=settings,
+            ):
+                authorized = True
+
+        # 2. Team ownership
+        if not authorized and product_db.owner_team_id and caller_team_ids:
+            if product_db.owner_team_id in caller_team_ids:
+                authorized = True
+
+        # 3. Creator / single-user ownership (drafts AND non-drafts).
+        #    Case-insensitive email match — emails are not case-sensitive.
+        if not authorized and product_db.draft_owner_id and user_email:
+            if product_db.draft_owner_id.lower() == user_email.lower():
+                authorized = True
+
+        if not authorized:
+            logger.warning(
+                "User %s denied update on product %s "
+                "(project_id=%s, owner_team_id=%s, draft_owner_id=%s)",
+                user_email, product_db.id, product_db.project_id,
+                product_db.owner_team_id, product_db.draft_owner_id,
+            )
+            # Generic message — do not leak which sub-check failed.
+            raise PermissionError(
+                "Insufficient permissions to edit this data product"
+            )
 
     def update_product_with_auth(
         self,
@@ -788,66 +981,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 logger.warning(f"Product not found for update: {product_id}")
                 return None
 
-            from src.controller.projects_manager import projects_manager
-            from src.common.authorization import is_user_admin
-            from src.common.config import get_settings
-
-            settings = get_settings()
-
-            # Admin always allowed (short-circuit, also matches existing
-            # is_user_project_member behavior). This covers both workspace
-            # admins (group-based) and callers whose *feature-level*
-            # data-products permission is ADMIN — e.g. an in-app role override
-            # that grants data-products=Admin. The latter is resolved by the
-            # route (which has access to the effective-permissions/role
-            # machinery) and passed in as ``is_feature_admin``; without it an
-            # in-app admin who isn't the object owner was wrongly denied
-            # (ONT-CUJ-015).
-            if is_feature_admin or is_user_admin(user_groups, settings):
-                logger.debug(f"User {user_email} is admin — bypassing ownership cascade")
-                return self.update_product(
-                    product_id,
-                    product_data_dict,
-                    db=db_session,
-                    user=user_email,
-                    background_tasks=background_tasks,
-                )
-
-            authorized = False
-
-            # 1. Project membership (preserves prior fast-path semantics)
-            if existing_product_db.project_id:
-                if projects_manager.is_user_project_member(
-                    db=db_session,
-                    user_identifier=user_email,
-                    user_groups=user_groups,
-                    project_id=existing_product_db.project_id,
-                    settings=settings,
-                ):
-                    authorized = True
-
-            # 2. Team ownership
-            if not authorized and existing_product_db.owner_team_id and caller_team_ids:
-                if existing_product_db.owner_team_id in caller_team_ids:
-                    authorized = True
-
-            # 3. Creator / single-user ownership (drafts AND non-drafts).
-            #    Case-insensitive email match — emails are not case-sensitive.
-            if not authorized and existing_product_db.draft_owner_id and user_email:
-                if existing_product_db.draft_owner_id.lower() == user_email.lower():
-                    authorized = True
-
-            if not authorized:
-                logger.warning(
-                    f"User {user_email} denied update on product {product_id} "
-                    f"(project_id={existing_product_db.project_id}, "
-                    f"owner_team_id={existing_product_db.owner_team_id}, "
-                    f"draft_owner_id={existing_product_db.draft_owner_id})"
-                )
-                # Generic message — do not leak which sub-check failed.
-                raise PermissionError(
-                    "Insufficient permissions to edit this data product"
-                )
+            self.check_update_allowed(
+                existing_product_db,
+                user_email=user_email,
+                user_groups=user_groups,
+                db=db_session,
+                caller_team_ids=caller_team_ids,
+                is_feature_admin=is_feature_admin,
+            )
 
             # Perform update (validation happens inside update_product)
             return self.update_product(
@@ -866,16 +1007,41 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db_session.rollback()
             raise
 
-    def delete_product(self, product_id: str, user: Optional[str] = None) -> bool:
-        """Delete an ODPS v1.0.0 data product."""
+    def delete_product(
+        self,
+        product_id: str,
+        user: Optional[str] = None,
+        db: Optional[Session] = None,
+        workflow_user: Optional[str] = None,
+    ) -> bool:
+        """Delete an ODPS v1.0.0 data product.
+
+        Subscribers are notified only after the deletion is committed, so a
+        failed delete notifies nobody. The recipients are read before the
+        delete, since it cascades the subscription rows. Then the ``on_delete``
+        workflows fire (DELETE /data-products/{id}, the assistant tool).
+
+        Args:
+            product_id: ID of the product to delete
+            user: Who deletes it (change log, notices)
+            db: The caller's session, for the ``on_delete`` workflows; the delete
+                itself uses the manager's session, as before
+            workflow_user: Who the ``on_delete`` workflows run for; defaults to ``user``
+        """
         try:
-            # Get product info before deletion for change log
+            # Get product info and subscribers before deletion
             product_db = self._repo.get(db=self._db, id=product_id)
             product_name = product_db.name if product_db else None
+            deletion_notice = (
+                self._collect_deletion_notice(
+                    product_id=product_id, product_name=product_name, deleted_by=user
+                )
+                if product_db else None
+            )
 
             entity_domain_repo.remove_all_for_entity(self._db, entity_type="data_product", entity_id=product_id)
             deleted_obj = self._repo.remove(db=self._db, id=product_id)
-            
+
             if deleted_obj:
                 # Log to change log for timeline
                 try:
@@ -893,15 +1059,27 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     )
                 except Exception as log_err:
                     logger.warning(f"Failed to log change for product deletion: {log_err}")
-                
+
+                # Persist the deletion before anyone is told about it.
+                self._db.commit()
+
                 self._notify_index_remove(f"product::{product_id}")
-            
+
+                if deletion_notice:
+                    self._notify_subscribers_on_delete(**deletion_notice)
+
+                self._fire_delete_trigger(
+                    db if db is not None else self._db, product_id, workflow_user or user
+                )
+
             return deleted_obj is not None
         except SQLAlchemyError as e:
             logger.error(f"Database error deleting product {product_id}: {e}")
+            self._db.rollback()
             raise
         except Exception as e:
             logger.error(f"Unexpected error deleting product {product_id}: {e}")
+            self._db.rollback()
             raise
 
     # ==================== Lifecycle Transition Methods ====================
@@ -910,7 +1088,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         product_id: str,
         new_status: str,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        deprecation: Optional[DeprecationDetails] = None,
+        fire_status_change_trigger: bool = True,
     ) -> DataProductApi:
         """
         Transition product status with validation.
@@ -918,12 +1098,18 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Validates the transition is allowed per ODPS lifecycle rules (aligned with ODCS),
         then updates the product status.
         
-        Lifecycle: draft → [sandbox] → proposed → under_review → approved → active → certified → deprecated → retired
+        Lifecycle: draft → [sandbox] → proposed → under_review → approved → active → deprecated → retired (certification is certification_level)
         
         Args:
             product_id: ID of the product
             new_status: Target status
             current_user: Username for audit trail
+            deprecation: Reason, sunset date and replacement, required when
+                moving to ``deprecated`` (see ``lifecycle_fields``)
+            fire_status_change_trigger: Fire on_status_change for this step.
+                A caller that makes one change in several lifecycle steps (a
+                product review going under_review -> approved -> active)
+                passes False and fires the trigger once for the whole change.
             
         Returns:
             Updated product
@@ -948,39 +1134,37 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Validate transition
             allowed = valid_transitions.get(current_status, [])
             if new_status_lower not in allowed:
-                raise ValueError(
+                from src.common.api_errors import InvalidStatusTransitionError
+                raise InvalidStatusTransitionError(
                     f"Invalid status transition from '{current_status}' to '{new_status_lower}'. "
-                    f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}"
+                    f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}",
+                    fromStatus=current_status, toStatus=new_status_lower, allowed=list(allowed),
                 )
-            
+
             # Run before_status_change workflows (gating)
-            try:
-                from src.common.workflow_triggers import get_trigger_registry
-                from src.models.process_workflows import EntityType as WFEntityType
-                trigger_registry = get_trigger_registry(self._db)
-                gate_passed, gate_executions = trigger_registry.before_status_change(
-                    entity_type=WFEntityType.DATA_PRODUCT,
-                    entity_id=product_id,
-                    from_status=current_status,
-                    to_status=new_status_lower,
-                    entity_name=product_db.name,
-                    entity_data={"name": product_db.name, "status": current_status},
-                    user_email=current_user,
-                )
-                if not gate_passed:
-                    from src.common.workflow_triggers import describe_failed_executions
-                    reasons = describe_failed_executions(gate_executions)
-                    raise ValueError(
-                        f"Status transition from '{current_status}' to '{new_status_lower}' "
-                        f"blocked by workflow: {reasons}"
-                    )
-            except ValueError:
-                raise
-            except Exception as e:
-                logger.warning(f"before_status_change trigger error (non-fatal): {e}")
+            # (a gate that errors refuses the transition when it is fail_closed, #1103);
+            # the deprecation fields are checked after the certified guard, before the gates
+            from src.common.workflow_triggers import run_status_gates
+            from src.models.process_workflows import EntityType as WFEntityType
+            run_status_gates(
+                self._db,
+                entity_type=WFEntityType.DATA_PRODUCT,
+                entity_id=product_id,
+                from_status=current_status,
+                to_status=new_status_lower,
+                entity_name=product_db.name,
+                entity_data={"name": product_db.name, "status": current_status},
+                user_email=current_user,
+                before_gates=lambda: check_lifecycle_fields(
+                    self._db, 'data_product', product_id, new_status_lower, deprecation
+                ),
+            )
             
             # Update status
             old_status = product_db.status
+            lifecycle_changes = apply_lifecycle_fields(
+                product_db, 'data_product', current_status, new_status_lower, deprecation
+            )
             product_db.status = new_status_lower
             self._db.add(product_db)
             self._db.commit()
@@ -988,6 +1172,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.info(
                 f"Product {product_id} status transitioned: {old_status} → {new_status_lower}"
                 + (f" by {current_user}" if current_user else "")
+            )
+            # After the commit; never raises, so the transition stands whatever happens.
+            request_uc_tag_sync_after_transition(
+                "data_product", product_id, current_status, new_status_lower
             )
             
             # Log to change log for timeline
@@ -1004,6 +1192,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         "from_status": old_status,
                         "to_status": new_status_lower,
                         "summary": f"Status changed from '{old_status}' to '{new_status_lower}'" + (f" by {current_user}" if current_user else ""),
+                        **lifecycle_changes,
                     },
                 )
             except Exception as log_err:
@@ -1018,18 +1207,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             
             # Fire on_status_change workflow trigger
-            from src.common.workflow_triggers import fire_trigger_safe
-            from src.models.process_workflows import EntityType
-            fire_trigger_safe(
-                self._db, "on_status_change",
-                entity_type=EntityType.DATA_PRODUCT,
-                entity_id=product_id,
-                from_status=current_status,
-                to_status=new_status_lower,
-                entity_name=product_db.name,
-                entity_data={"name": product_db.name, "status": new_status_lower},
-                user_email=current_user,
-            )
+            if fire_status_change_trigger:
+                self.fire_status_change_trigger(
+                    product_id, product_db.name, current_status, new_status_lower, current_user,
+                    extra_data={
+                        **lifecycle_changes,
+                        **lifecycle_trigger_data(
+                            self._db, 'data_product', product_db, new_status_lower
+                        ),
+                    },
+                )
 
             result = self._load_product_with_tags(product_db)
             self._update_search_index(result)
@@ -1041,6 +1228,78 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except ValueError as e:
             logger.error(f"Validation error transitioning product {product_id}: {e}")
             raise
+
+    def fire_status_change_trigger(
+        self,
+        product_id: str,
+        product_name: Optional[str],
+        from_status: str,
+        to_status: str,
+        current_user: Optional[str] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Fire the on_status_change workflow trigger for a product.
+
+        ``extra_data`` goes into the trigger's entity data (e.g. the
+        deprecation fields set with the change).
+        """
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            self._db, "on_status_change",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=product_id,
+            from_status=from_status,
+            to_status=to_status,
+            entity_name=product_name,
+            entity_data={"name": product_name, "status": to_status, **(extra_data or {})},
+            user_email=current_user,
+        )
+
+    # The on_create / on_update / on_delete workflow triggers, fired by the write
+    # methods above once the change succeeded, whoever calls them (not blocking: a
+    # failing workflow is only logged and doesn't undo the change).
+
+    @staticmethod
+    def _fire_create_trigger(db: Session, product: Any, user_email: Optional[str]) -> None:
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        name = getattr(product, 'name', None)
+        fire_trigger_safe(
+            db, "on_create",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=str(product.id),
+            entity_name=name,
+            entity_data={"product_id": str(product.id), "name": name},
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def _fire_update_trigger(
+        db: Session, product: Any, changes: Dict[str, Any], user_email: Optional[str]
+    ) -> None:
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_update",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=str(product.id),
+            entity_name=getattr(product, 'name', None),
+            entity_data=changes,
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def _fire_delete_trigger(db: Session, product_id: str, user_email: Optional[str]) -> None:
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_delete",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=product_id,
+            entity_data={"product_id": product_id},
+            user_email=user_email,
+        )
 
     def move_to_sandbox(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """
@@ -1101,45 +1360,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         return self.transition_status(product_id, 'draft', current_user)
 
     def _validate_output_port_contracts(self, product_db, db=None) -> None:
-        """Raise ValueError unless every output port has an approved / active contract."""
-        db = db or self._db
-        if not product_db.output_ports:
-            return
-        ports_without_contracts = [
-            port.name for port in product_db.output_ports
-            if not port.contract_id
-        ]
-        if ports_without_contracts:
-            raise ValueError(
-                f"Cannot publish product: Output ports {', '.join(ports_without_contracts)} "
-                f"must have data contracts assigned"
-            )
+        """Raise ``OutputPortContractsError`` unless every port has an approved contract."""
+        from src.common.output_port_contracts import validate_output_port_contracts
 
-        # Validate that all linked contracts are in an approved status
-        from src.repositories.data_contracts_repository import data_contract_repo
-
-        valid_contract_statuses = ['approved', 'active']
-        contracts_not_approved = []
-
-        for port in product_db.output_ports:
-            if port.contract_id:
-                contract = data_contract_repo.get(db=db, id=port.contract_id)
-                if not contract:
-                    contracts_not_approved.append(
-                        f"{port.name} -> {port.contract_id} (contract not found)"
-                    )
-                    continue
-                contract_status = (contract.status or '').lower()
-                if contract_status not in valid_contract_statuses:
-                    contracts_not_approved.append(
-                        f"{port.name} -> {contract.name} (status: {contract.status})"
-                    )
-
-        if contracts_not_approved:
-            raise ValueError(
-                f"Cannot publish product: These output ports have unapproved contracts: "
-                f"{', '.join(contracts_not_approved)}. Contracts must be approved first."
-            )
+        validate_output_port_contracts(product_db, db or self._db)
 
     def set_publication_scope(self, product_id: str, scope: str,
                               current_user: Optional[str] = None, db=None):
@@ -1172,8 +1396,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 )
             self._validate_output_port_contracts(product_db, db)
             product_db.publication_scope = scope
-            product_db.published_at = datetime.now(timezone.utc)
-            product_db.published_by = current_user
+            if not was_published:
+                # A scope change keeps who published it and when
+                product_db.published_at = datetime.now(timezone.utc)
+                product_db.published_by = current_user
         else:
             product_db.publication_scope = 'none'
             product_db.published_at = None
@@ -1211,12 +1437,223 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         return product_db
 
+    def unpublish_product(
+        self, product_id: str, current_user: Optional[str] = None, db: Optional[Session] = None
+    ):
+        """Remove a product from the marketplace (scope ``none``) and fire ``on_unpublish``.
+
+        Same rule as the ``none`` scope of ``set_publication_scope``: ``on_unpublish``
+        fires only when the product was published. A failing trigger is only logged:
+        the unpublish is committed.
+
+        Returns:
+            The product row, or None when there is no such product
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db if db is not None else self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            return None
+        was_published = (product_db.publication_scope or "none").lower() != "none"
+        product_db.publication_scope = "none"
+        product_db.published_at = None
+        product_db.published_by = None
+        db.add(product_db)
+        db.commit()
+
+        if was_published:
+            try:
+                get_trigger_registry(db).on_unpublish(
+                    WFEntityType.DATA_PRODUCT,
+                    product_id,
+                    entity_name=product_db.name,
+                    user_email=current_user,
+                )
+            except Exception:
+                # The unpublish is committed; its on_unpublish workflows didn't run
+                logger.exception("on_unpublish trigger failed for data product %s", product_id)
+        return product_db
+
+    def certify_at_level(
+        self,
+        product_id: str,
+        certification_level: int,
+        certified_by: Optional[str],
+        notes: Optional[str] = None,
+        db: Optional[Session] = None,
+    ):
+        """Certify a product at a level, propagate it downstream and fire ``on_certify``.
+
+        The caller checks the product is active and the level exists. A failing
+        ``on_certify`` workflow is only logged: the certification is committed.
+
+        Returns:
+            The product row, or None when there is no such product
+        """
+        from datetime import timezone
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.controller.certification_propagator import propagate_certification
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db if db is not None else self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            return None
+        product_db.certification_level = certification_level
+        product_db.certified_at = datetime.now(timezone.utc)
+        product_db.certified_by = certified_by
+        product_db.certification_notes = notes
+        db.add(product_db)
+        db.commit()
+        db.refresh(product_db)
+
+        propagate_certification(db, "DataProduct", product_id)
+        db.commit()
+
+        try:
+            get_trigger_registry(db).on_certify(
+                WFEntityType.DATA_PRODUCT,
+                product_id,
+                entity_name=product_db.name,
+                entity_data={
+                    "certification_level": certification_level,
+                    "notes": notes,
+                    "certified_by": certified_by,
+                },
+                user_email=certified_by,
+                blocking=False,
+            )
+        except Exception as trigger_err:
+            logger.warning("on_certify trigger error (non-fatal): %s", trigger_err)
+        return product_db
+
+    def decertify_product(
+        self, product_id: str, current_user: Optional[str] = None, db: Optional[Session] = None
+    ) -> Optional[int]:
+        """Remove a product's certification and fire ``on_decertify``.
+
+        Returns:
+            The previous certification level
+
+        Raises:
+            ValueError: If there is no such product
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db if db is not None else self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            raise ValueError(f"Data product with ID {product_id} not found")
+        old_level = product_db.certification_level
+        product_db.certification_level = None
+        product_db.certified_at = None
+        product_db.certified_by = None
+        product_db.certification_expires_at = None
+        product_db.certification_notes = None
+        db.add(product_db)
+        db.commit()
+
+        get_trigger_registry(db).on_decertify(
+            WFEntityType.DATA_PRODUCT,
+            product_id,
+            entity_name=product_db.name,
+            user_email=current_user,
+        )
+        return old_level
+
+    def request_certification(
+        self,
+        product_id: str,
+        certification_level: Any,
+        message: Optional[str],
+        requester: Optional[str],
+        db: Optional[Session] = None,
+    ) -> None:
+        """Ask for a product's certification: run the ``on_request_certify`` workflows.
+
+        A pre-review product (draft / sandbox) moves to ``proposed`` first, so it
+        surfaces in the review queue (ONT-CUJ-019); a product already in flight
+        keeps its status. The caller checks the product has a deliverable.
+
+        Raises:
+            ValueError: If there is no such product
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db if db is not None else self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            raise ValueError(f"Data product with ID {product_id} not found")
+        if (product_db.status or 'draft').lower() in ('draft', 'sandbox'):
+            self.submit_for_review(product_id, requester)
+
+        get_trigger_registry(db).on_request_certify(
+            WFEntityType.DATA_PRODUCT,
+            product_id,
+            entity_name=product_db.name,
+            entity_data={
+                "requested_certification_level": certification_level,
+                "message": message,
+                "requester": requester,
+            },
+            user_email=requester,
+            blocking=True,
+        )
+
+    def request_publication(
+        self,
+        product_id: str,
+        scope: str,
+        justification: Optional[str],
+        requester: Optional[str],
+        current_status: str,
+        db: Optional[Session] = None,
+    ) -> List[Any]:
+        """Ask for a product's publication: run the ``on_request_publish`` workflows.
+
+        The caller checks the scope and that an ``active`` product is published.
+
+        Returns:
+            The workflow executions that ran
+
+        Raises:
+            ValueError: If there is no such product
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db if db is not None else self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            raise ValueError(f"Data product with ID {product_id} not found")
+        return get_trigger_registry(db).on_request_publish(
+            WFEntityType.DATA_PRODUCT,
+            product_id,
+            entity_name=product_db.name,
+            entity_data={
+                "requested_scope": scope,
+                "justification": justification,
+                "requester": requester,
+                # Same key as the data contract request (data_contracts_manager)
+                "current_status": current_status,
+            },
+            user_email=requester,
+            blocking=True,
+        )
+
     def publish_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """
         Publish an approved product (approved → active).
 
         ODPS lifecycle (aligned with ODCS): Publishes a product to make it active and available
         in the marketplace. Validates that all output ports have data contracts assigned.
+        An unpublished product is published at organization scope, stamped and fires
+        ``on_publish``; one still published (e.g. deprecated, then re-published) keeps its
+        scope, ``published_at`` / ``published_by``, and fires no ``on_publish``.
 
         Args:
             product_id: ID of the product to publish
@@ -1235,9 +1672,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError(f"Data product with ID {product_id} not found")
 
             self._validate_output_port_contracts(product_db)
+            # A product deprecated while published keeps its scope (e.g. domain)
+            was_published = (product_db.publication_scope or 'none').lower() != 'none'
 
             # Use transition_status for validation and update
             result = self.transition_status(product_id, 'active', current_user)
+            if was_published:
+                # Same rule as set_publication_scope: no new scope, stamp or
+                # on_publish unless the product goes from unpublished to published
+                return result
 
             # Set publication scope
             from datetime import datetime, timezone
@@ -1262,7 +1705,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             except Exception:
                 logger.exception("on_publish trigger failed for data product %s", product_id)
 
-            return result
+            # ``result`` was read before the scope was set: return the product as published
+            return self.get_product(product_id)
 
         except ValueError as e:
             logger.error(f"Validation error publishing product {product_id}: {e}")
@@ -1278,7 +1722,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             "Use POST /api/data-products/{id}/certify with a certification_level instead."
         )
 
-    def deprecate_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
+    def deprecate_product(self, product_id: str, current_user: Optional[str] = None,
+                          deprecation: Optional[DeprecationDetails] = None) -> DataProductApi:
         """
         Deprecate an active product (active → deprecated).
 
@@ -1296,54 +1741,43 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ValueError: If product not found or invalid status transition
             SQLAlchemyError: If database operation fails
         """
-        return self.transition_status(product_id, 'deprecated', current_user)
+        return self.transition_status(
+            product_id, 'deprecated', current_user, deprecation=deprecation
+        )
 
     # ==================== Status Change Request/Approval Methods ====================
 
     def _get_allowed_status_transitions(self, current_status: str) -> List[Dict[str, str]]:
         """Get allowed status transitions for a given status.
-        
+
+        The targets are the lifecycle map's (``DATA_PRODUCT_TRANSITIONS``), the
+        one ``transition_status`` applies, so a request is only accepted for a
+        change that can be applied. Certification isn't a status.
+
         Args:
             current_status: Current product status
-            
+
         Returns:
             List of allowed transitions with target and label
         """
-        transitions = {
-            'draft': [
-                {'target': 'sandbox', 'label': 'Move to Sandbox'},
-                {'target': 'proposed', 'label': 'Submit for Review'},
-            ],
-            'sandbox': [
-                {'target': 'draft', 'label': 'Return to Draft'},
-                {'target': 'proposed', 'label': 'Submit for Review'},
-            ],
-            'proposed': [
-                {'target': 'draft', 'label': 'Return to Draft'},
-                {'target': 'under_review', 'label': 'Start Review'},
-            ],
-            'under_review': [
-                {'target': 'approved', 'label': 'Approve'},
-                {'target': 'draft', 'label': 'Reject (Return to Draft)'},
-            ],
-            'approved': [
-                {'target': 'active', 'label': 'Publish/Activate'},
-                {'target': 'draft', 'label': 'Return to Draft'},
-            ],
-            'active': [
-                {'target': 'certified', 'label': 'Certify'},
-                {'target': 'deprecated', 'label': 'Deprecate'},
-            ],
-            'certified': [
-                {'target': 'deprecated', 'label': 'Deprecate'},
-            ],
-            'deprecated': [
-                {'target': 'retired', 'label': 'Retire'},
-                {'target': 'active', 'label': 'Reactivate'},
-            ],
-            'retired': []  # Terminal state
+        from src.models.lifecycle import DATA_PRODUCT_TRANSITIONS
+
+        labels = {
+            'draft': 'Return to Draft',
+            'sandbox': 'Move to Sandbox',
+            'proposed': 'Submit for Review',
+            'under_review': 'Start Review',
+            'approved': 'Approve',
+            'active': 'Publish/Activate',
+            'deprecated': 'Deprecate',
+            'retired': 'Retire',
         }
-        return transitions.get(current_status.lower(), [])
+        current = (current_status or 'draft').lower()
+        targets = DATA_PRODUCT_TRANSITIONS.get(current, [])
+        return [
+            {'target': target, 'label': 'Reactivate' if current == 'deprecated' and target == 'active' else labels[target]}
+            for target in targets
+        ]
 
     def request_status_change(
         self,
@@ -1353,7 +1787,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         target_status: str,
         justification: str,
         requester_email: str,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        sunset_date: Optional[str] = None,
+        replacement_id: Optional[str] = None,
     ) -> Dict[str, str]:
         """Request a status change for a product via workflow.
         
@@ -1377,7 +1813,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         """
         from datetime import datetime
         from uuid import uuid4
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import (
+            get_trigger_registry, request_submitted_message, request_workflow_outcome,
+        )
         from src.models.process_workflows import EntityType
         from src.controller.change_log_manager import change_log_manager
         
@@ -1392,7 +1830,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         allowed_transitions = self._get_allowed_status_transitions(from_status)
         if target_status_lower not in [t['target'] for t in allowed_transitions]:
             raise ValueError(f"Invalid status transition from '{from_status}' to '{target_status}'.")
-        
+
+        # A requested deprecation may carry a sunset date and a replacement,
+        # checked now and applied with the justification as the reason
+        requested_deprecation: Dict[str, Optional[str]] = {}
+        if target_status_lower == 'deprecated' and (sunset_date or replacement_id):
+            from src.controller.lifecycle_fields import (
+                check_requested_deprecation, requested_deprecation_data,
+            )
+            details = check_requested_deprecation(
+                db, 'data_product', product_id, justification, sunset_date, replacement_id,
+            )
+            requested_deprecation = requested_deprecation_data(db, 'data_product', details)
+
         now = datetime.utcnow()
         request_id = str(uuid4())
         
@@ -1411,9 +1861,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 "target_status": target_status_lower,
                 "justification": justification,
                 "request_id": request_id,
+                **requested_deprecation,
             },
             user_email=requester_email,
         )
+        outcome = request_workflow_outcome(executions)
         
         # Log to change_log
         change_log_manager.log_change_with_details(
@@ -1424,25 +1876,24 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             username=current_user or "anonymous",
             details={
                 "requester_email": requester_email,
+                # Ties the decision to this request (certified deprecation guard)
+                "request_id": request_id,
                 "from_status": from_status,
                 "target_status": target_status,
                 "justification": justification,
+                **requested_deprecation,
                 "timestamp": now.isoformat(),
                 "summary": f"Status change requested from {from_status} to {target_status} by {current_user}",
-                "workflow_triggered": len(executions) > 0,
+                **outcome,
             },
         )
         
         # Build response
         result = {
-            "message": "Status change request submitted successfully",
+            "message": request_submitted_message("Status change", outcome),
             "request_id": request_id,
         }
-        
-        if executions:
-            execution = executions[0]
-            result["execution_id"] = execution.id
-            result["workflow_status"] = execution.status.value
+        result.update({k: v for k, v in outcome.items() if k != "workflow_triggered"})
         
         return result
 
@@ -1495,7 +1946,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # Find requester from change log
         requester_email = None
         try:
-            recent_changes = change_log_manager.get_changes_for_entity(db, "data_product", product_id)
+            recent_changes = change_log_manager.get_changes_for_entity(db, "data_product", product_id, action="status_change_requested", limit=1)
             for change in recent_changes:
                 if change.action == "status_change_requested":
                     requester_email = change.details.get("requester_email")
@@ -1504,8 +1955,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             pass
         
         if decision == 'approve':
-            # Apply the status change directly
-            self.transition_status(product_id, target_status, current_user)
+            # Apply the status change directly; a requested deprecation uses
+            # the request's justification as its reason
+            from_status = (product.status or '').lower()
+            request_id, deprecation = requested_deprecation(
+                db, 'data_product', product_id, target_status
+            )
+            self.transition_status(
+                product_id, target_status, current_user, deprecation=deprecation,
+            )
+            audit_approved_lifecycle_change(
+                db, 'data_product', product_id, from_status, target_status,
+                request_id, current_user or approver_email,
+            )
             notification_title = "Product Status Change Approved"
             notification_desc = f"Your request to change the status of '{product.name}' to '{target_status}' has been approved by '{approver_email}'."
         elif decision == 'deny':
@@ -1564,7 +2026,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     def request_review(
         self,
         product_id: str,
-        reviewer_email: str,
+        reviewer_email: Optional[str],
         requester_email: str,
         message: Optional[str] = None,
         current_user: Optional[str] = None
@@ -1577,7 +2039,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         
         Args:
             product_id: Product ID to request review for
-            reviewer_email: Email of the reviewer
+            reviewer_email: Email of the reviewer, or None to let the review
+                workflow resolve it (its ``create_asset_review`` step)
             requester_email: Email of user requesting review
             message: Optional message to reviewer
             current_user: Username requesting review
@@ -1588,11 +2051,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If product not found or invalid status
         """
-        from datetime import datetime
         from uuid import uuid4
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import (
+            get_trigger_registry, request_submitted_message, request_workflow_outcome,
+        )
         from src.models.process_workflows import EntityType
-        from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
         
         product_db = self._repo.get(db=self._db, id=product_id)
         if not product_db:
@@ -1608,34 +2071,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # Then transition to UNDER_REVIEW
         self.transition_status(product_id, 'under_review', current_user)
         
-        now = datetime.utcnow()
         request_id = str(uuid4())
-        
-        # Create asset review record
-        try:
-            from src.controller.data_asset_reviews_manager import DataAssetReviewManager
-            from src.models.data_asset_reviews import ReviewedAsset as ReviewedAssetApi
-            
-            if not self._notifications_manager:
-                logger.warning("NotificationsManager not available for review workflow")
-            
-            review_manager = DataAssetReviewManager(
-                db=self._db, 
-                ws_client=self._ws_client, 
-                notifications_manager=self._notifications_manager
-            )
-            
-            review_asset = ReviewedAssetApi(
-                id=str(uuid4()),
-                asset_fqn=f"product:{product_id}",
-                asset_type=AssetType.DATA_PRODUCT,
-                status=ReviewedAssetStatus.PENDING,
-                updated_at=now
-            )
-            logger.info(f"Created asset review record for product {product_id}")
-        except Exception as e:
-            logger.warning(f"Failed to create asset review record: {e}", exc_info=True)
-        
+
+        # The review record is created by the review workflow's
+        # ``create_asset_review`` step (as ``product:<id>``, type DATA_PRODUCT),
+        # which also resolves the reviewer when none is named.
+
         # Fire the ON_REQUEST_REVIEW trigger
         trigger_registry = get_trigger_registry(self._db)
         executions = trigger_registry.on_request_review(
@@ -1653,23 +2094,24 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             },
             user_email=requester_email,
         )
+        outcome = request_workflow_outcome(executions)
         
         # Build response
+        failed = outcome.get("workflow_status") == "failed"
         result = {
             "status": "success",
-            "message": f"Review request created for product {product_db.name or product_id}",
+            "message": (
+                request_submitted_message("Review", outcome) if failed
+                else f"Review request created for product {product_db.name or product_id}"
+            ),
             "request_id": request_id,
         }
-        
-        if executions:
-            execution = executions[0]
-            result["execution_id"] = execution.id
-            result["workflow_status"] = execution.status.value
+        result.update({k: v for k, v in outcome.items() if k != "workflow_triggered"})
         
         return result
 
     def get_published_products(
-        self, skip: int = 0, limit: int = 100, scope: Optional[str] = None
+        self, skip: int = 0, limit: Optional[int] = None, scope: Optional[str] = None
     ) -> List[DataProductApi]:
         """
         Get data products published to the marketplace (by publication scope).
@@ -1677,8 +2119,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Returns products with a non-none publication_scope. Optionally filter to one scope.
 
         Args:
-            skip: Number of products to skip (for pagination)
-            limit: Maximum number of products to return
+            skip: Number of published products to skip (for pagination)
+            limit: Maximum number of products to return (``None`` = all);
+                applied after the publication filter (#1295)
             scope: If set, only products whose publication_scope matches (case-insensitive)
 
         Returns:
@@ -1692,7 +2135,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # authoritative permission for these products, NOT the
             # per-user ownership cascade. Bypass the cascade so published
             # products surface regardless of who's asking.
-            all_products = self.list_products(skip=skip, limit=limit, is_admin=True)
+            all_products = self.list_products(is_admin=True)
             published_products = [
                 product for product in all_products
                 if product.publication_scope and product.publication_scope.lower() != 'none'
@@ -1702,6 +2145,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     p for p in published_products
                     if p.publication_scope and p.publication_scope.lower() == scope.lower()
                 ]
+            if skip or limit is not None:
+                end = skip + limit if limit is not None else None
+                published_products = published_products[skip:end]
             logger.info(
                 f"Retrieved {len(published_products)} published products (scope={scope or 'all'})"
             )
@@ -1805,6 +2251,21 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             return data
         raise ValueError("File must contain a JSON object/array or YAML mapping/list of data products")
 
+    @staticmethod
+    def _import_replacement_entries(parsed_files):
+        """``(id, ontosReplacedBy)`` of every product in the parsed import files,
+        for ``ImportLinks.plan``; files that didn't parse are left out (the
+        import reports them)."""
+        entries = []
+        for _filename, data_list, _error in parsed_files:
+            for product_data in data_list or []:
+                if isinstance(product_data, dict):
+                    entries.append((
+                        product_data.get('id'),
+                        peek_lifecycle_replacement(product_data.get('customProperties')),
+                    ))
+        return entries
+
     def create_products_from_files(
         self,
         files: List[tuple],
@@ -1813,6 +2274,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         adopt_ids: bool = True,
         on_duplicate: str = "skip",
         reveal_dup_detail: bool = False,
+        workflow_user: Optional[str] = None,
     ) -> BatchImportResult:
         """Import ODPS products from one or more uploaded files.
 
@@ -1827,6 +2289,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             on_duplicate: what to do when the payload id is a valid UUID that already exists
                 in the table — "skip" (default, recorded as skipped) or "new" (import as a new
                 copy with a fresh UUID). Import stays create-only either way.
+            workflow_user: Who the ``on_create`` workflows of each imported product
+                run for (``create_product``); defaults to ``user``.
 
         Returns:
             A :class:`BatchImportResult`. A file that cannot be parsed at all is
@@ -1834,13 +2298,24 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             individually and never abort the batch.
         """
         result = BatchImportResult()
-        index = 0
+        # Each file is parsed once: the replacement links of the whole import
+        # are planned before any product is created
+        parsed_files = []
         for filename, content in files:
             try:
                 data_list = self._parse_products_content(content, filename)
+                parsed_files.append((filename, data_list, None))
             except ValueError as e:
+                parsed_files.append((filename, None, e))
+        links = ImportLinks('data_product')
+        links.plan(self._import_replacement_entries(parsed_files))
+        self._ensure_default_tag_namespace(parsed_files, user)
+        index = 0
+        for filename, data_list, parse_error in parsed_files:
+            if parse_error is not None:
                 result.add(ImportItemResult(
-                    index=index, source_file=filename, status="failed", message=str(e),
+                    index=index, source_file=filename, status="failed",
+                    message=str(parse_error),
                 ))
                 index += 1
                 continue
@@ -1920,14 +2395,48 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 # old→new map keyed on canon_source and rewrite port.contractId before
                 # calling create_product (#853 review item 4).
                 try:
-                    created = self.create_product(
+                    # A status Ontos doesn't have is imported as draft, with a note
+                    status_value, status_note = import_status(
+                        product_data.get('status'), PRODUCT_STATUSES
+                    )
+                    product_data = {**product_data, 'status': status_value}
+                    created = self._create_imported_product(
                         product_data, user=user, preserve_source_id=True,
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
+                        import_links=links,
+                        workflow_user=workflow_user,
                     )
+                    # Only a product that was created can be a replacement of
+                    # the import: one that failed leaves no link
+                    links.record(source_id, created.id)
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         entity_id=created.id, name=created.name, status="created",
+                        **(status_note or {}),
+                    ))
+                except ImportedLifecycleError as e:
+                    # The app's own message, naming the lifecycle property
+                    logger.warning(
+                        "Failed to import data product at batch index %d (file %s): %s",
+                        index, filename, e,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=product_data.get('name'), status="failed", message=str(e),
+                        code=e.code, params=e.params,
+                    ))
+                except CodedValueError as e:
+                    # The app's own refusal (e.g. ``certified`` as a status):
+                    # its English message is safe to show, and its code lets
+                    # the UI translate it.
+                    logger.info(
+                        "Refused product at batch index %d (file %s): %s", index, filename, e,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=product_data.get('name'), status="failed",
+                        message=str(e), code=e.code, params=e.params or None,
                     ))
                 except Exception as e:
                     # Log full detail (may carry SQL/internal text); keep the
@@ -1943,6 +2452,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     ))
                 index += 1
 
+        add_import_notes(result, links.finish(self._db, username=user))
+        # The links are kept even when their change log entry couldn't be written
+        self._db.commit()
         logger.info(
             "Product batch import complete: %d created, %d skipped, %d failed (%d total)",
             result.created, result.skipped, result.failed, result.total,
@@ -2638,8 +3150,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 }
 
                 # Step 4: Format metadata as instructions
+                contract_ids = sorted({
+                    port.contract_id for p in products for port in p.output_ports
+                    if port.contract_id
+                })
                 instructions = genie_client.format_metadata_for_genie(
-                    metadata_map, products, product_domains=product_domains
+                    metadata_map, products, product_domains=product_domains,
+                    contract_names=genie_client.collect_contract_names(contract_ids, db),
                 )
                 logger.info(f"Formatted {len(instructions)} characters of metadata")
 
@@ -2729,7 +3246,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         System-level export — bypasses per-user ownership scope.
         """
         try:
-            all_products_api = self.list_products(limit=10000, is_admin=True)
+            all_products_api = self.list_products(is_admin=True)
             products_list = [p.model_dump(by_alias=True) for p in all_products_api]
 
             with open(yaml_path, 'w') as file:
@@ -2942,7 +3459,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         logger.info("Fetching ODPS products for search indexing...")
         items = []
         try:
-            products_api = self.list_products(limit=10000, is_admin=True)
+            products_api = self.list_products(is_admin=True)
             # Batch-load domains once for the whole index build (avoids N+1).
             domains_map = entity_domain_repo.get_domains_for_entities(
                 self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_api]
@@ -2975,10 +3492,89 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.error(f"Error fetching/mapping ODPS products for search: {e}", exc_info=True)
             return []
 
+    def _create_imported_product(self, product_data: Dict[str, Any], **kwargs) -> DataProductApi:
+        """Create and commit one product of a batch import, in its own savepoint.
+
+        A product that fails after its first flush leaves nothing, and on
+        Postgres its failed statement doesn't abort the transaction of the rest
+        of the import. Each product is committed once created, so a
+        session-wide rollback inside (a repository's error path) only loses
+        this one. Raises when the product isn't created, with the session
+        usable for the next product.
+        """
+        savepoint = self._db.begin_nested()
+        try:
+            created = self.create_product(product_data, **kwargs)
+            if savepoint.is_active:
+                savepoint.commit()
+            else:
+                # Deactivated by a failed flush a helper swallowed, or ended by
+                # a commit or a session-wide rollback inside (nothing to undo)
+                self._end_savepoint(savepoint)
+                if not self._product_row_exists(created.id):
+                    # Writes made after that rollback are in a new transaction
+                    # holding only this product's work: drop them too
+                    self._db.rollback()
+                    raise RuntimeError(
+                        f"Product {created.id} was rolled back while it was imported"
+                    )
+            self._db.commit()
+            return created
+        except Exception:
+            already_ended = self._end_savepoint(savepoint)
+            if already_ended or not self._db.is_active:
+                # e.g. the commit failed, or create_product kept writing after a
+                # session-wide rollback a helper swallowed: only this product's
+                # work is uncommitted
+                self._db.rollback()
+            raise
+
+    @staticmethod
+    def _end_savepoint(savepoint) -> bool:
+        """Roll back a savepoint that is still open, also when a failed flush
+        deactivated it (``is_active`` is then False, but it needs a rollback).
+        Returns True when it had already ended."""
+        try:
+            savepoint.rollback()
+        except ResourceClosedError:
+            return True  # already ended by a commit or a session-wide rollback
+        return False
+
+    def _product_row_exists(self, product_id: str) -> bool:
+        """Whether the product's row is in the database (not just in the session)."""
+        from src.db_models.data_products import DataProductDb
+        return self._db.query(DataProductDb.id).filter(
+            DataProductDb.id == product_id).first() is not None
+
     # --- Tag integration helpers ---
 
-    def _assign_tags_to_product(self, product_id: str, tags_data: List[Dict[str, Any]]) -> None:
-        """Helper to assign tags to an ODPS data product."""
+    def _ensure_default_tag_namespace(self, parsed_files, user: Optional[str]) -> None:
+        """Create the default tag namespace before an import's products are, if
+        one of them has tags: creating it commits, which would end the
+        savepoint of the product being imported."""
+        if not self._tags_manager:
+            return
+        if not any(
+            isinstance(entity, dict) and entity.get('tags')
+            for _filename, entities, _error in parsed_files for entity in entities or []
+        ):
+            return
+        try:
+            self._tags_manager.get_or_create_default_namespace(self._db, user_email=user)
+        except Exception as e:
+            # The tags of the products then fail on their own, as before
+            self._db.rollback()
+            logger.warning(f"Could not create the default tag namespace for the import: {e}")
+
+    def _assign_tags_to_product(
+        self, product_id: str, tags_data: List[Dict[str, Any]], commit: bool = True,
+    ) -> None:
+        """Helper to assign tags to an ODPS data product.
+
+        With ``commit=False`` (a batch import) the tags are only flushed, in a
+        savepoint, so a failure is rolled back without aborting the import's
+        transaction (Postgres).
+        """
         if not self._tags_manager:
             logger.warning("TagsManager not available, cannot assign tags")
             return
@@ -3003,13 +3599,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 logger.debug(f"No valid tags to assign to ODPS product {product_id}")
                 return
 
-            self._tags_manager.set_tags_for_entity(
-                db=self._db,
-                entity_id=product_id,
-                entity_type="data_product",
-                tags=assigned_tags,
-                user_email="system"
-            )
+            if commit:
+                self._tags_manager.set_tags_for_entity(
+                    db=self._db,
+                    entity_id=product_id,
+                    entity_type="data_product",
+                    tags=assigned_tags,
+                    user_email="system"
+                )
+            else:
+                with self._db.begin_nested():
+                    self._tags_manager.set_tags_for_entity(
+                        db=self._db, entity_id=product_id, entity_type="data_product",
+                        tags=assigned_tags, user_email="system", commit=False,
+                    )
             logger.debug(f"Successfully assigned {len(assigned_tags)} tags to ODPS product {product_id}")
 
         except Exception as e:
@@ -3190,7 +3793,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         contract_id: str,
         product_name: str,
         version: str,
-        output_port_name: Optional[str] = None
+        output_port_name: Optional[str] = None,
+        user_email: Optional[str] = None,
     ) -> DataProductApi:
         """
         Creates a new ODPS v1.0.0 Data Product from an existing Data Contract.
@@ -3203,6 +3807,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_name: Name for the new data product
             version: Version string for the product
             output_port_name: Optional name for the output port
+            user_email: Who the ``on_create`` workflows run for (``create_product``)
 
         Returns:
             Created DataProduct API model
@@ -3220,7 +3825,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise ValueError(f"Data Contract with ID {contract_id} not found")
 
         # Validate contract status
-        valid_statuses = ['active', 'approved', 'certified']
+        valid_statuses = ['active', 'approved']
         if contract_db.status and contract_db.status.lower() not in valid_statuses:
             raise ValueError(
                 f"Cannot create product from contract in status '{contract_db.status}'. "
@@ -3270,7 +3875,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
 
         # Create the product
-        created_product = self.create_product(product_data)
+        created_product = self.create_product(product_data, workflow_user=user_email)
         logger.info(f"Successfully created ODPS Data Product {product_id} from contract {contract_id}")
         return created_product
 
@@ -3374,7 +3979,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     "name": asset.name,
                     "description": asset.description,
                     "status": asset.status,
-                    "properties": asset.properties or {},
+                    "properties": public_properties(asset.properties) or {},
                     "tags": asset.tags or [],
                     "created_at": asset.created_at.isoformat() if asset.created_at else None,
                 })
@@ -3425,7 +4030,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 "name": ds_asset.name,
                 "description": ds_asset.description,
                 "status": ds_asset.status,
-                "properties": ds_asset.properties or {},
+                "properties": public_properties(ds_asset.properties) or {},
                 "tables": [],
                 "views": [],
                 "contract": None,
@@ -3454,7 +4059,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     "name": child_asset.name,
                     "location": child_asset.location,
                     "status": child_asset.status,
-                    "properties": child_asset.properties or {},
+                    "properties": public_properties(child_asset.properties) or {},
                     "columns": [],
                 }
 
@@ -3470,7 +4075,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         child_entry["columns"].append({
                             "id": str(col_asset.id),
                             "name": col_asset.name,
-                            "properties": col_asset.properties or {},
+                            "properties": public_properties(col_asset.properties) or {},
                         })
 
                 if child_rel.relationship_type == "hasTable":
@@ -3586,7 +4191,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 {k: v for k, v in {
                     "name": p.name, "version": p.version,
                     "contractId": p.contractId,
-                    "status": p.status,
+                    # ODPS has no port status: carried as a custom property.
+                    "customProperties": (
+                        [{"property": ONTOS_PORT_STATUS_PROPERTY, "value": p.status}]
+                        if p.status else None
+                    ),
                 }.items() if v}
                 for p in product.outputPorts
             ]
@@ -3633,6 +4242,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
         # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
         _upsert_custom_property(odps, ONTOS_ENTITY_ID_PROPERTY, product.id)
+        for prop, value in lifecycle_custom_properties(product, 'data_product').items():
+            _upsert_custom_property(odps, prop, value)
 
         if product.authoritativeDefinitions:
             odps["authoritativeDefinitions"] = [
@@ -3965,11 +4576,27 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError(f"Product {product_id} not found")
 
             # Check if product is in a subscribable status
-            subscribable_statuses = ['active', 'certified']
+            subscribable_statuses = ['active']
             if product.status and product.status.lower() not in subscribable_statuses:
-                raise ValueError(
-                    f"Cannot subscribe to product in status '{product.status}'. "
-                    f"Product must be in one of: {', '.join(subscribable_statuses)}"
+                # Try to get replacement product info if available (from #1042)
+                replacement_id = None
+                replacement_name = None
+                if hasattr(product, 'replacement_product_id'):
+                    replacement_id = product.replacement_product_id
+                    # Try to get replacement product name
+                    if replacement_id:
+                        try:
+                            replacement = self.get_product(replacement_id)
+                            if replacement:
+                                replacement_name = replacement.name
+                        except Exception:
+                            # If we can't get replacement, continue without it
+                            pass
+                raise ProductNotSubscribableError(
+                    status=product.status,
+                    product_name=product.name,
+                    replacement_product_id=replacement_id,
+                    replacement_product_name=replacement_name,
                 )
 
             # Validate on_behalf_of principal exists in workspace SCIM (groups,
@@ -4247,7 +4874,18 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 logger.info(f"User {subscriber_email} unsubscribed from product {product_id}")
             else:
                 logger.info(f"User {subscriber_email} was not subscribed to product {product_id}")
-            
+
+            # The on_unsubscribe workflows (fired whether a subscription was removed)
+            from src.common.workflow_triggers import fire_trigger_safe
+            from src.models.process_workflows import EntityType as WFEntityType
+            fire_trigger_safe(
+                db_session, "on_unsubscribe",
+                entity_type=WFEntityType.SUBSCRIPTION,
+                entity_id=product_id,
+                entity_name=product_id,
+                entity_data={"product_id": product_id, "subscriber_email": subscriber_email},
+                user_email=subscriber_email,
+            )
             return SubscriptionResponse(subscribed=False, subscription=None)
             
         except SQLAlchemyError as e:
@@ -4291,7 +4929,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         product_id: str,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         db: Optional[Session] = None
     ) -> SubscribersListResponse:
         """
@@ -4340,7 +4978,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         subscriber_email: str,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         db: Optional[Session] = None
     ) -> List[DataProductApi]:
         """
@@ -4369,7 +5007,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         
         # Fetch the actual products with pagination
         products = []
-        for pid in product_ids[skip:skip + limit]:
+        for pid in product_ids[skip:skip + limit if limit is not None else None]:
             product = self.get_product(pid)
             if product:
                 products.append(product)
@@ -4391,40 +5029,46 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         description: str,
         notification_type: str = "INFO",
         link: Optional[str] = None,
-        db: Optional[Session] = None
+        data: Optional[Dict[str, Any]] = None,
+        db: Optional[Session] = None,
+        subscriber_emails: Optional[List[str]] = None,
     ) -> int:
         """
         Send a notification to all subscribers of a product.
-        
+
         Args:
             product_id: ID of the product
             title: Notification title
             description: Notification description
             notification_type: Type of notification (INFO, WARNING, ACTION_REQUIRED)
             link: Optional link to include
+            data: Optional additional data including i18n keys
             db: Optional database session
-            
+            subscriber_emails: Recipients read beforehand (the deletion notice
+                reads them before the delete cascades the subscription rows);
+                when omitted they are read from the subscriptions now
+
         Returns:
             Number of notifications sent
         """
         if not self._notifications_manager:
             logger.warning("NotificationsManager not available, cannot notify subscribers")
             return 0
-        
+
         db_session = db if db is not None else self._db
-        
-        # Get all subscriber emails
-        subscriber_emails = subscription_repo.get_subscriber_emails_for_product(
-            db_session,
-            product_id=product_id
-        )
-        
+
+        if subscriber_emails is None:
+            subscriber_emails = subscription_repo.get_subscriber_emails_for_product(
+                db_session,
+                product_id=product_id
+            )
+
         if not subscriber_emails:
             logger.debug(f"No subscribers to notify for product {product_id}")
             return 0
-        
+
         from src.models.notifications import NotificationType, Notification
-        
+
         # Map string to enum
         type_map = {
             "INFO": NotificationType.INFO,
@@ -4434,7 +5078,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             "ERROR": NotificationType.ERROR
         }
         notif_type = type_map.get(notification_type.upper(), NotificationType.INFO)
-        
+
         notifications_sent = 0
         for email in subscriber_emails:
             try:
@@ -4446,7 +5090,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     description=description,
                     recipient=email,
                     link=link or f"/data-products/{product_id}",
-                    can_delete=True
+                    can_delete=True,
+                    data=data
                 )
                 self._notifications_manager.create_notification(
                     notification=notification,
@@ -4455,9 +5100,137 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 notifications_sent += 1
             except Exception as e:
                 logger.error(f"Failed to send notification to {email}: {e}")
-        
+
         logger.info(f"Sent {notifications_sent} notifications for product {product_id}")
         return notifications_sent
+
+    def _collect_deletion_notice(
+        self,
+        product_id: str,
+        product_name: Optional[str],
+        deleted_by: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Read what the deletion notice needs while the product still exists.
+
+        The delete cascades the subscription rows and removes the product, so
+        the recipients, the name and the replacement (from #1042) are read
+        before it. Returns None when there is nobody to notify or the read
+        fails (a failed read never blocks the delete).
+
+        Args:
+            product_id: ID of the product
+            product_name: Name of the product
+            deleted_by: Username or email of who deletes it
+        """
+        try:
+            subscriber_emails = subscription_repo.get_subscriber_emails_for_product(
+                self._db, product_id=product_id
+            )
+            if not subscriber_emails:
+                return None
+
+            # Get replacement info if available
+            product = self.get_product(product_id) if product_id else None
+            replacement_id = None
+            replacement_name = None
+
+            if product:
+                if hasattr(product, 'replacement_product_id') and product.replacement_product_id:
+                    replacement_id = product.replacement_product_id
+                    try:
+                        replacement = self.get_product(replacement_id)
+                        if replacement:
+                            replacement_name = replacement.name
+                    except Exception:
+                        pass
+
+            return {
+                'product_id': product_id,
+                'product_name': product_name,
+                'deleted_by': deleted_by,
+                'subscriber_emails': subscriber_emails,
+                'replacement_id': replacement_id,
+                'replacement_name': replacement_name,
+            }
+        except Exception as e:
+            # Log but don't raise - notification failure shouldn't block deletion
+            logger.error("Failed to read subscribers of product %s before deletion: %s",
+                         product_id, e)
+            return None
+
+    def _notify_subscribers_on_delete(
+        self,
+        product_id: str,
+        product_name: Optional[str],
+        subscriber_emails: List[str],
+        deleted_by: Optional[str] = None,
+        replacement_id: Optional[str] = None,
+        replacement_name: Optional[str] = None,
+    ) -> None:
+        """
+        Notify the subscribers of a deleted product.
+
+        The notification includes who deleted it, when it happened, and the product
+        name. If the product has a replacement (from #1042), that info is included.
+
+        Called only AFTER the deletion is committed, so a failed delete notifies
+        nobody; the recipients come from ``_collect_deletion_notice`` (read before
+        the delete cascaded the subscription rows).
+
+        Args:
+            product_id: ID of the product
+            product_name: Name of the product
+            subscriber_emails: Recipients read before the delete
+            deleted_by: Username or email of who deleted it
+            replacement_id: Replacement product id, if any
+            replacement_name: Replacement product name, if any
+        """
+        try:
+            # Prepare i18n data
+            deletion_time = datetime.utcnow().isoformat()
+            i18n_params = {
+                'productName': product_name or product_id,
+                'deletedAt': deletion_time,
+            }
+            if deleted_by:
+                i18n_params['deletedBy'] = deleted_by
+            if replacement_id:
+                i18n_params['replacementProductId'] = replacement_id
+            if replacement_name:
+                i18n_params['replacementProductName'] = replacement_name
+
+            # Create i18n data
+            i18n_data = notification_i18n_data(
+                title_key='notifications:lifecycle.deletion.title',
+                description_key='notifications:lifecycle.deletion.description',
+                **i18n_params
+            )
+
+            # Send notification
+            count = self.notify_subscribers(
+                product_id=product_id,
+                title=f"Product '{product_name or product_id}' has been deleted",
+                description=(
+                    f"The data product '{product_name or product_id}' has been deleted "
+                    f"{'by ' + deleted_by if deleted_by else 'recently'}."
+                ),
+                notification_type='ACTION_REQUIRED',
+                link="/data-products",
+                data=i18n_data,
+                subscriber_emails=subscriber_emails,
+            )
+            # The delete is already committed: commit the notices on their own.
+            self._db.commit()
+            logger.info("Notified %s subscribers about product %s deletion", count, product_id)
+        except Exception as e:
+            # Log but don't raise - notification failure shouldn't block deletion
+            logger.error("Failed to notify subscribers of product %s deletion: %s",
+                         product_id, e)
+            try:
+                self._db.rollback()
+            except Exception:
+                pass
 
     def _log_subscription_change(
         self,
@@ -4511,67 +5284,108 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     ) -> None:
         """
         Notify subscribers when a product's status changes to a notable state.
-        
+
         Subscribers are notified for:
         - Deprecation (deprecated status)
         - Retirement (retired status)
         - Activation (active status from non-active)
-        - New certification (certified status)
-        
+
+        Notifications include i18n keys so each subscriber sees their language.
+        Deprecation and retirement notifications include reason, sunset date, and
+        replacement product info when available (from #1042).
+
         Args:
             product_id: ID of the product
             product_name: Name of the product
             old_status: Previous status
             new_status: New status
         """
-        # Define which status changes warrant notifications
+        # Define which status changes warrant notifications (per #998 PRD)
+        # Deprecation, retirement and activation notify subscribers; certification
+        # isn't a status (#1125), so a status change never reaches it
         notification_configs = {
             'deprecated': {
                 'title': f"Product '{product_name}' has been deprecated",
                 'description': (
-                    f"The data product '{product_name}' has been marked as deprecated. "
-                    "Please plan to migrate to an alternative product or contact the owner for more information."
+                    "The data product has been marked as deprecated. "
+                    "Please plan to migrate to an alternative or contact the owner for information."
                 ),
+                'title_key': 'notifications:lifecycle.deprecation.title',
+                'description_key': 'notifications:lifecycle.deprecation.description',
                 'notification_type': 'WARNING'
             },
             'retired': {
                 'title': f"Product '{product_name}' has been retired",
                 'description': (
-                    f"The data product '{product_name}' has been retired and is no longer available. "
+                    "The data product has been retired and is no longer available. "
                     "If you were using this product, please migrate to an alternative immediately."
                 ),
+                'title_key': 'notifications:lifecycle.retirement.title',
+                'description_key': 'notifications:lifecycle.retirement.description',
                 'notification_type': 'ACTION_REQUIRED'
             },
             'active': {
                 'title': f"Product '{product_name}' is now active",
                 'description': (
-                    f"The data product '{product_name}' has been activated and is now available for use."
+                    "The data product has been activated and is now available for use."
                 ),
+                'title_key': 'notifications:lifecycle.activation.title',
+                'description_key': 'notifications:lifecycle.activation.description',
                 'notification_type': 'INFO'
             },
             'certified': {
                 'title': f"Product '{product_name}' has been certified",
                 'description': (
-                    f"The data product '{product_name}' has achieved certified status, "
+                    "The data product has achieved certified status, "
                     "indicating it meets all quality and compliance requirements."
                 ),
+                'title_key': 'notifications:lifecycle.certification.title',
+                'description_key': 'notifications:lifecycle.certification.description',
                 'notification_type': 'SUCCESS'
             }
         }
-        
+
         # Check if this status change warrants notification
         config = notification_configs.get(new_status)
         if not config:
             logger.debug(f"No notification needed for status change to {new_status}")
             return
-        
+
         try:
+            # Prepare i18n data with product name and any lifecycle fields
+            i18n_params = {'productName': product_name}
+
+            # Add deprecation fields if available (from #1042)
+            product = self.get_product(product_id)
+            if product:
+                if hasattr(product, 'deprecation_reason') and product.deprecation_reason:
+                    i18n_params['reason'] = product.deprecation_reason
+                if hasattr(product, 'sunset_date') and product.sunset_date:
+                    i18n_params['sunsetDate'] = str(product.sunset_date)
+                if hasattr(product, 'replacement_product_id') and product.replacement_product_id:
+                    i18n_params['replacementProductId'] = product.replacement_product_id
+                    # Try to get replacement name
+                    try:
+                        replacement = self.get_product(product.replacement_product_id)
+                        if replacement:
+                            i18n_params['replacementProductName'] = replacement.name
+                    except Exception:
+                        pass
+
+            # Create i18n data
+            i18n_data = notification_i18n_data(
+                title_key=config['title_key'],
+                description_key=config['description_key'],
+                **i18n_params
+            )
+
             count = self.notify_subscribers(
                 product_id=product_id,
                 title=config['title'],
                 description=config['description'],
                 notification_type=config['notification_type'],
-                link=f"/data-products/{product_id}"
+                link=f"/data-products/{product_id}",
+                data=i18n_data
             )
             logger.info(
                 f"Notified {count} subscribers about product {product_id} status change "

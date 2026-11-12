@@ -149,6 +149,118 @@
       "relationships": "Relaties",
       "lineage": "Lineage",
       "impact": "Impactanalyse"
+    },
+    "metricView": {
+      "title": "Metric view",
+      "loading": "Metric view laden",
+      "loadError": "De definitie van de metric view kon niet worden geladen.",
+      "userTokenRequired": "Deze metric view wordt met uw eigen toegang uit Unity Catalog gelezen, en uw Databricks-aanmelding is in deze sessie niet beschikbaar.",
+      "state": {
+        "drift": {
+          "label": "Definitie",
+          "in_sync": "Komt overeen met de baseline",
+          "drifted": "Gewijzigd sinds de baseline",
+          "unknown": "Niet vergeleken",
+          "driftedHint": "De definitie in Unity Catalog wijkt af van de baseline in Ontos. Ontos wijzigt haar niet.",
+          "unknownHint": "De definitie kon niet met de baseline worden vergeleken."
+        },
+        "baseline": {
+          "recorded": "Baseline vastgelegd op {{date}} uit de eerste gelezen definitie; er is nog geen wijziging goedgekeurd.",
+          "approved": "Baseline goedgekeurd op {{date}}.",
+          "none": "Nog geen baseline.",
+          "digest": "digest {{digest}}"
+        },
+        "lastChecked": "Gecontroleerd op {{date}}",
+        "refresh": {
+          "label": "Vernieuwing",
+          "succeeded": "Geslaagd",
+          "failed": "Mislukt",
+          "running": "Bezig",
+          "canceled": "Geannuleerd",
+          "unknown": "Onbekend",
+          "lastStarted": "Laatste vernieuwing gestart op {{date}}",
+          "schedule": "Planning: {{schedule}}",
+          "noSchedule": "Geen planning: vernieuwingen worden handmatig gestart.",
+          "openPipeline": "Pipeline openen",
+          "failedTitle": "De laatste vernieuwing is mislukt",
+          "failedHint": "Bekijk de pipeline voor de oorzaak.",
+          "notAvailable": "De vernieuwingsstatus kon niet worden gelezen."
+        }
+      },
+      "changeRequests": {
+        "title": "Wijzigingsverzoeken",
+        "propose": "Wijziging voorstellen",
+        "empty": "Nog geen wijzigingsverzoeken.",
+        "loadError": "De wijzigingsverzoeken konden niet worden geladen.",
+        "requestedBy": "Aangevraagd door {{user}} op {{date}}",
+        "decidedBy": "Besloten door {{user}} op {{date}}",
+        "inReview": "Wacht op goedkeuring: de goedkeurders zijn op de hoogte gebracht.",
+        "delivered": "Geleverd ({{modes}}). Wordt de baseline zodra Unity Catalog deze definitie heeft.",
+        "applied": "Toegepast in Unity Catalog op {{date}}: deze definitie is nu de baseline.",
+        "statement": "Uit te voeren statement",
+        "submit": "Ter beoordeling indienen",
+        "cancel": "Verzoek annuleren",
+        "status": {
+          "draft": "Concept",
+          "in_review": "In beoordeling",
+          "approved": "Goedgekeurd",
+          "rejected": "Afgewezen",
+          "delivered": "Geleverd",
+          "failed": "Levering mislukt",
+          "cancelled": "Geannuleerd"
+        },
+        "deliveryModes": {
+          "indirect": "bestanden in Git",
+          "manual": "melding aan de eigenaren"
+        },
+        "securedKinds": {
+          "row_filter": "rijfilter",
+          "column_mask": "kolommasker",
+          "abac_policy": "ABAC-beleid"
+        },
+        "dialog": {
+          "title": "Een wijziging van de definitie voorstellen",
+          "description": "Bewerk de YAML-definitie van de metric view. De wijziging wordt beoordeeld en goedgekeurd voordat ze wordt geleverd; Ontos past ze niet toe in Unity Catalog.",
+          "definition": "YAML-definitie",
+          "justification": "Motivering",
+          "justificationPlaceholder": "Waarom is deze wijziging nodig?",
+          "saveDraft": "Opslaan als concept",
+          "saveAndSubmit": "Opslaan en ter beoordeling indienen"
+        },
+        "errors": {
+          "generic": "De actie is mislukt."
+        },
+        "codes": {
+          "metric_view_definition_invalid_yaml": "De YAML is niet geldig (regel {{line}}, kolom {{column}}).",
+          "metric_view_definition_invalid": "De definitie is geen geldige metric-view-definitie.",
+          "metric_view_definition_source_missing": "De definitie heeft geen source.",
+          "metric_view_definition_dollar_quote": "De definitie mag geen $$ bevatten: ze wordt tussen $$ geleverd.",
+          "metric_view_duplicate_field": "De veldnaam {{field}} wordt meer dan eens gebruikt.",
+          "metric_view_definition_unchanged": "De voorgestelde definitie is gelijk aan de huidige.",
+          "metric_view_base_unreadable": "De huidige definitie kan niet worden gelezen, dus er kan geen wijziging op worden voorgesteld.",
+          "metric_view_base_stale": "De metric view is in Unity Catalog gewijzigd sinds dit concept is geschreven. Schrijf een nieuw concept.",
+          "metric_view_owner_changed": "De eigenaar van deze gematerialiseerde metric view is gewijzigd sinds het concept is geschreven. Schrijf een nieuw concept.",
+          "metric_view_materialized_group_owner": "Een gematerialiseerde metric view kan geen groep als eigenaar hebben ({{owner}}).",
+          "metric_view_materialized_source_secured": "Een gematerialiseerde metric view kan de source {{source}} niet gebruiken: die heeft een {{kind}}.",
+          "metric_view_change_request_not_found": "Het wijzigingsverzoek is niet gevonden.",
+          "metric_view_change_request_not_requester": "Alleen de aanvrager kan dit doen.",
+          "metric_view_change_request_not_draft": "Alleen een concept kan worden ingediend.",
+          "metric_view_change_request_not_cancellable": "Dit wijzigingsverzoek kan niet meer worden geannuleerd.",
+          "metric_view_change_no_approval": "Geen actieve workflow vraagt om goedkeuring van deze wijziging, dus die blijft een concept. Een beheerder kan er een activeren in Workflows.",
+          "metric_view_not_found": "De metric view is niet gevonden in Unity Catalog, of de toegang is geweigerd.",
+          "user_token_required": "Voor het lezen van Unity Catalog is uw Databricks-aanmelding nodig.",
+          "user_client_unavailable": "Uw Databricks-verbinding kon niet worden gemaakt.",
+          "own_change_request_approval": "De aanvrager kan zijn eigen wijzigingsverzoek niet goedkeuren.",
+          "metric_view_delivery_git_unavailable": "De Git-repository voor indirecte levering is niet beschikbaar.",
+          "metric_view_delivery_write_failed": "De definitie kon niet naar de Git-repository worden geschreven.",
+          "metric_view_delivery_restore_failed": "De definitie kon niet naar de Git-repository worden geschreven, en deze bestanden konden niet worden hersteld: {{files}}.",
+          "metric_view_delivery_notification_failed": "De eigenaren konden niet op de hoogte worden gebracht.",
+          "metric_view_delivery_no_recipient": "Niemand kon worden gevraagd het statement uit te voeren.",
+          "metric_view_delivery_failed": "De wijziging kon niet worden geleverd.",
+          "metric_view_linked_field_removed": "Het veld {{field}} heeft conceptkoppelingen ({{links}}) en wordt verwijderd.",
+          "metric_view_source_not_checked": "De source {{source}} kon niet worden gecontroleerd op rijfilters, kolommaskers en ABAC-beleid."
+        }
+      }
     }
   },
   "explorer": {

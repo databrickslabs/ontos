@@ -163,15 +163,23 @@ class WorkspaceDeployer:
         if not package_dir.exists() or not package_dir.is_dir():
             raise ValueError(f"Python package directory does not exist: {package_dir}")
 
+        # The Alembic scripts next to the package go along, so a job can check
+        # that the database schema is the one this code reads (#813).
+        trees = [(package_dir, Path("src"))]
+        alembic_dir = package_dir.parent / "alembic"
+        if (alembic_dir / "versions").is_dir():
+            trees.append((alembic_dir, Path("alembic")))
+
         archive_buffer = BytesIO()
         with ZipFile(archive_buffer, "w", ZIP_DEFLATED) as archive:
-            for file_path in package_dir.rglob("*"):
-                if not file_path.is_file():
-                    continue
-                relative_path = file_path.relative_to(package_dir)
-                if "__pycache__" in relative_path.parts or file_path.suffix in {".pyc", ".pyo"}:
-                    continue
-                archive.write(file_path, Path("src") / relative_path)
+            for tree, prefix in trees:
+                for file_path in tree.rglob("*"):
+                    if not file_path.is_file():
+                        continue
+                    relative_path = file_path.relative_to(tree)
+                    if "__pycache__" in relative_path.parts or file_path.suffix in {".pyc", ".pyo"}:
+                        continue
+                    archive.write(file_path, prefix / relative_path)
         return archive_buffer.getvalue()
 
     def _upload_directory(self, local_dir: Path, workspace_path: str) -> None:

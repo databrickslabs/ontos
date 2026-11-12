@@ -231,5 +231,12 @@
     "inputPlaceholder": "{{shortName}}に何でも質問...",
     "messageSendFailed": "メッセージの送信に失敗しました",
     "resizeHandle": "Ask Ontos パネルのサイズを変更"
+  },
+  "chatErrors": {
+    "chat_validation_failed": "このリクエストのデータを処理できませんでした。質問を言い換えてください。詳細はサーバーログにあります（エラー ID {{errorId}}）。",
+    "chat_timeout": "リクエストがタイムアウトしました。より簡単な質問にするか、後でもう一度お試しください（エラー ID {{errorId}}）。",
+    "chat_connection_failed": "必要なサービスに接続できませんでした。しばらくしてからもう一度お試しください（エラー ID {{errorId}}）。",
+    "chat_failed": "リクエストの処理中にエラーが発生しました。質問を言い換えるか、もう一度お試しください。詳細はサーバーログにあります（エラー ID {{errorId}}）。",
+    "chat_empty_answer": "モデルからこのリクエストへの回答が返されませんでした。もう一度お試しいただくか、質問を言い換えてください（エラー ID {{errorId}}）。"
   }
 }

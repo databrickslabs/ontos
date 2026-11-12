@@ -41,7 +41,7 @@ from src.db_models.data_products import DataProductDb
 from src.db_models.projects import ProjectDb
 from src.db_models.settings import AppRoleDb
 from src.db_models.teams import TeamDb
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -69,6 +69,23 @@ def _count(db: Session, model_cls) -> int:
             "returning 0"
         )
         return 0
+
+
+def _count_published_products_among(db: Session, ids) -> int:
+    """``_count_published_products`` restricted to the given product ids."""
+    ids = list(ids)
+    if not ids:
+        return 0
+    return int(
+        db.query(func.count(DataProductDb.id))
+        .filter(
+            DataProductDb.id.in_(ids),
+            DataProductDb.publication_scope.isnot(None),
+            func.lower(DataProductDb.publication_scope) != "none",
+        )
+        .scalar()
+        or 0
+    )
 
 
 def _count_published_products(db: Session) -> int:
@@ -167,11 +184,33 @@ class GetAppStateTool(BaseTool):
         try:
             snapshot = get_adoption_snapshot(ctx.db)
         except Exception as e:
-            logger.error(f"[get_app_state] snapshot failed: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"failed to compute app-state snapshot: {type(e).__name__}: {e}",
+                **tool_failure("get_app_state", e),
             )
+
+        # The product and contract counts cover only what the caller may read
+        # (the read rules), so they don't reveal unreadable drafts and the
+        # published count never exceeds the total.
+        from src.tools import read_access
+
+        for key, kind in (("data_products_total", read_access.PRODUCT_TYPE),
+                          ("data_contracts_total", read_access.CONTRACT_TYPE)):
+            try:
+                ids = read_access.readable_ids(ctx, kind)
+            except Exception:
+                logger.warning("[get_app_state] read rule failed for %s; counting 0", kind,
+                               exc_info=True)
+                ids = set()
+            if ids is None:
+                continue
+            snapshot["counts"][key] = len(ids)
+            if kind == read_access.PRODUCT_TYPE:
+                published = _count_published_products_among(ctx.db, ids)
+                snapshot["counts"]["data_products_published"] = published
+                snapshot["adoption_mode"] = (
+                    ADOPTION_MODE_BLANK if published == 0 else ADOPTION_MODE_ACTIVE
+                )
 
         logger.info(
             f"[get_app_state] mode={snapshot['adoption_mode']} "

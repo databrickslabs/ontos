@@ -1,0 +1,42 @@
+{
+  "blocked": "Die Statusänderung von {{fromStatus}} zu {{toStatus}} wurde von einem Workflow blockiert: {{reasons}}",
+  "reasons": {
+    "waitingForApproval": "wartet auf Genehmigung ({{step}})",
+    "entityLoadFailed": "{{entityType}} {{entityId}} konnte zur Auswertung der Regel nicht geladen werden",
+    "entityNotFound": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden",
+    "whereEvaluationFailed": "die WHERE-Klausel der Richtlinie '{{policyName}}' konnte für {{entityType}} {{entityId}} nicht ausgewertet werden",
+    "validationFailed": "die Workflow-Validierung ist fehlgeschlagen",
+    "status": {
+      "failed": "fehlgeschlagen",
+      "cancelled": "abgebrochen",
+      "pending": "ausstehend",
+      "running": "läuft"
+    }
+  },
+  "requiresTransition": "Eine Bearbeitung kann den Status nicht von {{fromStatus}} zu {{toStatus}} ändern. Verwenden Sie Status ändern, das den Übergang prüft und die Statusänderungs-Workflows ausführt.",
+  "certifiedIsNotAStatus": "Zertifiziert ist kein Status: Die Zertifizierung wird mit Zertifizieren gesetzt, bei einer aktiven Entität.",
+  "invalidStatus": "{{status}} ist kein Lebenszyklus-Status. Verwenden Sie einen von: {{allowed}}.",
+  "gateError": "Die Statusänderung von {{fromStatus}} zu {{toStatus}} wurde abgelehnt: Das Workflow-Gate {{workflows}} konnte nicht ausgewertet werden. Bitten Sie einen Administrator, den Workflow zu prüfen.",
+  "gateErrorUnnamed": "Die Statusänderung von {{fromStatus}} zu {{toStatus}} wurde abgelehnt: Ein Workflow-Gate konnte nicht ausgewertet werden. Bitten Sie einen Administrator, den Workflow zu prüfen.",
+  "certifiedDeprecationRequiresApproval": "{{name}} ist zertifiziert und kann daher nur über eine genehmigte Statusänderungsanfrage als veraltet markiert werden. Beantragen Sie stattdessen die Statusänderung.",
+  "requestInstead": "Statusänderung beantragen",
+  "certifiedGuard": {
+    "title": "Schutz vor dem Veralten zertifizierter Einträge",
+    "description": "Ein zertifiziertes Datenprodukt oder ein zertifizierter Datenvertrag kann nur über eine genehmigte Statusänderungsanfrage als veraltet markiert werden. Der Schutz gilt überall, außer Sie schalten ihn unten ab.",
+    "hint": "Der Schutz gilt nicht für die hier aufgeführten Domänen, Datenprodukte und Datenverträge (eine Domäne umfasst ihre Produkte und Verträge): Ihre zertifizierten Einträge werden direkt als veraltet markiert. Jedes Überspringen wird protokolliert und auditiert.",
+    "saved": "Schutz vor dem Veralten zertifizierter Einträge gespeichert",
+    "saveFailed": "Der Schutz vor dem Veralten zertifizierter Einträge konnte nicht gespeichert werden",
+    "loadFailed": "Der Schutz vor dem Veralten zertifizierter Einträge konnte nicht geladen werden",
+    "notFound": "{{id}} existiert nicht mehr. Entfernen Sie den Eintrag und speichern Sie erneut.",
+    "missingOnSave_one": "Der Schutz ist für {{count}} Eintrag abgeschaltet, der nicht mehr existiert. Entfernen Sie ihn und speichern Sie erneut.",
+    "missingOnSave_other": "Der Schutz ist für {{count}} Einträge abgeschaltet, die nicht mehr existieren. Entfernen Sie sie und speichern Sie erneut.",
+    "readOnly": "Nur Admins der Zertifizierungsstufen können den Schutz ändern."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} ist zertifiziert: Nur ein Admin dieser Funktion kann das Veralten genehmigen.",
+    "no_pending_request": "{{name}} ist zertifiziert: Die Genehmigung braucht eine offene Statusänderungsanfrage für diese Änderung, und es gibt keine.",
+    "target_mismatch": "{{name}} ist zertifiziert: Die offene Anfrage verlangt einen anderen Status, daher gilt diese Genehmigung nicht für sie.",
+    "self_approval": "{{name}} ist zertifiziert: Sie haben diese Anfrage gestellt, daher muss jemand anderes sie genehmigen.",
+    "no_approver": "{{name}} ist zertifiziert: Das Veralten braucht die Entscheidung eines Genehmigenden der Anfrage."
+  }
+}

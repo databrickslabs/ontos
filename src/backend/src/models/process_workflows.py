@@ -4,10 +4,11 @@ Pydantic models for process workflows.
 Defines the API request/response schemas for workflow definitions, steps, and executions.
 """
 
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 import uuid
 
 from src.common.logging import get_logger
@@ -33,6 +34,8 @@ class TriggerType(str, Enum):
     ON_REQUEST_PUBLISH = "on_request_publish"  # Marketplace publication requested
     ON_REQUEST_DEPLOY = "on_request_deploy"  # Deployment to Unity Catalog requested (contracts)
     ON_REQUEST_STATUS_CHANGE = "on_request_status_change"  # When status change is requested
+    # A metric view definition change request was submitted (#1124)
+    ON_REQUEST_DEFINITION_CHANGE = "on_request_definition_change"
     
     # Job lifecycle triggers
     ON_JOB_SUCCESS = "on_job_success"  # When a background job completes successfully
@@ -91,6 +94,10 @@ class EntityType(str, Enum):
     JOB = "job"  # For background job lifecycle workflows
     SUBSCRIPTION = "subscription"  # For subscription events
     USER = "user"  # The user themselves — for on_first_access disclaimer/ToU workflows
+    ONTOLOGY_CONCEPT = "ontology_concept"  # A SKOS concept (RDF triples keyed by IRI)
+    ONTOLOGY_COLLECTION = "ontology_collection"  # A concept scheme / collection
+    CONCEPT_CHANGESET = "concept_changeset"  # A bulk RDF-upload changeset awaiting approval
+    METRIC_VIEW = "metric_view"  # The asset of a Unity Catalog metric view (#1124)
 
 
 class ScopeType(str, Enum):
@@ -134,6 +141,30 @@ class StepType(str, Enum):
     ON_BEHALF_OF = "on_behalf_of"  # Approval workflow: capture self/group/SP principal at wizard start ()
 
 
+# Steps that end a process workflow run with their own outcome. They have no next
+# step: a stored on_pass / on_fail (older designers saved one, the canvas never
+# drew it) is ignored when the workflow runs and dropped when it is saved.
+# Approval (wizard) workflows are not covered: their runtime treats a Pass step
+# with a link as a step it passes through.
+TERMINAL_STEP_TYPES = frozenset({StepType.PASS.value, StepType.FAIL.value})
+
+
+def is_terminal_step_type(step_type: Any) -> bool:
+    """Whether a step of this type (enum or stored string) ends the run."""
+    return getattr(step_type, 'value', step_type) in TERMINAL_STEP_TYPES
+
+
+def is_conditional_step_type(step_type: Any) -> bool:
+    """Whether a step of this type (enum or stored string) is a conditional."""
+    return getattr(step_type, 'value', step_type) == StepType.CONDITIONAL.value
+
+
+def ends_process_run(workflow_type: Any, step_type: Any) -> bool:
+    """Whether a step of a workflow of this type ends the run, so its links are dropped."""
+    return (getattr(workflow_type, 'value', workflow_type) or WorkflowType.PROCESS.value) \
+        == WorkflowType.PROCESS.value and is_terminal_step_type(step_type)
+
+
 class ExecutionStatus(str, Enum):
     """Workflow execution status."""
     PENDING = "pending"
@@ -155,18 +186,72 @@ class StepExecutionStatus(str, Enum):
 
 # --- Trigger Configuration ---
 
+class GateErrorMode(str, Enum):
+    """What a ``before_status_change`` gate does when evaluating it raises."""
+    FAIL_OPEN = "fail_open"  # The transition proceeds (the error is logged and audited)
+    FAIL_CLOSED = "fail_closed"  # The transition is refused
+
+
+class GateExemptions(BaseModel):
+    """Entities a ``before_status_change`` gate is switched off for.
+
+    The gate is skipped for an entity listed here, and for a product or
+    contract assigned to one of the listed domains (any of its domains). An
+    exemption can't be overridden at a lower level: the lists only switch the
+    gate off.
+    """
+    domains: List[str] = Field(default_factory=list, description="Domain ids: the gate is off for their products and contracts")
+    data_products: List[str] = Field(default_factory=list, description="Data product ids the gate is off for")
+    data_contracts: List[str] = Field(default_factory=list, description="Data contract ids the gate is off for")
+
+    def is_empty(self) -> bool:
+        return not (self.domains or self.data_products or self.data_contracts)
+
+
 class WorkflowTrigger(BaseModel):
     """Trigger configuration for a workflow."""
     type: TriggerType = Field(..., description="Type of trigger")
     entity_types: List[EntityType] = Field(default_factory=list, description="Entity types that trigger this workflow")
-    
+    # Stored values that are no ``EntityType`` (a removed type such as ``dataset``). They
+    # match no event, are written back with ``entity_types`` (stored_config_json), and a
+    # save that still lists them is refused (``trigger_entity_type_unknown``).
+    unknown_entity_types: List[str] = Field(
+        default_factory=list,
+        description="Stored entity types this version doesn't know; they match no event",
+    )
+
     # For on_status_change
     from_status: Optional[str] = Field(None, description="Status to transition from (for status change triggers)")
     to_status: Optional[str] = Field(None, description="Status to transition to (for status change triggers)")
-    
+
     # For scheduled
     schedule: Optional[str] = Field(None, description="Cron expression for scheduled triggers")
-    
+
+    # For before_status_change
+    on_error: GateErrorMode = Field(
+        GateErrorMode.FAIL_OPEN,
+        description=(
+            "before_status_change only: what happens when evaluating this gate raises. "
+            "fail_open lets the transition proceed, fail_closed refuses it. "
+            "A gate that fails normally blocks in both modes."
+        ),
+    )
+    disabled_for: GateExemptions = Field(
+        default_factory=GateExemptions,
+        description=(
+            "before_status_change only: domains, data products and data contracts "
+            "this gate is switched off for. Skips are logged and audited."
+        ),
+    )
+
+    def stored_config_json(self) -> str:
+        """The trigger as stored: one ``entity_types`` list, unknown values included."""
+        data = self.model_dump(mode='json', exclude={'unknown_entity_types'})
+        data['entity_types'] = list(dict.fromkeys(
+            [*data['entity_types'], *self.unknown_entity_types]
+        ))
+        return json.dumps(data)
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -405,8 +490,8 @@ class NotificationStepConfig(BaseModel):
 class AssignTagStepConfig(BaseModel):
     """Configuration for tag assignment steps."""
     key: str = Field(..., description="Tag key to assign")
-    value: Optional[str] = Field(None, description="Static tag value")
-    value_source: Optional[str] = Field(None, description="Dynamic value source: 'current_user', 'project_name', etc.")
+    value: Optional[str] = Field(None, description="Static tag value. Without value and value_source the tag is assigned without a value, and a value the entity already has is kept.")
+    value_source: Optional[str] = Field(None, description="Dynamic value source: 'current_user', 'project_name', 'entity_name', 'timestamp'. Wins over value.")
     
     class Config:
         json_schema_extra = {
@@ -444,7 +529,7 @@ class ScriptStepConfig(BaseModel):
         json_schema_extra = {
             "example": {
                 "language": "python",
-                "code": "return {'status': 'ok'}",
+                "code": "result = {'passed': True, 'data': {'status': 'ok'}}",
                 "timeout_seconds": 30
             }
         }
@@ -618,6 +703,12 @@ class ProcessWorkflow(ProcessWorkflowBase):
     updated_at: Optional[datetime] = None
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
+    # Read only: stored trigger entity types that match no event (an unknown type, a
+    # pair no code fires). The workflow is kept as stored; saves don't send this.
+    trigger_warnings: List['WorkflowValidationIssue'] = Field(
+        default_factory=list,
+        description="Trigger entity types of the stored workflow that match no event",
+    )
 
     class Config:
         from_attributes = True
@@ -642,7 +733,11 @@ class TriggerContext(BaseModel):
 class WorkflowStepExecutionResult(BaseModel):
     """Result of a step execution."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    step_id: str
+    # The step's row id; None once the step was removed from the workflow
+    step_id: Optional[str] = None
+    # The step's step_id and name when it ran, kept if the step is removed
+    step_key: Optional[str] = None
+    step_name: Optional[str] = None
     status: StepExecutionStatus
     passed: Optional[bool] = None
     result_data: Optional[Dict[str, Any]] = None
@@ -675,6 +770,11 @@ class WorkflowExecution(WorkflowExecutionBase):
     success_count: int = Field(default=0)
     failure_count: int = Field(default=0)
     error_message: Optional[str] = None
+    error_code: Optional[str] = Field(
+        None,
+        description="Code of error_message when it is a failed step's coded error",
+    )
+    error_params: Optional[Dict[str, Any]] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     triggered_by: Optional[str] = None
@@ -817,9 +917,62 @@ class WorkflowExecutionListResponse(BaseModel):
     total: int
 
 
+class CodedMessage(str):
+    """An English validation message that also carries a code and params.
+
+    It is a ``str``, so lists of messages keep working; WorkflowValidationResult
+    turns the codes into ``issues``. A plain string gets the generic code
+    ``workflow_validation_error``.
+    """
+    code: str
+    params: Dict[str, Any]
+
+    def __new__(cls, message: str, code: str, **params: Any) -> 'CodedMessage':
+        obj = super().__new__(cls, message)
+        obj.code = code
+        obj.params = params
+        return obj
+
+
+class WorkflowValidationIssue(BaseModel):
+    """One validation error with a stable code and its parameters, for translation."""
+    code: str
+    message: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ``ProcessWorkflow.trigger_warnings`` refers to the issue model defined above
+ProcessWorkflow.model_rebuild()
+WorkflowListResponse.model_rebuild()
+
+
 class WorkflowValidationResult(BaseModel):
     """Result of workflow validation."""
     valid: bool
     errors: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+    # Same errors as ``errors``, with a code and parameters each.
+    issues: List[WorkflowValidationIssue] = Field(default_factory=list)
+    # Same warnings as ``warnings``, with a code and parameters each.
+    warning_issues: List[WorkflowValidationIssue] = Field(default_factory=list)
+
+    @staticmethod
+    def _coded(messages: Any, default_code: str) -> List[Dict[str, Any]]:
+        return [
+            {
+                'code': getattr(message, 'code', default_code),
+                'message': str(message),
+                'params': dict(getattr(message, 'params', {}) or {}),
+            }
+            for message in messages or []
+        ]
+
+    @model_validator(mode='before')
+    @classmethod
+    def _issues_from_errors(cls, data: Any) -> Any:
+        if isinstance(data, dict) and 'issues' not in data:
+            data = {**data, 'issues': cls._coded(data.get('errors'), 'workflow_validation_error')}
+        if isinstance(data, dict) and 'warning_issues' not in data:
+            data = {**data, 'warning_issues': cls._coded(data.get('warnings'), 'workflow_validation_warning')}
+        return data
 

@@ -13,6 +13,7 @@ import {
   Braces,
   Library,
   HardDrive,
+  BarChart3,
   X,
   Search,
   AlertCircle,
@@ -68,6 +69,7 @@ const nodeIconMap: Record<string, typeof Database> = {
   procedure: Braces,
   model: Box,
   volume: HardDrive,
+  metric: BarChart3,
 };
 
 function getNodeIcon(nodeType: string) {

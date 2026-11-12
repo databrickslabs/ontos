@@ -1,4 +1,5 @@
 // Corresponds to api/models/data_asset_reviews.py
+import type { EntitySemanticLink } from '@/types/semantic-link';
 
 // --- Enums --- //
 export enum ReviewRequestStatus {
@@ -56,6 +57,10 @@ export enum AssetType {
 
     // Authority Relation reviews (asset_fqn = authority-relation://{id})
     AUTHORITY_RELATION = "authority_relation",
+    // Knowledge system assets
+    KNOWLEDGE_CONCEPT = "knowledge_concept",
+    CONCEPT_CHANGESET = "concept_changeset",
+    KNOWLEDGE_COLLECTION = "knowledge_collection",
 
     // Generic/external
     EXTERNAL = "external",
@@ -129,6 +134,104 @@ export interface CatalogItem {
 
 // Type for Asset Definition (plain text)
 export type AssetDefinition = string;
+
+/** A dimension or measure of a Unity Catalog metric view. */
+export interface MetricViewField {
+    name: string;
+    expr?: string | null;
+    display_name?: string | null;
+    comment?: string | null;
+    /** A measure's window, only when its definition sets one */
+    window?: MetricViewWindow[];
+}
+
+/** One entry of a measure's `window`. */
+export interface MetricViewWindow {
+    order?: string | null;
+    range?: string | null;
+    semiadditive?: string | null;
+    offset?: string | number | null;
+}
+
+/** The definition a metric view's drift is checked against. */
+export interface MetricViewBaseline {
+    digest: string;
+    approved_at?: string | null; // null: recorded from the first definition read, not approved
+    request_id?: string | null;
+    recorded_at?: string | null;
+}
+
+export type MetricViewDriftState = 'in_sync' | 'drifted' | 'unknown';
+
+export interface MetricViewDrift {
+    state: MetricViewDriftState;
+    current_digest?: string | null; // null when the definition could not be parsed
+    last_checked_at?: string | null;
+}
+
+export type MetricViewRefreshStatus = 'succeeded' | 'failed' | 'running' | 'canceled' | 'unknown';
+
+/** The refresh state of a materialized metric view (its pipeline's latest update). */
+export interface MetricViewRefresh {
+    status: MetricViewRefreshStatus;
+    schedule?: string | null;
+    pipeline_id?: string | null;
+    pipeline_url?: string | null;
+    pipeline_state?: string | null;
+    health?: string | null;
+    latest_update_id?: string | null;
+    latest_update_state?: string | null;
+    latest_update_at?: string | null; // when the latest update started
+}
+
+/** The concept links of one dimension or measure (`uc_column`, `catalog.schema.view.field`). */
+export interface MetricViewFieldLinks {
+    name: string;
+    kind?: 'dimension' | 'measure' | null; // null: no longer in the definition
+    entity_id: string;
+    links: EntitySemanticLink[];
+}
+
+/** A metric view's concept links: the view's own (`uc_table`) and each field's. */
+export interface MetricViewLinks {
+    view_entity_id: string;
+    view_links: EntitySemanticLink[];
+    fields: MetricViewFieldLinks[];
+    removed_fields: MetricViewFieldLinks[]; // Fields with links, no longer in the definition
+}
+
+/**
+ * GET /api/data-asset-reviews/{id}/assets/{id}/metric-view and
+ * GET /api/assets/{id}/metric-view
+ */
+export interface MetricViewDefinition {
+    definition: string; // The metric view's YAML
+    metric_view: {
+        version?: string | null;
+        source?: string | null;
+        filter?: string | null;
+        joins: {
+            name?: string | null;
+            source?: string | null;
+            on?: string | null;
+            using?: string[] | null;
+            cardinality?: string | null; // only when the definition sets it
+        }[];
+        dimensions: MetricViewField[];
+        measures: MetricViewField[];
+        materialization?: {
+            schedule?: string | null;
+            mode?: string | null;
+            materialized_views: { name?: string | null; type?: string | null }[];
+        } | null;
+        parameters?: { name: string; data_type?: string | null; default?: unknown }[];
+    } | null; // null when the YAML could not be parsed
+    links?: MetricViewLinks | null;
+    // GET /api/assets/{id}/metric-view only
+    baseline?: MetricViewBaseline | null;
+    drift?: MetricViewDrift | null;
+    refresh?: MetricViewRefresh | null; // null when the view isn't materialized
+}
 
 // Type for Table Preview Data (reuse from Catalog Commander or define similarly)
 export interface TablePreview {

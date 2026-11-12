@@ -197,6 +197,7 @@ export const CollectionsTab: React.FC<CollectionsTabProps> = ({
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon">
+                <span className="sr-only">{t('common:actions.openMenu')}</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>

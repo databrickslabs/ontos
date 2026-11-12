@@ -63,6 +63,26 @@
     "previewFailed": "Voorbeeld mislukt",
     "importFailed": "Import mislukt",
     "importComplete": "Import voltooid",
-    "importCompleteSummary": "{{created}} aangemaakt, {{skipped}} overgeslagen, {{errors}} fouten"
+    "importCompleteSummary": "{{created}} aangemaakt, {{skipped}} overgeslagen, {{errors}} fouten",
+    "async": {
+      "started": "Import gestart",
+      "startedDescription": "Wordt op de achtergrond uitgevoerd. De voortgang verschijnt hier en in uw meldingen.",
+      "startFailed": "Kan de achtergrondimport niet starten",
+      "seeRunDetails": "Bekijk de details van de uitvoering.",
+      "progress": "{{processed}} van {{total}} verwerkt (aangemaakt: {{created}}, overgeslagen: {{skipped}})",
+      "progressWithErrors": "{{processed}} van {{total}} verwerkt (aangemaakt: {{created}}, overgeslagen: {{skipped}}, fouten: {{errors}})",
+      "starting": "Bezig met starten…",
+      "closeHint": "U kunt dit dialoogvenster sluiten. De import loopt door, en de voltooiing wordt gemeld in uw meldingen.",
+      "cancel": "Import annuleren",
+      "closeKeepRunning": "Sluiten (blijft lopen)",
+      "runInBackground": "Op de achtergrond uitvoeren",
+      "status": {
+        "pending": "In wachtrij",
+        "running": "Bezig",
+        "completed": "Voltooid",
+        "failed": "Mislukt",
+        "cancelled": "Geannuleerd"
+      }
+    }
   }
 }

@@ -146,6 +146,8 @@ def test_serverless_main_imports_backend_modules_from_deployed_archive(
         config=SimpleNamespace(host="https://serverless-workspace.databricks.com")
     )
     module_globals["create_engine_from_params"] = lambda **kwargs: object()
+    checked = []
+    module_globals["check_schema_revision"] = lambda engine, location: checked.append(location)
     module_globals["sessionmaker"] = lambda **kwargs: lambda: fake_session
     module_globals["load_policies"] = lambda *args, **kwargs: [
         {
@@ -171,8 +173,13 @@ def test_serverless_main_imports_backend_modules_from_deployed_archive(
         ],
     )
 
-    module_globals["main"]()
+    # The fake session has no policy, so the run errors and the job exits 1
+    with pytest.raises(SystemExit) as exit_info:
+        module_globals["main"]()
 
+    assert exit_info.value.code == 1
+    # The schema check uses the Alembic scripts shipped in the archive
+    assert checked == [extracted_path / "alembic"]
     assert sys.path[0] == str(extracted_path)
     assert str(archive_path) not in sys.path
     assert _EXPECTED_SRC_ROOT not in sys.path

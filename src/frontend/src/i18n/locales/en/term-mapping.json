@@ -17,6 +17,15 @@
     "noComment": "—",
     "suggestionsCount": "{{count}} suggestions"
   },
+  "runResult": {
+    "title": "Run complete",
+    "loading": "Gathering suggested matches…",
+    "found": "Found {{count}} suggested match(es) to review.",
+    "none": "No matches were found for this run. Nothing to review.",
+    "reviewMatches": "Review matches",
+    "requestReview": "Request review",
+    "thisRun": "this run"
+  },
   "detail": {
     "runLabel": "Run",
     "createdAt": "Created",

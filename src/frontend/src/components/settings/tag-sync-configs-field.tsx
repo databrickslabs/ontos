@@ -10,6 +10,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Info, AlertCircle } from 'lucide-react';
 import { TagSyncConfig } from '@/types/workflow-configurations';
+import {
+  LIFECYCLE_STATUS_MAPPING,
+  defaultLifecycleEntry,
+  findEntryIndex,
+  supportsLifecycleMapping,
+  upsertEntry,
+} from './tag-sync-configs';
 
 interface TagSyncConfigsFieldProps {
   value: TagSyncConfig[];
@@ -81,9 +88,9 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
     '{PRODUCT.STATUS}': t('settings:tags.syncConfigs.variables.productStatus'),
   };
 
-  // Ensure we have a config for each entity type
+  // Ensure we have a config for each entity type (the first entry without a mapping id)
   const getConfigForType = (entityType: string): TagSyncConfig => {
-    const existing = value.find(c => c.entity_type === entityType);
+    const existing = value[findEntryIndex(value, entityType)];
     if (existing) return existing;
 
     // Return default config based on entity type
@@ -116,16 +123,18 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
   };
 
   const updateConfig = (entityType: string, updates: Partial<TagSyncConfig>) => {
-    const newConfigs = [...value];
-    const index = newConfigs.findIndex(c => c.entity_type === entityType);
+    const index = findEntryIndex(value, entityType);
+    onChange(upsertEntry(value, index, getConfigForType(entityType), updates));
+  };
 
-    if (index >= 0) {
-      newConfigs[index] = { ...newConfigs[index], ...updates };
-    } else {
-      newConfigs.push({ ...getConfigForType(entityType), ...updates });
-    }
+  // The lifecycle status entry of a product or contract (mapping 'lifecycle_status')
+  const getLifecycleConfig = (entityType: string): TagSyncConfig =>
+    value[findEntryIndex(value, entityType, LIFECYCLE_STATUS_MAPPING)]
+    ?? defaultLifecycleEntry(entityType);
 
-    onChange(newConfigs);
+  const updateLifecycleConfig = (entityType: string, updates: Partial<TagSyncConfig>) => {
+    const index = findEntryIndex(value, entityType, LIFECYCLE_STATUS_MAPPING);
+    onChange(upsertEntry(value, index, defaultLifecycleEntry(entityType), updates));
   };
 
   // Render example tag key with current format
@@ -282,10 +291,79 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
                   </div>
                 </CardContent>
               </Card>
+              {supportsLifecycleMapping(entityType) && (
+                <LifecycleStatusCard
+                  entityType={entityType}
+                  config={getLifecycleConfig(entityType)}
+                  onChange={(updates) => updateLifecycleConfig(entityType, updates)}
+                />
+              )}
             </TabsContent>
           );
         })}
       </Tabs>
     </div>
+  );
+}
+
+interface LifecycleStatusCardProps {
+  entityType: string;
+  config: TagSyncConfig;
+  onChange: (updates: Partial<TagSyncConfig>) => void;
+}
+
+// The tag value is fixed to the status variable: only the key and the switch are edited.
+function LifecycleStatusCard({ entityType, config, onChange }: LifecycleStatusCardProps) {
+  const { t } = useTranslation(['settings']);
+  const keyError = config.enabled ? validateTagKey(config.tag_key_format, t) : null;
+  const description = entityType === 'data_product'
+    ? t('settings:tags.syncConfigs.lifecycle.descriptionProduct')
+    : t('settings:tags.syncConfigs.lifecycle.descriptionContract');
+
+  return (
+    <Card className="mt-4" data-testid={`${entityType}-lifecycle-card`}>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>{t('settings:tags.syncConfigs.lifecycle.title')}</span>
+          <div className="flex items-center gap-2">
+            <Label htmlFor={`${entityType}-lifecycle-enabled`}>{t('settings:tags.enable')}</Label>
+            <Switch
+              id={`${entityType}-lifecycle-enabled`}
+              checked={config.enabled}
+              onCheckedChange={(enabled) => onChange({ enabled })}
+            />
+          </div>
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor={`${entityType}-lifecycle-key-format`}>
+            {t('settings:tags.syncConfigs.keyFormatLabel')}
+            <span className="text-red-500 ml-1">*</span>
+          </Label>
+          <Input
+            id={`${entityType}-lifecycle-key-format`}
+            value={config.tag_key_format}
+            onChange={(e) => onChange({ tag_key_format: e.target.value })}
+            className="font-mono text-sm"
+            disabled={!config.enabled}
+          />
+          {keyError && (
+            <div className="text-xs text-red-500 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {keyError}
+            </div>
+          )}
+        </div>
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <div>
+            {t('settings:tags.syncConfigs.lifecycle.valueLabel')}{' '}
+            <code className="bg-muted px-1 py-0.5 rounded">{config.tag_value_format}</code>
+          </div>
+          <div>{t('settings:tags.syncConfigs.lifecycle.sharedKeyHint')}</div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

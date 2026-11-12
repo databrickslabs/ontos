@@ -18,7 +18,9 @@ from src.common.dependencies import (
     DBSessionDep,
 )
 from src.common.config import get_settings
-from src.common.workspace_client import get_obo_workspace_client
+from src.common.workspace_client import (
+    get_obo_workspace_client, raise_user_token_required, sp_fallback_allowed,
+)
 from src.common.logging import get_logger
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
@@ -228,11 +230,15 @@ async def start_import_async(
     """Kick off the import on a background thread. The response returns
     immediately with a run id; poll GET /runs/{run_id} (or watch the
     notification bell) for progress and completion."""
+    user_token = _user_token(request)
+    if not user_token and not sp_fallback_allowed(get_settings()):
+        # The background run would otherwise build the app's own client.
+        raise_user_token_required()
     runs_manager = _get_runs_manager(request)
     user_id = current_user.username if current_user else "system"
     try:
         run_id = runs_manager.start_run(
-            db=db, request=payload, user_id=user_id, user_token=_user_token(request),
+            db=db, request=payload, user_id=user_id, user_token=user_token,
         )
         return StartImportRunResponse(run_id=run_id)
     except ValueError as exc:

@@ -54,6 +54,7 @@
       "createdDescription": "チーム\"{{name}}\"を正常に作成しました。",
       "updatedDescription": "チーム\"{{name}}\"を正常に更新しました。",
       "createFailedTitle": "チームの作成に失敗しました",
+      "membersFailedTitle": "チームは作成されましたが、メンバーを保存できませんでした",
       "updateFailedTitle": "チームの更新に失敗しました",
       "failedDescription": "予期しないエラーが発生しました。"
     }

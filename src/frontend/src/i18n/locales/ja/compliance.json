@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "コンプライアンスポリシーの読み込みに失敗しました",
     "loadRunResultsFailed": "実行結果の読み込みに失敗しました",
     "policyNotFound": "コンプライアンスポリシーが見つかりません。",
-    "runNotFound": "実行が見つかりません。"
+    "runNotFound": "実行が見つかりません。",
+    "runningPolicy": "ポリシーの実行エラー"
   },
   "results": {
     "passed": "合格",
@@ -77,7 +78,8 @@
       "passedExamples": "合格した例",
       "failedExamples": "不合格の例",
       "noPassedExamples": "この実行で合格した例はありません",
-      "noFailures": "この実行に失敗はありません"
+      "noFailures": "この実行に失敗はありません",
+      "errorLabel": "エラー:"
     },
     "runsList": {
       "title": "実行",
@@ -100,7 +102,8 @@
     "scoreLabel": "スコア:",
     "passedLabel": "合格:",
     "failedLabel": "不合格:",
-    "startedLabel": "開始: {{date}}"
+    "startedLabel": "開始: {{date}}",
+    "errorLabel": "エラー:"
   },
   "toast": {
     "policySaved": "ポリシー '{{name}}' を保存しました",
@@ -166,5 +169,17 @@
   "ruleWarnings": {
     "unsupported_match_type": "MATCH の型 '{{type}}' はサポートされていないため、このルールはどのエンティティも評価しません。サポートされている型: {{supported}}、またはすべてを対象とする Object。",
     "missing_assert": "ルールに ASSERT 句がないため、すべてのエンティティが合格します。"
+  },
+  "runErrors": {
+    "entities_load_failed": "{{entityType}} エンティティを読み込めなかったため、ルールを評価できませんでした。",
+    "rule_parse_failed": "ルールを解析できませんでした: {{detail}}",
+    "workspace_client_unavailable": "Databricks ワークスペースを利用できません。このルールは Unity Catalog オブジェクトを確認するため、実行できませんでした。",
+    "tags_load_failed": "{{entityType}} エンティティのタグを読み込めなかったため、ルールを評価できませんでした。"
+  },
+  "saveErrors": {
+    "rule_trailing_input": "ルールに無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。それ以降は無視されるため、ルールは記述より少ない内容しか検査しません。削除するか、構文を修正してください。"
+  },
+  "runWarnings": {
+    "rule_trailing_input": "このルールには無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。実行時には無視されるため、ルールは記述より少ない内容しか検査しない可能性があります。ルールを編集して修正してください。"
   }
 }

@@ -63,6 +63,26 @@
     "previewFailed": "Échec de l'aperçu",
     "importFailed": "Échec de l'importation",
     "importComplete": "Importation terminée",
-    "importCompleteSummary": "{{created}} créés, {{skipped}} ignorés, {{errors}} erreurs"
+    "importCompleteSummary": "{{created}} créés, {{skipped}} ignorés, {{errors}} erreurs",
+    "async": {
+      "started": "Importation démarrée",
+      "startedDescription": "Exécution en arrière-plan. La progression s'affiche ici et dans vos notifications.",
+      "startFailed": "Impossible de démarrer l'importation en arrière-plan",
+      "seeRunDetails": "Consultez les détails de l'exécution.",
+      "progress": "{{processed}} sur {{total}} traités (créés : {{created}}, ignorés : {{skipped}})",
+      "progressWithErrors": "{{processed}} sur {{total}} traités (créés : {{created}}, ignorés : {{skipped}}, erreurs : {{errors}})",
+      "starting": "Démarrage…",
+      "closeHint": "Vous pouvez fermer cette boîte de dialogue. L'importation continue, et sa fin vous est signalée dans vos notifications.",
+      "cancel": "Annuler l'importation",
+      "closeKeepRunning": "Fermer (continue en arrière-plan)",
+      "runInBackground": "Exécuter en arrière-plan",
+      "status": {
+        "pending": "En attente",
+        "running": "En cours",
+        "completed": "Terminée",
+        "failed": "Échouée",
+        "cancelled": "Annulée"
+      }
+    }
   }
 }

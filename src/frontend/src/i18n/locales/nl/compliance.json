@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "Kon compliance-beleid niet laden",
     "loadRunResultsFailed": "Kon uitvoeringsresultaten niet laden",
     "policyNotFound": "Compliance-beleid niet gevonden.",
-    "runNotFound": "Uitvoering niet gevonden."
+    "runNotFound": "Uitvoering niet gevonden.",
+    "runningPolicy": "Fout bij het uitvoeren van het beleid"
   },
   "results": {
     "passed": "Geslaagd",
@@ -77,7 +78,8 @@
       "passedExamples": "Geslaagde voorbeelden",
       "failedExamples": "Mislukte voorbeelden",
       "noPassedExamples": "Geen geslaagde voorbeelden in deze uitvoering",
-      "noFailures": "Geen fouten in deze uitvoering"
+      "noFailures": "Geen fouten in deze uitvoering",
+      "errorLabel": "Fout:"
     },
     "runsList": {
       "title": "Uitvoeringen",
@@ -100,7 +102,8 @@
     "scoreLabel": "Score:",
     "passedLabel": "Geslaagd:",
     "failedLabel": "Mislukt:",
-    "startedLabel": "Gestart: {{date}}"
+    "startedLabel": "Gestart: {{date}}",
+    "errorLabel": "Fout:"
   },
   "toast": {
     "policySaved": "Beleid '{{name}}' succesvol opgeslagen",
@@ -166,5 +169,17 @@
   "ruleWarnings": {
     "unsupported_match_type": "Het MATCH-type '{{type}}' wordt niet ondersteund, dus de regel controleert geen entiteiten. Ondersteunde typen: {{supported}}, of Object voor allemaal.",
     "missing_assert": "De regel heeft geen ASSERT-clausule, dus elke entiteit slaagt."
+  },
+  "runErrors": {
+    "entities_load_failed": "De {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd.",
+    "rule_parse_failed": "De regel kon niet worden geparseerd: {{detail}}",
+    "workspace_client_unavailable": "De Databricks-workspace is niet beschikbaar en deze regel controleert Unity Catalog-objecten, dus kon hij niet worden uitgevoerd.",
+    "tags_load_failed": "De tags van de {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd."
+  },
+  "saveErrors": {
+    "rule_trailing_input": "De regel bevat ongeldige invoer, vanaf regel {{line}}, kolom {{column}} ('{{text}}'). Alles vanaf dat punt zou worden genegeerd, waardoor de regel minder controleert dan er staat. Verwijder het of corrigeer de syntaxis."
+  },
+  "runWarnings": {
+    "rule_trailing_input": "Deze regel bevat ongeldige invoer, vanaf regel {{line}}, kolom {{column}} ('{{text}}'). Die wordt bij het uitvoeren genegeerd, waardoor de regel mogelijk minder controleert dan er staat. Bewerk de regel om dit te herstellen."
   }
 }

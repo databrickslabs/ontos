@@ -224,11 +224,40 @@ def collect_rich_text_metadata(product_ids: List[str], db: Session) -> Dict[str,
     return metadata_map
 
 
+def collect_contract_names(contract_ids: List[str], db: Session) -> Dict[str, str]:
+    """Map contract id to contract name, for the headings of the contract notes."""
+    from src.db_models.data_contracts import DataContractDb
+
+    if not contract_ids:
+        return {}
+    rows = db.query(DataContractDb.id, DataContractDb.name).filter(
+        DataContractDb.id.in_(contract_ids)
+    ).all()
+    return {str(row.id): row.name for row in rows if row.name}
+
+
+def _append_notes(section_parts: List[str], notes: Optional[List], heading: str) -> None:
+    """Append rich text notes (title, short description, content) to a section."""
+    for meta in notes or []:
+        section_parts.append(f"{heading} {meta.title}\n\n")
+
+        if meta.short_description:
+            section_parts.append(f"{meta.short_description}\n\n")
+
+        if meta.content_markdown:
+            # Limit individual content to reasonable size
+            content = meta.content_markdown
+            if len(content) > 1000:
+                content = content[:997] + "..."
+            section_parts.append(f"{content}\n\n")
+
+
 def format_metadata_for_genie(
     metadata_map: Dict[str, List],
     products: List,
     max_length: int = 5000,
     product_domains: Optional[Dict[str, str]] = None,
+    contract_names: Optional[Dict[str, str]] = None,
 ) -> str:
     """
     Format collected metadata as markdown instructions for Genie.
@@ -240,6 +269,7 @@ def format_metadata_for_genie(
         product_domains: Optional {product_id: primary domain name}. Domain moved to the
             entity_domain_associations junction (the legacy DataProductDb.domain column was
             dropped), so the caller resolves it and passes it in here.
+        contract_names: Optional {contract_id: name} for the headings of the contract notes.
 
     Returns:
         Formatted markdown string
@@ -263,19 +293,20 @@ def format_metadata_for_genie(
         section_parts.append("\n")
 
         # Add rich text metadata for this product
-        if product.id in metadata_map:
-            for meta in metadata_map[product.id]:
-                section_parts.append(f"### {meta.title}\n\n")
+        _append_notes(section_parts, metadata_map.get(product.id), "###")
 
-                if meta.short_description:
-                    section_parts.append(f"{meta.short_description}\n\n")
-
-                if meta.content_markdown:
-                    # Limit individual content to reasonable size
-                    content = meta.content_markdown
-                    if len(content) > 1000:
-                        content = content[:997] + "..."
-                    section_parts.append(f"{content}\n\n")
+        # Add the notes of the contracts on the product's output ports, one heading per contract
+        seen_contracts = set()
+        for port in getattr(product, 'output_ports', None) or []:
+            contract_id = getattr(port, 'contract_id', None)
+            if not contract_id or contract_id in seen_contracts:
+                continue
+            seen_contracts.add(contract_id)
+            contract_notes = metadata_map.get(contract_id)
+            if contract_notes:
+                name = (contract_names or {}).get(contract_id) or contract_id
+                section_parts.append(f"### Contract: {name}\n\n")
+                _append_notes(section_parts, contract_notes, "####")
 
         sections.append("".join(section_parts))
 

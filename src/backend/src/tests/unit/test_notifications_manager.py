@@ -356,4 +356,3 @@ class TestNotificationsManager:
 
         assert result is False
         manager._repo.remove.assert_not_called()
-

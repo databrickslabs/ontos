@@ -1,0 +1,139 @@
+{
+  "approvalResponse": {
+    "title": "Geef een reden op",
+    "description": "Geef de reden voor uw besluit tot goedkeuring of afwijzing.",
+    "fields": {
+      "reason": "Reden voor goedkeuring of afwijzing"
+    }
+  },
+  "subscription": {
+    "title": "Abonnementsgegevens",
+    "description": "Beschrijf hoe u dit dataproduct wilt gebruiken.",
+    "fields": {
+      "reason": "Reden voor abonneren",
+      "useCase": "Beoogde use case"
+    }
+  },
+  "requestReview": {
+    "title": "Review aanvragen",
+    "description": "Geef de reden voor uw reviewaanvraag.",
+    "fields": {
+      "reason": "Waarom vraagt u een review aan?"
+    }
+  },
+  "requestAccess": {
+    "title": "Toegang aanvragen",
+    "description": "Geef de reden voor uw toegangsaanvraag en stel eventueel een duur in.",
+    "fields": {
+      "reason": "Waarom hebt u toegang nodig?",
+      "expiryDays": "Gevraagde duur (dagen; leeg laten voor onbepaalde tijd)"
+    }
+  },
+  "requestPublish": {
+    "title": "Publicatie aanvragen",
+    "description": "Geef de reden voor uw publicatieaanvraag.",
+    "fields": {
+      "reason": "Waarom vraagt u publicatie aan?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Statuswijziging aanvragen",
+    "description": "Geef de reden voor uw aanvraag tot statuswijziging.",
+    "fields": {
+      "reason": "Waarom vraagt u deze statuswijziging aan?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Een reden opgeven"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "De objectnaam volgt de naamgevingsconventies niet",
+      "tagging": "De verplichte tags konden niet worden toegepast"
+    },
+    "dataProductApproval": {
+      "noContract": "Het dataproduct vereist een datacontract",
+      "rejected": "Het publicatieverzoek voor het dataproduct is afgewezen"
+    },
+    "dataContractValidation": {
+      "noSchema": "Het datacontract vereist een schemadefinitie"
+    },
+    "preCreationCompliance": {
+      "naming": "De assetnaam voldoet niet aan het beleid voor naamgevingsconventies",
+      "tagging": "De asset heeft niet de verplichte tags"
+    },
+    "tablePreCreation": {
+      "invalidName": "De tabelnaam mag alleen kleine letters en underscores bevatten",
+      "reservedWord": "De tabelnaam mag geen gereserveerd SQL-woord zijn"
+    },
+    "contractReviewRequest": {
+      "rejected": "Het beoordelingsverzoek voor het datacontract is afgewezen"
+    },
+    "contractDeployRequest": {
+      "rejected": "Het implementatieverzoek voor het datacontract is afgewezen"
+    },
+    "productReviewRequest": {
+      "rejected": "Het beoordelingsverzoek voor het dataproduct is afgewezen"
+    },
+    "accessGrantRequest": {
+      "rejected": "Het toegangsverzoek is geweigerd"
+    },
+    "statusChangeRequest": {
+      "rejected": "Het verzoek om statuswijziging is afgewezen"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "De beoordeling van de data-asset vereist wijzigingen"
+    },
+    "roleAccessRequest": {
+      "rejected": "Het verzoek om roltoegang is geweigerd"
+    },
+    "certificationRequestReview": {
+      "end": "De certificeringsworkflow is mislukt"
+    },
+    "publicationRequestReview": {
+      "end": "De publicatieworkflow is mislukt"
+    },
+    "conceptReviewRequest": {
+      "rejected": "De conceptreview is niet goedgekeurd"
+    },
+    "metricViewChangeRequest": {
+      "rejected": "Het wijzigingsverzoek voor de metric view is afgewezen"
+    }
+  },
+  "workflowNames": {
+    "naming-convention-check": "Validatie van naamgevingsconventies",
+    "data-product-approval": "Goedkeuring voor publicatie van dataproduct",
+    "data-contract-validation": "Schemavalidatie van datacontract",
+    "pii-detection": "PII-detectie en -classificatie",
+    "pre-creation-compliance": "Compliancevalidatie vóór aanmaak",
+    "table-pre-creation": "Tabelvalidatie vóór aanmaak",
+    "contract-review-request": "Beoordelingsverzoek voor datacontract",
+    "contract-deploy-request": "Implementatieverzoek voor datacontract",
+    "product-review-request": "Beoordelingsverzoek voor dataproduct",
+    "access-grant-request": "Verzoek om toegang",
+    "status-change-request": "Verzoek om statuswijziging",
+    "data-asset-review-request": "Beoordelingsverzoek voor data-asset",
+    "project-access-request": "Verzoek om projecttoegang",
+    "role-access-request": "Verzoek om roltoegang",
+    "job-failure-notification": "Melding van mislukte taak",
+    "job-success-notification": "Melding van geslaagde taak",
+    "access-expiring-warning": "Waarschuwing voor verlopende toegang",
+    "access-revoked-notification": "Melding van ingetrokken toegang",
+    "approval-response": "Goedkeuringsantwoord",
+    "subscription": "Abonnementsovereenkomst",
+    "request-review": "Beoordeling aanvragen",
+    "request-access": "Toegang aanvragen",
+    "request-publish": "Publicatie aanvragen",
+    "request-status-change": "Statuswijziging aanvragen",
+    "before-status-change-default": "Poort voor statuswijziging (standaard)",
+    "owner-deprecation-notice": "Melding aan eigenaren: verouderd",
+    "owner-retirement-notice": "Melding aan eigenaren: buiten gebruik",
+    "on-publish-notification": "Melding van publicatie",
+    "on-unpublish-notification": "Melding van intrekking van publicatie",
+    "certification-request-review": "Beoordeling van certificeringsverzoeken",
+    "publication-request-review": "Beoordeling van publicatieverzoeken",
+    "first-access-welcome": "Welkom: gebruiksvoorwaarden",
+    "on-request-access-grant-permissions-reference": "Referentie: UC SELECT toekennen aan de aanvrager (on_request_access)",
+    "metric-view-change-request": "Wijzigingsverzoek metric view"
+  }
+}

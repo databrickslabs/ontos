@@ -209,6 +209,9 @@ The `trigger_config` JSON defines when the workflow executes:
 }
 ```
 
+A `before_status_change` trigger also has `on_error` (`fail_open`, the default, or
+`fail_closed`); see [When a status gate errors](#when-a-status-gate-errors).
+
 ### Scope Configuration
 
 The `scope_config` JSON restricts workflow applicability:
@@ -226,6 +229,8 @@ The `scope_config` JSON restricts workflow applicability:
 | `project` | Only entities in specified projects |
 | `catalog` | Only entities in specified catalogs |
 | `domain` | Only entities in specified domains |
+
+> **Not applied yet:** the scope is saved with the workflow, but no trigger event carries a scope today, so a scoped workflow fires for every entity that matches its trigger ([#1118](https://github.com/databrickslabs/ontos/issues/1118)).
 
 ### Pydantic Models
 
@@ -272,6 +277,7 @@ The `TriggerRegistry` provides a centralized interface for firing events and exe
 |------|------------|-------------|
 | Before Create | `before_create` | **Pre-creation validation** - blocks creation if workflow fails |
 | Before Update | `before_update` | **Pre-update validation** - blocks update if workflow fails |
+| Before Status Change | `before_status_change` | **Status gate** - blocks a product or contract status transition if workflow fails |
 | On Create | `on_create` | Entity is created (post-creation) |
 | On Update | `on_update` | Entity is modified (post-update) |
 | On Delete | `on_delete` | Entity is deleted |
@@ -280,6 +286,8 @@ The `TriggerRegistry` provides a centralized interface for firing events and exe
 | Manual | `manual` | User-initiated execution |
 
 > **Pre-Creation vs Post-Creation Triggers:** Use `before_create`/`before_update` for inline validation that must pass before an entity is saved. Use `on_create`/`on_update` for asynchronous actions like notifications or tagging that run after the entity is already persisted.
+
+> **Scheduled and Manual:** the `scheduled` trigger does not run yet ([#941](https://github.com/databrickslabs/ontos/issues/941)). A `manual` workflow is started from the **Run** action in the row menu of the Workflows list (or with `POST /api/workflows/{id}/execute`); it asks for the entity type and the entity.
 
 ### Entity Types
 
@@ -368,6 +376,102 @@ if not all_passed:
 ```
 
 > **Important:** The `before_create` and `before_update` triggers execute **synchronously** and return a boolean indicating whether all workflows passed. This enables blocking creation/update operations if validation fails.
+
+#### When a Status Gate Errors
+
+A `before_status_change` workflow (a status gate) runs when a product or contract
+changes status through Change Status or an approved status change request. A gate
+that **fails** (a Fail step, a validation that doesn't hold, an approval it is still
+waiting for) blocks the transition. A gate whose **evaluation raises an error** (the
+database is unreachable, a step handler crashes) is different: it neither passed nor
+failed. What happens then is set per workflow with `on_error` on its trigger
+(Designer: *Refuse the transition if this gate can't be evaluated*):
+
+| `on_error` | When evaluating the gate raises |
+|---|---|
+| `fail_open` (default) | The transition proceeds |
+| `fail_closed` | The transition is refused with `status_change_gate_error` ("a workflow gate could not be evaluated"), translated in the UI |
+
+In both modes the error is logged at error level and written to the audit log
+(feature `process-workflows`, action `GATE_ERROR`, with the entity, the statuses,
+the workflow, its mode and the error). If the gates can't even be listed, the active
+`fail_closed` gates for the entity type are read directly from the workflows table,
+and one of them is enough to refuse the transition; if that fails too, the mode is
+unknown and the transition proceeds (the error is still reported). Use `fail_closed`
+for gates that enforce a policy, such as a certification or enforcement check.
+
+#### Switching a Status Gate Off for a Domain or an Entity
+
+A status gate can be switched off for some domains, data products or data
+contracts with `disabled_for` on its trigger (Designer: *Switched off for*):
+
+```json
+"trigger": {
+  "type": "before_status_change",
+  "entity_types": ["data_product", "data_contract"],
+  "disabled_for": {"domains": ["<domain id>"], "data_products": [], "data_contracts": ["<contract id>"]}
+}
+```
+
+- The gate doesn't run for a listed product or contract, nor for a product or
+  contract assigned to a listed domain (any of its domains, not only the primary).
+- The lists only switch the gate off: there is no way to switch it back on for one
+  entity of a listed domain. Subdomains are not included; list them too.
+- Each skip is logged at info level and written to the audit log (feature
+  `process-workflows`, action `GATE_SKIPPED`, with the entity, the statuses, the
+  workflow and which domain or entity switched it off).
+- It applies to `fail_closed` gates as well, also when the gates can't be listed.
+- Saving a workflow checks the ids exist, and only `before_status_change`
+  workflows accept the setting. Who can edit workflows can change it.
+
+#### Certified Deprecation Guard
+
+Deprecating a **certified** data product or data contract (`certification_level`
+set) needs an approved status change request. This is enforced in the transition
+code, not by a workflow, so it holds in every installation: Change Status, the
+product's Deprecate action and any other caller of the transition are refused with
+`certified_deprecation_requires_approval` (translated in the UI, which offers to send
+the status change request instead). Uncertified entities deprecate directly; other
+transitions of a certified entity are not affected; imports create entities and are
+not transitions, so they are not guarded.
+
+The way through is `POST /api/data-products/{id}/request-status-change` (contracts:
+`POST /api/data-contracts/{id}/request-status-change`). The guard accepts the
+deprecation only when the request is applied after an approval that counts:
+
+- a product's or contract's request, at the approval step of the Status Change
+  Request workflow (`on_request_status_change`), decided by one of its approvers
+  through `POST /api/workflows/handle-approval`. A run without an approval step, or a
+  plain `POST /api/workflows/executions/{id}/resume`, doesn't count;
+- a product's or contract's **pending** request approved with `handle-status-change`
+  by a user with Admin on the feature. Each request has a `request_id` in its
+  `status_change_requested` change log entry (the record both managers write with
+  every request; notifications can be deleted, and a product's request has none). A
+  request is pending when it is the entity's latest one, the entity still has the
+  status it was made from, and no `status_change_request_closed` entry names it. Its
+  decision writes that entry: `handle-status-change` approve or deny (a clarification
+  keeps it open), the Status Change Request workflow's approval or rejection, and any
+  transition of the entity, so a request made from a status the entity has left can't
+  be approved even after the entity returns to it. Requests made before they had an
+  id are never pending. In the UI, both are decided from the workflow's approval
+  notification (*Approval Required*), as any workflow approval.
+
+In both cases the approver must not be the requester. A decision that doesn't count
+is refused with `certified_deprecation_approval_refused` and a `reason`
+(`not_admin`, `no_pending_request`, `target_mismatch`, `self_approval`,
+`no_approver`), translated in the UI. Every route answers the guard's refusals with
+400.
+
+The guard runs before the status gates, which can add stricter rules on top. It can
+be switched off for domains, data products and data contracts with the same
+`disabled_for` value as a status gate (Settings > Certification Levels, *Certified
+deprecation guard*; API `GET`/`PUT /api/certified-deprecation-guard`). The value is
+stored in the app settings, since the guard is not a workflow. As for a gate, a
+domain covers its products and contracts (not its subdomains), saving checks the ids
+exist, and each skip is logged and audited as `GATE_SKIPPED`, with
+`guard: certified_deprecation` instead of a workflow. Changing it needs Admin on
+certification levels; others see it read-only. A domain switch is only as strong as
+the entities' domain assignment, as for status gates.
 
 ### TriggerEvent Dataclass
 
@@ -465,8 +569,8 @@ Creates an approval request and pauses workflow execution.
 | Config Key | Type | Description |
 |------------|------|-------------|
 | `approvers` | String | Approver specification (email, group, or role) |
-| `timeout_days` | Integer | Days before approval expires |
-| `require_all` | Boolean | Require all approvers (vs. any one) |
+| `timeout_days` | Integer | Days before approval expires; `0` means no timeout, default 7 (accepted, not enforced yet: a pending approval never expires, [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
+| `require_all` | Boolean | Every resolved notification target must approve (a user target that user, a group or role target any one member; one person fills one target); any rejection fails the step. Default `false`: the first decision resumes the workflow |
 
 **Approver Specifications:**
 - `domain_owners` - Owners of the entity's domain
@@ -510,6 +614,7 @@ Sends notifications to specified recipients.
 - `product_approved` - Product approval notification
 - `product_rejected` - Product rejection notification
 - `approval_requested` - Approval request notification
+- `entity_deprecated` / `entity_retired` - Owner notice of a deprecation / retirement: the reason, sunset date and replacement from the `on_status_change` payload, one line each when set
 
 **Example Configuration:**
 ```yaml
@@ -527,9 +632,13 @@ Assigns a tag to the entity.
 
 | Config Key | Type | Description |
 |------------|------|-------------|
-| `key` | String | Tag key name |
-| `value` | String | Static tag value |
-| `value_source` | String | Dynamic value source |
+| `key` | String | Tag key: the tag's fully qualified name (`namespace/name`) |
+| `value` | String | Fixed tag value. Must not be empty when set |
+| `value_source` | String | Dynamic value source; wins over `value` |
+
+Without `value` and `value_source` the tag is assigned **without a value**. If the entity already has the tag, the step changes nothing: its value is kept, and later steps see that value (or `true` for a tag without one). An empty `value` and an unknown `value_source` are refused when the workflow is saved.
+
+In the designer, choose **Fixed value** (a list of the tag's possible values when it defines them), **Value from the run**, or **No value**.
 
 **Value Sources:**
 - `current_user` - Email of user who triggered workflow
@@ -580,6 +689,8 @@ config:
 ```
 
 **Handler:** `ConditionalStepHandler`
+
+A condition that could be evaluated makes the step succeed, true or false. True follows `on_pass`, false follows `on_fail`, and the step's result data records `result` and `branch` (`"true"` / `"false"`). A false condition doesn't count as a failure, and a branch with no step ends the run as succeeded. Only a condition that can't be evaluated fails the step, and the run then ends there as failed.
 
 #### 7. Script Step
 
@@ -933,7 +1044,7 @@ Each step type has a corresponding visual node:
 1. **Drag-and-Drop**: Add steps from the toolbar
 2. **Edge Connections**: Connect steps with pass/fail branches
 3. **Configuration Panel**: Edit step settings in the side sheet
-4. **Auto-Layout**: Automatic DAG layout using Dagre
+4. **Layout**: the designer keeps the layout you arrange (step positions are saved with the workflow). A workflow without stored positions is auto-arranged once with Dagre; steps added later without a position are placed below the step that leads to them. **Rearrange** in the canvas toolbar auto-arranges all steps after a confirmation.
 5. **Validation**: Real-time workflow validation
 
 ### Accessing the Designer
@@ -959,7 +1070,7 @@ workflows_manager.load_from_yaml(requests_only_active=True)
 
 - Only workflows that don't exist yet (by name) are created; existing ones, including local edits and their active state, are left untouched.
 - Request workflows (`on_request_*`) are created with the `is_active` value from the YAML. All others (event-driven workflows such as naming validation or publish notifications, and the `for_*` UI wizards) are created **inactive**, so an upgrade doesn't turn on new automatic behavior. Enable them on the Workflows page.
-- **Load Defaults** (`POST /api/workflows/load-defaults`) creates missing workflows with the YAML's `is_active`; with `update_existing=true` it also resets existing default workflows to the YAML.
+- **Load Defaults** (`POST /api/workflows/load-defaults`) creates missing workflows with the YAML's `is_active`; with `update_existing=true` it also resets existing default workflows to the YAML, except those a user edited (`is_customized`; add `include_edited=true` to reset them too). A reset keeps each workflow's `is_active`.
 
 ### Pre-Defined Workflows
 
@@ -1130,23 +1241,11 @@ Content-Type: application/json
 
 #### Execute Workflow Manually
 
-```http
-POST /api/workflows/wf-uuid-123/execute
-Content-Type: application/json
-```
+The entity is passed as query parameters, with no request body. The same call backs the
+**Run** action of the Workflows list.
 
-```json
-{
-  "entity_type": "table",
-  "entity_id": "catalog.schema.table_name",
-  "entity_name": "table_name",
-  "entity_data": {
-    "name": "table_name",
-    "catalog": "catalog",
-    "schema": "schema",
-    "columns": [...]
-  }
-}
+```http
+POST /api/workflows/wf-uuid-123/execute?entity_type=table&entity_id=catalog.schema.table_name&entity_name=table_name
 ```
 
 ---
@@ -1503,7 +1602,7 @@ GET /api/workflows/executions/:execution_id
 The following capabilities are explicitly deferred from the current implementation and tracked for future iterations:
 
 ### Timeout Expiry
-Approval steps accept a `timeout_days` configuration but the system does not currently auto-expire approvals. A scheduled job should periodically scan for paused workflow executions where the approval step has exceeded `timeout_days` and automatically fail or escalate them.
+Approval steps accept a `timeout_days` configuration (`0` = no timeout) but the system does not currently auto-expire approvals ([#1119](https://github.com/databrickslabs/ontos/issues/1119)). A scheduled job should periodically scan for paused workflow executions where the approval step has exceeded `timeout_days` and automatically fail or escalate them.
 
 ### Crash Recovery
 If the server restarts while a workflow is executing (status `running` or `paused`), those executions are currently orphaned. A startup recovery task should detect in-progress executions and either resume them from the last completed step or mark them as failed with a clear error message.
@@ -1512,7 +1611,7 @@ If the server restarts while a workflow is executing (status `running` or `pause
 Overdue approval steps should support automatic escalation to a higher role (e.g., if a `DataSteward` hasn't responded in 3 days, escalate to `Admin`). This requires an `escalation_role` field on the approval step config and a scheduled checker.
 
 ### Parallel Approval Gates
-The current `require_all` flag on approval steps is conceptual but not fully implemented for concurrent multi-approver scenarios. Supporting `n-of-m` approval quorums (e.g., 2 of 3 approvers must agree) would enable richer governance patterns.
+`require_all` makes every resolved approver decide (any rejection fails the step). Supporting `n-of-m` approval quorums (e.g., 2 of 3 approvers must agree) would enable richer governance patterns.
 
 ### Audit Trail
 Workflow executions are logged but not easily queryable. A dedicated `workflow_audit_log` table with structured fields (execution_id, step_id, action, actor, timestamp, outcome) would enable compliance reporting and execution history search.
@@ -1529,6 +1628,7 @@ The workflow executor currently lacks comprehensive unit tests for:
 
 ## Related Documentation
 
+- [Workflow Authoring Guide](/user-docs/workflow-authoring-guide): how executions run, step by step, with verified examples
 - [Compliance DSL Guide](compliance-dsl-guide.md)
 - [Compliance DSL Reference](compliance-dsl-reference.md)
 - [User Guide](USER-GUIDE.md)

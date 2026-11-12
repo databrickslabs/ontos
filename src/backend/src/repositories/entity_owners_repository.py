@@ -13,6 +13,8 @@ _ENTITY_KINDS = {
     'data_contract': 'data_contract', 'datacontract': 'data_contract',
     # Assets' Business Owners are stored as object_type='asset'.
     'dataset': 'asset', 'asset': 'asset',
+    # A metric view's workflows run on its asset (#1124)
+    'metric_view': 'asset', 'metricview': 'asset',
 }
 # ODPS / ODCS team roles that mean "owner" (compared lowercased).
 _OWNER_TEAM_ROLES = (
@@ -123,4 +125,46 @@ def resolve_owner_emails(db: Session, entity_type: str, entity_id: str) -> list[
             "No owner users for %s %s (owner team: %s; group members not notified: %s)",
             kind, entity_id, owner_team_id or 'none', ', '.join(groups) or 'none',
         )
+    return emails
+
+
+def resolve_domain_owner_emails(db: Session, entity_type: str, entity_id: str) -> list[str]:
+    """Emails of the owners of an entity's domain.
+
+    The domain is the entity's primary domain, or all its domains when none
+    is primary. Its owners are all the domain's active Business Owners: the
+    domain page lists them under "Owners", whatever their business role.
+    Read-only, like ``resolve_owner_emails``.
+    """
+    from src.db_models.business_owners import BusinessOwnerDb
+    from src.db_models.domain_associations import EntityDomainAssociationDb
+
+    raw_type = (entity_type or '').strip().lower()
+    kind = _ENTITY_KINDS.get(raw_type.replace(' ', ''), raw_type)
+
+    links = (
+        db.query(EntityDomainAssociationDb.domain_id, EntityDomainAssociationDb.is_primary)
+        .filter(EntityDomainAssociationDb.entity_type == kind)
+        .filter(EntityDomainAssociationDb.entity_id == entity_id)
+        .all()
+    )
+    domain_ids = [link.domain_id for link in links if link.is_primary] or [
+        link.domain_id for link in links
+    ]
+    if not domain_ids:
+        logger.warning("No domain assigned to %s %s", kind, entity_id)
+        return []
+
+    rows = (
+        db.query(BusinessOwnerDb.user_email)
+        .filter(BusinessOwnerDb.object_type == 'data_domain')
+        .filter(BusinessOwnerDb.object_id.in_(domain_ids))
+        .filter(BusinessOwnerDb.is_active.is_(True))
+        .order_by(BusinessOwnerDb.assigned_at)
+        .all()
+    )
+    emails = list(dict.fromkeys(row.user_email for row in rows if row.user_email))
+    if not emails:
+        logger.warning("No owners for the domain(s) of %s %s: %s",
+                       kind, entity_id, ', '.join(domain_ids))
     return emails

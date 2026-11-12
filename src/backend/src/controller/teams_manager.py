@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -20,10 +21,15 @@ from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.common.errors import ConflictError, NotFoundError
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
+from src.common.team_role_override import pick_team_role_override
 from src.common.database import get_session_factory
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
+
+
+class InvalidMemberSetError(ValueError):
+    """A submitted team member set has blank or duplicate identifiers."""
 
 
 class TeamsManager(SearchableAsset):
@@ -43,11 +49,14 @@ class TeamsManager(SearchableAsset):
             id=f"team::{team.id}",
             type="team",
             feature_id="teams",
-            title=team.name,
+            # Display title first, like projects. A field named "title" always resolves
+            # to item.title in both search backends, so keeping the display title in
+            # extra_data["title"] left it unsearchable; the slug-ish name goes there instead.
+            title=getattr(team, 'title', None) or team.name,
             description=getattr(team, 'description', '') or "",
             link=f"/teams/{team.id}",
             tags=[],
-            extra_data={"title": getattr(team, 'title', '') or ""},
+            extra_data={"name": team.name},
         )
 
     def _update_search_index(self, team: TeamDb) -> None:
@@ -162,7 +171,7 @@ class TeamsManager(SearchableAsset):
             return None
         try:
             # Get all domains and find by name
-            domains = self.domain_repo.get_multi(db, limit=1000)
+            domains = self.domain_repo.get_multi(db)
             for domain in domains:
                 if domain.name == domain_name:
                     return domain.id
@@ -263,7 +272,7 @@ class TeamsManager(SearchableAsset):
         self,
         db: Session,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         domain_id: Optional[str] = None,
         domain_ids: Optional[List[str]] = None,
     ) -> List[TeamRead]:
@@ -280,7 +289,7 @@ class TeamsManager(SearchableAsset):
         """Gets a summary list of teams for dropdowns/selection."""
         logger.debug(f"Fetching teams summary for domain_id={domain_id}, domain_ids={domain_ids}")
         db_teams = self.team_repo.get_multi_with_members(
-            db, limit=1000, domain_id=domain_id, domain_ids=domain_ids
+            db, domain_id=domain_id, domain_ids=domain_ids
         )
         domains_map = entity_domain_repo.get_domains_for_entities(
             db, entity_type="team", entity_ids=[t.id for t in db_teams]
@@ -471,6 +480,120 @@ class TeamsManager(SearchableAsset):
         """Gets all members of a team."""
         db_members = self.team_member_repo.get_members_by_team(db, team_id)
         return [TeamMemberRead.model_validate(member) for member in db_members]
+
+    @staticmethod
+    def validate_member_set(members_in: List[TeamMemberCreate]) -> List[TeamMemberCreate]:
+        """Trim identifiers and overrides; reject blanks and case-insensitive duplicates."""
+        cleaned: List[TeamMemberCreate] = []
+        seen = set()
+        for member in members_in:
+            identifier = member.member_identifier.strip()
+            if not identifier:
+                raise InvalidMemberSetError("Member identifier must not be empty.")
+            if identifier.lower() in seen:
+                raise InvalidMemberSetError(f"Member '{identifier}' is listed more than once.")
+            seen.add(identifier.lower())
+            cleaned.append(member.model_copy(update={
+                "member_identifier": identifier,
+                "app_role_override": (member.app_role_override or "").strip() or None,
+            }))
+        return cleaned
+
+    def current_member_set(self, db: Session, team_id: str) -> List[TeamMemberCreate]:
+        return [
+            TeamMemberCreate(
+                member_type=m.member_type,
+                member_identifier=m.member_identifier,
+                app_role_override=m.app_role_override,
+            )
+            for m in self.team_member_repo.get_members_by_team(db, team_id)
+        ]
+
+    def replace_team_members(
+        self, db: Session, team_id: str, members_in: List[TeamMemberCreate], current_user_id: str
+    ) -> List[TeamMemberRead]:
+        """Make the team's members exactly ``members_in``, touching only rows that changed.
+
+        Identifiers match case-insensitively, like the membership lookup used for authorization.
+        Flushes but does not commit, so the caller applies the whole set in one transaction.
+        """
+        db_team = self.team_repo.get(db, team_id)
+        if not db_team:
+            raise NotFoundError(f"Team with id '{team_id}' not found.")
+
+        desired = {m.member_identifier.lower(): m for m in self.validate_member_set(members_in)}
+        existing: dict = {}
+        for db_member in self.team_member_repo.get_members_by_team(db, team_id):
+            key = db_member.member_identifier.lower()
+            if key in existing:
+                # No unique constraint on (team_id, member_identifier); collapse duplicates so the
+                # resulting set is exact and a stale override can't linger on a twin row.
+                db.delete(db_member)
+            else:
+                existing[key] = db_member
+
+        for key, db_member in existing.items():
+            if key not in desired:
+                db.delete(db_member)
+
+        for key, member in desired.items():
+            db_member = existing.get(key)
+            if db_member is None:
+                db.add(TeamMemberDb(
+                    team_id=team_id,
+                    member_type=member.member_type.value,
+                    member_identifier=member.member_identifier,
+                    app_role_override=member.app_role_override,
+                    added_by=current_user_id,
+                ))
+                continue
+            db_member.member_identifier = member.member_identifier
+            db_member.member_type = member.member_type.value
+            db_member.app_role_override = member.app_role_override
+
+        db.flush()
+        logger.info(
+            "Replaced members of team '%s': %d added, %d removed, %d kept",
+            db_team.name,
+            len(desired.keys() - existing.keys()),
+            len(existing.keys() - desired.keys()),
+            len(desired.keys() & existing.keys()),
+        )
+        return self.get_team_members(db, team_id)
+
+    def team_role_override_with_members(
+        self,
+        db: Session,
+        team_id: str,
+        members: List[TeamMemberCreate],
+        user_identifier: str,
+        user_groups: Optional[List[str]] = None,
+    ) -> Optional[str]:
+        """The team role override the user would resolve to if ``team_id`` had ``members``.
+
+        Mirrors request authorization: only teams the user is a direct member of count, in the
+        repository's team order, with ``team_id``'s members swapped in place.
+        """
+        is_direct_member = any(
+            m.member_identifier.lower() == user_identifier.lower() for m in members
+        )
+        teams = []
+        replaced = False
+        for team in self.team_repo.get_teams_for_user(db, user_identifier):
+            if team.id != team_id:
+                teams.append(team.members)
+                continue
+            replaced = True
+            if is_direct_member:
+                teams.append(members)
+        if is_direct_member and not replaced:
+            # Joining a new team: its position among the user's teams is unknown here, so it goes
+            # last; that only matters when the user holds conflicting overrides in several teams.
+            teams.append(members)
+
+        return pick_team_role_override(
+            [SimpleNamespace(members=m) for m in teams], user_identifier, user_groups or []
+        )
 
 
 

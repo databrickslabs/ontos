@@ -13,7 +13,10 @@
     "deletingEstate": "エステートの削除エラー",
     "triggeringSync": "同期の開始エラー",
     "validationError": "検証エラー",
-    "validationMessage": "必須項目をすべて入力してください：名前、説明、ワークスペースURL、メタストア名、クラウドタイプ、接続タイプ。"
+    "validationMessage": "必須項目をすべて入力してください：名前、説明、ワークスペースURL、メタストア名、クラウドタイプ、接続タイプ。",
+    "codes": {
+      "estate_name_conflict": "「{{name}}」という名前のエステートは既に存在します。"
+    }
   },
   "toast": {
     "estateCreated": "エステートを作成しました",
@@ -102,7 +105,6 @@
     "backToEstateManager": "エステートマネージャーに戻る",
     "backToListButton": "一覧に戻る",
     "configureSyncJob": "同期ジョブを構成",
-    "editNotImplemented": "エステート編集機能は今後実装されます",
     "syncEnabled": "同期が有効",
     "syncDisabled": "同期が無効",
     "never": "なし",
@@ -121,15 +123,16 @@
       "noEstateData": "ポリシーを追加するためのエステートデータがありません。"
     },
     "policies": {
-      "title": "共有ポリシー",
       "add": "ポリシーを追加",
-      "sectionDescription": "このエステートと特定のデータプロダクトまたはセマンティックモデルの用語を共有するルールを定義します。共有されたリソースは、構成された接続タイプ経由でアクセスできます。",
       "resourceTypeLabel": "リソースタイプ:",
       "rulesLabel": "ルール（{{count}}）:",
-      "filterBy": "フィルタ条件",
-      "whereValue": "値の条件",
+      "ruleText": {
+        "equals": "<b>{{filterType}}</b> で絞り込み：値が <b>'{{value}}'</b> に等しい",
+        "contains": "<b>{{filterType}}</b> で絞り込み：値に <b>'{{value}}'</b> を含む",
+        "starts_with": "<b>{{filterType}}</b> で絞り込み：値が <b>'{{value}}'</b> で始まる",
+        "regex": "<b>{{filterType}}</b> で絞り込み：値が正規表現 <b>'{{value}}'</b> に一致する"
+      },
       "noRules": "このポリシーにはルールが定義されていません。",
-      "emptyTitle": "このエステートには共有ポリシーが定義されていません。",
       "emptyHint": "「ポリシーを追加」をクリックしてリソースの共有を開始してください。",
       "editPolicyAlert": "ポリシーを編集: {{name}}",
       "deletePolicyAlert": "ポリシーを削除: {{name}}",
@@ -137,7 +140,17 @@
       "addedDescription": "共有ポリシー「{{name}}」が正常に追加されました。",
       "addErrorTitle": "ポリシーの追加中にエラーが発生しました",
       "addErrorDescription": "新しい共有ポリシーを保存できませんでした。もう一度お試しください。",
-      "saveFailedNoData": "ポリシーの保存に失敗しました。サーバーからデータが返されませんでした。"
+      "saveFailedNoData": "ポリシーの保存に失敗しました。サーバーからデータが返されませんでした。",
+      "export": {
+        "title": "エクスポートポリシー",
+        "sectionDescription": "このインスタンスがこのエステートと共有するもの。",
+        "emptyTitle": "このエステートにはエクスポートポリシーが定義されていません。"
+      },
+      "import": {
+        "title": "インポートポリシー",
+        "sectionDescription": "このインスタンスがこのエステートから受け入れるもの。",
+        "emptyTitle": "このエステートにはインポートポリシーが定義されていません。"
+      }
     },
     "overview": {
       "title": "エステート概要",
@@ -181,6 +194,12 @@
       "filterType": "例: tag、domain、status",
       "value": "例: finance、Active"
     },
+    "operators": {
+      "equals": "等しい",
+      "contains": "含む",
+      "starts_with": "で始まる",
+      "regex": "正規表現に一致"
+    },
     "validation": {
       "nameMin": "ポリシー名は3文字以上である必要があります",
       "filterTypeRequired": "フィルタタイプは必須です",
@@ -192,5 +211,12 @@
       "submittedDescription": "共有ポリシー「{{name}}」を処理中です。",
       "addErrorDescription": "共有ポリシーの追加に失敗しました。詳細はコンソールを確認してください。"
     }
+  },
+  "resourceTypes": {
+    "data_product": "データプロダクト",
+    "data_contract": "データコントラクト",
+    "business_term": "ビジネス用語",
+    "data_domain": "データドメイン",
+    "concept": "コンセプト"
   }
 }

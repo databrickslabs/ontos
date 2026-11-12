@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "Instanzidentität",
+      "id": {
+        "label": "Instanz-ID",
+        "help": "Stabile Kennung dieser Ontos-Instanz, die in exportierten Entitäten enthalten ist. Standard: {{default}}. Feld leeren, um den Standard wiederherzustellen.",
+        "invalid": "Verwenden Sie 1-128 Zeichen (Buchstaben, Ziffern, \".\", \"_\", \":\" oder \"-\"); das erste Zeichen muss ein Buchstabe oder eine Ziffer sein."
+      },
+      "name": {
+        "label": "Instanzname",
+        "help": "Lesbarer Name dieser Instanz. Standard: {{default}}. Feld leeren, um den Standard wiederherzustellen.",
+        "invalid": "Verwenden Sie höchstens 128 Zeichen, ohne Steuerzeichen."
+      }
+    },
     "auditLog": {
       "label": "Audit-Log-Verzeichnis",
       "placeholder": "audit_logs",
@@ -210,7 +223,8 @@
       "repoUrl": "https://github.com/ihre-org/ihr-repo.git",
       "branch": "main",
       "token": "ghp_... oder ähnlich",
-      "username": "x-access-token"
+      "username": "x-access-token",
+      "tokenSaved": "Gespeichert. Leer lassen, um ihn zu behalten."
     },
     "cloneButton": "Repository klonen",
     "currentCommit": "Commit",
@@ -235,7 +249,8 @@
       "pushError": "Änderungen konnten nicht übertragen werden",
       "pushSuccess": "Änderungen erfolgreich übertragen",
       "saveError": "Git-Einstellungen konnten nicht gespeichert werden",
-      "saveSuccess": "Git-Einstellungen gespeichert"
+      "saveSuccess": "Git-Einstellungen gespeichert",
+      "tokenRemoved": "Gespeichertes Token entfernt"
     },
     "pendingChanges": "Ausstehende Änderungen",
     "pullButton": "Pull",
@@ -250,7 +265,15 @@
       "notConfigured": "Nicht konfiguriert"
     },
     "viewChangesButton": "Änderungen anzeigen",
-    "volumePath": "Volume-Pfad"
+    "volumePath": "Volume-Pfad",
+    "workingCopy": "Arbeitskopie",
+    "workingCopyNote": "Das Volume ist hier nicht eingehängt. Die Arbeitskopie liegt daher auf der lokalen Festplatte der App, und jede exportierte Datei wird zusätzlich in das Volume geschrieben. Klonen Sie das Repository nach einem Neustart der App erneut: Gepushte Commits bleiben im Remote erhalten.",
+    "volumeSyncWarningTitle": "Export nicht in das Volume geschrieben",
+    "errors": {
+      "git_volume_invalid": "Die Volume-Einstellung „{{value}}“ bezeichnet kein Unity-Catalog-Volume. Verwenden Sie /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> oder einen Volume-Namen mit Katalog und Schema aus den allgemeinen Einstellungen.",
+      "git_volume_sync_failed": "{{path}} konnte nicht in das Volume geschrieben werden. Die Änderung ist im Repository und wird wie gewohnt gepusht; prüfen Sie, ob die App in das Volume schreiben darf (WRITE VOLUME)."
+    },
+    "removeTokenButton": "Gespeichertes Token entfernen"
   },
   "nav": {
     "groups": {
@@ -408,6 +431,15 @@
       "featurePermissions": {
         "title": "Funktionsberechtigungen",
         "description": "Zugriffsebenen für jede Funktion in der Anwendung konfigurieren."
+      },
+      "navigation": {
+        "help": "Nicht markierte Funktionen erscheinen nicht in den Menüs dieser Rolle (Seitenleiste, Schnellaktionen der Startseite, Über). Das Ausblenden ändert nur, was die Menüs zeigen, nicht die Berechtigungen: Seiten bleiben per Link mit derselben Zugriffsebene erreichbar.",
+        "accessColumn": "Zugriffsebene",
+        "column": "In Navigation anzeigen",
+        "showFeature": "{{feature}} in der Navigation anzeigen",
+        "noAccessHint": "Kein Zugriff: Die Funktion erscheint nicht in den Menüs",
+        "adminHint": "Die Admin-Rolle zeigt immer alle Funktionen",
+        "unknownFeatures": "Unbekannte Funktionen können nicht aus der Navigation ausgeblendet werden: {{features}}"
       },
       "groups": {
         "discover": "Entdecken",
@@ -945,6 +977,13 @@
         "productName": "Produktname",
         "productVersion": "Produktversion",
         "productStatus": "Produktstatus"
+      },
+      "lifecycle": {
+        "title": "Lebenszyklus-Status-Tag",
+        "descriptionProduct": "Versieht jede Tabelle mit dem Lebenszyklusstatus des Datenprodukts, das sie verwendet. Bei einer Tabelle, die mehrere Produkte verwenden, gewinnt der beste Status (active zuerst, retired zuletzt).",
+        "descriptionContract": "Versieht jede Tabelle mit dem Lebenszyklusstatus des Datenvertrags, der sie verwendet. Bei einer Tabelle, die mehrere Verträge verwenden, gewinnt der beste Status (active zuerst, retired zuletzt).",
+        "valueLabel": "Tag-Wert:",
+        "sharedKeyHint": "Sind die Status-Tags von Produkt und Vertrag beide mit demselben Schlüssel aktiviert, wird der Status des Produkts geschrieben."
       }
     },
     "entityPatterns": {

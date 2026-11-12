@@ -23,5 +23,10 @@
     "title": "Erreur",
     "message": "Une erreur inattendue s'est produite.",
     "retry": "Réessayer"
+  },
+  "internalError": "Une erreur inattendue s'est produite. Les détails se trouvent dans le journal du serveur (id de l'erreur {{errorId}}).",
+  "userTokenRequired": "Cette requête nécessite votre jeton d'accès Databricks, et aucun n'a été reçu. Rechargez la page ; si le problème persiste, demandez à un administrateur d'activer l'autorisation utilisateur pour l'application.",
+  "subscription": {
+    "productNotSubscribable": "Impossible de s'abonner à « {{productName}} » : son statut est « {{status}} ». Seuls les produits actifs acceptent de nouveaux abonnements."
   }
 }

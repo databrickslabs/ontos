@@ -21,6 +21,7 @@ import {
 } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table"; // Import DataTable
 import { usePermissions } from '@/stores/permissions-store'; // Import the permissions hook
+import { deleteOrThrow } from '@/lib/delete-or-throw';
 
 export default function RolesSettings() {
     const { get, post: _post, delete: deleteApi } = useApi();
@@ -120,7 +121,7 @@ export default function RolesSettings() {
         }
 
         try {
-            await deleteApi(`/api/settings/roles/${roleId}`);
+            await deleteOrThrow(deleteApi, `/api/settings/roles/${roleId}`);
             toast({ title: t('common:status.success'), description: t('roles.messages.roleDeleted', { name: roleName }) });
             fetchData(); // Refresh list
             await refreshPermissionsAndRoles(); // Refresh permissions/roles

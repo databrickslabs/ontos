@@ -19,11 +19,20 @@
   },
   "warning": {
     "title": "Systeemwaarschuwing",
-    "workspaceFailed": "Verbinding met Databricks-werkruimte mislukt. Sommige functies zijn mogelijk niet beschikbaar."
+    "workspaceFailed": "Verbinding met Databricks-werkruimte mislukt. Sommige functies zijn mogelijk niet beschikbaar.",
+    "stillUnavailable": "De workspace is nog steeds niet bereikbaar. Probeer het later opnieuw."
   },
   "routeError": {
     "title": "Er is iets misgegaan",
     "body": "Er is een onverwachte fout opgetreden bij het weergeven van deze pagina. Je kunt het opnieuw proberen of teruggaan naar de startpagina.",
     "goHome": "Naar Home"
+  },
+  "health": {
+    "issues": {
+      "workspace_client_unavailable": "De Databricks-workspaceclient kon niet worden gemaakt. De oorzaak staat in de serverlogs.",
+      "manager_init_failed": "Sommige services konden niet worden geïnitialiseerd. De oorzaak staat in de serverlogs.",
+      "seeding_failed": "Standaardrollen, -teams of -projecten konden niet worden aangemaakt. De oorzaak staat in de serverlogs.",
+      "database_unavailable": "De metadatadatabase kon niet worden geïnitialiseerd. De oorzaak staat in de serverlogs."
+    }
   }
 }

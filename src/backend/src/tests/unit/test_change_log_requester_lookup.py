@@ -1,8 +1,12 @@
 """Approval flows find the requester in the change log.
 
-Five request / approval flows call ``change_log_manager.get_changes_for_entity``
-and read ``change.details``; neither existed, the AttributeError was swallowed,
-and the requester was never told about the decision.
+Four request / approval flows (three in DataContractsManager, one in
+DataProductsManager) call ``change_log_manager.get_changes_for_entity`` and
+read ``change.details``; neither existed, the AttributeError was swallowed,
+and the requester was never told about the decision. The behavioural test
+covers one flow, the approved contract publication. The other three share the
+same accessor, which is tested directly (ordering, parsed details, and the
+``action`` filter that finds an old request on an entity with a long history).
 """
 import os
 
@@ -36,6 +40,44 @@ def test_changes_come_newest_first_with_parsed_details(db_session):
     changes = change_log_manager.get_changes_for_entity(db_session, 'data_contract', 'c1')
 
     assert [c.details['requester_email'] for c in changes] == ['new@x', 'old@x']
+
+
+def test_the_action_filter_finds_an_old_request_behind_many_newer_entries(db_session):
+    _log(db_session, 'c2', 'publish_requested', {'requester_email': 'old@x'}, days_ago=30)
+    for i in range(120):
+        _log(db_session, 'c2', 'comment_added', {'n': i}, days_ago=1)
+
+    # The default limit of 100 only sees the newer entries ...
+    unfiltered = change_log_manager.get_changes_for_entity(db_session, 'data_contract', 'c2')
+    assert not any(c.action == 'publish_requested' for c in unfiltered)
+
+    # ... the filter is applied in SQL, so the old request is still found.
+    found = change_log_manager.get_changes_for_entity(
+        db_session, 'data_contract', 'c2', action='publish_requested', limit=1,
+    )
+    assert [c.details['requester_email'] for c in found] == ['old@x']
+
+
+def test_an_approved_publish_request_finds_a_requester_behind_many_newer_entries(db_session):
+    contract = DataContractDb(
+        id=str(uuid.uuid4()), name='c', version='1.0.0', status='approved',
+        version_family_id=str(uuid.uuid4()), publication_scope='none',
+    )
+    db_session.add(contract)
+    db_session.flush()
+    _log(db_session, contract.id, 'publish_requested',
+         {'requester_email': 'requester@example.com', 'requested_scope': 'domain'}, days_ago=30)
+    for i in range(120):
+        _log(db_session, contract.id, 'comment_added', {'n': i}, days_ago=1)
+    notifications = MagicMock()
+
+    DataContractsManager(data_dir=Path('/tmp')).handle_publish_response(
+        db_session, notifications, contract.id, 'approver@example.com', 'approve',
+    )
+
+    recipients = [c.kwargs['notification'].recipient
+                  for c in notifications.create_notification.call_args_list]
+    assert 'requester@example.com' in recipients
 
 
 def test_details_tolerates_missing_or_invalid_json():

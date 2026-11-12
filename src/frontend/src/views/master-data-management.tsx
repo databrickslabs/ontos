@@ -37,6 +37,7 @@ import {
   MdmMatchCandidateStatus,
   MdmMatchType,
 } from '@/types/mdm';
+import { deleteOrThrow } from '@/lib/delete-or-throw';
 
 export default function MasterDataManagement() {
   const { t } = useTranslation(['mdm', 'common']);
@@ -180,7 +181,7 @@ export default function MasterDataManagement() {
     if (!confirm(t('mdm:confirm.deleteConfig'))) return;
     
     try {
-      await deleteApi(`/api/mdm/configs/${configId}`);
+      await deleteOrThrow(deleteApi, `/api/mdm/configs/${configId}`);
       toast({ title: t('common:toast.success'), description: t('mdm:toast.configDeleted') });
       if (selectedConfig?.id === configId) {
         setSelectedConfig(null);
@@ -195,7 +196,7 @@ export default function MasterDataManagement() {
     if (!confirm(t('mdm:confirm.deleteSource'))) return;
     
     try {
-      await deleteApi(`/api/mdm/sources/${linkId}`);
+      await deleteOrThrow(deleteApi, `/api/mdm/sources/${linkId}`);
       toast({ title: t('common:toast.success'), description: t('mdm:toast.sourceRemoved') });
       if (selectedConfig) {
         fetchSourceLinks(selectedConfig.id);

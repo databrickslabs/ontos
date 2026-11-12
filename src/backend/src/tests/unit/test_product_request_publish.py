@@ -10,12 +10,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from src.controller.data_products_manager import DataProductsManager
 from src.routes import data_product_routes
 
 
 async def _request_publish(product, registry, scope='organization'):
-    manager = SimpleNamespace(_repo=SimpleNamespace(get=lambda db, id: product))
-    with patch.object(data_product_routes, 'get_trigger_registry', return_value=registry):
+    # The route's manager, on a stub repository (the manager fires the trigger)
+    manager = DataProductsManager(db=MagicMock())
+    manager._repo = SimpleNamespace(get=lambda db, id: product)
+    registry.on_request_publish.return_value = []  # the executions it ran
+    with patch('src.common.workflow_triggers.get_trigger_registry', return_value=registry):
         return await data_product_routes.request_publish_product(
             product_id='prod-1',
             request=MagicMock(client=None),

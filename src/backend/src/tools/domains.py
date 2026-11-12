@@ -6,9 +6,10 @@ Tools for searching, creating, updating, and deleting data domains.
 
 from typing import Any, Dict, List, Optional
 from uuid import UUID
+from src.common.features import FeatureAccessLevel
 
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -81,8 +82,7 @@ class SearchDomainsTool(BaseTool):
             )
 
         except Exception as e:
-            logger.error(f"[search_domains] FAILED: {e.__class__.__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{e.__class__.__name__}: {str(e)}", data={"domains": []})
+            return ToolResult(success=False, **tool_failure("search_domains", e), data={"domains": []})
 
 
 class GetDomainTool(BaseTool):
@@ -143,8 +143,7 @@ class GetDomainTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[get_domain] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("get_domain", e))
 
 
 class CreateDomainTool(BaseTool):
@@ -169,6 +168,7 @@ class CreateDomainTool(BaseTool):
     }
     required_params = ["name"]
     required_scope = "domains:write"
+    required_permission = ("data-domains", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -215,8 +215,7 @@ class CreateDomainTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[create_domain] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("create_domain", e))
 
 
 class UpdateDomainTool(BaseTool):
@@ -245,6 +244,7 @@ class UpdateDomainTool(BaseTool):
     }
     required_params = ["domain_id"]
     required_scope = "domains:write"
+    required_permission = ("data-domains", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -308,8 +308,7 @@ class UpdateDomainTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[update_domain] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("update_domain", e))
 
 
 class DeleteDomainTool(BaseTool):
@@ -326,6 +325,7 @@ class DeleteDomainTool(BaseTool):
     }
     required_params = ["domain_id"]
     required_scope = "domains:write"
+    required_permission = ("data-domains", FeatureAccessLevel.ADMIN)
     
     async def execute(
         self,
@@ -366,5 +366,4 @@ class DeleteDomainTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[delete_domain] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("delete_domain", e))

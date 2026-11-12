@@ -31,8 +31,9 @@ from ..controller.notifications_manager import NotificationsManager
 from ..common.config import get_settings
 from ..common.sanitization import sanitize_markdown_input
 from ..common.search_config_loader import get_search_config_loader
-from ..common.authorization import PermissionChecker
+from ..common.authorization import PermissionChecker, require_demo_admin_or_setup_token
 from ..common.features import FeatureAccessLevel
+from ..common.api_errors import CodedValueError
 
 # Configure logging
 from src.common.logging import get_logger, redact_sensitive_keys
@@ -94,6 +95,16 @@ async def update_settings(
             details['allow_job_enablement_requests'] = settings_payload.get('allow_job_enablement_requests')
         if 'schema_import_child_limit' in settings_payload:
             details['schema_import_child_limit'] = settings_payload.get('schema_import_child_limit')
+        # The Git token itself never goes to the audit log, only what happened to it.
+        if settings_payload.get('git_password'):
+            details['git_password'] = 'set'
+        elif settings_payload.get('git_password_clear'):
+            details['git_password'] = 'cleared'
+
+        if 'ontos_instance_id' in settings_payload:
+            details['ontos_instance_id'] = settings_payload.get('ontos_instance_id')
+        if 'ontos_instance_name' in settings_payload:
+            details['ontos_instance_name'] = settings_payload.get('ontos_instance_name')
 
         updated = manager.update_settings(settings_payload)
         success = True
@@ -290,6 +301,10 @@ async def create_role(
             details["created_role_id"] = str(created_role.id)
         
         return created_role
+    except CodedValueError as e:
+        # Coded refusals (e.g. unknown hidden_nav_features) keep their code and params.
+        details["exception"] = str(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except ValueError as e:
         logger.warning("Validation error creating role '%s': %s", role_data.name, e)
         details["exception"] = str(e)
@@ -354,6 +369,9 @@ async def update_role(
         success = True
         
         return updated_role
+    except CodedValueError as e:
+        details["exception"] = str(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except ValueError as e:
         logger.warning("Validation error updating role %s: %s", role_id, e)
         details["exception"] = str(e)
@@ -490,10 +508,7 @@ async def load_demo_data(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: SettingsManager = Depends(get_settings_manager),
-    # NOTE: intentionally NOT gated by PermissionChecker — invoked from the
-    # Swagger UI during demo setup, which does not propagate app-level auth
-    # headers. Tracked for a follow-up that introduces a Swagger-friendly
-    # admin path. Edge auth still blocks anonymous callers in prod.
+    access_via: str = Depends(require_demo_admin_or_setup_token),
     preset: str = Query(
         default="retail",
         description=(
@@ -516,7 +531,9 @@ async def load_demo_data(
     """
     success = False
     preset_slug = (preset or "").strip().lower()
-    details: Dict[str, Any] = {"action": "load_demo_data", "preset": preset_slug}
+    details: Dict[str, Any] = {
+        "action": "load_demo_data", "preset": preset_slug, "via": access_via,
+    }
 
     if preset_slug not in DEMO_DATA_PRESETS:
         raise HTTPException(
@@ -664,24 +681,40 @@ async def clear_demo_data(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: SettingsManager = Depends(get_settings_manager),
-    # NOTE: intentionally NOT gated by PermissionChecker — see load_demo_data
-    # above. Swagger-driven demo teardown; gate added in a follow-up.
+    dry_run: bool = Query(
+        default=False,
+        description=(
+            "List what would be deleted, and what blocks the clear, without changing anything."
+        ),
+    ),
+    access_via: str = Depends(require_demo_admin_or_setup_token),
 ):
     """
     Clear all demo data from the database.
-    
-    This endpoint is Admin-only and removes all demo data that was loaded
-    via the /settings/demo-data/load endpoint.
-    
-    WARNING: This will delete all data with IDs matching the demo data patterns.
+
+    Deletes the rows inserted by the demo packs, together with the rows that
+    are part of them and were added later, also by users (e.g. subscriptions
+    to a demo product, runs and results of a demo compliance policy, custom
+    properties of a demo product). Comments posted on a demo entity are not
+    linked to it by a foreign key and are left in place.
+
+    User data that refers to demo rows (an asset of a demo asset type, a tag in
+    a demo tag namespace, a product owned by a demo team, ...) is never deleted
+    or detached: if there is any, nothing is deleted and the response (409)
+    lists it per table with row ids. The clear is all or nothing.
+
+    With `dry_run=true`, returns the rows that would be deleted per table
+    (`would_delete`), how many of them were added later as parts of demo rows
+    (`added_later`, per table), and the rows that would block the clear,
+    without changing anything.
     """
     success = False
-    details = {"action": "clear_demo_data"}
-    
+    details = {"action": "clear_demo_data", "dry_run": dry_run, "via": access_via}
+
     try:
         from pathlib import Path
-        from sqlalchemy import bindparam, text
         from src.utils.demo_data_sql import parse_demo_inserts
+        from src.utils.demo_data_cleanup import plan_demo_clear, run_demo_clear
 
         # Derive the teardown directly from the demo packs instead of maintaining a
         # hand-written prefix list. The prefix list silently drifted from the packs
@@ -712,58 +745,96 @@ async def clear_demo_data(
                 agg[key] = []
                 order.append(key)
             agg[key].extend(ins.pk_values)
+        demo = [
+            (table_name, pk_column, list(dict.fromkeys(agg[(table_name, pk_column)])))
+            for table_name, pk_column in order
+        ]
 
-        # Wrap each statement in a SAVEPOINT so that a single failing DELETE (e.g.
-        # against a table dropped by a later migration) does not poison the
-        # surrounding transaction and silently abort all subsequent deletes.
-        deleted_counts: Dict[str, int] = {}
-        skipped: List[Dict[str, str]] = []
-        for table_name, pk_column in order:
-            ids = list(dict.fromkeys(agg[(table_name, pk_column)]))  # dedup, keep order
-            stmt = text(
-                f"DELETE FROM {table_name} WHERE {pk_column}::text IN :ids"
-            ).bindparams(bindparam("ids", expanding=True))
-            try:
-                with db.begin_nested():
-                    result = db.execute(stmt, {"ids": ids})
-                rowcount = result.rowcount or 0
-                if rowcount > 0:
-                    deleted_counts[table_name] = deleted_counts.get(table_name, 0) + rowcount
-            except Exception as e:
-                err_short = str(e).splitlines()[0][:200]
-                logger.warning(
-                    f"Delete statement FAILED ({table_name}): {err_short}"
-                )
-                skipped.append({
-                    "table": table_name,
-                    "error": err_short,
-                })
+        plan = plan_demo_clear(db, demo)
+        blocking = plan.blocking_report()
+        details["blocking"] = [
+            {k: v for k, v in b.items() if k != "ids"} for b in blocking
+        ]
 
+        if dry_run:
+            would_delete = plan.deletes_report(db)
+            total = sum(len(ids) for ids in would_delete.values())
+            # Rows added after the demo was loaded that are part of demo rows
+            # (a subscription to a demo product, a run of a demo policy): they
+            # go with them, so the dry run names them apart.
+            added_later = {t: len(rows) for t, rows in sorted(plan.dependents.items()) if rows}
+            added_later_count = sum(added_later.values())
+            success = True
+            details["would_delete_counts"] = {t: len(ids) for t, ids in would_delete.items()}
+            blocking_count = sum(b['count'] for b in blocking)
+            return {
+                "status": "dry_run",
+                # code + params for clients to translate; message is the English fallback
+                "code": "demo_clear_dry_run",
+                "params": {
+                    "would_delete": total, "added_later": added_later_count,
+                    "blocking": blocking_count,
+                },
+                "message": (
+                    f"Clearing would delete {total} records"
+                    + (f", {added_later_count} of them added after the demo was loaded "
+                       f"as parts of demo records (e.g. subscriptions to demo products)"
+                       if added_later_count else "")
+                    + (f"; {blocking_count} records of user data refer to "
+                       f"demo data and would block it." if blocking else ".")
+                ),
+                "would_delete": would_delete,
+                "added_later": added_later,
+                "blocking": blocking,
+            }
+
+        if blocking:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "demo_clear_blocked",
+                    "params": {"blocking": sum(b['count'] for b in blocking)},
+                    "message": (
+                        "Demo data was not cleared: these records were not created by the demo "
+                        "but refer to demo data. Delete them, or move them off the demo data, "
+                        "and clear again. Nothing was deleted."
+                    ),
+                    "blocking": blocking,
+                },
+            )
+
+        # One transaction: if any delete fails, nothing is deleted
+        deleted_counts = run_demo_clear(db, plan)
         db.commit()
         _rebuild_search_index(request)
 
         success = True
         details["deleted_counts"] = deleted_counts
-        details["skipped"] = skipped
-
         total_deleted = sum(deleted_counts.values())
-        skipped_msg = f", {len(skipped)} statements skipped" if skipped else ""
-        logger.info(f"Demo data cleared. Deleted {total_deleted} records{skipped_msg}.")
+        logger.info(f"Demo data cleared. Deleted {total_deleted} records.")
 
         return {
-            "status": "success" if not skipped else "partial",
-            "message": f"Demo data cleared. Deleted {total_deleted} records{skipped_msg}.",
+            "status": "success",
+            "code": "demo_clear_succeeded",
+            "params": {"deleted": total_deleted},
+            "message": f"Demo data cleared. Deleted {total_deleted} records.",
             "deleted_counts": deleted_counts,
-            "skipped": skipped,
         }
-        
+
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         logger.error("Error clearing demo data", exc_info=True)
         details["exception"] = str(e)
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to clear demo data: {str(e)}"
+            detail={
+                "code": "demo_clear_failed",
+                "params": {"error": str(e)},
+                "message": f"Failed to clear demo data; nothing was deleted: {str(e)}",
+            },
         )
     finally:
         background_tasks.add_task(
@@ -1127,10 +1198,12 @@ async def clone_git_repository(
     manager: SettingsManager = Depends(get_settings_manager),
     _: bool = Depends(PermissionChecker('settings-git', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Clone the Git repository to the UC Volume.
+    """Clone the Git repository to the export location.
     
     This is an explicit admin action to initialize the Git repository.
-    The repository will be cloned to {DATABRICKS_VOLUME}/git-export/.
+    The repository is cloned to {DATABRICKS_VOLUME}/git-export/, or to a
+    local working copy whose exports are written there when the volume
+    isn't mounted (Databricks Apps).
     """
     success = False
     details = {"action": "clone_git_repository"}
@@ -1146,10 +1219,15 @@ async def clone_git_repository(
             return result.to_dict()
         else:
             details["error"] = result.error_message
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result.error_message or "Failed to clone repository"
-            )
+            message = result.error_message or "Failed to clone repository"
+            detail: Any = message
+            if result.error_code:
+                detail = {
+                    "code": result.error_code,
+                    "message": message,
+                    "params": result.error_params or {},
+                }
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     except RuntimeError as e:
         details["exception"] = str(e)
         raise HTTPException(status_code=400, detail=str(e))

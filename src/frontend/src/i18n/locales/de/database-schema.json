@@ -63,6 +63,26 @@
     "previewFailed": "Vorschau fehlgeschlagen",
     "importFailed": "Import fehlgeschlagen",
     "importComplete": "Import abgeschlossen",
-    "importCompleteSummary": "{{created}} erstellt, {{skipped}} übersprungen, {{errors}} Fehler"
+    "importCompleteSummary": "{{created}} erstellt, {{skipped}} übersprungen, {{errors}} Fehler",
+    "async": {
+      "started": "Import gestartet",
+      "startedDescription": "Läuft im Hintergrund. Der Fortschritt erscheint hier und in Ihren Benachrichtigungen.",
+      "startFailed": "Hintergrundimport konnte nicht gestartet werden",
+      "seeRunDetails": "Siehe die Details des Laufs.",
+      "progress": "{{processed}} von {{total}} verarbeitet (erstellt: {{created}}, übersprungen: {{skipped}})",
+      "progressWithErrors": "{{processed}} von {{total}} verarbeitet (erstellt: {{created}}, übersprungen: {{skipped}}, Fehler: {{errors}})",
+      "starting": "Wird gestartet…",
+      "closeHint": "Sie können diesen Dialog schließen. Der Import läuft weiter, und sein Abschluss wird in Ihren Benachrichtigungen gemeldet.",
+      "cancel": "Import abbrechen",
+      "closeKeepRunning": "Schließen (läuft weiter)",
+      "runInBackground": "Im Hintergrund ausführen",
+      "status": {
+        "pending": "Ausstehend",
+        "running": "Läuft",
+        "completed": "Abgeschlossen",
+        "failed": "Fehlgeschlagen",
+        "cancelled": "Abgebrochen"
+      }
+    }
   }
 }

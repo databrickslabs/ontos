@@ -54,7 +54,9 @@
     "uploadError": "コントラクトのアップロードに失敗しました",
     "uploadFailed": "アップロードに失敗しました",
     "uploadOdpsHint": "\n\nヒント: このページはデータコントラクト（ODCS 形式）用です。データプロダクト（ODPS 形式）をアップロードする場合は、代わりにデータプロダクトのページを使用してください。",
-    "uploadSuccess": "コントラクトをアップロードしました"
+    "uploadSuccess": "コントラクトをアップロードしました",
+    "uploadSuccessCount_one": "{{count}} 件の契約をインポートしました",
+    "uploadSuccessCount_other": "{{count}} 件の契約をインポートしました"
   },
   "status": {
     "draft": "下書き",
@@ -69,6 +71,15 @@
     "retired": "廃止",
     "published": "公開済み",
     "archived": "アーカイブ済み"
+  },
+  "statusDescriptions": {
+    "draft": "開発中で、まだレビューに提出されていません",
+    "proposed": "レビューのために提出済み",
+    "under_review": "データスチュワードがレビュー中",
+    "approved": "スチュワードが承認済みで、有効化できます",
+    "active": "本番で使用中で、データ資産を管理しています",
+    "deprecated": "引き続き利用できますが、廃止予定です",
+    "retired": "使用されておらず、アーカイブ済み"
   },
   "details": {
     "backToList": "リストに戻る",
@@ -187,7 +198,8 @@
     "validationErrorTitle": "検証エラー",
     "nameRequired": "コントラクト名は必須です",
     "versionRequired": "バージョンは必須です",
-    "saveError": "コントラクトの保存に失敗しました"
+    "saveError": "コントラクトの保存に失敗しました",
+    "statusChangeHint": "ステータスはページの「ステータスを変更」で変更します。遷移を確認し、ステータス変更ワークフローを実行します。"
   },
   "import": {
     "title": "データ契約をインポート",
@@ -209,7 +221,14 @@
     "importedTitle": "インポート済み",
     "importedSuccess": "ODCS JSON をインポートしました",
     "importOdcsError": "ODCS JSON のインポートに失敗しました",
-    "importJsonButton": "JSON をインポート"
+    "importJsonButton": "JSON をインポート",
+    "uploadDescription": "1 つ以上の ODCS ファイル（YAML/JSON）を選択してください。各ファイルには契約を 1 つ、または配列で含めることができます。",
+    "createMissingDomains": "不足しているドメインを作成",
+    "createMissingDomainsHint": "存在しないドメインを自動作成します。オフ: 一致しないドメインは未割り当てのままになります（元の値は保持されます）。",
+    "adoptIds": "ファイルの ID を使用",
+    "adoptIdsHint": "ファイル内の有効で重複しない UUID を主キーとして再利用し、エンティティ間のリンクがインポート後も保たれるようにします。",
+    "duplicatesAsNew": "重複した ID を新しいコピーとしてインポート",
+    "duplicatesAsNewHint": "オフ（既定）: ID が既に存在するエンティティはスキップされます。オン: 新しい ID の新しいコピーとしてインポートされます。"
   },
   "editor": {
     "title": "契約エディタ",
@@ -266,6 +285,8 @@
       "domain": "ドメイン",
       "project": "プロジェクト",
       "projectIdTitle": "プロジェクト ID: {{id}}",
+      "dataProduct": "データプロダクト",
+      "dataProductIdTitle": "プロダクト ID: {{id}}",
       "tenant": "テナント",
       "team": "チーム",
       "teamIdTitle": "チーム ID: {{id}}",
@@ -325,7 +346,7 @@
       "createProduct": "データプロダクトを作成",
       "noneYet": "リンクされたデータプロダクトはまだありません",
       "emptyHint": "このコントラクトを使用して成果物をガバナンスするデータプロダクトを作成します",
-      "statusRequirement": "コントラクトは「active」「approved」または「certified」ステータスである必要があります",
+      "statusRequirement": "コントラクトは「active」または「approved」ステータスである必要があります",
       "unnamedProduct": "名称未設定のプロダクト",
       "deliverables_one": "成果物: {{ports}}",
       "deliverables_other": "成果物: {{ports}}"
@@ -496,11 +517,12 @@
       "deleteSchemaAuthDefFailed": "スキーマの正式な定義の削除に失敗しました",
       "createPropertyAuthDefFailed": "プロパティの正式な定義の作成に失敗しました",
       "updatePropertyAuthDefFailed": "プロパティの正式な定義の更新に失敗しました",
-      "approveFailedStatus": "承認に失敗しました（{{status}}）",
+      "invalidTransition": "契約は現在{{fromStatus}}のため、承認も却下もできません。ページを再読み込みして現在のステータスを確認してください。",
       "approveFailed": "承認に失敗しました",
-      "rejectFailedStatus": "却下に失敗しました（{{status}}）",
       "rejectFailed": "却下に失敗しました",
-      "startProfilingFailed": "プロファイリングの開始に失敗しました"
+      "startProfilingFailed": "プロファイリングの開始に失敗しました",
+      "invalidVersionFormat": "「{{version}}」は有効なバージョンではありません。新しいバージョンは X.Y.Z の形式です（例: 2.0.0）。",
+      "draftVersionFormat": "この契約のバージョン「{{version}}」は X.Y.Z の形式ではないため、個人用ドラフトを作成できません。代わりに新しいバージョン（例: 2.0.0）を作成してください。"
     }
   },
   "list": {
@@ -1062,7 +1084,7 @@
     "statusLabel": "ステータス:",
     "requestTypeLabel": "リクエストタイプ *",
     "notAvailableForStatus": "ステータス「{{status}}」では利用できません",
-    "cannotRequest": "ステータス「{{status}}」のコントラクトに対して {{type}} をリクエストできません",
+    "cannotRequest": "「{{type}}」はステータス {{status}} のコントラクトでは利用できません。",
     "messageOptionalLabel": "メッセージ（任意）",
     "changingStatus": "ステータスを変更中...",
     "sendingRequest": "リクエストを送信中...",
@@ -1123,6 +1145,14 @@
       "requestDescription": "このコントラクトのライフサイクルステータスを変更する承認をリクエストします。",
       "currentStatusLabel": "現在のステータス:",
       "recommendedLabel": "推奨:",
+      "recommended": {
+        "draft": "準備ができたらレビューに提出してください（提案済み）",
+        "proposed": "スチュワードがレビュー中に移すのを待ってください",
+        "under_review": "スチュワードが承認するか、変更を依頼します",
+        "approved": "本番データを管理する準備ができたら有効化してください",
+        "active": "廃止を計画するときは非推奨にしてください。認証には認証パネルを使用します",
+        "deprecated": "使用されなくなったら廃止してください"
+      },
       "selectTargetLabel": "対象ステータスを選択 *",
       "chooseTargetPlaceholder": "対象ステータスを選択...",
       "terminalStateLabel": "終端状態:",
@@ -1145,11 +1175,24 @@
       "statusChangedTitle": "ステータスを変更しました",
       "statusChangedDescription": "コントラクトのステータスが「{{from}}」から「{{to}}」に変更されました。",
       "submittedTitle": "リクエストを送信しました",
-      "submittedDescription": "{{type}} のリクエストを送信しました。判断結果は通知されます。"
+      "submittedDescription": "{{type}} のリクエストを送信しました。判断結果は通知されます。",
+      "workflowFailedTitle": "リクエストは送信されましたが、ワークフローが失敗しました",
+      "workflowFailedDescription": "{{type}} のリクエストの判断を依頼された人はいません。ワークフロー「{{workflow}}」を開始できませんでした。管理者に連絡してください。",
+      "requestTypes": {
+        "access": "アクセス",
+        "review": "レビュー",
+        "deploy": "デプロイ",
+        "publish": "公開",
+        "certify": "認定",
+        "status_change": "ステータス変更"
+      },
+      "workflowPartiallyFailedTitle": "いくつかのリクエストワークフローが失敗しました",
+      "workflowPartiallyFailedDescription": "{{type}}リクエストワークフローの1つが失敗しました: {{workflows}}。他の承認はまだ保留中である可能性があります。"
     },
     "errors": {
       "submitFailed": "リクエストの送信に失敗しました",
-      "loadPolicyFailed": "デプロイポリシーの読み込みに失敗しました"
+      "loadPolicyFailed": "デプロイポリシーの読み込みに失敗しました",
+      "reviewSchemaRequired": "レビューに提案する前に、コントラクトにスキーマが必要です。"
     }
   },
   "deployRequest": {

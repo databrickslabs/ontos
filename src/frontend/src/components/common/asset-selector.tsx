@@ -56,6 +56,7 @@ const ASSET_TYPE_ICONS: Record<string, React.ElementType> = {
   Dataset: Database,
   Table: Table2,
   View: Eye,
+  'Metric View': Eye,
   'Delivery Channel': Radio,
   Dashboard: LayoutDashboard,
   Notebook: BookOpen,
@@ -251,7 +252,7 @@ export function AssetSelector({
   const fetchAssetTypes = useCallback(async () => {
     setTypesLoading(true);
     try {
-      const response = await apiGet<AssetTypeRead[]>('/api/asset-types?limit=100');
+      const response = await apiGet<AssetTypeRead[]>('/api/asset-types');
       if (!response.error && Array.isArray(response.data)) {
         setAssetTypes(response.data.filter(t => t.status === 'active'));
       }

@@ -22,9 +22,14 @@ class ChangeLogManager:
         entity_id: str, 
         action: str, 
         username: Optional[str], 
-        details_json: Optional[str] = None
+        details_json: Optional[str] = None,
+        commit: bool = True,
     ) -> ChangeLogDb:
-        """Log a change to the change log."""
+        """Log a change to the change log.
+
+        With ``commit=False`` the entry is only flushed, so it is committed (or
+        rolled back) with the caller's transaction.
+        """
         logger.info(f"Logging change: {entity_type}:{entity_id} - {action} by {username}")
         
         entry = ChangeLogDb(
@@ -35,6 +40,9 @@ class ChangeLogManager:
             details_json=details_json,
         )
         db.add(entry)
+        if not commit:
+            db.flush()
+            return entry
         db.commit()
         db.refresh(entry)
         return entry
@@ -47,7 +55,8 @@ class ChangeLogManager:
         entity_id: str, 
         action: str, 
         username: Optional[str], 
-        details: Optional[dict] = None
+        details: Optional[dict] = None,
+        commit: bool = True,
     ) -> ChangeLogDb:
         """Log a change with structured details."""
         details_json = None
@@ -63,18 +72,26 @@ class ChangeLogManager:
             entity_id=entity_id,
             action=action,
             username=username,
-            details_json=details_json
+            details_json=details_json,
+            commit=commit,
         )
 
     def get_changes_for_entity(
-        self, db: Session, entity_type: str, entity_id: str, limit: int = 100
+        self,
+        db: Session,
+        entity_type: str,
+        entity_id: str,
+        limit: int = 100,
+        action: Optional[str] = None,
     ) -> List[ChangeLogDb]:
         """Change log entries for an entity, newest first (``entry.details`` is parsed).
 
-        Used by the request / approval flows to find who made a request.
+        Used by the request / approval flows to find who made a request. Pass
+        ``action`` to filter in SQL, so an old request is found however many
+        newer entries the entity has; ``limit`` then applies to matching rows only.
         """
         return self.list_changes_for_entity(
-            db, entity_type=entity_type, entity_id=entity_id, limit=limit
+            db, entity_type=entity_type, entity_id=entity_id, limit=limit, action=action
         )
 
     def list_changes_for_entity(
@@ -83,13 +100,15 @@ class ChangeLogManager:
         *, 
         entity_type: str, 
         entity_id: str, 
-        limit: int = 100
+        limit: int = 100,
+        action: Optional[str] = None,
     ) -> List[ChangeLogDb]:
-        """List change log entries for a specific entity."""
+        """List change log entries for a specific entity (optionally one action)."""
         return self._change_log_repo.list_by_entity(
             db, 
             entity_type=entity_type, 
             entity_id=entity_id, 
+            action=action,
             limit=limit
         )
 

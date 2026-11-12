@@ -5,7 +5,7 @@ Provides CRUD operations for workflow definitions, steps, and executions.
 """
 
 import json
-from typing import List, Optional
+from typing import Dict, List, Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 
@@ -23,6 +23,7 @@ from src.models.process_workflows import (
     TriggerType,
     EntityType,
     WorkflowType,
+    ends_process_run,
 )
 from src.common.logging import get_logger
 
@@ -169,7 +170,7 @@ class ProcessWorkflowRepository:
         db_workflow = ProcessWorkflowDb(
             name=workflow.name,
             description=workflow.description,
-            trigger_config=workflow.trigger.model_dump_json(),
+            trigger_config=workflow.trigger.stored_config_json(),
             scope_config=workflow.scope.model_dump_json() if workflow.scope else None,
             workflow_type=(getattr(workflow, 'workflow_type', WorkflowType.PROCESS) or WorkflowType.PROCESS).value,
             is_active=workflow.is_active,
@@ -182,14 +183,16 @@ class ProcessWorkflowRepository:
         
         # Create steps
         for i, step in enumerate(workflow.steps):
+            # A Pass or Fail step ends a process run, so a link out of it is dropped
+            terminal = ends_process_run(db_workflow.workflow_type, step.step_type)
             db_step = WorkflowStepDb(
                 workflow_id=db_workflow.id,
                 step_id=step.step_id,
                 name=step.name,
                 step_type=step.step_type.value,
                 config=json.dumps(step.config) if step.config else None,
-                on_pass=step.on_pass,
-                on_fail=step.on_fail,
+                on_pass=None if terminal else step.on_pass,
+                on_fail=None if terminal else step.on_fail,
                 order=step.order if step.order else i,
                 position=step.position.model_dump_json() if step.position else None,
             )
@@ -206,8 +209,13 @@ class ProcessWorkflowRepository:
         workflow: ProcessWorkflowUpdate,
         *,
         updated_by: Optional[str] = None,
+        customized: Optional[bool] = None,
     ) -> Optional[ProcessWorkflowDb]:
-        """Update an existing workflow."""
+        """Update an existing workflow.
+
+        ``customized`` sets ``is_customized`` (True for a user's update, False for the
+        default loader's reset); None leaves it as it is.
+        """
         db_workflow = self.get(db, workflow_id)
         if not db_workflow:
             return None
@@ -218,7 +226,7 @@ class ProcessWorkflowRepository:
         if workflow.description is not None:
             db_workflow.description = workflow.description
         if workflow.trigger is not None:
-            db_workflow.trigger_config = workflow.trigger.model_dump_json()
+            db_workflow.trigger_config = workflow.trigger.stored_config_json()
         if workflow.scope is not None:
             db_workflow.scope_config = workflow.scope.model_dump_json()
         if workflow.workflow_type is not None:
@@ -228,32 +236,56 @@ class ProcessWorkflowRepository:
         
         db_workflow.updated_by = updated_by
         db_workflow.version += 1
+        if customized is not None:
+            db_workflow.is_customized = customized
         
         # Update steps if provided
         if workflow.steps is not None:
-            # Delete existing steps
-            db.query(WorkflowStepDb).filter(
-                WorkflowStepDb.workflow_id == workflow_id
-            ).delete()
-            
-            # Create new steps
-            for i, step in enumerate(workflow.steps):
-                db_step = WorkflowStepDb(
-                    workflow_id=workflow_id,
-                    step_id=step.step_id,
-                    name=step.name,
-                    step_type=step.step_type.value,
-                    config=json.dumps(step.config) if step.config else None,
-                    on_pass=step.on_pass,
-                    on_fail=step.on_fail,
-                    order=step.order if step.order else i,
-                    position=step.position.model_dump_json() if step.position else None,
-                )
-                db.add(db_step)
-        
+            self._replace_steps(db, db_workflow, workflow.steps)
+
         db.commit()
         db.refresh(db_workflow)
         return db_workflow
+
+    def _replace_steps(
+        self, db: Session, db_workflow: ProcessWorkflowDb, steps: List[WorkflowStepCreate],
+    ) -> None:
+        """Make the workflow's steps match ``steps``, keeping the rows of the steps that stay.
+
+        Step results (``workflow_step_executions``) reference the step's row id
+        and are deleted with it, so recreating every step on save erased the
+        results of all past executions. A step whose ``step_id`` is still in
+        the workflow keeps its row and is updated in place; only the steps that
+        are no longer in it are deleted; their results stay, with the step's
+        ``step_id`` and name (``step_key``, ``step_name``) and no row id.
+        """
+        existing: Dict[str, WorkflowStepDb] = {}
+        for db_step in db_workflow.steps:
+            if db_step.step_id in existing:
+                db.delete(db_step)  # A duplicate step_id: keep one row
+            else:
+                existing[db_step.step_id] = db_step
+
+        kept = set()
+        for i, step in enumerate(steps):
+            db_step = existing.get(step.step_id)
+            if db_step is None or step.step_id in kept:
+                db_step = WorkflowStepDb(workflow_id=db_workflow.id, step_id=step.step_id)
+                db.add(db_step)
+            kept.add(step.step_id)
+            db_step.name = step.name
+            db_step.step_type = step.step_type.value
+            db_step.config = json.dumps(step.config) if step.config else None
+            # A Pass or Fail step ends a process run, so a link out of it is dropped
+            terminal = ends_process_run(db_workflow.workflow_type, step.step_type)
+            db_step.on_pass = None if terminal else step.on_pass
+            db_step.on_fail = None if terminal else step.on_fail
+            db_step.order = step.order if step.order else i
+            db_step.position = step.position.model_dump_json() if step.position else None
+
+        for step_id, db_step in existing.items():
+            if step_id not in kept:
+                db.delete(db_step)
 
     def delete(self, db: Session, workflow_id: str) -> bool:
         """Delete a workflow (cascades to steps and executions)."""
@@ -349,6 +381,22 @@ class WorkflowExecutionRepository:
             .first()
         )
 
+    def lock(self, db: Session, execution_id: str) -> Optional[WorkflowExecutionDb]:
+        """Lock an execution's row until the transaction ends and read it afresh.
+
+        ``populate_existing`` replaces what the session already holds for the
+        row, so a status that another transaction changed while this one
+        waited for the lock is seen. No joined loads: Postgres can't lock the
+        nullable side of an outer join.
+        """
+        return (
+            db.query(WorkflowExecutionDb)
+            .filter(WorkflowExecutionDb.id == execution_id)
+            .populate_existing()
+            .with_for_update()
+            .first()
+        )
+
     def create(
         self,
         db: Session,
@@ -410,11 +458,26 @@ class WorkflowExecutionRepository:
         result_data: Optional[dict] = None,
         error_message: Optional[str] = None,
         duration_ms: Optional[float] = None,
+        step_key: Optional[str] = None,
+        step_name: Optional[str] = None,
     ) -> WorkflowStepExecutionDb:
-        """Add a step execution result."""
+        """Add a step execution result.
+
+        ``step_id`` is the step's row id. The step's ``step_id`` and name are
+        stored with the result (``step_key``, ``step_name``), read from the step
+        when not given, so the result still names its step if the step is
+        removed from the workflow later.
+        """
+        if step_key is None or step_name is None:
+            db_step = db.get(WorkflowStepDb, step_id)
+            if db_step is not None:
+                step_key = step_key if step_key is not None else db_step.step_id
+                step_name = step_name if step_name is not None else db_step.name
         db_step_exec = WorkflowStepExecutionDb(
             execution_id=execution_id,
             step_id=step_id,
+            step_key=step_key,
+            step_name=step_name,
             status=status,
             passed=passed,
             result_data=json.dumps(result_data) if result_data else None,

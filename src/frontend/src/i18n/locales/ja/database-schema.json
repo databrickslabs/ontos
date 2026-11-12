@@ -63,6 +63,26 @@
     "previewFailed": "プレビューに失敗しました",
     "importFailed": "インポートに失敗しました",
     "importComplete": "インポートが完了しました",
-    "importCompleteSummary": "作成 {{created}} 件、スキップ {{skipped}} 件、エラー {{errors}} 件"
+    "importCompleteSummary": "作成 {{created}} 件、スキップ {{skipped}} 件、エラー {{errors}} 件",
+    "async": {
+      "started": "インポートを開始しました",
+      "startedDescription": "バックグラウンドで実行中です。進行状況はここと通知に表示されます。",
+      "startFailed": "バックグラウンドインポートを開始できませんでした",
+      "seeRunDetails": "実行の詳細を確認してください。",
+      "progress": "{{total}} 件中 {{processed}} 件を処理済み(作成: {{created}}、スキップ: {{skipped}})",
+      "progressWithErrors": "{{total}} 件中 {{processed}} 件を処理済み(作成: {{created}}、スキップ: {{skipped}}、エラー: {{errors}})",
+      "starting": "開始しています…",
+      "closeHint": "このダイアログは閉じてもかまいません。インポートは引き続き実行され、完了は通知でお知らせします。",
+      "cancel": "インポートをキャンセル",
+      "closeKeepRunning": "閉じる(実行は継続)",
+      "runInBackground": "バックグラウンドで実行",
+      "status": {
+        "pending": "保留中",
+        "running": "実行中",
+        "completed": "完了",
+        "failed": "失敗",
+        "cancelled": "キャンセル済み"
+      }
+    }
   }
 }

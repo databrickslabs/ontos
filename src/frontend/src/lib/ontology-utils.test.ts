@@ -63,6 +63,13 @@ describe('ontology-utils', () => {
       const c = concept({ iri: 'urn:noslash', labels: {} });
       expect(resolveLabel(c, 'fr')).toBe('urn:noslash');
     });
+
+    it('handles a concept with no labels field at all (labels || {} branch)', () => {
+      // labels is undefined (not just empty), exercising the `labels || {}`
+      // guard; falls through to the IRI local name.
+      const c = concept({ iri: 'http://example.org/onto#Widget' });
+      expect(resolveLabel(c, 'fr')).toBe('Widget');
+    });
   });
 
   describe('resolveComment', () => {
@@ -81,6 +88,12 @@ describe('ontology-utils', () => {
       expect(resolveComment(concept({ comments: {}, comment: 'Legacy' }), 'fr')).toBe('Legacy');
       expect(resolveComment(concept({ comments: {} }), 'fr')).toBeUndefined();
     });
+
+    it('handles a concept with no comments field at all (comments || {} branch)', () => {
+      // comments is undefined, exercising the `comments || {}` guard; with a
+      // legacy comment present it still resolves.
+      expect(resolveComment(concept({ comment: 'Legacy only' }), 'fr')).toBe('Legacy only');
+    });
   });
 
   describe('getAvailableLanguages', () => {
@@ -94,6 +107,16 @@ describe('ontology-utils', () => {
 
     it('returns an empty array when there are no labels', () => {
       expect(getAvailableLanguages([concept({})])).toEqual([]);
+    });
+
+    it('sorts English first even when it is not encountered first (b === en branch)', () => {
+      // 'de'/'aa' are collected before 'en' so the comparator must hit the
+      // `b === "en"` arm (return 1) to push English to the front.
+      const concepts = [
+        concept({ labels: { de: 'B', aa: 'A' } }),
+        concept({ labels: { en: 'C' } }),
+      ];
+      expect(getAvailableLanguages(concepts)).toEqual(['en', 'aa', 'de']);
     });
   });
 

@@ -41,7 +41,7 @@ export default function LinkContractToPortDialog({
   // appear. The backend's role-aware visibility already enforces the
   // personal-draft and consumer rules; this filter narrows further to
   // the producer-publishable subset.
-  const activeStatuses = ['active', 'approved', 'certified'];
+  const activeStatuses = ['active', 'approved'];
 
   useEffect(() => {
     if (isOpen) {
@@ -177,8 +177,7 @@ export default function LinkContractToPortDialog({
                 placeholder={t('data-products:linkContract.placeholders.chooseContract')}
               />
               <p className="text-xs text-muted-foreground">
-                Only showing contracts with 'active', 'approved', or 'certified' status.
-                Pick a specific version — same-named contracts now show their version inline.
+                {t('data-products:linkContract.statusFilterNote')}
               </p>
             </div>
 

@@ -158,5 +158,71 @@
     "metadataLoadFailed": "メタデータの読み込みに失敗しました",
     "couldNotLoadMetadata": "メタデータを読み込めませんでした。",
     "editTeamLoadError": "編集用のチーム詳細の読み込みに失敗しました。"
+  },
+  "sync": {
+    "title": "ドメインを同期",
+    "description": "Unity Catalog のドメインを Ontos にインポートするか、ドメインを Unity Catalog にエクスポートします。UC がサポートするのは 2 階層(ドメインとサブドメイン)までで、それより深いドメインはスキップされます。",
+    "direction": {
+      "title": "方向",
+      "description": "同期の方向",
+      "importLabel": "Unity Catalog からインポート",
+      "importHint": "UC から Ontos ドメインを作成/リンク",
+      "exportLabel": "Unity Catalog にエクスポート",
+      "exportHint": "Ontos ドメインを UC に公開"
+    },
+    "target": {
+      "importTitle": "配置先",
+      "exportTitle": "アンカー",
+      "importHint": "インポートした UC のルートを配置する Ontos ドメイン。",
+      "exportHint": "その子は UC のルートに、孫はサブドメインになります。",
+      "importTopLevel": "最上位(親なし)",
+      "exportTopLevel": "最上位のドメイン"
+    },
+    "actions": {
+      "preview": "プレビュー",
+      "apply": "適用"
+    },
+    "panel": {
+      "resultTitle": "同期結果",
+      "previewTitle": "プレビュー",
+      "importFlow": "Unity Catalog → Ontos",
+      "exportFlow": "Ontos → Unity Catalog"
+    },
+    "emptyHint": "方向を選んで<b>プレビュー</b>をクリックすると、変更内容を確認できます。",
+    "warnings": "警告",
+    "errorsTitle": "エラー",
+    "nothingToSync": "同期するものはありません。",
+    "level": "L{{level}}",
+    "actionLabels": {
+      "create": "作成",
+      "match": "リンク",
+      "skip": "スキップ",
+      "error": "エラー"
+    },
+    "toasts": {
+      "previewFailed": "プレビューに失敗しました",
+      "syncFailed": "同期に失敗しました",
+      "syncComplete": "同期が完了しました"
+    },
+    "summary": "作成: {{created}}、リンク: {{matched}}、スキップ: {{skipped}}。",
+    "summaryWithErrors": "作成: {{created}}、リンク: {{matched}}、スキップ: {{skipped}}、エラー: {{errors}}。",
+    "plan": {
+      "toCreate_one": "作成予定: {{count}} 件",
+      "toCreate_other": "作成予定: {{count}} 件",
+      "toMatch_one": "リンク予定: {{count}} 件",
+      "toMatch_other": "リンク予定: {{count}} 件",
+      "toSkip_one": "スキップ予定: {{count}} 件",
+      "toSkip_other": "スキップ予定: {{count}} 件"
+    },
+    "result": {
+      "created_one": "作成: {{count}} 件",
+      "created_other": "作成: {{count}} 件",
+      "matched_one": "リンク: {{count}} 件",
+      "matched_other": "リンク: {{count}} 件",
+      "skipped_one": "スキップ: {{count}} 件",
+      "skipped_other": "スキップ: {{count}} 件",
+      "errors_one": "エラー: {{count}} 件",
+      "errors_other": "エラー: {{count}} 件"
+    }
   }
 }

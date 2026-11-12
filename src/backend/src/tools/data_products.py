@@ -5,12 +5,18 @@ Tools for searching, creating, updating, and deleting data products.
 """
 
 import json
+from contextlib import contextmanager
 import uuid
 from typing import Any, Dict, List, Optional
+from src.common.features import FeatureAccessLevel
+from src.tools import read_access
+from src.tools import visibility as vis
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.controller import search_scoring
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
 
@@ -120,6 +126,11 @@ def _serialize_product(product) -> Dict[str, Any]:
 logger = get_logger(__name__)
 
 
+# The update tool's answer to a sunset_date that isn't YYYY-MM-DD
+INVALID_SUNSET_DATE = "Invalid sunset_date: expected YYYY-MM-DD"
+INVALID_SUNSET_DATE_CODE = "sunset_date_invalid"
+
+
 class SearchDataProductsTool(BaseTool):
     """Search for data products via the shared, tokenized search index."""
 
@@ -134,7 +145,8 @@ class SearchDataProductsTool(BaseTool):
         "includes 'total_count', 'has_more' and (by default) 'facets' so you can refine "
         "rather than fetch everything. Set include_facets=false to skip the facet block "
         "on cheap list calls, or fields=['title','status'] to narrow each row. Call "
-        "get_data_product for full details (output tables, ports)."
+        "get_data_product for full details (output tables, ports). "
+        + vis.VISIBILITY_DESCRIPTION
     )
     parameters = {
         "query": {
@@ -169,6 +181,9 @@ class SearchDataProductsTool(BaseTool):
             "description": "Optional allowlist of result-row keys to keep (e.g. ['title','status']). "
                            "'id' is always included. Shrinks payload for 'then fetch details' flows.",
         },
+        "visibility": vis.VISIBILITY_PARAM,
+        "min_certification_level": vis.MIN_CERTIFICATION_PARAM,
+        "include_history": vis.INCLUDE_HISTORY_PARAM,
     }
     required_params = ["query"]
     required_scope = "data-products:read"
@@ -183,6 +198,9 @@ class SearchDataProductsTool(BaseTool):
         offset: int = 0,
         include_facets: bool = True,
         fields: Optional[List[str]] = None,
+        visibility: Optional[str] = None,
+        min_certification_level: Optional[int] = None,
+        include_history: bool = False,
     ) -> ToolResult:
         """Search data products over the shared in-memory index."""
         logger.info(
@@ -211,18 +229,30 @@ class SearchDataProductsTool(BaseTool):
                     data={"products": []},
                 )
 
+        search_filters = {"domains": domain, "status": status}
+        applied = vis.applied_visibility(ctx, visibility)
+        if applied is None:
+            return vis.invalid_visibility(visibility, **{"products": []})
+
         try:
             data = ctx.search_manager.query_index(
                 query,
                 type_filter="data-product",
                 # 'domains' = full assigned-domain set, so the filter matches ANY
                 # assigned domain exactly (not just the primary).
-                filters={"domains": domain, "status": status},
+                filters=search_filters,
                 limit=limit,
                 offset=offset,
                 include_facets=include_facets,
                 fields=fields,
+                # The read rule and the visibility, before pagination and facets.
+                allowed_ids_by_type=vis.allowed_ids_by_type(
+                    ctx, "data-product", visibility=applied,
+                    min_certification_level=min_certification_level,
+                    include_history=include_history, query=query, filters=search_filters,
+                ),
             )
+            vis.annotate(ctx, data["results"], default_type="data-product")
             # Tool name already carries the type; `link` is a UI-only route path.
             # Neither helps an MCP agent, so drop them from every record.
             for r in data["results"]:
@@ -244,16 +274,102 @@ class SearchDataProductsTool(BaseTool):
                     "has_more": data["has_more"],
                     "facets": data["facets"],
                     "query": query,
+                    "visibility": applied,
                 },
             )
 
         except Exception as e:
-            logger.error(f"[search_data_products] FAILED: {e.__class__.__name__}: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"{e.__class__.__name__}: {str(e)}",
+                **tool_failure("search_data_products", e),
                 data={"products": []},
             )
+
+
+DATA_PRODUCTS_FEATURE_ID = "data-products"
+# The caller may read the product but isn't one of its owners (draft owner,
+# owning team, project member) nor a data-products admin: PUT answers 403.
+PRODUCT_EDIT_NOT_ALLOWED_CODE = "product_edit_not_allowed"
+
+
+def _caller_email(ctx: ToolContext) -> Optional[str]:
+    return ctx.caller.email if ctx.caller else None
+
+
+def _audit_change(
+    ctx: ToolContext, tool_name: str, action: str, success: bool, details: Dict[str, Any]
+) -> None:
+    """Write the data-products audit entry of the REST route doing the same change."""
+    # The module, not the function, so tests can replace log_system_action.
+    from src.controller import audit_manager
+
+    caller = ctx.caller
+    audit_manager.log_system_action(
+        username=(caller.email or caller.auth_path) if caller else "unknown",
+        feature=DATA_PRODUCTS_FEATURE_ID,
+        action=action,
+        success=success,
+        details={
+            **details,
+            "tool_name": tool_name,
+            "auth_path": caller.auth_path if caller else None,
+        },
+    )
+
+
+@contextmanager
+def _audited(ctx: ToolContext, tool_name: str, action: str, details: Dict[str, Any]):
+    """Audit the change in the block once it ends: failed unless it sets ``success``."""
+    outcome = {"success": False}
+    try:
+        yield outcome
+    finally:
+        _audit_change(ctx, tool_name, action, outcome["success"], details)
+
+
+def _transition_status(
+    ctx: ToolContext, tool_name: str, product_id: str, status: str, **kwargs: Any
+) -> None:
+    """The change-status route's call (the caller for the gates), audited as CHANGE_STATUS.
+
+    ``kwargs`` go to ``transition_status``.
+    """
+    details = {"product_id": product_id, "new_status": status}
+    with _audited(ctx, tool_name, "CHANGE_STATUS", details) as outcome:
+        ctx.data_products_manager.transition_status(
+            product_id, status, current_user=_caller_email(ctx), **kwargs
+        )
+        outcome["success"] = True
+
+
+def _edit_refusal(ctx: ToolContext, tool_name: str, product: Any) -> Optional[ToolResult]:
+    """The PUT route's ownership rule (``check_update_allowed``); None = may edit."""
+    caller = ctx.caller
+    if caller is None:
+        is_admin, groups, team_ids = False, [], []
+    else:
+        is_admin = caller.full_access or caller.products_admin
+        groups, team_ids = caller.groups, list(caller.team_ids)
+    try:
+        ctx.data_products_manager.check_update_allowed(
+            product,
+            user_email=_caller_email(ctx),
+            user_groups=groups,
+            db=ctx.db,
+            caller_team_ids=team_ids,
+            is_feature_admin=is_admin,
+        )
+        return None
+    except PermissionError:
+        _audit_change(ctx, tool_name, "UPDATE", False, {
+            "product_id": str(product.id), "error_code": PRODUCT_EDIT_NOT_ALLOWED_CODE,
+        })
+        return ToolResult(
+            success=False,
+            error="Not allowed: you can't edit this data product.",
+            error_code=PRODUCT_EDIT_NOT_ALLOWED_CODE,
+            data={"product_id": str(product.id)},
+        )
 
 
 class CreateDraftDataProductTool(BaseTool):
@@ -287,6 +403,7 @@ class CreateDraftDataProductTool(BaseTool):
     }
     required_params = ["name", "description", "domain"]
     required_scope = "data-products:write"
+    required_permission = ("data-products", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -303,6 +420,15 @@ class CreateDraftDataProductTool(BaseTool):
         if not ctx.data_products_manager:
             logger.error(f"[create_draft_data_product] FAILED: Data products manager not available")
             return ToolResult(success=False, error="Data products manager not available")
+
+        # A contract the caller can't read is answered like a missing one.
+        if contract_id:
+            refusal = read_access.unreadable_target(
+                ctx, self.name, "data_contract", contract_id,
+                f"Data contract '{contract_id}' not found",
+            )
+            if refusal:
+                return refusal
         
         try:
             logger.info(f"Creating draft data product: {name}")
@@ -336,11 +462,18 @@ class CreateDraftDataProductTool(BaseTool):
                 "outputPorts": output_ports
             }
             
-            # Create the product
-            created = ctx.data_products_manager.create_product(
-                product_data=product_data,
-                db=ctx.db
-            )
+            # Create the product. The caller is its draft owner, as with POST
+            # /data-products, so they can read and edit it afterwards; the manager
+            # fires the on_create workflows for them.
+            audit_details: Dict[str, Any] = {"params": {"name": name}}
+            with _audited(ctx, self.name, "CREATE", audit_details) as outcome:
+                created = ctx.data_products_manager.create_product(
+                    product_data=product_data,
+                    db=ctx.db,
+                    user=_caller_email(ctx),
+                )
+                audit_details["created_resource_id"] = str(created.id)
+                outcome["success"] = True
             
             logger.info(f"[create_draft_data_product] SUCCESS: Created product id={created.id}, name={created.name}")
             return ToolResult(
@@ -357,8 +490,7 @@ class CreateDraftDataProductTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[create_draft_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("create_draft_data_product", e))
 
 
 class UpdateDataProductTool(BaseTool):
@@ -382,12 +514,31 @@ class UpdateDataProductTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "description": "New status (draft, active, deprecated)",
+            "description": (
+                "New status (draft, active, deprecated). Applied as a lifecycle transition: "
+                "only an allowed transition, and status change workflows can block it."
+            ),
             "enum": ["draft", "active", "deprecated"]
+        },
+        "deprecation_reason": {
+            "type": "string",
+            "description": "Why the product is deprecated (required with status deprecated)"
+        },
+        "sunset_date": {
+            "type": "string",
+            "description": (
+                "Date the product stops being supported, YYYY-MM-DD "
+                "(with status deprecated; not in the past)"
+            )
+        },
+        "replacement_id": {
+            "type": "string",
+            "description": "ID of the product that replaces it (with status deprecated)"
         }
     }
     required_params = ["product_id"]
     required_scope = "data-products:write"
+    required_permission = ("data-products", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -395,7 +546,10 @@ class UpdateDataProductTool(BaseTool):
         product_id: str,
         domain: Optional[str] = None,
         description: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        deprecation_reason: Optional[str] = None,
+        sunset_date: Optional[str] = None,
+        replacement_id: Optional[str] = None,
     ) -> ToolResult:
         """Update an existing data product."""
         logger.info(f"[update_data_product] Starting - product_id={product_id}, domain={domain}, status={status}")
@@ -403,6 +557,13 @@ class UpdateDataProductTool(BaseTool):
         if not ctx.data_products_manager:
             logger.error(f"[update_data_product] FAILED: Data products manager not available")
             return ToolResult(success=False, error="Data products manager not available")
+
+        # A product the caller can't read is answered like a missing one.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_product", product_id, f"Data product '{product_id}' not found"
+        )
+        if refusal:
+            return refusal
         
         try:
             # Build update data
@@ -411,21 +572,69 @@ class UpdateDataProductTool(BaseTool):
                 update_data["domain"] = domain
             if description is not None:
                 update_data["description"] = {"purpose": description}
-            if status is not None:
-                update_data["status"] = status
             
-            if not update_data:
+            if not update_data and status is None:
                 return ToolResult(
                     success=False,
                     error="No fields to update. Provide at least one of: domain, description, status"
                 )
-            
-            # Update the product
-            updated = ctx.data_products_manager.update_product(
-                product_id=product_id,
-                product_data_dict=update_data,
-                db=ctx.db
-            )
+
+            # A field change needs what PUT /data-products/{id} needs
+            # (update_product_with_auth): an owner or a data-products admin.
+            # Checked before the status change, so a refused call writes nothing.
+            # A status change alone needs only the level, as the change-status route.
+            if update_data:
+                target = ctx.data_products_manager.get_product(product_id)
+                if not target:
+                    return ToolResult(
+                        success=False,
+                        error=f"Data product '{product_id}' not found"
+                    )
+                refusal = _edit_refusal(ctx, self.name, target)
+                if refusal:
+                    return refusal
+
+            # A status change goes through the lifecycle transition (allowed
+            # transitions, before_status_change gates), like the change-status
+            # route; an update can't change it.
+            if status is not None:
+                current = ctx.data_products_manager.get_product(product_id)
+                if not current:
+                    return ToolResult(
+                        success=False,
+                        error=f"Data product '{product_id}' not found"
+                    )
+                current_status = getattr(current.status, 'value', current.status) or 'draft'
+                current_status = str(current_status).lower()
+                if current_status != status.lower():
+                    # transition_status checks the transition: a refused one is a
+                    # coded InvalidStatusTransitionError (handled below)
+                    try:
+                        deprecation = deprecation_details_from_strings(
+                            deprecation_reason, sunset_date, replacement_id
+                        )
+                    except ValueError:
+                        return ToolResult(
+                            success=False, error=INVALID_SUNSET_DATE,
+                            error_code=INVALID_SUNSET_DATE_CODE,
+                        )
+                    _transition_status(
+                        ctx, self.name, product_id, status, deprecation=deprecation,
+                    )
+
+            # Update the product (the manager fires the on_update workflows; a
+            # status change alone fires on_status_change only, as change-status)
+            if update_data:
+                with _audited(ctx, self.name, "UPDATE", {"product_id": product_id}) as outcome:
+                    updated = ctx.data_products_manager.update_product(
+                        product_id=product_id,
+                        product_data_dict=update_data,
+                        db=ctx.db,
+                        user=_caller_email(ctx),
+                    )
+                    outcome["success"] = updated is not None
+            else:
+                updated = ctx.data_products_manager.get_product(product_id)
             
             if not updated:
                 return ToolResult(
@@ -447,9 +656,14 @@ class UpdateDataProductTool(BaseTool):
                 }
             )
             
+        except CodedValueError as err:
+            # An expected, app-written error (a deprecation the details don't allow,
+            # a status change a workflow blocks): no SQL or internal text, so its
+            # message and code go to the client, like the API's coded 400.
+            # Anything else stays generic (tool_failure).
+            return ToolResult(success=False, error=str(err), error_code=err.code or None)
         except Exception as e:
-            logger.error(f"[update_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("update_data_product", e))
 
 
 class GetDataProductTool(BaseTool):
@@ -483,19 +697,23 @@ class GetDataProductTool(BaseTool):
         
         try:
             product = ctx.data_products_manager.get_product(product_id)
+            readable = product is not None and read_access.can_read_product(ctx, product)
 
-            if not product:
-                return ToolResult(
+            if not readable:
+                # An unreadable product is answered like a missing one.
+                result = ToolResult(
                     success=False,
                     error=f"Data product '{product_id}' not found"
                 )
+                if product is not None:
+                    read_access.denied(ctx, self.name, result, [product_id])
+                return result
 
             logger.info(f"[get_data_product] SUCCESS: Found product {product.name}")
             return ToolResult(success=True, data=_serialize_product(product))
 
         except Exception as e:
-            logger.error(f"[get_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("get_data_product", e))
 
 
 class GetDataProductsBulkTool(BaseTool):
@@ -552,19 +770,23 @@ class GetDataProductsBulkTool(BaseTool):
 
         products: List[Dict[str, Any]] = []
         not_found: List[str] = []
+        unreadable: List[str] = []
         try:
             for pid in ids:
                 product = ctx.data_products_manager.get_product(pid)
-                if product:
+                if product and read_access.can_read_product(ctx, product):
                     products.append(_serialize_product(product))
                 else:
+                    # An unreadable product is answered like a missing one.
                     not_found.append(pid)
+                    if product:
+                        unreadable.append(pid)
 
             logger.info(
                 f"[get_data_products] SUCCESS: {len(products)} found, "
                 f"{len(not_found)} not found"
             )
-            return ToolResult(
+            result = ToolResult(
                 success=True,
                 data={
                     "products": products,
@@ -575,9 +797,9 @@ class GetDataProductsBulkTool(BaseTool):
                     "truncated": requested > effective_limit,
                 },
             )
+            return read_access.denied(ctx, self.name, result, unreadable)
         except Exception as e:
-            logger.error(f"[get_data_products] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("get_data_products", e))
 
 
 class ListDataProductsTool(BaseTool):
@@ -590,7 +812,8 @@ class ListDataProductsTool(BaseTool):
         "thin wrapper over search_data_products with query='*'; prefer search_data_products "
         "directly when you need relevance ranking, pagination offsets, facets, or a free-text "
         "query. The response shape matches search_data_products (products / total_found / "
-        "has_more / offset / limit / facets)."
+        "has_more / offset / limit / facets). "
+        + vis.VISIBILITY_DESCRIPTION
     )
     parameters = {
         "domain": {
@@ -606,6 +829,9 @@ class ListDataProductsTool(BaseTool):
             "type": "integer",
             "description": "Maximum number of products to return (default: 50, max: 100)",
         },
+        "visibility": vis.VISIBILITY_PARAM,
+        "min_certification_level": vis.MIN_CERTIFICATION_PARAM,
+        "include_history": vis.INCLUDE_HISTORY_PARAM,
     }
     required_params = []
     required_scope = "data-products:read"
@@ -616,6 +842,9 @@ class ListDataProductsTool(BaseTool):
         domain: Optional[str] = None,
         status: Optional[str] = None,
         limit: int = 50,
+        visibility: Optional[str] = None,
+        min_certification_level: Optional[int] = None,
+        include_history: bool = False,
     ) -> ToolResult:
         """Delegate to search_data_products with query='*' so the three overlapping
         entry points (search / list / get) collapse to a single implementation.
@@ -630,6 +859,9 @@ class ListDataProductsTool(BaseTool):
             status=status,
             limit=limit,
             offset=0,
+            visibility=visibility,
+            min_certification_level=min_certification_level,
+            include_history=include_history,
         )
 
 
@@ -647,6 +879,7 @@ class DeleteDataProductTool(BaseTool):
     }
     required_params = ["product_id"]
     required_scope = "data-products:write"
+    required_permission = ("data-products", FeatureAccessLevel.ADMIN)
     
     async def execute(self, ctx: ToolContext, product_id: str) -> ToolResult:
         """Delete a data product."""
@@ -655,6 +888,13 @@ class DeleteDataProductTool(BaseTool):
         if not ctx.data_products_manager:
             logger.error(f"[delete_data_product] FAILED: Data products manager not available")
             return ToolResult(success=False, error="Data products manager not available")
+
+        # A product the caller can't read is answered like a missing one.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_product", product_id, f"Data product '{product_id}' not found"
+        )
+        if refusal:
+            return refusal
         
         try:
             # Get product name first for the response
@@ -667,15 +907,19 @@ class DeleteDataProductTool(BaseTool):
             
             product_name = product.name
             
-            # Delete the product
-            success = ctx.data_products_manager.delete_product(product_id)
+            # Delete the product (the manager fires the on_delete workflows)
+            with _audited(ctx, self.name, "DELETE", {"product_id": product_id}) as outcome:
+                success = ctx.data_products_manager.delete_product(
+                    product_id, user=_caller_email(ctx), db=ctx.db
+                )
+                outcome["success"] = success
             
             if not success:
                 return ToolResult(
                     success=False,
                     error=f"Failed to delete data product '{product_id}'"
                 )
-            
+
             logger.info(f"[delete_data_product] SUCCESS: Deleted product {product_name}")
             return ToolResult(
                 success=True,
@@ -688,6 +932,5 @@ class DeleteDataProductTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[delete_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("delete_data_product", e))
 

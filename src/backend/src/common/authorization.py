@@ -1,17 +1,20 @@
+import hmac
 from typing import Optional, Dict, List
 
 from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import APIKeyHeader
 
 from src.controller.authorization_manager import AuthorizationManager
 from src.models.users import UserInfo
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.common.database import get_db
+from src.common.team_role_override import pick_team_role_override
 # Import dependencies for user info and managers (adjust paths if needed)
 # Import dependencies needed for the moved function
 from databricks.sdk.errors import NotFound
 from src.controller.users_manager import UsersManager
-from src.common.config import get_settings, Settings
+from src.common.config import MIN_DEMO_SETUP_TOKEN_LENGTH, get_settings, Settings
 # Import from the new dependencies file
 from src.common.manager_dependencies import get_auth_manager, get_users_manager, get_settings_manager
 from src.controller.settings_manager import SettingsManager
@@ -50,6 +53,50 @@ def is_user_admin(user_groups: Optional[List[str]], settings: Settings) -> bool:
         logger.error("Error parsing APP_ADMIN_DEFAULT_GROUPS: %s", e)
         # Fallback to simple check
         return "admins" in [g.lower() for g in user_groups]
+
+
+async def resolve_effective_permissions(
+    user_email: Optional[str],
+    user_groups: Optional[List[str]],
+    request: Request,
+    auth_manager: Optional[AuthorizationManager] = None,
+) -> Dict[str, FeatureAccessLevel]:
+    """The caller's effective feature levels, as every feature check resolves them.
+
+    Precedence: an applied role override, else the merge of the team role
+    override and the roles matching the groups or the email. Shared by
+    :class:`PermissionChecker`, :func:`is_user_feature_admin`,
+    :func:`enforce_feature_permission` and the assistant tools
+    (``src.tools.caller``), which check levels outside ``Depends``.
+
+    ``auth_manager`` defaults to the one in ``request.app.state``
+    (``PermissionChecker`` passes its injected one).
+    Raises ``RuntimeError`` when no ``AuthorizationManager`` is configured.
+    """
+    if auth_manager is None:
+        auth_manager = getattr(request.app.state, "authorization_manager", None)
+    if auth_manager is None:
+        raise RuntimeError("AuthorizationManager not found in app state")
+    settings_manager: Optional[SettingsManager] = getattr(
+        request.app.state, "settings_manager", None
+    )
+
+    team_role_override = await get_user_team_role_overrides(
+        user_email, user_groups or [], request
+    )
+
+    applied_role_id: Optional[str] = None
+    if settings_manager is not None:
+        try:
+            applied_role_id = settings_manager.get_applied_role_override_for_user(user_email)
+        except Exception:
+            applied_role_id = None
+
+    if applied_role_id and settings_manager is not None:
+        return settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+    return auth_manager.get_user_effective_permissions(
+        user_groups or [], team_role_override, user_email=user_email
+    )
 
 
 async def is_user_feature_admin(
@@ -94,37 +141,9 @@ async def is_user_feature_admin(
     if not user_email:
         return False
     try:
-        auth_manager: Optional[AuthorizationManager] = getattr(
-            request.app.state, "authorization_manager", None
-        )
-        settings_manager: Optional[SettingsManager] = getattr(
-            request.app.state, "settings_manager", None
-        )
-        if auth_manager is None:
+        if getattr(request.app.state, "authorization_manager", None) is None:
             return False
-
-        team_role_override = await get_user_team_role_overrides(
-            user_email, user_groups or [], request
-        )
-
-        applied_role_id: Optional[str] = None
-        if settings_manager is not None:
-            try:
-                applied_role_id = settings_manager.get_applied_role_override_for_user(
-                    user_email
-                )
-            except Exception:
-                applied_role_id = None
-
-        if applied_role_id and settings_manager is not None:
-            effective = settings_manager.get_feature_permissions_for_role_id(
-                applied_role_id
-            )
-        else:
-            effective = auth_manager.get_user_effective_permissions(
-                user_groups or [], team_role_override, user_email=user_email
-            )
-
+        effective = await resolve_effective_permissions(user_email, user_groups, request)
         return effective.get(feature_id) == FeatureAccessLevel.ADMIN
     except Exception:
         logger.exception(
@@ -407,48 +426,6 @@ async def require_ontos_admin(
     return user_details
 
 
-async def get_user_groups(user_email: str, request: Optional[Request] = None) -> List[str]:
-    """Get user groups for the given user email.
-
-    When ``request`` is provided and a valid test-user override header is
-    present, the override's groups are returned (mirrors
-    :func:`get_user_details_from_sdk`).
-    """
-    # Get settings directly instead of using dependency injection
-    settings = get_settings()
-
-    # Per-request test override (only when caller threaded the request through).
-    if request is not None:
-        try:
-            override = _try_resolve_test_override(
-                request, settings, manager=None, real_ip=request.headers.get("X-Real-Ip")
-            )
-            if override is not None and override.email == user_email:
-                return list(override.groups or [])
-        except HTTPException:
-            # A 400 here means the caller meant to override but did it wrong.
-            # Surface it rather than masking with an empty group list.
-            raise
-
-    if settings.ENV.upper().startswith("LOCAL") or getattr(settings, "MOCK_USER_DETAILS", False):
-        # Return mock groups for local/mock development honoring overrides
-        if settings.MOCK_USER_GROUPS:
-            try:
-                import json as _json
-                parsed = _json.loads(settings.MOCK_USER_GROUPS)
-                if isinstance(parsed, list) and all(isinstance(x, str) for x in parsed):
-                    return parsed
-            except Exception:
-                csv = [g.strip() for g in settings.MOCK_USER_GROUPS.split(',') if g.strip()]
-                if csv:
-                    return csv
-        return LOCAL_DEV_USER.groups
-
-    # In production, you would get groups from the user details
-    # For now, returning empty list as fallback
-    return []
-
-
 async def get_user_team_role_overrides(user_identifier: str, user_groups: List[str], request: Request) -> Optional[str]:
     """Get the highest team role override for a user."""
     try:
@@ -463,30 +440,10 @@ async def get_user_team_role_overrides(user_identifier: str, user_groups: List[s
         try:
             # Get teams where user is a member
             user_teams = teams_manager.get_teams_for_user(db, user_identifier)
-
-            # Normalize user groups to lowercase for case-insensitive matching
-            user_groups_lower = set(g.lower() for g in user_groups)
-
-            # Collect all role overrides for this user across teams
-            role_overrides = []
-            for team in user_teams:
-                for member in team.members:
-                    if member.member_identifier == user_identifier and member.app_role_override:
-                        role_overrides.append(member.app_role_override)
-
-            # Also check group memberships (case-insensitive)
-            for team in user_teams:
-                for member in team.members:
-                    if member.member_identifier.lower() in user_groups_lower and member.app_role_override:
-                        role_overrides.append(member.app_role_override)
-
-            if not role_overrides:
-                return None
-
-            # Return the highest role override (assuming role names have hierarchical order)
-            # For now, just return the first one found - in practice you'd need proper role hierarchy
-            logger.debug("Found team role overrides for user %s: %s", user_identifier, role_overrides)
-            return role_overrides[0]
+            override = pick_team_role_override(user_teams, user_identifier, user_groups)
+            if override:
+                logger.debug("Found team role override for user %s: %s", user_identifier, override)
+            return override
 
         finally:
             db.close()
@@ -599,28 +556,9 @@ async def enforce_feature_permission(
 
     try:
         # Mirror PermissionChecker.__call__: team override → applied role override → group merge.
-        team_role_override = await get_user_team_role_overrides(
-            user_details.email,
-            user_details.groups or [],
-            request,
+        effective_permissions = await resolve_effective_permissions(
+            user_details.email, user_details.groups, request
         )
-
-        applied_role_id = None
-        settings_manager = getattr(request.app.state, "settings_manager", None)
-        try:
-            if settings_manager:
-                applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
-        except Exception:
-            applied_role_id = None
-
-        if applied_role_id and settings_manager:
-            effective_permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-        else:
-            effective_permissions = auth_manager.get_user_effective_permissions(
-                user_details.groups,
-                team_role_override,
-                user_email=user_details.email,
-            )
 
         if not auth_manager.has_permission(effective_permissions, feature_id, required_level):
             user_level = effective_permissions.get(feature_id, FeatureAccessLevel.NONE)
@@ -647,6 +585,24 @@ async def enforce_feature_permission(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error checking user permissions.",
         )
+
+
+async def has_feature_permission(
+    feature_id: str,
+    required_level: FeatureAccessLevel,
+    user_details: UserInfo,
+    request: Request,
+) -> bool:
+    """Whether the user has ``required_level`` on the feature, resolved as
+    :func:`enforce_feature_permission` does (role override, team override,
+    groups), for a route that only changes what it does when it hasn't."""
+    try:
+        await enforce_feature_permission(feature_id, required_level, user_details, request)
+    except HTTPException as e:
+        if e.status_code == status.HTTP_403_FORBIDDEN:
+            return False
+        raise
+    return True
 
 
 def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
@@ -715,31 +671,10 @@ class PermissionChecker:
             )
 
         try:
-            # Check for team role overrides
-            team_role_override = await get_user_team_role_overrides(
-                user_details.email,
-                user_details.groups or [],
-                request
+            # Applied role override, else team role override + group/email roles.
+            effective_permissions = await resolve_effective_permissions(
+                user_details.email, user_details.groups, request, auth_manager=auth_manager
             )
-
-            # Check if an explicit role override is applied for this user
-            applied_role_id = None
-            try:
-                settings_manager = getattr(request.app.state, 'settings_manager', None)
-                if settings_manager:
-                    applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
-            except Exception:
-                applied_role_id = None
-
-            if applied_role_id and settings_manager:
-                # Build effective permissions directly from the selected role
-                effective_permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-            else:
-                effective_permissions = auth_manager.get_user_effective_permissions(
-                    user_details.groups,
-                    team_role_override,
-                    user_email=user_details.email,
-                )
             has_required_permission = auth_manager.has_permission(
                 effective_permissions,
                 self.feature_id,
@@ -846,3 +781,63 @@ class ApprovalChecker:
         except Exception as e:
             logger.error("Unexpected error during approval check for '%s'", self.entity.value, exc_info=True)
             raise HTTPException(status_code=500, detail="Error checking approval privileges")
+
+
+# --- Demo-data routes: settings admin OR optional setup token ---
+
+DEMO_SETUP_TOKEN_HEADER = "X-Demo-Setup-Token"
+
+# Declared as a security scheme so Swagger "Authorize" can send the token.
+demo_setup_token_scheme = APIKeyHeader(
+    name=DEMO_SETUP_TOKEN_HEADER,
+    auto_error=False,
+    description=(
+        "Optional setup token (the DEMO_SETUP_TOKEN app setting). Accepted instead of the "
+        "settings-general ADMIN permission on the demo-data load/clear routes."
+    ),
+)
+
+
+DEMO_ACCESS_VIA_ADMIN = "admin"
+DEMO_ACCESS_VIA_SETUP_TOKEN = "setup_token"
+
+
+def is_valid_demo_setup_token(provided: Optional[str], configured: Optional[str]) -> bool:
+    """Constant-time check of a presented token.
+
+    Always False when no token is configured, or when the configured one is shorter than
+    ``MIN_DEMO_SETUP_TOKEN_LENGTH`` (settings drop it at startup; this guards later changes).
+    """
+    if not configured or not provided or len(configured) < MIN_DEMO_SETUP_TOKEN_LENGTH:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), configured.encode("utf-8"))
+
+
+async def require_demo_admin_or_setup_token(
+    request: Request,
+    setup_token: Optional[str] = Depends(demo_setup_token_scheme),
+    settings: Settings = Depends(get_settings),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+) -> str:
+    """Allow the call for a ``settings-general`` ADMIN, or for a valid ``DEMO_SETUP_TOKEN``.
+
+    Returns how access was granted (``"setup_token"`` or ``"admin"``) for the routes' audit
+    entries.
+
+    A presented token that is wrong, or presented while ``DEMO_SETUP_TOKEN`` is unset, does
+    not grant access; the request then falls through to the admin check (403 for non-admins).
+    The token value is never logged.
+    """
+    if is_valid_demo_setup_token(setup_token, settings.DEMO_SETUP_TOKEN):
+        logger.info(
+            "Demo-data access granted by setup token for '%s'",
+            user_details.user or user_details.email,
+        )
+        return DEMO_ACCESS_VIA_SETUP_TOKEN
+    if setup_token:
+        logger.warning("Demo-data setup token rejected or not configured")
+    await PermissionChecker("settings-general", FeatureAccessLevel.ADMIN)(
+        request, user_details, auth_manager
+    )
+    return DEMO_ACCESS_VIA_ADMIN

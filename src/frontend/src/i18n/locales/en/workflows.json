@@ -31,9 +31,12 @@
       "special": "Special",
       "requesterOriginalUser": "Requester (Original User)",
       "ownerEntityOwner": "Owner (Entity Owner)",
+      "domainOwners": "Domain owners",
+      "contractApprovers": "Contract approvers",
       "appRoles": "App Roles",
       "businessRoles": "Business Roles",
-      "noGroups": "No groups"
+      "noGroups": "No groups",
+      "assetOwners": "Asset owners"
     },
     "messages": {
       "loadWorkflowFailed": "Failed to load workflow",
@@ -43,7 +46,8 @@
       "createdSuccess": "Workflow created successfully",
       "updatedSuccess": "Workflow updated successfully",
       "createFailed": "Failed to create workflow: {{error}}",
-      "updateFailed": "Failed to update workflow: {{error}}"
+      "updateFailed": "Failed to update workflow: {{error}}",
+      "stepConfigInvalid": "Step \"{{step}}\": {{issue}}"
     },
     "badges": {
       "default": "Default",
@@ -90,6 +94,13 @@
       "generate_pdf": "Generate PDF",
       "deliver": "Deliver"
     },
+    "layout": {
+      "rearrange": "Rearrange",
+      "rearrangeHint": "Arrange all steps automatically",
+      "confirmTitle": "Rearrange all steps?",
+      "confirmDescription": "The steps are arranged automatically. Your current layout is replaced when you save.",
+      "confirmAction": "Rearrange"
+    },
     "discard": {
       "description": "You have unsaved changes to this workflow. If you leave now, your changes will be lost.",
       "stay": "Stay",
@@ -101,7 +112,25 @@
       "fromStatusPlaceholder": "e.g. draft",
       "toStatus": "To Status",
       "toStatusPlaceholder": "e.g. active",
-      "descriptionPlaceholder": "Workflow description"
+      "descriptionPlaceholder": "Workflow description",
+      "failClosed": "Refuse the transition if this gate can't be evaluated",
+      "failClosedHint": "Fail closed: when evaluating this gate raises an error (not a normal failure), the status change is refused. Off (fail open), the change proceeds and the error is logged and audited.",
+      "disabledFor": {
+        "title": "Switched off for",
+        "hint": "This gate doesn't run for the domains, data products and data contracts listed here (a domain covers its products and contracts). Each skip is logged and audited.",
+        "domains": "Domains",
+        "dataProducts": "Data products",
+        "dataContracts": "Data contracts",
+        "none": "None",
+        "selectedCount_one": "{{count}} selected",
+        "selectedCount_other": "{{count}} selected",
+        "search": "Search...",
+        "noResults": "Nothing found.",
+        "remove": "Remove {{name}}",
+        "notFound": "{{id}} (no longer exists)",
+        "missingOnSave_one": "The gate is switched off for {{count}} item that no longer exists. Remove it and save again.",
+        "missingOnSave_other": "The gate is switched off for {{count}} items that no longer exist. Remove them and save again."
+      }
     },
     "stepConfig": {
       "title": "Step Configuration",
@@ -167,7 +196,9 @@
         "validationPassed": "Validation Passed",
         "productApproved": "Product Approved",
         "productRejected": "Product Rejected",
-        "piiDetected": "PII Detected"
+        "piiDetected": "PII Detected",
+        "entityDeprecated": "Deprecation Notice",
+        "entityRetired": "Retirement Notice"
       },
       "customMessage": "Custom Message",
       "customMessagePlaceholder": "Override template message. Supports ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
@@ -188,13 +219,28 @@
       "selectSource": "Select source",
       "sourceCurrentUser": "Current User",
       "sourceProjectName": "Project Name",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Value",
+      "modeFixed": "Fixed value",
+      "modeSource": "Value from the run",
+      "modeNone": "No value",
+      "fixedValue": "Tag value",
+      "fixedValuePlaceholder": "e.g., confidential",
+      "selectValue": "Select a value",
+      "noValueHelp": "The tag is assigned without a value. A value the entity already has for this tag is kept.",
+      "sourceEntityName": "Entity Name",
+      "tagNotFound": "No tag has this name. The step then only sets it for the following steps of the run.",
+      "fixedValueRequired": "Enter a value, or choose \"No value\" to assign the tag without one."
     },
     "approval": {
       "approversRole": "Approvers (Role)",
       "selectRole": "Select role",
       "additionalApproversAria": "Additional approvers",
-      "timeoutDays": "Timeout (days)"
+      "timeoutDays": "Timeout (days)",
+      "timeoutDaysHelp": "0 means no timeout; leave it empty for the default (7 days).",
+      "requireAll": "Require every approver",
+      "requireAllHelp": "Each approver decides: a user for themselves, any one member for a group or role. Any rejection fails the step.",
+      "timeoutNotEnforced": "Not enforced yet: a pending approval doesn't expire."
     },
     "assetReview": {
       "reviewerRole": "Reviewer Role",
@@ -241,6 +287,66 @@
       "timeoutSeconds": "Timeout (seconds)",
       "retryCount": "Retry Count",
       "retryHelp": "Number of retries on failure (0-5)."
+    },
+    "conditional": {
+      "condition": "Condition",
+      "placeholder": "obj.status = 'active' AND NOT HAS_TAG('pii')",
+      "branchHelp": "When the condition is true the workflow follows the Pass branch; when it is false, the Fail branch.",
+      "fieldsHelp": "Write a Compliance DSL expression without MATCH or ASSERT. Fields of the entity are read as obj.<field>; compare with =, not ==.",
+      "examplesTitle": "Examples",
+      "errors": {
+        "condition_required": "Enter a condition.",
+        "condition_syntax_error": "The condition doesn't parse (line {{line}}, column {{column}}).",
+        "condition_trailing_input": "Unexpected \"{{token}}\" after the condition (line {{line}}, column {{column}}). Join conditions with AND or OR.",
+        "condition_too_long": "The condition is longer than {{maximum}} characters. Shorten it or split it into several steps.",
+        "condition_too_complex": "The condition is nested too deeply to check. Remove some parentheses or split it into several steps."
+      }
+    },
+    "script": {
+      "language": "Language",
+      "languages": {
+        "python": "Python",
+        "sql": "SQL"
+      },
+      "code": "Code",
+      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
+      "timeout": "Timeout (seconds)",
+      "timeoutHelp": "The step fails when the script runs longer than this.",
+      "variablesTitle": "Available variables",
+      "pythonVariables": {
+        "entity": "The entity's data (a dictionary)",
+        "entity_type": "The entity's type",
+        "entity_id": "The entity's ID",
+        "entity_name": "The entity's name",
+        "user_email": "Email of the user who triggered the workflow",
+        "step_results": "Results of the steps that already ran, by step ID"
+      },
+      "pythonResultHelp": "Set result to choose the branch: result = {'passed': False, 'message': '...'} follows the Fail branch; without result the step passes. Only basic built-ins are available: no imports, files or network.",
+      "sqlHelp": "Runs on the SQL warehouse set in Settings. ${variable} placeholders are replaced before the statement runs; the step passes when the statement succeeds. The statement waits up to 50 seconds.",
+      "errors": {
+        "script_code_required": "Enter the script's code.",
+        "script_timeout_invalid": "Enter a whole number of seconds, at least {{minimum}}.",
+        "script_language_unsupported": "The language \"{{language}}\" is not supported. Supported: {{supported}}."
+      }
+    },
+    "validationIssues": {
+      "stepsRequired": "A workflow needs at least one step.",
+      "duplicateStepIds": "Two steps have the same ID.",
+      "stepUnknownReference": "Step \"{{step}}\" points its {{branch}} branch at \"{{target}}\", which is not in the workflow.",
+      "stepConfigMissing": "Step \"{{step}}\" is missing required settings: {{fields}}.",
+      "assignTagValueSourceUnknown": "Step \"{{step}}\" uses the unknown value source \"{{source}}\".",
+      "policyCheckPolicyMissing": "Step \"{{step}}\" needs an existing compliance policy. Select one in the step's settings.",
+      "branch": {
+        "on_pass": "pass",
+        "on_fail": "fail"
+      }
+    },
+    "edgeLabels": {
+      "pass": "Pass",
+      "fail": "Fail",
+      "true": "True",
+      "false": "False"
     }
   },
   "approvalResponse": {
@@ -270,7 +376,58 @@
       "processFailed": "Failed to process approval.",
       "processFailedRetry": "Failed to process approval. Please try again.",
       "entityApproved": "{{name}} has been approved.",
-      "entityRejected": "{{name}} has been rejected."
+      "entityRejected": "{{name}} has been rejected.",
+      "decisionRecorded": "Decision recorded",
+      "waitingForApprovers_one": "Waiting for {{count}} more approver.",
+      "waitingForApprovers_other": "Waiting for {{count}} more approvers."
+    },
+    "errors": {
+      "own_owner_approval": "This approval is for the owners; you can't approve your own request.",
+      "own_change_request_approval": "You can't approve your own change request.",
+      "approval_already_decided": "You have already decided this approval.",
+      "approval_not_an_approver": "Only the approvers of this step can decide it.",
+      "approval_no_longer_pending": "This approval has already been decided."
+    },
+    "entityTypes": {
+      "entity": "Entity",
+      "data_product": "Data Product",
+      "data_contract": "Data Contract",
+      "data_domain": "Data Domain",
+      "data_asset_review": "Data Asset Review",
+      "access_grant": "Access Grant",
+      "asset": "Asset",
+      "ontology_concept": "Concept",
+      "concept": "Concept"
+    },
+    "fields": {
+      "product_id": "Product ID",
+      "product_name": "Product name",
+      "contract_id": "Contract ID",
+      "contract_name": "Contract name",
+      "status": "Status",
+      "from_status": "From status",
+      "to_status": "To status",
+      "target_status": "Requested status",
+      "current_status": "Current status",
+      "justification": "Justification",
+      "sunset_date": "Sunset date",
+      "replacement_id": "Replacement ID",
+      "replacement_name": "Replacement",
+      "requested_scope": "Requested scope",
+      "publication_scope": "Publication scope",
+      "requester": "Requester",
+      "requester_message": "Requester's message",
+      "reviewer_email": "Reviewer",
+      "requested_certification_level": "Requested certification level",
+      "certification_level": "Certification level",
+      "certification_notes": "Certification notes",
+      "asset_count": "Number of assets",
+      "asset_fqns": "Assets",
+      "domain_id": "Domain ID",
+      "project_id": "Project ID",
+      "project_name": "Project",
+      "name": "Name",
+      "notes": "Notes"
     }
   },
   "approvalWizard": {
@@ -360,9 +517,22 @@
     "titleFallback": "Workflow Execution",
     "executionId": "Execution ID: {{id}}...",
     "stepsProgress": "{{done}}/{{total}} steps",
+    "stepsProgressWithRemoved_one": "{{done}}/{{total}} steps (+{{count}} removed)",
+    "stepsProgressWithRemoved_other": "{{done}}/{{total}} steps (+{{count}} removed)",
     "triggeredBy": "Triggered by: {{user}}",
     "workflowSteps": "Workflow Steps",
     "loadDefinitionFailed": "Failed to load workflow definition",
+    "removedSteps": "Removed steps",
+    "removedStepsHint": "These steps ran in this execution and were removed from the workflow later.",
+    "stepErrors": {
+      "rule_where_evaluation_failed": "The WHERE clause of policy '{{policyName}}' could not be evaluated on {{entityType}} {{entityId}}",
+      "approval_rejected": "Request denied",
+      "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
+      "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",
+      "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule",
+      "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated",
+      "cancelled_by_admin": "Cancelled by an admin ({{by}})"
+    },
     "states": {
       "pending": "Pending",
       "running": "Running",
@@ -370,6 +540,18 @@
       "failed": "Failed",
       "skipped": "Skipped",
       "waiting": "Waiting"
+    },
+    "conditionalBranch": {
+      "true": "Condition was true: took the true branch",
+      "false": "Condition was false: took the false branch"
+    },
+    "executionStates": {
+      "pending": "Pending",
+      "running": "Running",
+      "paused": "Paused",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
     },
     "summary": {
       "entity": "Entity",
@@ -393,6 +575,8 @@
     "policyLabel": "Policy: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "No policy selected",
+    "policyHint": "Suggested: {{name}}",
+    "policyUnknown": "Unknown or inactive policy: {{id}}",
     "reviewerLabel": "Reviewer:",
     "notSet": "Not set",
     "connectionLabel": "Connection: {{name}}",
@@ -431,6 +615,25 @@
     "endpointHint": "Backend endpoint returning JSON",
     "addField": "Add field"
   },
+  "runDialog": {
+    "menuLabel": "Run",
+    "title": "Run \"{{name}}\"",
+    "description": "Start this manual workflow for an entity. It runs now, as you.",
+    "entityType": "Entity type",
+    "entity": "Entity",
+    "selectEntity": "Select an entity",
+    "loading": "Loading...",
+    "noEntities": "Nothing to select.",
+    "listFailed": "Could not load the list; enter the id instead.",
+    "entityId": "Entity id",
+    "entityIdPlaceholder": "e.g. main.sales.orders",
+    "entityIdHelp": "The id or full name of the entity the workflow should run for.",
+    "run": "Run",
+    "failed": "The workflow could not be started.",
+    "resultStatus": "Result",
+    "viewExecution": "View execution",
+    "resultEntity": "{{type}}: {{name}}"
+  },
   "templateVars": {
     "copiedToClipboard": "{{placeholder}} copied to clipboard.",
     "copyFailed": "Copy failed",
@@ -452,6 +655,16 @@
     "matches_one": "{{count}} match",
     "matches_other": "{{count}} matches",
     "noMatch": "No variables match"
+  },
+  "triggerEntityChecks": {
+    "unknownBadge": "Unknown entity type: {{type}}",
+    "removeUnknown": "Remove {{type}}",
+    "unknownNotice_one": "This trigger lists an entity type that no longer exists. It matches nothing: remove it to change the trigger.",
+    "unknownNotice_other": "This trigger lists {{count}} entity types that no longer exist. They match nothing: remove them to change the trigger.",
+    "unknownOnSave": "The trigger lists the unknown entity type \"{{type}}\": remove it in the trigger settings to change the trigger.",
+    "unsupportedOnSave": "\"{{trigger}}\" never fires for {{type}}: pick an entity type this trigger supports.",
+    "pickKnownType": "Pick at least one entity type. With none, this workflow would fire for every entity.",
+    "requiredOnSave": "Pick at least one entity type for the trigger: none of its types fires (they no longer exist, or this trigger never fires for them), and an empty list would make it fire for every entity."
   },
   "triggerPicker": {
     "label": "Fires on",
@@ -489,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "Default Workflows",
       "newOnly": "Load New Only",
-      "reloadAll": "Reload All Defaults"
+      "reloadAll": "Reload All Defaults",
+      "confirmTitle": "Reload all default workflows?",
+      "confirmDescription": "Each default workflow is reset to its shipped definition: description, trigger, scope, steps and their layout. Whether a workflow is active doesn't change. Defaults that you or another admin edited are kept unless you also reset them below.",
+      "includeEdited": "Also reset default workflows that were edited (their changes are lost)",
+      "confirmAction": "Reload",
+      "keptEdited": "Kept edited: {{names}}.",
+      "result": "Created {{created}}, updated {{updated}}, skipped {{skipped}}."
     },
     "badges": {
       "default": "Default",
@@ -552,7 +771,12 @@
       "duplicateTitle": "Duplicate Workflow",
       "duplicateDescription": "Create a copy of \"{{name}}\" with a new name.",
       "deleteExecutionTitle": "Delete Execution",
-      "deleteExecutionDescription": "Are you sure you want to delete this workflow execution? This action cannot be undone."
+      "deleteExecutionDescription": "Are you sure you want to delete this workflow execution? This action cannot be undone.",
+      "activationOverlapTitle": "Another workflow matches the same event",
+      "activationOverlapDescription": "The workflows below would also run for the same event. Review them, then cancel or activate anyway.",
+      "activationOverlapDetails": "Trigger: {{trigger}} · Entities: {{entities}}",
+      "allEntities": "all entities",
+      "activateAnyway": "Activate anyway"
     },
     "placeholders": {
       "newWorkflowName": "New workflow name"
@@ -599,6 +823,7 @@
       "loadDefaultsFailed": "Failed to load default workflows",
       "cancelSuccess": "Execution cancelled successfully",
       "cancelFailed": "Failed to cancel execution",
+      "approvalCancelled": "Approval cancelled. The workflow followed its rejection path; status: {{status}}.",
       "retryStarted": "Execution retry started",
       "retryFailed": "Failed to retry execution",
       "executionDeleteSuccess": "Execution deleted successfully",
@@ -609,6 +834,7 @@
       "approveFailed": "Failed to approve workflow",
       "rejectResumeSuccess": "Workflow rejected and resumed",
       "rejectFailed": "Failed to reject workflow",
+      "forceDecisionRequireAll": "Only the approvers can decide this step (every approver must decide). You can cancel the execution instead.",
       "noChanges": "No Changes",
       "allAlreadyEnabled": "All selected workflows are already enabled.",
       "allAlreadyDisabled": "All selected workflows are already disabled.",

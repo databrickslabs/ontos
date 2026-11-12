@@ -37,6 +37,12 @@ documents:
     description: Complete guide for configuring automated workflows for validation, approval, and notifications
     category: reference
 
+  workflow-authoring-guide:
+    file: workflow-authoring-guide.md
+    title: Workflow Authoring Guide
+    description: "How workflows run: triggers, branching, variables, approvals, failures and debugging executions"
+    category: user-guide
+
   release-notes:
     file: RELEASE_NOTES.md
     title: Release Notes

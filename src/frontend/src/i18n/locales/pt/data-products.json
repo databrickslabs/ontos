@@ -49,14 +49,32 @@
   },
   "upload": {
     "success": "Upload bem-sucedido",
-    "successMessage": "{{filename}} processado com sucesso. {{count}} produto(s) processado(s).",
+    "successMessage_one": "{{filename}} processado com sucesso. {{count}} produto processado.",
+    "successMessage_other": "{{filename}} processado com sucesso. {{count}} produtos processados.",
+    "successMessage_files_one": "{{files}} arquivos processados com sucesso. {{count}} produto processado.",
+    "successMessage_files_other": "{{files}} arquivos processados com sucesso. {{count}} produtos processados.",
+    "partialSuccess": "Importado com problemas",
     "failed": "Falha no upload",
     "unexpectedError": "Ocorreu um erro inesperado durante o upload.",
     "uploading": "Enviando...",
     "tooltipTitle": "Enviar produto de dados (formato ODPS)",
     "tooltipDescription": "Aceita arquivos YAML ou JSON seguindo o esquema ODPS (Open Data Product Standard).",
     "tooltipHint": "Para contratos de dados (ODCS), use a página Contratos de dados.",
-    "odcsHint": "Dica: esta página é para produtos de dados (formato ODPS). Se você está tentando enviar um contrato de dados (formato ODCS), use a página Contratos de dados."
+    "odcsHint": "Dica: esta página é para produtos de dados (formato ODPS). Se você está tentando enviar um contrato de dados (formato ODCS), use a página Contratos de dados.",
+    "dialogTitle": "Enviar produtos de dados",
+    "dialogDescription": "Selecione um ou mais arquivos ODPS (YAML/JSON). Cada arquivo pode conter um único produto ou um array.",
+    "createMissingDomains": "Criar domínios ausentes",
+    "createMissingDomainsHint": "Cria automaticamente os domínios que ainda não existem. Desligado: domínios sem correspondência ficam sem atribuição (o original é preservado).",
+    "adoptIds": "Adotar os IDs do arquivo",
+    "adoptIdsHint": "Reutiliza um UUID válido e sem colisão do arquivo como chave primária, para que os vínculos entre entidades sobrevivam à importação.",
+    "duplicatesAsNew": "Importar IDs duplicados como novas cópias",
+    "duplicatesAsNewHint": "Desligado (padrão): um produto cujo ID já existe é ignorado. Ligado: ele é importado como nova cópia com um ID novo.",
+    "dropActive": "Solte o(s) arquivo(s) aqui",
+    "dropInactive": "Arraste e solte arquivo(s) de produto aqui, ou clique para selecionar",
+    "supportedFormats": "Formatos suportados: JSON ou YAML (ODPS)",
+    "orPasteOdps": "Ou cole o JSON ODPS",
+    "pasteOdpsPlaceholder": "Cole aqui o JSON do produto ODPS",
+    "importJsonButton": "Importar JSON"
   },
   "genie": {
     "noSelection": "Nenhuma seleção",
@@ -354,7 +372,8 @@
       "deleteSupportChannel": "Excluir este canal de suporte?",
       "unlinkContract": "Desvincular o contrato deste entregável?",
       "createGenieSpace": "Criar um Genie Space para \"{{name}}\"?"
-    }
+    },
+    "contractDangling": "O contrato não existe mais"
   },
   "form": {
     "createTitle": "Criar produto de dados",
@@ -522,7 +541,8 @@
       "failedToSerialize": "Falha ao serializar o estado da UI para JSON.",
       "unexpectedError": "Ocorreu um erro inesperado."
     },
-    "syntaxErrorLabel": "Erro de sintaxe:"
+    "syntaxErrorLabel": "Erro de sintaxe:",
+    "statusChangeHint": "O status muda com Alterar status na página, que verifica a transição e executa os workflows de mudança de status."
   },
   "import": {
     "title": "Importar produto de dados",
@@ -658,14 +678,26 @@
       "certLevelRequired": "Selecione um nível de certificação"
     },
     "errors": {
-      "cannotRequest": "Não é possível solicitar {{requestType}} para um produto com status '{{productStatus}}'",
-      "failedToSubmit": "Falha ao enviar solicitação"
+      "cannotRequest": "\"{{requestType}}\" não está disponível para um produto com status {{productStatus}}.",
+      "failedToSubmit": "Falha ao enviar solicitação",
+      "notProductOwner": "Somente os proprietários do produto ou um administrador podem solicitar a revisão dele."
     },
     "toast": {
       "statusChanged": "Status alterado",
       "statusChangedDesc": "O status do produto mudou de \"{{fromStatus}}\" para \"{{toStatus}}\".",
       "requestSubmitted": "Solicitação enviada",
-      "requestSubmittedDesc": "Sua solicitação de {{type}} foi enviada e você será notificado sobre a decisão."
+      "requestSubmittedDesc": "Sua solicitação de {{type}} foi enviada e você será notificado sobre a decisão.",
+      "workflowFailed": "Solicitação enviada, mas o workflow falhou",
+      "workflowFailedDesc": "Ninguém foi acionado para decidir sobre sua solicitação de {{type}}: o workflow \"{{workflow}}\" não pôde ser iniciado. Contate um administrador.",
+      "requestTypes": {
+        "access": "acesso",
+        "review": "revisão",
+        "publish": "publicação",
+        "certify": "certificação",
+        "status_change": "mudança de status"
+      },
+      "workflowPartiallyFailed": "Alguns workflows de solicitação falharam",
+      "workflowPartiallyFailedDesc": "Um dos workflows de solicitação de {{type}} falhou: {{workflows}}. Outras aprovações podem ainda estar pendentes."
     },
     "labels": {
       "requestType": "Tipo de solicitação",
@@ -899,7 +931,8 @@
       "createNewContract": "Criar novo contrato",
       "linkContract": "Vincular contrato",
       "linking": "Vinculando..."
-    }
+    },
+    "statusFilterNote": "Só aparecem contratos com status 'ativo' ou 'aprovado'. Escolha uma versão específica: contratos com o mesmo nome mostram a versão ao lado."
   },
   "hierarchy": {
     "title": "Hierarquia de dados",
@@ -1056,8 +1089,10 @@
     "versionPlaceholder": "ex.: v1.1, v2.0-beta",
     "createButton": "Criar versão",
     "errors": {
-      "versionEmpty": "O identificador da versão não pode estar vazio."
-    }
+      "versionEmpty": "O identificador da versão não pode estar vazio.",
+      "versionFormat": "\"{{version}}\" não está no formato X.Y.Z (por exemplo 2.0.0)."
+    },
+    "versionPlaceholderSemver": "ex.: 2.0.0"
   },
   "graphView": {
     "unnamedProduct": "Produto sem nome",

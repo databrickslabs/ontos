@@ -63,6 +63,26 @@
     "previewFailed": "Falha na pré-visualização",
     "importFailed": "Falha na importação",
     "importComplete": "Importação concluída",
-    "importCompleteSummary": "Criados {{created}}, ignorados {{skipped}}, erros {{errors}}"
+    "importCompleteSummary": "Criados {{created}}, ignorados {{skipped}}, erros {{errors}}",
+    "async": {
+      "started": "Importação iniciada",
+      "startedDescription": "Rodando em segundo plano. O progresso aparece aqui e nas suas notificações.",
+      "startFailed": "Não foi possível iniciar a importação em segundo plano",
+      "seeRunDetails": "Veja os detalhes da execução.",
+      "progress": "{{processed}} de {{total}} processados (criados: {{created}}, ignorados: {{skipped}})",
+      "progressWithErrors": "{{processed}} de {{total}} processados (criados: {{created}}, ignorados: {{skipped}}, erros: {{errors}})",
+      "starting": "Iniciando…",
+      "closeHint": "Você pode fechar este diálogo. A importação continua rodando, e a conclusão é informada nas suas notificações.",
+      "cancel": "Cancelar importação",
+      "closeKeepRunning": "Fechar (continua rodando)",
+      "runInBackground": "Rodar em segundo plano",
+      "status": {
+        "pending": "Pendente",
+        "running": "Em execução",
+        "completed": "Concluída",
+        "failed": "Falhou",
+        "cancelled": "Cancelada"
+      }
+    }
   }
 }

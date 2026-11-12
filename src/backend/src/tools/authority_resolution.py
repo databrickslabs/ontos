@@ -17,7 +17,7 @@ from typing import Any
 
 from starlette.concurrency import run_in_threadpool
 
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 from src.controller.authority_resolution_manager import AuthorityResolutionManager
 
 _manager = AuthorityResolutionManager()
@@ -164,7 +164,7 @@ class ComputeDnaCoefficientTool(BaseTool):
         try:
             run = _manager.compute_dnaco(ctx.db, relation.id)
         except Exception as e:
-            return ToolResult(success=False, error=f"DNA-Coefficient computation failed: {e}")
+            return ToolResult(success=False, **tool_failure("compute_dna_coefficient", e))
         if not run:
             return ToolResult(success=False, error=f"Authority Relation not found: {ar_id}")
         return ToolResult(success=True, data={

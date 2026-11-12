@@ -28,6 +28,9 @@ interface NeighborItem {
 interface ConceptNeighborhoodGraphProps {
   concept: OntologyConcept
   onNavigate: (iri: string) => void
+  // Render mode. 'list' (default) shows a compact predicate/target list; 'graph'
+  // shows the node-link canvas. The parent owns the toggle.
+  view?: 'list' | 'graph'
 }
 
 const PARENT_PREDICATE_FRAGMENTS = [
@@ -264,6 +267,7 @@ const MAX_PER_SIDE = 8
 function ConceptNeighborhoodGraphInner({
   concept,
   onNavigate,
+  view = 'list',
 }: ConceptNeighborhoodGraphProps) {
   const { get } = useApi()
   const { t } = useTranslation(['semantic-models'])
@@ -402,6 +406,44 @@ function ConceptNeighborhoodGraphInner({
     )
   }
 
+  // List view (default): a compact predicate -> target list over the same
+  // neighbour data. Resource targets are clickable and navigate to that concept.
+  if (view === 'list') {
+    const items = neighbors ?? []
+    return (
+      <div
+        className="max-h-[320px] overflow-auto divide-y"
+        data-testid="concept-neighborhood-list"
+      >
+        {items.map((n, i) => {
+          const clickable = n.displayType === 'resource' && !!n.stepIri
+          return (
+            <div
+              key={`${n.predicate}-${n.display}-${i}`}
+              className="flex items-center gap-3 px-3 py-2 text-sm"
+            >
+              <span className="text-xs font-mono text-muted-foreground shrink-0 w-40 truncate" title={n.predicate}>
+                {localName(n.predicate)}
+              </span>
+              {clickable ? (
+                <button
+                  type="button"
+                  className="text-left text-primary hover:underline truncate"
+                  onClick={() => n.stepIri && onNavigate(n.stepIri)}
+                  title={n.stepIri || n.display}
+                >
+                  {n.display}
+                </button>
+              ) : (
+                <span className="truncate" title={n.display}>{n.display}</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   const isDarkMode =
     typeof document !== 'undefined' &&
     document.documentElement.classList.contains('dark')
@@ -450,6 +492,8 @@ const GRAPH_HEIGHT = 320
 export default function ConceptNeighborhoodGraph(
   props: ConceptNeighborhoodGraphProps,
 ) {
+  // Always provide ReactFlow context: the inner component calls useReactFlow()
+  // unconditionally (for the graph view), even though the list view ignores it.
   return (
     <ReactFlowProvider>
       <ConceptNeighborhoodGraphInner {...props} />

@@ -475,6 +475,26 @@ class TestDescribeFailedExecutions:
 
         assert describe_failed_executions([exe]) == "{'code': 'X'}"
 
+    def test_an_execution_without_step_results_reports_its_status(self):
+        from src.common.workflow_triggers import describe_failed_executions
+
+        exe = _make_execution(ExecutionStatus.FAILED)
+        exe.step_executions = []
+
+        assert describe_failed_executions([exe]) == 'Gate: failed'
+
+    def test_a_step_result_that_is_not_a_dict_is_skipped(self):
+        from types import SimpleNamespace
+
+        from src.common.workflow_triggers import describe_failed_executions
+
+        exe = _make_execution(ExecutionStatus.FAILED)
+        exe.step_executions = [
+            SimpleNamespace(passed=False, error_message=None, result_data=['not', 'a', 'dict']),
+        ]
+
+        assert describe_failed_executions([exe]) == 'Gate: failed'
+
     def test_default_when_nothing_failed(self):
         from src.common.workflow_triggers import describe_failed_executions
 

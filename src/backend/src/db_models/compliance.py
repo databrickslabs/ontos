@@ -39,6 +39,13 @@ class ComplianceRunDb(Base):
     failure_count = Column(Integer, default=0, nullable=False)
     score = Column(Float, default=0.0, nullable=False)
     error_message = Column(Text, nullable=True)
+    # Stable code and JSON parameters of an app error, translated by the UI (error_message is the fallback)
+    error_code = Column(String, nullable=True)
+    error_params = Column(Text, nullable=True)
+    # Code and JSON parameters of what a finished run has to report (a rule tail it ignored);
+    # kept apart from error_code so a succeeded run never looks failed
+    warning_code = Column(String, nullable=True)
+    warning_params = Column(Text, nullable=True)
 
     policy = relationship("CompliancePolicyDb", back_populates="runs")
     results = relationship("ComplianceResultDb", back_populates="run", cascade="all, delete-orphan", lazy="selectin")

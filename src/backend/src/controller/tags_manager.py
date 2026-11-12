@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 from uuid import UUID
 
 from sqlalchemy import func
@@ -17,7 +17,7 @@ from src.models.tags import (
     AssignedTagCreate, AssignedTag,
     DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR
 )
-from src.db_models.tags import TagDb, TagNamespaceDb # For type hints
+from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
 
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
@@ -98,7 +98,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         db_namespace = self._namespace_repo.get_by_name(db, name=name)
         return TagNamespace.from_orm(db_namespace) if db_namespace else None
 
-    def list_namespaces(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[TagNamespace]:
+    def list_namespaces(self, db: Session, *, skip: int = 0, limit: Optional[int] = None) -> List[TagNamespace]:
         db_namespaces = self._namespace_repo.get_multi(db, skip=skip, limit=limit)
         return [TagNamespace.from_orm(ns) for ns in db_namespaces]
 
@@ -168,7 +168,18 @@ class TagsManager(DeliveryMixin, SearchableAsset):
     def list_assigned_tags(self, db: Session, *, entity_id: str, entity_type: str) -> List[AssignedTag]:
         return self._entity_assoc_repo.get_assigned_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type)
 
-    def set_tags_for_entity(self, db: Session, *, entity_id: str, entity_type: str, tags: List[AssignedTagCreate], user_email: Optional[str]) -> List[AssignedTag]:
+    def list_assigned_tags_for_entities(
+        self, db: Session, *, entity_ids: List[str], entity_type: str,
+    ) -> Dict[str, List[AssignedTag]]:
+        """Tags of several entities in one query: ``{entity_id: [AssignedTag, ...]}``."""
+        return self._entity_assoc_repo.get_assigned_tags_for_entities(db, entity_ids=entity_ids, entity_type=entity_type)
+
+    def set_tags_for_entity(
+        self, db: Session, *, entity_id: str, entity_type: str,
+        tags: List[AssignedTagCreate], user_email: Optional[str], commit: bool = True,
+    ) -> List[AssignedTag]:
+        """Replace the tags of an entity. With ``commit=False`` (a batch import,
+        inside the savepoint of the entity) the change is only flushed."""
         ns_repo = self._namespace_repo
         assigned = self._entity_assoc_repo.set_tags_for_entity(
             db,
@@ -188,25 +199,40 @@ class TagsManager(DeliveryMixin, SearchableAsset):
                 tag_summary = ", ".join(tag_names)
                 if len(tags) > 5:
                     tag_summary += f", ... ({len(tags)} total)"
-                change_log_manager.log_change_with_details(
-                    db,
-                    entity_type=entity_type,
-                    entity_id=str(entity_id),
-                    action="TAGS_SET",
-                    username=user_email,
-                    details={
-                        "tag_count": len(tags),
-                        "tags": tag_summary,
-                        "summary": f"Tags updated: {tag_summary}" + (f" by {user_email}" if user_email else ""),
-                    },
-                )
+                details = {
+                    "tag_count": len(tags),
+                    "tags": tag_summary,
+                    "summary": f"Tags updated: {tag_summary}"
+                               + (f" by {user_email}" if user_email else ""),
+                }
+                if commit:
+                    change_log_manager.log_change_with_details(
+                        db, entity_type=entity_type, entity_id=str(entity_id),
+                        action="TAGS_SET", username=user_email, details=details,
+                    )
+                else:
+                    # A failed write mustn't abort the caller's transaction (Postgres)
+                    with db.begin_nested():
+                        change_log_manager.log_change_with_details(
+                            db, entity_type=entity_type, entity_id=str(entity_id),
+                            action="TAGS_SET", username=user_email, details=details,
+                            commit=False,
+                        )
             except Exception as log_err:
                 logger.warning(f"Failed to log change for tag set: {log_err}")
-        
-        db.commit()
+
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         return assigned
 
     def add_tag_to_entity(self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID, assigned_value: Optional[str], user_email: Optional[str]) -> AssignedTag:
+        previous = (
+            db.query(EntityTagAssociationDb.assigned_value)
+            .filter_by(entity_id=entity_id, entity_type=entity_type, tag_id=tag_id)
+            .first()
+        )
         assoc = self._entity_assoc_repo.add_tag_to_entity(
             db,
             entity_id=entity_id,
@@ -221,23 +247,26 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         ns = self._namespace_repo.get(db, id=tag_db.namespace_id) if tag_db and tag_db.namespace_id else None
         tag_fqn = f"{(ns.name if ns else DEFAULT_NAMESPACE_NAME)}{TAG_NAMESPACE_SEPARATOR}{tag_db.name}"
         
-        # Log to change log for timeline
-        try:
-            from src.controller.change_log_manager import change_log_manager
-            change_log_manager.log_change_with_details(
-                db,
-                entity_type=entity_type,
-                entity_id=str(entity_id),
-                action="TAG_ASSIGN",
-                username=user_email,
-                details={
-                    "tag": tag_fqn,
-                    "assigned_value": assigned_value,
-                    "summary": f"Tag '{tag_fqn}' assigned" + (f" with value '{assigned_value}'" if assigned_value else "") + (f" by {user_email}" if user_email else ""),
-                },
-            )
-        except Exception as log_err:
-            logger.warning(f"Failed to log change for tag assign: {log_err}")
+        # Log to change log for timeline, with the stored value, and only when the
+        # assignment changed: re-adding a tag without a value keeps it (#1420)
+        stored_value = assoc.assigned_value
+        if previous is None or previous[0] != stored_value:
+            try:
+                from src.controller.change_log_manager import change_log_manager
+                change_log_manager.log_change_with_details(
+                    db,
+                    entity_type=entity_type,
+                    entity_id=str(entity_id),
+                    action="TAG_ASSIGN",
+                    username=user_email,
+                    details={
+                        "tag": tag_fqn,
+                        "assigned_value": stored_value,
+                        "summary": f"Tag '{tag_fqn}' assigned" + (f" with value '{stored_value}'" if stored_value else "") + (f" by {user_email}" if user_email else ""),
+                    },
+                )
+            except Exception as log_err:
+                logger.warning(f"Failed to log change for tag assign: {log_err}")
         
         db.commit()
         
@@ -337,7 +366,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
 
     def list_tags(
         self, db: Session, *, 
-        skip: int = 0, limit: int = 100, 
+        skip: int = 0, limit: Optional[int] = None, 
         namespace_id: Optional[UUID] = None,
         namespace_name: Optional[str] = None, 
         name_contains: Optional[str] = None,
@@ -423,11 +452,11 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         db_perm = self._permission_repo.get(db, id=perm_id)
         return TagNamespacePermission.from_orm(db_perm) if db_perm else None
 
-    def list_permissions_for_namespace(self, db: Session, *, namespace_id: UUID, skip: int = 0, limit: int = 100) -> List[TagNamespacePermission]:
+    def list_permissions_for_namespace(self, db: Session, *, namespace_id: UUID, skip: int = 0, limit: Optional[int] = None) -> List[TagNamespacePermission]:
         # Add skip/limit to repository method if needed, for now fetching all for a namespace.
         db_perms = self._permission_repo.get_permissions_for_namespace(db, namespace_id=namespace_id)
         # Apply skip/limit here if repo doesn't support it directly for this specific query
-        return [TagNamespacePermission.from_orm(p) for p in db_perms[skip : skip + limit]]
+        return [TagNamespacePermission.from_orm(p) for p in db_perms[skip : skip + limit if limit is not None else None]]
 
     def update_namespace_permission(self, db: Session, *, perm_id: UUID, perm_in: TagNamespacePermissionUpdate, user_email: Optional[str]) -> Optional[TagNamespacePermission]:
         db_perm = self._permission_repo.get(db, id=perm_id)

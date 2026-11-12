@@ -31,9 +31,12 @@
       "special": "Speciaal",
       "requesterOriginalUser": "Aanvrager (Oorspronkelijke Gebruiker)",
       "ownerEntityOwner": "Eigenaar (Entiteitseigenaar)",
+      "domainOwners": "Domeineigenaren",
+      "contractApprovers": "Contractgoedkeurders",
       "appRoles": "App-rollen",
       "businessRoles": "Bedrijfsrollen",
-      "noGroups": "Geen groepen"
+      "noGroups": "Geen groepen",
+      "assetOwners": "Asseteigenaren"
     },
     "messages": {
       "loadWorkflowFailed": "Kon workflow niet laden",
@@ -43,7 +46,8 @@
       "createdSuccess": "Workflow succesvol aangemaakt",
       "updatedSuccess": "Workflow succesvol bijgewerkt",
       "createFailed": "Kon workflow niet aanmaken: {{error}}",
-      "updateFailed": "Kon workflow niet bijwerken: {{error}}"
+      "updateFailed": "Kon workflow niet bijwerken: {{error}}",
+      "stepConfigInvalid": "Stap \"{{step}}\": {{issue}}"
     },
     "badges": {
       "default": "Standaard",
@@ -90,6 +94,13 @@
       "generate_pdf": "PDF Genereren",
       "deliver": "Afleveren"
     },
+    "layout": {
+      "rearrange": "Herschikken",
+      "rearrangeHint": "Alle stappen automatisch schikken",
+      "confirmTitle": "Alle stappen herschikken?",
+      "confirmDescription": "De stappen worden automatisch geschikt. Je huidige indeling wordt bij het opslaan vervangen.",
+      "confirmAction": "Herschikken"
+    },
     "discard": {
       "description": "Je hebt niet-opgeslagen wijzigingen aan deze workflow. Als je nu weggaat, gaan je wijzigingen verloren.",
       "stay": "Blijven",
@@ -101,7 +112,25 @@
       "fromStatusPlaceholder": "bijv. concept",
       "toStatus": "Naar Status",
       "toStatusPlaceholder": "bijv. actief",
-      "descriptionPlaceholder": "Workflowbeschrijving"
+      "descriptionPlaceholder": "Workflowbeschrijving",
+      "failClosed": "De overgang weigeren als deze poort niet kan worden geëvalueerd",
+      "failClosedHint": "Fail closed: als het evalueren van deze poort een fout geeft (geen normale mislukking), wordt de statuswijziging geweigerd. Uit (fail open) gaat de wijziging door en wordt de fout gelogd en geaudit.",
+      "disabledFor": {
+        "title": "Uitgeschakeld voor",
+        "hint": "Deze gate draait niet voor de hier vermelde domeinen, dataproducten en datacontracten (een domein omvat zijn producten en contracten). Elke keer dat de gate wordt overgeslagen, wordt dat gelogd en geaudit.",
+        "domains": "Domeinen",
+        "dataProducts": "Dataproducten",
+        "dataContracts": "Datacontracten",
+        "none": "Geen",
+        "selectedCount_one": "{{count}} geselecteerd",
+        "selectedCount_other": "{{count}} geselecteerd",
+        "search": "Zoeken...",
+        "noResults": "Niets gevonden.",
+        "remove": "{{name}} verwijderen",
+        "notFound": "{{id}} (bestaat niet meer)",
+        "missingOnSave_one": "De gate staat uit voor {{count}} item dat niet meer bestaat. Verwijder het en sla opnieuw op.",
+        "missingOnSave_other": "De gate staat uit voor {{count}} items die niet meer bestaan. Verwijder ze en sla opnieuw op."
+      }
     },
     "stepConfig": {
       "title": "Stapconfiguratie",
@@ -167,7 +196,9 @@
         "validationPassed": "Validatie Geslaagd",
         "productApproved": "Product Goedgekeurd",
         "productRejected": "Product Afgewezen",
-        "piiDetected": "PII Gedetecteerd"
+        "piiDetected": "PII Gedetecteerd",
+        "entityDeprecated": "Melding: verouderd",
+        "entityRetired": "Melding: buiten gebruik"
       },
       "customMessage": "Aangepast Bericht",
       "customMessagePlaceholder": "Overschrijf sjabloonbericht. Ondersteunt ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
@@ -188,13 +219,28 @@
       "selectSource": "Selecteer bron",
       "sourceCurrentUser": "Huidige Gebruiker",
       "sourceProjectName": "Projectnaam",
-      "sourceTimestamp": "Tijdstempel"
+      "sourceTimestamp": "Tijdstempel",
+      "valueMode": "Waarde",
+      "modeFixed": "Vaste waarde",
+      "modeSource": "Waarde uit de uitvoering",
+      "modeNone": "Geen waarde",
+      "fixedValue": "Tagwaarde",
+      "fixedValuePlaceholder": "bijv. vertrouwelijk",
+      "selectValue": "Selecteer een waarde",
+      "noValueHelp": "De tag wordt zonder waarde toegewezen. Een waarde die de entiteit al voor deze tag heeft, blijft behouden.",
+      "sourceEntityName": "Entiteitsnaam",
+      "tagNotFound": "Geen tag heeft deze naam. De stap zet hem dan alleen voor de volgende stappen van de uitvoering.",
+      "fixedValueRequired": "Voer een waarde in, of kies \"Geen waarde\" om de tag zonder waarde toe te wijzen."
     },
     "approval": {
       "approversRole": "Goedkeurders (Rol)",
       "selectRole": "Selecteer rol",
       "additionalApproversAria": "Aanvullende goedkeurders",
-      "timeoutDays": "Time-out (dagen)"
+      "timeoutDays": "Time-out (dagen)",
+      "timeoutDaysHelp": "0 betekent geen time-out; laat leeg voor de standaardwaarde (7 dagen).",
+      "requireAll": "Alle goedkeurders vereisen",
+      "requireAllHelp": "Elke goedkeurder beslist: een gebruiker voor zichzelf, een willekeurig lid voor een groep of rol. Elke afwijzing laat de stap mislukken.",
+      "timeoutNotEnforced": "Nog niet afgedwongen: een openstaande goedkeuring verloopt niet."
     },
     "assetReview": {
       "reviewerRole": "Beoordelaarsrol",
@@ -241,6 +287,66 @@
       "timeoutSeconds": "Time-out (seconden)",
       "retryCount": "Aantal Nieuwe Pogingen",
       "retryHelp": "Aantal nieuwe pogingen bij mislukking (0-5)."
+    },
+    "conditional": {
+      "condition": "Voorwaarde",
+      "placeholder": "obj.status = 'active' AND NOT HAS_TAG('pii')",
+      "branchHelp": "Als de voorwaarde waar is, volgt de workflow de Pass-tak; als ze onwaar is, de Fail-tak.",
+      "fieldsHelp": "Schrijf een Compliance DSL-expressie zonder MATCH of ASSERT. Velden van de entiteit lees je als obj.<veld>; vergelijk met =, niet ==.",
+      "examplesTitle": "Voorbeelden",
+      "errors": {
+        "condition_required": "Voer een voorwaarde in.",
+        "condition_syntax_error": "De voorwaarde kan niet worden geparsed (regel {{line}}, kolom {{column}}).",
+        "condition_trailing_input": "Onverwachte \"{{token}}\" na de voorwaarde (regel {{line}}, kolom {{column}}). Verbind voorwaarden met AND of OR.",
+        "condition_too_long": "De voorwaarde is langer dan {{maximum}} tekens. Maak haar korter of verdeel haar over meerdere stappen.",
+        "condition_too_complex": "De voorwaarde is te diep genest om te controleren. Verwijder enkele haakjes of verdeel haar over meerdere stappen."
+      }
+    },
+    "script": {
+      "language": "Taal",
+      "languages": {
+        "python": "Python",
+        "sql": "SQL"
+      },
+      "code": "Code",
+      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
+      "timeout": "Time-out (seconden)",
+      "timeoutHelp": "De stap mislukt als het script langer draait.",
+      "variablesTitle": "Beschikbare variabelen",
+      "pythonVariables": {
+        "entity": "De gegevens van de entiteit (een dictionary)",
+        "entity_type": "Het type van de entiteit",
+        "entity_id": "De ID van de entiteit",
+        "entity_name": "De naam van de entiteit",
+        "user_email": "E-mail van de gebruiker die de workflow startte",
+        "step_results": "Resultaten van de stappen die al zijn uitgevoerd, per stap-ID"
+      },
+      "pythonResultHelp": "Stel result in om de tak te kiezen: result = {'passed': False, 'message': '...'} volgt de Fail-tak; zonder result slaagt de stap. Alleen basis-built-ins zijn beschikbaar: geen imports, bestanden of netwerk.",
+      "sqlHelp": "Draait op de SQL-warehouse die in Instellingen is ingesteld. ${variable}-plaatshouders worden vervangen voordat de instructie draait; de stap slaagt als de instructie slaagt. De instructie wacht maximaal 50 seconden.",
+      "errors": {
+        "script_code_required": "Voer de code van het script in.",
+        "script_timeout_invalid": "Voer een geheel aantal seconden in, minimaal {{minimum}}.",
+        "script_language_unsupported": "De taal \"{{language}}\" wordt niet ondersteund. Ondersteund: {{supported}}."
+      }
+    },
+    "validationIssues": {
+      "stepsRequired": "Een workflow heeft minstens één stap nodig.",
+      "duplicateStepIds": "Twee stappen hebben dezelfde ID.",
+      "stepUnknownReference": "Stap \"{{step}}\" laat zijn {{branch}}-tak wijzen naar \"{{target}}\", die niet in de workflow staat.",
+      "stepConfigMissing": "Stap \"{{step}}\" mist verplichte instellingen: {{fields}}.",
+      "assignTagValueSourceUnknown": "Stap \"{{step}}\" gebruikt de onbekende waardebron \"{{source}}\".",
+      "policyCheckPolicyMissing": "Stap \"{{step}}\" heeft een bestaand compliancebeleid nodig. Selecteer er een in de instellingen van de stap.",
+      "branch": {
+        "on_pass": "succes",
+        "on_fail": "fout"
+      }
+    },
+    "edgeLabels": {
+      "pass": "Geslaagd",
+      "fail": "Mislukt",
+      "true": "Waar",
+      "false": "Onwaar"
     }
   },
   "approvalResponse": {
@@ -270,7 +376,58 @@
       "processFailed": "Kon goedkeuring niet verwerken.",
       "processFailedRetry": "Kon goedkeuring niet verwerken. Probeer het opnieuw.",
       "entityApproved": "{{name}} is goedgekeurd.",
-      "entityRejected": "{{name}} is afgewezen."
+      "entityRejected": "{{name}} is afgewezen.",
+      "decisionRecorded": "Beslissing vastgelegd",
+      "waitingForApprovers_one": "Wacht nog op {{count}} goedkeurder.",
+      "waitingForApprovers_other": "Wacht nog op {{count}} goedkeurders."
+    },
+    "errors": {
+      "own_owner_approval": "Deze goedkeuring is voor de eigenaren; u kunt uw eigen aanvraag niet goedkeuren.",
+      "own_change_request_approval": "U kunt uw eigen wijzigingsverzoek niet goedkeuren.",
+      "approval_already_decided": "U hebt al over deze goedkeuring beslist.",
+      "approval_not_an_approver": "Alleen de goedkeurders van deze stap kunnen erover beslissen.",
+      "approval_no_longer_pending": "Over deze goedkeuring is al besloten."
+    },
+    "entityTypes": {
+      "entity": "Entiteit",
+      "data_product": "Dataproduct",
+      "data_contract": "Datacontract",
+      "data_domain": "Datadomein",
+      "data_asset_review": "Beoordeling van data-assets",
+      "access_grant": "Toegangsverlening",
+      "asset": "Asset",
+      "ontology_concept": "Concept",
+      "concept": "Concept"
+    },
+    "fields": {
+      "product_id": "Product-ID",
+      "product_name": "Productnaam",
+      "contract_id": "Contract-ID",
+      "contract_name": "Contractnaam",
+      "status": "Status",
+      "from_status": "Van status",
+      "to_status": "Naar status",
+      "target_status": "Aangevraagde status",
+      "current_status": "Huidige status",
+      "justification": "Onderbouwing",
+      "sunset_date": "Einddatum",
+      "replacement_id": "Vervangings-ID",
+      "replacement_name": "Vervanging",
+      "requested_scope": "Aangevraagd bereik",
+      "publication_scope": "Publicatiebereik",
+      "requester": "Aanvrager",
+      "requester_message": "Bericht van de aanvrager",
+      "reviewer_email": "Beoordelaar",
+      "requested_certification_level": "Aangevraagd certificeringsniveau",
+      "certification_level": "Certificeringsniveau",
+      "certification_notes": "Certificeringsnotities",
+      "asset_count": "Aantal assets",
+      "asset_fqns": "Assets",
+      "domain_id": "Domein-ID",
+      "project_id": "Project-ID",
+      "project_name": "Project",
+      "name": "Naam",
+      "notes": "Notities"
     }
   },
   "approvalWizard": {
@@ -360,9 +517,22 @@
     "titleFallback": "Workflow-uitvoering",
     "executionId": "Uitvoerings-ID: {{id}}...",
     "stepsProgress": "{{done}}/{{total}} stappen",
+    "stepsProgressWithRemoved_one": "{{done}}/{{total}} stappen (+{{count}} verwijderd)",
+    "stepsProgressWithRemoved_other": "{{done}}/{{total}} stappen (+{{count}} verwijderd)",
     "triggeredBy": "Geactiveerd door: {{user}}",
     "workflowSteps": "Workflowstappen",
     "loadDefinitionFailed": "Kon workflowdefinitie niet laden",
+    "removedSteps": "Verwijderde stappen",
+    "removedStepsHint": "Deze stappen zijn in deze uitvoering uitgevoerd en later uit de workflow verwijderd.",
+    "stepErrors": {
+      "rule_where_evaluation_failed": "De WHERE-clausule van beleid '{{policyName}}' kon niet worden geëvalueerd op {{entityType}} {{entityId}}",
+      "approval_rejected": "Verzoek afgewezen",
+      "output_port_contracts_missing": "Publiceren niet mogelijk: de uitvoerpoorten {{ports}} moeten datacontracten toegewezen hebben",
+      "output_port_contracts_unapproved": "Publiceren niet mogelijk: deze uitvoerpoorten hebben niet-goedgekeurde contracten: {{ports}}. De contracten moeten eerst worden goedgekeurd.",
+      "rule_entity_load_failed": "{{entityType}} {{entityId}} kon niet worden geladen om de regel te evalueren",
+      "rule_entity_not_found": "{{entityType}} {{entityId}} is niet gevonden, dus de regel kan niet worden geëvalueerd",
+      "cancelled_by_admin": "Geannuleerd door een beheerder ({{by}})"
+    },
     "states": {
       "pending": "In Afwachting",
       "running": "Wordt Uitgevoerd",
@@ -370,6 +540,18 @@
       "failed": "Mislukt",
       "skipped": "Overgeslagen",
       "waiting": "Wachtend"
+    },
+    "conditionalBranch": {
+      "true": "Voorwaarde was waar: ware tak gevolgd",
+      "false": "Voorwaarde was onwaar: onware tak gevolgd"
+    },
+    "executionStates": {
+      "pending": "In afwachting",
+      "running": "Actief",
+      "paused": "Gepauzeerd",
+      "succeeded": "Geslaagd",
+      "failed": "Mislukt",
+      "cancelled": "Geannuleerd"
     },
     "summary": {
       "entity": "Entiteit",
@@ -393,6 +575,8 @@
     "policyLabel": "Beleid: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Geen beleid geselecteerd",
+    "policyHint": "Suggestie: {{name}}",
+    "policyUnknown": "Onbekend of inactief beleid: {{id}}",
     "reviewerLabel": "Beoordelaar:",
     "notSet": "Niet ingesteld",
     "connectionLabel": "Verbinding: {{name}}",
@@ -431,6 +615,25 @@
     "endpointHint": "Backend-endpoint dat JSON teruggeeft",
     "addField": "Veld toevoegen"
   },
+  "runDialog": {
+    "menuLabel": "Uitvoeren",
+    "title": "\"{{name}}\" uitvoeren",
+    "description": "Start deze handmatige workflow voor een entiteit. De workflow wordt nu uitgevoerd, namens jou.",
+    "entityType": "Entiteitstype",
+    "entity": "Entiteit",
+    "selectEntity": "Selecteer een entiteit",
+    "loading": "Laden...",
+    "noEntities": "Niets om te selecteren.",
+    "listFailed": "De lijst kon niet worden geladen; voer in plaats daarvan de ID in.",
+    "entityId": "Entiteits-ID",
+    "entityIdPlaceholder": "bijv. main.sales.orders",
+    "entityIdHelp": "De ID of volledige naam van de entiteit waarvoor de workflow moet worden uitgevoerd.",
+    "run": "Uitvoeren",
+    "failed": "De workflow kon niet worden gestart.",
+    "resultStatus": "Resultaat",
+    "viewExecution": "Uitvoering bekijken",
+    "resultEntity": "{{type}}: {{name}}"
+  },
   "templateVars": {
     "copiedToClipboard": "{{placeholder}} gekopieerd naar klembord.",
     "copyFailed": "Kopiëren mislukt",
@@ -452,6 +655,16 @@
     "matches_one": "{{count}} match",
     "matches_other": "{{count}} matches",
     "noMatch": "Geen variabelen komen overeen"
+  },
+  "triggerEntityChecks": {
+    "unknownBadge": "Onbekend entiteitstype: {{type}}",
+    "removeUnknown": "{{type}} verwijderen",
+    "unknownNotice_one": "Deze trigger bevat een entiteitstype dat niet meer bestaat. Het komt met niets overeen: verwijder het om de trigger te wijzigen.",
+    "unknownNotice_other": "Deze trigger bevat {{count}} entiteitstypen die niet meer bestaan. Ze komen met niets overeen: verwijder ze om de trigger te wijzigen.",
+    "unknownOnSave": "De trigger bevat het onbekende entiteitstype \"{{type}}\": verwijder het in de triggerconfiguratie om de trigger te wijzigen.",
+    "unsupportedOnSave": "\"{{trigger}}\" wordt nooit geactiveerd voor {{type}}: kies een entiteitstype dat deze trigger ondersteunt.",
+    "pickKnownType": "Kies minstens één entiteitstype. Zonder type wordt deze workflow voor elke entiteit geactiveerd.",
+    "requiredOnSave": "Kies minstens één entiteitstype voor de trigger: geen van zijn typen activeert hem (ze bestaan niet meer, of deze trigger wordt er nooit voor geactiveerd), en een lege lijst zou hem voor elke entiteit activeren."
   },
   "triggerPicker": {
     "label": "Wordt geactiveerd bij",
@@ -489,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "Standaardworkflows",
       "newOnly": "Alleen Nieuwe Laden",
-      "reloadAll": "Alle Standaardwaarden Herladen"
+      "reloadAll": "Alle Standaardwaarden Herladen",
+      "confirmTitle": "Alle standaardworkflows opnieuw laden?",
+      "confirmDescription": "Elke standaardworkflow wordt teruggezet naar de meegeleverde definitie: beschrijving, trigger, bereik, stappen en hun indeling. Of een workflow actief is, verandert niet. Standaardworkflows die u of een andere beheerder heeft bewerkt, blijven behouden, tenzij u ze hieronder ook terugzet.",
+      "includeEdited": "Ook bewerkte standaardworkflows terugzetten (hun wijzigingen gaan verloren)",
+      "confirmAction": "Opnieuw laden",
+      "keptEdited": "Bewerkte behouden: {{names}}.",
+      "result": "Aangemaakt: {{created}}, bijgewerkt: {{updated}}, overgeslagen: {{skipped}}."
     },
     "badges": {
       "default": "Standaard",
@@ -552,7 +771,12 @@
       "duplicateTitle": "Workflow Dupliceren",
       "duplicateDescription": "Maak een kopie van \"{{name}}\" met een nieuwe naam.",
       "deleteExecutionTitle": "Uitvoering Verwijderen",
-      "deleteExecutionDescription": "Weet je zeker dat je deze workflow-uitvoering wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+      "deleteExecutionDescription": "Weet je zeker dat je deze workflow-uitvoering wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
+      "activationOverlapTitle": "Een andere workflow komt overeen met dezelfde gebeurtenis",
+      "activationOverlapDescription": "De onderstaande workflows zouden ook bij dezelfde gebeurtenis worden uitgevoerd. Controleer ze en annuleer of activeer toch.",
+      "activationOverlapDetails": "Trigger: {{trigger}} · Entiteiten: {{entities}}",
+      "allEntities": "alle entiteiten",
+      "activateAnyway": "Toch activeren"
     },
     "placeholders": {
       "newWorkflowName": "Nieuwe workflownaam"
@@ -599,6 +823,7 @@
       "loadDefaultsFailed": "Kon standaardworkflows niet laden",
       "cancelSuccess": "Uitvoering succesvol geannuleerd",
       "cancelFailed": "Kon uitvoering niet annuleren",
+      "approvalCancelled": "Goedkeuring geannuleerd. De workflow volgde het afwijzingspad; status: {{status}}.",
       "retryStarted": "Nieuwe poging voor uitvoering gestart",
       "retryFailed": "Kon uitvoering niet opnieuw proberen",
       "executionDeleteSuccess": "Uitvoering succesvol verwijderd",
@@ -609,6 +834,7 @@
       "approveFailed": "Kon workflow niet goedkeuren",
       "rejectResumeSuccess": "Workflow afgewezen en hervat",
       "rejectFailed": "Kon workflow niet afwijzen",
+      "forceDecisionRequireAll": "Alleen de goedkeurders kunnen over deze stap beslissen (iedereen moet beslissen). Je kunt de uitvoering in plaats daarvan annuleren.",
       "noChanges": "Geen Wijzigingen",
       "allAlreadyEnabled": "Alle geselecteerde workflows zijn al ingeschakeld.",
       "allAlreadyDisabled": "Alle geselecteerde workflows zijn al uitgeschakeld.",

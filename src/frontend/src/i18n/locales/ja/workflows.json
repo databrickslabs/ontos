@@ -31,9 +31,12 @@
       "special": "特別",
       "requesterOriginalUser": "リクエスト者（元のユーザー）",
       "ownerEntityOwner": "所有者（エンティティ所有者）",
+      "domainOwners": "ドメインオーナー",
+      "contractApprovers": "契約承認者",
       "appRoles": "アプリロール",
       "businessRoles": "ビジネスロール",
-      "noGroups": "グループがありません"
+      "noGroups": "グループがありません",
+      "assetOwners": "アセット所有者"
     },
     "messages": {
       "loadWorkflowFailed": "ワークフローの読み込みに失敗しました",
@@ -43,7 +46,8 @@
       "createdSuccess": "ワークフローを正常に作成しました",
       "updatedSuccess": "ワークフローを正常に更新しました",
       "createFailed": "ワークフローの作成に失敗しました: {{error}}",
-      "updateFailed": "ワークフローの更新に失敗しました: {{error}}"
+      "updateFailed": "ワークフローの更新に失敗しました: {{error}}",
+      "stepConfigInvalid": "ステップ \"{{step}}\": {{issue}}"
     },
     "badges": {
       "default": "デフォルト",
@@ -90,6 +94,13 @@
       "generate_pdf": "PDF を生成",
       "deliver": "配信"
     },
+    "layout": {
+      "rearrange": "再配置",
+      "rearrangeHint": "すべてのステップを自動で配置",
+      "confirmTitle": "すべてのステップを再配置しますか？",
+      "confirmDescription": "ステップは自動で配置されます。保存すると現在のレイアウトは置き換えられます。",
+      "confirmAction": "再配置"
+    },
     "discard": {
       "description": "このワークフローに未保存の変更があります。今すぐ離れると、変更内容は失われます。",
       "stay": "とどまる",
@@ -101,7 +112,25 @@
       "fromStatusPlaceholder": "例: draft",
       "toStatus": "変更先ステータス",
       "toStatusPlaceholder": "例: active",
-      "descriptionPlaceholder": "ワークフローの説明"
+      "descriptionPlaceholder": "ワークフローの説明",
+      "failClosed": "このゲートを評価できない場合は遷移を拒否する",
+      "failClosedHint": "Fail closed: このゲートの評価でエラーが発生した場合（通常の失敗ではない場合）、ステータス変更は拒否されます。オフ（fail open）の場合、変更は実行され、エラーはログと監査に記録されます。",
+      "disabledFor": {
+        "title": "無効にする対象",
+        "hint": "このゲートは、ここに挙げたドメイン、データプロダクト、データコントラクトでは実行されません（ドメインはその配下のプロダクトとコントラクトを含みます）。スキップはすべてログと監査に記録されます。",
+        "domains": "ドメイン",
+        "dataProducts": "データプロダクト",
+        "dataContracts": "データコントラクト",
+        "none": "なし",
+        "selectedCount_one": "{{count}} 件選択",
+        "selectedCount_other": "{{count}} 件選択",
+        "search": "検索...",
+        "noResults": "見つかりません。",
+        "remove": "{{name}} を削除",
+        "notFound": "{{id}}（存在しません）",
+        "missingOnSave_one": "このゲートは、存在しなくなった{{count}}件の項目に対してオフになっています。削除してから再度保存してください。",
+        "missingOnSave_other": "このゲートは、存在しなくなった{{count}}件の項目に対してオフになっています。削除してから再度保存してください。"
+      }
     },
     "stepConfig": {
       "title": "ステップ設定",
@@ -167,7 +196,9 @@
         "validationPassed": "検証に合格しました",
         "productApproved": "プロダクトが承認されました",
         "productRejected": "プロダクトが却下されました",
-        "piiDetected": "PII を検出しました"
+        "piiDetected": "PII を検出しました",
+        "entityDeprecated": "非推奨のお知らせ",
+        "entityRetired": "廃止のお知らせ"
       },
       "customMessage": "カスタムメッセージ",
       "customMessagePlaceholder": "テンプレートメッセージを上書きします。${entity_name}、${entity_type}、${user_email}、${entity.field} に対応...",
@@ -188,13 +219,28 @@
       "selectSource": "ソースを選択",
       "sourceCurrentUser": "現在のユーザー",
       "sourceProjectName": "プロジェクト名",
-      "sourceTimestamp": "タイムスタンプ"
+      "sourceTimestamp": "タイムスタンプ",
+      "valueMode": "値",
+      "modeFixed": "固定値",
+      "modeSource": "実行時の値",
+      "modeNone": "値なし",
+      "fixedValue": "タグの値",
+      "fixedValuePlaceholder": "例: confidential",
+      "selectValue": "値を選択",
+      "noValueHelp": "タグは値なしで割り当てられます。エンティティがこのタグに既に持つ値は保持されます。",
+      "sourceEntityName": "エンティティ名",
+      "tagNotFound": "この名前のタグはありません。このステップは実行の後続ステップに対してのみ設定します。",
+      "fixedValueRequired": "値を入力するか、「値なし」を選択して値なしでタグを割り当ててください。"
     },
     "approval": {
       "approversRole": "承認者（ロール）",
       "selectRole": "ロールを選択",
       "additionalApproversAria": "追加の承認者",
-      "timeoutDays": "タイムアウト（日）"
+      "timeoutDays": "タイムアウト（日）",
+      "timeoutDaysHelp": "0 はタイムアウトなしを意味します。空欄にすると既定値（7 日）になります。",
+      "requireAll": "すべての承認者を必須にする",
+      "requireAllHelp": "各承認者が判断します。ユーザーは本人が、グループまたはロールはそのメンバーの誰か 1 人が判断します。1 件でも却下されるとステップは失敗します。",
+      "timeoutNotEnforced": "まだ適用されません: 保留中の承認は期限切れになりません。"
     },
     "assetReview": {
       "reviewerRole": "レビュー担当者ロール",
@@ -241,6 +287,66 @@
       "timeoutSeconds": "タイムアウト（秒）",
       "retryCount": "リトライ回数",
       "retryHelp": "失敗時のリトライ回数（0～5）。"
+    },
+    "conditional": {
+      "condition": "条件",
+      "placeholder": "obj.status = 'active' AND NOT HAS_TAG('pii')",
+      "branchHelp": "条件が true のときワークフローは Pass の分岐に、false のときは Fail の分岐に進みます。",
+      "fieldsHelp": "MATCH や ASSERT を含まない Compliance DSL の式を書きます。エンティティのフィールドは obj.<field> で参照し、比較には == ではなく = を使います。",
+      "examplesTitle": "例",
+      "errors": {
+        "condition_required": "条件を入力してください。",
+        "condition_syntax_error": "条件を解析できません（{{line}} 行 {{column}} 列）。",
+        "condition_trailing_input": "条件の後に予期しない \"{{token}}\" があります（{{line}} 行 {{column}} 列）。条件は AND または OR でつなぎます。",
+        "condition_too_long": "条件が {{maximum}} 文字を超えています。短くするか、複数のステップに分けてください。",
+        "condition_too_complex": "条件の入れ子が深すぎるためチェックできません。括弧を減らすか、複数のステップに分けてください。"
+      }
+    },
+    "script": {
+      "language": "言語",
+      "languages": {
+        "python": "Python",
+        "sql": "SQL"
+      },
+      "code": "コード",
+      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
+      "timeout": "タイムアウト（秒）",
+      "timeoutHelp": "スクリプトの実行がこれより長くなるとステップは失敗します。",
+      "variablesTitle": "使用できる変数",
+      "pythonVariables": {
+        "entity": "エンティティのデータ（辞書）",
+        "entity_type": "エンティティの種類",
+        "entity_id": "エンティティの ID",
+        "entity_name": "エンティティの名前",
+        "user_email": "ワークフローを起動したユーザーのメール",
+        "step_results": "実行済みのステップの結果（ステップ ID ごと）"
+      },
+      "pythonResultHelp": "result を設定して分岐を選びます。result = {'passed': False, 'message': '...'} は Fail の分岐に進み、result がなければステップは成功します。使えるのは基本的な組み込み関数だけで、import、ファイル、ネットワークは使えません。",
+      "sqlHelp": "設定で指定した SQL ウェアハウスで実行されます。${variable} のプレースホルダーは実行前に置き換えられ、ステートメントが成功するとステップは成功します。ステートメントの待機は最大 50 秒です。",
+      "errors": {
+        "script_code_required": "スクリプトのコードを入力してください。",
+        "script_timeout_invalid": "{{minimum}} 以上の整数（秒）を入力してください。",
+        "script_language_unsupported": "言語 \"{{language}}\" はサポートされていません。サポート対象: {{supported}}。"
+      }
+    },
+    "validationIssues": {
+      "stepsRequired": "ワークフローには少なくとも1つのステップが必要です。",
+      "duplicateStepIds": "2つのステップのIDが同じです。",
+      "stepUnknownReference": "ステップ「{{step}}」の{{branch}}の分岐先「{{target}}」はワークフロー内にありません。",
+      "stepConfigMissing": "ステップ「{{step}}」に必須の設定がありません: {{fields}}。",
+      "assignTagValueSourceUnknown": "ステップ「{{step}}」は不明な値ソース「{{source}}」を使用しています。",
+      "policyCheckPolicyMissing": "ステップ「{{step}}」には既存のコンプライアンスポリシーが必要です。ステップの設定で選択してください。",
+      "branch": {
+        "on_pass": "成功時",
+        "on_fail": "失敗時"
+      }
+    },
+    "edgeLabels": {
+      "pass": "成功",
+      "fail": "失敗",
+      "true": "真",
+      "false": "偽"
     }
   },
   "approvalResponse": {
@@ -270,7 +376,58 @@
       "processFailed": "承認の処理に失敗しました。",
       "processFailedRetry": "承認の処理に失敗しました。もう一度お試しください。",
       "entityApproved": "{{name}} が承認されました。",
-      "entityRejected": "{{name}} が却下されました。"
+      "entityRejected": "{{name}} が却下されました。",
+      "decisionRecorded": "判断を記録しました",
+      "waitingForApprovers_one": "あと {{count}} 人の承認者を待っています。",
+      "waitingForApprovers_other": "あと {{count}} 人の承認者を待っています。"
+    },
+    "errors": {
+      "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。",
+      "own_change_request_approval": "自分の変更リクエストは承認できません。",
+      "approval_already_decided": "この承認はすでにあなたが判断済みです。",
+      "approval_not_an_approver": "このステップは承認者だけが判断できます。",
+      "approval_no_longer_pending": "この承認はすでに判断済みです。"
+    },
+    "entityTypes": {
+      "entity": "エンティティ",
+      "data_product": "データ製品",
+      "data_contract": "データ契約",
+      "data_domain": "データドメイン",
+      "data_asset_review": "データ資産レビュー",
+      "access_grant": "アクセス付与",
+      "asset": "資産",
+      "ontology_concept": "コンセプト",
+      "concept": "コンセプト"
+    },
+    "fields": {
+      "product_id": "製品 ID",
+      "product_name": "製品名",
+      "contract_id": "契約 ID",
+      "contract_name": "契約名",
+      "status": "ステータス",
+      "from_status": "変更前のステータス",
+      "to_status": "変更後のステータス",
+      "target_status": "リクエストされたステータス",
+      "current_status": "現在のステータス",
+      "justification": "正当な理由",
+      "sunset_date": "提供終了日",
+      "replacement_id": "後継の ID",
+      "replacement_name": "後継",
+      "requested_scope": "リクエストされた範囲",
+      "publication_scope": "公開範囲",
+      "requester": "リクエスト者",
+      "requester_message": "リクエスト者のメッセージ",
+      "reviewer_email": "レビュー担当者",
+      "requested_certification_level": "リクエストされた認定レベル",
+      "certification_level": "認定レベル",
+      "certification_notes": "認定メモ",
+      "asset_count": "資産の数",
+      "asset_fqns": "資産",
+      "domain_id": "ドメイン ID",
+      "project_id": "プロジェクト ID",
+      "project_name": "プロジェクト",
+      "name": "名前",
+      "notes": "メモ"
     }
   },
   "approvalWizard": {
@@ -360,9 +517,22 @@
     "titleFallback": "ワークフロー実行",
     "executionId": "実行 ID: {{id}}...",
     "stepsProgress": "{{done}}/{{total}} ステップ",
+    "stepsProgressWithRemoved_one": "{{done}}/{{total}} ステップ（削除済み +{{count}}）",
+    "stepsProgressWithRemoved_other": "{{done}}/{{total}} ステップ（削除済み +{{count}}）",
     "triggeredBy": "トリガー者: {{user}}",
     "workflowSteps": "ワークフローステップ",
     "loadDefinitionFailed": "ワークフロー定義の読み込みに失敗しました",
+    "removedSteps": "削除されたステップ",
+    "removedStepsHint": "これらのステップはこの実行で実行され、その後ワークフローから削除されました。",
+    "stepErrors": {
+      "rule_where_evaluation_failed": "ポリシー '{{policyName}}' の WHERE 句を {{entityType}} {{entityId}} で評価できませんでした",
+      "approval_rejected": "リクエストが却下されました",
+      "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
+      "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",
+      "rule_entity_load_failed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",
+      "rule_entity_not_found": "{{entityType}} {{entityId}} が見つからないため、ルールを評価できません",
+      "cancelled_by_admin": "管理者によりキャンセルされました（{{by}}）"
+    },
     "states": {
       "pending": "保留中",
       "running": "実行中",
@@ -370,6 +540,18 @@
       "failed": "失敗",
       "skipped": "スキップ",
       "waiting": "待機中"
+    },
+    "conditionalBranch": {
+      "true": "条件は真でした: 真の分岐を実行しました",
+      "false": "条件は偽でした: 偽の分岐を実行しました"
+    },
+    "executionStates": {
+      "pending": "保留中",
+      "running": "実行中",
+      "paused": "一時停止",
+      "succeeded": "成功",
+      "failed": "失敗",
+      "cancelled": "キャンセル"
     },
     "summary": {
       "entity": "エンティティ",
@@ -393,6 +575,8 @@
     "policyLabel": "ポリシー: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "ポリシーが選択されていません",
+    "policyHint": "推奨: {{name}}",
+    "policyUnknown": "不明または無効なポリシー: {{id}}",
     "reviewerLabel": "レビュー担当者:",
     "notSet": "未設定",
     "connectionLabel": "接続: {{name}}",
@@ -431,6 +615,25 @@
     "endpointHint": "JSON を返すバックエンドエンドポイント",
     "addField": "フィールドを追加"
   },
+  "runDialog": {
+    "menuLabel": "実行",
+    "title": "「{{name}}」を実行",
+    "description": "この手動ワークフローをエンティティに対して開始します。今すぐ、あなたとして実行されます。",
+    "entityType": "エンティティタイプ",
+    "entity": "エンティティ",
+    "selectEntity": "エンティティを選択",
+    "loading": "読み込み中...",
+    "noEntities": "選択できる項目がありません。",
+    "listFailed": "一覧を読み込めませんでした。IDを入力してください。",
+    "entityId": "エンティティID",
+    "entityIdPlaceholder": "例: main.sales.orders",
+    "entityIdHelp": "ワークフローを実行する対象エンティティのIDまたは完全名。",
+    "run": "実行",
+    "failed": "ワークフローを開始できませんでした。",
+    "resultStatus": "結果",
+    "viewExecution": "実行を表示",
+    "resultEntity": "{{type}}: {{name}}"
+  },
   "templateVars": {
     "copiedToClipboard": "{{placeholder}} をクリップボードにコピーしました。",
     "copyFailed": "コピーに失敗しました",
@@ -452,6 +655,16 @@
     "matches_one": "{{count}} 件の一致",
     "matches_other": "{{count}} 件の一致",
     "noMatch": "一致する変数がありません"
+  },
+  "triggerEntityChecks": {
+    "unknownBadge": "不明なエンティティタイプ: {{type}}",
+    "removeUnknown": "{{type}} を削除",
+    "unknownNotice_one": "このトリガーには、存在しなくなったエンティティタイプが含まれています。何にも一致しません。トリガーを変更するには削除してください。",
+    "unknownNotice_other": "このトリガーには、存在しなくなったエンティティタイプが{{count}}件含まれています。何にも一致しません。トリガーを変更するには削除してください。",
+    "unknownOnSave": "トリガーに不明なエンティティタイプ「{{type}}」が含まれています。トリガーを変更するにはトリガー設定で削除してください。",
+    "unsupportedOnSave": "「{{trigger}}」は{{type}}に対して発動しません。このトリガーがサポートするエンティティタイプを選択してください。",
+    "pickKnownType": "エンティティタイプを1つ以上選択してください。選択しないと、このワークフローはすべてのエンティティで発動します。",
+    "requiredOnSave": "トリガーのエンティティタイプを1つ以上選択してください。どのタイプでも発動しません（存在しなくなったか、このトリガーがそのタイプでは発動しません）。空のリストではすべてのエンティティで発動します。"
   },
   "triggerPicker": {
     "label": "発動条件",
@@ -489,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "デフォルトワークフロー",
       "newOnly": "新規のみ読み込む",
-      "reloadAll": "すべてのデフォルトを再読み込み"
+      "reloadAll": "すべてのデフォルトを再読み込み",
+      "confirmTitle": "すべての既定ワークフローを再読み込みしますか？",
+      "confirmDescription": "各既定ワークフローは出荷時の定義（説明、トリガー、スコープ、ステップとその配置）にリセットされます。有効かどうかは変わりません。あなたや他の管理者が編集した既定ワークフローは、下で一緒にリセットしない限り保持されます。",
+      "includeEdited": "編集済みの既定ワークフローもリセットする（変更は失われます）",
+      "confirmAction": "再読み込み",
+      "keptEdited": "編集済みを保持: {{names}}。",
+      "result": "作成 {{created}} 件、更新 {{updated}} 件、スキップ {{skipped}} 件。"
     },
     "badges": {
       "default": "デフォルト",
@@ -552,7 +771,12 @@
       "duplicateTitle": "ワークフローを複製",
       "duplicateDescription": "「{{name}}」のコピーを新しい名前で作成します。",
       "deleteExecutionTitle": "実行を削除",
-      "deleteExecutionDescription": "このワークフロー実行を削除してもよろしいですか？この操作は元に戻せません。"
+      "deleteExecutionDescription": "このワークフロー実行を削除してもよろしいですか？この操作は元に戻せません。",
+      "activationOverlapTitle": "別のワークフローが同じイベントに一致します",
+      "activationOverlapDescription": "以下のワークフローも同じイベントで実行されます。内容を確認し、キャンセルするかそのまま有効化してください。",
+      "activationOverlapDetails": "トリガー: {{trigger}} · エンティティ: {{entities}}",
+      "allEntities": "すべてのエンティティ",
+      "activateAnyway": "そのまま有効化"
     },
     "placeholders": {
       "newWorkflowName": "新しいワークフロー名"
@@ -599,6 +823,7 @@
       "loadDefaultsFailed": "デフォルトワークフローの読み込みに失敗しました",
       "cancelSuccess": "実行を正常にキャンセルしました",
       "cancelFailed": "実行のキャンセルに失敗しました",
+      "approvalCancelled": "承認をキャンセルしました。ワークフローは却下時の経路に進みました。ステータス: {{status}}。",
       "retryStarted": "実行のリトライを開始しました",
       "retryFailed": "実行のリトライに失敗しました",
       "executionDeleteSuccess": "実行を正常に削除しました",
@@ -609,6 +834,7 @@
       "approveFailed": "ワークフローの承認に失敗しました",
       "rejectResumeSuccess": "ワークフローを却下して再開しました",
       "rejectFailed": "ワークフローの却下に失敗しました",
+      "forceDecisionRequireAll": "このステップは承認者だけが判断できます（全員の判断が必要です）。代わりに実行をキャンセルできます。",
       "noChanges": "変更なし",
       "allAlreadyEnabled": "選択したワークフローはすべてすでに有効です。",
       "allAlreadyDisabled": "選択したワークフローはすべてすでに無効です。",

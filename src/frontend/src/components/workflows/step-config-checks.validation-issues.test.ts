@@ -1,0 +1,77 @@
+/** The errors of a refused workflow save, in the user's language. */
+import { afterEach, describe, expect, it } from 'vitest';
+import i18n from '@/i18n/config';
+import { workflowValidationIssueText } from './step-config-checks';
+
+describe('workflowValidationIssueText', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  it('translates a step pointing at a step that is not in the workflow', async () => {
+    const issue = {
+      code: 'step_unknown_reference',
+      message: "Step 'prepare' references unknown step 'old-check' in on_fail",
+      params: { step: 'prepare', target: 'old-check', field: 'on_fail' },
+    };
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Step "prepare" points its fail branch at "old-check", which is not in the workflow.',
+    );
+    await i18n.changeLanguage('pt');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'A etapa "prepare" aponta o ramo de falha para "old-check", que não está no workflow.',
+    );
+  });
+
+  it('translates missing settings and a Conditional step issue', async () => {
+    await i18n.changeLanguage('pt');
+    expect(workflowValidationIssueText(
+      { code: 'step_config_missing', message: 'x', params: { step: 'notify', fields: ['recipients'] } },
+      i18n.t,
+    )).toBe('Faltam configurações obrigatórias na etapa "notify": recipients.');
+    expect(workflowValidationIssueText(
+      { code: 'condition_required', message: "Step 'check': Enter a condition.", params: { step: 'check' } },
+      i18n.t,
+    )).toBe('Etapa "check": Informe uma condição.');
+  });
+
+  it('translates an assign tag step with an unknown value source', async () => {
+    const issue = {
+      code: 'assign_tag_value_source_unknown',
+      message: "Step 'tag': unknown value source 'curent_user'",
+      params: { step: 'tag', source: 'curent_user' },
+    };
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Step "tag" uses the unknown value source "curent_user".',
+    );
+    await i18n.changeLanguage('de');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Schritt „tag“ verwendet die unbekannte Wertquelle „curent_user“.',
+    );
+  });
+
+  it('translates a policy check step without an existing policy', async () => {
+    const issue = {
+      code: 'policy_check_policy_missing',
+      message: "Step 'naming-check': the policy to check is not selected",
+      params: { step: 'naming-check', policyId: '' },
+    };
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Step "naming-check" needs an existing compliance policy. '
+      + 'Select one in the step\'s settings.',
+    );
+    await i18n.changeLanguage('pt');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'A etapa "naming-check" precisa de uma política de conformidade existente. '
+      + 'Selecione uma nas configurações da etapa.',
+    );
+  });
+
+  it('shows the English text of an error it has no text for', () => {
+    const message = "disabled_for: unknown domain 'nope'";
+    expect(workflowValidationIssueText(
+      { code: 'workflow_validation_error', message, params: {} },
+      i18n.t,
+    )).toBe(message);
+  });
+});

@@ -1,11 +1,13 @@
-from typing import List, Optional, Union, TYPE_CHECKING
+from typing import Any, List, Optional, Union, TYPE_CHECKING, Dict
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import re
 
 from src.db_models.semantic_links import EntitySemanticLinkDb
-from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate
+from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate, MappingStatus
+from src.models.metric_views import MetricViewFieldLinks, MetricViewLinks
+from src.common.metric_views import metric_view_entity_id
 from src.repositories.semantic_links_repository import entity_semantic_links_repo
 from src.common.logging import get_logger
 from src.controller.change_log_manager import change_log_manager
@@ -108,29 +110,123 @@ class SemanticLinksManager:
 
         return None
 
-    def _to_api(self, db_obj: EntitySemanticLinkDb) -> EntitySemanticLink:
+    def _to_api(self, db_obj: EntitySemanticLinkDb, parent_entity_id: Optional[str] = None) -> EntitySemanticLink:
         label = db_obj.label
         if not label:
             # Derive concept label from IRI local name (fragment or last path segment)
             iri = db_obj.iri or ''
             tail = iri.split('#')[-1].split('/')[-1]
             label = tail.replace('_', ' ') if tail else None
-        
+
         return EntitySemanticLink(
             id=str(db_obj.id),
             entity_id=db_obj.entity_id,
             entity_type=db_obj.entity_type,  # type: ignore
             iri=db_obj.iri,
             label=label,
+            parent_entity_id=parent_entity_id,
         )
+
+    def _compute_nesting_for_links(self, links: List[EntitySemanticLink]) -> None:
+        """Compute parent_entity_id for nestable links (contract-schema-property chain).
+
+        Modifies links in-place. For data_contract_schema and data_contract_property links,
+        sets parent_entity_id to point to their parent data_contract link if present.
+
+        Nesting logic:
+        - data_contract_schema#{contractId} links are nested under the data_contract link
+          with entity_id={contractId}.
+        - data_contract_property#{contractId}#{schemaName}#{propertyName} links are nested
+          under their parent data_contract_schema link.
+        - All other links stay at top level (parent_entity_id remains None).
+
+        This is a O(n) algorithm over the concept's own link set; no extra DB queries.
+        """
+        # Build a map of entity_id -> link for quick lookup
+        by_entity_id: Dict[str, EntitySemanticLink] = {}
+        for link in links:
+            by_entity_id[link.entity_id] = link
+
+        # Process each link to find its parent (if any)
+        for link in links:
+            if link.entity_type == 'data_contract_schema':
+                # Extract contractId from entity_id format: {contractId}#{schemaName}
+                parts = link.entity_id.split('#', 1)
+                if len(parts) >= 1:
+                    contract_id = parts[0]
+                    # Look for a data_contract link with this contract_id
+                    if contract_id in by_entity_id and by_entity_id[contract_id].entity_type == 'data_contract':
+                        link.parent_entity_id = contract_id
+
+            elif link.entity_type == 'data_contract_property':
+                # Extract schemaName from entity_id format: {contractId}#{schemaName}#{propertyName}
+                parts = link.entity_id.split('#', 2)
+                if len(parts) >= 2:
+                    schema_entity_id = f"{parts[0]}#{parts[1]}"  # {contractId}#{schemaName}
+                    # Look for a data_contract_schema link with this entity_id
+                    if schema_entity_id in by_entity_id and by_entity_id[schema_entity_id].entity_type == 'data_contract_schema':
+                        link.parent_entity_id = schema_entity_id
 
     def list_for_entity(self, entity_id: str, entity_type: str) -> List[EntitySemanticLink]:
         items = entity_semantic_links_repo.list_for_entity(self._db, entity_id, entity_type)
-        return [self._to_api(it) for it in items]
+        results = [self._to_api(it) for it in items]
+        self._compute_nesting_for_links(results)
+        return results
 
     def list_for_entity_prefix(self, entity_id_prefix: str, entity_type: str) -> List[EntitySemanticLink]:
         items = entity_semantic_links_repo.list_for_entity_prefix(self._db, entity_id_prefix, entity_type)
         return [self._to_api(it) for it in items]
+
+    def list_for_metric_view(
+        self, view_fqn: str, spec: Optional[Dict[str, Any]]
+    ) -> MetricViewLinks:
+        """The concept links of a metric view and of each of its dimensions and measures.
+
+        ``spec`` is the parsed definition (``parse_metric_view_definition``).
+        A ``uc_column`` link under the view whose field is not in ``spec`` is
+        kept and listed in ``removed_fields``. When ``spec`` is None (the YAML
+        could not be parsed), field links can't be matched and only the view's
+        own links are returned.
+
+        Unity Catalog names are case-insensitive and links to UC objects are
+        stored as their writer spelled them, so the view and the fields are
+        matched ignoring case.
+        """
+        view_id = metric_view_entity_id(view_fqn)
+        view_links = [
+            self._to_api(it) for it in entity_semantic_links_repo.list_for_entity_ignoring_case(
+                self._db, view_id, 'uc_table')
+        ]
+        if spec is None:
+            return MetricViewLinks(view_entity_id=view_id, view_links=view_links)
+
+        prefix = f"{view_id}."
+        # casefolded field name -> (field name as stored, links)
+        by_field: Dict[str, List[EntitySemanticLink]] = {}
+        stored_name: Dict[str, str] = {}
+        for it in entity_semantic_links_repo.list_for_entity_prefix_ignoring_case(
+                self._db, prefix, 'uc_column'):
+            name = it.entity_id[len(prefix):]
+            by_field.setdefault(name.casefold(), []).append(self._to_api(it))
+            stored_name.setdefault(name.casefold(), name)
+
+        fields: List[MetricViewFieldLinks] = []
+        for kind, key in (('dimension', 'dimensions'), ('measure', 'measures')):
+            for field in spec.get(key) or []:
+                name = field['name']
+                fields.append(MetricViewFieldLinks(
+                    name=name, kind=kind, entity_id=prefix + name,
+                    links=by_field.get(name.casefold(), []),
+                ))
+        current = {f.name.casefold() for f in fields}
+        removed = [
+            MetricViewFieldLinks(name=stored_name[key], entity_id=prefix + stored_name[key],
+                                 links=links)
+            for key, links in sorted(by_field.items()) if key not in current
+        ]
+        return MetricViewLinks(
+            view_entity_id=view_id, view_links=view_links, fields=fields, removed_fields=removed,
+        )
 
     def list_for_iri(self, iri: str) -> List[EntitySemanticLink]:
         """Get all entities linked to an IRI, including both explicit links and inferred type relationships.
@@ -141,6 +237,12 @@ class SemanticLinksManager:
         relationship. Deduplicate on (entity_type, entity_id) so a single
         assignment is never shown twice, preferring the explicit stored link
         (it carries a real id/label) over the synthetic inferred one.
+
+        For physical assets linked through data contracts or products,
+        parent_entity_id is set (after dedup) to enable frontend nesting
+        (concept -> contract -> asset in a visual hierarchy). Only
+        contract-structured nesting is currently implemented (safe,
+        deterministic); fuzzy FQN->product matching is deferred.
         """
         # Explicit links from the database come first so they win on dedup.
         items = entity_semantic_links_repo.list_for_iri(self._db, iri)
@@ -151,6 +253,8 @@ class SemanticLinksManager:
             inferred = self._get_inferred_links_from_graph(iri)
             results.extend(inferred)
 
+        # Dedup on (entity_type, entity_id): explicit stored links come first
+        # so they win over the synthetic inferred duplicates.
         deduped: List[EntitySemanticLink] = []
         seen: set = set()
         for link in results:
@@ -160,7 +264,56 @@ class SemanticLinksManager:
             seen.add(key)
             deduped.append(link)
 
+        # Compute nesting relationships on the deduped set (concept -> contract
+        # -> asset), so the frontend can render the visual hierarchy.
+        self._compute_nesting_for_links(deduped)
+
         return deduped
+
+    def mapping_status_for_iris(self, iris: List[str]) -> Dict[str, MappingStatus]:
+        """Get mapping status for a batch of IRIs.
+
+        Returns a dict mapping each IRI to its layer status (asset/product/contract).
+        Only uses stored links (not inferred graph links) for efficiency in batch queries.
+
+        Args:
+            iris: List of IRI strings to query
+
+        Returns:
+            Dict[iri, MappingStatus] where MappingStatus indicates linked layers.
+            IRIs with no links are included with all flags false.
+        """
+        # Entity types that belong to each layer
+        physical_layer_types = {'asset', 'uc_catalog', 'uc_schema', 'uc_table', 'uc_column'}
+        product_layer_types = {'data_product'}
+        contract_layer_types = {'data_contract', 'data_contract_schema', 'data_contract_property'}
+
+        # Initialize all IRIs with false status
+        statuses: Dict[str, MappingStatus] = {
+            iri: MappingStatus(asset=False, product=False, contract=False)
+            for iri in iris
+        }
+
+        if not iris:
+            return statuses
+
+        # Batch query for all links matching these IRIs
+        links = entity_semantic_links_repo.list_for_iris(self._db, iris)
+
+        # Group by IRI and update status flags
+        for link in links:
+            if link.iri not in statuses:
+                # IRI not requested; skip it
+                continue
+
+            if link.entity_type in physical_layer_types:
+                statuses[link.iri].asset = True
+            elif link.entity_type in product_layer_types:
+                statuses[link.iri].product = True
+            elif link.entity_type in contract_layer_types:
+                statuses[link.iri].contract = True
+
+        return statuses
 
     def _get_inferred_links_from_graph(self, iri: str) -> List[EntitySemanticLink]:
         """Query RDF graph for entities that have rdf:type matching the given IRI."""
@@ -232,16 +385,14 @@ class SemanticLinksManager:
         
         # Incrementally update the in-memory RDF graph via the shared manager on app.state
         try:
-            from fastapi import Request
-            # Access global app.state manager through SQLAlchemy session bind info when available
-            # Fallback: attempt to import a locator util
-            manager = None
-            try:
-                # Preferred path: retrieve from a globally stored application reference
-                from src.common.app_state import get_app_state_manager
-                manager = get_app_state_manager('semantic_models_manager')
-            except Exception:
-                manager = None
+            manager = self._semantic_models_manager
+            if manager is None:
+                try:
+                    # Preferred runtime path: retrieve the shared application manager.
+                    from src.common.app_state import get_app_state_manager
+                    manager = get_app_state_manager('semantic_models_manager')
+                except Exception:
+                    manager = None
             if manager is not None:
                 manager.add_entity_semantic_link_to_graph(payload.entity_type, payload.entity_id, payload.iri, created_by=created_by)
                 # The new triple changes which entities resolve to a concept,
@@ -274,20 +425,22 @@ class SemanticLinksManager:
     def remove(self, link_id: Union[str, UUID], removed_by: Optional[str] = None) -> bool:
         removed = entity_semantic_links_repo.remove(self._db, id=link_id)
         try:
-            manager = None
-            try:
-                from src.common.app_state import get_app_state_manager
-                manager = get_app_state_manager('semantic_models_manager')
-            except Exception:
-                manager = None
-            if removed and manager is not None:
-                manager.remove_entity_semantic_link_from_graph(removed.entity_type, removed.entity_id, removed.iri)
-                # Mirror of the add path: the removed triple invalidates
-                # cached concepts/properties/stats and the inferred-link cache.
-                manager._invalidate_cache()
-            else:
-                from src.controller.semantic_models_manager import SemanticModelsManager
-                SemanticModelsManager(db=self._db).on_models_changed()
+            manager = self._semantic_models_manager
+            if manager is None:
+                try:
+                    from src.common.app_state import get_app_state_manager
+                    manager = get_app_state_manager('semantic_models_manager')
+                except Exception:
+                    manager = None
+            if removed:
+                if manager is not None:
+                    manager.remove_entity_semantic_link_from_graph(removed.entity_type, removed.entity_id, removed.iri)
+                    # Mirror of the add path: the removed triple invalidates
+                    # cached concepts/properties/stats and the inferred-link cache.
+                    manager._invalidate_cache()
+                else:
+                    from src.controller.semantic_models_manager import SemanticModelsManager
+                    SemanticModelsManager(db=self._db).on_models_changed()
         except Exception as e:
             logger.warning(f"Failed to update KG after link removal: {e}")
         

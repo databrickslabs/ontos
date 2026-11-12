@@ -26,6 +26,8 @@ from src.models.assets import (
     AssetCreate,
     AssetStatus,
     AssetUpdate,
+    public_properties,
+    with_internal_properties,
 )
 from src.repositories.assets_repository import (
     asset_repo,
@@ -138,6 +140,7 @@ def _parse_properties(raw: Optional[str]) -> Optional[Dict[str, Any]]:
 
 
 def _format_properties(props: Optional[dict]) -> str:
+    props = public_properties(props)
     if not props:
         return ""
     return json.dumps(props, ensure_ascii=False)
@@ -647,7 +650,8 @@ class AssetBulkManager:
                         asset_type_id=type_id,
                         platform=platform_val,
                         location=location_val,
-                        properties=properties,
+                        # The internal keys aren't exported, so the file can't carry them
+                        properties=with_internal_properties(properties, existing.properties),
                         tags=tags,
                         status=status_val,
                     )
@@ -668,7 +672,7 @@ class AssetBulkManager:
                     if existing:
                         update_data = AssetUpdate(
                             description=description,
-                            properties=properties,
+                            properties=with_internal_properties(properties, existing.properties),
                             tags=tags,
                             status=status_val,
                         )

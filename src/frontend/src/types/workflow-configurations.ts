@@ -37,10 +37,11 @@ export interface EntityPatternConfig {
 }
 
 export interface TagSyncConfig {
-  entity_type: 'semantic_assignment' | 'data_domain' | 'data_contract' | 'data_product';
+  entity_type: 'semantic_assignment' | 'data_domain' | 'data_contract' | 'data_product' | 'asset';
   enabled: boolean;
   tag_key_format: string;    // Format string with {VARIABLE} placeholders
   tag_value_format: string;  // Format string with {VARIABLE} placeholders
+  mapping?: string | null;   // Named mapping id, e.g. 'lifecycle_status'; none = main entry
 }
 
 export interface WorkflowConfiguration {

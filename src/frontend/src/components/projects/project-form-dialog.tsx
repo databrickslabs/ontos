@@ -98,7 +98,9 @@ export function ProjectFormDialog({
           name: project.name,
           title: project.title || '',
           description: project.description || '',
-          tags: (project.tags || []).map((tag: any) => typeof tag === 'string' ? tag : (tag?.name ?? tag?.value ?? tag?.tag ?? '')),
+          // Keep the assigned tags as objects: AssignedTag has no `name`, so mapping
+          // them to strings turned every tag into '' (#1420).
+          tags: project.tags || [],
           team_ids: project.teams?.map(team => team.id) || [],
           project_type: (project.project_type as any) || 'TEAM',
         });
@@ -214,7 +216,7 @@ export function ProjectFormDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-height-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderOpen className="w-5 h-5" />

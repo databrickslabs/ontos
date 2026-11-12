@@ -61,6 +61,24 @@ def is_admin_only_status(row: Any) -> bool:
     return _normalize_status(row) in _ADMIN_ONLY_STATUSES
 
 
+def not_others_personal_draft(model: Any, user_email: Optional[str]) -> Any:
+    """SQL filter: drop another user's personal draft, keep every other row.
+
+    A personal draft (tier 1) is a row in ``draft`` status with a
+    ``draft_owner_id``; only its owner sees it. The owner stamp hides no row
+    in any other status: an active or deprecated version that still carries
+    another user's ``draft_owner_id`` is published and visible to everyone.
+    ``model`` is a mapped class with ``status`` and ``draft_owner_id``.
+    """
+    from sqlalchemy import func, or_
+
+    return or_(
+        model.draft_owner_id.is_(None),
+        model.draft_owner_id == user_email,
+        func.lower(func.trim(func.coalesce(model.status, ""))) != "draft",
+    )
+
+
 def compute_rank(row: Any, *, has_elevated_access: bool) -> tuple:
     """Sort key for rep-picking inside a family (lower = preferred).
 
@@ -161,4 +179,5 @@ __all__ = [
     "family_counts",
     "is_admin_only_status",
     "is_visible_consumer",
+    "not_others_personal_draft",
 ]

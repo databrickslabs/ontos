@@ -17,7 +17,9 @@ import yaml
 
 import src.workflows.compliance_checks.compliance_checks as job
 from src.common.config import Settings
-from src.controller.jobs_manager import LLM_TASK_ARGUMENTS, JobsManager
+from databricks.sdk.service import compute, jobs
+
+from src.controller.jobs_manager import JOB_SHAPE_UNEXPECTED, LLM_TASK_ARGUMENTS, JobsManager
 from src.controller.settings_manager import SettingsManager
 from src.repositories.workflow_installations_repository import workflow_installation_repo
 
@@ -121,21 +123,36 @@ def _settings_manager(db_session, cluster_id='test-cluster'):
 
 def test_changing_the_llm_settings_syncs_the_installed_job(db_session):
     manager = _settings_manager(db_session)
+    manager._jobs.sync_installed_workflow.return_value = None
 
     manager.update_settings({'llm_endpoint': 'new-endpoint'})
 
     manager._jobs.sync_installed_workflow.assert_called_once_with(
         WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS,
     )
+    assert manager.update_warnings == []
 
 
-def test_a_failed_job_update_still_saves_the_settings(db_session):
+def test_a_job_the_app_cannot_update_is_a_coded_warning(db_session):
+    from databricks.sdk.errors import PermissionDenied
+
     manager = _settings_manager(db_session)
-    manager._jobs.sync_installed_workflow.side_effect = RuntimeError('job deleted')
+    manager._jobs.sync_installed_workflow.side_effect = PermissionDenied('no CAN_MANAGE')
 
     manager.update_settings({'llm_endpoint': 'new-endpoint'})
 
+    # The settings are saved; the warning says the job kept the old ones
     assert manager._settings.LLM_ENDPOINT == 'new-endpoint'
+    assert [w['code'] for w in manager.update_warnings] == ['compliance_job_not_updated']
+
+
+def test_a_job_of_another_shape_is_a_coded_warning(db_session):
+    manager = _settings_manager(db_session)
+    manager._jobs.sync_installed_workflow.return_value = JOB_SHAPE_UNEXPECTED
+
+    manager.update_settings({'llm_enabled': True})
+
+    assert [w['code'] for w in manager.update_warnings] == ['compliance_job_shape_unexpected']
 
 
 def _installed(monkeypatch, job_id=789):
@@ -145,61 +162,140 @@ def _installed(monkeypatch, job_id=789):
     )
 
 
-def _installed_job_with(manager, arguments, cluster_id=None):
-    task = SimpleNamespace(
-        spark_python_task=SimpleNamespace(parameters=arguments), existing_cluster_id=cluster_id,
+OLD_ARGS = ['--policy_filter', '{{job.parameters.policy_filter}}']
+
+
+def _job(manager, *tasks):
+    manager._client.jobs.get.return_value = jobs.Job(
+        job_id=789, settings=jobs.JobSettings(tasks=list(tasks)),
     )
-    manager._client.jobs.get.return_value = SimpleNamespace(
-        settings=SimpleNamespace(tasks=[task]),
+
+
+def _compliance_task(arguments=None, **fields):
+    return jobs.Task(
+        task_key=WORKFLOW,
+        spark_python_task=jobs.SparkPythonTask(
+            python_file='/Workspace/app/compliance_checks/compliance_checks.py',
+            parameters=list(OLD_ARGS if arguments is None else arguments),
+        ),
+        **fields,
     )
+
+
+def _sync(manager):
+    return manager.sync_installed_workflow(WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS)
+
+
+def _updated(manager):
+    return manager._client.jobs.update.call_args.kwargs['new_settings']
 
 
 def test_a_current_job_gets_only_its_parameters(db_session, llm_settings, monkeypatch):
     manager = _manager(db_session, llm_settings)
     manager._workspace_deployer = MagicMock()
     _installed(monkeypatch)
-    _installed_job_with(manager, ['--policy_filter', 'active', *LLM_TASK_ARGUMENTS])
+    current = OLD_ARGS + [
+        a for flag in LLM_TASK_ARGUMENTS for a in (flag, f'{{{{job.parameters.{flag[2:]}}}}}')
+    ]
+    _job(manager, _compliance_task(current))
 
-    assert manager.sync_installed_workflow(WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS)
+    assert _sync(manager) is None
 
-    new_settings = manager._client.jobs.update.call_args.kwargs['new_settings']
+    new_settings = _updated(manager)
     assert new_settings.tasks is None
     assert {p.name: p.default for p in new_settings.parameters}['llm_endpoint'] == 'db-endpoint'
     manager._workspace_deployer.deploy_workflow.assert_not_called()
 
 
-def test_an_older_job_gets_its_code_and_tasks_again(db_session, llm_settings, monkeypatch):
+def _llm_args(task):
+    args = task.spark_python_task.parameters
+    return {args[i]: args[i + 1] for i in range(len(args) - 1) if args[i] in LLM_TASK_ARGUMENTS}
+
+
+EXPECTED_LLM_ARGS = {
+    '--llm_enabled': '{{job.parameters.llm_enabled}}',
+    '--llm_endpoint': '{{job.parameters.llm_endpoint}}',
+    '--llm_check_max_calls_per_run': '{{job.parameters.llm_check_max_calls_per_run}}',
+}
+
+
+def test_an_older_job_on_a_new_cluster_keeps_it(db_session, llm_settings, monkeypatch):
     manager = _manager(db_session, llm_settings)
     manager._workspace_deployer = MagicMock()
     _installed(monkeypatch)
-    _installed_job_with(manager, ['--policy_filter', 'active'], cluster_id='cluster-1')
+    cluster = compute.ClusterSpec(spark_version='15.4.x-scala2.12', num_workers=2)
+    _job(manager, _compliance_task(new_cluster=cluster, max_retries=3, timeout_seconds=900))
 
-    assert manager.sync_installed_workflow(WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS)
+    assert _sync(manager) is None
 
     manager._workspace_deployer.deploy_workflow.assert_called_once()
-    assert manager._workspace_deployer.deploy_workflow.call_args.args[0] == WORKFLOW
-    new_settings = manager._client.jobs.update.call_args.kwargs['new_settings']
-    [task] = new_settings.tasks
-    assert task.existing_cluster_id == 'cluster-1'
-    # The environment the tasks name comes along, with the YAML's dependencies
-    [env] = new_settings.environments
-    assert env.environment_key == 'compliance-checks-env'
-    assert 'databricks-sdk>=0.81.0' in env.spec.dependencies
-    args = task.spark_python_task.parameters
-    assert args[args.index('--llm_endpoint') + 1] == '{{job.parameters.llm_endpoint}}'
+    [task] = _updated(manager).tasks
+    assert task.new_cluster == cluster
+    assert task.environment_key is None and task.existing_cluster_id is None
+    assert (task.max_retries, task.timeout_seconds) == (3, 900)
+    assert task.spark_python_task.parameters[:2] == OLD_ARGS
+    assert _llm_args(task) == EXPECTED_LLM_ARGS
     # The schedule (and its pause status) is not rewritten
-    assert new_settings.schedule is None
+    assert _updated(manager).schedule is None
 
 
-def test_an_older_serverless_job_stays_serverless(db_session, llm_settings, monkeypatch):
+def test_an_older_job_on_a_job_cluster_keeps_it(db_session, llm_settings, monkeypatch):
     manager = _manager(db_session, llm_settings)
     _installed(monkeypatch)
-    _installed_job_with(manager, ['--policy_filter', 'active'])
+    _job(manager, _compliance_task(job_cluster_key='shared'))
 
-    assert manager.sync_installed_workflow(WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS)
+    assert _sync(manager) is None
 
-    [task] = manager._client.jobs.update.call_args.kwargs['new_settings'].tasks
-    assert task.existing_cluster_id is None
+    new_settings = _updated(manager)
+    [task] = new_settings.tasks
+    assert task.job_cluster_key == 'shared'
+    # job_clusters is not sent, so the job keeps it
+    assert new_settings.job_clusters is None
+    assert _llm_args(task) == EXPECTED_LLM_ARGS
+
+
+def test_a_task_the_user_added_is_kept(db_session, llm_settings, monkeypatch):
+    manager = _manager(db_session, llm_settings)
+    _installed(monkeypatch)
+    extra = jobs.Task(
+        task_key='notify_owners', depends_on=[jobs.TaskDependency(task_key=WORKFLOW)],
+        notebook_task=jobs.NotebookTask(notebook_path='/Workspace/Shared/notify'), max_retries=2,
+    )
+    _job(manager, _compliance_task(existing_cluster_id='cluster-1'), extra)
+
+    assert _sync(manager) is None
+
+    compliance, kept = _updated(manager).tasks
+    assert compliance.existing_cluster_id == 'cluster-1'
+    assert _llm_args(compliance) == EXPECTED_LLM_ARGS
+    assert kept is extra and kept.max_retries == 2
+
+
+def test_a_job_without_its_task_only_gets_parameters(db_session, llm_settings, monkeypatch):
+    manager = _manager(db_session, llm_settings)
+    manager._workspace_deployer = MagicMock()
+    _installed(monkeypatch)
+    renamed = jobs.Task(task_key='renamed', notebook_task=jobs.NotebookTask(notebook_path='/x'))
+    _job(manager, renamed)
+
+    assert _sync(manager) == JOB_SHAPE_UNEXPECTED
+
+    new_settings = _updated(manager)
+    assert new_settings.tasks is None
+    assert {p.name: p.default for p in new_settings.parameters}['llm_endpoint'] == 'db-endpoint'
+    manager._workspace_deployer.deploy_workflow.assert_not_called()
+
+
+def test_a_permission_error_is_raised_to_the_caller(db_session, llm_settings, monkeypatch):
+    from databricks.sdk.errors import PermissionDenied
+
+    manager = _manager(db_session, llm_settings)
+    _installed(monkeypatch)
+    manager._client.jobs.get.side_effect = PermissionDenied('no CAN_VIEW')
+
+    with pytest.raises(PermissionDenied):
+        _sync(manager)
+    manager._client.jobs.update.assert_not_called()
 
 
 def test_nothing_to_update_when_the_job_is_not_installed(db_session, llm_settings, monkeypatch):
@@ -208,8 +304,7 @@ def test_nothing_to_update_when_the_job_is_not_installed(db_session, llm_setting
         workflow_installation_repo, 'get_by_workflow_id', MagicMock(return_value=None),
     )
 
-    assert not manager.sync_installed_workflow(WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS)
-    assert manager.update_installed_workflow(WORKFLOW) is False
+    assert _sync(manager) is None
     manager._client.jobs.update.assert_not_called()
 
 

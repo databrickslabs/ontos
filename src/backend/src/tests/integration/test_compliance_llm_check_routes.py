@@ -129,3 +129,49 @@ def test_rule_test_rejects_a_rule_that_does_not_parse(client, llm):
     response = client.post('/api/compliance/llm-check/test', json={'rule': 'ASSERT LLM_CHECK('})
 
     assert response.status_code == 422
+
+
+@pytest.fixture(autouse=True)
+def _no_rule_test_history():
+    from src.routes import compliance_routes
+
+    compliance_routes._rule_tests.clear()
+    yield
+    compliance_routes._rule_tests.clear()
+
+
+def test_rule_tests_are_throttled_per_user(client, domains, llm, monkeypatch):
+    from src.routes import compliance_routes
+
+    monkeypatch.setattr(compliance_routes, 'RULE_TEST_MAX_CALLS', 2)
+    for _ in range(2):
+        ok = client.post('/api/compliance/llm-check/test', json={'rule': RULE})
+        assert ok.status_code == 200, ok.text
+
+    limited = client.post('/api/compliance/llm-check/test', json={'rule': RULE})
+
+    assert limited.status_code == 429
+    assert limited.json()['detail']['code'] == 'llm_check_test_rate_limited'
+    assert int(limited.headers['Retry-After']) >= 1
+
+
+def test_saving_a_rule_with_entity_data_as_criterion_is_rejected(client):
+    response = client.post('/api/compliance/policies', json={
+        'name': 'Injected', 'description': 'd', 'category': 'Governance', 'severity': 'low',
+        'rule': 'MATCH (d:domain)\nASSERT LLM_CHECK(d.description, d.name)',
+    })
+
+    assert response.status_code == 422
+    assert response.json()['detail']['code'] == 'llm_check_criterion_not_literal'
+
+
+def test_the_settings_save_returns_the_job_warnings(client, monkeypatch):
+    from src.controller.settings_manager import SettingsManager
+
+    warning = {'code': 'compliance_job_not_updated', 'params': {}, 'message': 'm'}
+    monkeypatch.setattr(SettingsManager, '_refresh_llm_job_parameters', lambda self: warning)
+
+    response = client.put('/api/settings', json={'llm_endpoint': 'new-endpoint'})
+
+    assert response.status_code == 200, response.text
+    assert response.json()['warnings'] == [warning]

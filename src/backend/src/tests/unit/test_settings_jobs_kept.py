@@ -103,6 +103,7 @@ def test_the_audit_records_what_happened_to_the_token_but_never_its_value(payloa
 
     background_tasks = MagicMock()
     settings_manager = MagicMock()
+    settings_manager.update_settings_with_warnings.return_value = (MagicMock(), [])
     asyncio.run(update_settings(
         request=MagicMock(),
         background_tasks=background_tasks,

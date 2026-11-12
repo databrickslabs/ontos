@@ -10,7 +10,9 @@ describe('compliance LLM checks', () => {
 
   it('reads the checks of a result', () => {
     const details = JSON.stringify({
-      llm_checks: [{ criterion: 'states the grain', passed: false, reason: 'no grain', code: null }],
+      llm_checks: [
+        { criterion: 'states the grain', passed: false, reason: 'no grain', code: null },
+      ],
     });
 
     expect(parseLlmChecks(details)).toEqual([

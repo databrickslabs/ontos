@@ -357,6 +357,11 @@ class FakeLlm:
         self.calls: List[Dict[str, Any]] = []
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
+    def with_options(self, **options):
+        """As ``OpenAI.with_options``: the options are kept, the client is the same."""
+        self.options = options
+        return self
+
     def _create(self, **kwargs):
         self.calls.append(kwargs)
         if self.answer is not None:

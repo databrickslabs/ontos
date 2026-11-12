@@ -89,7 +89,9 @@ export function LlmCheckTester({ getRule }: LlmCheckTesterProps) {
         <div className="space-y-2 text-sm" data-testid="llm-check-test-result">
           <div className="flex items-center gap-2">
             <span>
-              {t('compliance:llmCheck.test.entity', { type: result.entity_type, name: entityLabel })}
+              {t('compliance:llmCheck.test.entity', {
+                type: result.entity_type, name: entityLabel,
+              })}
             </span>
             <Badge variant={result.passed ? 'secondary' : 'destructive'}>
               {result.passed ? t('compliance:results.passed') : t('compliance:results.failed')}
@@ -97,7 +99,9 @@ export function LlmCheckTester({ getRule }: LlmCheckTesterProps) {
           </div>
           {result.error_code && !result.llm_checks.some((c) => c.code === result.error_code) && (
             <p className="text-destructive">
-              {t(`compliance:llmCheck.codes.${result.error_code}`, { defaultValue: result.error_code })}
+              {t(`compliance:llmCheck.codes.${result.error_code}`, {
+                defaultValue: result.error_code,
+              })}
             </p>
           )}
           {result.llm_checks.length === 0 && !result.error_code && (
@@ -112,7 +116,9 @@ export function LlmCheckTester({ getRule }: LlmCheckTesterProps) {
                 <span className="font-medium">{check.criterion}</span>
                 <span className="text-muted-foreground break-words">{llmCheckText(t, check)}</span>
                 {check.cached && (
-                  <span className="text-xs text-muted-foreground">{t('compliance:llmCheck.cached')}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t('compliance:llmCheck.cached')}
+                  </span>
                 )}
               </li>
             ))}

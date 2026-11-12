@@ -11,6 +11,7 @@ vi.mock('@/hooks/use-api', () => ({ useApi: () => ({ post }) }));
 import i18n from '@/i18n/config';
 import { LlmCheckTester } from './llm-check-tester';
 
+const URL = '/api/compliance/llm-check/test';
 const RULE = "MATCH (d:domain)\nASSERT LLM_CHECK(d.description, 'states the grain')";
 
 function result(overrides: Record<string, unknown> = {}) {
@@ -44,7 +45,7 @@ describe('LlmCheckTester', () => {
     await user.type(screen.getByLabelText('Test on a sample entity'), ' misc ');
     await user.click(screen.getByRole('button', { name: 'Test' }));
 
-    expect(post).toHaveBeenCalledWith('/api/compliance/llm-check/test', { rule: RULE, entity: 'misc' });
+    expect(post).toHaveBeenCalledWith(URL, { rule: RULE, entity: 'misc' });
     const shown = await screen.findByTestId('llm-check-test-result');
     expect(shown).toHaveTextContent('domain misc');
     expect(shown).toHaveTextContent('Failed');
@@ -56,14 +57,16 @@ describe('LlmCheckTester', () => {
   it('uses the first match when no entity is given', async () => {
     post.mockResolvedValue(result({
       passed: true,
-      llm_checks: [{ criterion: 'states the grain', passed: true, reason: 'daily grain', cached: true }],
+      llm_checks: [
+        { criterion: 'states the grain', passed: true, reason: 'daily grain', cached: true },
+      ],
     }));
     const user = userEvent.setup();
     render(<LlmCheckTester getRule={() => RULE} />);
 
     await user.click(screen.getByRole('button', { name: 'Test' }));
 
-    expect(post).toHaveBeenCalledWith('/api/compliance/llm-check/test', { rule: RULE, entity: null });
+    expect(post).toHaveBeenCalledWith(URL, { rule: RULE, entity: null });
     const shown = await screen.findByTestId('llm-check-test-result');
     expect(shown).toHaveTextContent('Passed');
     expect(shown).toHaveTextContent('daily grain');
@@ -74,7 +77,9 @@ describe('LlmCheckTester', () => {
     await i18n.changeLanguage('pt');
     post.mockResolvedValue(result({
       error_code: 'llm_check_no_endpoint',
-      llm_checks: [{ criterion: 'states the grain', passed: false, reason: '', code: 'llm_check_no_endpoint' }],
+      llm_checks: [
+        { criterion: 'states the grain', passed: false, reason: '', code: 'llm_check_no_endpoint' },
+      ],
     }));
     const user = userEvent.setup();
     render(<LlmCheckTester getRule={() => RULE} />);
@@ -97,7 +102,8 @@ describe('LlmCheckTester', () => {
     await user.click(screen.getByRole('button', { name: 'Test' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'No entity the rule matches was found. Check the name, or leave it empty to use the first match.',
+      'No entity the rule matches was found. Check the name, '
+        + 'or leave it empty to use the first match.',
     );
   });
 
@@ -108,7 +114,8 @@ describe('LlmCheckTester', () => {
 
     await user.click(screen.getByRole('button', { name: 'Test' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to parse rule: Unexpected token: EOF');
+    expect(await screen.findByRole('alert'))
+      .toHaveTextContent('Failed to parse rule: Unexpected token: EOF');
   });
 
   it('asks for a rule before calling the API', async () => {

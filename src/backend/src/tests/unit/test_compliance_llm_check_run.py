@@ -116,6 +116,24 @@ def test_no_endpoint_fails_every_entity_with_a_code(db_session):
     assert fake.calls == []
 
 
+def test_actions_do_not_run_without_a_verdict(db_session):
+    policy = _policy(db_session, rule=RULE + "\nON_FAIL FAIL 'Purpose missing'")
+    fake = _grain_llm()
+
+    run = _run(db_session, policy, [
+        _domain(1, 'table with data'), _domain(2, '   '),
+    ], fake)
+
+    results = _results(db_session, run)
+    # A model verdict runs the ON_FAIL actions
+    assert results['d1'].message == 'Purpose missing'
+    # No verdict (empty text): the entity fails, but its actions don't run
+    assert results['d2'].passed is False
+    assert results['d2'].message == (
+        'Evaluation error: LLM_CHECK was not run: the text is empty'
+    )
+
+
 def test_budget_exceeded_is_counted_in_the_run(db_session):
     policy = _policy(db_session, rule=(
         f"MATCH (d:domain)\nASSERT NOT LLM_CHECK(d.description, 'names a person')"

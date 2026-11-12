@@ -9,7 +9,7 @@ The text under test is untrusted (anyone who can edit a description writes it):
 it goes in the user message between markers with a random nonce, and the
 system prompt tells the model to treat it as data. The reply's first line must
 be ``PASS: <reason>`` or ``FAIL: <reason>``. Everything else fails closed with
-a code (``LlmCheckError``): no endpoint, a refusal (also next to a verdict), an
+a code (``LlmCheckError``): no text, no endpoint, a refusal (also next to a verdict), an
 empty reply, a reply that did not finish (``finish_reason != "stop"``), a first
 line in any other form, a failed call, and a run past its call budget. Those
 codes make the rule fail whatever the expression around the call is (``NOT
@@ -44,6 +44,10 @@ LLM_CHECK_MAX_TOKENS = 2048
 LLM_CHECK_REASON_MAX_CHARS = 300
 # Longest text sent to the model; a longer one fails with llm_check_text_too_long.
 LLM_CHECK_MAX_TEXT_CHARS = 20000
+# Per call: seconds before a call fails (llm_check_call_failed), and retries. The
+# SDK defaults (600 s, 2 retries) could hold a run for hours on a hung endpoint.
+LLM_CHECK_TIMEOUT_SECONDS = 60
+LLM_CHECK_MAX_RETRIES = 1
 
 # Codes of a check without a model verdict. They are sent to the UI, which
 # translates them (compliance:llmCheck.codes.<code>).
@@ -57,8 +61,7 @@ REFUSED = 'llm_check_refused'
 EMPTY_REPLY = 'llm_check_empty_reply'
 TRUNCATED = 'llm_check_truncated'
 INVALID_REPLY = 'llm_check_invalid_reply'
-# Code of a verdict made without a call: there is no text to judge.
-EMPTY_TEXT = 'llm_check_empty_text'
+EMPTY_TEXT = 'llm_check_empty_text'  # no text to judge (no call)
 
 _MESSAGES = {
     NOT_AVAILABLE: "LLM_CHECK is only evaluated in compliance runs",
@@ -71,6 +74,7 @@ _MESSAGES = {
     EMPTY_REPLY: "LLM_CHECK failed: the model returned no answer",
     TRUNCATED: "LLM_CHECK failed: the model's reply did not finish",
     INVALID_REPLY: "LLM_CHECK failed: the model's reply is not a PASS or FAIL verdict",
+    EMPTY_TEXT: "LLM_CHECK was not run: the text is empty",
 }
 
 # The first line of the reply: the verdict, a colon and a reason.
@@ -240,14 +244,16 @@ class LlmChecker:
         def factory():
             from src.common.llm_client import create_openai_client
 
-            return create_openai_client(settings)
+            return create_openai_client(settings).with_options(
+                timeout=LLM_CHECK_TIMEOUT_SECONDS, max_retries=LLM_CHECK_MAX_RETRIES,
+            )
         return factory
 
     def check(self, text: Any, criterion: str) -> LlmCheckResult:
         """The verdict on ``text``; raises LlmCheckError when there is none."""
         if text is None or not str(text).strip():
-            # Nothing to judge: no text meets a documentation criterion
-            return LlmCheckResult(criterion, False, code=EMPTY_TEXT)
+            # Nothing to judge: no verdict, so it fails closed like the errors
+            raise self._error(criterion, EMPTY_TEXT)
         text = str(text)
         if not self._enabled:
             raise self._error(criterion, DISABLED)

@@ -879,6 +879,7 @@ class ComplianceManager:
                 # Evaluate ASSERT clause
                 ok = True
                 msg = None
+                no_verdict = False
                 evaluator = Evaluator(obj, llm_checker=llm_checker)
 
                 if parsed_rule.get('assert_clause'):
@@ -887,12 +888,19 @@ class ComplianceManager:
                         ok = bool(result)
                         if not ok:
                             msg = f"Assertion failed for {obj.get('type')} {obj.get('name')}"
+                    except LlmCheckError as e:
+                        # Failed closed without a model verdict (no endpoint,
+                        # budget, refusal...): the entity fails, its actions don't run
+                        ok, no_verdict = False, True
+                        msg = f"Evaluation error: {str(e)}"
                     except Exception as e:
                         ok = False
                         msg = f"Evaluation error: {str(e)}"
 
                 # Execute actions
-                actions = parsed_rule.get('on_pass_actions' if ok else 'on_fail_actions', [])
+                actions = [] if no_verdict else parsed_rule.get(
+                    'on_pass_actions' if ok else 'on_fail_actions', [],
+                )
                 action_outcomes = None
                 if actions:
                     action_context = ActionContext(

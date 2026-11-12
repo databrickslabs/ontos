@@ -8,8 +8,9 @@ const toastMock = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }));
 
 const putMock = vi.fn();
+const getMock = vi.fn();
 vi.mock('@/hooks/use-api', () => ({
-  useApi: () => ({ get: vi.fn(), post: vi.fn(), put: putMock }),
+  useApi: () => ({ get: getMock, post: vi.fn(), put: putMock }),
 }));
 
 vi.mock('@/components/ui/domain-multi-selector', () => ({ default: () => null }));
@@ -30,7 +31,7 @@ const asset: AssetRead = {
   updated_at: '2026-11-12T00:00:00Z',
 };
 
-function renderDialog() {
+function renderDialog(props: { asset?: AssetRead; assetTypeIri?: string } = {}) {
   const onSuccess = vi.fn();
   render(
     <AssetFormDialog
@@ -39,11 +40,30 @@ function renderDialog() {
       onSuccess={onSuccess}
       assetTypeId="t1"
       assetTypeName="Table"
-      asset={asset}
+      assetTypeIri={props.assetTypeIri}
+      asset={props.asset ?? asset}
     />
   );
   return onSuccess;
 }
+
+// The ontology's Table schema: Physical Path is required
+const tableSchema = {
+  type_iri: 'http://ontos.app/ontology#Table',
+  type_label: 'Table',
+  model_tier: 'physical',
+  fields: [{
+    iri: 'http://ontos.app/ontology#physicalPath',
+    name: 'physicalPath',
+    label: 'physical path',
+    comment: 'Fully qualified path in the target system',
+    range_type: 'string',
+    field_type: 'text',
+    field_order: 10,
+    is_required: true,
+    field_group: 'technical',
+  }],
+};
 
 describe('AssetFormDialog - Unity Catalog description warning', () => {
   beforeEach(() => {
@@ -83,5 +103,38 @@ describe('AssetFormDialog - Unity Catalog description warning', () => {
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
     expect(toastMock).toHaveBeenCalledTimes(1);
     expect(toastMock.mock.calls[0][0].title).not.toMatch(/Unity Catalog/);
+  });
+});
+
+describe('AssetFormDialog - Physical Path and Location', () => {
+  beforeEach(() => {
+    toastMock.mockClear();
+    putMock.mockReset();
+    getMock.mockReset();
+    getMock.mockResolvedValue({ data: tableSchema });
+    putMock.mockResolvedValue({ data: { ...asset, warnings: [] } });
+  });
+
+  it('saves a table whose Location is set without a separate Physical Path', async () => {
+    const onSuccess = renderDialog({ assetTypeIri: tableSchema.type_iri });
+    await screen.findByText(/physical path/i);
+
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    expect(putMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still requires a path when Location is empty too', async () => {
+    const onSuccess = renderDialog({
+      assetTypeIri: tableSchema.type_iri, asset: { ...asset, location: null },
+    });
+    await screen.findByText(/physical path/i);
+
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    expect(await screen.findByText(/is required/i)).toBeInTheDocument();
+    expect(putMock).not.toHaveBeenCalled();
+    expect(onSuccess).not.toHaveBeenCalled();
   });
 });

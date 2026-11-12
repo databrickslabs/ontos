@@ -384,18 +384,34 @@ export function AssetFormDialog({
   );
 }
 
+/** Ontology properties that hold the same path as the asset's Location field */
+const LOCATION_PROPERTIES = new Set(['physicalPath']);
+
+const isBlank = (value: unknown) =>
+  value === undefined || value === null || String(value).trim() === '';
+
 function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; form: any }) {
   const { t } = useTranslation('common');
   const formatLabel = useFormatLabel();
   const fieldName = `prop_${f.name}`;
   const label = formatLabel(f.label);
+  const requiredMessage = t('common:assetForm.fieldRequired', { label });
+  // A required path property is satisfied by the Location field, which holds the same path
+  const requiredRules = !f.is_required
+    ? undefined
+    : LOCATION_PROPERTIES.has(f.name)
+      ? {
+          validate: (value: unknown) =>
+            !isBlank(value) || !isBlank(form.getValues('location')) || requiredMessage,
+        }
+      : { required: requiredMessage };
 
   if (f.field_type === 'select' && f.select_options) {
     return (
       <FormField
         control={form.control}
         name={fieldName}
-        rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
+        rules={requiredRules}
         render={({ field }) => (
           <FormItem>
             <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>
@@ -424,7 +440,7 @@ function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; fo
       <FormField
         control={form.control}
         name={fieldName}
-        rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
+        rules={requiredRules}
         render={({ field }) => (
           <FormItem>
             <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>
@@ -475,7 +491,7 @@ function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; fo
     <FormField
       control={form.control}
       name={fieldName}
-      rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
+      rules={requiredRules}
       render={({ field }) => (
         <FormItem>
           <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>

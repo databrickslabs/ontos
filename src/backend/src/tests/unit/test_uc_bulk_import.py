@@ -182,6 +182,21 @@ def test_update_adds_the_new_schema_objects_to_the_existing_contract(engine):
     assert sorted(names) == sorted(_TABLES)
 
 
+def test_update_keeps_the_existing_domain(engine):
+    tag = {'data_domain_finance': ''}
+    domains = {'finance': [job.DiscoveredObject('SCHEMA', 'main.finance', tag)]}
+    assert job.create_domains(engine, domains, 'skip', created_by='job') == \
+        {'created': 1, 'updated': 0, 'skipped': 0, 'errors': 0}
+    with engine.connect() as conn:
+        [domain_id] = conn.execute(text('SELECT id FROM data_domains')).scalars().all()
+
+    # Inserting again failed on the unique domain name
+    assert job.create_domains(engine, domains, 'update', created_by='job') == \
+        {'created': 0, 'updated': 1, 'skipped': 0, 'errors': 0}
+    with engine.connect() as conn:
+        assert conn.execute(text('SELECT id FROM data_domains')).scalars().all() == [domain_id]
+
+
 def test_a_stored_port_with_null_booleans_still_reads():
     # Rows written before the fix carry NULL in both columns
     port = OutputPort.model_validate({'name': 'orders', 'version': '1.0.0',

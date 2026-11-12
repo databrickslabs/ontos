@@ -663,21 +663,28 @@ def create_domains(
     dry_run: bool = False,
     verbose: bool = False
 ) -> Dict[str, int]:
-    """Create data domains from discovered objects"""
-    stats = {"created": 0, "skipped": 0, "errors": 0}
-    
+    """Create data domains from discovered objects.
+
+    With the ``update`` strategy an existing domain (matched by its unique
+    name) keeps its row; only ``updated_at`` changes, as the job sets nothing else.
+    """
+    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
+    domain_sql = text("""
+        INSERT INTO data_domains (
+            id, name, created_by, created_at, updated_at
+        ) VALUES (
+            :id, :name, :created_by, :created_at, :updated_at
+        )
+    """)
+    touch_sql = text("UPDATE data_domains SET updated_at = :updated_at WHERE id = :id")
+
     for domain_name, objects in entity_objects.items():
         try:
             if verbose:
                 print(f"  Processing domain: {domain_name}")
-            
-            # Check if exists
-            check_sql = text("SELECT id FROM data_domains WHERE name = :name")
-            with engine.connect() as conn:
-                result = conn.execute(check_sql, {"name": domain_name})
-                existing = result.fetchone()
-            
-            if existing:
+
+            existing_id = find_existing_id(engine, "data_domains", domain_name)
+            if existing_id:
                 if conflict_strategy == 'skip':
                     if verbose:
                         print(f"    Skipped (already exists)")
@@ -685,44 +692,37 @@ def create_domains(
                     continue
                 elif conflict_strategy == 'error':
                     raise ValueError(f"Domain '{domain_name}' already exists")
-            
+            outcome = "updated" if existing_id else "created"
+
             if dry_run:
-                print(f"  [DRY-RUN] Would create domain: {domain_name}")
-                stats["created"] += 1
+                verb = "update" if existing_id else "create"
+                print(f"  [DRY-RUN] Would {verb} domain: {domain_name}")
+                stats[outcome] += 1
                 continue
-            
-            # Create domain
-            domain_id = str(uuid4())
-            domain_sql = text("""
-                INSERT INTO data_domains (
-                    id, name, created_by, created_at, updated_at
-                ) VALUES (
-                    :id, :name, :created_by, :created_at, :updated_at
-                )
-                ON CONFLICT (id) DO UPDATE SET
-                    updated_at = :updated_at
-            """)
-            
-            with engine.connect() as conn:
-                conn.execute(domain_sql, {
-                    "id": domain_id,
-                    "name": domain_name,
-                    "created_by": created_by,
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
-                })
-                conn.commit()
-            
+
+            now = datetime.utcnow()
+            with engine.begin() as conn:
+                if existing_id:
+                    conn.execute(touch_sql, {"id": existing_id, "updated_at": now})
+                else:
+                    conn.execute(domain_sql, {
+                        "id": str(uuid4()),
+                        "name": domain_name,
+                        "created_by": created_by,
+                        "created_at": now,
+                        "updated_at": now
+                    })
+
             if verbose:
-                print(f"    Created")
-            stats["created"] += 1
-            
+                print(f"    {outcome.capitalize()}")
+            stats[outcome] += 1
+
         except Exception as e:
             print(f"  Error creating domain {domain_name}: {e}")
             if verbose:
                 traceback.print_exc()
             stats["errors"] += 1
-    
+
     return stats
 
 
@@ -943,7 +943,8 @@ def main():
             verbose=verbose
         )
         summary['domains'] = domain_stats
-        print(f"  Created: {domain_stats['created']}, Skipped: {domain_stats['skipped']}, Errors: {domain_stats['errors']}")
+        print(f"  Created: {domain_stats['created']}, Updated: {domain_stats['updated']}, "
+              f"Skipped: {domain_stats['skipped']}, Errors: {domain_stats['errors']}")
     
     # Link products to contracts
     if 'contract' in discovered and 'product' in discovered:

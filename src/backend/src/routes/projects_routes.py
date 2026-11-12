@@ -85,6 +85,24 @@ def _require_visible_project(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 
+def _visible_project_or_404(detail: str):
+    """Route dependency: ``_require_visible_project`` on the path's ``project_id``.
+
+    Listed before the feature-level ``PermissionChecker``, so a caller who can't
+    see the project gets the route's 404 for a missing project, not a 403.
+    """
+    def _check(
+        project_id: str,
+        db: DBSessionDep,
+        current_user: CurrentUserDep,
+        settings: Settings = Depends(get_settings),
+        manager = Depends(get_projects_manager),
+    ) -> None:
+        _require_visible_project(db, manager, project_id, current_user, settings, detail)
+
+    return Depends(_check)
+
+
 # Project Routes
 @router.post(
     "/projects",
@@ -219,7 +237,10 @@ def get_project(
 @router.put(
     "/projects/{project_id}",
     response_model=ProjectRead,
-    dependencies=[Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))]
+    dependencies=[
+        _visible_project_or_404("Project not found"),
+        Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    ]
 )
 def update_project(
     project_id: str,
@@ -280,7 +301,10 @@ def update_project(
     "/projects/{project_id}",
     response_model=ProjectRead,
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.ADMIN))]
+    dependencies=[
+        _visible_project_or_404("Project not found"),
+        Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.ADMIN)),
+    ]
 )
 def delete_project(
     project_id: str,
@@ -330,7 +354,10 @@ def delete_project(
 @router.post(
     "/projects/{project_id}/teams",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))]
+    dependencies=[
+        _visible_project_or_404("Project or member not found"),
+        Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    ]
 )
 def assign_team_to_project(
     project_id: str,
@@ -367,7 +394,10 @@ def assign_team_to_project(
 @router.delete(
     "/projects/{project_id}/teams/{team_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))]
+    dependencies=[
+        _visible_project_or_404("Team assignment not found"),
+        Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    ]
 )
 def remove_team_from_project(
     project_id: str,

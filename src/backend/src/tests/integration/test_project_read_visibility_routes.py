@@ -34,6 +34,8 @@ PERSONAS = {
     "outsider": (OUTSIDER, ["data-consumers"]),
     "admin_named_group": (OUTSIDER, ["data-consumers", "billing-admin-viewers"]),
     "admin": (ADMIN, ["test_admins"]),
+    "outsider_producer": (OUTSIDER, ["data-producers"]),
+    "member_producer": (MEMBER, ["data-producers"]),
 }
 
 
@@ -174,3 +176,56 @@ def test_request_access_to_a_hidden_project_is_404_and_notifies_nobody(
     assert response.status_code == 404
     assert response.json() == {"detail": "Project not found"}
     assert _access_request_notifications(db_session) == 0
+
+
+def _write_calls(project_id, team_id):
+    """(method, path, json) of the project write routes."""
+    return [
+        ("PUT", f"/api/projects/{project_id}", {"description": "edited"}),
+        ("POST", f"/api/projects/{project_id}/teams", {"team_id": team_id}),
+        ("DELETE", f"/api/projects/{project_id}/teams/{team_id}", None),
+        ("DELETE", f"/api/projects/{project_id}", None),
+    ]
+
+
+@pytest.mark.parametrize("persona", ["outsider", "outsider_producer"])
+def test_write_routes_answer_404_on_a_hidden_project(as_persona, hidden_project, persona):
+    """Before the feature-level check: 404 with the body of a missing project, also
+    for a caller without the write level, and the project is unchanged."""
+    client = as_persona(persona)
+    team_id = hidden_project.owner_team_id
+    missing = {path: client.request(method, path.replace(hidden_project.id, "no-such-project"),
+                                    json=body)
+               for method, path, body in _write_calls(hidden_project.id, team_id)}
+    for method, path, body in _write_calls(hidden_project.id, team_id):
+        response = client.request(method, path, json=body)
+        assert response.status_code == 404, (method, path, response.status_code)
+        want = missing[path]
+        assert want.status_code == 404, (method, path, want.status_code)
+        assert response.json() == {
+            "detail": want.json()["detail"].replace("no-such-project", hidden_project.id)
+        }, (method, path)
+
+    detail = as_persona("admin").get(f"/api/projects/{hidden_project.id}")
+    assert detail.status_code == 200
+    assert detail.json()["description"] is None
+    assert [t["id"] for t in detail.json()["teams"]] == [team_id]
+
+
+def test_member_writes_a_project_it_sees(as_persona, hidden_project):
+    response = as_persona("member_producer").put(
+        f"/api/projects/{hidden_project.id}", json={"description": "edited"})
+    assert response.status_code == 200
+    assert response.json()["description"] == "edited"
+
+
+def test_admin_keeps_every_write_route(as_persona, hidden_project):
+    client = as_persona("admin")
+    team_id = hidden_project.owner_team_id
+    calls = _write_calls(hidden_project.id, team_id)
+    # Remove the team before assigning it again, then delete the project.
+    calls = [calls[0], calls[2], calls[1], calls[3]]
+    for method, path, body in calls:
+        response = client.request(method, path, json=body)
+        assert response.status_code < 300, (method, path, response.status_code, response.text)
+    assert client.get(f"/api/projects/{hidden_project.id}").status_code == 404

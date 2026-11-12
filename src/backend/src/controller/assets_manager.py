@@ -410,7 +410,7 @@ class AssetsManager(SearchableAsset):
                     assigned_by=current_user_id,
                 )
             if description_changed:
-                self._update_table_column_snapshot(db, updated)
+                self.update_table_column_snapshot(db, updated)
             updated = self._asset_repo.get_with_relationships(db, updated.id)
             logger.info(f"Updated asset '{updated.name}' (id: {asset_id})")
             try:
@@ -432,7 +432,8 @@ class AssetsManager(SearchableAsset):
                 raise ConflictError("Asset identity conflict.")
             raise
 
-    def _update_table_column_snapshot(self, db: Session, column: AssetDb) -> None:
+    @staticmethod
+    def update_table_column_snapshot(db: Session, column: AssetDb) -> None:
         """Copy a Column asset's new description into its table's ``properties.schema``.
 
         An imported table or view keeps a snapshot of its columns; the table is

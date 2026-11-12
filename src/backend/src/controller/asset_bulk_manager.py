@@ -558,6 +558,7 @@ class AssetBulkManager:
 
         ``after_save(asset_id, previous_description)`` runs after each saved
         row; a warning it returns is added to the row, and it never fails it.
+        A changed Column description also updates its table's column snapshot.
         """
         result = ImportResult()
 
@@ -726,6 +727,8 @@ class AssetBulkManager:
                 result.items.append(item)
                 continue
 
+            if description != previous_description:
+                self._update_column_snapshot(db, item)
             if after_save is not None:
                 self._after_save(after_save, item, previous_description, result)
             result.items.append(item)
@@ -735,6 +738,15 @@ class AssetBulkManager:
             self._wire_parent_relationships(db, rows, type_map, created_assets, result)
 
         return result
+
+    def _update_column_snapshot(self, db: Session, item: ImportResultItem) -> None:
+        try:
+            asset = self._asset_repo.get(db, UUID(item.asset_id))
+            if asset is not None:
+                AssetsManager.update_table_column_snapshot(db, asset)
+        except Exception:
+            logger.warning("Updating the column snapshot for import row %s failed", item.row,
+                           exc_info=True)
 
     @staticmethod
     def _after_save(

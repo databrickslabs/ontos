@@ -5,11 +5,12 @@ Provides endpoints for exporting assets as CSV/XLSX and importing
 assets from uploaded files with preview and validation.
 """
 
-from typing import Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 
 from src.common.authorization import PermissionChecker
 from src.common.dependencies import (
@@ -26,6 +27,7 @@ from src.controller.asset_bulk_manager import (
     ImportResult,
 )
 from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
+from src.db_models.assets import AssetDb
 
 logger = get_logger(__name__)
 
@@ -164,29 +166,28 @@ async def execute_import(
     """Upload a file and execute the import, creating/updating assets.
 
     With the "write asset descriptions to Unity Catalog" setting on, imported
-    table, view and column descriptions are written there as the user, as on
-    a single save; a failed write is a warning on its row, never an error.
+    table, view and column descriptions are written there as the user once
+    the import is committed; a failed write is a warning on its row, never
+    an error. An empty description cell doesn't remove a Unity Catalog comment.
     """
-    from src.routes.assets_routes import _user_workspace_client
-
     success = False
     details: dict = {"params": {"filename": file.filename}}
-    description_sync = UcDescriptionSyncManager(settings)
+    saved: List[Tuple[UUID, Optional[str]]] = []
 
-    def after_save(asset_id, previous_description):
-        warning, _ = description_sync.sync_after_update(
-            db, asset_id, description_sent=True, previous_description=previous_description,
-            user_client=lambda: _user_workspace_client(request),
-        )
-        return warning
+    def record_saved(asset_id: UUID, previous_description: Optional[str]) -> None:
+        saved.append((asset_id, previous_description))
 
     try:
         contents = await file.read()
         filename = file.filename or "upload.csv"
-        result = manager.execute_import(
-            db, file_bytes=contents, filename=filename, current_user_id=current_user.email,
-            after_save=after_save,
+        # Sync database and Unity Catalog work stays off the event loop
+        result = await run_in_threadpool(
+            manager.execute_import, db, file_bytes=contents, filename=filename,
+            current_user_id=current_user.email, after_save=record_saved,
         )
+        db.commit()
+        await run_in_threadpool(
+            _write_imported_descriptions, db, settings, request, result, saved)
         success = result.errors == 0
         details["result"] = {
             "created": result.created,
@@ -205,6 +206,34 @@ async def execute_import(
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="IMPORT_ASSETS", success=success, details=details,
         )
+
+
+def _write_imported_descriptions(
+    db, settings, request: Request, result: ImportResult,
+    saved: List[Tuple[UUID, Optional[str]]],
+) -> None:
+    """Write the committed rows' descriptions to Unity Catalog; failures become row warnings."""
+    from src.routes.assets_routes import _user_workspace_client
+
+    description_sync = UcDescriptionSyncManager(settings)
+    items = {item.asset_id: item for item in result.items if item.asset_id}
+    for asset_id, previous_description in saved:
+        asset = db.get(AssetDb, asset_id)
+        try:
+            warning, _ = description_sync.sync_after_update(
+                db, asset_id,
+                description_sent=bool(asset is not None and asset.description),
+                previous_description=previous_description,
+                user_client=lambda: _user_workspace_client(request),
+            )
+        except Exception:
+            logger.warning("Writing the imported description of asset %s failed", asset_id,
+                           exc_info=True)
+            continue
+        item = items.get(str(asset_id))
+        if warning is not None and item is not None:
+            item.warnings.append(warning)
+            result.warnings += 1
 
 
 def register_routes(app):

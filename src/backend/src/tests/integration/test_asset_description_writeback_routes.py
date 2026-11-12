@@ -202,3 +202,40 @@ class TestBulkImportWriteback:
 
         assert body['errors'] == 0 and body['warnings'] == 0
         user_ws.statement_execution.execute_statement.assert_not_called()
+
+    def test_an_empty_description_cell_keeps_the_uc_comment(self, client, settings, table,
+                                                            user_ws):
+        _import_csv(client, 'name,asset_type,platform,location,description\n'
+                            'orders,Table,databricks,main.sales.orders,\n')
+
+        user_ws.statement_execution.execute_statement.assert_not_called()
+
+    def test_a_failing_write_step_never_fails_the_row(self, client, settings, table, user_ws,
+                                                      monkeypatch):
+        from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
+
+        def boom(*args, **kwargs):
+            raise RuntimeError('unexpected')
+
+        monkeypatch.setattr(UcDescriptionSyncManager, 'sync_after_update', boom)
+
+        body = _import_csv(client, self.CSV)
+
+        assert body['errors'] == 0 and body['warnings'] == 0
+        assert client.get(f'/api/assets/{table.id}').json()['description'] == \
+            'Orders placed online'
+
+    def test_an_imported_column_description_updates_the_table_snapshot(
+            self, client, settings, db_session, user_ws):
+        table = AssetDb(name='orders', asset_type_id=_type(db_session, 'Table').id,
+                        platform='databricks', location='main.sales.orders',
+                        properties={'schema': {'columns': [
+                            {'name': 'order_id', 'description': 'Old'}]}})
+        db_session.add(table)
+        db_session.flush()
+
+        _import_csv(client, 'name,asset_type,platform,location,description\n'
+                            'order_id,Column,databricks,main.sales.orders.order_id,Order key\n')
+
+        db_session.refresh(table)
+        assert table.properties['schema']['columns'][0]['description'] == 'Order key'

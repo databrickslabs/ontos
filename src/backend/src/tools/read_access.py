@@ -14,6 +14,9 @@ the request.
 
 An item the caller can't read is answered like a missing one; the result's
 ``denied_reason`` (audit only) says it was the read rule.
+
+Teams and projects follow their REST list routes: Read-only on the feature,
+and for projects the list's visibility (``visible_project_ids``).
 """
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -185,6 +188,70 @@ def allowed_ids_by_type(ctx: ToolContext, type_filter: Optional[str] = None) -> 
         if ids is not None:
             allowed[kind] = {f"{prefix}{i}" for i in ids}
     return allowed
+
+
+# --- Teams and projects: the rules of the REST list routes -----------------------
+
+TEAMS_FEATURE = "teams"
+PROJECTS_FEATURE = "projects"
+PROJECT_TYPE = "project"
+PROJECT_ITEM_PREFIX = "project::"
+
+
+def has_feature_read_level(ctx: ToolContext, feature_id: str) -> bool:
+    """Whether the caller has Read-only on ``feature_id``, as the REST GETs require."""
+    return _caller(ctx).has_level(feature_id, FeatureAccessLevel.READ_ONLY)
+
+
+def _sees_every_project(ctx: ToolContext) -> bool:
+    caller = _caller(ctx)
+    # ``project_ids`` is None for the configured admin groups (resolve_tool_caller).
+    return caller.full_access or (
+        caller.project_ids is None and has_feature_read_level(ctx, PROJECTS_FEATURE)
+    )
+
+
+def visible_project_ids(ctx: ToolContext, project_ids: Iterable[Any]) -> set:
+    """The subset of ``project_ids`` the caller sees on ``GET /api/projects``.
+
+    Read-only on ``projects``, then the list's rule, also applied by
+    ``/api/search`` (``ProjectsManager.visible_project_ids``): the admin groups
+    see every project, others the projects related to their teams' domains,
+    and a caller without a user sees none. Fails closed.
+    """
+    ids = {str(i) for i in project_ids}
+    if not ids or not has_feature_read_level(ctx, PROJECTS_FEATURE):
+        return set()
+    if _sees_every_project(ctx):
+        return ids
+    from src.controller.projects_manager import projects_manager
+
+    caller = _caller(ctx)
+    return projects_manager.visible_project_ids(
+        ctx.db, sorted(ids),
+        user_identifier=caller.email,
+        user_groups=list(caller.groups or []),
+        is_admin=False,
+    )
+
+
+def allowed_project_ids_by_type(
+    ctx: ToolContext, type_filter: Optional[str] = None
+) -> Dict[str, set]:
+    """For ``global_search``: ``{"project": <the project index ids the caller sees>}``.
+
+    Empty (not filtered) when the type is filtered out or the caller sees
+    every project. Merged into ``allowed_ids_by_type``.
+    """
+    if type_filter not in (None, "", PROJECT_TYPE) or _sees_every_project(ctx):
+        return {}
+    if not has_feature_read_level(ctx, PROJECTS_FEATURE):
+        return {PROJECT_TYPE: set()}
+    from src.db_models.projects import ProjectDb
+
+    all_ids = [r[0] for r in ctx.db.query(ProjectDb.id).all()]
+    visible = visible_project_ids(ctx, all_ids)
+    return {PROJECT_TYPE: {f"{PROJECT_ITEM_PREFIX}{i}" for i in visible}}
 
 
 def owning_row(entity_type: str, entity_id: Any) -> Optional[Tuple[str, str]]:

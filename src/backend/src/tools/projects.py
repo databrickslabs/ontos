@@ -11,6 +11,7 @@ from src.common.logging import get_logger
 from src.common.search_interfaces import SearchIndexItem
 from src.controller import search_scoring
 from src.models.search_config import SearchConfig
+from src.tools import read_access
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
@@ -58,7 +59,10 @@ class SearchProjectsTool(BaseTool):
             from src.db_models.projects import ProjectDb
 
             projects_db = ctx.db.query(ProjectDb).limit(5000).all()
-            logger.debug(f"[search_projects] Found {len(projects_db)} total projects in database")
+            # Only the projects GET /api/projects lists for the caller.
+            visible = read_access.visible_project_ids(ctx, [p.id for p in projects_db])
+            projects_db = [p for p in projects_db if str(p.id) in visible]
+            logger.debug(f"[search_projects] {len(projects_db)} projects visible to the caller")
 
             # Adapt rows to SearchIndexItem so the shared scorer applies (projects are
             # not part of the persistent search index).

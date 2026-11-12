@@ -56,12 +56,12 @@ ON CONFLICT (id) DO NOTHING;
 -- 2b. TEAM MEMBERS
 -- ============================================================================
 
-INSERT INTO team_members (id, team_id, member_type, member_identifier, app_role_override, added_by, created_at, updated_at) VALUES
-('00200001-0004-4000-8000-000000000001', '00100001-0004-4000-8000-000000000001', 'user', 'cv.architect@oem.com', 'Data Producer', 'system@demo', NOW(), NOW()),
+INSERT INTO team_members (id, team_id, member_type, member_identifier, app_role_override_id, added_by, created_at, updated_at) VALUES
+('00200001-0004-4000-8000-000000000001', '00100001-0004-4000-8000-000000000001', 'user', 'cv.architect@oem.com', (SELECT id FROM app_roles WHERE name = 'Data Producer'), 'system@demo', NOW(), NOW()),
 ('00200002-0004-4000-8000-000000000002', '00100001-0004-4000-8000-000000000001', 'group', 'connected-vehicle-devs', NULL, 'system@demo', NOW(), NOW()),
-('00200003-0004-4000-8000-000000000003', '00100002-0004-4000-8000-000000000002', 'user', 'adas.lead@oem.com', 'Data Producer', 'system@demo', NOW(), NOW()),
+('00200003-0004-4000-8000-000000000003', '00100002-0004-4000-8000-000000000002', 'user', 'adas.lead@oem.com', (SELECT id FROM app_roles WHERE name = 'Data Producer'), 'system@demo', NOW(), NOW()),
 ('00200004-0004-4000-8000-000000000004', '00100002-0004-4000-8000-000000000002', 'group', 'perception-engineers', NULL, 'system@demo', NOW(), NOW()),
-('00200005-0004-4000-8000-000000000005', '00100003-0004-4000-8000-000000000003', 'user', 'sqe.manager@oem.com', 'Data Steward', 'system@demo', NOW(), NOW()),
+('00200005-0004-4000-8000-000000000005', '00100003-0004-4000-8000-000000000003', 'user', 'sqe.manager@oem.com', (SELECT id FROM app_roles WHERE name = 'Data Steward'), 'system@demo', NOW(), NOW()),
 ('00200006-0004-4000-8000-000000000006', '00100003-0004-4000-8000-000000000003', 'group', 'supplier-quality-engineers', NULL, 'system@demo', NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;

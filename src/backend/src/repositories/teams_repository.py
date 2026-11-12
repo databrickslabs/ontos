@@ -184,6 +184,33 @@ class TeamMemberRepository(CRUDBase[TeamMemberDb, TeamMemberCreate, TeamMemberUp
             db.rollback()
             raise
 
+    def get_role_overrides_for_user(
+        self, db: Session, user_identifier: str, user_groups: Optional[List[str]] = None
+    ) -> List[TeamMemberDb]:
+        """Member entries with a role override that could apply to the user (#1453).
+
+        Only the entries whose identifier is the user's or one of their groups', matched
+        case-insensitively through ``lower(member_identifier)``. Whole teams aren't loaded.
+        Which of them apply, by member type, is decided by ``team_role_overrides``.
+        """
+        candidates = sorted({str(v).lower() for v in [user_identifier or "", *(user_groups or [])] if v})
+        if not candidates:
+            return []
+        try:
+            return (
+                db.query(self.model)
+                .filter(
+                    self.model.app_role_override_id.isnot(None),
+                    func.lower(self.model.member_identifier).in_(candidates),
+                )
+                .order_by(self.model.member_identifier)
+                .all()
+            )
+        except SQLAlchemyError as e:
+            logger.error("Database error fetching role overrides for %s: %s", user_identifier, e, exc_info=True)
+            db.rollback()
+            raise
+
     def get_members_by_team(self, db: Session, team_id: str) -> List[TeamMemberDb]:
         """Gets all members for a specific team."""
         logger.debug(f"Fetching members for team: {team_id}")

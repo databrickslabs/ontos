@@ -47,6 +47,7 @@ class TeamMemberRead(TeamMemberBase):
     """Model for reading team members"""
     id: str
     team_id: str
+    app_role_override_id: Optional[str] = Field(None, description="Id of the app role override (#1453)")
     member_name: Optional[str] = Field(None, description="Display name for the member")
     created_at: datetime
     updated_at: datetime

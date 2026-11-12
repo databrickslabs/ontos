@@ -464,6 +464,37 @@ def test_attaching_an_unknown_row_to_another_entity_keeps_working(client, act_as
     assert response.status_code == 201, response.text
 
 
+@pytest.mark.parametrize('body', [
+    {'asset_type': 'note', 'asset_id': 'x'}, {'asset_id': 'x'}, {'asset_type': 'link'}, [1],
+])
+def test_a_malformed_attach_body_is_left_to_the_route_validation(client, act_as, body):
+    act_as('Data Steward')
+
+    response = client.post('/api/entities/data_product/attachments',
+                           params={'entity_id': 'target-1'}, json=body)
+
+    assert response.status_code == 422, response.text
+
+
+def test_a_row_that_cannot_be_loaded_is_not_attached_to_another_entity(
+        client, db_session, asset, ws, act_as, monkeypatch):
+    ids = _seed(db_session, 'asset', str(asset.id))
+
+    def broken(self, db, *, id):
+        raise RuntimeError('database unavailable')
+
+    monkeypatch.setattr(MetadataManager, 'get_rich_text', broken)
+    act_as('Data Steward')
+
+    response = client.post('/api/entities/data_product/attachments',
+                           params={'entity_id': 'target-1'},
+                           json={'asset_type': 'rich_text', 'asset_id': ids['note']})
+
+    assert response.status_code == 500, response.text
+    assert MetadataManager().list_attachments(
+        db_session, entity_type='data_product', entity_id='target-1') == []
+
+
 def test_assets_alone_still_detaches_from_an_asset(client, db_session, asset, act_as):
     note_id = _contract_note(db_session)
     MetadataManager().attach_shared_asset(

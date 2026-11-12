@@ -29,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataDomain, DataDomainCreate, DataDomainUpdate } from '@/types/data-domain';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
-import TagSelector from '@/components/ui/tag-selector';
+import TagSelector, { toTagPayload, toTagSelections } from '@/components/ui/tag-selector';
 
 interface DataDomainFormDialogProps {
   domain?: DataDomain | null;
@@ -72,7 +72,7 @@ export function DataDomainFormDialog({
     defaultValues: {
       name: domain?.name || "",
       description: domain?.description || "",
-      tags: domain?.tags || [],
+      tags: toTagSelections(domain?.tags || []),
       parent_id: domain?.parent_id ?? NO_PARENT_VALUE, // Use NO_PARENT_VALUE for null/undefined
     },
   });
@@ -82,7 +82,7 @@ export function DataDomainFormDialog({
       form.reset({
         name: domain?.name || "",
         description: domain?.description || "",
-        tags: domain?.tags || [],
+        tags: toTagSelections(domain?.tags || []),
         parent_id: domain?.parent_id ?? NO_PARENT_VALUE, // Use NO_PARENT_VALUE for null/undefined
       });
     }
@@ -109,7 +109,7 @@ export function DataDomainFormDialog({
     const processedValues: DataDomainCreate | DataDomainUpdate = {
       name: values.name,
       description: values.description,
-      tags: values.tags || [],
+      tags: toTagPayload(values.tags || []),
       parent_id: values.parent_id === NO_PARENT_VALUE ? null : values.parent_id, // Convert back to null for API
     };
 

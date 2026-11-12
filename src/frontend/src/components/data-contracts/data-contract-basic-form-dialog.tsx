@@ -20,7 +20,7 @@ import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
 import type { DataContractCreate } from '@/types/data-contract'
 import type { TeamSummary } from '@/types/team'
-import TagSelector from '@/components/ui/tag-selector'
+import TagSelector, { TagSelection, toTagPayload, toTagSelections } from '@/components/ui/tag-selector'
 import type { AssignedTag } from '@/components/ui/tag-chip'
 import { useProjectContext } from '@/stores/project-store'
 
@@ -70,7 +70,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const [descriptionUsage, setDescriptionUsage] = useState('')
   const [descriptionPurpose, setDescriptionPurpose] = useState('')
   const [descriptionLimitations, setDescriptionLimitations] = useState('')
-  const [tags, setTags] = useState<(string | AssignedTag)[]>([])
+  const [tags, setTags] = useState<TagSelection[]>([])
 
   // Teams state
   const [teams, setTeams] = useState<TeamSummary[]>([])
@@ -114,7 +114,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       descriptionUsage: initial.descriptionUsage || '',
       descriptionPurpose: initial.descriptionPurpose || '',
       descriptionLimitations: initial.descriptionLimitations || '',
-      tags: initial.tags || [],
+      tags: toTagSelections(initial.tags || []),
     } : {
       name: '',
       version: '0.0.1',
@@ -150,8 +150,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const isFormDirty = useMemo(() => {
     if (!initialFormValues) return false
     
-    // Normalize tags for comparison
-    const normalizeTag = (tag: any) => typeof tag === 'string' ? tag : (tag.fully_qualified_name || tag.tag_id || tag.tag_name || tag)
+    // Normalize tags for comparison: FQN and value, so a changed value counts as a change
+    const normalizeTag = (tag: TagSelection) => `${tag.fqn}=${tag.value ?? tag.storedValue ?? ''}`
     const currentTagsNormalized = tags.map(normalizeTag).sort().join(',')
     const initialTagsNormalized = initialFormValues.tags.map(normalizeTag).sort().join(',')
     
@@ -198,13 +198,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     
     setIsSubmitting(true)
     try {
-      // Normalize tags to FQNs (strings) for backend compatibility
-      // Use fully_qualified_name so backend can look up existing tags by FQN
-      const normalizedTags = tags.map((tag: any) => {
-        if (typeof tag === 'string') return tag;
-        // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-        return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-      });
+      // Only edited tag values are sent; the backend keeps the stored value of the rest
+      const normalizedTags = toTagPayload(tags);
 
       const payload: DataContractCreate = {
         name: name.trim(),

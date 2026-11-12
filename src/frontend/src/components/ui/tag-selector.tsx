@@ -2,9 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-// Input - unused
-// import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Command,
   CommandEmpty,
@@ -36,11 +42,41 @@ interface Tag {
   possible_values?: string[];
 }
 
+// A tag as selected in the picker. `value` is set only when the user edits the
+// value here: undefined makes the backend keep the stored value (#1420), '' clears it.
+export interface TagSelection {
+  fqn: string;
+  value?: string;
+  /** Value stored on the entity. Shown in the picker, never sent back unless edited. */
+  storedValue?: string;
+}
+
+/** Selections from tags as loaded from the API (or FQN strings from older callers). */
+export const toTagSelections = (tags: (string | AssignedTag)[] = []): TagSelection[] =>
+  tags.map(tag =>
+    typeof tag === 'string'
+      ? { fqn: tag }
+      : { fqn: tag.fully_qualified_name, storedValue: tag.assigned_value },
+  );
+
+/** Request payload for tags:set and entity create/update. Untouched tags carry no value. */
+export type TagPayload = { tag_fqn: string; assigned_value?: string };
+
+export const toTagPayload = (tags: TagSelection[]): TagPayload[] =>
+  tags.map(tag =>
+    tag.value === undefined
+      ? { tag_fqn: tag.fqn }
+      : { tag_fqn: tag.fqn, assigned_value: tag.value },
+  );
+
+// Radix Select cannot use '' as an item value.
+const NO_VALUE = '__no_value__';
+
 export interface TagSelectorProps {
   /** Currently selected tags */
-  value: (string | AssignedTag)[];
+  value: TagSelection[];
   /** Callback when tags change */
-  onChange: (tags: (string | AssignedTag)[]) => void;
+  onChange: (tags: TagSelection[]) => void;
   /** Placeholder text */
   placeholder?: string;
   /** Whether the selector is disabled */
@@ -49,6 +85,8 @@ export interface TagSelectorProps {
   maxTags?: number;
   /** Allow creating new simple tags (FQN strings) */
   allowCreate?: boolean;
+  /** Show a value editor per selected tag. Off where the stored tags carry no values. */
+  editValues?: boolean;
   /** Label for the selector */
   label?: string;
   /** Additional CSS classes */
@@ -62,6 +100,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   disabled = false,
   maxTags,
   allowCreate = true,
+  editValues = true,
   label,
   className,
 }) => {
@@ -95,10 +134,12 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   const canCreateTags = hasPermission('tags', FeatureAccessLevel.READ_WRITE);
   const effectiveAllowCreate = allowCreate && canCreateTags;
 
-  // Fetch available tags from backend
+  // Fetch available tags from backend. Closed, it still loads them when tags are
+  // selected and value editors are shown: they need each tag's possible_values.
+  const needsDefinitions = editValues && value.length > 0;
   useEffect(() => {
     const fetchTags = async () => {
-      if (!open) return;
+      if (!open && !needsDefinitions) return;
 
       setLoading(true);
       try {
@@ -114,7 +155,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
     };
 
     fetchTags();
-  }, [open, get]);
+  }, [open, needsDefinitions, get]);
 
   // Get display value for a tag (available for future features)
   // const getTagDisplay = (tag: string | AssignedTag): string => {
@@ -124,33 +165,18 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   //     tag.fully_qualified_name;
   // };
 
-  // Get tag key for comparison
-  const getTagKey = (tag: string | AssignedTag): string => {
-    if (typeof tag === 'string') {
-      return tag;
-    }
-    return tag.fully_qualified_name;
-  };
-
   // Check if a tag is already selected
   const isTagSelected = (tagFqn: string): boolean => {
-    return value.some(tag => getTagKey(tag) === tagFqn);
+    return value.some(tag => tag.fqn === tagFqn);
   };
 
-  // Add a tag to selection
+  // Add a tag to selection (its value starts out untouched)
   const addTag = (tag: Tag | string) => {
     if (maxTags && value.length >= maxTags) return;
 
-    if (typeof tag === 'string') {
-      // Simple string tag (FQN)
-      if (!isTagSelected(tag)) {
-        onChange([...value, tag]);
-      }
-    } else {
-      // Rich tag object - use fully_qualified_name for display and backend lookup
-      if (!isTagSelected(tag.fully_qualified_name)) {
-        onChange([...value, tag.fully_qualified_name]);
-      }
+    const fqn = typeof tag === 'string' ? tag : tag.fully_qualified_name;
+    if (!isTagSelected(fqn)) {
+      onChange([...value, { fqn }]);
     }
 
     setSearchValue('');
@@ -158,10 +184,18 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   };
 
   // Remove a tag from selection
-  const removeTag = (tagToRemove: string | AssignedTag) => {
-    const keyToRemove = getTagKey(tagToRemove);
-    onChange(value.filter(tag => getTagKey(tag) !== keyToRemove));
+  const removeTag = (fqn: string) => {
+    onChange(value.filter(tag => tag.fqn !== fqn));
   };
+
+  // Set the value of a selected tag. This marks it as edited.
+  const setTagValue = (fqn: string, next: string) => {
+    onChange(value.map(tag => (tag.fqn === fqn ? { ...tag, value: next } : tag)));
+  };
+
+  // Tag definition for a selected tag, when loaded (carries possible_values)
+  const definitionFor = (fqn: string): Tag | undefined =>
+    availableTags.find(tag => tag.fully_qualified_name === fqn);
 
   // Handle creating a new tag (simple string)
   const handleCreateTag = () => {
@@ -189,18 +223,51 @@ const TagSelector: React.FC<TagSelectorProps> = ({
     <div className={cn('space-y-2', className)}>
       {label && <Label>{label}</Label>}
 
-      {/* Selected tags display */}
+      {/* Selected tags display, each with its value: a select when the tag has
+          possible_values, free text otherwise */}
       {value.length > 0 && (
-        <div className="flex flex-wrap gap-1 p-2 border rounded-md bg-background">
-          {value.map((tag, index) => (
-            <TagChip
-              key={`${getTagKey(tag)}-${index}`}
-              tag={tag}
-              removable={!disabled}
-              onRemove={removeTag}
-              size="sm"
-            />
-          ))}
+        <div className="flex flex-col gap-2 p-2 border rounded-md bg-background">
+          {value.map((tag, index) => {
+            const possibleValues = definitionFor(tag.fqn)?.possible_values ?? [];
+            const current = tag.value ?? tag.storedValue ?? '';
+            const valueLabel = t('common:tagSelector.valueLabel');
+            return (
+              <div key={`${tag.fqn}-${index}`} className="flex flex-wrap items-center gap-2">
+                <TagChip
+                  tag={tag.fqn}
+                  removable={!disabled}
+                  onRemove={() => removeTag(tag.fqn)}
+                  size="sm"
+                />
+                {editValues && (possibleValues.length > 0 ? (
+                  <Select
+                    value={current || NO_VALUE}
+                    onValueChange={next => setTagValue(tag.fqn, next === NO_VALUE ? '' : next)}
+                    disabled={disabled}
+                  >
+                    <SelectTrigger className="h-7 w-48 text-xs" aria-label={valueLabel}>
+                      <SelectValue placeholder={t('common:tagSelector.noValue')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_VALUE}>{t('common:tagSelector.noValue')}</SelectItem>
+                      {(current && !possibleValues.includes(current) ? [...possibleValues, current] : possibleValues).map(option => (
+                        <SelectItem key={option} value={option}>{option}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    className="h-7 w-48 text-xs"
+                    aria-label={valueLabel}
+                    placeholder={t('common:tagSelector.valuePlaceholder')}
+                    value={current}
+                    onChange={e => setTagValue(tag.fqn, e.target.value)}
+                    disabled={disabled}
+                  />
+                ))}
+              </div>
+            );
+          })}
         </div>
       )}
 

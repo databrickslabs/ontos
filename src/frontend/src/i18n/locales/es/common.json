@@ -720,7 +720,10 @@
     "create": "Crear \"{{value}}\"",
     "selectedCount_one": "{{count}} etiqueta seleccionada",
     "selectedCount_other": "{{count}} etiquetas seleccionadas",
-    "selectedOfMax": "{{count}} de {{max}} etiquetas seleccionadas"
+    "selectedOfMax": "{{count}} de {{max}} etiquetas seleccionadas",
+    "valueLabel": "Valor",
+    "valuePlaceholder": "Introduzca un valor",
+    "noValue": "Sin valor"
   },
   "userInfo": {
     "actingAs": "Actuando como {{label}} (modo de prueba)",

@@ -724,7 +724,10 @@
     "create": "Criar \"{{value}}\"",
     "selectedCount_one": "{{count}} tag selecionada",
     "selectedCount_other": "{{count}} tags selecionadas",
-    "selectedOfMax": "{{count}} de {{max}} tags selecionadas"
+    "selectedOfMax": "{{count}} de {{max}} tags selecionadas",
+    "valueLabel": "Valor",
+    "valuePlaceholder": "Digite um valor",
+    "noValue": "Sem valor"
   },
   "userInfo": {
     "actingAs": "Atuando como {{label}} (modo de teste)",

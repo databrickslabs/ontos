@@ -50,11 +50,23 @@ vi.mock('@/stores/permissions-store', () => ({
 
 // TagSelector pulls in Radix popover/command which hangs in jsdom; stub it with
 // a simple control that drives the onChange contract this panel relies on.
-vi.mock('@/components/ui/tag-selector', () => ({
-  default: ({ value, onChange }: { value: unknown[]; onChange: (tags: unknown[]) => void }) => (
-    <button onClick={() => onChange([...value, 'governance.pii'])}>add-tag</button>
-  ),
-}))
+// The stub keeps the real payload helpers.
+vi.mock('@/components/ui/tag-selector', async () => {
+  const actual = await vi.importActual<typeof import('@/components/ui/tag-selector')>('@/components/ui/tag-selector')
+  return {
+    ...actual,
+    default: ({ value, onChange }: { value: { fqn: string; value?: string }[]; onChange: (tags: unknown[]) => void }) => (
+      <>
+        <button onClick={() => onChange([...value, { fqn: 'governance.pii' }])}>add-tag</button>
+        <button
+          onClick={() => onChange(value.map(tag => (tag.fqn === 'governance.classification' ? { ...tag, value: 'public' } : tag)))}
+        >
+          set-value
+        </button>
+      </>
+    ),
+  }
+})
 
 // TagChip fetches global settings on mount; stub the store so jsdom does not
 // attempt a real network request for the relative /api/settings URL.
@@ -137,9 +149,9 @@ describe('EntityTagsPanel', () => {
     })
   })
 
-  // The panel can't edit values (#1421), so it sends assigned tags without one and the
-  // backend keeps the stored value (#1420). Re-sending the loaded value would overwrite
-  // a change made after the panel was opened.
+  // Tags the user did not edit are sent without a value, so the backend keeps the stored
+  // one (#1420). Re-sending the loaded value would overwrite a change made after the panel
+  // was opened.
   it('sends an assigned tag without its loaded value when another tag is added', async () => {
     mockGet.mockResolvedValue({ data: [classified] })
     mockPost.mockResolvedValue({ data: [classified, sampleTags[0]] })
@@ -169,6 +181,23 @@ describe('EntityTagsPanel', () => {
       expect(mockPost).toHaveBeenCalledWith(
         '/api/entities/catalog-object/samples.nyctaxi.trips/tags:set',
         [{ tag_fqn: 'governance.classification' }],
+      )
+    })
+  })
+
+  it('sends a value only for the tag whose value was edited (#1421)', async () => {
+    mockGet.mockResolvedValue({ data: [classified, sampleTags[0]] })
+    mockPost.mockResolvedValue({ data: [classified, sampleTags[0]] })
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'tags.edit' }))
+    await userEvent.click(screen.getByText('set-value'))
+    await userEvent.click(screen.getByText('tags.save'))
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/entities/catalog-object/samples.nyctaxi.trips/tags:set',
+        [{ tag_fqn: 'governance.classification', assigned_value: 'public' }, { tag_fqn: 'governance.pii' }],
       )
     })
   })

@@ -250,3 +250,115 @@ class TestAddTagChangeLog:
         latest = self._entries(db_session)[-1]
         details = json.loads(latest.details_json)
         assert details['assigned_value'] == 'public'
+
+
+class TestPossibleValues:
+    """A value must be one of the tag's possible_values when the tag defines them (#1421)."""
+
+    @pytest.fixture
+    def classified(self, db_session):
+        namespace = tag_namespace_repo.get_or_create_default_namespace(db_session, user_email='admin@example.com')
+        tag = TagDb(
+            name=f'classification_{uuid.uuid4().hex[:8]}', namespace_id=namespace.id, status='active',
+            possible_values=['public', 'confidential'],
+        )
+        db_session.add(tag)
+        db_session.flush()
+        return tag
+
+    def test_set_accepts_a_listed_value(self, manager, db_session, classified):
+        manager.set_tags_for_entity(
+            db_session, tags=[AssignedTagCreate(tag_fqn=_fqn(classified), assigned_value='confidential')],
+            user_email='admin@example.com', **ENTITY,
+        )
+
+        assert _stored(db_session, classified).assigned_value == 'confidential'
+
+    def test_set_refuses_a_value_outside_the_list(self, manager, db_session, classified):
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as err:
+            manager.set_tags_for_entity(
+                db_session, tags=[AssignedTagCreate(tag_fqn=_fqn(classified), assigned_value='secret')],
+                user_email='admin@example.com', **ENTITY,
+            )
+
+        assert err.value.status_code == 422
+        assert db_session.query(EntityTagAssociationDb).filter_by(**ENTITY).count() == 0
+
+    def test_refused_save_leaves_existing_values_alone(self, manager, db_session, classified):
+        from fastapi import HTTPException
+
+        _assign(db_session, classified, 'public')
+
+        with pytest.raises(HTTPException):
+            manager.set_tags_for_entity(
+                db_session, tags=[AssignedTagCreate(tag_fqn=_fqn(classified), assigned_value='secret')],
+                user_email='admin@example.com', **ENTITY,
+            )
+
+        assert _stored(db_session, classified).assigned_value == 'public'
+
+    def test_untouched_value_outside_the_list_is_kept(self, manager, db_session, classified):
+        """A stored value from before possible_values existed is not re-checked on an unrelated save."""
+        _assign(db_session, classified, 'secret')
+
+        manager.set_tags_for_entity(
+            db_session, tags=[AssignedTagCreate(tag_fqn=_fqn(classified))],
+            user_email='admin@example.com', **ENTITY,
+        )
+
+        assert _stored(db_session, classified).assigned_value == 'secret'
+
+    def test_empty_string_clears_without_a_check(self, manager, db_session, classified):
+        _assign(db_session, classified, 'public')
+
+        manager.set_tags_for_entity(
+            db_session, tags=[AssignedTagCreate(tag_fqn=_fqn(classified), assigned_value='')],
+            user_email='admin@example.com', **ENTITY,
+        )
+
+        assert _stored(db_session, classified).assigned_value is None
+
+    def test_add_refuses_a_value_outside_the_list(self, manager, db_session, classified):
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as err:
+            manager.add_tag_to_entity(
+                db_session, tag_id=classified.id, assigned_value='secret',
+                user_email='admin@example.com', **ENTITY,
+            )
+
+        assert err.value.status_code == 422
+
+    def test_add_accepts_a_listed_value(self, manager, db_session, classified):
+        result = manager.add_tag_to_entity(
+            db_session, tag_id=classified.id, assigned_value='public',
+            user_email='admin@example.com', **ENTITY,
+        )
+
+        assert result.assigned_value == 'public'
+
+    def test_free_text_tag_accepts_any_value(self, manager, db_session, tags):
+        _, region = tags
+
+        manager.set_tags_for_entity(
+            db_session, tags=[AssignedTagCreate(tag_fqn=_fqn(region), assigned_value='anything at all')],
+            user_email='admin@example.com', **ENTITY,
+        )
+
+        assert _stored(db_session, region).assigned_value == 'anything at all'
+
+    def test_check_refuses_an_out_of_list_value_given_as_a_dict(self, manager, db_session, classified):
+        """Product and contract payloads carry raw dicts; the check runs before their writes."""
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as err:
+            manager.check_assigned_values(
+                db_session, [{'tag_fqn': _fqn(classified), 'assigned_value': 'secret'}],
+            )
+
+        assert err.value.status_code == 422
+
+    def test_check_passes_fqn_strings_and_listed_values(self, manager, db_session, classified):
+        manager.check_assigned_values(db_session, [_fqn(classified), {'tag_fqn': _fqn(classified), 'assigned_value': 'public'}])

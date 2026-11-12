@@ -165,6 +165,38 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         return False
 
     # --- Entity Tagging Methods (generic across entity types) ---
+    @staticmethod
+    def _check_possible_value(tag_db: TagDb, value: Optional[str]) -> None:
+        """Refuse a value outside the tag's possible_values (422). ``None`` keeps the
+        stored value and ``""`` clears it, so neither is checked."""
+        allowed = tag_db.possible_values or []
+        if value and allowed and value not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Value '{value}' is not one of the possible values of tag '{tag_db.name}'.",
+            )
+
+    def check_assigned_values(self, db: Session, tags: List[Any]) -> None:
+        """Refuse out-of-list values before anything is written. Takes FQN strings, dicts
+        or AssignedTagCreate; entries that don't parse are left to the caller's own handling."""
+        for tag_in in tags:
+            try:
+                if isinstance(tag_in, str):
+                    tag_in = AssignedTagCreate(tag_fqn=tag_in)
+                elif isinstance(tag_in, dict):
+                    tag_in = AssignedTagCreate(**tag_in)
+            except (ValueError, TypeError):
+                continue
+            if not tag_in.assigned_value:
+                continue
+            tag_db = (
+                self._tag_repo.get(db, id=tag_in.tag_id) if tag_in.tag_id
+                else self._tag_repo.get_by_fully_qualified_name(db, fqn=tag_in.tag_fqn) if tag_in.tag_fqn
+                else None
+            )
+            if tag_db:
+                self._check_possible_value(tag_db, tag_in.assigned_value)
+
     def list_assigned_tags(self, db: Session, *, entity_id: str, entity_type: str) -> List[AssignedTag]:
         return self._entity_assoc_repo.get_assigned_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type)
 
@@ -180,6 +212,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
     ) -> List[AssignedTag]:
         """Replace the tags of an entity. With ``commit=False`` (a batch import,
         inside the savepoint of the entity) the change is only flushed."""
+        self.check_assigned_values(db, tags)
         ns_repo = self._namespace_repo
         assigned = self._entity_assoc_repo.set_tags_for_entity(
             db,
@@ -228,6 +261,9 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         return assigned
 
     def add_tag_to_entity(self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID, assigned_value: Optional[str], user_email: Optional[str]) -> AssignedTag:
+        tag_to_assign = self._tag_repo.get(db, id=tag_id)
+        if tag_to_assign:
+            self._check_possible_value(tag_to_assign, assigned_value)
         previous = (
             db.query(EntityTagAssociationDb.assigned_value)
             .filter_by(entity_id=entity_id, entity_type=entity_type, tag_id=tag_id)

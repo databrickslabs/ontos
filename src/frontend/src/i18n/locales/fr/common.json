@@ -720,7 +720,10 @@
     "create": "Créer \"{{value}}\"",
     "selectedCount_one": "{{count}} étiquette sélectionnée",
     "selectedCount_other": "{{count}} étiquettes sélectionnées",
-    "selectedOfMax": "{{count}} sur {{max}} étiquettes sélectionnées"
+    "selectedOfMax": "{{count}} sur {{max}} étiquettes sélectionnées",
+    "valueLabel": "Valeur",
+    "valuePlaceholder": "Saisir une valeur",
+    "noValue": "Aucune valeur"
   },
   "userInfo": {
     "actingAs": "Agissant en tant que {{label}} (mode test)",

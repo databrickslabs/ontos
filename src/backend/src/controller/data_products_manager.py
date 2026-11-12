@@ -432,6 +432,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Extract tags (handled separately)
             tags_data = product_data.get('tags', [])
+            if tags_data and self._tags_manager:
+                self._tags_manager.check_assigned_values(db_session, tags_data)
 
             # Create via repository
             created_db_obj = self._repo.create(db=db_session, obj_in=product_api_model)
@@ -761,6 +763,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # VALIDATE FIRST - before acquiring any database locks
             # Extract tags (handled separately)
             tags_data = product_data_dict.pop('tags', None)
+            if tags_data and self._tags_manager:
+                self._tags_manager.check_assigned_values(db_session, tags_data)
 
             # Prepare update payload
             update_payload = product_data_dict.copy()

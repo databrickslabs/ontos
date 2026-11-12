@@ -32,7 +32,7 @@ import { Loader2 } from 'lucide-react';
 import { ConsumerPrincipal, DataProduct, DataProductStatus } from '@/types/data-product';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { useTeams } from '@/hooks/use-teams';
-import TagSelector from '@/components/ui/tag-selector';
+import TagSelector, { TagPayload, toTagPayload, toTagSelections } from '@/components/ui/tag-selector';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 import { useProjectContext } from '@/stores/project-store';
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error';
@@ -140,7 +140,7 @@ export default function DataProductCreateDialog({
           purpose: product.description?.purpose || '',
           limitations: product.description?.limitations || '',
           usage: product.description?.usage || '',
-          tags: product.tags || [],
+          tags: toTagSelections(product.tags || []),
           consumer_principals: product.consumer_principals || [],
         });
       } else {
@@ -188,15 +188,10 @@ export default function DataProductCreateDialog({
 
       if (mode === 'edit' && product) {
         // Edit mode - prepare update payload
-        // Normalize tags to FQNs (strings) for backend compatibility
-        // Use fully_qualified_name so backend can look up existing tags by FQN
-        const normalizedTags = (data.tags || []).map((tag: any) => {
-          if (typeof tag === 'string') return tag;
-          // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-          return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-        });
+        // Only edited tag values are sent; the backend keeps the stored value of the rest
+        const normalizedTags = toTagPayload(data.tags || []);
 
-        const updateData: Partial<DataProduct> = {
+        const updateData: Omit<Partial<DataProduct>, 'tags'> & { tags?: TagPayload[] } = {
           ...product,
           name: data.name,
           version: data.version,
@@ -253,15 +248,10 @@ export default function DataProductCreateDialog({
         onSuccess(updatedProduct);
       } else {
         // Create mode - construct new product
-        // Normalize tags to FQNs (strings) for backend compatibility
-        // Use fully_qualified_name so backend can look up existing tags by FQN
-        const normalizedTags = (data.tags || []).map((tag: any) => {
-          if (typeof tag === 'string') return tag;
-          // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-          return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-        });
+        // Only edited tag values are sent; the backend keeps the stored value of the rest
+        const normalizedTags = toTagPayload(data.tags || []);
 
-        const productData: Partial<DataProduct> = {
+        const productData: Omit<Partial<DataProduct>, 'tags'> & { tags?: TagPayload[] } = {
           apiVersion: 'v1.0.0',
           kind: 'DataProduct',
           name: data.name,

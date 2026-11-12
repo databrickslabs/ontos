@@ -2612,6 +2612,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             # Extract tags (handled separately)
             tags_data = data_dict.get('tags')
+            if tags_data and self._tags_manager:
+                self._tags_manager.check_assigned_values(db, tags_data)
             
             # Determine whether the caller supplied a domain assignment (multi-domain).
             domains_provided = any(

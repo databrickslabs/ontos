@@ -23,16 +23,19 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en', changeLanguage: vi.fn() } }),
 }));
 
-vi.mock('@/components/ui/tag-selector', () => ({
-  default: ({ value }: { value: (string | { fully_qualified_name: string })[] }) => (
-    <ul aria-label="selected-tags">
-      {value.map(tag => {
-        const fqn = typeof tag === 'string' ? tag : tag.fully_qualified_name;
-        return <li key={fqn}>{fqn}</li>;
-      })}
-    </ul>
-  ),
-}));
+vi.mock('@/components/ui/tag-selector', async () => {
+  const actual = await vi.importActual<typeof import('@/components/ui/tag-selector')>('@/components/ui/tag-selector');
+  return {
+    ...actual,
+    default: ({ value }: { value: { fqn: string }[] }) => (
+      <ul aria-label="selected-tags">
+        {value.map(tag => (
+          <li key={tag.fqn}>{tag.fqn}</li>
+        ))}
+      </ul>
+    ),
+  };
+});
 
 vi.mock('@/components/ui/select', () => ({
   Select: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -90,7 +93,7 @@ describe('ProjectFormDialog tags', () => {
     expect(list).toHaveTextContent('default/pii');
   });
 
-  // Values are left to the backend, which keeps them (#1420); the dialog can't edit them.
+  // Untouched values are left out, so the backend keeps them (#1420).
   it('saves the assigned tags by FQN', async () => {
     render(<ProjectFormDialog isOpen onOpenChange={vi.fn()} project={project} onSubmitSuccess={vi.fn()} />);
 
@@ -99,6 +102,6 @@ describe('ProjectFormDialog tags', () => {
     await waitFor(() => expect(mockPut).toHaveBeenCalled());
     const [url, body] = mockPut.mock.calls[0];
     expect(url).toBe('/api/projects/p-1');
-    expect(body.tags).toEqual(['default/classification', 'default/pii']);
+    expect(body.tags).toEqual([{ tag_fqn: 'default/classification' }, { tag_fqn: 'default/pii' }]);
   });
 });

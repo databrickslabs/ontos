@@ -720,7 +720,10 @@
     "create": "\"{{value}}\" を作成",
     "selectedCount_one": "{{count}} 件のタグを選択中",
     "selectedCount_other": "{{count}} 件のタグを選択中",
-    "selectedOfMax": "{{max}} 件中 {{count}} 件のタグを選択中"
+    "selectedOfMax": "{{max}} 件中 {{count}} 件のタグを選択中",
+    "valueLabel": "値",
+    "valuePlaceholder": "値を入力...",
+    "noValue": "値なし"
   },
   "userInfo": {
     "actingAs": "{{label}} として操作中（テストモード）",

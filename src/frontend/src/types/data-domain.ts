@@ -1,4 +1,5 @@
 import { AssignedTag } from '@/components/ui/tag-chip';
+import type { TagPayload } from '@/components/ui/tag-selector';
 
 export interface DataDomainBasicInfo {
   id: string;
@@ -50,7 +51,7 @@ export interface DataDomainCreate {
   name: string;
   description?: string | null;
   owner_team_id?: string | null; // UUID of the owning team
-  tags?: (string | AssignedTag)[] | null;
+  tags?: (string | AssignedTag | TagPayload)[] | null;
   parent_id?: string | null;
 }
 

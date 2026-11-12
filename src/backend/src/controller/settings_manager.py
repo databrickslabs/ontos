@@ -1544,17 +1544,11 @@ class SettingsManager:
         """
         if not getattr(self, '_jobs', None):
             return
-        # Placeholder values mean "not set" (serverless), as when jobs are installed
-        cluster_id = self._settings.job_cluster_id
-        if cluster_id in ('cluster-id', ''):
-            cluster_id = None
         from src.controller.jobs_manager import LLM_TASK_ARGUMENTS
 
         try:
             self._jobs.sync_installed_workflow(
-                'compliance_checks',
-                required_arguments=LLM_TASK_ARGUMENTS,
-                job_cluster_id=cluster_id,
+                'compliance_checks', required_arguments=LLM_TASK_ARGUMENTS,
             )
         except Exception as e:
             logger.warning(

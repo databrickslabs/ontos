@@ -531,20 +531,15 @@ class JobsManager:
         )
         return True
 
-    def sync_installed_workflow(
-        self,
-        workflow_id: str,
-        *,
-        required_arguments: List[str],
-        job_cluster_id: Optional[str] = None,
-    ) -> bool:
+    def sync_installed_workflow(self, workflow_id: str, *, required_arguments: List[str]) -> bool:
         """Give the installed job the current parameters, and its tasks if they're old.
 
         A job installed by an older version lacks the task arguments the
         definition added since (``required_arguments``): then its code is
         redeployed and its tasks and parameters rewritten
-        (:meth:`update_installed_workflow`). Otherwise only the parameters are.
-        Returns whether an installed job was updated.
+        (:meth:`update_installed_workflow`), on the cluster its tasks use now
+        (serverless if none). Otherwise only the parameters are. Returns
+        whether an installed job was updated.
         """
         installation = workflow_installation_repo.get_by_workflow_id(
             self._db, workflow_id=workflow_id
@@ -552,16 +547,23 @@ class JobsManager:
         if installation is None:
             return False
         job = self._client.jobs.get(job_id=int(installation.job_id))
+        tasks = getattr(job.settings, 'tasks', None) or []
         arguments = {
             argument
-            for task in (getattr(job.settings, 'tasks', None) or [])
+            for task in tasks
             for argument in (
                 getattr(getattr(task, 'spark_python_task', None), 'parameters', None) or []
             )
         }
         if all(a in arguments for a in required_arguments):
             return self.refresh_installed_job_parameters(workflow_id)
-        return self.update_installed_workflow(workflow_id, job_cluster_id=job_cluster_id)
+        # Keep the job's compute: the cluster its tasks run on, else serverless
+        cluster_id = next(
+            (getattr(t, 'existing_cluster_id', None) for t in tasks
+             if getattr(t, 'existing_cluster_id', None)),
+            None,
+        )
+        return self.update_installed_workflow(workflow_id, job_cluster_id=cluster_id)
 
     def update_installed_workflow(
         self, workflow_id: str, *, job_cluster_id: Optional[str] = None,

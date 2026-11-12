@@ -125,17 +125,8 @@ def test_changing_the_llm_settings_syncs_the_installed_job(db_session):
     manager.update_settings({'llm_endpoint': 'new-endpoint'})
 
     manager._jobs.sync_installed_workflow.assert_called_once_with(
-        WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS, job_cluster_id='test-cluster',
+        WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS,
     )
-
-
-@pytest.mark.parametrize('placeholder', ['cluster-id', ''])
-def test_a_placeholder_cluster_means_serverless(db_session, placeholder):
-    manager = _settings_manager(db_session, cluster_id=placeholder)
-
-    manager.update_settings({'llm_enabled': True})
-
-    assert manager._jobs.sync_installed_workflow.call_args.kwargs['job_cluster_id'] is None
 
 
 def test_a_failed_job_update_still_saves_the_settings(db_session):
@@ -154,8 +145,10 @@ def _installed(monkeypatch, job_id=789):
     )
 
 
-def _installed_job_with(manager, arguments):
-    task = SimpleNamespace(spark_python_task=SimpleNamespace(parameters=arguments))
+def _installed_job_with(manager, arguments, cluster_id=None):
+    task = SimpleNamespace(
+        spark_python_task=SimpleNamespace(parameters=arguments), existing_cluster_id=cluster_id,
+    )
     manager._client.jobs.get.return_value = SimpleNamespace(
         settings=SimpleNamespace(tasks=[task]),
     )
@@ -179,11 +172,9 @@ def test_an_older_job_gets_its_code_and_tasks_again(db_session, llm_settings, mo
     manager = _manager(db_session, llm_settings)
     manager._workspace_deployer = MagicMock()
     _installed(monkeypatch)
-    _installed_job_with(manager, ['--policy_filter', 'active'])
+    _installed_job_with(manager, ['--policy_filter', 'active'], cluster_id='cluster-1')
 
-    assert manager.sync_installed_workflow(
-        WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS, job_cluster_id='cluster-1',
-    )
+    assert manager.sync_installed_workflow(WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS)
 
     manager._workspace_deployer.deploy_workflow.assert_called_once()
     assert manager._workspace_deployer.deploy_workflow.call_args.args[0] == WORKFLOW
@@ -194,6 +185,17 @@ def test_an_older_job_gets_its_code_and_tasks_again(db_session, llm_settings, mo
     assert args[args.index('--llm_endpoint') + 1] == '{{job.parameters.llm_endpoint}}'
     # The schedule (and its pause status) is not rewritten
     assert new_settings.schedule is None
+
+
+def test_an_older_serverless_job_stays_serverless(db_session, llm_settings, monkeypatch):
+    manager = _manager(db_session, llm_settings)
+    _installed(monkeypatch)
+    _installed_job_with(manager, ['--policy_filter', 'active'])
+
+    assert manager.sync_installed_workflow(WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS)
+
+    [task] = manager._client.jobs.update.call_args.kwargs['new_settings'].tasks
+    assert task.existing_cluster_id is None
 
 
 def test_nothing_to_update_when_the_job_is_not_installed(db_session, llm_settings, monkeypatch):

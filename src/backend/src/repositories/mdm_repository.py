@@ -46,7 +46,7 @@ class MdmConfigRepository:
         project_id: Optional[str] = None,
         status: Optional[str] = None,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[MdmConfigDb]:
         """List MDM configurations with optional filters"""
         query = db.query(MdmConfigDb)
@@ -214,7 +214,7 @@ class MdmMatchCandidateRepository:
         run_id: str,
         status: Optional[str] = None,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[MdmMatchCandidateDb]:
         """Get match candidates for a run"""
         query = db.query(MdmMatchCandidateDb).filter(MdmMatchCandidateDb.run_id == run_id)

@@ -126,7 +126,7 @@ class TagRepository(CRUDBase[TagDb, TagCreate, TagUpdate]):
 
     def get_multi_with_filters(
         self, db: Session, *, 
-        skip: int = 0, limit: int = 100, 
+        skip: int = 0, limit: Optional[int] = None, 
         namespace_id: Optional[UUID] = None,
         namespace_name: Optional[str] = None,
         name_contains: Optional[str] = None,

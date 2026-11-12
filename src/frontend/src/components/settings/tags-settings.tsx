@@ -167,7 +167,7 @@ export default function TagsSettings() {
   const fetchTags = useCallback(async () => {
     if (!selectedNamespace) return;
     try {
-      const response = await get<Tag[]>(`/api/tags?namespace_id=${selectedNamespace}&limit=1000`);
+      const response = await get<Tag[]>(`/api/tags?namespace_id=${selectedNamespace}`);
       if (response.data) {
         setTags(response.data);
       }

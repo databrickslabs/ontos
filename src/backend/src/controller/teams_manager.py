@@ -49,11 +49,14 @@ class TeamsManager(SearchableAsset):
             id=f"team::{team.id}",
             type="team",
             feature_id="teams",
-            title=team.name,
+            # Display title first, like projects. A field named "title" always resolves
+            # to item.title in both search backends, so keeping the display title in
+            # extra_data["title"] left it unsearchable; the slug-ish name goes there instead.
+            title=getattr(team, 'title', None) or team.name,
             description=getattr(team, 'description', '') or "",
             link=f"/teams/{team.id}",
             tags=[],
-            extra_data={"title": getattr(team, 'title', '') or ""},
+            extra_data={"name": team.name},
         )
 
     def _update_search_index(self, team: TeamDb) -> None:
@@ -168,7 +171,7 @@ class TeamsManager(SearchableAsset):
             return None
         try:
             # Get all domains and find by name
-            domains = self.domain_repo.get_multi(db, limit=1000)
+            domains = self.domain_repo.get_multi(db)
             for domain in domains:
                 if domain.name == domain_name:
                     return domain.id
@@ -269,7 +272,7 @@ class TeamsManager(SearchableAsset):
         self,
         db: Session,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         domain_id: Optional[str] = None,
         domain_ids: Optional[List[str]] = None,
     ) -> List[TeamRead]:
@@ -286,7 +289,7 @@ class TeamsManager(SearchableAsset):
         """Gets a summary list of teams for dropdowns/selection."""
         logger.debug(f"Fetching teams summary for domain_id={domain_id}, domain_ids={domain_ids}")
         db_teams = self.team_repo.get_multi_with_members(
-            db, limit=1000, domain_id=domain_id, domain_ids=domain_ids
+            db, domain_id=domain_id, domain_ids=domain_ids
         )
         domains_map = entity_domain_repo.get_domains_for_entities(
             db, entity_type="team", entity_ids=[t.id for t in db_teams]

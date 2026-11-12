@@ -350,7 +350,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected error getting review request {request_id}: {e}")
             raise
 
-    def list_review_requests(self, skip: int = 0, limit: int = 100) -> List[DataAssetReviewRequestApi]:
+    def list_review_requests(self, skip: int = 0, limit: Optional[int] = None) -> List[DataAssetReviewRequestApi]:
         """Lists all review requests."""
         try:
             requests_db = self._repo.get_multi(db=self._db, skip=skip, limit=limit)

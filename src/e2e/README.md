@@ -101,6 +101,17 @@ cd src/e2e
 pytest -v
 ```
 
+### Admin persona and the demo-data tests
+
+The demo-data CUJ tests (`test_CUJ_003_load_retail_demo_data`,
+`test_NEG_016_demo_data_idempotent`) call the demo-data load route, which needs the
+`settings-general` ADMIN permission (the Admin role). Run them with an admin persona (or, when
+no admin persona is configured, a default identity) that is in the Admin role: a member of a
+group from the app's `APP_ADMIN_DEFAULT_GROUPS` (`admins` by default) or a user in the Admin
+role's assigned users. Otherwise the route answers 403: CUJ_003 fails, and NEG_016 loads
+nothing, so it checks nothing. The e2e sessions do not send the
+`X-Demo-Setup-Token` header, so the app's `DEMO_SETUP_TOKEN` setting does not apply to them.
+
 ## CI / Service Principal
 
 For CI pipelines where the Databricks CLI is not available, set `E2E_DATABRICKS_TOKEN` directly:

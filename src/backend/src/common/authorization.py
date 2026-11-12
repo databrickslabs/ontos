@@ -14,7 +14,7 @@ from src.common.team_role_override import pick_team_role_override
 # Import dependencies needed for the moved function
 from databricks.sdk.errors import NotFound
 from src.controller.users_manager import UsersManager
-from src.common.config import get_settings, Settings
+from src.common.config import MIN_DEMO_SETUP_TOKEN_LENGTH, get_settings, Settings
 # Import from the new dependencies file
 from src.common.manager_dependencies import get_auth_manager, get_users_manager, get_settings_manager
 from src.controller.settings_manager import SettingsManager
@@ -798,9 +798,17 @@ demo_setup_token_scheme = APIKeyHeader(
 )
 
 
+DEMO_ACCESS_VIA_ADMIN = "admin"
+DEMO_ACCESS_VIA_SETUP_TOKEN = "setup_token"
+
+
 def is_valid_demo_setup_token(provided: Optional[str], configured: Optional[str]) -> bool:
-    """Constant-time check of a presented token. Always False when no token is configured."""
-    if not configured or not provided:
+    """Constant-time check of a presented token.
+
+    Always False when no token is configured, or when the configured one is shorter than
+    ``MIN_DEMO_SETUP_TOKEN_LENGTH`` (settings drop it at startup; this guards later changes).
+    """
+    if not configured or not provided or len(configured) < MIN_DEMO_SETUP_TOKEN_LENGTH:
         return False
     return hmac.compare_digest(provided.encode("utf-8"), configured.encode("utf-8"))
 
@@ -811,8 +819,11 @@ async def require_demo_admin_or_setup_token(
     settings: Settings = Depends(get_settings),
     user_details: UserInfo = Depends(get_user_details_from_sdk),
     auth_manager: AuthorizationManager = Depends(get_auth_manager),
-) -> None:
+) -> str:
     """Allow the call for a ``settings-general`` ADMIN, or for a valid ``DEMO_SETUP_TOKEN``.
+
+    Returns how access was granted (``"setup_token"`` or ``"admin"``) for the routes' audit
+    entries.
 
     A presented token that is wrong, or presented while ``DEMO_SETUP_TOKEN`` is unset, does
     not grant access; the request then falls through to the admin check (403 for non-admins).
@@ -823,9 +834,10 @@ async def require_demo_admin_or_setup_token(
             "Demo-data access granted by setup token for '%s'",
             user_details.user or user_details.email,
         )
-        return
+        return DEMO_ACCESS_VIA_SETUP_TOKEN
     if setup_token:
         logger.warning("Demo-data setup token rejected or not configured")
     await PermissionChecker("settings-general", FeatureAccessLevel.ADMIN)(
         request, user_details, auth_manager
     )
+    return DEMO_ACCESS_VIA_ADMIN

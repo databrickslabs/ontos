@@ -6882,7 +6882,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     (DataContractDb.project_id == project_id) |
                     (DataContractDb.project_id.is_(None))
                 )
-            contracts = query.limit(500).all()
+            contracts = query.all()
         else:
             contracts = data_contract_repo.get_multi(
                 db,

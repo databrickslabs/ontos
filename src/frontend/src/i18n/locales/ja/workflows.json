@@ -702,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "デフォルトワークフロー",
       "newOnly": "新規のみ読み込む",
-      "reloadAll": "すべてのデフォルトを再読み込み"
+      "reloadAll": "すべてのデフォルトを再読み込み",
+      "confirmTitle": "すべての既定ワークフローを再読み込みしますか？",
+      "confirmDescription": "各既定ワークフローは出荷時の定義（説明、トリガー、スコープ、ステップとその配置）にリセットされます。有効かどうかは変わりません。あなたや他の管理者が編集した既定ワークフローは、下で一緒にリセットしない限り保持されます。",
+      "includeEdited": "編集済みの既定ワークフローもリセットする（変更は失われます）",
+      "confirmAction": "再読み込み",
+      "keptEdited": "編集済みを保持: {{names}}。",
+      "result": "作成 {{created}} 件、更新 {{updated}} 件、スキップ {{skipped}} 件。"
     },
     "badges": {
       "default": "デフォルト",

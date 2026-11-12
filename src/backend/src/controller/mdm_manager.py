@@ -74,7 +74,7 @@ class MdmManager:
         project_id: Optional[str] = None,
         status: Optional[str] = None,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[MdmConfigApi]:
         """List all MDM configurations"""
         configs = mdm_config_repo.list(
@@ -307,7 +307,7 @@ class MdmManager:
         run_id: str,
         status: Optional[str] = None,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[MdmMatchCandidateApi]:
         """List match candidates for a run"""
         candidates = mdm_match_candidate_repo.get_by_run(

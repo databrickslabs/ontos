@@ -50,7 +50,7 @@ class BusinessRolesManager:
         return self._to_read(db_role)
 
     def get_all_roles(
-        self, db: Session, *, skip: int = 0, limit: int = 100,
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None,
         category: Optional[str] = None, status: Optional[str] = None
     ) -> List[BusinessRoleRead]:
         db_roles = self._repo.get_multi_filtered(db, skip=skip, limit=limit, category=category, status=status)

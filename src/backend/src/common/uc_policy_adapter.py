@@ -192,7 +192,7 @@ def build_grants(plan: EntitlementPlan, resolve_object_kind: Optional[ObjectKind
         if e.action == "use" and e.source and e.source.policy_uid not in broad_warned:
             broad_warned.add(e.source.policy_uid)
             plan.issue(SEVERITY_WARNING, "broad_grant",
-                       f"{e.source.label()}: 'use' compiles to ALL PRIVILEGES", e.source)
+                       f"{e.source.label()}: 'use' compiles to ALL PRIVILEGES", e.source, params={"rule": e.source.label()})
         principal = uc_principal(e.principal)
         src = e.source.to_dict() if e.source else None
         for priv in privileges:
@@ -376,7 +376,7 @@ def build_abac(plan: EntitlementPlan, abac: Any,
                 # grant): not being able to build it must block the release, never fail open.
                 plan.issue(SEVERITY_ERROR, "abac_unsupported_target",
                            f"{rule.source.label() if rule.source else rule.kind}: ABAC policies apply to "
-                           f"tables, not to a {kind} ({name})", rule.source)
+                           f"tables, not to a {kind} ({name})", rule.source, params={"rule": rule.source.label() if rule.source else rule.kind, "kind": kind, "name": name})
                 continue
             on_type = _ABAC_ON[kind]
             spec: Dict[str, Any] = {

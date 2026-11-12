@@ -274,7 +274,7 @@ class PolicyReleaseManager:
             owns=adapter.owns,
         )
         for w in warnings:
-            plan.issue("error", "inheritance", w)
+            plan.issue("error", "inheritance", w, params={"detail": w})
         self._note_untargeted(db, plan)
         pt.restrict(plan, resolved)
         # The object-kind resolver reads Unity Catalog: only meaningful for UC names.
@@ -297,11 +297,11 @@ class PolicyReleaseManager:
             diff.untrack = sorted(diff.untrack + untrack, key=lambda g: g.key)
             plan.issue("warning", "untracked_outside_scope",
                        f"{len(untrack)} tracked grant(s) are outside the target's scope and will no longer be "
-                       "tracked (they stay on the platform)")
+                       "tracked (they stay on the platform)", params={"count": len(untrack)})
         if expiring:
             plan.issue("warning", "expiring_outside_scope",
                        f"{len(expiring)} time-bound grant(s) are outside the target's scope; they stay tracked "
-                       "here until they expire and are revoked")
+                       "here until they expire and are revoked", params={"count": len(expiring)})
         changes = diff.to_dict()
         changes["sql"] = adapter.render_sql(diff, resolved)
         ir = plan.to_dict()
@@ -324,7 +324,7 @@ class PolicyReleaseManager:
         if lost:
             plan.issue("warning", "no_target",
                        f"No active target compiles {', '.join(lost[:5])}{' …' if len(lost) > 5 else ''} — "
-                       "configure an Access Target for that platform")
+                       "configure an Access Target for that platform", params={"refs": ", ".join(lost[:5]), "more": max(0, len(lost) - 5)})
 
     @staticmethod
     def _insert(db: Session, row: AccessPolicyReleaseDb, attempts: int = 5) -> AccessPolicyReleaseDb:

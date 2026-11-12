@@ -67,11 +67,13 @@ class RuleRef:
 class CompileIssue:
     severity: str
     code: str
-    message: str
+    message: str  # English fallback; clients translate ``code`` with ``params``
     source: Optional[RuleRef] = None
+    params: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        out: Dict[str, Any] = {"severity": self.severity, "code": self.code, "message": self.message}
+        out: Dict[str, Any] = {"severity": self.severity, "code": self.code, "message": self.message,
+                               "params": dict(self.params)}
         if self.source:
             out["source"] = self.source.to_dict()
         return out
@@ -162,8 +164,9 @@ class EntitlementPlan:
     def has_errors(self) -> bool:
         return any(i.severity == SEVERITY_ERROR for i in self.issues)
 
-    def issue(self, severity: str, code: str, message: str, source: Optional[RuleRef] = None) -> None:
-        self.issues.append(CompileIssue(severity, code, message, source))
+    def issue(self, severity: str, code: str, message: str, source: Optional[RuleRef] = None, *,
+              params: Optional[Dict[str, Any]] = None) -> None:
+        self.issues.append(CompileIssue(severity, code, message, source, dict(params or {})))
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -503,7 +506,7 @@ def compile_policies(
                 continue
             if is_offer and rule.get("assignee") is None:
                 # A product's terms bind its consumers through their Agreements (snapshotted there).
-                plan.issue(SEVERITY_INFO, "offer_term", f"{src.label()} binds consumers via their Agreements", src)
+                plan.issue(SEVERITY_INFO, "offer_term", f"{src.label()} binds consumers via their Agreements", src, params={"rule": src.label()})
                 continue
             pro = _compile_prohibition(rule, src, conflict, parties, assets, now, plan, abac)
             if pro:
@@ -523,7 +526,7 @@ def compile_policies(
             invalid_policies.add(pro.source.policy_uid)
             plan.issue(SEVERITY_ERROR, "policy_conflict_invalid",
                        f"{pro.source.policy_name}: permission and prohibition conflict under the 'invalid' "
-                       "strategy — the policy is void and has no effect", pro.source)
+                       "strategy — the policy is void and has no effect", pro.source, params={"policy": pro.source.policy_name})
     prohibitions = [p for p in prohibitions if p.source.policy_uid not in invalid_policies]
     candidates = [e for e in candidates if not (e.source and e.source.policy_uid in invalid_policies)]
 
@@ -546,16 +549,16 @@ def compile_policies(
                     e.expires_at = _iso(cap)
                     plan.issue(SEVERITY_INFO, "expires_at_prohibition",
                                f"{e.principal} {e.action} {e.securable} expires at {_iso(cap)} when "
-                               f"{pro.source.label()} takes effect", e.source)
+                               f"{pro.source.label()} takes effect", e.source, params={"principal": e.principal, "action": e.action, "securable": e.securable, "at": _iso(cap), "rule": pro.source.label()})
                 continue
             if verdict == "full":
                 plan.issue(SEVERITY_INFO, "denied_by_prohibition",
-                           f"{e.principal} {e.action} {e.securable} removed by {pro.source.label()}", e.source)
+                           f"{e.principal} {e.action} {e.securable} removed by {pro.source.label()}", e.source, params={"principal": e.principal, "action": e.action, "securable": e.securable, "rule": pro.source.label()})
             else:
                 plan.issue(SEVERITY_ERROR, "prohibition_unenforceable",
                            f"{pro.source.label()} only partly overlaps the grant {e.principal} {e.action} "
                            f"{e.securable} ({verdict}); the platform has no DENY — narrow the permission or "
-                           "the prohibition", pro.source)
+                           "the prohibition", pro.source, params={"rule": pro.source.label(), "principal": e.principal, "action": e.action, "securable": e.securable, "overlap": verdict})
             denied = True
             break
         if not denied:
@@ -584,7 +587,7 @@ def _apply_abac_semantics(plan: EntitlementPlan, kept: List[Entitlement], candid
                 and any(securable_covers(s, e.securable) or securable_covers(e.securable, s) for s in rule.securables)
                 for e in candidates):
             plan.issue(SEVERITY_INFO, "mask_overridden",
-                       f"{rule.source.label()}: the policy's own permission overrides the mask (conflict=perm)", rule.source)
+                       f"{rule.source.label()}: the policy's own permission overrides the mask (conflict=perm)", rule.source, params={"rule": rule.source.label()})
             continue
         masks.append(rule)
 
@@ -648,26 +651,26 @@ def _compile_permission(rule: Dict[str, Any], src: RuleRef, parties: _Parties, a
         plan.gated.append(GatedRule(src, gate[0], gate[1]))
         return []
     if end is not None and end <= now:
-        plan.issue(SEVERITY_INFO, "expired", f"{src.label()} expired at {_iso(end)} — not granted", src)
+        plan.issue(SEVERITY_INFO, "expired", f"{src.label()} expired at {_iso(end)} — not granted", src, params={"rule": src.label(), "at": _iso(end)})
         return []
     if start is not None and start > now:
-        plan.issue(SEVERITY_INFO, "not_yet_active", f"{src.label()} starts at {_iso(start)} — not granted yet", src)
+        plan.issue(SEVERITY_INFO, "not_yet_active", f"{src.label()} starts at {_iso(start)} — not granted yet", src, params={"rule": src.label(), "at": _iso(start)})
         return []
 
     party = parties.resolve(rule.get("assignee"))
     if party.inexact:
         plan.issue(SEVERITY_WARNING, "assignee_inexact",
-                   f"{src.label()}: {party.inexact} — only the resolvable principals are granted", src)
+                   f"{src.label()}: {party.inexact} — only the resolvable principals are granted", src, params={"rule": src.label(), "reason": party.inexact})
     asset = assets.resolve(rule.get("target"))
     if asset.inexact:
         plan.gated.append(GatedRule(src, GATE_ABAC, asset.inexact))
         return []
     for f in sorted(asset.foreign):
-        plan.issue(SEVERITY_WARNING, "foreign_target", f"{src.label()}: {f} is not a Unity Catalog or Snowflake securable — skipped", src)
+        plan.issue(SEVERITY_WARNING, "foreign_target", f"{src.label()}: {f} is not a Unity Catalog or Snowflake securable — skipped", src, params={"rule": src.label(), "target": f})
 
     principals = [EVERYONE] if party.everyone else sorted(party.principals)
     if not principals and not party.inexact:
-        plan.issue(SEVERITY_INFO, "no_principals", f"{src.label()}: the assignee resolves to nobody", src)
+        plan.issue(SEVERITY_INFO, "no_principals", f"{src.label()}: the assignee resolves to nobody", src, params={"rule": src.label()})
     out: List[Entitlement] = []
     for principal in principals:
         for securable in sorted(asset.securables):
@@ -712,12 +715,12 @@ def _compile_prohibition(rule: Dict[str, Any], src: RuleRef, conflict: str, part
         return None
     start, end, rest = _time_window(rule.get("constraint") or [])
     if end is not None and end <= now:
-        plan.issue(SEVERITY_INFO, "prohibition_inactive", f"{src.label()} ended at {_iso(end)}", src)
+        plan.issue(SEVERITY_INFO, "prohibition_inactive", f"{src.label()} ended at {_iso(end)}", src, params={"rule": src.label(), "at": _iso(end)})
         return None
     scheduled = start if start is not None and start > now else None
     if scheduled is not None:
         plan.issue(SEVERITY_INFO, "prohibition_scheduled",
-                   f"{src.label()} takes effect at {_iso(scheduled)} — overlapping grants expire then", src)
+                   f"{src.label()} takes effect at {_iso(scheduled)} — overlapping grants expire then", src, params={"rule": src.label(), "at": _iso(scheduled)})
     column_tag = _single_eq(rest, "ontos:columnTag") if abac and abac.mask_function else None
     # Only an exact read prohibition becomes a mask: a broader one (``use``) still denies the other
     # actions it covers, so it keeps the fail-closed treatment below.
@@ -727,7 +730,7 @@ def _compile_prohibition(rule: Dict[str, Any], src: RuleRef, conflict: str, part
         if party.inexact or asset.inexact or party.everyone:
             reason = party.inexact or asset.inexact or "a column mask for everyone needs explicit principals"
             plan.issue(SEVERITY_ERROR, "prohibition_inexact",
-                       f"{src.label()}: {reason}; a column mask must name its principals and securables", src)
+                       f"{src.label()}: {reason}; a column mask must name its principals and securables", src, params={"rule": src.label(), "reason": reason})
             return None
         key, _, value = str(column_tag).partition("=")
         plan.abac.append(AbacRule("column_mask", sorted(party.principals), sorted(asset.securables),
@@ -735,18 +738,18 @@ def _compile_prohibition(rule: Dict[str, Any], src: RuleRef, conflict: str, part
         scheduled = start if start is not None and start > now else None
         plan.issue(SEVERITY_INFO, "column_mask",
                    f"{src.label()} is enforced as a column mask"
-                   + (f" (applied now — a mask can't wait for its start at {_iso(scheduled)})" if scheduled else ""), src)
+                   + (f" (applied now — a mask can't wait for its start at {_iso(scheduled)})" if scheduled else ""), src, params={"rule": src.label(), "at": _iso(scheduled) if scheduled else None})
         return None  # Masks the matching columns instead of denying the whole securable.
     if rest or rule.get("action_refinement"):
         # Fail closed: an unenforceable condition never lets a prohibition lapse.
         plan.issue(SEVERITY_WARNING, "prohibition_unconditional",
-                   f"{src.label()}: its constraints can't be enforced statically — applied unconditionally", src)
+                   f"{src.label()}: its constraints can't be enforced statically — applied unconditionally", src, params={"rule": src.label()})
     party = parties.resolve(rule.get("assignee"))
     asset = assets.resolve(rule.get("target"))
     for what, reason in (("assignee", party.inexact), ("target", asset.inexact)):
         if reason:
             plan.issue(SEVERITY_ERROR, "prohibition_inexact",
-                       f"{src.label()}: {what} — {reason}; a prohibition must be exact to be enforced", src)
+                       f"{src.label()}: {what} — {reason}; a prohibition must be exact to be enforced", src, params={"rule": src.label(), "what": what, "reason": reason})
     if party.inexact or asset.inexact:
         return None
     return _Prohibition(party, action, set(asset.securables), src, conflict, scheduled)

@@ -470,41 +470,68 @@ def resolve_inheritance(
 
 # ------------------------------------------------------------------ validation
 
+class Problem(str):
+    """A message that is also a stable ``code`` + ``params`` (clients translate those).
+
+    A ``str`` subclass, so lists of problems still compare, join and serialize as their English
+    text; ``to_dict`` gives the structured form for API responses.
+    """
+    code: str
+    params: Dict[str, Any]
+
+    def __new__(cls, message: str, code: str, params: Optional[Dict[str, Any]] = None) -> "Problem":
+        obj = super().__new__(cls, message)
+        obj.code, obj.params = code, dict(params or {})
+        return obj
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"code": self.code, "params": dict(self.params), "message": str(self)}
+
+
+def problem_dicts(problems: Iterable[Any]) -> List[Dict[str, Any]]:
+    """Structured form of a problem list (plain strings get the generic ``message`` code)."""
+    return [p.to_dict() if isinstance(p, Problem) else {"code": "message", "params": {}, "message": str(p)}
+            for p in problems]
+
+
 @dataclass
 class Issue:
     severity: str  # "error" | "warning"
     path: str
-    message: str
+    message: str  # English fallback; clients translate ``code`` with ``params``
+    code: str = ""
+    params: Dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, str]:
-        return {"severity": self.severity, "path": self.path, "message": self.message}
+    def to_dict(self) -> Dict[str, Any]:
+        return {"severity": self.severity, "path": self.path, "message": self.message,
+                "code": self.code, "params": dict(self.params)}
 
 
 def _validate_constraint(c: Dict[str, Any], path: str, issues: List[Issue], subject: Optional[str] = None) -> None:
     if c.get("invalid"):
-        issues.append(Issue("error", path, "Constraint must be an object"))
+        issues.append(Issue("error", path, "Constraint must be an object", "constraint_not_object"))
         return
     if c.get("logical"):
         members = c.get("constraints") or []
         if len(members) < 1:
-            issues.append(Issue("error", path, f"Logical constraint '{c['logical']}' needs at least one operand"))
+            issues.append(Issue("error", path, f"Logical constraint '{c['logical']}' needs at least one operand", "logical_empty", {"operator": c['logical']}))
         for i, m in enumerate(members):
             _validate_constraint(m, f"{path}.{c['logical']}[{i}]", issues, subject)
         return
     lo, op = c.get("leftOperand"), c.get("operator")
     if not lo:
-        issues.append(Issue("error", path, "Constraint is missing leftOperand"))
+        issues.append(Issue("error", path, "Constraint is missing leftOperand", "constraint_no_left_operand"))
     elif lo not in LEFT_OPERANDS:
-        issues.append(Issue("error", path, f"Unknown leftOperand '{lo}' (not in the Ontos profile)"))
+        issues.append(Issue("error", path, f"Unknown leftOperand '{lo}' (not in the Ontos profile)", "unknown_left_operand", {"operand": lo}))
     elif subject and LEFT_OPERANDS[lo].subject not in (subject, "context"):
-        issues.append(Issue("warning", path, f"leftOperand '{lo}' describes a {LEFT_OPERANDS[lo].subject}, not a {subject}"))
+        issues.append(Issue("warning", path, f"leftOperand '{lo}' describes a {LEFT_OPERANDS[lo].subject}, not a {subject}", "operand_subject_mismatch", {"operand": lo, "describes": LEFT_OPERANDS[lo].subject, "expected": subject}))
     if not op:
-        issues.append(Issue("error", path, "Constraint is missing operator"))
+        issues.append(Issue("error", path, "Constraint is missing operator", "constraint_no_operator"))
     elif op not in OPERATORS:
-        issues.append(Issue("error", path, f"Unknown operator '{op}'"))
+        issues.append(Issue("error", path, f"Unknown operator '{op}'", "unknown_operator", {"operator": op}))
     has_ro, has_ref = "rightOperand" in c, "rightOperandReference" in c
     if has_ro == has_ref:
-        issues.append(Issue("error", path, "Constraint needs exactly one of rightOperand / rightOperandReference"))
+        issues.append(Issue("error", path, "Constraint needs exactly one of rightOperand / rightOperandReference", "constraint_right_operand"))
 
 
 def _validate_ref(ref: Any, path: str, kind: str, issues: List[Issue],
@@ -513,14 +540,14 @@ def _validate_ref(ref: Any, path: str, kind: str, issues: List[Issue],
         return
     if isinstance(ref, str):
         if known is not None and not known(ref):
-            issues.append(Issue("error", path, f"Unknown {kind} reference '{ref}'"))
+            issues.append(Issue("error", path, f"Unknown {kind} reference '{ref}'", "unknown_reference", {"kind": kind, "ref": ref}))
         return
     if isinstance(ref, dict):
         refined = bool(ref.get("refinement"))
         if refined and ref.get("uid"):
-            issues.append(Issue("error", path, f"A refined {kind} collection must use 'source', not 'uid' (ODRL §2.5.5/§2.5.6)"))
+            issues.append(Issue("error", path, f"A refined {kind} collection must use 'source', not 'uid' (ODRL §2.5.5/§2.5.6)", "refined_collection_uid", {"kind": kind}))
         if ref.get("source") and known is not None and not known(ref["source"]):
-            issues.append(Issue("error", path, f"Unknown {kind} collection source '{ref['source']}'"))
+            issues.append(Issue("error", path, f"Unknown {kind} collection source '{ref['source']}'", "unknown_collection_source", {"kind": kind, "ref": ref['source']}))
         for i, c in enumerate(ref.get("refinement") or []):
             _validate_constraint(c, f"{path}.refinement[{i}]", issues, "party" if kind == "party" else "asset")
 
@@ -535,27 +562,27 @@ def validate_policy(
     issues: List[Issue] = []
     norm = normalize_policy(doc) if "type" not in doc or "permission" not in doc else doc
     if norm["type"] not in POLICY_TYPES:
-        issues.append(Issue("error", "@type", f"Unsupported policy type '{norm['type']}'"))
+        issues.append(Issue("error", "@type", f"Unsupported policy type '{norm['type']}'", "unsupported_policy_type", {"type": norm['type']}))
     for p in norm.get("profile") or []:
         if p not in SUPPORTED_PROFILES:
-            issues.append(Issue("error", "profile", f"Unrecognised ODRL profile '{p}' — policy cannot be processed (ODRL §3.2)"))
+            issues.append(Issue("error", "profile", f"Unrecognised ODRL profile '{p}' — policy cannot be processed (ODRL §3.2)", "unknown_profile", {"profile": p}))
     if norm.get("conflict") and norm["conflict"] not in CONFLICT_TERMS:
-        issues.append(Issue("error", "conflict", f"Unknown conflict strategy '{norm['conflict']}'"))
+        issues.append(Issue("error", "conflict", f"Unknown conflict strategy '{norm['conflict']}'", "unknown_conflict", {"conflict": norm['conflict']}))
     if not any(norm.get(k) for k in RULE_KINDS):
-        issues.append(Issue("error", "", "A policy needs at least one permission, prohibition or obligation"))
+        issues.append(Issue("error", "", "A policy needs at least one permission, prohibition or obligation", "no_rules"))
 
     def check_rule(r: Dict[str, Any], path: str, kind: str) -> None:
         act = r.get("action")
         if not act:
-            issues.append(Issue("error", f"{path}.action", "Rule is missing an action"))
+            issues.append(Issue("error", f"{path}.action", "Rule is missing an action", "rule_no_action"))
         elif act not in ACTIONS:
-            issues.append(Issue("error", f"{path}.action", f"Unknown action '{act}' (not in the Ontos profile)"))
+            issues.append(Issue("error", f"{path}.action", f"Unknown action '{act}' (not in the Ontos profile)", "unknown_action", {"action": act}))
         if kind in ("permission", "prohibition") and r.get("target") is None:
-            issues.append(Issue("error", f"{path}.target", f"A {kind} needs a target asset"))
+            issues.append(Issue("error", f"{path}.target", f"A {kind} needs a target asset", "rule_no_target", {"kind": kind}))
         if norm["type"] in ("Offer", "Agreement") and kind != "duty" and r.get("assigner") is None:
-            issues.append(Issue("error", f"{path}.assigner", f"An {norm['type']} needs an assigner on every rule"))
+            issues.append(Issue("error", f"{path}.assigner", f"An {norm['type']} needs an assigner on every rule", "rule_no_assigner", {"type": norm['type']}))
         if norm["type"] == "Agreement" and kind != "duty" and r.get("assignee") is None:
-            issues.append(Issue("error", f"{path}.assignee", "An Agreement needs an assignee on every rule"))
+            issues.append(Issue("error", f"{path}.assignee", "An Agreement needs an assignee on every rule", "rule_no_assignee"))
         _validate_ref(r.get("target"), f"{path}.target", "asset", issues, known_asset)
         _validate_ref(r.get("assignee"), f"{path}.assignee", "party", issues, known_party)
         _validate_ref(r.get("assigner"), f"{path}.assigner", "party", issues, None)
@@ -565,9 +592,9 @@ def validate_policy(
             _validate_constraint(c, f"{path}.action.refinement[{i}]", issues)
         for sub in ("duty", "remedy", "consequence"):
             if sub == "duty" and kind not in ("permission",) and r.get(sub):
-                issues.append(Issue("error", f"{path}.{sub}", "Only permissions may carry duties (use 'remedy' on prohibitions)"))
+                issues.append(Issue("error", f"{path}.{sub}", "Only permissions may carry duties (use 'remedy' on prohibitions)", "duty_not_on_permission"))
             if sub == "remedy" and kind != "prohibition" and r.get(sub):
-                issues.append(Issue("error", f"{path}.{sub}", "Only prohibitions may carry remedies"))
+                issues.append(Issue("error", f"{path}.{sub}", "Only prohibitions may carry remedies", "remedy_not_on_prohibition"))
             for i, d in enumerate(r.get(sub) or []):
                 check_rule(d, f"{path}.{sub}[{i}]", "duty")
 

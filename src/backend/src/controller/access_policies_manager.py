@@ -104,10 +104,14 @@ _TARGET_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{1,39}$")
 class AccessPolicyError(ValueError):
     """Author-visible validation / lifecycle error (routes map it to 400/409)."""
 
-    def __init__(self, message: str, status_code: int = 400, details: Optional[Any] = None):
+    def __init__(self, message: str, status_code: int = 400, details: Optional[Any] = None, *,
+                 code: str = "access_policy_error", params: Optional[Dict[str, Any]] = None):
         super().__init__(message)
         self.status_code = status_code
         self.details = details
+        # Stable code + params for clients to translate; ``message`` stays the English fallback.
+        self.code = code
+        self.params = dict(params or {})
 
 
 # ----------------------------------------------------------- principal attributes
@@ -271,10 +275,12 @@ class AccessPoliciesManager:
             doc, known_party=self._known_ref(db, KIND_AUDIENCE), known_asset=self._known_ref(db, KIND_ASSET_COLLECTION))]
         for parent in inherit_from or []:
             if not repo_for(KIND_POLICY).get_family_by_uid(db, parent):
-                issues.append({"severity": "error", "path": "inheritFrom", "message": f"Parent policy {parent} not found"})
+                issues.append({"severity": "error", "path": "inheritFrom", "message": f"Parent policy {parent} not found",
+                               "code": "parent_not_found", "params": {"parent": parent}})
         if conflict == odrl.SPEC_DEFAULT_CONFLICT:
             issues.append({"severity": "warning", "path": "conflict",
-                           "message": "conflict=invalid voids the whole policy if any permission and prohibition clash"})
+                           "message": "conflict=invalid voids the whole policy if any permission and prohibition clash",
+                           "code": "conflict_invalid_voids", "params": {}})
         return issues
 
     def _rebuild_index(self, db: Session, policy: AccessPolicyDb) -> None:
@@ -516,7 +522,8 @@ class AccessPoliciesManager:
         if new_status == STATUS_ACTIVE:
             problems = self.activation_problems(db, kind, row)
             if problems:
-                raise AccessPolicyError("Not ready to activate: " + "; ".join(problems), 409, details=problems)
+                raise AccessPolicyError("Not ready to activate: " + "; ".join(problems), 409, details=problems,
+                                    code="not_ready_to_activate", params={"count": len(problems)})
         if new_status == STATUS_RETIRED and kind == KIND_TARGET and not self._other_active_version(db, kind, row):
             # A retired target is never compiled or swept again: whatever it still tracks would never be revoked.
             tracked = self.tracked_grants(db, row.key)
@@ -575,37 +582,44 @@ class AccessPoliciesManager:
         adapter = targets_mod.get_adapter(row.system or "")
         if adapter is None:
             names = ", ".join(a.system for a in targets_mod.adapters())
-            return [f"Unknown system '{row.system}' (available: {names})"]
+            return [odrl.Problem(f"Unknown system '{row.system}' (available: {names})", "unknown_system",
+                                 {"system": row.system, "available": names})]
         problems: List[str] = []
         if not _TARGET_KEY_RE.match(row.key or ""):
-            problems.append("The key must be 2–40 lower-case letters, digits, '-' or '_', starting with a letter")
+            problems.append(odrl.Problem("The key must be 2–40 lower-case letters, digits, '-' or '_', starting with a letter",
+                                         "target_key_invalid"))
         problems += adapter.scope_problems(row.scope or [])
         problems += adapter.validate_connection(row.connection or {})
         from src.controller.delivery_service import DeliveryMode
         valid = {m.value for m in DeliveryMode}
-        problems += [f"Unknown delivery mode '{m}'" for m in row.delivery_modes or [] if m not in valid]
+        problems += [odrl.Problem(f"Unknown delivery mode '{m}'", "unknown_delivery_mode", {"mode": m})
+                     for m in row.delivery_modes or [] if m not in valid]
         if DeliveryMode.DIRECT.value in (row.delivery_modes or []) and targets_mod.CAP_APPLY_GRANTS not in adapter.capabilities:
-            problems.append(f"{adapter.label} targets can't be delivered directly — allow Indirect or Manual")
+            problems.append(odrl.Problem(f"{adapter.label} targets can't be delivered directly — allow Indirect or Manual",
+                                         "direct_unsupported", {"system": adapter.label}))
         if (row.drift_policy or targets_mod.DRIFT_REPORT) not in targets_mod.DRIFT_POLICIES:
-            problems.append(f"Drift policy '{row.drift_policy}' is not supported (report only)")
+            problems.append(odrl.Problem(f"Drift policy '{row.drift_policy}' is not supported (report only)",
+                                         "drift_policy_unsupported", {"policy": row.drift_policy}))
         if (cron := targets_mod.cron_problem(row.reconcile_schedule)):
             problems.append(cron)
         # Deprecated targets still deliver pending releases and revoke what they track: they count.
         others = [t for t in repo_for(KIND_TARGET).list_all(db) if t.version_family_id != row.version_family_id
                   and t.status in (STATUS_ACTIVE, STATUS_NEEDS_REVIEW, STATUS_DEPRECATED)]
         if any(t.key == row.key for t in others):
-            problems.append(f"Another target (active or deprecated) already uses the key '{row.key}'")
+            problems.append(odrl.Problem(f"Another target (active or deprecated) already uses the key '{row.key}'",
+                                         "target_key_taken", {"key": row.key}))
         clash = [t.name for t in others if t.system == row.system
                  and targets_mod.scopes_overlap(row.scope or [], t.scope or [])]
         if clash:
             # One securable, one tracking target: otherwise two ledgers would grant and revoke the same thing.
-            problems.append(f"Scope overlaps active or deprecated {adapter.label} target(s): {', '.join(clash)} "
-                            "— retire them first")
+            problems.append(odrl.Problem(f"Scope overlaps active or deprecated {adapter.label} target(s): {', '.join(clash)} "
+                                         "— retire them first", "scope_overlap", {"system": adapter.label, "targets": ", ".join(clash)}))
         builtin = targets_mod.BUILTIN_UC.key
         if (row.system == builtin and row.key != builtin and not any(t.system == builtin for t in others)
                 and self.tracked_grants(db, builtin)):
-            problems.append(f"Grants tracked by the built-in '{builtin}' target would be orphaned — "
-                            f"use the key '{builtin}' for the first Unity Catalog target to adopt them")
+            problems.append(odrl.Problem(f"Grants tracked by the built-in '{builtin}' target would be orphaned — "
+                                         f"use the key '{builtin}' for the first Unity Catalog target to adopt them",
+                                         "builtin_orphaned", {"key": builtin}))
         return problems
 
     def activation_problems(self, db: Session, kind: str, row: Any) -> List[str]:
@@ -613,17 +627,19 @@ class AccessPoliciesManager:
             return self._target_problems(db, row)
         if kind != KIND_POLICY:
             if kind == KIND_AUDIENCE and not row.members and not row.refinement:
-                return ["An audience needs members or a refinement (an empty audience means everyone)"]
+                return [odrl.Problem("An audience needs members or a refinement (an empty audience means everyone)",
+                                     "audience_empty")]
             if kind == KIND_ASSET_COLLECTION and not row.members and not row.refinement:
-                return ["An asset collection needs members or a refinement"]
+                return [odrl.Problem("An asset collection needs members or a refinement", "collection_empty")]
             return []
-        problems = [i["message"] for i in self.validate_body(
+        problems = [odrl.Problem(i["message"], i.get("code") or "message", i.get("params")) for i in self.validate_body(
             db, row.policy_type, row.conflict, row.inherit_from or [], row.body or {}) if i["severity"] == "error"]
         for ref_kind, prefix in ((KIND_AUDIENCE, odrl.AUDIENCE_IRI_PREFIX),
                                  (KIND_ASSET_COLLECTION, odrl.ASSET_COLLECTION_IRI_PREFIX)):
             for value in {v for _, _, v in odrl.index_terms(row.body or {}) if v.startswith(prefix)}:
                 if not repo_for(ref_kind).get_active_by_uid(db, value):
-                    problems.append(f"{KINDS[ref_kind].label} {value} has no active version")
+                    problems.append(odrl.Problem(f"{KINDS[ref_kind].label} {value} has no active version", "ref_not_active",
+                                                 {"kind": ref_kind, "ref": value}))
         return problems
 
     def _fire_review_requested(self, db: Session, kind: str, row: Any, user: Optional[str], comment: Optional[str]) -> None:

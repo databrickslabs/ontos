@@ -539,7 +539,14 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                   <TableRow key={d.id}>
                     <TableCell className="text-xs text-muted-foreground font-mono">{d.level ?? 50}</TableCell>
                     <TableCell className="font-medium">{d.title}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground truncate max-w-[180px]">{d.original_filename}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground truncate max-w-[180px]">
+                      {d.original_filename}
+                      {d.source_path && (
+                        <div className="truncate" title={d.source_path}>
+                          {t('documents.importedFrom', { path: d.source_path })}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         {d.is_shared && <Badge variant="secondary" className="text-xs"><Share2 className="h-3 w-3 mr-1" />S</Badge>}

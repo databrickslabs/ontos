@@ -107,7 +107,8 @@
     "messages": {
       "deleteFailed": "削除に失敗しました",
       "uploadFailed": "アップロードに失敗しました"
-    }
+    },
+    "importedFrom": "{{path}} からインポート"
   },
   "sharedAssets": {
     "selectDescription": "このエンティティに添付する共有アセットを選択してください",
@@ -251,5 +252,54 @@
     "goToDetails": "詳細へ移動",
     "alreadySubscribed": "登録済み",
     "subscribe": "登録"
+  },
+  "markdownImport": {
+    "open": "Markdown をインポート",
+    "title": "ボリュームから Markdown をインポート",
+    "description": "Unity Catalog ボリュームのフォルダー（サブフォルダーを含む）にある .md ファイルを、フロントマターで指定されたドメイン、アセット、コンセプトのドキュメントとしてインポートします。再実行すると、変更されたファイルだけが更新されます。",
+    "pathLabel": "ボリュームのフォルダーまたはファイル",
+    "frontMatterHint": "各ファイルはフロントマターの domain:、assets:、concepts: で、名前、ID、または FQN によりリンクされます。既知の対象がないファイルは未リンクとして表示されます。用語集の用語はドキュメントのテキストのままです。",
+    "submit": "インポート",
+    "importing": "インポート中…",
+    "close": "閉じる",
+    "summary": {
+      "added": "追加: {{count}}",
+      "updated": "更新: {{count}}",
+      "unchanged": "変更なし: {{count}}",
+      "unlinked": "未リンク: {{count}}",
+      "failed": "失敗: {{count}}"
+    },
+    "status": {
+      "added": "追加",
+      "updated": "更新",
+      "unchanged": "変更なし",
+      "unlinked": "未リンク",
+      "failed": "失敗"
+    },
+    "linkedTo": "リンク先: {{targets}}",
+    "noTargets": "フロントマターにドメイン、アセット、コンセプトの指定がありません。",
+    "noFiles": "このパスに Markdown ファイルが見つかりません。",
+    "kinds": {
+      "domain": "ドメイン",
+      "asset": "アセット",
+      "concept": "コンセプト"
+    },
+    "unresolved": {
+      "notFound": "{{kind}}「{{value}}」が見つかりません",
+      "ambiguous": "{{kind}}「{{value}}」が複数のエンティティに一致します"
+    },
+    "reasons": {
+      "too_large": "ファイルが 1 MB を超えています。",
+      "not_utf8": "ファイルが UTF-8 テキストではありません。",
+      "front_matter_invalid": "フロントマターが有効な YAML マッピングではありません。",
+      "read_failed": "ファイルを読み取れませんでした。"
+    },
+    "errors": {
+      "markdown_import_path_invalid": "「{{path}}」は Unity Catalog ボリューム内のパスではありません。/Volumes/<catalog>/<schema>/<volume>/<folder> を使用してください。",
+      "markdown_import_path_not_found": "「{{path}}」には何も見つかりませんでした。",
+      "markdown_import_access_denied": "「{{path}}」を読み取る権限がありません。ボリュームの READ VOLUME 権限を依頼してください。",
+      "markdown_import_too_many_files": "「{{path}}」には {{max}} 個を超える Markdown ファイルがあります。より小さいフォルダーをインポートしてください。",
+      "failed": "インポートに失敗しました。"
+    }
   }
 }

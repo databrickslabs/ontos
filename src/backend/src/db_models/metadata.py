@@ -99,6 +99,13 @@ class DocumentMetadataDb(Base):
     size_bytes = Column(Integer, nullable=True)
     storage_path = Column(String, nullable=False)  # Path in Databricks Volume
 
+    # Markdown imported from a volume (empty for uploads): the file it came
+    # from, its SHA-256, and its text (served and indexed from here, so the
+    # source file is never read again or deleted with the document).
+    source_path = Column(String, nullable=True)
+    content_hash = Column(String(64), nullable=True)
+    content_text = Column(Text, nullable=True)
+
     # Sharing and inheritance fields
     is_shared = Column(Boolean, nullable=False, default=False, index=True)
     level = Column(Integer, nullable=False, default=50)
@@ -112,6 +119,7 @@ class DocumentMetadataDb(Base):
     __table_args__ = (
         Index("ix_document_entity", "entity_type", "entity_id"),
         Index("ix_document_shared", "is_shared"),
+        Index("ix_document_source_path", "source_path"),
     )
 
 

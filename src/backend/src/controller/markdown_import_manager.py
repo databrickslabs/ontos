@@ -1,0 +1,417 @@
+"""Import Markdown files from a Unity Catalog volume as documents on entities.
+
+Each ``.md`` file under the folder becomes a document (the same records the
+documents panel lists) on every entity its YAML front matter names::
+
+    ---
+    title: Customer churn            # optional; else the first "# " heading, else the file name
+    domain: Customer                 # a domain id or name
+    assets: [main.crm.customers]     # asset ids, FQNs (location) or names
+    concepts: [Customer]             # concept IRIs or labels
+    ---
+
+Nothing is guessed: a file whose front matter names no existing entity is
+reported as unlinked. A re-run compares each file's SHA-256 with the stored one
+and only rewrites the documents of files that changed. Glossary terms in a file
+stay document text; no concepts are created.
+
+The files are read with the caller's workspace client (on behalf of the user),
+so an import can't expose files the user can't read. The Markdown is stored
+with the document; the source file is never written or deleted.
+"""
+import hashlib
+import json
+import posixpath
+import re
+from typing import Any, Dict, List, Optional, Tuple
+from uuid import UUID
+
+import yaml
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.errors import BadRequest, NotFound, PermissionDenied, Unauthenticated
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from src.common.api_errors import CodedValueError
+from src.common.logging import get_logger
+from src.controller.metadata_manager import MetadataManager
+from src.db_models.assets import AssetDb
+from src.db_models.change_log import ChangeLogDb
+from src.db_models.data_domains import DataDomain
+from src.db_models.metadata import DocumentMetadataDb
+from src.models.metadata import (
+    MarkdownImportFileResult, MarkdownImportResult, MarkdownImportTarget,
+    MarkdownImportUnresolved,
+)
+from src.repositories.metadata_repository import DocumentRepository, document_repo
+
+logger = get_logger(__name__)
+
+MAX_FILES = 500
+MAX_FILE_BYTES = 1024 * 1024
+MAX_DEPTH = 10
+_TITLE_MAX = 255
+_VOLUME_ROOT = re.compile(r'^/Volumes/[^/\s]+/[^/\s]+/[^/\s]+(/.*)?$')
+_HEADING = re.compile(r'^#\s+(.+?)\s*#*\s*$', re.MULTILINE)
+
+# Front matter keys per entity kind (singular and plural are both accepted).
+_TARGET_KEYS = {
+    'domain': ('domain', 'domains'),
+    'asset': ('asset', 'assets'),
+    'concept': ('concept', 'concepts'),
+}
+
+
+class MarkdownImportPathInvalidError(CodedValueError):
+    """The path isn't a folder or ``.md`` file inside a Unity Catalog volume."""
+
+    code = 'markdown_import_path_invalid'
+
+
+class MarkdownImportPathNotFoundError(CodedValueError):
+    """Nothing exists at the path."""
+
+    code = 'markdown_import_path_not_found'
+
+
+class MarkdownImportAccessDeniedError(CodedValueError):
+    """The user may not read the path."""
+
+    code = 'markdown_import_access_denied'
+
+
+class MarkdownImportTooManyFilesError(CodedValueError):
+    """The folder holds more Markdown files than one import takes."""
+
+    code = 'markdown_import_too_many_files'
+
+
+class FrontMatterError(ValueError):
+    """The YAML front matter can't be read as a mapping."""
+
+
+def normalize_volume_path(raw: str) -> str:
+    """``raw`` as a clean ``/Volumes/<catalog>/<schema>/<volume>[/...]`` path.
+
+    Raises:
+        MarkdownImportPathInvalidError: Not inside a volume, or with ``.``/``..`` segments.
+    """
+    path = (raw or '').strip()
+    segments = path.split('/')
+    if (not path.startswith('/') or '\\' in path
+            or any(segment in ('.', '..') for segment in segments)):
+        raise MarkdownImportPathInvalidError(f"Invalid volume path {path!r}", path=path)
+    cleaned = '/' + '/'.join(segment for segment in segments if segment)
+    if not _VOLUME_ROOT.match(cleaned):
+        raise MarkdownImportPathInvalidError(
+            f"The path must be /Volumes/<catalog>/<schema>/<volume>[/<folder>], got {path!r}",
+            path=path,
+        )
+    return cleaned
+
+
+def parse_front_matter(text: str) -> Tuple[Dict[str, Any], str]:
+    """(front matter, body) of a Markdown text; ({}, text) without front matter.
+
+    Raises:
+        FrontMatterError: The block isn't valid YAML, or isn't a mapping.
+    """
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != '---':
+        return {}, text
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() in ('---', '...'):
+            block = ''.join(lines[1:index])
+            body = ''.join(lines[index + 1:])
+            try:
+                data = yaml.safe_load(block) if block.strip() else {}
+            except yaml.YAMLError as e:
+                raise FrontMatterError("Front matter is not valid YAML") from e
+            if data is None:
+                data = {}
+            if not isinstance(data, dict):
+                raise FrontMatterError("Front matter must be a mapping")
+            return data, body
+    # An opening line without a closing one is plain Markdown (e.g. a rule).
+    return {}, text
+
+
+def _values(front_matter: Dict[str, Any], keys: Tuple[str, ...]) -> List[str]:
+    values: List[str] = []
+    for key in keys:
+        raw = front_matter.get(key)
+        items = raw if isinstance(raw, list) else [raw]
+        for item in items:
+            if isinstance(item, (str, int, float)) and not isinstance(item, bool):
+                text = str(item).strip()
+                if text and text not in values:
+                    values.append(text)
+    return values
+
+
+def document_title(front_matter: Dict[str, Any], body: str, path: str) -> str:
+    title = front_matter.get('title')
+    if not isinstance(title, str) or not title.strip():
+        heading = _HEADING.search(body)
+        title = heading.group(1) if heading else posixpath.splitext(posixpath.basename(path))[0]
+    return title.strip()[:_TITLE_MAX] or posixpath.basename(path)
+
+
+# (target, None) when a value names one entity, else (None, 'not_found' | 'ambiguous')
+_Lookup = Tuple[Optional[MarkdownImportTarget], Optional[str]]
+
+
+class _TargetResolver:
+    """Resolves front matter values to entities, once per value per import."""
+
+    def __init__(self, db: Session, semantic_models_manager: Any = None):
+        self._db = db
+        self._semantic = semantic_models_manager
+        self._cache: Dict[Tuple[str, str], _Lookup] = {}
+
+    def resolve(
+        self, front_matter: Dict[str, Any],
+    ) -> Tuple[List[MarkdownImportTarget], List[MarkdownImportUnresolved]]:
+        targets: List[MarkdownImportTarget] = []
+        unresolved: List[MarkdownImportUnresolved] = []
+        for kind, keys in _TARGET_KEYS.items():
+            for value in _values(front_matter, keys):
+                key = (kind, value)
+                if key not in self._cache:
+                    self._cache[key] = self._lookup(kind, value)
+                target, reason = self._cache[key]
+                if target is None:
+                    unresolved.append(
+                        MarkdownImportUnresolved(kind=kind, value=value, reason=reason))
+                elif all((t.entity_type, t.entity_id) != (target.entity_type, target.entity_id)
+                         for t in targets):
+                    targets.append(target)
+        return targets, unresolved
+
+    def _lookup(self, kind: str, value: str) -> _Lookup:
+        if kind == 'domain':
+            return self._one('data_domain', self._domains(value))
+        if kind == 'asset':
+            return self._one('asset', self._assets(value))
+        return self._concept(value)
+
+    @staticmethod
+    def _one(entity_type: str, rows: List[Any]) -> _Lookup:
+        if not rows:
+            return None, 'not_found'
+        if len(rows) > 1:
+            return None, 'ambiguous'
+        row = rows[0]
+        target = MarkdownImportTarget(entity_type=entity_type, entity_id=str(row.id), name=row.name)
+        return target, None
+
+    def _domains(self, value: str) -> List[DataDomain]:
+        by_id = self._db.query(DataDomain).filter(DataDomain.id == value).first()
+        if by_id:
+            return [by_id]
+        return self._db.query(DataDomain).filter(func.lower(DataDomain.name) == value.lower()).all()
+
+    def _assets(self, value: str) -> List[AssetDb]:
+        try:
+            asset_id = UUID(value)
+        except ValueError:
+            asset_id = None
+        if asset_id is not None:
+            by_id = self._db.query(AssetDb).filter(AssetDb.id == asset_id).first()
+            if by_id:
+                return [by_id]
+        lowered = value.lower()
+        by_fqn = self._db.query(AssetDb).filter(func.lower(AssetDb.location) == lowered).all()
+        if by_fqn:
+            return by_fqn
+        return self._db.query(AssetDb).filter(func.lower(AssetDb.name) == lowered).all()
+
+    def _concept(self, value: str) -> _Lookup:
+        iris: List[str] = []
+        if self._semantic is not None:
+            try:
+                iris = self._semantic.find_concept_iris(value)
+            except Exception:
+                logger.warning("Concept lookup failed during Markdown import", exc_info=True)
+        if not iris:
+            return None, 'not_found'
+        if len(iris) > 1:
+            return None, 'ambiguous'
+        return MarkdownImportTarget(entity_type='concept', entity_id=iris[0], name=value), None
+
+
+class MarkdownImportManager:
+    def __init__(
+        self,
+        metadata_manager: MetadataManager,
+        semantic_models_manager: Any = None,
+        document_repository: DocumentRepository = document_repo,
+    ):
+        self._metadata = metadata_manager
+        self._semantic = semantic_models_manager
+        self._documents = document_repository
+
+    def import_from_volume(
+        self, db: Session, ws: WorkspaceClient, *, path: str, user_email: Optional[str],
+    ) -> MarkdownImportResult:
+        """Import every ``.md`` file under ``path`` (a volume folder, or one file).
+
+        Raises:
+            MarkdownImportPathInvalidError, MarkdownImportPathNotFoundError,
+            MarkdownImportAccessDeniedError, MarkdownImportTooManyFilesError
+        """
+        root = normalize_volume_path(path)
+        files = self._list_markdown_files(ws, root)
+        resolver = _TargetResolver(db, self._semantic)
+        result = MarkdownImportResult(path=root)
+        changed: List[DocumentMetadataDb] = []
+        for file_path, size in files:
+            entry = self._import_file(db, ws, file_path, size, resolver, user_email, changed)
+            result.files.append(entry)
+            setattr(result, entry.status, getattr(result, entry.status) + 1)
+        db.commit()
+        for doc in changed:
+            db.refresh(doc)
+            self._metadata.index_document(doc)
+        logger.info(
+            "Markdown import of %s: %d added, %d updated, %d unchanged, %d unlinked, %d failed",
+            root, result.added, result.updated, result.unchanged, result.unlinked, result.failed,
+        )
+        return result
+
+    # --- Volume access ---
+    def _list_markdown_files(
+        self, ws: WorkspaceClient, root: str,
+    ) -> List[Tuple[str, Optional[int]]]:
+        if root.lower().endswith('.md'):
+            try:
+                metadata = ws.files.get_metadata(root)
+            except NotFound as e:
+                raise MarkdownImportPathNotFoundError(f"No file at {root}", path=root) from e
+            except (PermissionDenied, Unauthenticated) as e:
+                raise MarkdownImportAccessDeniedError(f"Can't read {root}", path=root) from e
+            return [(root, getattr(metadata, 'content_length', None))]
+        found: List[Tuple[str, Optional[int]]] = []
+        pending = [(root, 0)]
+        while pending:
+            folder, depth = pending.pop(0)
+            try:
+                entries = list(ws.files.list_directory_contents(folder))
+            except (NotFound, BadRequest) as e:
+                # BadRequest: the path is a file, not a folder
+                if folder == root:
+                    raise MarkdownImportPathNotFoundError(f"No folder at {root}", path=root) from e
+                continue
+            except (PermissionDenied, Unauthenticated) as e:
+                if folder == root:
+                    raise MarkdownImportAccessDeniedError(f"Can't read {root}", path=root) from e
+                continue
+            for entry in entries:
+                entry_path = entry.path or posixpath.join(folder, entry.name or '')
+                if entry.is_directory:
+                    if depth + 1 <= MAX_DEPTH:
+                        pending.append((entry_path, depth + 1))
+                elif entry_path.lower().endswith('.md'):
+                    found.append((entry_path, entry.file_size))
+                    if len(found) > MAX_FILES:
+                        raise MarkdownImportTooManyFilesError(
+                            f"More than {MAX_FILES} Markdown files under {root}",
+                            path=root, max=MAX_FILES,
+                        )
+        found.sort()
+        return found
+
+    @staticmethod
+    def _download(ws: WorkspaceClient, path: str) -> bytes:
+        response = ws.files.download(path)
+        stream = getattr(response, 'contents', None)
+        if stream is None or not hasattr(stream, 'read'):
+            raise ValueError("Unsupported download response")
+        return stream.read(MAX_FILE_BYTES + 1)
+
+    # --- One file ---
+    def _import_file(
+        self, db: Session, ws: WorkspaceClient, path: str, size: Optional[int],
+        resolver: _TargetResolver, user_email: Optional[str], changed: List[DocumentMetadataDb],
+    ) -> MarkdownImportFileResult:
+        def failed(reason: str) -> MarkdownImportFileResult:
+            return MarkdownImportFileResult(path=path, status='failed', reason=reason)
+
+        if size is not None and size > MAX_FILE_BYTES:
+            return failed('too_large')
+        try:
+            raw = self._download(ws, path)
+        except Exception:
+            logger.warning("Failed to read %s during Markdown import", path, exc_info=True)
+            return failed('read_failed')
+        if len(raw) > MAX_FILE_BYTES:
+            return failed('too_large')
+        try:
+            text = raw.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            return failed('not_utf8')
+        try:
+            front_matter, body = parse_front_matter(text)
+        except FrontMatterError:
+            return failed('front_matter_invalid')
+
+        title = document_title(front_matter, body, path)
+        targets, unresolved = resolver.resolve(front_matter)
+        if not targets:
+            return MarkdownImportFileResult(path=path, status='unlinked', title=title,
+                                            unresolved=unresolved)
+
+        digest = hashlib.sha256(raw).hexdigest()
+        existing = {
+            (doc.entity_type, doc.entity_id): doc
+            for doc in self._documents.list_by_source_path(db, source_path=path)
+        }
+        added = updated = 0
+        for target in targets:
+            doc = existing.get((target.entity_type, target.entity_id))
+            if doc is None:
+                doc = DocumentMetadataDb(
+                    entity_type=target.entity_type,
+                    entity_id=target.entity_id,
+                    title=title,
+                    original_filename=posixpath.basename(path),
+                    content_type='text/markdown',
+                    size_bytes=len(raw),
+                    storage_path=path,
+                    source_path=path,
+                    content_hash=digest,
+                    content_text=text,
+                    created_by=user_email,
+                    updated_by=user_email,
+                )
+                db.add(doc)
+                action = 'CREATE'
+                added += 1
+            elif doc.content_hash != digest:
+                doc.title = title
+                doc.size_bytes = len(raw)
+                doc.content_hash = digest
+                doc.content_text = text
+                doc.updated_by = user_email
+                action = 'UPDATE'
+                updated += 1
+            else:
+                continue
+            changed.append(doc)
+            db.add(ChangeLogDb(
+                entity_type=f"{target.entity_type}:document",
+                entity_id=target.entity_id,
+                action=action,
+                username=user_email,
+                details_json=json.dumps({'source_path': path, 'title': title}),
+            ))
+        db.flush()
+
+        if added == len(targets):
+            status = 'added'
+        elif added == 0 and updated == 0:
+            status = 'unchanged'
+        else:
+            status = 'updated'
+        return MarkdownImportFileResult(path=path, status=status, title=title,
+                                        targets=targets, unresolved=unresolved)

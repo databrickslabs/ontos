@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 import signal
 from contextlib import contextmanager
 import json
+import re
 import shutil
 import urllib.parse
 from filelock import FileLock
@@ -4581,6 +4582,43 @@ class SemanticModelsManager(SearchableAsset):
             "source_file": source_file,
             "owners": owners,
         }
+
+    def find_concept_iris(self, value: str) -> List[str]:
+        """IRIs of the concepts (OWL/RDFS classes, SKOS concepts) ``value`` names.
+
+        ``value`` is an IRI, a label (``skos:prefLabel`` / ``rdfs:label``), or,
+        when no label matches, the IRI's local name; names compare
+        case-insensitively. Several IRIs mean the name is ambiguous.
+        """
+        value = (value or '').strip()
+        if not value:
+            return []
+        concept_types = (OWL.Class, RDFS.Class, SKOS.Concept)
+
+        def is_concept(subject) -> bool:
+            return isinstance(subject, URIRef) and any(
+                (subject, RDF.type, kind) in self._graph for kind in concept_types
+            )
+
+        if is_concept(URIRef(value)):
+            return [value]
+        needle = value.casefold()
+        found = {
+            str(subject)
+            for predicate in (SKOS.prefLabel, RDFS.label)
+            for subject, label in self._graph.subject_objects(predicate)
+            if isinstance(label, Literal) and str(label).strip().casefold() == needle
+            and is_concept(subject)
+        }
+        if not found:
+            found = {
+                str(subject)
+                for kind in concept_types
+                for subject in self._graph.subjects(RDF.type, kind)
+                if isinstance(subject, URIRef)
+                and re.split(r'[#/:]', str(subject))[-1].casefold() == needle
+            }
+        return sorted(found)
 
     def get_concept(self, concept_iri: str) -> Optional[Dict[str, Any]]:
         """Get a concept by IRI with all its properties and governance info."""

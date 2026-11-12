@@ -9,7 +9,9 @@ from pydantic import BaseModel, Field, HttpUrl
 # ============================================================================
 # Entity Types Pattern
 # ============================================================================
-ENTITY_TYPE_PATTERN = r"^(data_domain|data_product|data_contract|dataset|asset)$"
+# ``concept`` (id = the concept IRI) is what the concept page lists documents for;
+# imported Markdown files can name concepts in their front matter.
+ENTITY_TYPE_PATTERN = r"^(data_domain|data_product|data_contract|dataset|asset|concept)$"
 
 
 # ============================================================================
@@ -118,6 +120,8 @@ class Document(DocumentBase):
     content_type: Optional[str] = None
     size_bytes: Optional[int] = None
     storage_path: str
+    # The volume file an imported Markdown document came from (None for uploads)
+    source_path: Optional[str] = None
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
     created_at: datetime
@@ -126,6 +130,58 @@ class Document(DocumentBase):
     model_config = {
         "from_attributes": True
     }
+
+
+# ============================================================================
+# Markdown Import Models (volume folder -> documents on the named entities)
+# ============================================================================
+
+class MarkdownImportRequest(BaseModel):
+    """Import the ``.md`` files of a Unity Catalog volume folder (and its subfolders)."""
+    path: str = Field(
+        ..., min_length=1, max_length=1024,
+        description="Volume folder or file, /Volumes/<catalog>/<schema>/<volume>[/<folder>...]",
+    )
+
+
+class MarkdownImportTarget(BaseModel):
+    """An entity a file is linked to."""
+    entity_type: str
+    entity_id: str
+    name: Optional[str] = None
+
+
+class MarkdownImportUnresolved(BaseModel):
+    """A front matter value that names no entity (``reason``: not_found | ambiguous)."""
+    kind: str = Field(..., description="domain | asset | concept")
+    value: str
+    reason: str
+
+
+class MarkdownImportFileResult(BaseModel):
+    """What the import did with one file.
+
+    ``status``: added (new documents only), updated (a document changed or a
+    target was added), unchanged, unlinked (no target resolved), or failed
+    (``reason``: too_large | not_utf8 | front_matter_invalid | read_failed).
+    """
+    path: str
+    status: str
+    title: Optional[str] = None
+    targets: List[MarkdownImportTarget] = Field(default_factory=list)
+    unresolved: List[MarkdownImportUnresolved] = Field(default_factory=list)
+    reason: Optional[str] = None
+
+
+class MarkdownImportResult(BaseModel):
+    """Summary of an import run, with one entry per Markdown file found."""
+    path: str
+    added: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    unlinked: int = 0
+    failed: int = 0
+    files: List[MarkdownImportFileResult] = Field(default_factory=list)
 
 
 # ============================================================================

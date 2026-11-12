@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, PlusCircle, AlertCircle, BoxSelect, TableIcon, WorkflowIcon, Loader2, ChevronDown, Eye, RefreshCw } from 'lucide-react';
+import {
+  MoreHorizontal, PlusCircle, AlertCircle, BoxSelect, TableIcon, WorkflowIcon, Loader2, ChevronDown,
+  Eye, RefreshCw, FileText,
+} from 'lucide-react';
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
@@ -28,6 +31,7 @@ import { ViewModeToggle } from '@/components/common/view-mode-toggle';
 import { useProjectContext } from '@/stores/project-store';
 import { useTranslation } from 'react-i18next';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
+import MarkdownImportDialog from '@/components/metadata/markdown-import-dialog';
 
 // Placeholder for Graph View
 // const DataDomainGraphViewPlaceholder = () => (
@@ -60,6 +64,7 @@ export default function DataDomainsView() {
   const [viewMode, setViewMode] = useState<'table' | 'graph'>('table');
   const [previewDomainId, setPreviewDomainId] = useState<string | null>(null);
   const [previewDomainTitle, setPreviewDomainTitle] = useState('');
+  const [isMarkdownImportOpen, setIsMarkdownImportOpen] = useState(false);
 
   const { get: apiGet, delete: apiDelete, loading: apiIsLoading } = useApi();
   const { toast } = useToast();
@@ -67,7 +72,7 @@ export default function DataDomainsView() {
   const { pathname } = useLocation();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const { currentProject, hasProjectContext } = useProjectContext();
-  const { t } = useTranslation(['data-domains', 'common']);
+  const { t } = useTranslation(['data-domains', 'common', 'metadata']);
 
   const featureId = 'data-domains';
   const canRead = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_ONLY);
@@ -354,6 +359,15 @@ export default function DataDomainsView() {
                     >
                       <RefreshCw className="mr-2 h-4 w-4" /> {t('syncWithUC', 'Sync with Unity Catalog')}
                     </Button>
+                    {canWrite && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsMarkdownImportOpen(true)}
+                        className="h-9"
+                      >
+                        <FileText className="mr-2 h-4 w-4" /> {t('metadata:markdownImport.open')}
+                      </Button>
+                    )}
                     <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading} className="h-9">
                       <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewDomain')}
                     </Button>
@@ -373,6 +387,8 @@ export default function DataDomainsView() {
           )}
         </div>
       )}
+
+      <MarkdownImportDialog open={isMarkdownImportOpen} onOpenChange={setIsMarkdownImportOpen} />
 
       <EntityInfoDialog
         entityType="data_domain"

@@ -308,8 +308,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
         import_links: Optional[ImportLinks] = None,
+        workflow_user: Optional[str] = None,
     ) -> DataProductApi:
         """Creates a new ODPS v1.0.0 data product via the repository.
+
+        Fires the ``on_create`` workflows once the product is created, for every
+        caller (POST /data-products, the assistant tool, the ODPS import, a product
+        from a contract).
 
         Args:
             product_data: Dictionary containing product data
@@ -330,6 +335,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 then set the lifecycle columns, with replacements resolved among
                 the entities of the same import. Otherwise they're ignored, since
                 those columns only change through a status transition.
+            workflow_user: Who the ``on_create`` workflows run for; defaults to ``user``
+                (the REST routes stamp the username and fire for the email).
         """
         from src.controller.delivery_service import DeliveryChangeType
 
@@ -491,6 +498,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             
             self._update_search_index(result)
+            self._fire_create_trigger(db_session, result, workflow_user or user)
             return result
 
         except SQLAlchemyError as e:
@@ -727,8 +735,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         db: Optional[Session] = None,
         user: Optional[str] = None,
         background_tasks: Optional[Any] = None,
+        workflow_user: Optional[str] = None,
     ) -> Optional[DataProductApi]:
         """Update an existing ODPS v1.0.0 data product.
+
+        Fires the ``on_update`` workflows once the product is updated (PUT
+        /data-products/{id}, the assistant tool), with the fields sent.
         
         Args:
             product_id: ID of product to update
@@ -736,6 +748,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db: Optional database session. If not provided, uses self._db
             user: Optional user who updated the product (for delivery tracking)
             background_tasks: Optional FastAPI BackgroundTasks for async delivery
+            workflow_user: Who the ``on_update`` workflows run for; defaults to ``user``
         """
         from src.controller.delivery_service import DeliveryChangeType
         
@@ -822,6 +835,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             
             self._update_search_index(result)
+            self._fire_update_trigger(
+                db_session, result, product_data_dict, workflow_user or user
+            )
             return result
 
         except SQLAlchemyError as e:
@@ -832,6 +848,77 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.error(f"Value error updating ODPS product {product_id}: {e}")
             db_session.rollback()
             raise
+
+    def check_update_allowed(
+        self,
+        product_db: Any,
+        user_email: Optional[str],
+        user_groups: List[str],
+        db: Optional[Session] = None,
+        caller_team_ids: Optional[List[str]] = None,
+        is_feature_admin: bool = False,
+    ) -> None:
+        """Raise ``PermissionError`` unless the caller may edit ``product_db``.
+
+        The ownership cascade of ``update_product_with_auth`` (documented
+        there), shared with the assistant's update tool. ``product_db`` needs
+        ``id``, ``project_id``, ``owner_team_id`` and ``draft_owner_id``.
+        """
+        from src.controller.projects_manager import projects_manager
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+
+        db_session = db if db is not None else self._db
+        settings = get_settings()
+
+        # Admin always allowed (short-circuit, also matches existing
+        # is_user_project_member behavior). This covers both workspace
+        # admins (group-based) and callers whose *feature-level*
+        # data-products permission is ADMIN — e.g. an in-app role override
+        # that grants data-products=Admin. The latter is resolved by the
+        # route (which has access to the effective-permissions/role
+        # machinery) and passed in as ``is_feature_admin``; without it an
+        # in-app admin who isn't the object owner was wrongly denied
+        # (ONT-CUJ-015).
+        if is_feature_admin or is_user_admin(user_groups, settings):
+            logger.debug("User %s is admin — bypassing ownership cascade", user_email)
+            return
+
+        authorized = False
+
+        # 1. Project membership (preserves prior fast-path semantics)
+        if product_db.project_id:
+            if projects_manager.is_user_project_member(
+                db=db_session,
+                user_identifier=user_email,
+                user_groups=user_groups,
+                project_id=product_db.project_id,
+                settings=settings,
+            ):
+                authorized = True
+
+        # 2. Team ownership
+        if not authorized and product_db.owner_team_id and caller_team_ids:
+            if product_db.owner_team_id in caller_team_ids:
+                authorized = True
+
+        # 3. Creator / single-user ownership (drafts AND non-drafts).
+        #    Case-insensitive email match — emails are not case-sensitive.
+        if not authorized and product_db.draft_owner_id and user_email:
+            if product_db.draft_owner_id.lower() == user_email.lower():
+                authorized = True
+
+        if not authorized:
+            logger.warning(
+                "User %s denied update on product %s "
+                "(project_id=%s, owner_team_id=%s, draft_owner_id=%s)",
+                user_email, product_db.id, product_db.project_id,
+                product_db.owner_team_id, product_db.draft_owner_id,
+            )
+            # Generic message — do not leak which sub-check failed.
+            raise PermissionError(
+                "Insufficient permissions to edit this data product"
+            )
 
     def update_product_with_auth(
         self,
@@ -894,66 +981,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 logger.warning(f"Product not found for update: {product_id}")
                 return None
 
-            from src.controller.projects_manager import projects_manager
-            from src.common.authorization import is_user_admin
-            from src.common.config import get_settings
-
-            settings = get_settings()
-
-            # Admin always allowed (short-circuit, also matches existing
-            # is_user_project_member behavior). This covers both workspace
-            # admins (group-based) and callers whose *feature-level*
-            # data-products permission is ADMIN — e.g. an in-app role override
-            # that grants data-products=Admin. The latter is resolved by the
-            # route (which has access to the effective-permissions/role
-            # machinery) and passed in as ``is_feature_admin``; without it an
-            # in-app admin who isn't the object owner was wrongly denied
-            # (ONT-CUJ-015).
-            if is_feature_admin or is_user_admin(user_groups, settings):
-                logger.debug(f"User {user_email} is admin — bypassing ownership cascade")
-                return self.update_product(
-                    product_id,
-                    product_data_dict,
-                    db=db_session,
-                    user=user_email,
-                    background_tasks=background_tasks,
-                )
-
-            authorized = False
-
-            # 1. Project membership (preserves prior fast-path semantics)
-            if existing_product_db.project_id:
-                if projects_manager.is_user_project_member(
-                    db=db_session,
-                    user_identifier=user_email,
-                    user_groups=user_groups,
-                    project_id=existing_product_db.project_id,
-                    settings=settings,
-                ):
-                    authorized = True
-
-            # 2. Team ownership
-            if not authorized and existing_product_db.owner_team_id and caller_team_ids:
-                if existing_product_db.owner_team_id in caller_team_ids:
-                    authorized = True
-
-            # 3. Creator / single-user ownership (drafts AND non-drafts).
-            #    Case-insensitive email match — emails are not case-sensitive.
-            if not authorized and existing_product_db.draft_owner_id and user_email:
-                if existing_product_db.draft_owner_id.lower() == user_email.lower():
-                    authorized = True
-
-            if not authorized:
-                logger.warning(
-                    f"User {user_email} denied update on product {product_id} "
-                    f"(project_id={existing_product_db.project_id}, "
-                    f"owner_team_id={existing_product_db.owner_team_id}, "
-                    f"draft_owner_id={existing_product_db.draft_owner_id})"
-                )
-                # Generic message — do not leak which sub-check failed.
-                raise PermissionError(
-                    "Insufficient permissions to edit this data product"
-                )
+            self.check_update_allowed(
+                existing_product_db,
+                user_email=user_email,
+                user_groups=user_groups,
+                db=db_session,
+                caller_team_ids=caller_team_ids,
+                is_feature_admin=is_feature_admin,
+            )
 
             # Perform update (validation happens inside update_product)
             return self.update_product(
@@ -972,12 +1007,26 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db_session.rollback()
             raise
 
-    def delete_product(self, product_id: str, user: Optional[str] = None) -> bool:
+    def delete_product(
+        self,
+        product_id: str,
+        user: Optional[str] = None,
+        db: Optional[Session] = None,
+        workflow_user: Optional[str] = None,
+    ) -> bool:
         """Delete an ODPS v1.0.0 data product.
 
         Subscribers are notified only after the deletion is committed, so a
         failed delete notifies nobody. The recipients are read before the
-        delete, since it cascades the subscription rows.
+        delete, since it cascades the subscription rows. Then the ``on_delete``
+        workflows fire (DELETE /data-products/{id}, the assistant tool).
+
+        Args:
+            product_id: ID of the product to delete
+            user: Who deletes it (change log, notices)
+            db: The caller's session, for the ``on_delete`` workflows; the delete
+                itself uses the manager's session, as before
+            workflow_user: Who the ``on_delete`` workflows run for; defaults to ``user``
         """
         try:
             # Get product info and subscribers before deletion
@@ -1018,6 +1067,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
                 if deletion_notice:
                     self._notify_subscribers_on_delete(**deletion_notice)
+
+                self._fire_delete_trigger(
+                    db if db is not None else self._db, product_id, workflow_user or user
+                )
 
             return deleted_obj is not None
         except SQLAlchemyError as e:
@@ -1203,6 +1256,51 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             user_email=current_user,
         )
 
+    # The on_create / on_update / on_delete workflow triggers, fired by the write
+    # methods above once the change succeeded, whoever calls them (not blocking: a
+    # failing workflow is only logged and doesn't undo the change).
+
+    @staticmethod
+    def _fire_create_trigger(db: Session, product: Any, user_email: Optional[str]) -> None:
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        name = getattr(product, 'name', None)
+        fire_trigger_safe(
+            db, "on_create",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=str(product.id),
+            entity_name=name,
+            entity_data={"product_id": str(product.id), "name": name},
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def _fire_update_trigger(
+        db: Session, product: Any, changes: Dict[str, Any], user_email: Optional[str]
+    ) -> None:
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_update",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=str(product.id),
+            entity_name=getattr(product, 'name', None),
+            entity_data=changes,
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def _fire_delete_trigger(db: Session, product_id: str, user_email: Optional[str]) -> None:
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_delete",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=product_id,
+            entity_data={"product_id": product_id},
+            user_email=user_email,
+        )
+
     def move_to_sandbox(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """
         Move a draft product to sandbox for testing (draft → sandbox).
@@ -1338,6 +1436,214 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.exception("Publication trigger failed for data product %s", product_id)
 
         return product_db
+
+    def unpublish_product(
+        self, product_id: str, current_user: Optional[str] = None, db: Optional[Session] = None
+    ):
+        """Remove a product from the marketplace (scope ``none``) and fire ``on_unpublish``.
+
+        Same rule as the ``none`` scope of ``set_publication_scope``: ``on_unpublish``
+        fires only when the product was published. A failing trigger is only logged:
+        the unpublish is committed.
+
+        Returns:
+            The product row, or None when there is no such product
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db if db is not None else self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            return None
+        was_published = (product_db.publication_scope or "none").lower() != "none"
+        product_db.publication_scope = "none"
+        product_db.published_at = None
+        product_db.published_by = None
+        db.add(product_db)
+        db.commit()
+
+        if was_published:
+            try:
+                get_trigger_registry(db).on_unpublish(
+                    WFEntityType.DATA_PRODUCT,
+                    product_id,
+                    entity_name=product_db.name,
+                    user_email=current_user,
+                )
+            except Exception:
+                # The unpublish is committed; its on_unpublish workflows didn't run
+                logger.exception("on_unpublish trigger failed for data product %s", product_id)
+        return product_db
+
+    def certify_at_level(
+        self,
+        product_id: str,
+        certification_level: int,
+        certified_by: Optional[str],
+        notes: Optional[str] = None,
+        db: Optional[Session] = None,
+    ):
+        """Certify a product at a level, propagate it downstream and fire ``on_certify``.
+
+        The caller checks the product is active and the level exists. A failing
+        ``on_certify`` workflow is only logged: the certification is committed.
+
+        Returns:
+            The product row, or None when there is no such product
+        """
+        from datetime import timezone
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.controller.certification_propagator import propagate_certification
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db if db is not None else self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            return None
+        product_db.certification_level = certification_level
+        product_db.certified_at = datetime.now(timezone.utc)
+        product_db.certified_by = certified_by
+        product_db.certification_notes = notes
+        db.add(product_db)
+        db.commit()
+        db.refresh(product_db)
+
+        propagate_certification(db, "DataProduct", product_id)
+        db.commit()
+
+        try:
+            get_trigger_registry(db).on_certify(
+                WFEntityType.DATA_PRODUCT,
+                product_id,
+                entity_name=product_db.name,
+                entity_data={
+                    "certification_level": certification_level,
+                    "notes": notes,
+                    "certified_by": certified_by,
+                },
+                user_email=certified_by,
+                blocking=False,
+            )
+        except Exception as trigger_err:
+            logger.warning("on_certify trigger error (non-fatal): %s", trigger_err)
+        return product_db
+
+    def decertify_product(
+        self, product_id: str, current_user: Optional[str] = None, db: Optional[Session] = None
+    ) -> Optional[int]:
+        """Remove a product's certification and fire ``on_decertify``.
+
+        Returns:
+            The previous certification level
+
+        Raises:
+            ValueError: If there is no such product
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db if db is not None else self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            raise ValueError(f"Data product with ID {product_id} not found")
+        old_level = product_db.certification_level
+        product_db.certification_level = None
+        product_db.certified_at = None
+        product_db.certified_by = None
+        product_db.certification_expires_at = None
+        product_db.certification_notes = None
+        db.add(product_db)
+        db.commit()
+
+        get_trigger_registry(db).on_decertify(
+            WFEntityType.DATA_PRODUCT,
+            product_id,
+            entity_name=product_db.name,
+            user_email=current_user,
+        )
+        return old_level
+
+    def request_certification(
+        self,
+        product_id: str,
+        certification_level: Any,
+        message: Optional[str],
+        requester: Optional[str],
+        db: Optional[Session] = None,
+    ) -> None:
+        """Ask for a product's certification: run the ``on_request_certify`` workflows.
+
+        A pre-review product (draft / sandbox) moves to ``proposed`` first, so it
+        surfaces in the review queue (ONT-CUJ-019); a product already in flight
+        keeps its status. The caller checks the product has a deliverable.
+
+        Raises:
+            ValueError: If there is no such product
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db if db is not None else self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            raise ValueError(f"Data product with ID {product_id} not found")
+        if (product_db.status or 'draft').lower() in ('draft', 'sandbox'):
+            self.submit_for_review(product_id, requester)
+
+        get_trigger_registry(db).on_request_certify(
+            WFEntityType.DATA_PRODUCT,
+            product_id,
+            entity_name=product_db.name,
+            entity_data={
+                "requested_certification_level": certification_level,
+                "message": message,
+                "requester": requester,
+            },
+            user_email=requester,
+            blocking=True,
+        )
+
+    def request_publication(
+        self,
+        product_id: str,
+        scope: str,
+        justification: Optional[str],
+        requester: Optional[str],
+        current_status: str,
+        db: Optional[Session] = None,
+    ) -> List[Any]:
+        """Ask for a product's publication: run the ``on_request_publish`` workflows.
+
+        The caller checks the scope and that an ``active`` product is published.
+
+        Returns:
+            The workflow executions that ran
+
+        Raises:
+            ValueError: If there is no such product
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db if db is not None else self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            raise ValueError(f"Data product with ID {product_id} not found")
+        return get_trigger_registry(db).on_request_publish(
+            WFEntityType.DATA_PRODUCT,
+            product_id,
+            entity_name=product_db.name,
+            entity_data={
+                "requested_scope": scope,
+                "justification": justification,
+                "requester": requester,
+                # Same key as the data contract request (data_contracts_manager)
+                "current_status": current_status,
+            },
+            user_email=requester,
+            blocking=True,
+        )
 
     def publish_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """
@@ -1968,6 +2274,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         adopt_ids: bool = True,
         on_duplicate: str = "skip",
         reveal_dup_detail: bool = False,
+        workflow_user: Optional[str] = None,
     ) -> BatchImportResult:
         """Import ODPS products from one or more uploaded files.
 
@@ -1982,6 +2289,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             on_duplicate: what to do when the payload id is a valid UUID that already exists
                 in the table — "skip" (default, recorded as skipped) or "new" (import as a new
                 copy with a fresh UUID). Import stays create-only either way.
+            workflow_user: Who the ``on_create`` workflows of each imported product
+                run for (``create_product``); defaults to ``user``.
 
         Returns:
             A :class:`BatchImportResult`. A file that cannot be parsed at all is
@@ -2096,6 +2405,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
                         import_links=links,
+                        workflow_user=workflow_user,
                     )
                     # Only a product that was created can be a replacement of
                     # the import: one that failed leaves no link
@@ -3483,7 +3793,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         contract_id: str,
         product_name: str,
         version: str,
-        output_port_name: Optional[str] = None
+        output_port_name: Optional[str] = None,
+        user_email: Optional[str] = None,
     ) -> DataProductApi:
         """
         Creates a new ODPS v1.0.0 Data Product from an existing Data Contract.
@@ -3496,6 +3807,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_name: Name for the new data product
             version: Version string for the product
             output_port_name: Optional name for the output port
+            user_email: Who the ``on_create`` workflows run for (``create_product``)
 
         Returns:
             Created DataProduct API model
@@ -3563,7 +3875,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
 
         # Create the product
-        created_product = self.create_product(product_data)
+        created_product = self.create_product(product_data, workflow_user=user_email)
         logger.info(f"Successfully created ODPS Data Product {product_id} from contract {contract_id}")
         return created_product
 
@@ -4562,7 +4874,18 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 logger.info(f"User {subscriber_email} unsubscribed from product {product_id}")
             else:
                 logger.info(f"User {subscriber_email} was not subscribed to product {product_id}")
-            
+
+            # The on_unsubscribe workflows (fired whether a subscription was removed)
+            from src.common.workflow_triggers import fire_trigger_safe
+            from src.models.process_workflows import EntityType as WFEntityType
+            fire_trigger_safe(
+                db_session, "on_unsubscribe",
+                entity_type=WFEntityType.SUBSCRIPTION,
+                entity_id=product_id,
+                entity_name=product_id,
+                entity_data={"product_id": product_id, "subscriber_email": subscriber_email},
+                user_email=subscriber_email,
+            )
             return SubscriptionResponse(subscribed=False, subscription=None)
             
         except SQLAlchemyError as e:

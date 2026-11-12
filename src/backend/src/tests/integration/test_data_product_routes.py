@@ -723,7 +723,7 @@ class TestUnpublishRoute:
         product = self._product(db_session, 'organization')
         registry = MagicMock()
 
-        with patch('src.routes.data_product_routes.get_trigger_registry', return_value=registry):
+        with patch('src.common.workflow_triggers.get_trigger_registry', return_value=registry):
             response = client.post(f"/api/data-products/{product.id}/unpublish")
 
         assert response.status_code == 200, response.text
@@ -739,7 +739,7 @@ class TestUnpublishRoute:
         product = self._product(db_session, 'none')
         registry = MagicMock()
 
-        with patch('src.routes.data_product_routes.get_trigger_registry', return_value=registry):
+        with patch('src.common.workflow_triggers.get_trigger_registry', return_value=registry):
             response = client.post(f"/api/data-products/{product.id}/unpublish")
 
         assert response.status_code == 200, response.text
@@ -755,7 +755,7 @@ class TestUnpublishRoute:
         registry.on_unpublish.side_effect = RuntimeError('workflow engine down')
         audit = MagicMock()
 
-        with patch('src.routes.data_product_routes.get_trigger_registry', return_value=registry), \
+        with patch('src.common.workflow_triggers.get_trigger_registry', return_value=registry), \
                 patch('src.controller.audit_manager.AuditManager.log_action', audit), \
                 caplog.at_level('ERROR'):
             response = client.post(f"/api/data-products/{product.id}/unpublish")

@@ -45,10 +45,7 @@ from src.common.dependencies import (
     AuditCurrentUserDep,
     ChangeLogManagerDep,
 )
-from src.common.workflow_triggers import (
-    fire_trigger_safe, get_trigger_registry, request_submitted_message, request_workflow_outcome,
-)
-from src.models.process_workflows import EntityType
+from src.common.workflow_triggers import request_submitted_message, request_workflow_outcome
 from src.models.notifications import NotificationType
 from src.models.import_results import BatchImportResult
 from src.common.upload_limits import read_uploads_capped
@@ -428,29 +425,9 @@ async def unpublish_product(
 ):
     """Remove a data product from the marketplace (set publication_scope to none)."""
     try:
-        product_db = manager._repo.get(db=db, id=product_id)
-        if not product_db:
+        # Unpublishes and fires on_unpublish
+        if not manager.unpublish_product(product_id, current_user.username, db=db):
             raise HTTPException(status_code=404, detail="Data product not found")
-
-        was_published = (product_db.publication_scope or "none").lower() != "none"
-        product_db.publication_scope = "none"
-        product_db.published_at = None
-        product_db.published_by = None
-        db.add(product_db)
-        db.commit()
-
-        # Same rule as set-publication-scope: unpublish workflows run only on a real change
-        if was_published:
-            try:
-                get_trigger_registry(db).on_unpublish(
-                    EntityType.DATA_PRODUCT,
-                    product_id,
-                    entity_name=product_db.name,
-                    user_email=current_user.username,
-                )
-            except Exception:
-                # The unpublish is committed; its on_unpublish workflows didn't run
-                logger.exception("on_unpublish trigger failed for data product %s", product_id)
 
         audit_manager.log_action(
             db=db,
@@ -513,26 +490,10 @@ async def request_certify_product(
             details={"certification_level": certification_level, "message": message},
         )
 
-        # Advance the lifecycle so the product surfaces in the review/approvals
-        # queue. A pre-review product (draft/sandbox) moves to 'proposed' on a
-        # successful certification request; products already in-flight keep their
-        # current status. Without this the documented draft -> proposed
-        # transition never happened (ONT-CUJ-019).
-        current_status = (product_db.status or 'draft').lower()
-        if current_status in ('draft', 'sandbox'):
-            manager.submit_for_review(product_id, username)
-
-        get_trigger_registry(db).on_request_certify(
-            EntityType.DATA_PRODUCT,
-            product_id,
-            entity_name=product_db.name,
-            entity_data={
-                "requested_certification_level": certification_level,
-                "message": message,
-                "requester": username,
-            },
-            user_email=username,
-            blocking=True,
+        # Moves a draft/sandbox product to 'proposed' (ONT-CUJ-019) and runs the
+        # on_request_certify workflows
+        manager.request_certification(
+            product_id, certification_level, message, username, db=db
         )
 
         audit_manager.log_action(
@@ -570,8 +531,6 @@ async def handle_certify_product(
     _: bool = Depends(ApprovalChecker('PRODUCTS')),
 ):
     """Approve or deny a certification request for a data product."""
-    from datetime import datetime, timezone
-
     if body.get("approved") is None:
         raise HTTPException(status_code=422, detail="approved is required")
 
@@ -620,13 +579,10 @@ async def handle_certify_product(
         if not level:
             raise HTTPException(status_code=404, detail=f"Certification level {certification_level} not found")
 
-        product_db.certification_level = certification_level
-        product_db.certified_at = datetime.now(timezone.utc)
-        product_db.certified_by = username
-        product_db.certification_notes = notes
-        db.add(product_db)
-        db.commit()
-        db.refresh(product_db)
+        # Certifies, propagates downstream and fires on_certify
+        product_db = manager.certify_at_level(
+            product_id, certification_level, username, notes=notes, db=db
+        )
 
         audit_manager.log_action(
             db=db,
@@ -637,27 +593,6 @@ async def handle_certify_product(
             success=True,
             details={'product_id': product_id, 'certification_level': certification_level},
         )
-
-        from src.controller.certification_propagator import propagate_certification
-
-        propagate_certification(db, "DataProduct", product_id)
-        db.commit()
-
-        try:
-            get_trigger_registry(db).on_certify(
-                EntityType.DATA_PRODUCT,
-                product_id,
-                entity_name=product_db.name,
-                entity_data={
-                    "certification_level": certification_level,
-                    "notes": notes,
-                    "certified_by": username,
-                },
-                user_email=username,
-                blocking=False,
-            )
-        except Exception as trigger_err:
-            logger.warning("on_certify trigger error (non-fatal): %s", trigger_err)
 
         return {
             'certification_level': product_db.certification_level,
@@ -800,19 +735,9 @@ async def request_publish_product(
             details={"scope": scope, "justification": justification},
         )
 
-        executions = get_trigger_registry(db).on_request_publish(
-            EntityType.DATA_PRODUCT,
-            product_id,
-            entity_name=product_db.name,
-            entity_data={
-                "requested_scope": scope,
-                "justification": justification,
-                "requester": username,
-                # Same key as the data contract request (data_contracts_manager)
-                "current_status": current_status,
-            },
-            user_email=username,
-            blocking=True,
+        # Runs the on_request_publish workflows
+        executions = manager.request_publication(
+            product_id, scope, justification, username, current_status, db=db
         )
         outcome = request_workflow_outcome(executions)
 
@@ -862,7 +787,6 @@ async def certify_product(
     Requires active status. Certification is now a separate dimension from status.
     Body: { "certification_level": int, "notes": str? }
     """
-    from datetime import datetime, timezone
     certification_level = body.get("certification_level")
     if certification_level is None:
         raise HTTPException(status_code=422, detail="certification_level is required")
@@ -883,13 +807,12 @@ async def certify_product(
         if not level:
             raise HTTPException(status_code=404, detail=f"Certification level {certification_level} not found")
 
-        product_db.certification_level = certification_level
-        product_db.certified_at = datetime.now(timezone.utc)
-        product_db.certified_by = current_user.username if current_user else None
-        product_db.certification_notes = body.get("notes")
-        db.add(product_db)
-        db.commit()
-        db.refresh(product_db)
+        # Certifies, propagates downstream and fires on_certify
+        product_db = manager.certify_at_level(
+            product_id, certification_level,
+            current_user.username if current_user else None,
+            notes=body.get("notes"), db=db,
+        )
 
         audit_manager.log_action(
             db=db,
@@ -899,19 +822,6 @@ async def certify_product(
             action='CERTIFY',
             success=True,
             details={'product_id': product_id, 'certification_level': certification_level}
-        )
-
-        # Propagate certification to downstream entities
-        from src.controller.certification_propagator import propagate_certification
-        propagate_certification(db, "DataProduct", product_id)
-        db.commit()
-
-        get_trigger_registry(db).on_certify(
-            EntityType.DATA_PRODUCT,
-            product_id,
-            entity_name=product_db.name,
-            entity_data={"certification_level": product_db.certification_level},
-            user_email=current_user.username,
         )
 
         return {
@@ -944,21 +854,8 @@ async def decertify_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        old_level = product_db.certification_level
-        product_db.certification_level = None
-        product_db.certified_at = None
-        product_db.certified_by = None
-        product_db.certification_expires_at = None
-        product_db.certification_notes = None
-        db.add(product_db)
-        db.commit()
-
-        get_trigger_registry(db).on_decertify(
-            EntityType.DATA_PRODUCT,
-            product_id,
-            entity_name=product_db.name,
-            user_email=current_user.username,
-        )
+        # Removes the certification and fires on_decertify
+        old_level = manager.decertify_product(product_id, current_user.username, db=db)
 
         audit_manager.log_action(
             db=db,
@@ -1138,7 +1035,8 @@ async def create_product_from_contract(
             contract_id=contract_id,
             product_name=product_name,
             version=version,
-            output_port_name=output_port_name
+            output_port_name=output_port_name,
+            user_email=current_user.email if current_user else None,
         )
 
         # Log audit event
@@ -1674,6 +1572,7 @@ async def upload_data_products(
             adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
             reveal_dup_detail=reveal_dup_detail,
+            workflow_user=current_user.email if current_user else None,
         )
 
         success = result.created > 0
@@ -1864,18 +1763,12 @@ async def create_data_product(
                     detail="You must be a member of the project to create a product in it"
                 )
 
-        created_product_response = manager.create_product(payload, db=db, user=current_user.username if current_user else None)
-        success = True
-
-        # Fire on_create workflow trigger
-        fire_trigger_safe(
-            db, "on_create",
-            entity_type=EntityType.DATA_PRODUCT,
-            entity_id=str(created_product_response.id) if created_product_response else str(payload.get('id', '')),
-            entity_name=getattr(created_product_response, 'name', None),
-            entity_data={"product_id": str(created_product_response.id), "name": getattr(created_product_response, 'name', None)},
-            user_email=current_user.email if current_user else None,
+        # Fires the on_create workflows for the user's email
+        created_product_response = manager.create_product(
+            payload, db=db, user=current_user.username if current_user else None,
+            workflow_user=current_user.email if current_user else None,
         )
+        success = True
 
         if created_product_response and hasattr(created_product_response, 'id'):
             details_for_audit["created_resource_id"] = str(created_product_response.id)
@@ -2307,6 +2200,7 @@ async def update_data_product(
                 "falling back to ownership cascade"
             )
 
+        # Fires the on_update workflows (update_product)
         updated_product_response = manager.update_product_with_auth(
             product_id=product_id,
             product_data_dict=product_dict,
@@ -2324,16 +2218,6 @@ async def update_data_product(
 
         success = True
         response_status_code = 200
-
-        # Fire on_update workflow trigger
-        fire_trigger_safe(
-            db, "on_update",
-            entity_type=EntityType.DATA_PRODUCT,
-            entity_id=product_id,
-            entity_name=getattr(updated_product_response, 'name', None),
-            entity_data=product_dict,
-            user_email=current_user.email if current_user else None,
-        )
 
         logger.info(f"Successfully updated data product with ID: {product_id}")
 
@@ -2401,7 +2285,11 @@ async def delete_data_product(
 
     try:
         logger.info(f"Received request to delete data product ID: {product_id}")
-        deleted = manager.delete_product(product_id, user=current_user.username if current_user else None)
+        # Fires the on_delete workflows for the user's email
+        deleted = manager.delete_product(
+            product_id, user=current_user.username if current_user else None, db=db,
+            workflow_user=current_user.email if current_user else None,
+        )
         if not deleted:
             response_status_code = 404
             exc = HTTPException(status_code=response_status_code, detail="Data product not found")
@@ -2411,15 +2299,6 @@ async def delete_data_product(
 
         success = True
         response_status_code = 204 # Standard for successful DELETE
-
-        # Fire on_delete workflow trigger
-        fire_trigger_safe(
-            db, "on_delete",
-            entity_type=EntityType.DATA_PRODUCT,
-            entity_id=product_id,
-            entity_data={"product_id": product_id},
-            user_email=current_user.email if current_user else None,
-        )
 
         logger.info(f"Successfully deleted data product with ID: {product_id}")
         # No response body for 204, so no updated_product_response or response_preview
@@ -2633,17 +2512,8 @@ async def unsubscribe_from_product(
             db=db
         )
 
+        # (unsubscribe fires the on_unsubscribe workflows)
         success = True
-
-        # Fire on_unsubscribe workflow trigger
-        fire_trigger_safe(
-            db, "on_unsubscribe",
-            entity_type=EntityType.SUBSCRIPTION,
-            entity_id=product_id,
-            entity_name=product_id,
-            entity_data={"product_id": product_id, "subscriber_email": current_user.username},
-            user_email=current_user.username,
-        )
 
         return result
 

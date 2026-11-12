@@ -809,6 +809,14 @@ def test_an_approved_request_to_another_status_writes_no_lifecycle_audit(db_sess
 
 # --- MCP update tools can deprecate ---
 
+@pytest.fixture
+def no_tool_audit(monkeypatch):
+    """The tools' audit entry is written in its own session, whose commit would
+    commit this test's rows on the unit tests' shared in-memory connection."""
+    from src.controller import audit_manager
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
+
+
 def _tool_context(db_session, **managers):
     """A tool context for an admin of both features (the tools apply the read
     rules and the route levels for the caller)."""
@@ -829,7 +837,7 @@ def _tool_context(db_session, **managers):
 
 
 @pytest.mark.asyncio
-async def test_the_mcp_product_tool_deprecates_with_its_details(db_session):
+async def test_the_mcp_product_tool_deprecates_with_its_details(db_session, no_tool_audit):
     from src.tools.data_products import UpdateDataProductTool
     product, replacement = _product(db_session), _product(db_session)
     db_session.commit()
@@ -848,7 +856,7 @@ async def test_the_mcp_product_tool_deprecates_with_its_details(db_session):
 
 
 @pytest.mark.asyncio
-async def test_the_mcp_product_tool_says_a_reason_is_needed(db_session):
+async def test_the_mcp_product_tool_says_a_reason_is_needed(db_session, no_tool_audit):
     from src.tools.data_products import UpdateDataProductTool
     product = _product(db_session)
     db_session.commit()
@@ -864,7 +872,7 @@ async def test_the_mcp_product_tool_says_a_reason_is_needed(db_session):
 
 
 @pytest.mark.asyncio
-async def test_the_mcp_contract_tool_deprecates_with_its_details(db_session):
+async def test_the_mcp_contract_tool_deprecates_with_its_details(db_session, no_tool_audit):
     from src.tools.data_contracts import UpdateDataContractTool
     contract = _contract(db_session)
     db_session.commit()
@@ -883,7 +891,7 @@ async def test_the_mcp_contract_tool_deprecates_with_its_details(db_session):
 
 
 @pytest.mark.asyncio
-async def test_the_mcp_contract_tool_says_a_reason_is_needed(db_session):
+async def test_the_mcp_contract_tool_says_a_reason_is_needed(db_session, no_tool_audit):
     from src.tools.data_contracts import UpdateDataContractTool
     contract = _contract(db_session)
     db_session.commit()
@@ -901,7 +909,7 @@ async def test_the_mcp_contract_tool_says_a_reason_is_needed(db_session):
 
 
 @pytest.mark.asyncio
-async def test_the_mcp_tools_refuse_a_malformed_sunset_date(db_session):
+async def test_the_mcp_tools_refuse_a_malformed_sunset_date(db_session, no_tool_audit):
     from src.tools.data_products import UpdateDataProductTool
     product = _product(db_session)
     db_session.commit()

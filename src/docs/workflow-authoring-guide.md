@@ -80,7 +80,7 @@ A workflow runs only if Ontos fires its trigger for an entity type the workflow 
 | `on_request_deploy` | A contract deployment is requested | `data_contract` | No |
 | `on_request_access` | Access is requested | `access_grant`, `project`, `role` | No |
 | `on_publish`, `on_unpublish` | A product or contract is published or unpublished | `data_product`, `data_contract` | No |
-| `on_certify`, `on_decertify` | A contract is certified or decertified from the contract page | `data_contract` | No |
+| `on_certify`, `on_decertify` | A product or contract is certified or decertified | `data_product`, `data_contract` | No |
 | `on_subscribe` / `on_unsubscribe` | A user subscribes to / unsubscribes from a product | `data_product` / `subscription` | No |
 | `on_expiring`, `on_revoke` | An access grant is about to expire, or is revoked | `access_grant` | No |
 | `on_job_success`, `on_job_failure` | A background job ends | `job` | No |
@@ -91,6 +91,7 @@ A workflow runs only if Ontos fires its trigger for an entity type the workflow 
 
 Notes:
 
+- **Data products fire them whatever the entry point.** A product created, changed, deleted, certified or (un)published through the REST API, Ask Ontos, an MCP client or an ODPS import (one `on_create` per imported product) fires the same triggers, with the same gates, for the user who made the change.
 - **"After" triggers never undo the action.** The product is already created, updated or moved when an `on_*` workflow runs; if the workflow fails, the action stays done. Errors while firing them are logged and don't fail the action.
 - **`scheduled` is not run.** It can be selected and saved, but nothing in the current version starts scheduled workflows.
 - **`manual` runs see only what you pass.** A manual run passes `{id, name, type}` from the query as the trigger payload; without `entity_name`, `${entity_name}` is empty. Rule steps still see the stored entity (see below); notification texts and scripts only have those three fields.

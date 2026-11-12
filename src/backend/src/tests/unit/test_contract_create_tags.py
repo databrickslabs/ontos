@@ -290,16 +290,30 @@ class TestExportAndSearch:
 
         assert odcs["tags"] == [classification.name]
 
-    def test_export_of_a_contract_with_only_odcs_tag_rows(self, db_session: Session):
+    def test_export_without_a_session_reads_the_odcs_tag_rows(self, db_session: Session):
         cid = str(uuid.uuid4())
-        db_session.add(DataContractDb(id=cid, name=_name(), version="1.0.0", status="active"))
+        db_session.add(DataContractDb(id=cid, name=_name(), version="1.0.0", status="draft"))
         db_session.add(DataContractTagDb(contract_id=cid, name="legacy"))
         db_session.commit()
-        manager = _manager()
-        obj = db_session.get(DataContractDb, cid)
 
-        assert manager.build_odcs_from_db(obj, db_session)["tags"] == ["legacy"]
-        assert manager.build_odcs_from_db(obj)["tags"] == ["legacy"]
+        assert _manager().build_odcs_from_db(db_session.get(DataContractDb, cid))["tags"] == ["legacy"]
+
+    def test_export_after_clearing_every_tag_on_the_page_has_none(self, db_session: Session, tags):
+        classification, _ = tags
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft", "tags": [classification.name],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+        manager._tags_manager.set_tags_for_entity(
+            db_session, entity_id=str(created.id), entity_type="data_contract", tags=[], user_email="bob",
+        )
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert "tags" not in odcs
 
     def test_export_keeps_a_file_tag_that_could_not_be_assigned(self, db_session: Session, tags):
         classification, _ = tags
@@ -350,6 +364,64 @@ class TestExportAndSearch:
         item = manager._build_search_index_item(db_session.get(DataContractDb, created.id), db_session)
 
         assert item.tags == [_fqn(classification)]
+
+
+class TestOdcsTagRoutesMirror:
+    """The ODCS tag routes keep the tag assignments the page shows in step."""
+
+    @pytest.fixture
+    def contract(self, db_session: Session, tags):
+        _, region = tags
+        manager = _manager()
+        created = manager.create_contract_with_relations(
+            db=db_session,
+            contract_data={"name": _name(), "tags": [{"tag_fqn": _fqn(region), "assigned_value": "eu"}]},
+            current_user="alice@example.com",
+        )
+        return manager, created.id
+
+    def test_adding_keeps_the_other_tags_and_their_values(self, db_session: Session, tags, contract):
+        classification, region = tags
+        manager, cid = contract
+
+        manager.add_odcs_tag_assignment(db_session, cid, classification.name, "bob")
+        db_session.commit()
+
+        assert _assigned(db_session, cid) == {classification.name: None, region.name: "eu"}
+
+    def test_a_name_in_a_missing_namespace_is_not_assigned(self, db_session: Session, tags, contract):
+        _, region = tags
+        manager, cid = contract
+
+        manager.add_odcs_tag_assignment(db_session, cid, f"nowhere_{uuid.uuid4().hex[:6]}/x", "bob")
+        db_session.commit()
+
+        assert _assigned(db_session, cid) == {region.name: "eu"}
+
+    def test_removing_drops_only_that_assignment(self, db_session: Session, tags, contract):
+        classification, region = tags
+        manager, cid = contract
+        manager.add_odcs_tag_assignment(db_session, cid, classification.name, "bob")
+        db_session.commit()
+
+        manager.remove_odcs_tag_assignment(db_session, cid, classification.name)
+        db_session.commit()
+
+        assert _assigned(db_session, cid) == {region.name: "eu"}
+
+
+    def test_a_rename_moves_the_assignment(self, db_session: Session, tags, contract):
+        _, region = tags
+        manager, cid = contract
+        old, new = f"old_{uuid.uuid4().hex[:6]}", f"new_{uuid.uuid4().hex[:6]}"
+        manager.add_odcs_tag_assignment(db_session, cid, old, "bob")
+        db_session.commit()
+
+        manager.remove_odcs_tag_assignment(db_session, cid, old)
+        manager.add_odcs_tag_assignment(db_session, cid, new, "bob")
+        db_session.commit()
+
+        assert _assigned(db_session, cid) == {new: None, region.name: "eu"}
 
 
 class TestNewVersions:

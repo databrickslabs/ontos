@@ -1513,17 +1513,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             odcs['authoritativeDefinitions'] = auth_defs
 
         # Tags: the tag assignments the contract page shows (#1484), a name in the
-        # default namespace written without it. The ODCS tag rows of older imports
-        # are used when the contract has no assignment; otherwise only the rows an
-        # import couldn't assign (a namespace that doesn't exist) are added, since a
-        # tag removed on the page keeps its ODCS row.
+        # default namespace written without it, plus the ODCS tag rows that couldn't
+        # be assigned (a namespace that doesn't exist). The other ODCS rows aren't
+        # used: imports, the ODCS tag routes and migration t1 mirror them onto the
+        # assignments, and a tag removed on the page keeps its row. Without a
+        # session only the ODCS rows can be read.
         legacy_tag_names = [t.name for t in (getattr(db_obj, 'tags', None) or []) if t.name]
-        exported_tags = self._odcs_tag_names(db_session, db_obj.id) if db_session is not None else []
-        if exported_tags:
+        if db_session is not None:
+            exported_tags = self._odcs_tag_names(db_session, db_obj.id)
             for name in legacy_tag_names:
                 if name not in exported_tags and self._is_unassignable_tag_name(db_session, name):
                     exported_tags.append(name)
-            odcs['tags'] = exported_tags
+            if exported_tags:
+                odcs['tags'] = exported_tags
         elif legacy_tag_names:
             odcs['tags'] = legacy_tag_names
             
@@ -2412,6 +2414,46 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     )
         except SQLAlchemyError as e:
             logger.error("Failed to copy tags from contract %s to %s: %s", source_id, target_id, e, exc_info=True)
+
+    def add_odcs_tag_assignment(self, db, contract_id: str, name: str, current_user: Optional[str]) -> None:
+        """Mirror an ODCS tag row onto the tag assignments the page shows (#1484).
+
+        Used by the ODCS tag routes, so a tag added there is shown on the page and
+        exported. A name in a namespace that doesn't exist is skipped.
+        """
+        if not name or not name.strip() or self._is_unassignable_tag_name(db, name.strip()):
+            return
+        self._assign_tags_on_create(
+            db, contract_id, self._current_tag_fqns(db, contract_id) + [name.strip()], current_user,
+        )
+
+    def remove_odcs_tag_assignment(self, db, contract_id: str, name: str) -> None:
+        """Remove the tag assignment an ODCS tag row was mirrored to (see add_odcs_tag_assignment)."""
+        from src.repositories.tags_repository import entity_tag_repo, tag_repo
+
+        if not name or not name.strip():
+            return
+        fqn = name.strip() if TAG_NAMESPACE_SEPARATOR in name else f"{DEFAULT_NAMESPACE_NAME}{TAG_NAMESPACE_SEPARATOR}{name.strip()}"
+        tag = tag_repo.get_by_fully_qualified_name(db, fqn=fqn)
+        if tag is not None:
+            entity_tag_repo.remove_tag_from_entity(
+                db, entity_id=str(contract_id), entity_type="data_contract", tag_id=tag.id,
+            )
+            # Sessions don't autoflush: a later read of the contract's tags (a rename
+            # adds the new name next) must not see the removed one.
+            db.flush()
+
+    @staticmethod
+    def _current_tag_fqns(db, contract_id: str) -> list:
+        """The contract's current tag assignments, as AssignedTagCreate input that keeps their values."""
+        from src.repositories.tags_repository import entity_tag_repo
+
+        return [
+            {"tag_id": str(tag.tag_id), "assigned_value": tag.assigned_value}
+            for tag in entity_tag_repo.get_assigned_tags_for_entity(
+                db, entity_id=str(contract_id), entity_type="data_contract",
+            )
+        ]
 
     @staticmethod
     def _is_unassignable_tag_name(db, name: str) -> bool:

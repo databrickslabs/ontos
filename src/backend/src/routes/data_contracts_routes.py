@@ -3712,6 +3712,7 @@ async def create_contract_tag(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     tag_data: dict = Body(...),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Create a new tag for a contract."""
@@ -3729,6 +3730,10 @@ async def create_contract_tag(
 
         # Create tag
         new_tag = contract_tag_repo.create_tag(db=db, contract_id=contract_id, name=tag_create.name)
+        # Shown on the page and exported through the tag assignments (#1484)
+        manager.add_odcs_tag_assignment(
+            db, contract_id, tag_create.name, current_user.username if current_user else None,
+        )
         db.commit()
 
         # Audit log
@@ -3762,6 +3767,7 @@ async def update_contract_tag(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     tag_data: dict = Body(...),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Update a contract tag."""
@@ -3780,6 +3786,9 @@ async def update_contract_tag(
         if tag_update.name is None:
             raise HTTPException(status_code=400, detail="Tag name is required for update")
 
+        existing_tag = db.query(DataContractTagDb).filter(DataContractTagDb.id == tag_id).first()
+        old_name = existing_tag.name if existing_tag else None
+
         # Update tag
         updated_tag = contract_tag_repo.update_tag(db=db, tag_id=tag_id, name=tag_update.name)
         if not updated_tag:
@@ -3788,6 +3797,13 @@ async def update_contract_tag(
         # Verify tag belongs to the contract
         if updated_tag.contract_id != contract_id:
             raise HTTPException(status_code=400, detail="Tag does not belong to this contract")
+
+        # Move the tag assignment with the rename (#1484)
+        if old_name != tag_update.name:
+            manager.remove_odcs_tag_assignment(db, contract_id, old_name)
+            manager.add_odcs_tag_assignment(
+                db, contract_id, tag_update.name, current_user.username if current_user else None,
+            )
 
         db.commit()
 
@@ -3823,6 +3839,7 @@ async def delete_contract_tag(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Delete a contract tag."""
@@ -3842,11 +3859,14 @@ async def delete_contract_tag(
         if tag.contract_id != contract_id:
             raise HTTPException(status_code=400, detail="Tag does not belong to this contract")
 
+        tag_name = tag.name
+
         # Delete tag
         success = contract_tag_repo.delete_tag(db=db, tag_id=tag_id)
         if not success:
             raise HTTPException(status_code=404, detail="Tag not found")
 
+        manager.remove_odcs_tag_assignment(db, contract_id, tag_name)  # #1484
         db.commit()
 
         # Audit log

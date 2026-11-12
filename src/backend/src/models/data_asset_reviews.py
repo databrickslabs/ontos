@@ -96,7 +96,9 @@ class ReviewedAsset(BaseModel):
     asset_type: AssetType = Field(..., description="Type of the Databricks asset")
     status: ReviewedAssetStatus = Field(default=ReviewedAssetStatus.PENDING, description="Current review status of this specific asset")
     comments: Optional[str] = Field(None, description="Reviewer comments specific to this asset")
-    updated_at: datetime = Field(default_factory=utc_now, description="Timestamp of the last update for this asset review")
+    updated_at: datetime = Field(
+        default_factory=utc_now, description="Timestamp of the last update for this asset review"
+    )
 
     model_config = {
         "from_attributes": True
@@ -152,7 +154,9 @@ class AssetAnalysisResponse(BaseModel):
     asset_id: str = Field(..., description="The ID of the reviewed asset.")
     analysis_summary: str = Field(..., description="The LLM-generated summary of the asset review.")
     llm_model_used: Optional[str] = Field(None, alias="model_used", description="The name of the LLM model used for analysis.")
-    timestamp: datetime = Field(default_factory=utc_now, description="Timestamp of when the analysis was performed.")
+    timestamp: datetime = Field(
+        default_factory=utc_now, description="Timestamp of when the analysis was performed."
+    )
     # Security metadata for two-phased verification
     phase1_passed: bool = Field(True, description="Whether the security check (phase 1) passed.")
     render_as_markdown: bool = Field(True, description="Whether the content is safe to render as markdown (phase 1 passed).")

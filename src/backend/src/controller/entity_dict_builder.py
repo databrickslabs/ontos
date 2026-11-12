@@ -127,6 +127,25 @@ def _extract_base_fields(db_obj) -> Dict[str, Any]:
     return d
 
 
+def concept_iris_for(db: Session, entity_type: str, entity_id: str, rels) -> set:
+    """Concept IRIs an entity is linked to, from both stores, each concept once (#970).
+
+    ``rels`` are the entity's relationship rows; only its outgoing hasSemanticConcept
+    rows count. A concept linked in both stores appears once.
+    """
+    from src.db_models.semantic_links import EntitySemanticLinkDb
+
+    iris = {r.target_id for r in rels
+            if r.relationship_type == "hasSemanticConcept" and r.source_id == entity_id}
+    semantic_type = _ASSOCIATION_ENTITY_TYPES.get(entity_type)
+    if semantic_type:
+        iris |= {link.iri for link in db.query(EntitySemanticLinkDb).filter(
+            EntitySemanticLinkDb.entity_id == entity_id,
+            EntitySemanticLinkDb.entity_type == semantic_type,
+        ).all()}
+    return iris
+
+
 def _add_relationship_counts(db: Session, d: Dict[str, Any],
                               entity_type: str, entity_id: str) -> None:
     """Count relationships by type and add to dict."""
@@ -153,7 +172,12 @@ def _add_relationship_counts(db: Session, d: Dict[str, Any],
 
     # Specific relationship counts
     d["dataset_count"] = sum(1 for r in outgoing if r.relationship_type == "hasDataset")
+    # Concept links (#970): semantic links are the store, hasSemanticConcept rows still count
+    # until they are migrated. The key keeps its old name because stored gate rules use it.
+    # Legacy hasTerm / relatesTo rows (BusinessTerm left the ontology) keep their score.
+    concepts = concept_iris_for(db, entity_type, entity_id, rels)
     d["business_term_count"] = (
+        len(concepts) +
         sum(1 for r in outgoing if r.relationship_type == "hasTerm") +
         sum(1 for r in incoming if r.relationship_type in ("relatesTo", "hasTerm"))
     )

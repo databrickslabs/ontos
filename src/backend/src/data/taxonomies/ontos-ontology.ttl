@@ -430,18 +430,6 @@ ontos:Policy a rdfs:Class ;
     ontos:uiDisplayOrder 10 ;
     ontos:uiPersonaVisibility "admin,steward,producer" .
 
-ontos:BusinessTerm a rdfs:Class ;
-    ontos:modelLayer "business" ;
-    rdfs:subClassOf ontos:Asset ;
-    rdfs:label "Business Term"@en ;
-    rdfs:comment "Business glossary term promoted to a first-class cataloged asset with definitions and linked entities"@en ;
-    skos:example "Customer, Revenue, Churn Rate" ;
-    ontos:modelTier "asset" ;
-    ontos:uiIcon "BookOpen" ;
-    ontos:uiCategory "governance" ;
-    ontos:uiDisplayOrder 11 ;
-    ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
-
 # --- Analytics assets ---
 
 ontos:Dashboard a rdfs:Class ;
@@ -737,19 +725,6 @@ ontos:attachedPolicy a owl:ObjectProperty ;
     ontos:cardinality "0..*" ;
     ontos:uiDisplayContext "tab" .
 
-ontos:hasTerm a owl:ObjectProperty ;
-    rdfs:label "has term"@en ;
-    rdfs:comment "Links an entity to a business term that describes it"@en ;
-    rdfs:domain ontos:DataProduct , ontos:DataContract , ontos:Dataset ,
-               ontos:Table , ontos:View , ontos:Column , ontos:LogicalEntity ,
-               ontos:LogicalAttribute , ontos:BusinessTerm , ontos:Dashboard ,
-               ontos:MLModel , ontos:APIEndpoint , ontos:Stream ;
-    rdfs:range ontos:BusinessTerm ;
-    ontos:uiLabel "Annotated with"@en ;
-    ontos:inverseLabel "Used By"@en ;
-    ontos:cardinality "0..*" ;
-    ontos:uiDisplayContext "sidebar" .
-
 
 # ############################################################################
 #
@@ -761,8 +736,9 @@ ontos:belongsToDomain a owl:ObjectProperty ;
     rdfs:label "belongs to domain"@en ;
     rdfs:comment "Associates an entity with its parent data domain"@en ;
     rdfs:domain ontos:DataProduct , ontos:DataContract , ontos:Dataset ,
-               ontos:Table , ontos:View , ontos:BusinessTerm ,
-               ontos:LogicalEntity ;
+               ontos:Table , ontos:View , ontos:LogicalEntity ,
+               ontos:LogicalAttribute , ontos:Dashboard , ontos:MLModel ,
+               ontos:APIEndpoint , ontos:Stream , ontos:Notebook ;
     rdfs:range ontos:DataDomain ;
     ontos:uiLabel "Belongs to Domain"@en ;
     ontos:inverseLabel "Contains"@en ;
@@ -837,16 +813,6 @@ ontos:memberOfTeam a owl:ObjectProperty ;
 #   SECTION 7b — OBJECT PROPERTIES: BUSINESS LINEAGE & LOGICAL MODEL
 #
 # ############################################################################
-
-ontos:relatesTo a owl:ObjectProperty ;
-    rdfs:label "relates to"@en ;
-    rdfs:comment "Links a business term to logical entities or attributes that define it"@en ;
-    rdfs:domain ontos:BusinessTerm ;
-    rdfs:range ontos:LogicalEntity , ontos:LogicalAttribute ;
-    ontos:uiLabel "Related Logical Model"@en ;
-    ontos:inverseLabel "Business Terms"@en ;
-    ontos:cardinality "0..*" ;
-    ontos:uiDisplayContext "tab" .
 
 ontos:hasLogicalAttribute a owl:ObjectProperty ;
     rdfs:label "has logical attribute"@en ;
@@ -970,7 +936,7 @@ ontos:appliesTo a owl:ObjectProperty ;
     rdfs:label "applies to"@en ;
     rdfs:comment "Links a policy to the entities it governs"@en ;
     rdfs:domain ontos:Policy ;
-    rdfs:range ontos:DataDomain , ontos:BusinessTerm , ontos:LogicalAttribute , ontos:DataProduct ;
+    rdfs:range ontos:DataDomain , ontos:LogicalAttribute , ontos:DataProduct ;
     ontos:uiLabel "Applies To"@en ;
     ontos:inverseLabel "Governed By Policy"@en ;
     ontos:cardinality "0..*" ;
@@ -1055,7 +1021,7 @@ ontos:hasOwner a owl:ObjectProperty ;
                ontos:Dataset , ontos:Schema , ontos:Table , ontos:View ,
                ontos:System , ontos:Dashboard , ontos:Notebook , ontos:MLModel ,
                ontos:APIEndpoint , ontos:Stream , ontos:Policy ,
-               ontos:BusinessTerm , ontos:LogicalEntity ;
+               ontos:LogicalEntity ;
     rdfs:range ontos:Ownership .
 
 ontos:hasSemanticConcept a owl:ObjectProperty ;
@@ -1063,7 +1029,7 @@ ontos:hasSemanticConcept a owl:ObjectProperty ;
     rdfs:comment "Links an entity to ontology concepts for semantic enrichment"@en ;
     rdfs:domain ontos:DataProduct , ontos:DataContract , ontos:Dataset ,
                ontos:Table , ontos:View , ontos:Column , ontos:LogicalEntity ,
-               ontos:LogicalAttribute , ontos:BusinessTerm ;
+               ontos:LogicalAttribute ;
     rdfs:range ontos:OntologyConcept ;
     ontos:uiLabel "Has Concepts"@en ;
     ontos:cardinality "0..*" ;
@@ -1444,38 +1410,6 @@ ontos:policyContent a owl:DatatypeProperty ;
     rdfs:label "policy content"@en ;
     rdfs:comment "The actual policy text or rules body"@en ;
     rdfs:domain ontos:Policy ;
-    rdfs:range xsd:string ;
-    ontos:uiFieldType "textarea" ;
-    ontos:uiFieldOrder 12 ;
-    ontos:isRequired false ;
-    ontos:uiFieldGroup "basic" .
-
-# --- BusinessTerm ---
-
-ontos:termDefinition a owl:DatatypeProperty ;
-    rdfs:label "definition"@en ;
-    rdfs:comment "Formal business definition of the term"@en ;
-    rdfs:domain ontos:BusinessTerm ;
-    rdfs:range xsd:string ;
-    ontos:uiFieldType "textarea" ;
-    ontos:uiFieldOrder 10 ;
-    ontos:isRequired true ;
-    ontos:uiFieldGroup "basic" .
-
-ontos:synonyms a owl:DatatypeProperty ;
-    rdfs:label "synonyms"@en ;
-    rdfs:comment "Alternative names or abbreviations for this term"@en ;
-    rdfs:domain ontos:BusinessTerm ;
-    rdfs:range xsd:string ;
-    ontos:uiFieldType "text" ;
-    ontos:uiFieldOrder 11 ;
-    ontos:isRequired false ;
-    ontos:uiFieldGroup "basic" .
-
-ontos:examples a owl:DatatypeProperty ;
-    rdfs:label "examples"@en ;
-    rdfs:comment "Usage examples for this term"@en ;
-    rdfs:domain ontos:BusinessTerm ;
     rdfs:range xsd:string ;
     ontos:uiFieldType "textarea" ;
     ontos:uiFieldOrder 12 ;

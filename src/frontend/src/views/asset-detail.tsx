@@ -130,7 +130,7 @@ export default function AssetDetailView() {
 
   const ontologyTypeName = useMemo(() => {
     const typeMap: Record<string, string> = {
-      'Business Term': 'BusinessTerm',
+      'Legacy Business Term': 'LegacyBusinessTerm',
       'Logical Entity': 'LogicalEntity',
       'Logical Attribute': 'LogicalAttribute',
       'Delivery Channel': 'DeliveryChannel',
@@ -145,7 +145,7 @@ export default function AssetDetailView() {
 
   const showLineageTab = true;
 
-  const isBusinessTerm = ontologyTypeName === 'BusinessTerm';
+  const isBusinessTerm = ontologyTypeName === 'LegacyBusinessTerm';
   const isPolicy = ontologyTypeName === 'Policy';
   const isLogicalEntity = ontologyTypeName === 'LogicalEntity';
 

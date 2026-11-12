@@ -51,7 +51,7 @@ const TARGET_TYPE_ICONS: Record<string, React.ElementType> = {
   DeliveryChannel: Send,
   LogicalEntity: Shapes,
   LogicalAttribute: Shapes,
-  BusinessTerm: Tag,
+  LegacyBusinessTerm: Tag,
 };
 
 function getIconForRelationship(rel: RelationshipDefinition): React.ElementType {

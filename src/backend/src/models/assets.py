@@ -531,6 +531,7 @@ class SampleData(BaseModel):
 class AssetTypeStatus(str, Enum):
     ACTIVE = "active"
     DEPRECATED = "deprecated"
+    RETIRED = "retired"  # hidden from pickers and create; assets stay readable (#970)
 
 
 class AssetTypeCategory(str, Enum):

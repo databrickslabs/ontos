@@ -67,6 +67,7 @@ MAX_LINEAGE_NODES = 500
 # Layer fallback for types the ontology does not annotate with ontos:modelLayer
 SYNTHETIC_LAYERS = {
     CONCEPT: "business",
+    "LegacyBusinessTerm": "business",  # retired asset type, not in the TTL (#970)
     SCHEMA_OBJECT: "logical",
     SCHEMA_PROPERTY: "logical",
 }

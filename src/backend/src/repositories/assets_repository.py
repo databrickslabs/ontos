@@ -33,15 +33,22 @@ class AssetTypeRepository(CRUDBase[AssetTypeDb, AssetTypeCreate, AssetTypeUpdate
 
     def get_multi_filtered(
         self, db: Session, *, skip: int = 0, limit: Optional[int] = None,
-        category: Optional[str] = None, status: Optional[str] = None
+        category: Optional[str] = None, status: Optional[str] = None,
+        include_retired: bool = False,
     ) -> List[AssetTypeDb]:
-        """Gets multiple asset types with optional filters."""
+        """Gets multiple asset types with optional filters.
+
+        Retired types (#970) are left out unless ``include_retired`` or an explicit
+        ``status`` asks for them: pickers and create flows must not offer them.
+        """
         try:
             query = db.query(self.model).order_by(self.model.name)
             if category:
                 query = query.filter(self.model.category == category)
             if status:
                 query = query.filter(self.model.status == status)
+            elif not include_retired:
+                query = query.filter(self.model.status != "retired")
             return query.offset(skip).limit(limit).all()
         except SQLAlchemyError as e:
             logger.error(f"Database error fetching asset types: {e}", exc_info=True)

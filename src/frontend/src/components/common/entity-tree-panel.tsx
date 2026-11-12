@@ -92,7 +92,7 @@ const TYPE_ICON_FALLBACK: Record<string, React.ElementType> = {
   Stream: Activity,
   System: Server,
   Policy: Shield,
-  'Business Term': BookOpen,
+  'Legacy Business Term': BookOpen,
   Catalog: FolderOpen,
   Schema: Shapes,
   DataProduct: Box,

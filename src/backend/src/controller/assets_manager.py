@@ -217,6 +217,8 @@ class AssetsManager(SearchableAsset):
         db_type = self._type_repo.get(db, asset_in.asset_type_id)
         if not db_type:
             raise NotFoundError(f"Asset type '{asset_in.asset_type_id}' not found.")
+        if db_type.status == "retired":
+            raise ValidationError(f"Asset type '{db_type.name}' is retired and cannot be used for new assets.")
 
         self._validate_properties(db, asset_in.asset_type_id, asset_in.properties)
 
@@ -381,6 +383,8 @@ class AssetsManager(SearchableAsset):
             db_type = self._type_repo.get(db, asset_in.asset_type_id)
             if not db_type:
                 raise NotFoundError(f"Asset type '{asset_in.asset_type_id}' not found.")
+            if db_type.status == "retired":
+                raise ValidationError(f"Asset type '{db_type.name}' is retired and cannot be used for assets.")
 
         effective_type_id = asset_in.asset_type_id or db_asset.asset_type_id
         if asset_in.properties is not None:

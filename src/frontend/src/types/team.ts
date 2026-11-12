@@ -1,4 +1,5 @@
 import { AssignedTag } from '@/components/ui/tag-chip';
+import type { TagPayload } from '@/components/ui/tag-selector';
 import { AssignedDomain } from '@/types/data-domain';
 
 export enum MemberType {
@@ -57,7 +58,7 @@ export interface TeamCreate {
   description?: string | null;
   domain_ids?: string[]; // Multi-domain assignment (primary included)
   primary_domain_id?: string | null;
-  tags?: (string | AssignedTag)[] | null;
+  tags?: (string | AssignedTag | TagPayload)[] | null;
   metadata?: Record<string, any> | null;
 }
 
@@ -67,7 +68,7 @@ export interface TeamUpdate {
   description?: string | null;
   domain_ids?: string[]; // Replace-all; omit to leave unchanged
   primary_domain_id?: string | null;
-  tags?: (string | AssignedTag)[] | null;
+  tags?: (string | AssignedTag | TagPayload)[] | null;
   metadata?: Record<string, any> | null;
 }
 

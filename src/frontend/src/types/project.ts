@@ -1,4 +1,5 @@
 import { TeamSummary } from './team';
+import type { TagPayload } from '@/components/ui/tag-selector';
 import { AssignedTag } from '@/components/ui/tag-chip';
 
 export interface Project {
@@ -20,7 +21,7 @@ export interface ProjectCreate {
   name: string;
   title?: string | null;
   description?: string | null;
-  tags?: (string | AssignedTag)[] | null;
+  tags?: (string | AssignedTag | TagPayload)[] | null;
   metadata?: Record<string, any> | null;
   team_ids?: string[] | null;
   project_type?: 'PERSONAL' | 'TEAM';
@@ -30,7 +31,7 @@ export interface ProjectUpdate {
   name?: string;
   title?: string | null;
   description?: string | null;
-  tags?: (string | AssignedTag)[] | null;
+  tags?: (string | AssignedTag | TagPayload)[] | null;
   metadata?: Record<string, any> | null;
   project_type?: 'PERSONAL' | 'TEAM';
 }

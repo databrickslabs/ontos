@@ -720,7 +720,10 @@
     "create": "\"{{value}}\" erstellen",
     "selectedCount_one": "{{count}} Tag ausgewählt",
     "selectedCount_other": "{{count}} Tags ausgewählt",
-    "selectedOfMax": "{{count}} von {{max}} Tags ausgewählt"
+    "selectedOfMax": "{{count}} von {{max}} Tags ausgewählt",
+    "valueLabel": "Wert",
+    "valuePlaceholder": "Wert eingeben",
+    "noValue": "Kein Wert"
   },
   "userInfo": {
     "actingAs": "Agiert als {{label}} (Testmodus)",

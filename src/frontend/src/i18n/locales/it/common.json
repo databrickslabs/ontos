@@ -720,7 +720,10 @@
     "create": "Crea \"{{value}}\"",
     "selectedCount_one": "{{count}} tag selezionato",
     "selectedCount_other": "{{count}} tag selezionati",
-    "selectedOfMax": "{{count}} di {{max}} tag selezionati"
+    "selectedOfMax": "{{count}} di {{max}} tag selezionati",
+    "valueLabel": "Valore",
+    "valuePlaceholder": "Inserisci un valore",
+    "noValue": "Nessun valore"
   },
   "userInfo": {
     "actingAs": "Stai agendo come {{label}} (modalità test)",

@@ -278,7 +278,8 @@ export default function TagsSettings() {
       const payload = {
         ...tagForm,
         namespace_id: selectedNamespace,
-        possible_values: tagForm.possible_values ? JSON.parse(tagForm.possible_values) : undefined,
+        // An emptied list is sent as [] on edit: an omitted field would keep the old values
+        possible_values: tagForm.possible_values ? JSON.parse(tagForm.possible_values) : (editingTag ? [] : undefined),
       };
 
       if (editingTag) {

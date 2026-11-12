@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import TagSelector from '@/components/ui/tag-selector';
+import TagSelector, { toTagPayload, toTagSelections } from '@/components/ui/tag-selector';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { principalAcceptsForMemberType } from '@/lib/team-members';
@@ -111,7 +111,7 @@ export function TeamFormDialog({
           description: team.description || '',
           domain_ids: team.domain_ids || (team.domain_id ? [team.domain_id] : []),
           primary_domain_id: team.primary_domain_id ?? team.domain_id ?? null,
-          tags: team.tags || [],
+          tags: toTagSelections(team.tags || []),
           members: team.members?.map(member => ({
             member_type: member.member_type,
             member_identifier: member.member_identifier,
@@ -185,7 +185,7 @@ export function TeamFormDialog({
         ...data,
         domain_ids: domainIds,
         primary_domain_id: primaryDomainId,
-        tags: data.tags || [],
+        tags: toTagPayload(data.tags || []),
         members: data.members?.filter(member => member.member_identifier.trim() !== '').map(member => ({
           ...member,
           app_role_override: member.app_role_override === 'none' ? undefined : member.app_role_override?.trim() || undefined,

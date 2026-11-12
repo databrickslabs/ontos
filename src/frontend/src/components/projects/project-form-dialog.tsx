@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import TagSelector from '@/components/ui/tag-selector';
+import TagSelector, { TagSelection, toTagPayload, toTagSelections } from '@/components/ui/tag-selector';
 import type { AssignedTag as _AssignedTag } from '@/components/ui/tag-chip';
 import {
   Dialog,
@@ -98,9 +98,9 @@ export function ProjectFormDialog({
           name: project.name,
           title: project.title || '',
           description: project.description || '',
-          // Keep the assigned tags as objects: AssignedTag has no `name`, so mapping
-          // them to strings turned every tag into '' (#1420).
-          tags: project.tags || [],
+          // Keep the assigned tags with their stored values: AssignedTag has no `name`,
+          // so mapping them to strings turned every tag into '' (#1420).
+          tags: toTagSelections(project.tags || []),
           team_ids: project.teams?.map(team => team.id) || [],
           project_type: (project.project_type as any) || 'TEAM',
         });
@@ -129,23 +129,11 @@ export function ProjectFormDialog({
     }
   };
 
-  // Normalize tags for backend submission (supports both string and AssignedTag)
-  // Use fully_qualified_name so backend can look up existing tags by FQN
-  const normalizeTagsForSubmission = (tags: any[]): (string | { tag_id: string; assigned_value?: string })[] => {
-    if (!tags || tags.length === 0) return [];
-
-    return tags.map((tag) => {
-      if (typeof tag === 'string') return tag;
-      // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-      return tag.fully_qualified_name || { tag_id: tag.tag_id || tag.id, assigned_value: tag.assigned_value };
-    });
-  };
-
   const handleSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
     try {
-      // Normalize tags for backend compatibility
-      const normalizedTags = normalizeTagsForSubmission(data.tags || []);
+      // Only edited tag values are sent; the backend keeps the stored value of the rest
+      const normalizedTags = toTagPayload((data.tags || []) as TagSelection[]);
 
       const cleanedData = {
         ...data,
@@ -389,7 +377,7 @@ export function ProjectFormDialog({
                     <FormLabel>{t('projects:form.labels.tags')}</FormLabel>
                     <FormControl>
                       <TagSelector
-                        value={(field.value || []) as (string | import('@/components/ui/tag-chip').AssignedTag)[]}
+                        value={(field.value || []) as TagSelection[]}
                         onChange={field.onChange}
                         placeholder={t('projects:form.placeholders.selectTags')}
                         allowCreate={true}

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tags, Pencil, Loader2, RefreshCcw } from 'lucide-react';
-import TagSelector from '@/components/ui/tag-selector';
+import TagSelector, { TagSelection, toTagPayload, toTagSelections } from '@/components/ui/tag-selector';
 import TagChip, { AssignedTag } from '@/components/ui/tag-chip';
 import { useApi } from '@/hooks/use-api';
 import { usePermissions } from '@/stores/permissions-store';
@@ -34,7 +34,7 @@ const EntityTagsPanel: React.FC<Props> = ({ entityId, entityType }) => {
   const [assignedTags, setAssignedTags] = React.useState<AssignedTag[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [editing, setEditing] = React.useState(false);
-  const [draft, setDraft] = React.useState<(string | AssignedTag)[]>([]);
+  const [draft, setDraft] = React.useState<TagSelection[]>([]);
 
   const fetchTags = React.useCallback(async () => {
     if (!entityId) return;
@@ -53,14 +53,14 @@ const EntityTagsPanel: React.FC<Props> = ({ entityId, entityType }) => {
   React.useEffect(() => { fetchTags(); }, [fetchTags]);
 
   const startEditing = () => {
-    setDraft(assignedTags.map(tag => tag.fully_qualified_name));
+    setDraft(toTagSelections(assignedTags));
     setEditing(true);
   };
 
   const handleSave = async () => {
     try {
-      // The backend accepts a list of FQN strings or {tag_fqn} objects.
-      const payload = draft.map(tag => (typeof tag === 'string' ? { tag_fqn: tag } : { tag_fqn: tag.fully_qualified_name }));
+      // Only edited values are sent; the backend keeps the stored value of the rest.
+      const payload = toTagPayload(draft);
       const resp = await post<AssignedTag[]>(`/api/entities/${entityType}/${encodeURIComponent(entityId)}/tags:set`, payload);
       if (resp.error) throw new Error(resp.error);
       setAssignedTags(Array.isArray(resp.data) ? resp.data : []);

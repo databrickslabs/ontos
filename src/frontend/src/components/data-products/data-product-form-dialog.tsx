@@ -34,7 +34,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { useApi } from '@/hooks/use-api';
-import TagSelector from '@/components/ui/tag-selector';
+import TagSelector, { TagSelection, toTagSelections } from '@/components/ui/tag-selector';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 import { useTranslation } from 'react-i18next';
@@ -172,6 +172,24 @@ const cleanEmptyOptionalStrings = (data: Record<string, any>): Record<string, an
 };
 
 // --- Default Product Creator --- 
+// The ODPS schema allows only tag names in `tags`, so the form keeps FQN strings. Stored
+// tag values are kept aside: shown in the picker, and edited values are sent after validation.
+const splitAssignedTags = (tags: any[] | undefined): { fqns: string[]; stored: Record<string, string> } => {
+  const fqns: string[] = [];
+  const stored: Record<string, string> = {};
+  (tags || []).forEach((tag: any) => {
+    if (typeof tag === 'string') {
+      fqns.push(tag);
+      return;
+    }
+    const fqn = tag?.fully_qualified_name;
+    if (!fqn) return;
+    fqns.push(fqn);
+    if (tag.assigned_value) stored[fqn] = tag.assigned_value;
+  });
+  return { fqns, stored };
+};
+
 const createDefaultProduct = (): DataProduct => {
   // No need for timestamps here, they are added during submit or by backend
   return {
@@ -333,6 +351,9 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   const { currentProject, availableProjects, fetchUserProjects, isLoading: projectsLoading } = useProjectContext();
   const isEditMode = !!initialProduct?.id;
   const [isLoadingProduct, setIsLoadingProduct] = useState(false);
+  // Product tag values edited in the picker (only those are sent), and the values stored on the product
+  const [tagValueEdits, setTagValueEdits] = useState<Record<string, string>>({});
+  const [storedTagValues, setStoredTagValues] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
   // State for managing dynamic arrays for Links and Custom properties (main product)
@@ -442,12 +463,16 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
           const response = await get<DataProduct>(`/api/data-products/${initialProduct.id}`);
           const productData = checkApiResponse(response, `Fetch product ${initialProduct.id}`);
           
+          const loadedTags = splitAssignedTags(productData.tags);
+          setTagValueEdits({});
+          setStoredTagValues(loadedTags.stored);
+
           const formData = { 
             ...createDefaultProduct(),
             ...productData,
             inputPorts: productData.inputPorts || [],
             outputPorts: productData.outputPorts || [],
-            tags: productData.tags || [],
+            tags: loadedTags.fqns,
             links: productData.links || {}, 
             custom: productData.custom || {},
             info: productData.info || { title: "", owner: "" },
@@ -492,6 +517,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
           setDomainIds([]);
           setPrimaryDomainId(null);
           const defaultValues = createDefaultProduct();
+          setTagValueEdits({});
+          setStoredTagValues({});
           reset(defaultValues);
           setLinksArray(linksObjectToArray(defaultValues.links));
           setCustomArray(objectToArray(defaultValues.custom));
@@ -728,6 +755,17 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   };
 
   // Actual Submit Logic (called by both UI form and JSON submit button)
+  // Picker view of the product tags: the FQNs with their edited or stored values
+  const tagSelectionsFor = (fqns: string[] = []): TagSelection[] =>
+    fqns.map(fqn => ({ fqn, value: tagValueEdits[fqn], storedValue: storedTagValues[fqn] }));
+
+  const handleTagsChange = (selections: TagSelection[], onFqns: (fqns: string[]) => void) => {
+    setTagValueEdits(Object.fromEntries(
+      selections.filter(sel => sel.value !== undefined).map(sel => [sel.fqn, sel.value as string]),
+    ));
+    onFqns(selections.map(sel => sel.fqn));
+  };
+
   const performSubmit = async (data: DataProduct) => {
     setFormError(null); 
     const productId = initialProduct?.id; // Use initialProduct ID for update check
@@ -758,6 +796,12 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     // are app extension fields not in the ODPS schema, so they must not be validated.
     (payload as any).domain_ids = domainIds;
     (payload as any).primary_domain_id = primaryDomainId;
+    // Same for tag values: only the tags the user edited carry one
+    (payload as any).tags = Array.isArray(payload.tags)
+        ? payload.tags.map(tag => (typeof tag === 'string' && tagValueEdits[tag] !== undefined
+            ? { tag_fqn: tag, assigned_value: tagValueEdits[tag] }
+            : tag))
+        : payload.tags;
 
     try {
         let response;
@@ -831,6 +875,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
           }
        }
        // Reset form state only when actually closing
+       setTagValueEdits({});
+       setStoredTagValues({});
        reset(createDefaultProduct()); 
        setLinksArray([]);
        setCustomArray([]);
@@ -1135,10 +1181,11 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                               control={control}
                                               render={({ field }) => (
                                                 <TagSelector
-                                                    value={field.value || []}
-                                                    onChange={field.onChange}
+                                                    value={toTagSelections(field.value || [])}
+                                                    onChange={sels => field.onChange(sels.map(sel => sel.fqn))}
                                                     placeholder={t('data-products:form.consumable.tagsPlaceholder')}
                                                     allowCreate={true}
+                                                    editValues={false}
                                                 />
                                               )}
                                           />
@@ -1208,10 +1255,11 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                                 control={control}
                                                 render={({ field }) => (
                                                   <TagSelector
-                                                      value={field.value || []}
-                                                      onChange={field.onChange}
+                                                      value={toTagSelections(field.value || [])}
+                                                      onChange={sels => field.onChange(sels.map(sel => sel.fqn))}
                                                       placeholder={t('data-products:form.deliverable.tagsPlaceholder')}
                                                       allowCreate={true}
+                                                      editValues={false}
                                                   />
                                                 )}
                                             />
@@ -1256,8 +1304,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                     control={control}
                                     render={({ field }) => (
                                       <TagSelector
-                                          value={field.value || []}
-                                          onChange={field.onChange}
+                                          value={tagSelectionsFor(field.value as string[])}
+                                          onChange={sels => handleTagsChange(sels, field.onChange)}
                                           placeholder={t('data-products:form.tagsProductPlaceholder')}
                                           allowCreate={true}
                                       />

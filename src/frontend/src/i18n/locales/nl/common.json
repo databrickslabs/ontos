@@ -724,7 +724,10 @@
     "create": "\"{{value}}\" aanmaken",
     "selectedCount_one": "{{count}} tag geselecteerd",
     "selectedCount_other": "{{count}} tags geselecteerd",
-    "selectedOfMax": "{{count}} van {{max}} tags geselecteerd"
+    "selectedOfMax": "{{count}} van {{max}} tags geselecteerd",
+    "valueLabel": "Waarde",
+    "valuePlaceholder": "Voer een waarde in",
+    "noValue": "Geen waarde"
   },
   "userInfo": {
     "actingAs": "Actief als {{label}} (testmodus)",

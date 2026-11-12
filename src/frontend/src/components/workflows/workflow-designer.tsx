@@ -1,5 +1,6 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ReactFlow, {
   Node,
@@ -75,8 +76,10 @@ import {
   Edit2,
   Check,
   X,
+  LayoutGrid,
 } from 'lucide-react';
 import ApprovalWizardDialog from './approval-wizard-dialog';
+import AssignTagStepForm from './assign-tag-step-form';
 
 import RequiredFieldsEditor, {
   type RequiredField,
@@ -134,6 +137,7 @@ import type {
   CompliancePolicyRef,
   HttpConnectionRef,
   WorkflowTypeValue,
+  AssignTagStepConfig,
 } from '@/types/process-workflow';
 import {
   ALL_ENTITY_TYPES,
@@ -149,10 +153,14 @@ import { UnknownEntityTypesNotice } from './unknown-entity-types-notice';
 import {
   TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
 } from './workflow-entry-step';
+import {
+  hasUsableLayout, newStepPosition, nonDragMoves, placeMissingSteps, triggerPositionFor, withNodePositions,
+} from './workflow-layout';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { WorkflowCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import {
   CONTRACT_APPROVER_TOKEN,
+  ASSET_OWNER_TOKEN,
   DOMAIN_OWNER_TOKEN,
   joinRoleAndPrincipals,
   roleSelectValue,
@@ -718,6 +726,16 @@ const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shie
 ];
 
 // Layout helper
+// Label and colour of a step's outgoing edge. A conditional's edges are its true and
+// false branches: a false condition is a branch, not a failure (#1418).
+export function branchEdgeLook(sourceType: string | undefined, handle: 'pass' | 'fail', t: TFunction) {
+  const isPass = handle === 'pass';
+  const color = isPass ? '#22c55e' : '#ef4444';
+  const key = sourceType === 'conditional' ? (isPass ? 'true' : 'false') : handle;
+  const label = t(`workflows:designer.edgeLabels.${key}`);
+  return { label, labelStyle: { fill: color, fontWeight: 500 }, style: { stroke: color } };
+}
+
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -753,7 +771,8 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
 // Convert workflow to React Flow elements
 const workflowToElements = (
   workflow: ProcessWorkflow | null,
-  rolesMap: Record<string, string> = {}
+  rolesMap: Record<string, string>,
+  t: TFunction,
 ) => {
   if (!workflow) return { nodes: [], edges: [] };
 
@@ -769,6 +788,13 @@ const workflowToElements = (
     deletable: false,
   });
 
+  // Open as the user arranged it (steps without a position are placed next to the
+  // others); auto-arrange only when there is no usable stored layout.
+  const useStoredLayout = hasUsableLayout(workflow.steps);
+  const positionOf = new Map(
+    (useStoredLayout ? placeMissingSteps(workflow.steps) : workflow.steps).map(s => [s.step_id, s.position]),
+  );
+
   // Add step nodes (use 'default' for unregistered step_type so we never get an empty box)
   const stepNodeTypes = Object.keys(nodeTypes);
   workflow.steps.forEach((step, index) => {
@@ -777,7 +803,7 @@ const workflowToElements = (
       id: step.step_id,
       type: nodeType,
       data: { step, rolesMap },
-      position: step.position || { x: 0, y: (index + 1) * 120 },
+      position: positionOf.get(step.step_id) || { x: 0, y: (index + 1) * 120 },
     });
   });
 
@@ -795,10 +821,8 @@ const workflowToElements = (
         sourceHandle: 'pass',
         target: step.on_pass,
         type: 'deletable',
-        label: 'Pass',
-        labelStyle: { fill: '#22c55e', fontWeight: 500 },
+        ...branchEdgeLook(step.step_type, 'pass', t),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#22c55e' },
       });
     }
     if (step.on_fail) {
@@ -808,14 +832,16 @@ const workflowToElements = (
         sourceHandle: 'fail',
         target: step.on_fail,
         type: 'deletable',
-        label: 'Fail',
-        labelStyle: { fill: '#ef4444', fontWeight: 500 },
+        ...branchEdgeLook(step.step_type, 'fail', t),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#ef4444' },
       });
     }
   });
 
+  if (useStoredLayout && workflow.steps.length > 0) {
+    nodes[0] = { ...nodes[0], position: triggerPositionFor(positionOf.get(workflow.steps[0].step_id)!) };
+    return { nodes, edges };
+  }
   return getLayoutedElements(nodes, edges);
 };
 
@@ -860,6 +886,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
   const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
+  const [showRearrangeDialog, setShowRearrangeDialog] = useState(false);
   const [activationConflicts, setActivationConflicts] = useState<WorkflowActivationConflict[]>([]);
   const [showOverlapDialog, setShowOverlapDialog] = useState(false);
   // Preview wizard (issue #405) — design-time dry-run. Only meaningful once
@@ -921,6 +948,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
               <>
                 <SelectItem value={DOMAIN_OWNER_TOKEN}>{t('workflows:designer.roles.domainOwners')}</SelectItem>
                 <SelectItem value={CONTRACT_APPROVER_TOKEN}>{t('workflows:designer.roles.contractApprovers')}</SelectItem>
+                <SelectItem value={ASSET_OWNER_TOKEN}>
+                  {t('workflows:designer.roles.assetOwners')}
+                </SelectItem>
               </>
             )}
           </SelectGroup>
@@ -976,7 +1006,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  // Read by the connect handlers, so they aren't recreated on every node change
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState([]);
+
+  // Wrap onNodesChange so moves without a drag (arrow keys on selected nodes) are
+  // copied onto the steps too; drags are handled by onNodeDragStop.
+  const handleNodesChange = useCallback((changes: import('reactflow').NodeChange[]) => {
+    onNodesChange(changes);
+    const moved = nonDragMoves(changes);
+    if (moved.length > 0) setSteps(prev => withNodePositions(prev, moved));
+  }, [onNodesChange]);
 
   // Wrap onEdgesChange to sync step on_pass/on_fail when edges are removed
   const onEdgesChange = useCallback((changes: import('reactflow').EdgeChange[]) => {
@@ -1079,6 +1120,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   // Load workflow
   useEffect(() => {
+    // A newer run (StrictMode, or id change) supersedes this one: its late results are dropped
+    let cancelled = false;
+    // A superseded edit load no longer clears it: a new workflow must not stay "loading"
+    if (isNew) setIsLoading(false);
     const loadData = async () => {
       // Load step types
       try {
@@ -1141,11 +1186,14 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         setHttpConnections([]);
       }
 
+      if (cancelled) return;
+
       // Load workflow if editing
       if (!isNew) {
         setIsLoading(true);
         try {
           const response = await get<ProcessWorkflow>(`/api/workflows/${id}`);
+          if (cancelled) return;
           if (response.data) {
             setWorkflow(response.data);
             setName(response.data.name);
@@ -1184,7 +1232,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             
             // Convert to flow elements - rolesMap will be empty initially, but nodes will be updated
             // when availableRoles loads (via updateNodesWithRoles effect)
-            const { nodes: flowNodes, edges: flowEdges } = workflowToElements(response.data, {});
+            const { nodes: flowNodes, edges: flowEdges } = workflowToElements(response.data, {}, t);
             setNodes(flowNodes);
             setEdges(flowEdges);
           }
@@ -1195,7 +1243,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             variant: 'destructive',
           });
         } finally {
-          setIsLoading(false);
+          if (!cancelled) setIsLoading(false);
         }
       } else {
         // Initialize with trigger node for new workflow
@@ -1220,6 +1268,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     };
 
     loadData();
+    return () => { cancelled = true; };
   }, [id, isNew, get, toast, setNodes, setEdges]);
 
   // Create rolesMap from availableRoles
@@ -1317,6 +1366,20 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setSelectedNodeId(node.id);
   }, []);
 
+  // Keep the layout the user arranges: dragged steps take their new positions
+  // (the trigger has no stored position, see workflow-layout.ts).
+  const onNodeDragStop = useCallback((_: React.MouseEvent, _node: Node, dragged: Node[]) => {
+    setSteps(prev => withNodePositions(prev, dragged));
+  }, []);
+
+  // Rearrange: auto-arrange every node, after the user confirmed (the layout is lost on save).
+  const rearrangeNodes = useCallback(() => {
+    const { nodes: arranged } = getLayoutedElements(nodes, edges);
+    setNodes(arranged);
+    setSteps(prev => withNodePositions(prev, arranged));
+    setShowRearrangeDialog(false);
+  }, [nodes, edges, setNodes]);
+
   // Handle edge reconnection (drag an existing edge endpoint to a different node)
   const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
     if (!newConnection.source || !newConnection.target) return;
@@ -1340,10 +1403,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         sourceHandle: handleType,
         target: newConnection.target!,
         type: 'deletable',
-        label: isPass ? 'Pass' : 'Fail',
-        labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+        ...branchEdgeLook(nodesRef.current.find(n => n.id === newConnection.source)?.type, isPass ? 'pass' : 'fail', t),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: isPass ? '#22c55e' : '#ef4444' },
       };
       return [...filtered, reconnectedEdge];
     });
@@ -1355,7 +1416,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       }
       return s;
     }));
-  }, [setEdges]);
+  }, [setEdges, t]);
 
   // Handle manual edge creation (drag from handle to handle)
   const onConnect = useCallback((connection: Connection) => {
@@ -1381,10 +1442,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       sourceHandle: handleType,
       target: connection.target,
       type: 'deletable',
-      label: isPass ? 'Pass' : 'Fail',
-      labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+      ...branchEdgeLook(nodesRef.current.find(n => n.id === connection.source)?.type, isPass ? 'pass' : 'fail', t),
       markerEnd: { type: MarkerType.ArrowClosed },
-      style: { stroke: isPass ? '#22c55e' : '#ef4444' },
     };
     setEdges(prev => [...prev, newEdge]);
 
@@ -1394,7 +1453,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         ? { ...s, [isPass ? 'on_pass' : 'on_fail']: connection.target }
         : s
     ));
-  }, [setEdges]);
+  }, [setEdges, t]);
 
   // Add new step
   const addStep = (type: StepType) => {
@@ -1405,6 +1464,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       step_type: type,
       config: type === 'entity_action' ? { action: 'certify' } : {},
       order: steps.length,
+      // Below the lowest node, on a spot no other node takes.
+      position: newStepPosition(nodes.map(n => n.position)),
     };
     
     setSteps(prev => [...prev, newStep]);
@@ -1414,7 +1475,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       id: stepId,
       type: type,
       data: { step: newStep, rolesMap },
-      position: { x: 100, y: (nodes.length + 1) * 120 },
+      position: newStep.position!,
     };
     setNodes(prev => [...prev, newNode]);
     
@@ -1573,7 +1634,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         },
         workflow_type: workflowType || 'process',
         is_active: isActive,
-        steps: steps.map((s, i) => ({ ...s, order: i })),
+        // The canvas is the source of truth for positions (also after an auto-arrange on load).
+        steps: withNodePositions(steps, nodes).map((s, i) => ({ ...s, order: i })),
       };
 
       let response;
@@ -1762,7 +1824,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           <ReactFlow
             nodes={nodes}
             edges={edgesWithDelete}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
+            onNodeDragStop={onNodeDragStop}
             onNodesDelete={deleted => removeSteps(deleted.map(n => n.id))}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -1803,6 +1866,19 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                 </Button>
               </div>
             </Panel>
+
+            {/* Layout tools */}
+            <Panel position="top-right" className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-1 dark:bg-slate-800/95">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowRearrangeDialog(true)}
+                disabled={steps.length === 0}
+                title={t('workflows:designer.layout.rearrangeHint')}
+              >
+                <LayoutGrid className="h-4 w-4 mr-2" /> {t('workflows:designer.layout.rearrange')}
+              </Button>
+            </Panel>
           </ReactFlow>
           </CompliancePolicyIdsContext.Provider>
         </div>
@@ -1823,6 +1899,20 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             previewMode
           />
         )}
+
+        {/* Rearrange confirmation dialog */}
+        <AlertDialog open={showRearrangeDialog} onOpenChange={setShowRearrangeDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('workflows:designer.layout.confirmTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('workflows:designer.layout.confirmDescription')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={rearrangeNodes}>{t('workflows:designer.layout.confirmAction')}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Discard changes confirmation dialog */}
         <AlertDialog open={showDiscardDialog} onOpenChange={setShowDiscardDialog}>
@@ -2478,36 +2568,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                   )}
                   
                   {selectedStep.step_type === 'assign_tag' && (
-                    <>
-                      <div>
-                        <Label>{t('workflows:designer.assignTag.tagKey')}</Label>
-                        <Input
-                          value={(selectedStep.config as { key?: string })?.key || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, key: e.target.value }
-                          })}
-                          placeholder={t('workflows:designer.assignTag.tagKeyPlaceholder')}
-                        />
-                      </div>
-                      <div>
-                        <Label>{t('workflows:designer.assignTag.valueSource')}</Label>
-                        <Select
-                          value={(selectedStep.config as { value_source?: string })?.value_source || ''}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, value_source: v }
-                          })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={t('workflows:designer.assignTag.selectSource')} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="current_user">{t('workflows:designer.assignTag.sourceCurrentUser')}</SelectItem>
-                            <SelectItem value="project_name">{t('workflows:designer.assignTag.sourceProjectName')}</SelectItem>
-                            <SelectItem value="timestamp">{t('workflows:designer.assignTag.sourceTimestamp')}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
+                    <AssignTagStepForm
+                      key={selectedStep.step_id}
+                      config={(selectedStep.config || {}) as Partial<AssignTagStepConfig>}
+                      onChange={(config) => updateStep(selectedStep.step_id, { config })}
+                    />
                   )}
                   
                   {selectedStep.step_type === 'approval' && (
@@ -2583,15 +2648,56 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           </>
                         );
                       })()}
-                      <div>
-                        <Label>{t('workflows:designer.approval.timeoutDays')}</Label>
-                        <Input
-                          type="number"
-                          value={(selectedStep.config as { timeout_days?: number })?.timeout_days || 7}
-                          onChange={(e) => updateStep(selectedStep.step_id, { 
-                            config: { ...selectedStep.config, timeout_days: parseInt(e.target.value) }
+                      <div className="flex items-start gap-2">
+                        <Checkbox
+                          id="approval-require-all"
+                          className="mt-0.5"
+                          checked={Boolean(
+                            (selectedStep.config as { require_all?: boolean })?.require_all,
+                          )}
+                          onCheckedChange={(checked) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, require_all: checked === true },
                           })}
                         />
+                        <div className="flex flex-col">
+                          <Label htmlFor="approval-require-all" className="text-sm">
+                            {t('workflows:designer.approval.requireAll')}
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            {t('workflows:designer.approval.requireAllHelp')}
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="approval-timeout-days">
+                          {t('workflows:designer.approval.timeoutDays')}
+                        </Label>
+                        <Input
+                          id="approval-timeout-days"
+                          type="number"
+                          min={0}
+                          // 0 means no timeout; empty (unset) means the default, 7 days
+                          placeholder="7"
+                          value={
+                            (selectedStep.config as { timeout_days?: number })?.timeout_days ?? ''
+                          }
+                          onChange={(e) => {
+                            const days = parseInt(e.target.value, 10);
+                            const { timeout_days: _unset, ...rest } =
+                              selectedStep.config as { timeout_days?: number };
+                            updateStep(selectedStep.step_id, {
+                              config: Number.isNaN(days)
+                                ? rest
+                                : { ...rest, timeout_days: Math.max(days, 0) },
+                            });
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('workflows:designer.approval.timeoutDaysHelp')}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('workflows:designer.approval.timeoutNotEnforced')}
+                        </p>
                       </div>
                     </>
                   )}

@@ -35,7 +35,8 @@
       "contractApprovers": "Approbateurs du contrat",
       "appRoles": "Rôles d'application",
       "businessRoles": "Rôles métier",
-      "noGroups": "Aucun groupe"
+      "noGroups": "Aucun groupe",
+      "assetOwners": "Propriétaires de l’actif"
     },
     "messages": {
       "loadWorkflowFailed": "Échec du chargement du workflow",
@@ -92,6 +93,13 @@
       "persist_agreement": "Conserver l'accord",
       "generate_pdf": "Générer un PDF",
       "deliver": "Livrer"
+    },
+    "layout": {
+      "rearrange": "Réorganiser",
+      "rearrangeHint": "Disposer automatiquement toutes les étapes",
+      "confirmTitle": "Réorganiser toutes les étapes ?",
+      "confirmDescription": "Les étapes sont disposées automatiquement. Votre disposition actuelle est remplacée à l’enregistrement.",
+      "confirmAction": "Réorganiser"
     },
     "discard": {
       "description": "Vous avez des modifications non enregistrées sur ce workflow. Si vous quittez maintenant, vos modifications seront perdues.",
@@ -211,13 +219,28 @@
       "selectSource": "Sélectionner une source",
       "sourceCurrentUser": "Utilisateur actuel",
       "sourceProjectName": "Nom du projet",
-      "sourceTimestamp": "Horodatage"
+      "sourceTimestamp": "Horodatage",
+      "valueMode": "Valeur",
+      "modeFixed": "Valeur fixe",
+      "modeSource": "Valeur issue de l’exécution",
+      "modeNone": "Aucune valeur",
+      "fixedValue": "Valeur du tag",
+      "fixedValuePlaceholder": "p. ex. confidentiel",
+      "selectValue": "Sélectionner une valeur",
+      "noValueHelp": "Le tag est attribué sans valeur. Une valeur que l’entité a déjà pour ce tag est conservée.",
+      "sourceEntityName": "Nom de l’entité",
+      "tagNotFound": "Aucun tag ne porte ce nom. L’étape ne le définit alors que pour les étapes suivantes de l’exécution.",
+      "fixedValueRequired": "Saisissez une valeur ou choisissez « Aucune valeur » pour attribuer le tag sans valeur."
     },
     "approval": {
       "approversRole": "Approbateurs (rôle)",
       "selectRole": "Sélectionner un rôle",
       "additionalApproversAria": "Approbateurs supplémentaires",
-      "timeoutDays": "Délai d'expiration (jours)"
+      "timeoutDays": "Délai d'expiration (jours)",
+      "timeoutDaysHelp": "0 signifie aucun délai ; laissez vide pour la valeur par défaut (7 jours).",
+      "requireAll": "Exiger tous les approbateurs",
+      "requireAllHelp": "Chaque approbateur décide : un utilisateur pour lui-même, n'importe quel membre pour un groupe ou un rôle. Tout refus fait échouer l'étape.",
+      "timeoutNotEnforced": "Pas encore appliqué : une approbation en attente n'expire pas."
     },
     "assetReview": {
       "reviewerRole": "Rôle du réviseur",
@@ -312,11 +335,18 @@
       "duplicateStepIds": "Deux étapes ont le même ID.",
       "stepUnknownReference": "L'étape « {{step}} » dirige sa branche {{branch}} vers « {{target}} », qui n'est pas dans le workflow.",
       "stepConfigMissing": "Il manque des paramètres obligatoires à l'étape « {{step}} » : {{fields}}.",
+      "assignTagValueSourceUnknown": "L’étape « {{step}} » utilise la source de valeur inconnue « {{source}} ».",
       "policyCheckPolicyMissing": "L'étape \"{{step}}\" nécessite une politique de conformité existante. Sélectionnez-en une dans les paramètres de l'étape.",
       "branch": {
         "on_pass": "de réussite",
         "on_fail": "d'échec"
       }
+    },
+    "edgeLabels": {
+      "pass": "Réussi",
+      "fail": "Échec",
+      "true": "Vrai",
+      "false": "Faux"
     }
   },
   "approvalResponse": {
@@ -346,10 +376,17 @@
       "processFailed": "Échec du traitement de l'approbation.",
       "processFailedRetry": "Échec du traitement de l'approbation. Veuillez réessayer.",
       "entityApproved": "{{name}} a été approuvé.",
-      "entityRejected": "{{name}} a été rejeté."
+      "entityRejected": "{{name}} a été rejeté.",
+      "decisionRecorded": "Décision enregistrée",
+      "waitingForApprovers_one": "En attente de {{count}} autre approbateur.",
+      "waitingForApprovers_other": "En attente de {{count}} autres approbateurs."
     },
     "errors": {
-      "own_owner_approval": "Cette approbation revient aux propriétaires ; vous ne pouvez pas approuver votre propre demande."
+      "own_owner_approval": "Cette approbation revient aux propriétaires ; vous ne pouvez pas approuver votre propre demande.",
+      "own_change_request_approval": "Vous ne pouvez pas approuver votre propre demande de modification.",
+      "approval_already_decided": "Vous avez déjà pris une décision sur cette approbation.",
+      "approval_not_an_approver": "Seuls les approbateurs de cette étape peuvent en décider.",
+      "approval_no_longer_pending": "Cette approbation a déjà été décidée."
     },
     "entityTypes": {
       "entity": "Entité",
@@ -493,7 +530,8 @@
       "output_port_contracts_missing": "Publication impossible : les ports de sortie {{ports}} doivent avoir des contrats de données assignés",
       "output_port_contracts_unapproved": "Publication impossible : ces ports de sortie ont des contrats non approuvés : {{ports}}. Les contrats doivent d'abord être approuvés.",
       "rule_entity_load_failed": "Impossible de charger {{entityType}} {{entityId}} pour évaluer la règle",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} est introuvable, la règle ne peut pas être évaluée"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} est introuvable, la règle ne peut pas être évaluée",
+      "cancelled_by_admin": "Annulé par un administrateur ({{by}})"
     },
     "states": {
       "pending": "En attente",
@@ -502,6 +540,10 @@
       "failed": "Échoué",
       "skipped": "Ignoré",
       "waiting": "En attente"
+    },
+    "conditionalBranch": {
+      "true": "Condition vraie : branche vraie suivie",
+      "false": "Condition fausse : branche fausse suivie"
     },
     "executionStates": {
       "pending": "En attente",
@@ -660,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "Workflows par défaut",
       "newOnly": "Charger uniquement les nouveaux",
-      "reloadAll": "Recharger tous les défauts"
+      "reloadAll": "Recharger tous les défauts",
+      "confirmTitle": "Recharger tous les workflows par défaut ?",
+      "confirmDescription": "Chaque workflow par défaut est réinitialisé à sa définition d'origine : description, déclencheur, portée, étapes et leur disposition. L'état actif ne change pas. Les workflows par défaut que vous ou un autre administrateur avez modifiés sont conservés, sauf si vous les réinitialisez aussi ci-dessous.",
+      "includeEdited": "Réinitialiser aussi les workflows par défaut modifiés (leurs modifications sont perdues)",
+      "confirmAction": "Recharger",
+      "keptEdited": "Modifiés conservés : {{names}}.",
+      "result": "Créés : {{created}}, mis à jour : {{updated}}, ignorés : {{skipped}}."
     },
     "badges": {
       "default": "Par défaut",
@@ -775,6 +823,7 @@
       "loadDefaultsFailed": "Échec du chargement des workflows par défaut",
       "cancelSuccess": "Exécution annulée avec succès",
       "cancelFailed": "Échec de l'annulation de l'exécution",
+      "approvalCancelled": "Approbation annulée. Le workflow a suivi son chemin de rejet ; statut : {{status}}.",
       "retryStarted": "Nouvelle tentative d'exécution démarrée",
       "retryFailed": "Échec de la nouvelle tentative d'exécution",
       "executionDeleteSuccess": "Exécution supprimée avec succès",
@@ -785,6 +834,7 @@
       "approveFailed": "Échec de l'approbation du workflow",
       "rejectResumeSuccess": "Workflow rejeté et repris",
       "rejectFailed": "Échec du rejet du workflow",
+      "forceDecisionRequireAll": "Seuls les approbateurs peuvent décider de cette étape (tous doivent décider). Vous pouvez plutôt annuler l'exécution.",
       "noChanges": "Aucune modification",
       "allAlreadyEnabled": "Tous les workflows sélectionnés sont déjà activés.",
       "allAlreadyDisabled": "Tous les workflows sélectionnés sont déjà désactivés.",

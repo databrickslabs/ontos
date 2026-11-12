@@ -35,7 +35,8 @@
       "contractApprovers": "契約承認者",
       "appRoles": "アプリロール",
       "businessRoles": "ビジネスロール",
-      "noGroups": "グループがありません"
+      "noGroups": "グループがありません",
+      "assetOwners": "アセット所有者"
     },
     "messages": {
       "loadWorkflowFailed": "ワークフローの読み込みに失敗しました",
@@ -92,6 +93,13 @@
       "persist_agreement": "契約を保存",
       "generate_pdf": "PDF を生成",
       "deliver": "配信"
+    },
+    "layout": {
+      "rearrange": "再配置",
+      "rearrangeHint": "すべてのステップを自動で配置",
+      "confirmTitle": "すべてのステップを再配置しますか？",
+      "confirmDescription": "ステップは自動で配置されます。保存すると現在のレイアウトは置き換えられます。",
+      "confirmAction": "再配置"
     },
     "discard": {
       "description": "このワークフローに未保存の変更があります。今すぐ離れると、変更内容は失われます。",
@@ -211,13 +219,28 @@
       "selectSource": "ソースを選択",
       "sourceCurrentUser": "現在のユーザー",
       "sourceProjectName": "プロジェクト名",
-      "sourceTimestamp": "タイムスタンプ"
+      "sourceTimestamp": "タイムスタンプ",
+      "valueMode": "値",
+      "modeFixed": "固定値",
+      "modeSource": "実行時の値",
+      "modeNone": "値なし",
+      "fixedValue": "タグの値",
+      "fixedValuePlaceholder": "例: confidential",
+      "selectValue": "値を選択",
+      "noValueHelp": "タグは値なしで割り当てられます。エンティティがこのタグに既に持つ値は保持されます。",
+      "sourceEntityName": "エンティティ名",
+      "tagNotFound": "この名前のタグはありません。このステップは実行の後続ステップに対してのみ設定します。",
+      "fixedValueRequired": "値を入力するか、「値なし」を選択して値なしでタグを割り当ててください。"
     },
     "approval": {
       "approversRole": "承認者（ロール）",
       "selectRole": "ロールを選択",
       "additionalApproversAria": "追加の承認者",
-      "timeoutDays": "タイムアウト（日）"
+      "timeoutDays": "タイムアウト（日）",
+      "timeoutDaysHelp": "0 はタイムアウトなしを意味します。空欄にすると既定値（7 日）になります。",
+      "requireAll": "すべての承認者を必須にする",
+      "requireAllHelp": "各承認者が判断します。ユーザーは本人が、グループまたはロールはそのメンバーの誰か 1 人が判断します。1 件でも却下されるとステップは失敗します。",
+      "timeoutNotEnforced": "まだ適用されません: 保留中の承認は期限切れになりません。"
     },
     "assetReview": {
       "reviewerRole": "レビュー担当者ロール",
@@ -312,11 +335,18 @@
       "duplicateStepIds": "2つのステップのIDが同じです。",
       "stepUnknownReference": "ステップ「{{step}}」の{{branch}}の分岐先「{{target}}」はワークフロー内にありません。",
       "stepConfigMissing": "ステップ「{{step}}」に必須の設定がありません: {{fields}}。",
+      "assignTagValueSourceUnknown": "ステップ「{{step}}」は不明な値ソース「{{source}}」を使用しています。",
       "policyCheckPolicyMissing": "ステップ「{{step}}」には既存のコンプライアンスポリシーが必要です。ステップの設定で選択してください。",
       "branch": {
         "on_pass": "成功時",
         "on_fail": "失敗時"
       }
+    },
+    "edgeLabels": {
+      "pass": "成功",
+      "fail": "失敗",
+      "true": "真",
+      "false": "偽"
     }
   },
   "approvalResponse": {
@@ -346,10 +376,17 @@
       "processFailed": "承認の処理に失敗しました。",
       "processFailedRetry": "承認の処理に失敗しました。もう一度お試しください。",
       "entityApproved": "{{name}} が承認されました。",
-      "entityRejected": "{{name}} が却下されました。"
+      "entityRejected": "{{name}} が却下されました。",
+      "decisionRecorded": "判断を記録しました",
+      "waitingForApprovers_one": "あと {{count}} 人の承認者を待っています。",
+      "waitingForApprovers_other": "あと {{count}} 人の承認者を待っています。"
     },
     "errors": {
-      "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。"
+      "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。",
+      "own_change_request_approval": "自分の変更リクエストは承認できません。",
+      "approval_already_decided": "この承認はすでにあなたが判断済みです。",
+      "approval_not_an_approver": "このステップは承認者だけが判断できます。",
+      "approval_no_longer_pending": "この承認はすでに判断済みです。"
     },
     "entityTypes": {
       "entity": "エンティティ",
@@ -493,7 +530,8 @@
       "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
       "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",
       "rule_entity_load_failed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} が見つからないため、ルールを評価できません"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} が見つからないため、ルールを評価できません",
+      "cancelled_by_admin": "管理者によりキャンセルされました（{{by}}）"
     },
     "states": {
       "pending": "保留中",
@@ -502,6 +540,10 @@
       "failed": "失敗",
       "skipped": "スキップ",
       "waiting": "待機中"
+    },
+    "conditionalBranch": {
+      "true": "条件は真でした: 真の分岐を実行しました",
+      "false": "条件は偽でした: 偽の分岐を実行しました"
     },
     "executionStates": {
       "pending": "保留中",
@@ -660,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "デフォルトワークフロー",
       "newOnly": "新規のみ読み込む",
-      "reloadAll": "すべてのデフォルトを再読み込み"
+      "reloadAll": "すべてのデフォルトを再読み込み",
+      "confirmTitle": "すべての既定ワークフローを再読み込みしますか？",
+      "confirmDescription": "各既定ワークフローは出荷時の定義（説明、トリガー、スコープ、ステップとその配置）にリセットされます。有効かどうかは変わりません。あなたや他の管理者が編集した既定ワークフローは、下で一緒にリセットしない限り保持されます。",
+      "includeEdited": "編集済みの既定ワークフローもリセットする（変更は失われます）",
+      "confirmAction": "再読み込み",
+      "keptEdited": "編集済みを保持: {{names}}。",
+      "result": "作成 {{created}} 件、更新 {{updated}} 件、スキップ {{skipped}} 件。"
     },
     "badges": {
       "default": "デフォルト",
@@ -775,6 +823,7 @@
       "loadDefaultsFailed": "デフォルトワークフローの読み込みに失敗しました",
       "cancelSuccess": "実行を正常にキャンセルしました",
       "cancelFailed": "実行のキャンセルに失敗しました",
+      "approvalCancelled": "承認をキャンセルしました。ワークフローは却下時の経路に進みました。ステータス: {{status}}。",
       "retryStarted": "実行のリトライを開始しました",
       "retryFailed": "実行のリトライに失敗しました",
       "executionDeleteSuccess": "実行を正常に削除しました",
@@ -785,6 +834,7 @@
       "approveFailed": "ワークフローの承認に失敗しました",
       "rejectResumeSuccess": "ワークフローを却下して再開しました",
       "rejectFailed": "ワークフローの却下に失敗しました",
+      "forceDecisionRequireAll": "このステップは承認者だけが判断できます（全員の判断が必要です）。代わりに実行をキャンセルできます。",
       "noChanges": "変更なし",
       "allAlreadyEnabled": "選択したワークフローはすべてすでに有効です。",
       "allAlreadyDisabled": "選択したワークフローはすべてすでに無効です。",

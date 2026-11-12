@@ -28,7 +28,7 @@ open https://<your-ontos-app-url>/docs
 
 ![Ontos api load](../assets/api_load.png)
 
-The endpoint needs the Admin permission. If your identity does not have it, set the optional `DEMO_SETUP_TOKEN` app setting, click *Authorize* and enter the value as `X-Demo-Setup-Token`.
+The endpoint needs the Admin permission. If your identity does not have it, set the optional `DEMO_SETUP_TOKEN` app setting (at least 32 characters; a shorter value is ignored), click *Authorize* and enter the value as `X-Demo-Setup-Token`.
 
 3. The API should give you a 200 Successful response
 

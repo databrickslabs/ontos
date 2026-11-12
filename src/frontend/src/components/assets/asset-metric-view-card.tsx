@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
 import MetricViewStatus from '@/components/assets/metric-view-status';
 import MeasureConsistencyList from '@/components/metric-views/measure-consistency-list';
+import MetricViewChangeRequests from '@/components/assets/metric-view-change-requests';
 import { useApi } from '@/hooks/use-api';
 import type { MetricViewDefinition } from '@/types/data-asset-review';
 
@@ -25,8 +26,9 @@ export function mayBeMetricView(
 
 /**
  * The metric view behind an asset: its dimensions and measures, the
- * concepts linked to the view and to each field, its drift from the baseline
- * and its refresh state, read from Unity Catalog as the user. Renders
+ * concepts linked to the view and to each field, its drift from the baseline,
+ * its refresh state and its definition change requests, read from Unity
+ * Catalog as the user. Renders
  * nothing when the asset isn't a metric view the user can read
  * (`metric_view_not_found`).
  *
@@ -101,6 +103,10 @@ export default function AssetMetricViewCard({ assetId, assetTypeName }: {
                         />
                         <MetricViewDefinitionPanel definition={definition} />
                         <MeasureConsistencyList assetId={assetId} />
+                        <MetricViewChangeRequests
+                            assetId={assetId}
+                            currentDefinition={definition.definition}
+                        />
                     </>
                 )}
             </CardContent>

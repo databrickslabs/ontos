@@ -47,11 +47,14 @@ export interface NamedRole {
  */
 export const DOMAIN_OWNER_TOKEN = 'DomainOwner';
 export const CONTRACT_APPROVER_TOKEN = 'ContractApprover';
+export const ASSET_OWNER_TOKEN = 'AssetOwner';
 
 const OWNER_TOKEN_BY_NORMALIZED: Record<string, string> = {
   domainowner: DOMAIN_OWNER_TOKEN,
   domainowners: DOMAIN_OWNER_TOKEN,
   contractapprover: CONTRACT_APPROVER_TOKEN,
+  assetowner: ASSET_OWNER_TOKEN,
+  assetowners: ASSET_OWNER_TOKEN,
 };
 
 function ownerOptionToken(token: string): string | undefined {

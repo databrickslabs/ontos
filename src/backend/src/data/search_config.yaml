@@ -200,9 +200,9 @@ asset_types:
     enabled: true
     inherit_defaults: true
     extra_fields:
-      title:
+      name:
         indexed: true
-        source: "title"
+        source: "name"
         match_type: substring
         priority: 4
         boost: 1.0

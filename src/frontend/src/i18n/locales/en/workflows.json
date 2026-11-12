@@ -35,7 +35,8 @@
       "contractApprovers": "Contract approvers",
       "appRoles": "App Roles",
       "businessRoles": "Business Roles",
-      "noGroups": "No groups"
+      "noGroups": "No groups",
+      "assetOwners": "Asset owners"
     },
     "messages": {
       "loadWorkflowFailed": "Failed to load workflow",
@@ -92,6 +93,13 @@
       "persist_agreement": "Persist Agreement",
       "generate_pdf": "Generate PDF",
       "deliver": "Deliver"
+    },
+    "layout": {
+      "rearrange": "Rearrange",
+      "rearrangeHint": "Arrange all steps automatically",
+      "confirmTitle": "Rearrange all steps?",
+      "confirmDescription": "The steps are arranged automatically. Your current layout is replaced when you save.",
+      "confirmAction": "Rearrange"
     },
     "discard": {
       "description": "You have unsaved changes to this workflow. If you leave now, your changes will be lost.",
@@ -211,13 +219,28 @@
       "selectSource": "Select source",
       "sourceCurrentUser": "Current User",
       "sourceProjectName": "Project Name",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Value",
+      "modeFixed": "Fixed value",
+      "modeSource": "Value from the run",
+      "modeNone": "No value",
+      "fixedValue": "Tag value",
+      "fixedValuePlaceholder": "e.g., confidential",
+      "selectValue": "Select a value",
+      "noValueHelp": "The tag is assigned without a value. A value the entity already has for this tag is kept.",
+      "sourceEntityName": "Entity Name",
+      "tagNotFound": "No tag has this name. The step then only sets it for the following steps of the run.",
+      "fixedValueRequired": "Enter a value, or choose \"No value\" to assign the tag without one."
     },
     "approval": {
       "approversRole": "Approvers (Role)",
       "selectRole": "Select role",
       "additionalApproversAria": "Additional approvers",
-      "timeoutDays": "Timeout (days)"
+      "timeoutDays": "Timeout (days)",
+      "timeoutDaysHelp": "0 means no timeout; leave it empty for the default (7 days).",
+      "requireAll": "Require every approver",
+      "requireAllHelp": "Each approver decides: a user for themselves, any one member for a group or role. Any rejection fails the step.",
+      "timeoutNotEnforced": "Not enforced yet: a pending approval doesn't expire."
     },
     "assetReview": {
       "reviewerRole": "Reviewer Role",
@@ -312,11 +335,18 @@
       "duplicateStepIds": "Two steps have the same ID.",
       "stepUnknownReference": "Step \"{{step}}\" points its {{branch}} branch at \"{{target}}\", which is not in the workflow.",
       "stepConfigMissing": "Step \"{{step}}\" is missing required settings: {{fields}}.",
+      "assignTagValueSourceUnknown": "Step \"{{step}}\" uses the unknown value source \"{{source}}\".",
       "policyCheckPolicyMissing": "Step \"{{step}}\" needs an existing compliance policy. Select one in the step's settings.",
       "branch": {
         "on_pass": "pass",
         "on_fail": "fail"
       }
+    },
+    "edgeLabels": {
+      "pass": "Pass",
+      "fail": "Fail",
+      "true": "True",
+      "false": "False"
     }
   },
   "approvalResponse": {
@@ -346,10 +376,17 @@
       "processFailed": "Failed to process approval.",
       "processFailedRetry": "Failed to process approval. Please try again.",
       "entityApproved": "{{name}} has been approved.",
-      "entityRejected": "{{name}} has been rejected."
+      "entityRejected": "{{name}} has been rejected.",
+      "decisionRecorded": "Decision recorded",
+      "waitingForApprovers_one": "Waiting for {{count}} more approver.",
+      "waitingForApprovers_other": "Waiting for {{count}} more approvers."
     },
     "errors": {
-      "own_owner_approval": "This approval is for the owners; you can't approve your own request."
+      "own_owner_approval": "This approval is for the owners; you can't approve your own request.",
+      "own_change_request_approval": "You can't approve your own change request.",
+      "approval_already_decided": "You have already decided this approval.",
+      "approval_not_an_approver": "Only the approvers of this step can decide it.",
+      "approval_no_longer_pending": "This approval has already been decided."
     },
     "entityTypes": {
       "entity": "Entity",
@@ -493,7 +530,8 @@
       "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
       "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",
       "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated",
+      "cancelled_by_admin": "Cancelled by an admin ({{by}})"
     },
     "states": {
       "pending": "Pending",
@@ -502,6 +540,10 @@
       "failed": "Failed",
       "skipped": "Skipped",
       "waiting": "Waiting"
+    },
+    "conditionalBranch": {
+      "true": "Condition was true: took the true branch",
+      "false": "Condition was false: took the false branch"
     },
     "executionStates": {
       "pending": "Pending",
@@ -660,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "Default Workflows",
       "newOnly": "Load New Only",
-      "reloadAll": "Reload All Defaults"
+      "reloadAll": "Reload All Defaults",
+      "confirmTitle": "Reload all default workflows?",
+      "confirmDescription": "Each default workflow is reset to its shipped definition: description, trigger, scope, steps and their layout. Whether a workflow is active doesn't change. Defaults that you or another admin edited are kept unless you also reset them below.",
+      "includeEdited": "Also reset default workflows that were edited (their changes are lost)",
+      "confirmAction": "Reload",
+      "keptEdited": "Kept edited: {{names}}.",
+      "result": "Created {{created}}, updated {{updated}}, skipped {{skipped}}."
     },
     "badges": {
       "default": "Default",
@@ -775,6 +823,7 @@
       "loadDefaultsFailed": "Failed to load default workflows",
       "cancelSuccess": "Execution cancelled successfully",
       "cancelFailed": "Failed to cancel execution",
+      "approvalCancelled": "Approval cancelled. The workflow followed its rejection path; status: {{status}}.",
       "retryStarted": "Execution retry started",
       "retryFailed": "Failed to retry execution",
       "executionDeleteSuccess": "Execution deleted successfully",
@@ -785,6 +834,7 @@
       "approveFailed": "Failed to approve workflow",
       "rejectResumeSuccess": "Workflow rejected and resumed",
       "rejectFailed": "Failed to reject workflow",
+      "forceDecisionRequireAll": "Only the approvers can decide this step (every approver must decide). You can cancel the execution instead.",
       "noChanges": "No Changes",
       "allAlreadyEnabled": "All selected workflows are already enabled.",
       "allAlreadyDisabled": "All selected workflows are already disabled.",

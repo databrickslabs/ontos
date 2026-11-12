@@ -35,7 +35,8 @@
       "contractApprovers": "Vertragsgenehmiger",
       "appRoles": "App-Rollen",
       "businessRoles": "Geschäftsrollen",
-      "noGroups": "Keine Gruppen"
+      "noGroups": "Keine Gruppen",
+      "assetOwners": "Asset-Eigentümer"
     },
     "messages": {
       "loadWorkflowFailed": "Workflow konnte nicht geladen werden",
@@ -92,6 +93,13 @@
       "persist_agreement": "Vereinbarung speichern",
       "generate_pdf": "PDF generieren",
       "deliver": "Zustellen"
+    },
+    "layout": {
+      "rearrange": "Neu anordnen",
+      "rearrangeHint": "Alle Schritte automatisch anordnen",
+      "confirmTitle": "Alle Schritte neu anordnen?",
+      "confirmDescription": "Die Schritte werden automatisch angeordnet. Ihr aktuelles Layout wird beim Speichern ersetzt.",
+      "confirmAction": "Neu anordnen"
     },
     "discard": {
       "description": "Sie haben nicht gespeicherte Änderungen an diesem Workflow. Wenn Sie jetzt verlassen, gehen Ihre Änderungen verloren.",
@@ -211,13 +219,28 @@
       "selectSource": "Quelle auswählen",
       "sourceCurrentUser": "Aktueller Benutzer",
       "sourceProjectName": "Projektname",
-      "sourceTimestamp": "Zeitstempel"
+      "sourceTimestamp": "Zeitstempel",
+      "valueMode": "Wert",
+      "modeFixed": "Fester Wert",
+      "modeSource": "Wert aus dem Lauf",
+      "modeNone": "Kein Wert",
+      "fixedValue": "Tag-Wert",
+      "fixedValuePlaceholder": "z. B. vertraulich",
+      "selectValue": "Wert auswählen",
+      "noValueHelp": "Das Tag wird ohne Wert zugewiesen. Ein Wert, den die Entität für dieses Tag bereits hat, bleibt erhalten.",
+      "sourceEntityName": "Entitätsname",
+      "tagNotFound": "Kein Tag hat diesen Namen. Der Schritt setzt es dann nur für die folgenden Schritte des Laufs.",
+      "fixedValueRequired": "Geben Sie einen Wert ein oder wählen Sie „Kein Wert“, um das Tag ohne Wert zuzuweisen."
     },
     "approval": {
       "approversRole": "Genehmiger (Rolle)",
       "selectRole": "Rolle auswählen",
       "additionalApproversAria": "Zusätzliche Genehmiger",
-      "timeoutDays": "Zeitlimit (Tage)"
+      "timeoutDays": "Zeitlimit (Tage)",
+      "timeoutDaysHelp": "0 bedeutet kein Zeitlimit; leer lassen für den Standardwert (7 Tage).",
+      "requireAll": "Alle Genehmigenden erforderlich",
+      "requireAllHelp": "Jeder Genehmigende entscheidet: ein Benutzer für sich selbst, ein beliebiges Mitglied für eine Gruppe oder Rolle. Jede Ablehnung lässt den Schritt fehlschlagen.",
+      "timeoutNotEnforced": "Noch nicht durchgesetzt: Eine ausstehende Genehmigung läuft nicht ab."
     },
     "assetReview": {
       "reviewerRole": "Prüferrolle",
@@ -312,11 +335,18 @@
       "duplicateStepIds": "Zwei Schritte haben dieselbe ID.",
       "stepUnknownReference": "Schritt \"{{step}}\" verweist mit seinem {{branch}}-Zweig auf \"{{target}}\", der nicht im Workflow ist.",
       "stepConfigMissing": "Bei Schritt \"{{step}}\" fehlen Pflichteinstellungen: {{fields}}.",
+      "assignTagValueSourceUnknown": "Schritt „{{step}}“ verwendet die unbekannte Wertquelle „{{source}}“.",
       "policyCheckPolicyMissing": "Der Schritt \"{{step}}\" benötigt eine vorhandene Compliance-Richtlinie. Wählen Sie in den Schritteinstellungen eine aus.",
       "branch": {
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
       }
+    },
+    "edgeLabels": {
+      "pass": "Bestanden",
+      "fail": "Fehlgeschlagen",
+      "true": "Wahr",
+      "false": "Falsch"
     }
   },
   "approvalResponse": {
@@ -346,10 +376,17 @@
       "processFailed": "Genehmigung konnte nicht verarbeitet werden.",
       "processFailedRetry": "Genehmigung konnte nicht verarbeitet werden. Bitte versuchen Sie es erneut.",
       "entityApproved": "{{name}} wurde genehmigt.",
-      "entityRejected": "{{name}} wurde abgelehnt."
+      "entityRejected": "{{name}} wurde abgelehnt.",
+      "decisionRecorded": "Entscheidung erfasst",
+      "waitingForApprovers_one": "Es fehlt noch {{count}} Genehmigender.",
+      "waitingForApprovers_other": "Es fehlen noch {{count}} Genehmigende."
     },
     "errors": {
-      "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen."
+      "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen.",
+      "own_change_request_approval": "Sie können Ihre eigene Änderungsanfrage nicht genehmigen.",
+      "approval_already_decided": "Sie haben über diese Genehmigung bereits entschieden.",
+      "approval_not_an_approver": "Nur die Genehmigenden dieses Schritts können darüber entscheiden.",
+      "approval_no_longer_pending": "Über diese Genehmigung wurde bereits entschieden."
     },
     "entityTypes": {
       "entity": "Entität",
@@ -493,7 +530,8 @@
       "output_port_contracts_missing": "Veröffentlichung nicht möglich: Den Ausgabeports {{ports}} müssen Datenverträge zugewiesen sein",
       "output_port_contracts_unapproved": "Veröffentlichung nicht möglich: Diese Ausgabeports haben nicht genehmigte Verträge: {{ports}}. Die Verträge müssen zuerst genehmigt werden.",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} konnte nicht geladen werden, um die Regel auszuwerten",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden",
+      "cancelled_by_admin": "Von einem Administrator abgebrochen ({{by}})"
     },
     "states": {
       "pending": "Ausstehend",
@@ -502,6 +540,10 @@
       "failed": "Fehlgeschlagen",
       "skipped": "Übersprungen",
       "waiting": "Wartet"
+    },
+    "conditionalBranch": {
+      "true": "Bedingung war wahr: Wahr-Zweig ausgeführt",
+      "false": "Bedingung war falsch: Falsch-Zweig ausgeführt"
     },
     "executionStates": {
       "pending": "Ausstehend",
@@ -660,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "Standard-Workflows",
       "newOnly": "Nur neue laden",
-      "reloadAll": "Alle Standardwerte neu laden"
+      "reloadAll": "Alle Standardwerte neu laden",
+      "confirmTitle": "Alle Standard-Workflows neu laden?",
+      "confirmDescription": "Jeder Standard-Workflow wird auf seine ausgelieferte Definition zurückgesetzt: Beschreibung, Auslöser, Geltungsbereich, Schritte und deren Anordnung. Ob ein Workflow aktiv ist, ändert sich nicht. Standard-Workflows, die Sie oder ein anderer Admin bearbeitet haben, bleiben erhalten, außer Sie setzen sie unten ebenfalls zurück.",
+      "includeEdited": "Auch bearbeitete Standard-Workflows zurücksetzen (ihre Änderungen gehen verloren)",
+      "confirmAction": "Neu laden",
+      "keptEdited": "Bearbeitete beibehalten: {{names}}.",
+      "result": "Erstellt: {{created}}, aktualisiert: {{updated}}, übersprungen: {{skipped}}."
     },
     "badges": {
       "default": "Standard",
@@ -775,6 +823,7 @@
       "loadDefaultsFailed": "Standard-Workflows konnten nicht geladen werden",
       "cancelSuccess": "Ausführung erfolgreich abgebrochen",
       "cancelFailed": "Ausführung konnte nicht abgebrochen werden",
+      "approvalCancelled": "Genehmigung abgebrochen. Der Workflow ist seinem Ablehnungspfad gefolgt; Status: {{status}}.",
       "retryStarted": "Wiederholung der Ausführung gestartet",
       "retryFailed": "Ausführung konnte nicht wiederholt werden",
       "executionDeleteSuccess": "Ausführung erfolgreich gelöscht",
@@ -785,6 +834,7 @@
       "approveFailed": "Workflow konnte nicht genehmigt werden",
       "rejectResumeSuccess": "Workflow abgelehnt und fortgesetzt",
       "rejectFailed": "Workflow konnte nicht abgelehnt werden",
+      "forceDecisionRequireAll": "Nur die Genehmigenden können diesen Schritt entscheiden (alle müssen entscheiden). Sie können die Ausführung stattdessen abbrechen.",
       "noChanges": "Keine Änderungen",
       "allAlreadyEnabled": "Alle ausgewählten Workflows sind bereits aktiviert.",
       "allAlreadyDisabled": "Alle ausgewählten Workflows sind bereits deaktiviert.",

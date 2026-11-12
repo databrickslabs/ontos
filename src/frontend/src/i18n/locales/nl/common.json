@@ -340,7 +340,8 @@
       "for_request_access": "Toegang Aanvragen (Wizard)",
       "for_request_publish": "Publicatie Aanvragen (Wizard)",
       "for_request_certify": "Certificering Aanvragen (Wizard)",
-      "for_request_status_change": "Statuswijziging Aanvragen (Wizard)"
+      "for_request_status_change": "Statuswijziging Aanvragen (Wizard)",
+      "on_request_definition_change": "Verzoek tot definitiewijziging"
     },
     "entityTypes": {
       "catalog": "Catalogus",
@@ -360,7 +361,8 @@
       "user": "Gebruiker",
       "ontology_concept": "Concept",
       "ontology_collection": "Collectie",
-      "concept_changeset": "Concept-wijzigingsset"
+      "concept_changeset": "Concept-wijzigingsset",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validatie",

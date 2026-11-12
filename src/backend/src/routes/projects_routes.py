@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 
@@ -117,7 +117,7 @@ def get_all_projects(
     settings: Settings = Depends(get_settings),
     manager = Depends(get_projects_manager),
     skip: int = 0,
-    limit: int = 100
+    limit: Optional[int] = None
 ):
     """Lists projects visible to the user based on domain relationships."""
     logger.debug(f"Fetching projects (skip={skip}, limit={limit}) for user: {current_user.email}")

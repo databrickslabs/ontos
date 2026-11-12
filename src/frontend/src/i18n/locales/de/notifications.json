@@ -186,6 +186,11 @@
       "concept-review-approval": {
         "notify-approved": "Dein Konzept '{{entity_name}}' wurde genehmigt.",
         "notify-rejected": "Dein Konzept '{{entity_name}}' wurde zur Überarbeitung zurückgegeben. Bitte lies den Kommentar des Prüfers und reiche es erneut ein."
+      },
+      "metric-view-change-request": {
+        "notify-requester": "Ihre Änderung an der Metric View '{{entity_name}}' wurde zur Genehmigung eingereicht.",
+        "notify-approved": "Ihre Änderung an der Metric View '{{entity_name}}' wurde genehmigt und wird ausgeliefert.",
+        "notify-rejected": "Ihre Änderung an der Metric View '{{entity_name}}' wurde abgelehnt."
       }
     },
     "approval": {
@@ -213,7 +218,8 @@
         "entity": "Entität",
         "ontology_concept": "Konzept",
         "ontology_collection": "Konzeptschema",
-        "concept_changeset": "Konzept-Änderungssatz"
+        "concept_changeset": "Konzept-Änderungssatz",
+        "metric_view": "Metric View"
       }
     },
     "approvalMessages": {
@@ -257,5 +263,13 @@
     "failedEntities": "Fehlgeschlagen: {{names}}",
     "passedEntities": "Bestanden: {{names}}",
     "namesWithMore": "{{names}} und {{count}} weitere"
+  },
+  "metricViewChangeManual": {
+    "title": "Änderung der Metric View anwenden",
+    "description": "Die Änderungsanfrage für die Metric View {{fqn}} wurde genehmigt. Führen Sie diese Anweisung aus, um sie anzuwenden:\n\n{{ddl}}"
+  },
+  "metricViewChangeFailed": {
+    "title": "Änderung der Metric View nicht ausgeliefert",
+    "description": "Die genehmigte Änderungsanfrage für die Metric View {{fqn}} konnte nicht ausgeliefert werden."
   }
 }

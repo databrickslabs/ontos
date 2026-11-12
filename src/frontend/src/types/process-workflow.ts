@@ -22,6 +22,7 @@ export type TriggerType =
   | 'on_request_publish'
   | 'on_request_deploy'
   | 'on_request_status_change'
+  | 'on_request_definition_change'
   | 'on_request_certify'
   | 'on_certify'
   | 'on_decertify'
@@ -71,7 +72,8 @@ export type EntityType =
   | 'user'
   | 'ontology_concept'
   | 'ontology_collection'
-  | 'concept_changeset';
+  | 'concept_changeset'
+  | 'metric_view';
 
 export type ScopeType = 'all' | 'project' | 'catalog' | 'domain';
 
@@ -471,6 +473,8 @@ export interface WorkflowValidationResult {
   warnings: string[];
   /** The same errors with a code and params each (translated by the designer). */
   issues?: { code: string; message: string; params: Record<string, unknown> }[];
+  /** The same warnings with a code and params each. */
+  warning_issues?: { code: string; message: string; params: Record<string, unknown> }[];
 }
 
 // API responses

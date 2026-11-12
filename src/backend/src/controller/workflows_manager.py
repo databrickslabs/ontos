@@ -37,6 +37,8 @@ from src.models.process_workflows import (
     TemplateVarDescriptor,
     TemplateVarGroup,
     TemplateVarsResponse,
+    ends_process_run,
+    is_conditional_step_type,
 )
 from src.repositories.process_workflows_repository import process_workflow_repo
 from src.common.logging import get_logger
@@ -110,6 +112,10 @@ def _stored_trigger(trigger: WorkflowTrigger | Dict[str, Any] | None) -> Optiona
     return trigger
 
 
+# Value sources the assign_tag step resolves (AssignTagStepHandler._resolve_value_source).
+ASSIGN_TAG_VALUE_SOURCES = ('current_user', 'project_name', 'entity_name', 'timestamp')
+
+
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
     """A step config error for required settings, with the step and fields as params."""
     return CodedMessage(f"Step '{step.step_id}': {text}", 'step_config_missing',
@@ -144,12 +150,16 @@ class WorkflowsManager:
         yaml_path: Optional[str] = None,
         update_existing: bool = False,
         requests_only_active: bool = False,
+        include_edited: bool = False,
     ) -> dict:
         """Load default workflows from YAML file.
         
         Args:
             yaml_path: Path to YAML file, or None to use default
-            update_existing: If True, updates existing default workflows instead of skipping
+            update_existing: If True, updates existing default workflows instead of skipping.
+                Defaults a user edited are kept (counted in ``kept_edited``) unless
+                ``include_edited`` is also True.
+            include_edited: With ``update_existing``, also reset defaults a user edited.
             requests_only_active: If True, workflows created now keep the YAML's
                 ``is_active`` only when a request starts them (``on_request_*``);
                 all others (event-driven automation, ``for_*`` UI wizards) are
@@ -157,11 +167,12 @@ class WorkflowsManager:
                 on new automatic behavior. Existing workflows are not changed.
             
         Returns:
-            Dict with counts: {'created': int, 'updated': int, 'skipped': int}
+            Dict with counts: {'created', 'updated', 'skipped', 'kept_edited'} and the
+            names of the kept edited defaults in ``kept_edited_names``.
         """
         path = Path(yaml_path) if yaml_path else self._default_workflows_path
         
-        result = {'created': 0, 'updated': 0, 'skipped': 0}
+        result = {'created': 0, 'updated': 0, 'skipped': 0, 'kept_edited': 0, 'kept_edited_names': []}
         
         if not path.exists():
             logger.warning(f"Workflows YAML not found: {path}")
@@ -181,7 +192,7 @@ class WorkflowsManager:
         # rows another process created.
         with self._defaults_lock():
             return self._load_workflows(
-                workflows_data, result, update_existing, requests_only_active
+                workflows_data, result, update_existing, requests_only_active, include_edited
             )
 
     def add_default_entity_types(self) -> int:
@@ -239,6 +250,7 @@ class WorkflowsManager:
         result: dict,
         update_existing: bool,
         requests_only_active: bool,
+        include_edited: bool = False,
     ) -> dict:
         for wf_data in workflows_data:
             try:
@@ -287,18 +299,27 @@ class WorkflowsManager:
                 existing = process_workflow_repo.get_by_name(self._db, name)
                 
                 if existing:
-                    if update_existing and existing.is_default:
-                        # Update existing default workflow
+                    if update_existing and existing.is_default and not include_edited \
+                            and existing.is_customized:
+                        # A user changed this default's definition; a reset would
+                        # silently undo that, so keep it unless asked.
+                        result['kept_edited'] += 1
+                        result['kept_edited_names'].append(name)
+                        logger.info("Kept default workflow edited by a user: %s", name)
+                    elif update_existing and existing.is_default:
+                        # Reset the definition to the YAML. Activation is the admin's
+                        # choice (startup seeds automation inactive), so it's kept.
                         wf_type = wf_data.get('workflow_type', 'process')
                         update_data = ProcessWorkflowUpdate(
                             description=wf_data.get('description'),
                             trigger=trigger,
                             scope=scope,
                             workflow_type=WorkflowType(wf_type) if isinstance(wf_type, str) else wf_type,
-                            is_active=wf_data.get('is_active', True),
                             steps=steps,
                         )
-                        process_workflow_repo.update(self._db, existing.id, update_data)
+                        process_workflow_repo.update(
+                            self._db, existing.id, update_data, updated_by='system', customized=False,
+                        )
                         result['updated'] += 1
                         logger.info(f"Updated default workflow: {name}")
                     else:
@@ -392,12 +413,13 @@ class WorkflowsManager:
         *,
         updated_by: Optional[str] = None,
     ) -> Optional[ProcessWorkflow]:
-        """Update an existing workflow."""
+        """Update an existing workflow (a user's change: marks a default as customized)."""
         db_workflow = process_workflow_repo.update(
             self._db,
             workflow_id,
             workflow,
             updated_by=updated_by,
+            customized=True,
         )
         if not db_workflow:
             return None
@@ -694,6 +716,31 @@ class WorkflowsManager:
                         'step_unknown_reference', step=step.step_id, target=target, field=field,
                     ))
         
+        # A Pass or Fail step ends a process run: a link out of it is never followed
+        # and is dropped on save (older designers stored one the canvas never drew)
+        for step in workflow.steps:
+            if not ends_process_run(workflow.workflow_type, step.step_type):
+                continue
+            for target in dict.fromkeys(t for t in (step.on_pass, step.on_fail) if t):
+                warnings.append(CodedMessage(
+                    f"Step '{step.step_id}' ends the workflow; its link to '{target}' is ignored and removed on save",
+                    'terminal_step_has_next', step=step.step_id, target=target,
+                ))
+
+        # A conditional whose branch has no step ends the run succeeded when it takes
+        # that branch, so a gate lets the change through (a false condition is not
+        # a failure). Warn, so a missing Fail step on a branch isn't overlooked.
+        for step in workflow.steps:
+            if not is_conditional_step_type(step.step_type):
+                continue
+            for branch, target in (('true', step.on_pass), ('false', step.on_fail)):
+                if not target:
+                    warnings.append(CodedMessage(
+                        f"Conditional step '{step.step_id}' has no step on its {branch} branch; "
+                        f"a {branch} condition ends the workflow as succeeded",
+                        'conditional_branch_missing', step=step.step_id, branch=branch,
+                    ))
+
         # Check for unreachable steps (warning only)
         reachable = set()
         if workflow.steps:
@@ -706,15 +753,18 @@ class WorkflowsManager:
                 reachable.add(current)
                 
                 step = next((s for s in workflow.steps if s.step_id == current), None)
-                if step:
+                if step and not ends_process_run(workflow.workflow_type, step.step_type):
                     if step.on_pass:
                         to_visit.append(step.on_pass)
                     if step.on_fail:
                         to_visit.append(step.on_fail)
             
-            unreachable = step_id_set - reachable
+            unreachable = sorted(step_id_set - reachable)
             if unreachable:
-                warnings.append(f"Unreachable steps: {', '.join(unreachable)}")
+                warnings.append(CodedMessage(
+                    f"Unreachable steps: {', '.join(unreachable)}",
+                    'unreachable_steps', steps=unreachable,
+                ))
         
         # Validate step configs based on type
         for step in workflow.steps:
@@ -886,6 +936,43 @@ class WorkflowsManager:
             )
         return warned
 
+    def log_branching_warnings(self) -> int:
+        """Warn once per stored process workflow whose branching changed meaning (#1417, #1418).
+
+        Run at startup. Two cases are logged, the workflows are not changed:
+        a Pass or Fail step with a link to a next step (ignored, dropped on the next
+        save), and a gate (``before_*`` trigger) whose conditional has no step on a
+        branch: a condition taking that branch now ends the run succeeded, which lets
+        the change through, where it used to fail the run. Returns how many workflows
+        were warned about.
+        """
+        warned = 0
+        for db_workflow in process_workflow_repo.list_all(self._db):
+            try:
+                workflow = self._db_to_model(db_workflow)
+            except Exception:
+                logger.warning("Could not check the steps of workflow %s", db_workflow.id, exc_info=True)
+                continue
+            linked = [
+                s.step_id for s in workflow.steps
+                if ends_process_run(workflow.workflow_type, s.step_type) and (s.on_pass or s.on_fail)
+            ]
+            open_branches = [
+                f"{s.step_id}:{branch}" for s in workflow.steps if is_conditional_step_type(s.step_type)
+                for branch, target in (('true', s.on_pass), ('false', s.on_fail)) if not target
+            ] if workflow.trigger.type.value.startswith('before_') else []
+            if not linked and not open_branches:
+                continue
+            warned += 1
+            logger.warning(
+                "Workflow %s (%r, %s, trigger %s): Pass/Fail steps with a next step, which is "
+                "ignored and removed on the next save: %s; gate conditionals with no step on a "
+                "branch, which now ends the run succeeded and lets the change through: %s",
+                workflow.id, workflow.name, 'active' if workflow.is_active else 'inactive',
+                workflow.trigger.type.value, linked, open_branches,
+            )
+        return warned
+
     def _validate_gate_exemptions(self, trigger: WorkflowTrigger) -> List[str]:
         """``disabled_for`` is for status gates only, and must name existing entities."""
         exemptions = trigger.disabled_for
@@ -931,8 +1018,17 @@ class WorkflowsManager:
         elif step.step_type == StepType.ASSIGN_TAG:
             if not config.get('key'):
                 errors.append(_missing(step, "Assign tag step requires 'key' in config", ['key']))
-            if not config.get('value') and not config.get('value_source'):
-                errors.append(_missing(step, "Assign tag step requires 'value' or 'value_source' in config", ['value', 'value_source']))
+            # Neither 'value' nor 'value_source' assigns the tag key-only. An empty
+            # fixed value is an unfinished step, not "no value".
+            value_source = config.get('value_source')
+            if not value_source and 'value' in config and config.get('value') in ('', None):
+                errors.append(_missing(step, "Assign tag step has an empty 'value': enter one or remove it to assign the tag without a value", ['value']))
+            if value_source and value_source not in ASSIGN_TAG_VALUE_SOURCES:
+                errors.append(CodedMessage(
+                    f"Step '{step.step_id}': unknown value source '{value_source}'",
+                    'assign_tag_value_source_unknown',
+                    step=step.step_id, source=value_source, supported=list(ASSIGN_TAG_VALUE_SOURCES),
+                ))
 
         elif step.step_type == StepType.REMOVE_TAG:
             if not config.get('key'):
@@ -1014,8 +1110,8 @@ class WorkflowsManager:
                     "type": "object",
                     "properties": {
                         "key": {"type": "string", "description": "Tag key"},
-                        "value": {"type": "string", "description": "Static tag value"},
-                        "value_source": {"type": "string", "description": "Dynamic value source: current_user, project_name"}
+                        "value": {"type": "string", "description": "Static tag value; leave out (and value_source) to assign the tag without a value"},
+                        "value_source": {"type": "string", "description": "Dynamic value source: current_user, project_name, entity_name, timestamp (wins over value)"}
                     },
                     "required": ["key"]
                 },

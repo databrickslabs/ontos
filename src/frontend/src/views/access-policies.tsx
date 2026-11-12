@@ -6,6 +6,7 @@ import { FileDown, FileUp, Plus, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
+import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -44,7 +45,7 @@ export default function AccessPolicies() {
   const [audiences, setAudiences] = useState<AccessCollection[]>([]);
   const [collections, setCollections] = useState<AccessCollection[]>([]);
   const [targets, setTargets] = useState<AccessTarget[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [createKind, setCreateKind] = useState<AccessKind | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
@@ -56,7 +57,6 @@ export default function AccessPolicies() {
   }, [setStaticSegments, setDynamicTitle, t]);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const [p, a, c, tg] = await Promise.all([
       get<AccessPolicy[]>('/api/access-policies/policies'),
       get<AccessCollection[]>('/api/access-policies/audiences'),
@@ -67,7 +67,7 @@ export default function AccessPolicies() {
     setAudiences(Array.isArray(a.data) ? a.data : []);
     setCollections(Array.isArray(c.data) ? c.data : []);
     setTargets(Array.isArray(tg.data) ? tg.data : []);
-    setLoading(false);
+    setLoaded(true);
   }, [get]);
 
   useEffect(() => {
@@ -264,11 +264,13 @@ export default function AccessPolicies() {
         </TabsList>
 
         <TabsContent value="policies" className="pt-4">
+          {!loaded ? (
+            <ListViewSkeleton columns={6} rows={5} toolbarButtons={2} />
+          ) : (
           <DataTable
             columns={policyColumns}
             data={policies}
             searchColumn="name"
-            isLoading={loading}
             storageKey="access-policies-list"
             onRowClick={(row) => openDetail('policy', row.original.id)}
             toolbarActions={
@@ -287,30 +289,37 @@ export default function AccessPolicies() {
               </div>
             }
           />
+          )}
         </TabsContent>
         <TabsContent value="audiences" className="pt-4">
           <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:list.audiencesHint')}</p>
+          {!loaded ? (
+            <ListViewSkeleton columns={6} rows={5} toolbarButtons={2} />
+          ) : (
           <DataTable
             columns={collectionColumns}
             data={audiences}
             searchColumn="name"
-            isLoading={loading}
             storageKey="access-audiences-list"
             onRowClick={(row) => openDetail('audience', row.original.id)}
             toolbarActions={newButton('audience')}
           />
+          )}
         </TabsContent>
         <TabsContent value="asset-collections" className="pt-4">
           <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:list.collectionsHint')}</p>
+          {!loaded ? (
+            <ListViewSkeleton columns={6} rows={5} toolbarButtons={2} />
+          ) : (
           <DataTable
             columns={collectionColumns}
             data={collections}
             searchColumn="name"
-            isLoading={loading}
             storageKey="access-asset-collections-list"
             onRowClick={(row) => openDetail('asset_collection', row.original.id)}
             toolbarActions={newButton('asset_collection')}
           />
+          )}
         </TabsContent>
         <TabsContent value="check" className="pt-4">
           <CheckAccessPanel />
@@ -323,15 +332,18 @@ export default function AccessPolicies() {
         </TabsContent>
         <TabsContent value="targets" className="pt-4">
           <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:targets.hint')}</p>
+          {!loaded ? (
+            <ListViewSkeleton columns={6} rows={5} toolbarButtons={2} />
+          ) : (
           <DataTable
             columns={targetColumns}
             data={targets}
             searchColumn="name"
-            isLoading={loading}
             storageKey="access-targets-list"
             onRowClick={(row) => openDetail('target', row.original.id)}
             toolbarActions={newButton('target')}
           />
+          )}
         </TabsContent>
       </Tabs>
 

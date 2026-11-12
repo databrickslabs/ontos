@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { PanelSkeleton } from '@/components/common/list-view-skeleton';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import type { DutyStatus } from '@/types/access-policy';
@@ -29,10 +30,12 @@ export default function DutiesPanel({
   const [duties, setDuties] = useState<DutyStatus[]>(initial || []);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(!!initial);
 
   const load = useCallback(async () => {
     const res = await get<DutyStatus[]>(`/api/access-policies/policies/${agreementId}/duties`);
     if (Array.isArray(res.data)) setDuties(res.data);
+    setLoaded(true);
   }, [agreementId, get]);
 
   useEffect(() => {
@@ -58,6 +61,7 @@ export default function DutiesPanel({
     toast({ title: t('access-policies:duties.done', { duty: label(action) }) });
   };
 
+  if (!loaded) return <PanelSkeleton rows={2} />;
   if (!duties.length) return null;
   const open = duties.filter((d) => !d.fulfilled);
 

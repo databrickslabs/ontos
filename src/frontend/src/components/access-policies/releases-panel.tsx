@@ -6,6 +6,7 @@ import { PackagePlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
+import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import ReleaseStatusBadge from '@/components/access-policies/release-status-badge';
@@ -20,7 +21,8 @@ export default function ReleasesPanel({ canWrite }: { canWrite: boolean }) {
   const { get, post } = useApi();
   const { toast } = useToast();
   const [rows, setRows] = useState<AccessRelease[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Skeleton until the first load returns; later reloads (filters, after actions) keep the rows.
+  const [loaded, setLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
   const compileTargets = useCompileTargets();
   const targets = compileTargets?.targets || [];
@@ -29,10 +31,9 @@ export default function ReleasesPanel({ canWrite }: { canWrite: boolean }) {
   const chosen = target || targets[0]?.key || '';
 
   const load = useCallback(async () => {
-    setLoading(true);
     const res = await get<AccessRelease[]>('/api/access-policies/releases');
     setRows(Array.isArray(res.data) ? res.data : []);
-    setLoading(false);
+    setLoaded(true);
   }, [get]);
 
   useEffect(() => {
@@ -118,6 +119,15 @@ export default function ReleasesPanel({ canWrite }: { canWrite: boolean }) {
     [t],
   );
 
+  if (!loaded) {
+    return (
+      <div>
+        <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:releases.hint')}</p>
+        <ListViewSkeleton columns={6} rows={5} toolbarButtons={2} />
+      </div>
+    );
+  }
+
   return (
     <div>
       <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:releases.hint')}</p>
@@ -125,7 +135,6 @@ export default function ReleasesPanel({ canWrite }: { canWrite: boolean }) {
         columns={columns}
         data={rows}
         searchColumn="name"
-        isLoading={loading}
         storageKey="access-policy-releases-list"
         onRowClick={(row) => navigate(`/access-policies/releases/${row.original.id}`)}
         toolbarActions={

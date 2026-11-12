@@ -945,7 +945,8 @@ export default function DataContractDetails() {
         descriptionUsage: payload.description?.usage,
         descriptionPurpose: payload.description?.purpose,
         descriptionLimitations: payload.description?.limitations,
-        tags: payload.tags || [],
+        // Missing = keep the tags, [] = remove them all (#1435): the dialog only sends a changed selection.
+        tags: payload.tags,
       }
       console.log('[DEBUG] Update payload owner_team_id:', updatePayload.owner_team_id)
       console.log('[DEBUG] Sending update request:', JSON.stringify(updatePayload, null, 2))

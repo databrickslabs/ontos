@@ -170,8 +170,29 @@ def test_the_settings_save_returns_the_job_warnings(client, monkeypatch):
 
     warning = {'code': 'compliance_job_not_updated', 'params': {}, 'message': 'm'}
     monkeypatch.setattr(SettingsManager, '_refresh_llm_job_parameters', lambda self: warning)
+    calls = []
+    real = SettingsManager.update_settings_with_warnings
+    monkeypatch.setattr(
+        SettingsManager, 'update_settings_with_warnings',
+        lambda self, payload: calls.append(payload) or real(self, payload),
+    )
 
     response = client.put('/api/settings', json={'llm_endpoint': 'new-endpoint'})
 
     assert response.status_code == 200, response.text
     assert response.json()['warnings'] == [warning]
+    assert len(calls) == 1
+
+
+def test_expired_rule_test_entries_are_dropped(monkeypatch):
+    from src.routes import compliance_routes
+
+    clock = [1000.0]
+    monkeypatch.setattr(compliance_routes.time, 'monotonic', lambda: clock[0])
+    for user in ('a@x', 'b@x', 'c@x'):
+        compliance_routes._throttle_rule_test(user)
+
+    clock[0] += compliance_routes.RULE_TEST_WINDOW_SECONDS
+    compliance_routes._throttle_rule_test('d@x')
+
+    assert set(compliance_routes._rule_tests) == {'d@x'}

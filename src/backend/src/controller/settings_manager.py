@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import json
 import uuid
 import yaml
@@ -1539,11 +1539,6 @@ class SettingsManager:
     COMPLIANCE_JOB_NOT_UPDATED = 'compliance_job_not_updated'
     COMPLIANCE_JOB_SHAPE_UNEXPECTED = 'compliance_job_shape_unexpected'
 
-    @property
-    def update_warnings(self) -> List[Dict[str, Any]]:
-        """Warnings of the last update_settings, as ``{code, params, message}``."""
-        return list(getattr(self, '_update_warnings', []))
-
     def _refresh_llm_job_parameters(self) -> Optional[Dict[str, Any]]:
         """Give the installed compliance job the new LLM settings; a warning if it couldn't.
 
@@ -1581,7 +1576,20 @@ class SettingsManager:
 
     def update_settings(self, settings: dict) -> Settings:
         """Update settings"""
-        self._update_warnings: List[Dict[str, Any]] = []
+        return self.update_settings_with_warnings(settings)[0]
+
+    def update_settings_with_warnings(
+        self, settings: dict,
+    ) -> Tuple[Settings, List[Dict[str, Any]]]:
+        """Update settings; also what didn't apply, as ``{code, params, message}`` warnings.
+
+        The warnings are returned, not kept on this shared instance, so
+        concurrent saves don't see each other's.
+        """
+        warnings: List[Dict[str, Any]] = []
+        return self._update_settings(settings, warnings), warnings
+
+    def _update_settings(self, settings: dict, warnings: List[Dict[str, Any]]) -> Settings:
         git_values_before = self._git_setting_values()
         # Persist configured cluster ID string; do not scan clusters
         cluster_in_payload = 'job_cluster_id' in settings
@@ -1696,7 +1704,7 @@ class SettingsManager:
         if 'llm_enabled' in settings or 'llm_endpoint' in settings:
             warning = self._refresh_llm_job_parameters()
             if warning:
-                self._update_warnings.append(warning)
+                warnings.append(warning)
         
         if 'llm_system_prompt' in settings:
             value = settings.get('llm_system_prompt') or None

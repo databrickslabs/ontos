@@ -398,9 +398,17 @@ class RuleTestRateLimitedError(CodedValueError):
 
 
 def _throttle_rule_test(user: str) -> None:
-    """Count a rule test of ``user``; RuleTestRateLimitedError past the limit (in memory)."""
+    """Count a rule test of ``user``; RuleTestRateLimitedError past the limit.
+
+    In memory, so the limit holds per backend process.
+    """
     now = time.monotonic()
     with _rule_tests_lock:
+        # Users whose tests all expired: drop them, so the dict doesn't keep growing
+        for expired in [
+            u for u, q in _rule_tests.items() if not q or now - q[-1] >= RULE_TEST_WINDOW_SECONDS
+        ]:
+            del _rule_tests[expired]
         calls = _rule_tests[user]
         while calls and now - calls[0] >= RULE_TEST_WINDOW_SECONDS:
             calls.popleft()

@@ -125,12 +125,12 @@ def test_changing_the_llm_settings_syncs_the_installed_job(db_session):
     manager = _settings_manager(db_session)
     manager._jobs.sync_installed_workflow.return_value = None
 
-    manager.update_settings({'llm_endpoint': 'new-endpoint'})
+    _, warnings = manager.update_settings_with_warnings({'llm_endpoint': 'new-endpoint'})
 
     manager._jobs.sync_installed_workflow.assert_called_once_with(
         WORKFLOW, required_arguments=LLM_TASK_ARGUMENTS,
     )
-    assert manager.update_warnings == []
+    assert warnings == []
 
 
 def test_a_job_the_app_cannot_update_is_a_coded_warning(db_session):
@@ -139,20 +139,24 @@ def test_a_job_the_app_cannot_update_is_a_coded_warning(db_session):
     manager = _settings_manager(db_session)
     manager._jobs.sync_installed_workflow.side_effect = PermissionDenied('no CAN_MANAGE')
 
-    manager.update_settings({'llm_endpoint': 'new-endpoint'})
+    _, warnings = manager.update_settings_with_warnings({'llm_endpoint': 'new-endpoint'})
 
     # The settings are saved; the warning says the job kept the old ones
     assert manager._settings.LLM_ENDPOINT == 'new-endpoint'
-    assert [w['code'] for w in manager.update_warnings] == ['compliance_job_not_updated']
+    assert [w['code'] for w in warnings] == ['compliance_job_not_updated']
+    # Not kept on the shared manager: the next save starts without it
+    manager._jobs.sync_installed_workflow.side_effect = None
+    manager._jobs.sync_installed_workflow.return_value = None
+    assert manager.update_settings_with_warnings({'llm_enabled': True})[1] == []
 
 
 def test_a_job_of_another_shape_is_a_coded_warning(db_session):
     manager = _settings_manager(db_session)
     manager._jobs.sync_installed_workflow.return_value = JOB_SHAPE_UNEXPECTED
 
-    manager.update_settings({'llm_enabled': True})
+    _, warnings = manager.update_settings_with_warnings({'llm_enabled': True})
 
-    assert [w['code'] for w in manager.update_warnings] == ['compliance_job_shape_unexpected']
+    assert [w['code'] for w in warnings] == ['compliance_job_shape_unexpected']
 
 
 def _installed(monkeypatch, job_id=789):
@@ -283,6 +287,19 @@ def test_a_job_without_its_task_only_gets_parameters(db_session, llm_settings, m
     new_settings = _updated(manager)
     assert new_settings.tasks is None
     assert {p.name: p.default for p in new_settings.parameters}['llm_endpoint'] == 'db-endpoint'
+    manager._workspace_deployer.deploy_workflow.assert_not_called()
+
+
+def test_a_cut_off_task_list_is_never_written(db_session, llm_settings, monkeypatch):
+    manager = _manager(db_session, llm_settings)
+    manager._workspace_deployer = MagicMock()
+    _installed(monkeypatch)
+    _job(manager, _compliance_task())
+    manager._client.jobs.get.return_value.has_more = True
+
+    assert _sync(manager) == JOB_SHAPE_UNEXPECTED
+
+    assert _updated(manager).tasks is None
     manager._workspace_deployer.deploy_workflow.assert_not_called()
 
 

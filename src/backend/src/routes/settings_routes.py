@@ -106,10 +106,10 @@ async def update_settings(
         if 'ontos_instance_name' in settings_payload:
             details['ontos_instance_name'] = settings_payload.get('ontos_instance_name')
 
-        updated = manager.update_settings(settings_payload)
+        updated, warnings = manager.update_settings_with_warnings(settings_payload)
         success = True
         # Saved, with what didn't apply ({code, params, message}; the UI translates the code)
-        return {**updated.to_dict(), 'warnings': manager.update_warnings}
+        return {**updated.to_dict(), 'warnings': warnings}
     except ValueError as e:
         # Validation errors from manager (e.g. invalid branding URL, name too long)
         logger.warning(f"Settings validation error: {e}")

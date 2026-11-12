@@ -557,7 +557,8 @@ class JobsManager:
         those arguments are appended to the tasks copied from the job as it
         is, so the user's changes (cluster, retries, timeouts, other tasks)
         stay. A job whose tasks don't match the definition (a task missing, not
-        a Python script task) is not rewritten: only its parameters are, and
+        a Python script task, or a task list ``jobs.get`` cut off) is not
+        rewritten: only its parameters are, and
         ``JOB_SHAPE_UNEXPECTED`` is returned. Returns None otherwise (also when
         the workflow isn't installed). Databricks errors are raised.
         """
@@ -572,7 +573,8 @@ class JobsManager:
         job = self._client.jobs.get(job_id=job_id)
         tasks = list(getattr(job.settings, 'tasks', None) or [])
         by_key = {getattr(t, 'task_key', None): t for t in tasks}
-        if not wanted or any(
+        # has_more: over 100 tasks, the list is cut; an update must never write part of it
+        if getattr(job, 'has_more', False) or not wanted or any(
             getattr(by_key.get(key), 'spark_python_task', None) is None for key in wanted
         ):
             logger.warning(

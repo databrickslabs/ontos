@@ -107,7 +107,14 @@
     "testEscalatedLabel": "escalation effettuata",
     "testPrerequisiteChain": "Catena dei prerequisiti",
     "testResolvedRefs": "Riferimenti a risorse risolti",
-    "buttonTestResolve": "Risolvi"
+    "buttonTestResolve": "Risolvi",
+    "labelRule": "Regola",
+    "testContextLabel": "Contesto",
+    "testContextValuePlaceholder": "valore",
+    "testContextAdd": "Aggiungi chiave di contesto",
+    "testPendingDuties": "Obblighi in sospeso",
+    "testScopeCheck": "Verifica dell'ambito",
+    "testScopeMissing": "mancante"
   },
   "conceptLinks": {
     "failedLink": "Impossibile collegare il concetto",
@@ -126,7 +133,8 @@
     "denied": "Negata",
     "conflict": "Conflitto",
     "no_authority": "Nessuna autorità",
-    "error": "Errore"
+    "error": "Errore",
+    "conditional": "Condizionato"
   },
   "refType": {
     "literal": "Letterale",
@@ -187,9 +195,6 @@
       "action": "Azione",
       "objectType": "Tipo di oggetto",
       "objectId": "ID oggetto",
-      "threshold": "Soglia",
-      "currency": "Valuta",
-      "market": "Mercato",
       "time": "Ora",
       "dayOfWeek": "Giorno della settimana",
       "minuteOfHour": "Minuto dell'ora",
@@ -199,7 +204,6 @@
     "hints": {
       "slug": "Chiave stabile usata dagli agenti per richiamare questa AR. Condivisa da tutte le versioni della famiglia.",
       "authorityRelation": "La tupla ARF: <strong>chi</strong> (ruolo dell'attore + identità di firma) può eseguire quale <strong>azione</strong> su quale <strong>oggetto</strong>.",
-      "domainContext": "Il predicato valutabile: il contesto (soglia, valuta, mercato) in cui vale questa autorità. I criteri vengono valutati rispetto ad esso.",
       "dnaMaxThreshold": "Il limite di divergenza. Il DNA-Coefficient misura quanto le decisioni passate <strong>divergono</strong> da questa regola (0.0 = corrispondenza perfetta, più alto = peggio). L'AR può essere attivata solo finché il valore misurato resta pari o inferiore a questo limite; un'AR attiva che in seguito supera il limite viene contrassegnata automaticamente come <strong>Da rivedere</strong>.",
       "mcpResolverCredentials": "<strong>OBO:</strong> gli strumenti MCP vengono eseguiti con i permessi del chiamante; un chiamante senza token inoltrato ottiene no_authority. <strong>Service principal dell'app:</strong> gli strumenti vengono eseguiti come l'app Ontos per ogni chiamante, quindi il risultato non dipende più da chi chiede. Usalo solo quando lo strumento deve vedere dati a cui i chiamanti non hanno accesso.",
       "mcpNoCallerToken": "Non è stato inoltrato alcun token del chiamante, quindi questo elenco è stato recuperato come service principal dell'app Ontos. I chiamanti di un'AR con autenticazione OBO potrebbero non avere accesso a questi servizi."
@@ -207,7 +211,7 @@
     "sections": {
       "authorityRelation": "Authority Relation",
       "domainContext": "Domain-Context",
-      "decisionCriteria": "Criteri decisionali",
+      "decisionCriteria": "Compliance Checks",
       "domains": "Domini",
       "evidenceSources": "Fonti di evidenza",
       "participants": "Partecipanti",
@@ -216,16 +220,18 @@
       "mcpResolverCredentials": "Credenziali del resolver MCP",
       "dnaSchedule": "Pianificazione del DNA-Coefficient",
       "tags": "Tag",
-      "ownership": "Proprietà e progetto"
+      "ownership": "Proprietà e progetto",
+      "rule": "Regola (ODRL)"
     },
     "sectionDescriptions": {
-      "decisionCriteria": "Definisci le regole che il gate di risoluzione applica (e rispetto alle quali il DNA-Coefficient misura la divergenza). Ogni criterio è un <strong>Controllo di conformità</strong> riutilizzabile.",
+      "decisionCriteria": "Controlli che il gate applica dopo la regola (e rispetto ai quali il coefficiente DNA misura la divergenza). Ognuno è un <strong>Compliance Check</strong> riutilizzabile.",
       "evidenceSources": "Associa le decisioni passate rispetto alle quali viene misurato il DNA-Coefficient. Aggiungi una o più fonti — una <strong>tabella Delta</strong>, un <strong>Prodotto dati</strong> o un <strong>Asset</strong> (file di volume, tabella o vista). Ognuna associa le sue colonne agli elementi canonici dell'AR tramite la mappa delle colonne.",
       "participants": "Il gate N-funzionale e la revisione. Gli <strong>Approvatori</strong> contano per il gate di conferma. I <strong>Revisori</strong> vengono intervistati durante il processo di revisione per confermare che la relazione rifletta la realtà. Un principal può essere entrambi.",
       "requires": "AR prerequisite: ciascuna deve risolversi come <strong>approvata</strong> prima che questa decida. Indicizzate tramite lo slug della famiglia (non la versione), così questa AR continua a funzionare quando un prerequisito cambia versione. Per salvare, questa AR deve avere uno slug proprio.",
       "resourceRefs": "Da dove provengono i valori dei campi. Invece di un semplice letterale, associa a un campo canonico (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) un puntatore tipizzato. Un riferimento a <strong>entità Ontos</strong> viene risolto di nuovo rispetto al knowledge graph al momento della valutazione, così il valore resta aggiornato quando cambiano il concetto, il prodotto o il dominio sottostante. I riferimenti a <strong>strumenti MCP</strong> chiamano un servizio MCP di Unity Catalog al momento della decisione; i criteri possono confrontarsi con il valore risolto come <code>obj.ref_{{fieldPlaceholder}}</code> (i punti diventano underscore, es. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "Con quale frequenza il DNA-Coefficient viene ricalcolato rispetto alle fonti di evidenza.",
-      "domainContext": "Il predicato valutabile: il contesto (soglia, valuta, mercato) in cui vale questa autorità. I criteri vengono valutati rispetto ad esso."
+      "domainContext": "L'ambito delimitato in cui vale questa autorità e i suoi parametri. Una richiesta fuori ambito riceve no_authority; la regola e i controlli leggono i parametri come ctx.<key>.",
+      "rule": "Ciò che l'autorità permette, in ODRL: <strong>vincoli</strong> che devono valere, <strong>obblighi</strong> ancora da adempiere (fino ad allora la decisione è <strong>condizionata</strong>, ad es. una co-approvazione) e <strong>divieti</strong>. Confronta con valori o variabili (<code>ctx.threshold</code>, <code>req.market</code>)."
     },
     "fields": {
       "name": {
@@ -245,15 +251,6 @@
       },
       "objectId": {
         "placeholder": "dp-1234"
-      },
-      "threshold": {
-        "placeholder": "0.15"
-      },
-      "currency": {
-        "placeholder": "EUR"
-      },
-      "market": {
-        "placeholder": "emea-north"
       },
       "dnaMaxThreshold": {
         "placeholder": "0.3"
@@ -343,41 +340,15 @@
     }
   },
   "criteria": {
-    "description": "Il gate approva solo quando ogni criterio abilitato è soddisfatto. Un criterio non soddisfatto per una decisione passata conta come divergenza nel DNA-Coefficient — ponderata e con segno in base alla sua direzione. Una regola composta va bene; suddividi in criteri separati solo se vuoi la divergenza per singolo motivo.",
+    "description": "Predicati derivati e aggregati che la regola non esprime. Il gate approva solo se ogni controllo passa; un controllo che fallisce per una decisione passata conta come divergenza nel coefficiente DNA, ponderata e con il segno della sua direzione. Le regole leggono la richiesta come obj.<field> / req.<key> e i parametri come ctx.<param>.",
     "mode": {
-      "builder": "Strutturato",
       "raw": "ASSERT grezzo",
       "existing": "Riusa controllo esistente"
     },
-    "predicate": {
-      "allowlist": "Lista dei firmatari autorizzati",
-      "ceiling": "Limite numerico",
-      "requiredFlag": "Flag obbligatorio",
-      "actionMatch": "Corrispondenza azione"
-    },
-    "predicateDefaults": {
-      "allowlistField": "actor_identity",
-      "allowlistName": "Firmatario autorizzato",
-      "allowlistFailure": "Il firmatario non è autorizzato.",
-      "ceilingField": "value",
-      "ceilingName": "Entro la soglia",
-      "ceilingFailure": "Il valore supera la soglia senza escalation.",
-      "requiredFlagField": "cosign_present",
-      "requiredFlagName": "Flag obbligatorio presente",
-      "requiredFlagFailure": "Manca una condizione obbligatoria.",
-      "actionMatchField": "action",
-      "actionMatchName": "Corrispondenza azione",
-      "actionMatchFailure": "L'azione non è consentita."
-    },
     "fields": {
-      "fieldPlaceholder": "campo (es. actor_identity)",
-      "allowlistPlaceholder": "rsm-east, rsm-west",
-      "actionMatchPlaceholder": "approve",
-      "ceilingPlaceholder": "0.15",
-      "ceilingAllowEscalation": "consenti se escalato",
       "criterionNamePlaceholder": "Nome del criterio",
       "failureMessagePlaceholder": "Messaggio di rifiuto mostrato quando non è soddisfatto",
-      "rawRulePlaceholder": "obj.actor_identity IN ['rsm-east'] AND (obj.value <= 0.15 OR obj.escalated = True)"
+      "rawRulePlaceholder": "req.value <= ctx.threshold OR obj.escalated = True"
     },
     "validation": {
       "validateButton": "Convalida",
@@ -397,7 +368,7 @@
     "selections": {
       "selectComplianceCheck": "Seleziona un Controllo di conformità…"
     },
-    "assertPrefix": "ASSERT"
+    "variables": "Variabili:"
   },
   "mcp": {
     "extraSchemas": {
@@ -484,7 +455,8 @@
       "empty": "—",
       "evidenceSources": "Fonti di evidenza",
       "evidenceBinding": "Associazione delle evidenze",
-      "justificationChain": "Catena di giustificazione"
+      "justificationChain": "Catena di giustificazione",
+      "rule": "Regola"
     },
     "questionnaire": {
       "confirmation": "Conferma",
@@ -536,5 +508,123 @@
       "changeStatus": "Cambia stato",
       "sendRequest": "Invia richiesta"
     }
+  },
+  "domainContext": {
+    "scope": {
+      "label": "Ambito",
+      "hint": "Dove vale questa autorità. Il contesto della richiesta deve contenere ogni chiave con un valore corrispondente, altrimenti la risoluzione restituisce no_authority (anche se la chiave manca). Le chiavi sono salvate come operandi ODRL (market → arf:market; spatial, purpose… mantengono il nome ODRL).",
+      "keyPlaceholder": "chiave (es. market)",
+      "valuesPlaceholder": "DE, AT, CH",
+      "add": "Aggiungi chiave",
+      "unscoped": "senza ambito (vale in ogni contesto)",
+      "match": {
+        "in": "è uno di",
+        "notIn": "non è nessuno di",
+        "lt": "<",
+        "lteq": "≤",
+        "gt": ">",
+        "gteq": "≥"
+      }
+    },
+    "params": {
+      "label": "Parametri",
+      "hint": "Valori che la regola e i controlli leggono come ctx.<key>, ad es. una soglia o i mercati autorizzati. Modificali qui invece di cambiare ogni regola.",
+      "keyPlaceholder": "nome (es. threshold)",
+      "valuePlaceholder": "valore",
+      "listPlaceholder": "a, b, c",
+      "add": "Aggiungi parametro",
+      "type": {
+        "string": "testo",
+        "number": "numero",
+        "boolean": "sì/no",
+        "list": "elenco",
+        "json": "JSON"
+      }
+    },
+    "remove": "Rimuovi",
+    "validation": {
+      "title": "Il contesto di dominio è incompleto",
+      "invalidKey": "'{{key}}' non è una chiave valida: usa lettere, cifre e _.",
+      "missingValue": "La chiave '{{key}}' richiede un valore.",
+      "notANumber": "Il parametro '{{key}}' deve essere un numero.",
+      "badJson": "Il parametro '{{key}}' non è JSON valido."
+    }
+  },
+  "rule": {
+    "kind": {
+      "constraint": "Vincolo",
+      "duty": "Obbligo",
+      "prohibition": "Divieto"
+    },
+    "kindHint": {
+      "constraint": "deve valere, altrimenti negato",
+      "duty": "non adempiuto → condizionato",
+      "prohibition": "se vale → negato"
+    },
+    "buttons": {
+      "remove": "Rimuovi",
+      "removeAlternative": "Rimuovi condizione",
+      "addCondition": "Aggiungi condizione",
+      "add": {
+        "constraint": "Vincolo",
+        "duty": "Obbligo",
+        "prohibition": "Divieto"
+      }
+    },
+    "operand": {
+      "value": "Valore (payAmount)",
+      "actor_identity": "Firmatario (arf:actor)",
+      "action": "Azione",
+      "object_id": "Id oggetto",
+      "cosign_present": "Controfirma presente",
+      "escalated": "Escalato",
+      "custom": "Chiave di contesto…"
+    },
+    "customKeyPlaceholder": "chiave",
+    "operator": {
+      "eq": "uguale a",
+      "neq": "diverso da",
+      "lt": "minore di",
+      "lteq": "al massimo",
+      "gt": "maggiore di",
+      "gteq": "almeno",
+      "isAnyOf": "è uno di",
+      "isNoneOf": "non è nessuno di"
+    },
+    "operatorSymbol": {
+      "eq": "=",
+      "neq": "≠",
+      "lt": "<",
+      "lteq": "≤",
+      "gt": ">",
+      "gteq": "≥",
+      "isAnyOf": "∈",
+      "isNoneOf": "∉"
+    },
+    "rightValue": "valore…",
+    "valuePlaceholder": "valore",
+    "valueListPlaceholder": "a, b, c",
+    "join": {
+      "or": "una qualsiasi (o)",
+      "and": "tutte (e)",
+      "orWord": "o",
+      "andWord": "e"
+    },
+    "namePlaceholder": "Nome (facoltativo)",
+    "messagePlaceholder": {
+      "constraint": "Messaggio di diniego se fallisce",
+      "duty": "Messaggio finché l'obbligo è in sospeso",
+      "prohibition": "Messaggio di diniego se vietato"
+    },
+    "variablesHint": "Confronta con una variabile invece di un valore fisso: ctx.<param> legge i parametri dell'AR, req.<key> la richiesta e il suo contesto. La logica derivata o aggregata va nei Compliance Checks qui sotto.",
+    "rawJsonHint": "Questa condizione usa logica annidata che l'editor non può mostrare; modificala come JSON ODRL.",
+    "validation": {
+      "title": "La regola è incompleta",
+      "badJson": "Il JSON ODRL di una condizione non è JSON valido.",
+      "valid": "La regola è valida"
+    },
+    "none": "Nessuna regola: solo i controlli regolano questa autorità.",
+    "fulfilledWhen": "adempiuto quando",
+    "prohibitedWhen": "vietato quando"
   }
 }

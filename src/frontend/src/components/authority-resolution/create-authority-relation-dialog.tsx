@@ -16,6 +16,12 @@ import { InfoHint, SectionTitle } from '@/components/authority-resolution/info-h
 import CriteriaBuilder, {
   rowsFromCriteria, rowsToPayload, type CriterionRow,
 } from '@/components/authority-resolution/criteria-builder';
+import DomainContextEditor, {
+  paramRowsFrom, scopeRowsFrom, toDomainContext, type ParamRow, type ScopeRow,
+} from '@/components/authority-resolution/domain-context-editor';
+import RuleEditor, {
+  itemsFromRule, ruleFromItems, type ItemDraft,
+} from '@/components/authority-resolution/rule-editor';
 import { useApi } from '@/hooks/use-api';
 import { useTeams } from '@/hooks/use-teams';
 import { useProjectContext } from '@/stores/project-store';
@@ -81,9 +87,9 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   const [action, setAction] = useState('approve');
   const [objectType, setObjectType] = useState('data_product');
   const [objectId, setObjectId] = useState('');
-  const [threshold, setThreshold] = useState('');
-  const [currency, setCurrency] = useState('');
-  const [market, setMarket] = useState('');
+  const [scopeRows, setScopeRows] = useState<ScopeRow[]>([]);
+  const [paramRows, setParamRows] = useState<ParamRow[]>([]);
+  const [ruleItems, setRuleItems] = useState<ItemDraft[]>([]);
   const [dnaMax, setDnaMax] = useState('0.3');
   const [criteriaRows, setCriteriaRows] = useState<CriterionRow[]>([]);
   const [evidenceSources, setEvidenceSources] = useState<EvidenceSourceInput[]>([]);
@@ -106,8 +112,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
 
   const reset = () => {
     setName(''); setSlug(''); setDescription(''); setActorRole(''); setActorIdentity('');
-    setAction('approve'); setObjectType('data_product'); setObjectId(''); setThreshold('');
-    setCurrency(''); setMarket(''); setDnaMax('0.3'); setCriteriaRows([]);
+    setAction('approve'); setObjectType('data_product'); setObjectId('');
+    setScopeRows([]); setParamRows([]); setRuleItems([]); setDnaMax('0.3'); setCriteriaRows([]);
     setEvidenceSources([]); setDomainIds([]); setPrimaryDomainId(null);
     setOwnerTeamId(''); setProjectId(currentProject?.id || '');
     setAffirmations(DEFAULT_AFFIRMATIONS); setTags([]); setScheduleCron(null);
@@ -154,7 +160,6 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   useEffect(() => {
     if (!open) return;
     if (relation) {
-      const dc = relation.domain_context || {};
       const eb = relation.evidence_binding || null;
       setName(relation.name || '');
       setSlug(relation.slug || '');
@@ -164,9 +169,9 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       setAction(relation.action || 'approve');
       setObjectType(relation.object_type || 'data_product');
       setObjectId(relation.object_id || '');
-      setThreshold(dc.threshold != null ? String(dc.threshold) : '');
-      setCurrency(dc.currency || '');
-      setMarket(dc.market || '');
+      setScopeRows(scopeRowsFrom(relation.domain_context));
+      setParamRows(paramRowsFrom(relation.domain_context));
+      setRuleItems(itemsFromRule(relation.rule));
       setDnaMax(relation.dna_max_threshold != null ? String(relation.dna_max_threshold) : '0.3');
       setCriteriaRows(rowsFromCriteria(relation.criteria));
       const srcs = relation.evidence_sources || [];
@@ -234,6 +239,10 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, relation]);
 
+  // The context as authored so far (for the rule editor's validation and the
+  // checks' variables); invalid rows leave it undefined until fixed.
+  const draftContext = toDomainContext(scopeRows, paramRows);
+
   const updateAffirmation = (idx: number, patch: Partial<AffirmationInput>) => {
     setAffirmations((prev) => prev.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
   };
@@ -286,10 +295,18 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       evidence_sources.push({ type: s.type, ref: s.ref.trim(), label: s.label.trim() || undefined, column_map: parsedMap });
     }
 
-    const domain_context: Record<string, any> = {};
-    if (threshold.trim()) domain_context.threshold = threshold.trim();
-    if (currency.trim()) domain_context.currency = currency.trim();
-    if (market.trim()) domain_context.market = market.trim();
+    const dc = toDomainContext(scopeRows, paramRows);
+    if (dc.error) {
+      toast({ title: t('domainContext.validation.title'), description: t(dc.error.key, { key: dc.error.field }), variant: 'destructive' });
+      return;
+    }
+    let rule;
+    try {
+      rule = ruleFromItems(ruleItems);
+    } catch {
+      toast({ title: t('rule.validation.title'), description: t('rule.validation.badJson'), variant: 'destructive' });
+      return;
+    }
 
     const payload = {
       name: name.trim(),
@@ -300,7 +317,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       action,
       object_type: objectType.trim() || undefined,
       object_id: objectId.trim() || undefined,
-      domain_context: Object.keys(domain_context).length ? domain_context : undefined,
+      domain_context: dc.value,
+      rule,
       criteria: rowsToPayload(criteriaRows),
       evidence_sources,
       dna_max_threshold: Number.isFinite(parseFloat(dnaMax)) ? parseFloat(dnaMax) : 0.3,
@@ -395,25 +413,30 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
           </div>
 
           <SectionTitle title={t('editor.sections.domainContext')} info={t('editor.sectionDescriptions.domainContext')} />
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <Label>{t('editor.labels.threshold')}</Label>
-              <Input value={threshold} onChange={(e) => setThreshold(e.target.value)} placeholder={t('editor.fields.threshold.placeholder')} />
-            </div>
-            <div className="space-y-1">
-              <Label>{t('editor.labels.currency')}</Label>
-              <Input value={currency} onChange={(e) => setCurrency(e.target.value)} placeholder={t('editor.fields.currency.placeholder')} />
-            </div>
-            <div className="space-y-1">
-              <Label>{t('editor.labels.market')}</Label>
-              <Input value={market} onChange={(e) => setMarket(e.target.value)} placeholder={t('editor.fields.market.placeholder')} />
-            </div>
-          </div>
+          <DomainContextEditor scope={scopeRows} params={paramRows} onScopeChange={setScopeRows} onParamsChange={setParamRows} />
+
+          <SectionTitle
+            title={t('editor.sections.rule')}
+            info={<Trans i18nKey="editor.sectionDescriptions.rule" ns="authority-resolution" components={{ strong: <strong />, code: <code /> }} />}
+          />
+          <RuleEditor
+            items={ruleItems}
+            onChange={setRuleItems}
+            paramKeys={paramRows.map((p) => p.key.trim())}
+            scopeKeys={scopeRows.map((r) => r.key.trim())}
+            domainContext={draftContext.value}
+          />
+
           <SectionTitle
             title={t('editor.sections.decisionCriteria')}
             info={<Trans i18nKey="editor.sectionDescriptions.decisionCriteria" ns="authority-resolution" components={{ strong: <strong />, }} />}
           />
-          <CriteriaBuilder rows={criteriaRows} onChange={setCriteriaRows} />
+          <CriteriaBuilder
+            rows={criteriaRows}
+            onChange={setCriteriaRows}
+            params={draftContext.value?.params}
+            scopeKeys={scopeRows.map((r) => r.key.trim())}
+          />
 
           <div className="text-sm font-semibold text-muted-foreground pt-2">{t('editor.sections.domains')}</div>
           <DomainMultiSelector

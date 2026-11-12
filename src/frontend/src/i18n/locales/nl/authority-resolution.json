@@ -107,7 +107,14 @@
     "testEscalatedLabel": "geëscaleerd",
     "testPrerequisiteChain": "Keten van vereisten",
     "testResolvedRefs": "Opgeloste resourceverwijzingen",
-    "buttonTestResolve": "Oplossen"
+    "buttonTestResolve": "Oplossen",
+    "labelRule": "Regel",
+    "testContextLabel": "Context",
+    "testContextValuePlaceholder": "waarde",
+    "testContextAdd": "Contextsleutel toevoegen",
+    "testPendingDuties": "Openstaande verplichtingen",
+    "testScopeCheck": "Bereikcontrole",
+    "testScopeMissing": "ontbreekt"
   },
   "conceptLinks": {
     "failedLink": "Koppelen van concept mislukt",
@@ -126,7 +133,8 @@
     "denied": "Geweigerd",
     "conflict": "Conflict",
     "no_authority": "Geen autoriteit",
-    "error": "Fout"
+    "error": "Fout",
+    "conditional": "Voorwaardelijk"
   },
   "refType": {
     "literal": "Letterlijk",
@@ -187,9 +195,6 @@
       "action": "Actie",
       "objectType": "Objecttype",
       "objectId": "Object-id",
-      "threshold": "Drempel",
-      "currency": "Valuta",
-      "market": "Markt",
       "time": "Tijd",
       "dayOfWeek": "Dag van de week",
       "minuteOfHour": "Minuut van het uur",
@@ -199,7 +204,6 @@
     "hints": {
       "slug": "Stabiele sleutel waarmee agents deze AR aanroepen. Gedeeld door elke versie van de familie.",
       "authorityRelation": "De ARF-tuple: <strong>wie</strong> (actorrol + ondertekenende identiteit) welke <strong>actie</strong> mag uitvoeren op welk <strong>object</strong>.",
-      "domainContext": "Het evalueerbare predicaat: de context (drempel, valuta, markt) waarin deze autoriteit geldt. Criteria worden hiertegen geëvalueerd.",
       "dnaMaxThreshold": "De divergentiebovengrens. De DNA-Coefficient meet hoe ver eerdere beslissingen van deze regel <strong>afwijken</strong> (0.0 = perfecte match, hoger = slechter). De AR kan alleen worden geactiveerd zolang de gemeten waarde op of onder deze grens blijft; een actieve AR die later boven de grens uitkomt, wordt automatisch gemarkeerd als <strong>Beoordeling nodig</strong>.",
       "mcpResolverCredentials": "<strong>OBO:</strong> MCP-tools draaien met de eigen rechten van de aanroeper; een aanroeper zonder doorgegeven token krijgt no_authority. <strong>Service principal van de app:</strong> tools draaien als de Ontos-app voor elke aanroeper, zodat het resultaat niet meer afhangt van wie het vraagt. Gebruik dit alleen als de tool data moet zien die aanroepers niet kunnen zien.",
       "mcpNoCallerToken": "Er is geen aanroepertoken doorgegeven, dus deze lijst is opgehaald als de service principal van de Ontos-app. Aanroepers van een OBO-geauthenticeerde AR hebben mogelijk geen toegang tot deze services."
@@ -207,7 +211,7 @@
     "sections": {
       "authorityRelation": "Authority Relation",
       "domainContext": "Domeincontext",
-      "decisionCriteria": "Beslissingscriteria",
+      "decisionCriteria": "Compliance Checks",
       "domains": "Domeinen",
       "evidenceSources": "Bewijsbronnen",
       "participants": "Deelnemers",
@@ -216,16 +220,18 @@
       "mcpResolverCredentials": "Referenties van MCP-resolver",
       "dnaSchedule": "DNA-Coefficient-schema",
       "tags": "Tags",
-      "ownership": "Eigenaarschap & project"
+      "ownership": "Eigenaarschap & project",
+      "rule": "Regel (ODRL)"
     },
     "sectionDescriptions": {
-      "decisionCriteria": "Stel de regels op die de resolutiepoort afdwingt (en waartegen de DNA-Coefficient divergentie meet). Elk criterium is een herbruikbare <strong>Compliance Check</strong>.",
+      "decisionCriteria": "Controles die de gate na de regel afdwingt (en waartegen de DNA-coëfficiënt afwijkingen meet). Elk is een herbruikbare <strong>Compliance Check</strong>.",
       "evidenceSources": "Koppel de eerdere beslissingen waartegen de DNA-Coefficient wordt gemeten. Voeg een of meer bronnen toe — een <strong>Delta-tabel</strong>, een <strong>Dataproduct</strong> of een <strong>Asset</strong> (volumebestand, tabel of view). Elke bron wijst zijn kolommen toe aan de canonieke AR-elementen via de kolomtoewijzing.",
       "participants": "De N-functionele poort en beoordeling. <strong>Goedkeurders</strong> tellen mee voor de bevestigingspoort. <strong> Beoordelaars</strong> worden tijdens het beoordelingsproces geïnterviewd om te bevestigen dat de relatie de werkelijkheid weergeeft. Een principal kan beide zijn.",
       "requires": "Voorafgaande ARs: elk moet <strong>goedgekeurd</strong> oplossen voordat deze beslist. Gekeyd op de familie-slug (niet de versie), zodat deze AR blijft werken wanneer een voorafgaande AR een nieuwe versie krijgt. Opslaan vereist dat deze AR een eigen slug heeft.",
       "resourceRefs": "Waar veldwaarden vandaan komen. In plaats van een gewone letterlijke waarde ondersteun je een canoniek veld (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) met een getypeerde verwijzing. Een <strong> Ontos-entiteit</strong>-verwijzing wordt bij evaluatie opnieuw opgelost tegen de kennisgraaf, zodat de waarde actueel blijft wanneer het onderliggende concept, product of domein verandert. <strong> MCP-tool</strong>-verwijzingen roepen op beslissingstijd een Unity Catalog MCP-service aan; criteria kunnen vergelijken met de opgeloste waarde als <code>obj.ref_{{fieldPlaceholder}}</code> (punten worden underscores, bijv. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "Hoe vaak de DNA-Coefficient opnieuw wordt berekend tegen de bewijsbronnen.",
-      "domainContext": "Het evalueerbare predicaat: de context (drempel, valuta, markt) waarin deze autoriteit geldt. Criteria worden hiertegen geëvalueerd."
+      "domainContext": "Het afgebakende bereik waarin deze bevoegdheid geldt, en haar parameters. Een verzoek buiten het bereik krijgt no_authority; de regel en de controles lezen de parameters als ctx.<key>.",
+      "rule": "Wat de bevoegdheid toestaat, als ODRL: <strong>voorwaarden</strong> die moeten gelden, nog te vervullen <strong>verplichtingen</strong> (tot dan is de beslissing <strong>voorwaardelijk</strong>, bijv. een mede-goedkeuring) en <strong>verboden</strong>. Vergelijk met waarden of variabelen (<code>ctx.threshold</code>, <code>req.market</code>)."
     },
     "fields": {
       "name": {
@@ -245,15 +251,6 @@
       },
       "objectId": {
         "placeholder": "dp-1234"
-      },
-      "threshold": {
-        "placeholder": "0.15"
-      },
-      "currency": {
-        "placeholder": "EUR"
-      },
-      "market": {
-        "placeholder": "emea-north"
       },
       "dnaMaxThreshold": {
         "placeholder": "0.3"
@@ -343,41 +340,15 @@
     }
   },
   "criteria": {
-    "description": "De poort keurt alleen goed als elk ingeschakeld criterium slaagt. Een criterium dat voor een eerdere beslissing faalt, telt als divergentie in de DNA-Coefficient — gewogen en getekend op basis van de richting. Eén samengestelde regel is prima; splits alleen in afzonderlijke criteria als je divergentie per reden wilt.",
+    "description": "Afgeleide en geaggregeerde predicaten die de regel niet uitdrukt. De gate keurt alleen goed als elke controle slaagt; een controle die faalt voor een eerdere beslissing telt als afwijking in de DNA-coëfficiënt, gewogen en met het teken van haar richting. Regels lezen het verzoek als obj.<field> / req.<key> en de parameters als ctx.<param>.",
     "mode": {
-      "builder": "Gestructureerd",
       "raw": "Ruwe ASSERT",
       "existing": "Bestaande controle hergebruiken"
     },
-    "predicate": {
-      "allowlist": "Toegestane ondertekenaars",
-      "ceiling": "Numerieke bovengrens",
-      "requiredFlag": "Vereiste vlag",
-      "actionMatch": "Actie-overeenkomst"
-    },
-    "predicateDefaults": {
-      "allowlistField": "actor_identity",
-      "allowlistName": "Geautoriseerde ondertekenaar",
-      "allowlistFailure": "Ondertekenaar is niet geautoriseerd.",
-      "ceilingField": "value",
-      "ceilingName": "Binnen drempel",
-      "ceilingFailure": "Waarde overschrijdt de drempel zonder escalatie.",
-      "requiredFlagField": "cosign_present",
-      "requiredFlagName": "Vereiste vlag aanwezig",
-      "requiredFlagFailure": "Een vereiste voorwaarde ontbreekt.",
-      "actionMatchField": "action",
-      "actionMatchName": "Actie-overeenkomst",
-      "actionMatchFailure": "Actie is niet toegestaan."
-    },
     "fields": {
-      "fieldPlaceholder": "veld (bijv. actor_identity)",
-      "allowlistPlaceholder": "rsm-east, rsm-west",
-      "actionMatchPlaceholder": "approve",
-      "ceilingPlaceholder": "0.15",
-      "ceilingAllowEscalation": "toestaan indien geëscaleerd",
       "criterionNamePlaceholder": "Criteriumnaam",
       "failureMessagePlaceholder": "Weigeringsbericht dat wordt getoond bij falen",
-      "rawRulePlaceholder": "obj.actor_identity IN ['rsm-east'] AND (obj.value <= 0.15 OR obj.escalated = True)"
+      "rawRulePlaceholder": "req.value <= ctx.threshold OR obj.escalated = True"
     },
     "validation": {
       "validateButton": "Valideren",
@@ -397,7 +368,7 @@
     "selections": {
       "selectComplianceCheck": "Selecteer een Compliance Check…"
     },
-    "assertPrefix": "ASSERT"
+    "variables": "Variabelen:"
   },
   "mcp": {
     "extraSchemas": {
@@ -484,7 +455,8 @@
       "empty": "—",
       "evidenceSources": "Bewijsbronnen",
       "evidenceBinding": "Bewijskoppeling",
-      "justificationChain": "Rechtvaardigingsketen"
+      "justificationChain": "Rechtvaardigingsketen",
+      "rule": "Regel"
     },
     "questionnaire": {
       "confirmation": "Bevestiging",
@@ -536,5 +508,123 @@
       "changeStatus": "Status wijzigen",
       "sendRequest": "Verzoek verzenden"
     }
+  },
+  "domainContext": {
+    "scope": {
+      "label": "Bereik",
+      "hint": "Waar deze bevoegdheid geldt. De verzoekcontext moet elke sleutel met een overeenkomende waarde bevatten, anders geeft de resolutie no_authority (ook bij een ontbrekende sleutel). Sleutels worden opgeslagen als ODRL-operanden (market → arf:market; spatial, purpose… houden hun ODRL-naam).",
+      "keyPlaceholder": "sleutel (bijv. market)",
+      "valuesPlaceholder": "DE, AT, CH",
+      "add": "Sleutel toevoegen",
+      "unscoped": "onbeperkt (geldt in elke context)",
+      "match": {
+        "in": "is een van",
+        "notIn": "is geen van",
+        "lt": "<",
+        "lteq": "≤",
+        "gt": ">",
+        "gteq": "≥"
+      }
+    },
+    "params": {
+      "label": "Parameters",
+      "hint": "Waarden die de regel en de controles lezen als ctx.<key>, bijv. een drempel of de vrijgegeven markten. Wijzig ze hier in plaats van in elke regel.",
+      "keyPlaceholder": "naam (bijv. threshold)",
+      "valuePlaceholder": "waarde",
+      "listPlaceholder": "a, b, c",
+      "add": "Parameter toevoegen",
+      "type": {
+        "string": "tekst",
+        "number": "getal",
+        "boolean": "ja/nee",
+        "list": "lijst",
+        "json": "JSON"
+      }
+    },
+    "remove": "Verwijderen",
+    "validation": {
+      "title": "Domeincontext is onvolledig",
+      "invalidKey": "'{{key}}' is geen geldige sleutel: gebruik letters, cijfers en _.",
+      "missingValue": "Sleutel '{{key}}' heeft een waarde nodig.",
+      "notANumber": "Parameter '{{key}}' moet een getal zijn.",
+      "badJson": "Parameter '{{key}}' is geen geldige JSON."
+    }
+  },
+  "rule": {
+    "kind": {
+      "constraint": "Voorwaarde",
+      "duty": "Verplichting",
+      "prohibition": "Verbod"
+    },
+    "kindHint": {
+      "constraint": "moet gelden, anders geweigerd",
+      "duty": "niet vervuld → voorwaardelijk",
+      "prohibition": "als het geldt → geweigerd"
+    },
+    "buttons": {
+      "remove": "Verwijderen",
+      "removeAlternative": "Voorwaarde verwijderen",
+      "addCondition": "Voorwaarde toevoegen",
+      "add": {
+        "constraint": "Voorwaarde",
+        "duty": "Verplichting",
+        "prohibition": "Verbod"
+      }
+    },
+    "operand": {
+      "value": "Waarde (payAmount)",
+      "actor_identity": "Ondertekenaar (arf:actor)",
+      "action": "Actie",
+      "object_id": "Object-id",
+      "cosign_present": "Medeondertekening aanwezig",
+      "escalated": "Geëscaleerd",
+      "custom": "Contextsleutel…"
+    },
+    "customKeyPlaceholder": "sleutel",
+    "operator": {
+      "eq": "gelijk aan",
+      "neq": "niet gelijk aan",
+      "lt": "kleiner dan",
+      "lteq": "hoogstens",
+      "gt": "groter dan",
+      "gteq": "minstens",
+      "isAnyOf": "is een van",
+      "isNoneOf": "is geen van"
+    },
+    "operatorSymbol": {
+      "eq": "=",
+      "neq": "≠",
+      "lt": "<",
+      "lteq": "≤",
+      "gt": ">",
+      "gteq": "≥",
+      "isAnyOf": "∈",
+      "isNoneOf": "∉"
+    },
+    "rightValue": "waarde…",
+    "valuePlaceholder": "waarde",
+    "valueListPlaceholder": "a, b, c",
+    "join": {
+      "or": "een van (of)",
+      "and": "alle (en)",
+      "orWord": "of",
+      "andWord": "en"
+    },
+    "namePlaceholder": "Naam (optioneel)",
+    "messagePlaceholder": {
+      "constraint": "Weigeringsbericht als het faalt",
+      "duty": "Bericht zolang de verplichting openstaat",
+      "prohibition": "Weigeringsbericht bij verbod"
+    },
+    "variablesHint": "Vergelijk met een variabele in plaats van een vaste waarde: ctx.<param> leest de parameters van de AR, req.<key> het verzoek en zijn context. Afgeleide of geaggregeerde logica hoort in de Compliance Checks hieronder.",
+    "rawJsonHint": "Deze voorwaarde gebruikt geneste logica die de editor niet kan tonen; bewerk haar als ODRL-JSON.",
+    "validation": {
+      "title": "Regel is onvolledig",
+      "badJson": "De ODRL-JSON van een voorwaarde is geen geldige JSON.",
+      "valid": "Regel is geldig"
+    },
+    "none": "Geen regel: alleen de controles bepalen deze bevoegdheid.",
+    "fulfilledWhen": "vervuld als",
+    "prohibitedWhen": "verboden als"
   }
 }

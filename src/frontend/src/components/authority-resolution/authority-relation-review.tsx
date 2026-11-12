@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { DialogSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
 import type { AuthorityReviewContext } from '@/types/authority-resolution';
+import { DomainContextView, RuleView } from '@/components/authority-resolution/domain-context-view';
 
 interface Props {
   relationId: string;
@@ -121,7 +122,14 @@ export default function AuthorityRelationReview({ relationId, reviewer, onComple
             <DetailBlock label={t('review.details.actorIdentity')} data={ctx.details.actor_identity} />
             <DetailBlock label={t('review.details.action')} data={ctx.details.action} />
           </div>
-          <DetailBlock label={t('review.details.domainContext')} data={ctx.details.domain_context} />
+          <div>
+            <div className="text-xs uppercase text-muted-foreground mb-1">{t('review.details.domainContext')}</div>
+            <DomainContextView value={ctx.details.domain_context} />
+          </div>
+          <div>
+            <div className="text-xs uppercase text-muted-foreground mb-1">{t('review.details.rule')}</div>
+            <RuleView rule={ctx.details.rule} />
+          </div>
           <div>
             <div className="text-xs uppercase text-muted-foreground mb-1">{t('review.details.decisionCriteria')}</div>
             {(ctx.details.criteria || []).length > 0 ? (

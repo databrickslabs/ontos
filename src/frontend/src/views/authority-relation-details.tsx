@@ -23,11 +23,18 @@ import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
 import ArConceptLinks from '@/components/authority-resolution/ar-concept-links';
+import { DomainContextView, RuleView } from '@/components/authority-resolution/domain-context-view';
 import { MaturityInline } from '@/components/common/maturity-inline';
 import VersionNavigator from '@/components/common/version-navigator';
 import { DetailHeaderSkeleton, PanelSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
-import type { AuthorityRelation, ResolveResponse, AuthorityReviewTracking, AuthorityDnaRun, AuthorityDecision } from '@/types/authority-resolution';
+import { operandKey, type AuthorityRelation, type ResolveResponse, type AuthorityReviewTracking, type AuthorityDnaRun, type AuthorityDecision } from '@/types/authority-resolution';
+
+/** Badge variant per verdict: approved solid, conditional muted, refusals red. */
+const verdictVariant = (verdict?: string | null) =>
+  verdict === 'approved' ? 'default'
+    : verdict === 'denied' || verdict === 'conflict' ? 'destructive'
+      : verdict === 'conditional' ? 'outline' : 'secondary';
 
 /** Human-readable label for a stored 5-field recompute cron. */
 function cronLabel(cron?: string | null, i18nFn?: (key: string, opts?: any) => string): string {
@@ -523,7 +530,7 @@ export default function AuthorityRelationDetails() {
                     <div className="flex items-center gap-2">
                       <Badge variant="outline">{t(`decisionSource.${d.source}`, { defaultValue: d.source })}</Badge>
                       {d.verdict && (
-                        <Badge variant={d.verdict === 'approved' ? 'default' : d.verdict === 'denied' ? 'destructive' : 'secondary'}>{t(`verdict.${d.verdict}`, { defaultValue: d.verdict })}</Badge>
+                        <Badge variant={verdictVariant(d.verdict)}>{t(`verdict.${d.verdict}`, { defaultValue: d.verdict })}</Badge>
                       )}
                       <span className="text-muted-foreground">
                         {d.actor_identity || '—'}{d.action ? ` · ${d.action}` : ''}{d.object_id ? ` · ${d.object_id}` : ''}
@@ -548,7 +555,7 @@ export default function AuthorityRelationDetails() {
             <div><span className="text-muted-foreground">{t('details.labelAction')}:</span> {relation.action || '—'}</div>
             <div><span className="text-muted-foreground">{t('details.labelObject')}:</span> {relation.object_type || '—'} {relation.object_id ? `· ${relation.object_id}` : ''}</div>
             <div className="pt-2 text-muted-foreground">{t('details.labelDomainContext')}</div>
-            <JsonBlock data={relation.domain_context} />
+            <DomainContextView value={relation.domain_context} />
             <div className="pt-2 text-muted-foreground">{t('details.labelJustificationChain')}</div>
             <JsonBlock data={relation.justification_chain} />
           </CardContent>
@@ -556,7 +563,9 @@ export default function AuthorityRelationDetails() {
         <Card>
           <CardHeader><CardTitle className="text-base">{t('details.cardRuntimeEvidence')}</CardTitle></CardHeader>
           <CardContent className="text-sm space-y-1">
-            <div className="text-muted-foreground">{t('details.labelDecisionCriteria')}</div>
+            <div className="text-muted-foreground">{t('details.labelRule')}</div>
+            <RuleView rule={relation.rule} />
+            <div className="pt-2 text-muted-foreground">{t('details.labelDecisionCriteria')}</div>
             {(relation.criteria || []).length > 0 ? (
               <div className="space-y-2">
                 {(relation.criteria || []).map((c) => (
@@ -684,9 +693,11 @@ export default function AuthorityRelationDetails() {
       <EntityMetadataPanel entityId={relationId!} entityType="authority_relation" />
 
       <TestResolveDialog
+        key={(relation.domain_context?.scope || []).map((c) => c.leftOperand).join('|')}
         open={testOpen}
         onOpenChange={setTestOpen}
         relationId={relationId!}
+        scopeKeys={(relation.domain_context?.scope || []).map((c) => operandKey(c.leftOperand))}
       />
 
       <CreateAuthorityRelationDialog
@@ -761,9 +772,16 @@ export default function AuthorityRelationDetails() {
   );
 }
 
-function TestResolveDialog({ open, onOpenChange, relationId }: { open: boolean; onOpenChange: (o: boolean) => void; relationId: string }) {
+function TestResolveDialog({ open, onOpenChange, relationId, scopeKeys }: {
+  open: boolean; onOpenChange: (o: boolean) => void; relationId: string; scopeKeys: string[];
+}) {
   const { t } = useTranslation(['authority-resolution', 'common']);
   const { post } = useApi();
+  // Request context, prefilled with the AR's scope keys (the scope gate reads
+  // them); the parent remounts the dialog when the scope keys change.
+  const [context, setContext] = useState<{ key: string; value: string }[]>(
+    () => scopeKeys.map((key) => ({ key, value: '' })),
+  );
   const [actorIdentity, setActorIdentity] = useState('');
   const [action, setAction] = useState('approve');
   const [value, setValue] = useState('');
@@ -776,14 +794,16 @@ function TestResolveDialog({ open, onOpenChange, relationId }: { open: boolean; 
     setBusy(true);
     const body: any = { actor_identity: actorIdentity || undefined, action, cosign_present: cosign, escalated };
     if (value.trim()) body.value = parseFloat(value);
+    // Numbers and booleans as such, so rules compare them like a resolve would.
+    const coerce = (v: string) => (v === 'true' || v === 'false' ? v === 'true' : v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : v);
+    body.context = Object.fromEntries(context.filter((c) => c.key.trim() && c.value.trim()).map((c) => [c.key.trim(), coerce(c.value.trim())]));
     const { data, error } = await post<ResolveResponse>(`/api/authority/relations/${relationId}/test`, body);
     setBusy(false);
     if (error) setResult({ verdict: 'error' as any, reason: error });
     else setResult(data);
   };
 
-  const verdictColor = result?.verdict === 'approved' ? 'default'
-    : result?.verdict === 'denied' ? 'destructive' : 'secondary';
+  const verdictColor = verdictVariant(result?.verdict);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -807,6 +827,24 @@ function TestResolveDialog({ open, onOpenChange, relationId }: { open: boolean; 
               <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.22" />
             </div>
           </div>
+          <div className="space-y-1">
+            <Label>{t('details.testContextLabel')}</Label>
+            {context.map((c, i) => (
+              <div key={i} className="grid grid-cols-[1fr_1.4fr_auto] gap-1.5">
+                <Input value={c.key} onChange={(e) => setContext(context.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))}
+                       placeholder={t('domainContext.scope.keyPlaceholder')} className="h-8 text-xs font-mono" />
+                <Input value={c.value} onChange={(e) => setContext(context.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
+                       placeholder={t('details.testContextValuePlaceholder')} className="h-8 text-xs" />
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('domainContext.remove')}
+                        onClick={() => setContext(context.filter((_, j) => j !== i))}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setContext([...context, { key: '', value: '' }])}>
+              {t('details.testContextAdd')}
+            </Button>
+          </div>
           <div className="flex gap-4">
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={cosign} onChange={(e) => setCosign(e.target.checked)} /> {t('details.testCosignLabel')}</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={escalated} onChange={(e) => setEscalated(e.target.checked)} /> {t('details.testEscalatedLabel')}</label>
@@ -816,13 +854,33 @@ function TestResolveDialog({ open, onOpenChange, relationId }: { open: boolean; 
               <AlertDescription>
                 <Badge variant={verdictColor as any} className="mr-2">{t(`verdict.${result.verdict}`, { defaultValue: result.verdict })}</Badge>
                 {result.reason}
+                {(result.pending_duties || []).length > 0 && (
+                  <div className="pt-2 space-y-1">
+                    <div className="text-xs text-muted-foreground">{t('details.testPendingDuties')}</div>
+                    {(result.pending_duties || []).map((d, i) => (
+                      <div key={i} className="text-xs">• {d.message || d.duty}</div>
+                    ))}
+                  </div>
+                )}
+                {(result.scope_check || []).length > 0 && (
+                  <div className="pt-2 space-y-1">
+                    <div className="text-xs text-muted-foreground">{t('details.testScopeCheck')}</div>
+                    {(result.scope_check || []).map((c, i) => (
+                      <div key={i} className="text-xs flex items-center gap-2 font-mono">
+                        {c.passed ? <CheckCircle2 className="h-3 w-3 text-green-600" /> : <AlertCircle className="h-3 w-3 text-destructive" />}
+                        {operandKey(c.operand)} {t(`rule.operatorSymbol.${c.operator}`)} {Array.isArray(c.expected) ? c.expected.join(', ') : String(c.expected)}
+                        <span className="text-muted-foreground">← {c.actual == null || c.actual === '' ? t('details.testScopeMissing') : String(c.actual)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {(result.prerequisite_chain || []).length > 0 && (
                   <div className="pt-2 space-y-1">
                     <div className="text-xs text-muted-foreground">{t('details.testPrerequisiteChain')}</div>
                     {(result.prerequisite_chain || []).map((entry, i) => (
                       <div key={i} className="text-xs flex items-center gap-2">
                         <Badge
-                          variant={entry.verdict === 'approved' ? 'default' : 'destructive'}
+                          variant={verdictVariant(entry.verdict)}
                           className="text-xs"
                         >
                           {t(`verdict.${entry.verdict}`, { defaultValue: entry.verdict })}

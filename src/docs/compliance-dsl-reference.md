@@ -118,6 +118,32 @@ ASSERT obj.has_pii != True
 > are strings. Compare string properties and `TAG()` values against quoted
 > values. Numeric fields such as `1` and `0` are not equal to booleans.
 
+## Namespaces: `ctx.` and `req.`
+
+The prefix before the dot (`obj.`, `p.`, …) normally doesn't matter: every
+property reads the evaluated object's top-level field. Two prefixes are
+reserved and read a nested namespace when the object carries one:
+
+| Prefix | Reads | Where |
+|---|---|---|
+| `ctx.<name>` | the Authority Relation's parameters (`domain_context.params`) and the values of its `domain_context.<name>` resource refs | Authority Relation checks and rules |
+| `req.<key>` | the decision request and its context (e.g. `market`), or the evidence row during a DNA-Coefficient run | Authority Relation checks and rules |
+
+This lets a check compare the request with the AR's own parameters instead
+of repeating literals:
+
+```
+# Ceiling taken from the AR's params
+ASSERT req.value <= ctx.threshold OR req.escalated = True
+
+# List membership against a list-valued param
+ASSERT req.market IN ctx.cleared_markets
+```
+
+A request can't set `ctx` or `req` itself: keys with those names are dropped
+before evaluation. Outside Authority Relations (no such namespace on the
+object), `ctx.x` and `req.x` read the top-level field `x`, as before.
+
 ## Functions
 
 ### Tag Functions

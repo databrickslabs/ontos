@@ -536,19 +536,37 @@ def create_products(
                 stats["created"] += 1
                 continue
             
-            # Create product
+            # Create product. Raw SQL skips the ORM's Python-side defaults, and
+            # a fresh database (tables from create_all) has no server defaults,
+            # so every NOT NULL column of DataProductDb is set here.
             product_id = str(uuid4())
+            now = datetime.utcnow()
             product_sql = text("""
                 INSERT INTO data_products (
-                    id, api_version, kind, status, name, version, product_created_ts, created_at, updated_at
+                    id, api_version, kind, status, name, version, product_created_ts,
+                    max_level_inheritance, version_family_id, published, publication_scope,
+                    created_at, updated_at
                 ) VALUES (
-                    :id, :api_version, :kind, :status, :name, :version, :product_created_ts, :created_at, :updated_at
+                    :id, :api_version, :kind, :status, :name, :version, :product_created_ts,
+                    :max_level_inheritance, :version_family_id, :published, :publication_scope,
+                    :created_at, :updated_at
                 )
                 ON CONFLICT (id) DO UPDATE SET
                     updated_at = :updated_at
             """)
-            
-            with engine.connect() as conn:
+            port_sql = text("""
+                INSERT INTO data_product_output_ports (
+                    id, product_id, name, version, asset_type, asset_identifier,
+                    contains_pii, auto_approve
+                ) VALUES (
+                    :id, :product_id, :name, :version, :asset_type, :asset_identifier,
+                    :contains_pii, :auto_approve
+                )
+            """)
+
+            # One transaction: a product whose ports failed would be skipped
+            # by every later run.
+            with engine.begin() as conn:
                 conn.execute(product_sql, {
                     "id": product_id,
                     "api_version": "v1.0.0",
@@ -556,39 +574,34 @@ def create_products(
                     "status": "draft",
                     "name": product_name,
                     "version": "1.0.0",
-                    "product_created_ts": datetime.utcnow(),
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
+                    "product_created_ts": now,
+                    "max_level_inheritance": 99,
+                    "version_family_id": product_id,
+                    "published": False,
+                    "publication_scope": "none",
+                    "created_at": now,
+                    "updated_at": now
                 })
-                conn.commit()
-            
-            # Create output ports for each table
-            for obj in objects:
-                if obj.object_type != 'TABLE':
-                    continue
-                
-                qualified_name = qualify_table_name(obj.full_name, default_catalog, default_schema)
-                port_id = str(uuid4())
-                
-                port_sql = text("""
-                    INSERT INTO output_ports (
-                        id, product_id, name, version, asset_type, asset_identifier
-                    ) VALUES (
-                        :id, :product_id, :name, :version, :asset_type, :asset_identifier
+
+                # Create output ports for each table
+                for obj in objects:
+                    if obj.object_type != 'TABLE':
+                        continue
+
+                    qualified_name = qualify_table_name(
+                        obj.full_name, default_catalog, default_schema
                     )
-                """)
-                
-                with engine.connect() as conn:
                     conn.execute(port_sql, {
-                        "id": port_id,
+                        "id": str(uuid4()),
                         "product_id": product_id,
                         "name": obj.table or qualified_name,
                         "version": "1.0.0",
                         "asset_type": "table",
-                        "asset_identifier": qualified_name
+                        "asset_identifier": qualified_name,
+                        "contains_pii": False,
+                        "auto_approve": False
                     })
-                    conn.commit()
-            
+
             if verbose:
                 print(f"    Created with {len([o for o in objects if o.object_type == 'TABLE'])} output ports")
             stats["created"] += 1
@@ -726,7 +739,7 @@ def link_products_to_contracts(
             
             # Update output port
             update_sql = text("""
-                UPDATE output_ports
+                UPDATE data_product_output_ports
                 SET contract_id = :contract_id
                 WHERE product_id IN (SELECT id FROM data_products WHERE name = :product_name)
                   AND asset_identifier = :asset_identifier

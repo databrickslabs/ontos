@@ -230,6 +230,13 @@ class OutputPort(BaseModel):
 
     _parse_server_json = field_validator('server', mode='before')(parse_json_if_string)
 
+    @field_validator('containsPii', 'autoApprove', mode='before')
+    @classmethod
+    def _null_flag_is_false(cls, value):
+        # Both columns are nullable; rows written by raw SQL (e.g. older UC Bulk
+        # Import runs) can hold NULL, which must read as the False default.
+        return False if value is None else value
+
     @model_validator(mode='before')
     @classmethod
     def _read_port_status_property(cls, data):

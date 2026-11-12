@@ -34,10 +34,13 @@ from src.db_models.metadata import (
     MetadataAttachmentDb,
     RichTextMetadataDb,
 )
+from src.db_models.tags import EntityTagAssociationDb, TagDb
 from src.models.data_domains import DataDomainCreate
 from src.repositories.data_domain_repository import data_domain_repo
+from src.repositories.tags_repository import tag_namespace_repo
 
-KINDS = (RichTextMetadataDb, LinkMetadataDb, DocumentMetadataDb, MetadataAttachmentDb, CostItemDb)
+KINDS = (RichTextMetadataDb, LinkMetadataDb, DocumentMetadataDb, MetadataAttachmentDb, CostItemDb,
+         EntityTagAssociationDb)
 
 
 def _seed(db: Session, entity_type: str, entity_id: str, shared_note_id: str) -> None:
@@ -55,6 +58,11 @@ def _seed(db: Session, entity_type: str, entity_id: str, shared_note_id: str) ->
         entity_type=entity_type, entity_id=entity_id, cost_center="STORAGE",
         amount_cents=100, currency="USD", start_month=date(2026, 10, 1),
     ))
+    namespace = tag_namespace_repo.get_or_create_default_namespace(db, user_email="admin@example.com")
+    tag = TagDb(name=f"t_{uuid.uuid4().hex[:8]}", namespace_id=namespace.id, status="active")
+    db.add(tag)
+    db.flush()
+    db.add(EntityTagAssociationDb(tag_id=tag.id, entity_type=entity_type, entity_id=entity_id, assigned_by="u"))
     db.commit()
 
 
@@ -104,10 +112,34 @@ class TestHelper:
         db_session.commit()
 
         assert removed == {
-            "rich_texts": 1, "links": 1, "documents": 1, "attachments": 1, "cost_items": 1,
+            "rich_texts": 1, "links": 1, "documents": 1, "attachments": 1, "cost_items": 1, "tags": 1,
         }
         _assert_cleaned(db_session, "data_product", "p1", shared_note, no_file_deletes)
-        assert _count(db_session, "data_product", "p2") == 5, "other entities keep theirs"
+        assert _count(db_session, "data_product", "p2") == 6, "other entities keep theirs"
+
+    def test_batches_many_ids(self, db_session, shared_note, no_file_deletes):
+        from src.controller.entity_data_cleanup import remove_entities_data
+        ids = [f"c{i}" for i in range(3)]
+        for entity_id in ids:
+            _seed(db_session, "concept", entity_id, str(shared_note.id))
+
+        removed = remove_entities_data(db_session, entity_type="concept", entity_ids=ids + [ids[0], None])
+        db_session.commit()
+
+        assert removed["rich_texts"] == 3 and removed["tags"] == 3
+        assert all(_count(db_session, "concept", entity_id) == 0 for entity_id in ids)
+        assert len(no_file_deletes) == 3
+
+    def test_move_rekeys_the_rows(self, db_session, shared_note):
+        from src.controller.entity_data_cleanup import move_entity_data
+        _seed(db_session, "concept", "old", str(shared_note.id))
+
+        moved = move_entity_data(db_session, entity_type="concept", from_id="old", to_id="new")
+        db_session.commit()
+
+        assert sum(moved.values()) == 6
+        assert _count(db_session, "concept", "old") == 0
+        assert _count(db_session, "concept", "new") == 6
 
 
 class TestDeletePaths:
@@ -177,4 +209,14 @@ class TestDeletePaths:
         assert _count(db_session, "data_product", "p9") == 0
         savepoint.rollback()
 
-        assert _count(db_session, "data_product", "p9") == 5
+        assert _count(db_session, "data_product", "p9") == 6
+
+
+def test_deleting_a_missing_product_touches_nothing(db_session, shared_note, no_file_deletes):
+    """Orphaned rows under an id with no product stay until a real delete; nothing is queued on the session."""
+    _seed(db_session, "data_product", "ghost", str(shared_note.id))
+
+    assert DataProductsManager(db=db_session).delete_product("ghost", user="u") is False
+
+    assert _count(db_session, "data_product", "ghost") == 6
+    assert no_file_deletes == []

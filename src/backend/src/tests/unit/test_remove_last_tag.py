@@ -113,3 +113,28 @@ def test_contract_update_without_tags_keeps_them(contracts_manager, contract, db
     contracts_manager.update_contract_with_relations(db_session, contract, {'name': 'C2'}, current_user='u')
 
     assert _contract_tags(db_session, contract) == 1
+
+
+def test_contract_update_with_unreadable_tags_keeps_them(contracts_manager, contract, db_session):
+    contracts_manager.update_contract_with_relations(db_session, contract, {'tags': [None, 7]}, current_user='u')
+
+    assert _contract_tags(db_session, contract) == 1
+
+
+def test_clearing_the_last_tag_is_logged(manager, product, db_session):
+    from src.db_models.change_log import ChangeLogDb
+
+    manager._assign_tags_to_product(product, [])
+
+    entry = db_session.query(ChangeLogDb).filter_by(entity_id=product, action='TAGS_SET').one()
+    assert 'Tags cleared' in (entry.details_json or '')
+
+
+def test_clearing_an_untagged_entity_logs_nothing(db_session):
+    from src.db_models.change_log import ChangeLogDb
+
+    TagsManager().set_tags_for_entity(
+        db_session, entity_id='untagged', entity_type='data_product', tags=[], user_email='u',
+    )
+
+    assert db_session.query(ChangeLogDb).filter_by(entity_id='untagged').count() == 0

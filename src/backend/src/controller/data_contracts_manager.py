@@ -2793,15 +2793,20 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         elif isinstance(tag, dict):
                             tag_creates.append(AssignedTagCreate(**tag))
                     
-                    # Set tags for the contract entity
-                    self._tags_manager.set_tags_for_entity(
-                        db,
-                        entity_id=contract_id,
-                        entity_type="data_contract",
-                        tags=tag_creates,
-                        user_email=current_user
-                    )
-                    logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
+                    # An explicit [] removes every tag (#1435); a list whose entries
+                    # couldn't be read keeps the current ones, as for products.
+                    if tags_data and not tag_creates:
+                        logger.warning("No readable tag in the update of contract %s; its tags are kept", contract_id)
+                    else:
+                        # Set tags for the contract entity
+                        self._tags_manager.set_tags_for_entity(
+                            db,
+                            entity_id=contract_id,
+                            entity_type="data_contract",
+                            tags=tag_creates,
+                            user_email=current_user
+                        )
+                        logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
                 except Exception as e:
                     logger.error(f"Failed to update tags for contract {contract_id}: {e}")
                     # Don't fail the entire update if tags fail

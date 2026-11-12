@@ -11,6 +11,7 @@
 export type TagSelection = string | {
   tag_id?: string;
   fully_qualified_name?: string;
+  tag_name?: string;
   assigned_value?: string | null;
 };
 
@@ -18,7 +19,7 @@ export type TagPayloadItem = string | { tag_id?: string; assigned_value?: string
 
 function tagKey(tag: TagSelection): string {
   if (typeof tag === 'string') return tag;
-  return tag.fully_qualified_name || tag.tag_id || '';
+  return tag.fully_qualified_name || tag.tag_id || tag.tag_name || '';
 }
 
 export function normalizeTagsForPayload(tags: TagSelection[] | undefined | null): TagPayloadItem[] {

@@ -181,6 +181,10 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         """Replace the tags of an entity. With ``commit=False`` (a batch import,
         inside the savepoint of the entity) the change is only flushed."""
         ns_repo = self._namespace_repo
+        # Clearing is logged only when there was something to clear (#1435).
+        had_tags = not tags and db.query(EntityTagAssociationDb.id).filter_by(
+            entity_id=entity_id, entity_type=entity_type,
+        ).first() is not None
         assigned = self._entity_assoc_repo.set_tags_for_entity(
             db,
             entity_id=entity_id,
@@ -192,7 +196,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         )
         
         # Log to change log for timeline
-        if tags:
+        if tags or had_tags:
             try:
                 from src.controller.change_log_manager import change_log_manager
                 tag_names = [t.tag_fqn if hasattr(t, 'tag_fqn') else str(t) for t in tags[:5]]
@@ -202,7 +206,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
                 details = {
                     "tag_count": len(tags),
                     "tags": tag_summary,
-                    "summary": f"Tags updated: {tag_summary}"
+                    "summary": (f"Tags updated: {tag_summary}" if tags else "Tags cleared")
                                + (f" by {user_email}" if user_email else ""),
                 }
                 if commit:

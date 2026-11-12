@@ -104,3 +104,37 @@ def test_delete_collection_removes_its_and_its_concepts_metadata(client, semanti
     assert _count(db_session, "collection", coll) == 0
     assert _count(db_session, "concept", concept) == 0
     assert _count(db_session, "concept", other) == 3
+
+
+def test_collection_delete_keeps_metadata_of_a_concept_still_in_another_collection(
+    client, semantic_models_manager, db_session,
+):
+    from src.repositories.rdf_triples_repository import rdf_triples_repo
+    home = _collection(client)
+    shared = _concept(client, home, "Shared")
+    other = _collection(client)
+    # The same IRI also carries triples in the collection that is deleted.
+    rdf_triples_repo.add_triple(
+        db_session, shared, "http://www.w3.org/2004/02/skos/core#note", "annotated elsewhere",
+        object_is_uri=False, context_name=other,
+    )
+    db_session.commit()
+    _seed(db_session, "concept", shared)
+
+    assert semantic_models_manager.delete_collection(other, deleted_by="tester") is True
+
+    assert _count(db_session, "concept", shared) == 3
+
+
+def test_migrating_a_draft_concept_keeps_its_metadata(client, semantic_models_manager, db_session):
+    source = _collection(client)
+    target = _collection(client)
+    concept = _concept(client, source, "Movable")
+    _seed(db_session, "concept", concept)
+
+    migrated = semantic_models_manager.migrate_concept(concept, target, delete_source=True, migrated_by="tester")
+    new_iri = migrated["iri"] if isinstance(migrated, dict) else migrated.iri
+
+    assert new_iri != concept
+    assert _count(db_session, "concept", concept) == 0
+    assert _count(db_session, "concept", new_iri) == 3

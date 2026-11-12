@@ -511,10 +511,7 @@ class AssetsManager(SearchableAsset):
                     db, entity_type="asset", entity_id=entity_id,
                 ),
             }
-            entity_rows, paths = remove_entity_rows(
-                db, entity_type="asset", entity_id=entity_id,
-                metadata_manager=self._metadata_manager, costs_manager=self._costs_manager,
-            )
+            entity_rows, paths = remove_entity_rows(db, entity_type="asset", entity_id=entity_id)
             removed.update(entity_rows)
             self._asset_repo.remove(db=db, id=asset_id)
         self._metadata_manager.delete_document_files_after_commit(db, paths, ws)

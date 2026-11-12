@@ -978,12 +978,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         try:
             # Get product info and subscribers before deletion
             product_db = self._repo.get(db=self._db, id=product_id)
-            product_name = product_db.name if product_db else None
-            deletion_notice = (
-                self._collect_deletion_notice(
-                    product_id=product_id, product_name=product_name, deleted_by=user
-                )
-                if product_db else None
+            if not product_db:
+                # Nothing to delete: touch nothing on the shared session.
+                return False
+            product_name = product_db.name
+            deletion_notice = self._collect_deletion_notice(
+                product_id=product_id, product_name=product_name, deleted_by=user
             )
 
             entity_domain_repo.remove_all_for_entity(self._db, entity_type="data_product", entity_id=product_id)

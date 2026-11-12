@@ -151,11 +151,6 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const isFormDirty = useMemo(() => {
     if (!initialFormValues) return false
     
-    // Normalize tags for comparison
-    const normalizeTag = (tag: any) => typeof tag === 'string' ? tag : (tag.fully_qualified_name || tag.tag_id || tag.tag_name || tag)
-    const currentTagsNormalized = tags.map(normalizeTag).sort().join(',')
-    const initialTagsNormalized = initialFormValues.tags.map(normalizeTag).sort().join(',')
-    
     return (
       name !== initialFormValues.name ||
       version !== initialFormValues.version ||
@@ -168,7 +163,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       descriptionUsage !== initialFormValues.descriptionUsage ||
       descriptionPurpose !== initialFormValues.descriptionPurpose ||
       descriptionLimitations !== initialFormValues.descriptionLimitations ||
-      currentTagsNormalized !== initialTagsNormalized
+      // The same comparison decides whether Save sends the tags
+      tagsForUpdate(tags, initialFormValues.tags) !== undefined
     )
   }, [initialFormValues, name, version, status, ownerTeamId, projectId, domainIds, primaryDomainId, tenant, descriptionUsage, descriptionPurpose, descriptionLimitations, tags])
 

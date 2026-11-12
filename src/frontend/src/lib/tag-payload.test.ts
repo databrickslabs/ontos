@@ -34,6 +34,11 @@ describe('tagsForUpdate', () => {
     expect(tagsForUpdate([loaded('ns/a'), 'ns/c'], [loaded('ns/a'), loaded('ns/b')])).toEqual(['ns/a', 'ns/c']);
   });
 
+  it('compares a tag known only by name the same way', () => {
+    expect(tagsForUpdate([{ tag_name: 'pii' }], [{ tag_name: 'pii' }])).toBeUndefined();
+    expect(tagsForUpdate([], [{ tag_name: 'pii' }])).toEqual([]);
+  });
+
   it('leaves tags out when the entity had none and still has none', () => {
     expect(tagsForUpdate([], [])).toBeUndefined();
     expect(tagsForUpdate([], undefined)).toBeUndefined();

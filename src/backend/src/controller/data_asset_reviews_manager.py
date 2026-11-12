@@ -234,7 +234,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                         asset_fqn=fqn,
                         asset_type=asset_type,
                         status=ReviewedAssetStatus.PENDING, # Start as pending
-                        updated_at=datetime.utcnow()
+                        updated_at=datetime.now(timezone.utc)
                     )
                 )
                 processed_fqns.add(fqn)
@@ -255,7 +255,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 status=ReviewRequestStatus.QUEUED,
                 notes=request_data.notes,
                 created_at=datetime.now(timezone.utc),
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(timezone.utc),
                 assets=assets_to_review
             )
 

@@ -76,7 +76,8 @@ def test_completed_delivery_notification_is_stamped_with_aware_utc():
     repo.get.return_value = MagicMock(action_payload=None)
     repo.update.side_effect = lambda db, db_obj, obj_in: obj_in
     try:
-        manager.complete_delivery_notification(db=MagicMock(), notification_id='n', completed_by='x')
+        manager.complete_delivery_notification(
+            db=MagicMock(), notification_id='n', completed_by='x')
     except Exception:
         pass
     update_data = repo.update.call_args.kwargs['obj_in']

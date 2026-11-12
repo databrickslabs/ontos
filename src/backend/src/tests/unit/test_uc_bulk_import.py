@@ -47,12 +47,12 @@ def engine(tmp_path):
     engine.dispose()
 
 
-def _discovered(name='sales'):
-    return {name: [job.DiscoveredObject('TABLE', t, {f'data_product_{name}': ''}) for t in _TABLES]}
+def _discovered(name='sales', tables=_TABLES):
+    return {name: [job.DiscoveredObject('TABLE', t, {f'data_product_{name}': ''}) for t in tables]}
 
 
-def _import(engine, strategy='skip'):
-    return job.create_products(engine, _discovered(), strategy, None, None)
+def _import(engine, strategy='skip', tables=_TABLES):
+    return job.create_products(engine, _discovered(tables=tables), strategy, None, None)
 
 
 def _count(engine, table):
@@ -61,7 +61,7 @@ def _count(engine, table):
 
 
 def test_an_imported_product_is_readable_through_the_manager(engine):
-    assert _import(engine) == {'created': 1, 'skipped': 0, 'errors': 0}
+    assert _import(engine) == {'created': 1, 'updated': 0, 'skipped': 0, 'errors': 0}
 
     with Session(engine) as db:
         products = DataProductsManager(db=db).list_products(is_admin=True)
@@ -79,7 +79,7 @@ def test_an_imported_product_is_readable_through_the_manager(engine):
 def test_a_rerun_skips_the_product(engine):
     _import(engine)
 
-    assert _import(engine) == {'created': 0, 'skipped': 1, 'errors': 0}
+    assert _import(engine) == {'created': 0, 'updated': 0, 'skipped': 1, 'errors': 0}
     assert _count(engine, 'data_products') == 1
     assert _count(engine, 'data_product_output_ports') == len(_TABLES)
 
@@ -88,24 +88,26 @@ def test_a_failed_port_insert_leaves_no_half_imported_product(engine):
     with engine.begin() as conn:
         conn.execute(text('DROP TABLE data_product_output_ports'))
 
-    assert _import(engine) == {'created': 0, 'skipped': 0, 'errors': 1}
+    assert _import(engine) == {'created': 0, 'updated': 0, 'skipped': 0, 'errors': 1}
     # A product without its ports would be skipped by every later run
     assert _count(engine, 'data_products') == 0
 
 
 def _import_contract(engine, name='orders', tables=_TABLES[:1], strategy='skip'):
-    objects = {name: [job.DiscoveredObject('TABLE', t, {f'data_contract_{name}': ''}) for t in tables]}
+    tag = {f'data_contract_{name}': ''}
+    objects = {name: [job.DiscoveredObject('TABLE', t, tag) for t in tables]}
     return job.create_contracts(engine, objects, strategy, None, None), objects
 
 
 def _contract_ids(engine, name='orders'):
     with engine.connect() as conn:
-        return conn.execute(text('SELECT id FROM data_contracts WHERE name = :n'), {'n': name}).scalars().all()
+        sql = text('SELECT id FROM data_contracts WHERE name = :n')
+        return conn.execute(sql, {'n': name}).scalars().all()
 
 
 def test_an_imported_contract_is_readable_through_the_manager(engine):
     stats, _ = _import_contract(engine)
-    assert stats == {'created': 1, 'skipped': 0, 'errors': 0}
+    assert stats == {'created': 1, 'updated': 0, 'skipped': 0, 'errors': 0}
 
     [contract_id] = _contract_ids(engine)
     with Session(engine) as db:
@@ -126,7 +128,7 @@ def test_a_failed_schema_insert_leaves_no_half_imported_contract(engine):
         conn.execute(text('DROP TABLE data_contract_schema_objects'))
 
     stats, _ = _import_contract(engine)
-    assert stats == {'created': 0, 'skipped': 0, 'errors': 1}
+    assert stats == {'created': 0, 'updated': 0, 'skipped': 0, 'errors': 1}
     assert _contract_ids(engine) == []
 
 
@@ -142,6 +144,42 @@ def test_ports_are_linked_to_the_contract_tagged_on_the_same_table(engine):
     [contract_id] = _contract_ids(engine)
     linked = {p.assetIdentifier: p.contractId for p in product.outputPorts}
     assert linked == {_TABLES[0]: contract_id, _TABLES[1]: None}
+
+
+def _port_assets(engine):
+    with engine.connect() as conn:
+        return sorted(conn.execute(text(
+            'SELECT asset_identifier FROM data_product_output_ports')).scalars())
+
+
+def test_update_adds_the_new_ports_to_the_existing_product(engine):
+    _import(engine, tables=_TABLES[:1])
+    with engine.connect() as conn:
+        [product_id] = conn.execute(text('SELECT id FROM data_products')).scalars().all()
+
+    # Run twice: the second run has nothing new to add
+    for _ in range(2):
+        assert _import(engine, 'update') == {'created': 0, 'updated': 1, 'skipped': 0, 'errors': 0}
+
+    with engine.connect() as conn:
+        assert conn.execute(text('SELECT id FROM data_products')).scalars().all() == [product_id]
+    assert _port_assets(engine) == sorted(_TABLES)
+
+
+def test_update_adds_the_new_schema_objects_to_the_existing_contract(engine):
+    _import_contract(engine, tables=_TABLES[:1])
+    [contract_id] = _contract_ids(engine)
+
+    for _ in range(2):
+        stats, _ = _import_contract(engine, tables=_TABLES, strategy='update')
+        assert stats == {'created': 0, 'updated': 1, 'skipped': 0, 'errors': 0}
+
+    assert _contract_ids(engine) == [contract_id]
+    with engine.connect() as conn:
+        names = conn.execute(text(
+            'SELECT physical_name FROM data_contract_schema_objects WHERE contract_id = :c'
+        ), {'c': contract_id}).scalars().all()
+    assert sorted(names) == sorted(_TABLES)
 
 
 def test_a_stored_port_with_null_booleans_still_reads():

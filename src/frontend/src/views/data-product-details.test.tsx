@@ -548,7 +548,7 @@ describe('putProductUpdate', () => {
     expect(fetchFn.mock.calls[0][1].headers['X-Force-Update']).toBe('true');
   });
 
-  it('throws with the failure label on other errors, including a 409 without versioning', async () => {
+  it('throws with the failure label on other errors (also a plain 409)', async () => {
     const fetchFn = vi.fn().mockResolvedValue(jsonResponse(409, { detail: 'conflict' }));
     const call = putProductUpdate('p1', {}, false, 'Failed to add deliverable', fetchFn);
     await expect(call).rejects.toThrow('Failed to add deliverable (409)');

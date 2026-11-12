@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -794,7 +794,7 @@ async def request_workflow_enablement(
 
         notification = Notification(
             id=str(uuid.uuid4()),
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             type=NotificationType.ACTION_REQUIRED,
             title="Background job enablement requested",
             subtitle=f"Job: {display_name}",

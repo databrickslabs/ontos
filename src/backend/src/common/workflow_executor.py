@@ -15,7 +15,7 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
@@ -1105,7 +1105,7 @@ class ApprovalStepHandler(StepHandler):
 
                     notification = Notification(
                         id=str(uuid4()),
-                        created_at=datetime.utcnow(),
+                        created_at=datetime.now(timezone.utc),
                         type=NotificationType.ACTION_REQUIRED,
                         title="Approval Required",
                         subtitle=subtitle,
@@ -1258,7 +1258,7 @@ class NotificationStepHandler(StepHandler):
                     try:
                         notification = Notification(
                             id=str(uuid4()),
-                            created_at=datetime.utcnow(),
+                            created_at=datetime.now(timezone.utc),
                             type=notification_type,
                             title=title,
                             subtitle=subtitle,
@@ -2054,7 +2054,7 @@ class CreateAssetReviewStepHandler(StepHandler):
                 title=title,
                 status=ReviewRequestStatus.QUEUED,
                 notes=full_notes,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 updated_at=datetime.utcnow(),
                 assets=assets_to_review,
             )
@@ -4046,7 +4046,7 @@ class WorkflowExecutor:
 
         notification_repo.create(db=self._db, obj_in=Notification(
             id=str(uuid4()),
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             type=NotificationType.WARNING,
             title="Contract status not changed",
             subtitle=trigger_context.entity_name or trigger_context.entity_id,
@@ -4612,7 +4612,7 @@ class WorkflowExecutor:
             sent.add(recipient)
             notification_repo.create(db=self._db, obj_in=Notification(
                 id=str(uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 type=NotificationType.WARNING,
                 title="Status change not applied",
                 subtitle=trigger_context.entity_name or product_id,

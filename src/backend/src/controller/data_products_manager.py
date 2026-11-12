@@ -8,7 +8,7 @@ Handles product creation, updates, versioning, contract integration, and search 
 import asyncio
 import uuid
 from contextlib import nullcontext
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Any, Set
 from uuid import UUID
 from pathlib import Path
@@ -4761,7 +4761,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             try:
                 notification = Notification(
                     id=str(uuid.uuid4()),
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(timezone.utc),
                     type=notif_type,
                     title=title,
                     description=description,

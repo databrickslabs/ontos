@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -254,7 +254,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 title=normalized_title,
                 status=ReviewRequestStatus.QUEUED,
                 notes=request_data.notes,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 updated_at=datetime.utcnow(),
                 assets=assets_to_review
             )
@@ -305,7 +305,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                         description=f"Assigned to you by {created_api_obj.requester_email}.",
                         type=NotificationType.INFO,
                         link=f"/data-asset-reviews/{created_api_obj.id}",
-                        created_at=datetime.utcnow(),
+                        created_at=datetime.now(timezone.utc),
                     )
                     self._notifications_manager.create_notification(notification)
                     logger.info(f"No workflow configured; sent direct notification to {created_api_obj.reviewer_email}")

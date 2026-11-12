@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
@@ -814,7 +814,7 @@ class JobsManager:
                 "status": "RUNNING"
             },
             target_roles=["Admin"],  # Only notify admins
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
         
         # Create notification via notifications manager
@@ -1399,7 +1399,7 @@ class JobsManager:
                     "error_type": "job_failure"
                 },
                 target_roles=["Admin"],
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
 
             self._notifications_manager.create_notification(notification, db=db)

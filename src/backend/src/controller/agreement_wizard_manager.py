@@ -8,7 +8,7 @@ and on completion creates an agreement record and writes to entity change log
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from sqlalchemy.orm import Session
@@ -869,7 +869,7 @@ class AgreementWizardManager:
                                 "entity_type": session.entity_type,
                                 "entity_id": session.entity_id,
                             },
-                            created_at=datetime.utcnow(),
+                            created_at=datetime.now(timezone.utc),
                             read=False,
                             can_delete=True,
                         )

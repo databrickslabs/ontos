@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, List, Optional, Dict
 import json
 
@@ -244,7 +244,7 @@ class NotificationsManager:
         notification was silently lost.
         """
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             notification_id = str(uuid.uuid4())
             
             # Construct the Notification Pydantic model internally
@@ -537,7 +537,7 @@ class NotificationsManager:
                     "entity_id": entity_id,
                     "data": data,
                 },
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 read=False,
                 can_delete=True,
             )
@@ -580,7 +580,7 @@ class NotificationsManager:
             # Update the notification
             update_data = {
                 'read': True,
-                'updated_at': datetime.utcnow(),
+                'updated_at': datetime.now(timezone.utc),
             }
             
             # Update action_payload with completion details

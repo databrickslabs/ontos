@@ -7,6 +7,8 @@
 - An applied role override ("act as role") still replaces everything.
 - ``/api/user/permissions`` reports what ``PermissionChecker`` enforces.
 - Assigning an override can't grant more than the actor holds.
+
+Overrides are stored by role id (#1453), so the resolver works on ids.
 """
 import itertools
 import uuid
@@ -54,6 +56,9 @@ ROLES = [
           data_contracts=L.READ_ONLY, data_domains=L.READ_ONLY),
 ]
 
+# Role ids by name, for the ROLES above.
+ID = {r.name: str(r.id) for r in ROLES}
+
 
 @pytest.fixture
 def auth():
@@ -62,119 +67,146 @@ def auth():
     return AuthorizationManager(settings_manager=settings)
 
 
+def _rid(override):
+    """A role id from a role name, an AppRole, or None (no override)."""
+    if override is None or isinstance(override, str) and override not in ID:
+        return None
+    if isinstance(override, str):
+        return ID[override]
+    return str(override.id)
+
+
 def _team(*members):
-    """A team whose entries are users when the identifier has an ``@``, else groups."""
-    return SimpleNamespace(members=[
-        SimpleNamespace(member_identifier=i, app_role_override=o, member_type="user" if "@" in i else "group")
+    """The member entries of one team: users when the identifier has an ``@``, else groups.
+
+    Each override is a role name in ROLES or an AppRole.
+    """
+    return [
+        SimpleNamespace(
+            member_identifier=i, app_role_override_id=_rid(o),
+            member_type="user" if "@" in i else "group",
+        )
         for i, o in members
-    ])
+    ]
 
 
 class TestMerge:
     def test_team_override_adds_to_group_roles(self, auth):
-        perms = auth.get_user_effective_permissions(["data-producers"], ["Data Steward"])
+        perms = auth.get_user_effective_permissions(["data-producers"], [ID["Data Steward"]])
 
         assert perms["data-domains"] == L.READ_WRITE   # from the team role
         assert perms["teams"] == L.READ_WRITE          # kept from the group role
 
     def test_lower_team_override_never_downgrades(self, auth):
-        perms = auth.get_user_effective_permissions(["admins"], ["Data Consumer"])
+        perms = auth.get_user_effective_permissions(["admins"], [ID["Data Consumer"]])
 
         assert all(perms[f] == L.ADMIN for f in FEATURES)
 
     def test_several_overrides_merge_by_highest(self, auth):
-        perms = auth.get_user_effective_permissions([], ["Data Consumer", "Data Producer", "Data Steward"])
+        roles = [ID["Data Consumer"], ID["Data Producer"], ID["Data Steward"]]
+        perms = auth.get_user_effective_permissions([], roles)
 
         assert perms["teams"] == L.READ_WRITE
         assert perms["data-domains"] == L.READ_WRITE
         assert perms["data-products"] == L.READ_WRITE
 
     def test_override_alone_grants_its_role(self, auth):
-        assert auth.get_user_effective_permissions([], "Admin")["settings"] == L.ADMIN
+        assert auth.get_user_effective_permissions([], [ID["Admin"]])["settings"] == L.ADMIN
 
     def test_unknown_override_is_ignored(self, auth):
-        perms = auth.get_user_effective_permissions(["data-consumers"], ["Nope"])
+        perms = auth.get_user_effective_permissions(["data-consumers"], ["a-deleted-role-id"])
 
         assert perms["data-products"] == L.READ_ONLY
+
+    def test_renamed_role_keeps_granting_through_its_id(self, auth):
+        # The role keeps its id when renamed; the resolver reads the new name.
+        steward = next(r for r in ROLES if r.name == "Data Steward")
+        renamed = steward.model_copy(update={"name": "Stewards"})
+        auth._settings_manager.list_app_roles.return_value = [
+            renamed if r.name == "Data Steward" else r for r in ROLES
+        ]
+
+        perms = auth.get_user_effective_permissions([], [str(steward.id)])
+
+        assert perms["data-domains"] == L.READ_WRITE
 
     def test_never_lower_than_before(self, auth):
         """The old resolution (override replaces groups) never yields a higher level."""
         def old(groups, override):
-            if override and any(r.name == override for r in ROLES):
-                return auth.get_user_effective_permissions([], [override])
+            if override and override in ID:
+                return auth.get_user_effective_permissions([], [ID[override]])
             return auth.get_user_effective_permissions(groups, None)
 
         group_sets = [[], ["admins"], ["data-consumers"], ["data-producers", "data-stewards"]]
         for groups, override in itertools.product(group_sets, [None, "Admin", "Data Consumer", "Data Steward", "Nope"]):
-            before, after = old(groups, override), auth.get_user_effective_permissions(groups, [override] if override else None)
+            new_roles = [ID[override]] if override in ID else None
+            before, after = old(groups, override), auth.get_user_effective_permissions(groups, new_roles)
             for feature in get_feature_config():
                 assert ACCESS_LEVEL_ORDER[after[feature]] >= ACCESS_LEVEL_ORDER[before[feature]], (groups, override, feature)
 
 
 class TestTeamRoleOverrides:
     def test_group_entry_applies_to_group_members(self):
-        teams = [_team(("data-consumers", "Data Steward"))]
+        members = _team(("data-consumers", "Data Steward"))
 
-        assert team_role_overrides(teams, "alice@example.com", ["data-consumers"]) == ["Data Steward"]
+        assert team_role_overrides(members, "alice@example.com", ["data-consumers"]) == [ID["Data Steward"]]
 
     def test_every_matching_entry_counts(self):
-        teams = [
-            _team(("Alice@Example.com", "Data Producer"), ("data-consumers", "Data Steward")),
-            _team(("data-consumers", "Data Producer"), ("bob@example.com", "Admin")),
-        ]
+        members = _team(("Alice@Example.com", "Data Producer"), ("data-consumers", "Data Steward")) + \
+            _team(("data-consumers", "Data Producer"), ("bob@example.com", "Admin"))
 
         # The user's own entries first, then the group entries.
-        assert team_role_overrides(teams, "alice@example.com", ["Data-Consumers"]) == ["Data Producer", "Data Steward"]
+        assert team_role_overrides(members, "alice@example.com", ["Data-Consumers"]) == [
+            ID["Data Producer"], ID["Data Steward"],
+        ]
 
     def test_own_entry_comes_before_group_entries(self):
-        teams = [_team(("eng", "Data Consumer")), _team(("alice@example.com", "Data Steward"))]
+        members = _team(("eng", "Data Consumer")) + _team(("alice@example.com", "Data Steward"))
 
-        assert team_role_overrides(teams, "alice@example.com", ["eng"]) == ["Data Steward", "Data Consumer"]
+        assert team_role_overrides(members, "alice@example.com", ["eng"]) == [ID["Data Steward"], ID["Data Consumer"]]
 
     def test_a_user_entry_named_like_a_group_does_not_apply_to_the_group(self):
-        team = SimpleNamespace(members=[
-            SimpleNamespace(member_identifier="data-consumers", app_role_override="Admin", member_type="user"),
-        ])
+        members = [SimpleNamespace(member_identifier="data-consumers", app_role_override_id=ID["Admin"], member_type="user")]
 
-        assert team_role_overrides([team], "alice@example.com", ["data-consumers"]) == []
+        assert team_role_overrides(members, "alice@example.com", ["data-consumers"]) == []
 
     def test_a_group_entry_named_like_the_user_does_not_apply_as_the_users_own(self):
-        team = SimpleNamespace(members=[
-            SimpleNamespace(member_identifier="alice@example.com", app_role_override="Admin", member_type="group"),
-        ])
+        members = [SimpleNamespace(member_identifier="alice@example.com", app_role_override_id=ID["Admin"], member_type="group")]
 
-        assert team_role_overrides([team], "alice@example.com", []) == []
+        assert team_role_overrides(members, "alice@example.com", []) == []
 
     def test_member_type_enum_values_are_understood(self):
         from src.models.teams import MemberType
 
-        team = SimpleNamespace(members=[
-            SimpleNamespace(member_identifier="data-consumers", app_role_override="Data Steward", member_type=MemberType.GROUP),
-        ])
+        members = [SimpleNamespace(member_identifier="data-consumers", app_role_override_id=ID["Data Steward"], member_type=MemberType.GROUP)]
 
-        assert team_role_overrides([team], "alice@example.com", ["data-consumers"]) == ["Data Steward"]
+        assert team_role_overrides(members, "alice@example.com", ["data-consumers"]) == [ID["Data Steward"]]
 
     def test_entries_without_override_or_for_others_are_ignored(self):
-        teams = [_team(("alice@example.com", None), ("other-group", "Admin"), ("bob@example.com", "Admin"))]
+        members = _team(("alice@example.com", None), ("other-group", "Admin"), ("bob@example.com", "Admin"))
 
-        assert team_role_overrides(teams, "alice@example.com", ["data-consumers"]) == []
+        assert team_role_overrides(members, "alice@example.com", ["data-consumers"]) == []
 
 
-def _request(teams_by_user, applied=None):
-    """A request whose app state resolves teams from ``teams_by_user``: {identifier/group: [team, ...]}."""
+def _request(members_by_key, applied=None):
+    """A request whose teams manager returns the member entries for a user's identifier and groups.
+
+    ``members_by_key`` maps an identifier or group to lists of member entries (one list per team).
+    """
     teams_manager = MagicMock()
 
-    def get_teams_for_user(db, identifier, groups=None):
+    def get_role_override_members_for_user(db, identifier, groups=None):
         keys = [identifier.lower()] + [g.lower() for g in groups or []]
         seen, out = set(), []
         for key in keys:
-            for team in teams_by_user.get(key, []):
-                if id(team) not in seen:
-                    seen.add(id(team))
-                    out.append(team)
+            for team_members in members_by_key.get(key, []):
+                for member in team_members:
+                    if id(member) not in seen:
+                        seen.add(id(member))
+                        out.append(member)
         return out
 
-    teams_manager.get_team_rows_for_user.side_effect = get_teams_for_user
+    teams_manager.get_role_override_members_for_user.side_effect = get_role_override_members_for_user
     settings_manager = MagicMock()
     settings_manager.get_applied_role_override_for_user.return_value = applied
     settings_manager.get_feature_permissions_for_role_id.side_effect = (
@@ -193,17 +225,15 @@ def _no_real_db(monkeypatch):
 
 class TestResolver:
     def test_group_only_team_membership_grants_the_override(self, auth):
-        team = _team(("data-consumers", "Data Steward"))
-        request = _request({"data-consumers": [team]})
+        request = _request({"data-consumers": [_team(("data-consumers", "Data Steward"))]})
 
         perms = effective_permissions_for_request(request, "alice@example.com", ["data-consumers"], auth)
 
         assert perms["data-domains"] == L.READ_WRITE
 
     def test_applied_role_override_still_replaces(self, auth):
-        team = _team(("alice@example.com", "Admin"))
-        consumer = next(r for r in ROLES if r.name == "Data Consumer")
-        request = _request({"alice@example.com": [team]}, applied=str(consumer.id))
+        request = _request({"alice@example.com": [_team(("alice@example.com", "Admin"))]},
+                           applied=ID["Data Consumer"])
 
         perms = effective_permissions_for_request(request, "alice@example.com", ["admins"], auth)
 
@@ -211,9 +241,8 @@ class TestResolver:
         assert perms["teams"] == L.READ_ONLY
 
     def test_without_applied_override_option(self, auth):
-        team = _team(("alice@example.com", "Admin"))
-        consumer = next(r for r in ROLES if r.name == "Data Consumer")
-        request = _request({"alice@example.com": [team]}, applied=str(consumer.id))
+        request = _request({"alice@example.com": [_team(("alice@example.com", "Admin"))]},
+                           applied=ID["Data Consumer"])
 
         perms = effective_permissions_for_request(
             request, "alice@example.com", [], auth, apply_role_override=False,
@@ -227,7 +256,7 @@ class TestResolver:
         second = effective_permissions_for_request(request, "alice@example.com", ["data-consumers"], auth)
 
         assert first is second
-        assert request.app.state.teams_manager.get_team_rows_for_user.call_count == 1
+        assert request.app.state.teams_manager.get_role_override_members_for_user.call_count == 1
 
     def test_a_dangling_applied_override_falls_back_to_the_merged_roles(self, auth):
         request = _request({"alice@example.com": [_team(("alice@example.com", "Data Steward"))]}, applied="gone")
@@ -239,7 +268,7 @@ class TestResolver:
 
     def test_team_lookup_failure_grants_nothing_extra(self, auth):
         request = _request({})
-        request.app.state.teams_manager.get_team_rows_for_user.side_effect = RuntimeError("db down")
+        request.app.state.teams_manager.get_role_override_members_for_user.side_effect = RuntimeError("db down")
 
         perms = effective_permissions_for_request(request, "alice@example.com", ["data-consumers"], auth)
 
@@ -307,7 +336,7 @@ class TestNavigation:
 
         assert "data-products" in auth.get_user_hidden_nav_features(["data-consumers"])
         assert "data-products" not in auth.get_user_hidden_nav_features(
-            ["data-consumers"], team_role_names=["Data Steward"],
+            ["data-consumers"], team_role_ids=[str(steward.id)],
         )
 
     def test_team_admin_role_hides_nothing(self):
@@ -319,14 +348,14 @@ class TestNavigation:
         settings.list_app_roles.return_value = [consumer, admin]
         auth = AuthorizationManager(settings_manager=settings)
 
-        assert auth.get_user_hidden_nav_features(["data-consumers"], team_role_names=["Admin"]) == []
+        assert auth.get_user_hidden_nav_features(["data-consumers"], team_role_ids=[str(admin.id)]) == []
 
 
 class TestInHandlerAdminChecks:
     """The asset and data-product admin checks resolve like PermissionChecker, team roles included."""
 
-    def _req(self, auth, teams_by_user, applied=None):
-        request = _request(teams_by_user, applied=applied)
+    def _req(self, auth, members_by_key, applied=None):
+        request = _request(members_by_key, applied=applied)
         request.app.state.authorization_manager = auth
         return request
 
@@ -337,9 +366,10 @@ class TestInHandlerAdminChecks:
         from src.routes.assets_routes import _user_has_assets_feature
 
         settings = MagicMock()
-        settings.list_app_roles.return_value = ROLES + [_role("Asset Editor", assets=L.READ_WRITE)]
+        editor = _role("Asset Editor", assets=L.READ_WRITE)
+        settings.list_app_roles.return_value = ROLES + [editor]
         auth_with_assets = AuthorizationManager(settings_manager=settings)
-        team = _team(("u@example.com", "Asset Editor"))
+        team = _team(("u@example.com", editor))
 
         assert not _user_has_assets_feature(self._req(auth_with_assets, {}), self._user(["data-consumers"]), L.READ_WRITE)
         assert _user_has_assets_feature(
@@ -353,9 +383,8 @@ class TestInHandlerAdminChecks:
         editor = _role("Asset Editor", assets=L.READ_WRITE)
         settings.list_app_roles.return_value = ROLES + [editor]
         auth_with_assets = AuthorizationManager(settings_manager=settings)
-        consumer = next(r for r in ROLES if r.name == "Data Consumer")
-        request = self._req(auth_with_assets, {"u@example.com": [_team(("u@example.com", "Asset Editor"))]},
-                            applied=str(consumer.id))
+        request = self._req(auth_with_assets, {"u@example.com": [_team(("u@example.com", editor))]},
+                            applied=ID["Data Consumer"])
 
         assert not _user_has_assets_feature(request, self._user([]), L.READ_WRITE)
 
@@ -416,7 +445,7 @@ class TestAdoptEntityIdsStaysGroupBased:
     def test_team_roles_do_not_count(self, auth, monkeypatch):
         from src.common.authorization import user_can_adopt_entity_ids_for
 
-        monkeypatch.setattr(authorization, "lookup_user_team_roles", lambda *a: ["Admin"])
+        monkeypatch.setattr(authorization, "lookup_user_team_roles", lambda *a: [ID["Admin"]])
         auth.user_can_adopt_entity_ids = MagicMock(return_value=False)
         assert not user_can_adopt_entity_ids_for(auth, self._user(["data-consumers"]), "data-products")
 
@@ -430,11 +459,11 @@ class TestAdoptEntityIdsStaysGroupBased:
 
 
 class TestSearchRouteUsesResolvedPermissions:
-    def _client(self, auth, teams_by_user, applied=None):
+    def _client(self, auth, members_by_key, applied=None):
         from src.common.dependencies import get_auth_manager as dep_auth, get_settings_manager as dep_settings
         from src.routes import search_routes
 
-        request_like = _request(teams_by_user, applied=applied)
+        request_like = _request(members_by_key, applied=applied)
         app = FastAPI()
         app.state.teams_manager = request_like.app.state.teams_manager
         app.state.settings_manager = request_like.app.state.settings_manager
@@ -461,9 +490,8 @@ class TestSearchRouteUsesResolvedPermissions:
         assert permissions["data-domains"] == L.READ_WRITE
 
     def test_an_applied_override_replaces_them(self, auth):
-        consumer = next(r for r in ROLES if r.name == "Data Consumer")
         client, search_manager = self._client(
-            auth, {"u@example.com": [_team(("u@example.com", "Admin"))]}, applied=str(consumer.id),
+            auth, {"u@example.com": [_team(("u@example.com", "Admin"))]}, applied=ID["Data Consumer"],
         )
 
         assert client.get("/api/search?search_term=x").status_code == 200

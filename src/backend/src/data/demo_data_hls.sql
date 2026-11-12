@@ -57,12 +57,12 @@ ON CONFLICT (id) DO NOTHING;
 -- 2b. TEAM MEMBERS
 -- ============================================================================
 
-INSERT INTO team_members (id, team_id, member_type, member_identifier, app_role_override, added_by, created_at, updated_at) VALUES
-('00200001-0001-4000-8000-000000000001', '00100001-0001-4000-8000-000000000001', 'user', 'dr.chen@hospital.org', 'Data Producer', 'system@demo', NOW(), NOW()),
+INSERT INTO team_members (id, team_id, member_type, member_identifier, app_role_override_id, added_by, created_at, updated_at) VALUES
+('00200001-0001-4000-8000-000000000001', '00100001-0001-4000-8000-000000000001', 'user', 'dr.chen@hospital.org', (SELECT id FROM app_roles WHERE name = 'Data Producer'), 'system@demo', NOW(), NOW()),
 ('00200002-0001-4000-8000-000000000002', '00100001-0001-4000-8000-000000000001', 'group', 'clinical-informatics', NULL, 'system@demo', NOW(), NOW()),
-('00200003-0001-4000-8000-000000000003', '00100002-0001-4000-8000-000000000002', 'user', 'dr.patel@pharma.com', 'Data Producer', 'system@demo', NOW(), NOW()),
+('00200003-0001-4000-8000-000000000003', '00100002-0001-4000-8000-000000000002', 'user', 'dr.patel@pharma.com', (SELECT id FROM app_roles WHERE name = 'Data Producer'), 'system@demo', NOW(), NOW()),
 ('00200004-0001-4000-8000-000000000004', '00100002-0001-4000-8000-000000000002', 'group', 'biostatisticians', NULL, 'system@demo', NOW(), NOW()),
-('00200005-0001-4000-8000-000000000005', '00100003-0001-4000-8000-000000000003', 'user', 'sarah.compliance@pharma.com', 'Data Steward', 'system@demo', NOW(), NOW()),
+('00200005-0001-4000-8000-000000000005', '00100003-0001-4000-8000-000000000003', 'user', 'sarah.compliance@pharma.com', (SELECT id FROM app_roles WHERE name = 'Data Steward'), 'system@demo', NOW(), NOW()),
 ('00200006-0001-4000-8000-000000000006', '00100003-0001-4000-8000-000000000003', 'group', 'regulatory-team', NULL, 'system@demo', NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;

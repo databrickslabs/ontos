@@ -142,23 +142,23 @@ ON CONFLICT (id) DO NOTHING;
 -- 2b. TEAM MEMBERS (type=002)
 -- ============================================================================
 
-INSERT INTO team_members (id, team_id, member_type, member_identifier, app_role_override, added_by, created_at, updated_at) VALUES
+INSERT INTO team_members (id, team_id, member_type, member_identifier, app_role_override_id, added_by, created_at, updated_at) VALUES
 -- Data Engineering Team
-('00200001-0000-4000-8000-000000000001', '00100001-0000-4000-8000-000000000001', 'user', 'john.doe@company.com', 'Data Producer', 'system@demo', NOW(), NOW()),
+('00200001-0000-4000-8000-000000000001', '00100001-0000-4000-8000-000000000001', 'user', 'john.doe@company.com', (SELECT id FROM app_roles WHERE name = 'Data Producer'), 'system@demo', NOW(), NOW()),
 ('00200002-0000-4000-8000-000000000002', '00100001-0000-4000-8000-000000000001', 'group', 'data-engineers', NULL, 'system@demo', NOW(), NOW()),
-('00200003-0000-4000-8000-000000000003', '00100001-0000-4000-8000-000000000001', 'user', 'jane.smith@company.com', 'Data Producer', 'system@demo', NOW(), NOW()),
+('00200003-0000-4000-8000-000000000003', '00100001-0000-4000-8000-000000000001', 'user', 'jane.smith@company.com', (SELECT id FROM app_roles WHERE name = 'Data Producer'), 'system@demo', NOW(), NOW()),
 
 -- Analytics Team
-('00200004-0000-4000-8000-000000000004', '00100002-0000-4000-8000-000000000002', 'user', 'alice.johnson@company.com', 'Data Consumer', 'system@demo', NOW(), NOW()),
+('00200004-0000-4000-8000-000000000004', '00100002-0000-4000-8000-000000000002', 'user', 'alice.johnson@company.com', (SELECT id FROM app_roles WHERE name = 'Data Consumer'), 'system@demo', NOW(), NOW()),
 ('00200005-0000-4000-8000-000000000005', '00100002-0000-4000-8000-000000000002', 'group', 'analysts', NULL, 'system@demo', NOW(), NOW()),
 
 -- Data Science Team
-('00200006-0000-4000-8000-000000000006', '00100003-0000-4000-8000-000000000003', 'user', 'bob.wilson@company.com', 'Data Producer', 'system@demo', NOW(), NOW()),
+('00200006-0000-4000-8000-000000000006', '00100003-0000-4000-8000-000000000003', 'user', 'bob.wilson@company.com', (SELECT id FROM app_roles WHERE name = 'Data Producer'), 'system@demo', NOW(), NOW()),
 ('00200007-0000-4000-8000-000000000007', '00100003-0000-4000-8000-000000000003', 'group', 'data-scientists', NULL, 'system@demo', NOW(), NOW()),
-('00200008-0000-4000-8000-000000000008', '00100003-0000-4000-8000-000000000003', 'user', 'carol.brown@company.com', 'Data Producer', 'system@demo', NOW(), NOW()),
+('00200008-0000-4000-8000-000000000008', '00100003-0000-4000-8000-000000000003', 'user', 'carol.brown@company.com', (SELECT id FROM app_roles WHERE name = 'Data Producer'), 'system@demo', NOW(), NOW()),
 
 -- Governance Team
-('00200009-0000-4000-8000-000000000009', '00100004-0000-4000-8000-000000000004', 'user', 'david.garcia@company.com', 'Data Steward', 'system@demo', NOW(), NOW()),
+('00200009-0000-4000-8000-000000000009', '00100004-0000-4000-8000-000000000004', 'user', 'david.garcia@company.com', (SELECT id FROM app_roles WHERE name = 'Data Steward'), 'system@demo', NOW(), NOW()),
 ('0020000a-0000-4000-8000-000000000010', '00100004-0000-4000-8000-000000000004', 'group', 'data-stewards', NULL, 'system@demo', NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;

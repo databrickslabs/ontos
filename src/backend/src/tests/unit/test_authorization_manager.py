@@ -143,12 +143,12 @@ class TestAuthorizationManager:
 
     # Team role override tests
     def test_get_effective_permissions_with_team_override(self, manager, mock_settings_manager, developer_role, admin_role):
-        """Test that team role override takes precedence."""
+        """Test that a team role override (by role id) adds its role's permissions."""
         mock_settings_manager.list_app_roles.return_value = [developer_role, admin_role]
         
         result = manager.get_user_effective_permissions(
             user_groups=["developers"],
-            team_role_override="Admin"
+            team_role_ids=[str(admin_role.id)]
         )
         
         # Should use admin permissions despite only having developer group
@@ -156,12 +156,12 @@ class TestAuthorizationManager:
         assert result["settings"] == FeatureAccessLevel.ADMIN
 
     def test_get_effective_permissions_invalid_team_override(self, manager, mock_settings_manager, developer_role):
-        """Test fallback when team role override doesn't exist."""
+        """Test fallback when team role override doesn't match a role."""
         mock_settings_manager.list_app_roles.return_value = [developer_role]
         
         result = manager.get_user_effective_permissions(
             user_groups=["developers"],
-            team_role_override="NonExistentRole"
+            team_role_ids=["nonexistent-role-id"]
         )
         
         # Should fall back to group-based permissions

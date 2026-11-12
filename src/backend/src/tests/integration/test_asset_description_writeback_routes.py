@@ -147,3 +147,11 @@ class TestDescriptionWriteback:
 
         assert body['warnings'] == [] and body['description_sync'] is None
         user_ws.statement_execution.execute_statement.assert_not_called()
+
+    def test_with_the_setting_off_an_old_mark_is_not_shown(self, client, settings, table,
+                                                            user_ws):
+        _fail_with(user_ws, 'PERMISSION_DENIED')
+        _put(client, table, 'Orders placed online')
+        settings.UC_DESCRIPTION_WRITEBACK_ENABLED = False
+
+        assert client.get(f'/api/assets/{table.id}').json()['description_sync'] is None

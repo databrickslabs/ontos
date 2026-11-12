@@ -104,7 +104,7 @@ class UcDescriptionSyncManager:
         Writes when the setting is on, the asset is a Unity Catalog table, view
         or column, and the update sent a description that differs from
         ``previous_description`` (or the asset is already out of sync, so
-        saving again retries). ``user_client`` builds the user's workspace
+        saving again retries). With the setting off, a save drops the mark. ``user_client`` builds the user's workspace
         client; a ``CodedValueError`` from it (no user token) is a warning.
         The sync state is the one stored on the asset afterwards.
         """
@@ -112,7 +112,12 @@ class UcDescriptionSyncManager:
         if asset is None:
             return None, None
         current_state = self._stored_state(asset)
-        if not self.enabled or not description_sent:
+        if not self.enabled:
+            # Nothing is written to Unity Catalog, so an older mark is dropped on save
+            if current_state is not None:
+                self._store_state(db, asset, None)
+            return None, None
+        if not description_sent:
             return None, current_state
         target = uc_comment_target(asset)
         if target is None:

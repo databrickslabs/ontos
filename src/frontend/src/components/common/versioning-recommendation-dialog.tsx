@@ -70,11 +70,19 @@ export default function VersioningRecommendationDialog({
   const getVersionBumpBadge = (bump: string) => {
     switch (bump) {
       case 'major':
-        return <Badge variant="destructive" className="text-xs">{t('common:versioning.bump.major')}</Badge>
+        return (
+          <Badge variant="destructive" className="text-xs">
+            {t('common:versioning.bump.major')}
+          </Badge>
+        )
       case 'minor':
         return <Badge className="bg-blue-500 text-xs">{t('common:versioning.bump.minor')}</Badge>
       case 'patch':
-        return <Badge variant="secondary" className="text-xs">{t('common:versioning.bump.patch')}</Badge>
+        return (
+          <Badge variant="secondary" className="text-xs">
+            {t('common:versioning.bump.patch')}
+          </Badge>
+        )
       default:
         return <Badge variant="outline" className="text-xs">{bump.toUpperCase()}</Badge>
     }

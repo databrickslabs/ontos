@@ -13,7 +13,12 @@ const initial = { name: 'in', version: '1.0.0', contractId: 'c-1' };
 
 const renderDialog = (onSubmit: () => Promise<void | boolean>, onOpenChange = vi.fn()) => {
   renderWithProviders(
-    <InputPortFormDialog isOpen onOpenChange={onOpenChange} onSubmit={onSubmit} initial={initial} />,
+    <InputPortFormDialog
+      isOpen
+      onOpenChange={onOpenChange}
+      onSubmit={onSubmit}
+      initial={initial}
+    />,
   );
   return onOpenChange;
 };

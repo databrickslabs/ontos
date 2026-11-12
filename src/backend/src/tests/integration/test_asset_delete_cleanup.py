@@ -78,7 +78,7 @@ NONE_LEFT = {model.__name__: 0 for model in MODELS}
 ONE_EACH = {model.__name__: 1 for model in MODELS}
 REMOVED = {
     'domains': 1, 'rich_texts': 1, 'links': 1, 'documents': 1, 'attachments': 1,
-    'cost_items': 1,
+    'cost_items': 1, 'tags': 0,
 }
 
 

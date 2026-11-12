@@ -18,6 +18,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from src.models.domain_associations import AssignedDomain
+from src.models.tags import AssignedTag, AssignedTagCreate
 
 
 # ============================================================================
@@ -665,12 +666,11 @@ class AssetBase(BaseModel):
     domain_ids: List[str] = Field(default_factory=list, description="Assigned data domain IDs (primary included)")
     primary_domain_id: Optional[str] = Field(None, description="Primary data domain ID")
     properties: Optional[Dict[str, Any]] = Field(None, description="Type-specific metadata")
-    tags: Optional[List[str]] = Field(None, description="Quick tags/classifications")
     status: AssetStatus = Field(AssetStatus.ACTIVE, description="Lifecycle status")
 
 
 class AssetCreate(AssetBase):
-    pass
+    tags: Optional[List[AssignedTagCreate]] = Field(None, description="Assigned tags (shared tag store); omitted leaves the tags unchanged")
 
 
 class AssetUpdate(BaseModel):
@@ -682,12 +682,13 @@ class AssetUpdate(BaseModel):
     domain_ids: Optional[List[str]] = None
     primary_domain_id: Optional[str] = None
     properties: Optional[Dict[str, Any]] = None
-    tags: Optional[List[str]] = None
+    tags: Optional[List[AssignedTagCreate]] = Field(None, description="Replaces the assigned tags; omitted leaves them unchanged")
     status: Optional[AssetStatus] = None
 
 
 class AssetRead(AssetBase):
     id: UUID
+    tags: List[AssignedTag] = Field(default_factory=list, description="Assigned tags (shared tag store)")
     domains: List[AssignedDomain] = Field(default_factory=list, description="Assigned domains with names + primary flag")
     asset_type_name: Optional[str] = Field(None, description="Resolved asset type name")
     relationships: List[AssetRelationshipRead] = Field(default_factory=list)
@@ -712,7 +713,7 @@ class AssetSummary(BaseModel):
     asset_type_name: Optional[str] = None
     platform: Optional[str] = None
     location: Optional[str] = None
-    tags: Optional[List[str]] = None
+    tags: List[AssignedTag] = Field(default_factory=list, description="Assigned tags (shared tag store)")
     status: AssetStatus
     # Multi-domain assignment (#520): carried on summaries so list rows can show domain
     # badges and edit dialogs (fed an AssetSummary) preserve domains on save.

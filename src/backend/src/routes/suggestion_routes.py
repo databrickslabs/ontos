@@ -10,6 +10,7 @@ from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import DBSessionDep
 from src.common.logging import get_logger
+from src.repositories.tags_repository import entity_tag_repo
 
 logger = get_logger(__name__)
 
@@ -93,9 +94,13 @@ def get_link_candidates(
                     q = q.filter(or_(*conditions))
 
             results = q.order_by(AssetDb.name).limit(limit).all()
+            tags_map = entity_tag_repo.get_assigned_tags_for_entities(
+                db, entity_ids=[str(a.id) for a in results], entity_type="asset",
+            ) if results else {}
 
             for asset in results:
-                score = _compute_score(asset.name, asset.description, asset.tags, search_term)
+                asset_tags = [t.tag_name for t in tags_map.get(str(asset.id), [])]
+                score = _compute_score(asset.name, asset.description, asset_tags, search_term)
                 candidates.append(LinkCandidate(
                     id=str(asset.id),
                     name=asset.name,

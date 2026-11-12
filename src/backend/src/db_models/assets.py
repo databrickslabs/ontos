@@ -46,7 +46,7 @@ class AssetDb(Base):
     # Domain assignment is polymorphic via entity_domain_associations (entity_type='asset');
     # the legacy domain_id column was removed in favour of multi-domain assignment.
     properties = Column(JSON, nullable=True)  # Type-specific metadata following type's schema
-    tags = Column(JSON, nullable=True)  # Quick tags/classifications
+    # Tags live on entity_tag_associations (entity_type='asset'); see #1422.
     status = Column(String, nullable=False, default="active", index=True)
 
     # Certification

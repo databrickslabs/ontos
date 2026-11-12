@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.common.dependencies import DBSessionDep, CurrentUserDep, get_tags_manager, AuditManagerDep, AuditCurrentUserDep
-from src.common.authorization import PermissionChecker
+from src.common.authorization import PermissionChecker, get_user_details_from_sdk
+from src.common.manager_dependencies import get_auth_manager
 from src.common.features import FeatureAccessLevel
 from src.controller.tags_manager import TagsManager
 from src.models.users import UserInfo # For CurrentUserDep
@@ -554,6 +555,29 @@ async def delete_namespace_permission(
         )
 
 # --- Generic Entity Tagging Routes ---
+async def _asset_tags_need_asset_write(
+    entity_type: str,
+    request: Request,
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager=Depends(get_auth_manager),
+) -> None:
+    """Asset tags are also written by the asset routes, which require assets READ_WRITE."""
+    if entity_type == "asset":
+        await PermissionChecker('assets', FeatureAccessLevel.READ_WRITE)(request, user_details, auth_manager)
+
+def _refresh_asset_search(request: Request, db, entity_type: str, entity_id: str) -> None:
+    """Asset tags are edited here, not on the asset: refresh the asset's search entry.
+    The write is committed by now; a refresh failure is logged, never a 500."""
+    if entity_type != "asset":
+        return
+    assets_manager = getattr(request.app.state, "assets_manager", None)
+    if assets_manager is None:
+        return
+    try:
+        assets_manager.refresh_search_entry(db, UUID(entity_id))
+    except Exception as e:
+        logger.warning(f"Search refresh failed for asset {entity_id}: {e}")
+
 # Reads use tags:READ_ONLY (widely granted, drives entity detail panels).
 # Writes use tags:READ_WRITE; per-namespace permissions are additionally enforced
 # inside TagsManager via TagNamespacePermission.
@@ -579,6 +603,7 @@ async def set_entity_tags(
     audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager),
     _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.READ_WRITE)),
+    __: None = Depends(_asset_tags_need_asset_write),
 ):
     success = False
     details = {
@@ -591,6 +616,7 @@ async def set_entity_tags(
 
     try:
         result = manager.set_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type, tags=tags, user_email=current_user.email)
+        _refresh_asset_search(request, db, entity_type, entity_id)
         success = True
         details["assigned_tags"] = [str(t.tag_id) for t in result]
         return result
@@ -624,6 +650,7 @@ async def add_tag_to_entity_route(
     assigned_value: Optional[str] = None,
     manager: TagsManager = Depends(get_tags_manager),
     _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.READ_WRITE)),
+    __: None = Depends(_asset_tags_need_asset_write),
 ):
     success = False
     details = {
@@ -637,6 +664,7 @@ async def add_tag_to_entity_route(
 
     try:
         result = manager.add_tag_to_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id, assigned_value=assigned_value, user_email=current_user.email)
+        _refresh_asset_search(request, db, entity_type, entity_id)
         success = True
         return result
     except HTTPException as e:
@@ -668,6 +696,7 @@ async def remove_tag_from_entity_route(
     audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager),
     _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.READ_WRITE)),
+    __: None = Depends(_asset_tags_need_asset_write),
 ):
     success = False
     details = {
@@ -682,6 +711,7 @@ async def remove_tag_from_entity_route(
         ok = manager.remove_tag_from_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id, user_email=current_user.email if current_user else None)
         if not ok:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag association not found")
+        _refresh_asset_search(request, db, entity_type, entity_id)
         success = True
         return
     except HTTPException as e:

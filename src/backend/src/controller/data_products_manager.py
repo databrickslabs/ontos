@@ -3984,7 +3984,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     "description": asset.description,
                     "status": asset.status,
                     "properties": public_properties(asset.properties) or {},
-                    "tags": asset.tags or [],
+                    "tags": [t.tag_name for t in entity_tag_repo.get_assigned_tags_for_entity(
+                        session, entity_id=str(asset.id), entity_type="asset")],
                     "created_at": asset.created_at.isoformat() if asset.created_at else None,
                 })
         return results

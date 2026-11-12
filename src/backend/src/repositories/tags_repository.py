@@ -288,6 +288,12 @@ class EntityTagAssociationRepository(CRUDBase[EntityTagAssociationDb, BaseModel,
             return True
         return False
 
+    def remove_all_for_entity(self, db: Session, *, entity_id: str, entity_type: str) -> int:
+        """Delete every tag assignment of an entity (its row is being deleted). Returns the count."""
+        return db.query(EntityTagAssociationDb).filter_by(
+            entity_id=entity_id, entity_type=entity_type,
+        ).delete(synchronize_session=False)
+
     def get_tags_for_entity(self, db: Session, *, entity_id: str, entity_type: str) -> List[TagDb]:
         return (
             db.query(TagDb)

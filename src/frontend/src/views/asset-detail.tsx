@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, AlertCircle, Pencil, Trash2,
-  MapPin, Globe, Calendar, User, Tag, FileJson, Network, GitBranch,
+  MapPin, Globe, Calendar, User, FileJson, Network, GitBranch,
   LayoutGrid, Share2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { CommentSidebar } from '@/components/comments';
 import { RatingPanel } from '@/components/ratings';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
+import EntityTagsPanel from '@/components/metadata/entity-tags-panel';
 import EntityCostsPanel from '@/components/costs/entity-costs-panel';
 import EntityQualityPanel from '@/components/quality/entity-quality-panel';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
@@ -47,6 +48,9 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'dest
   deprecated: 'secondary',
   archived: 'destructive',
 };
+
+/** Asset types whose tags panel is hidden (matrix: .cursor/rules/10-entity-panel-matrix.mdc, Tags row). */
+const TAGS_INELIGIBLE_TYPES = new Set(['Column', 'Logical Entity', 'Logical Attribute', 'Delivery Channel']);
 
 function PropertyValue({ value }: { value: any }) {
   const { t } = useTranslation(['assets', 'common']);
@@ -395,23 +399,6 @@ export default function AssetDetailView() {
                 </div>
               </div>
 
-              {/* Tags */}
-              {asset.tags && asset.tags.length > 0 && (
-                <>
-                  <Separator className="my-4" />
-                  <div>
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-                      <Tag className="h-3 w-3" /> {t('common:labels.tags')}
-                    </Label>
-                    <div className="flex flex-wrap gap-1">
-                      {asset.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-
               {/* Linked Business Concepts */}
               {(semanticLinks.length > 0 || canEditSemanticLinks) && (
                 <>
@@ -593,6 +580,11 @@ export default function AssetDetailView() {
 
       {/* Ownership Panel */}
       <OwnershipPanel objectType="asset" objectId={assetId!} canAssign={canWrite} className="mb-6" />
+
+      {/* Tags Panel (shared tag store, with values) */}
+      {!TAGS_INELIGIBLE_TYPES.has(asset.asset_type_name ?? '') && (
+        <EntityTagsPanel entityId={assetId!} entityType="asset" />
+      )}
 
       {/* Metadata Panel */}
       <EntityMetadataPanel entityId={assetId!} entityType="asset" />

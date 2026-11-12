@@ -329,8 +329,10 @@ export default function AssetExplorerView() {
       id: 'tags',
       header: t('common:labels.tags'),
       cell: ({ row }) => {
-        const tags = row.original.tags;
-        if (!tags || tags.length === 0) return <span className="text-muted-foreground">-</span>;
+        const tags = (row.original.tags ?? []).map((tag) => (
+          tag.assigned_value ? `${tag.tag_name}: ${tag.assigned_value}` : tag.tag_name
+        ));
+        if (tags.length === 0) return <span className="text-muted-foreground">-</span>;
         const visible = tags.slice(0, 2);
         const overflow = tags.slice(2);
         return (

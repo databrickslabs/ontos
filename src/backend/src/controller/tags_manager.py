@@ -197,6 +197,24 @@ class TagsManager(DeliveryMixin, SearchableAsset):
             if tag_db:
                 self._check_possible_value(tag_db, tag_in.assigned_value)
 
+    def unknown_tag_namespaces(self, db: Session, tags: List[Any]) -> List[str]:
+        """Namespaces named by the FQNs of ``tags`` that don't exist. ``set_tags_for_entity``
+        would raise for them; callers check first to refuse the request (422) or the
+        import row before anything is written. ``default`` is always there."""
+        missing: List[str] = []
+        for tag_in in tags or []:
+            fqn = tag_in.tag_fqn if isinstance(tag_in, AssignedTagCreate) else (
+                tag_in.get('tag_fqn') if isinstance(tag_in, dict) else tag_in if isinstance(tag_in, str) else None
+            )
+            if not fqn or TAG_NAMESPACE_SEPARATOR not in fqn:
+                continue
+            namespace_name = fqn.split(TAG_NAMESPACE_SEPARATOR, 1)[0]
+            if namespace_name == DEFAULT_NAMESPACE_NAME or namespace_name in missing:
+                continue
+            if self._namespace_repo.get_by_name(db, name=namespace_name) is None:
+                missing.append(namespace_name)
+        return missing
+
     def list_assigned_tags(self, db: Session, *, entity_id: str, entity_type: str) -> List[AssignedTag]:
         return self._entity_assoc_repo.get_assigned_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type)
 

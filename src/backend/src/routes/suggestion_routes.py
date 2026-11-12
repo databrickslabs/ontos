@@ -11,6 +11,7 @@ from src.common.authorization import enforce_feature_permission, get_user_detail
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import DBSessionDep
 from src.common.logging import get_logger
+from src.common.manager_dependencies import get_data_contracts_manager
 from src.common.ontology_type_names import ONTOS_NS, canonical_type_name
 from src.models.users import UserInfo
 
@@ -34,7 +35,6 @@ GENERIC_ASSET_TYPE = "Asset"
 # Concept types a "Has Concepts" link can point to (properties are not concepts).
 LINKABLE_CONCEPT_TYPES = ["concept", "class", "term", "individual"]
 MAX_CONCEPT_MATCHES = 10000
-APP_ENTITY_IRI_PREFIX = "urn:ontos:"
 
 
 class LinkCandidate(BaseModel):
@@ -63,49 +63,21 @@ async def _require_target_read_access(
     await enforce_feature_permission(feature_id, FeatureAccessLevel.READ_ONLY, user_details, request)
 
 
-async def _read_scope(
+async def _contract_scope(
     request: Request,
     db: DBSessionDep,
     target_type: str = Query(..., description="Target entity type to search for candidates"),
     user_details: UserInfo = Depends(get_user_details_from_sdk),
 ) -> Dict[str, Any]:
-    """The caller's inputs to the list view's read rule for ``target_type``.
+    """The contract list's read scope (``contract_read_scope``), for contract targets only.
 
-    Products follow the product read rule (``common.product_read_rule``, the rule
-    for opening a product by id): published products for everyone, others for
-    data-products admins and the product's owners (draft owner, owning team,
-    project member). Contracts use the contract list's scope: admins see
-    everything, others published contracts plus the families they own or their
-    team owns. Projects use the projects list's membership rule. Domains and
-    teams are readable in full with their feature, as in their lists.
+    The other read scopes need no async role check and are resolved in the
+    (threadpool) handler.
     """
-    target_type = canonical_type_name(target_type)
-    if target_type == "DataProduct":
-        from src.common import product_read_rule as rule
-        email = user_details.email if user_details else None
-        groups = list(user_details.groups or []) if user_details else []
-        is_admin = rule.is_product_read_admin(request, user_details)
-        return {
-            "is_admin": is_admin,
-            "caller_email": email,
-            "caller_groups": groups,
-            # Looked up once for every row (not per product).
-            "caller_team_ids": set() if is_admin else rule.lookup_team_ids(db, email, groups),
-            "caller_project_ids": rule.ALL_PROJECTS if is_admin else rule.lookup_member_project_ids(db, email, groups),
-        }
-    if target_type == "DataContract":
-        from src.routes.data_contracts_routes import contract_read_scope
-        return await contract_read_scope(request, db, user_details)
-    if target_type == "Project":
-        from src.common.authorization import is_user_admin
-        from src.common.config import get_settings
-        groups = list(user_details.groups or []) if user_details else []
-        return {
-            "user_identifier": user_details.email if user_details else None,
-            "user_groups": groups,
-            "is_admin": is_user_admin(groups, get_settings()),
-        }
-    return {}
+    if canonical_type_name(target_type) != "DataContract":
+        return {}
+    from src.routes.data_contracts_routes import contract_read_scope
+    return await contract_read_scope(request, db, user_details)
 
 
 # A plain ``def``: the queries are synchronous, so FastAPI runs it in its threadpool.
@@ -122,7 +94,8 @@ def get_link_candidates(
     target_type: str = Query(..., description="Target entity type to search for candidates"),
     query: Optional[str] = Query(None, description="Additional search query"),
     limit: int = Query(20, ge=1, le=100),
-    scope: Dict[str, Any] = Depends(_read_scope),
+    contract_scope: Dict[str, Any] = Depends(_contract_scope),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
 ):
     """Find candidate entities for linking, ranked by name/tag similarity.
 
@@ -131,16 +104,21 @@ def get_link_candidates(
     types in ``DEDICATED_TARGET_FEATURES``. Without ``query`` (and ``source_name``)
     the first ``limit`` entities by name are returned, for browsing. Each target
     type needs read access to the feature that owns it, and only entities the
-    caller could see in that type's list view are returned (``_read_scope``).
+    caller could open are returned (see ``_search_dedicated_type``).
     Types that have no list here (e.g. ``Ownership``) return no candidates.
     """
     target_type = canonical_type_name(target_type)  # 'Data Domain', IRIs -> 'DataDomain'
     search_term = query or source_name or ""
+    # Outside the try: a missing manager answers its own 503, not a generic 500.
+    contracts_manager = get_data_contracts_manager(request) if target_type == "DataContract" else None
     try:
         if target_type == "OntologyConcept":
             candidates, total = _search_concepts(request, search_term, limit)
         elif target_type in DEDICATED_TARGET_FEATURES:
-            candidates, total = _search_dedicated_type(db, request, target_type, search_term, limit, scope)
+            candidates, total = _search_dedicated_type(
+                db, request, target_type, search_term, limit,
+                user=user_details, contract_scope=contract_scope, contracts_manager=contracts_manager,
+            )
         else:
             candidates, total = _search_assets(db, target_type, search_term, limit)
     except Exception:
@@ -212,9 +190,10 @@ def _search_concepts(request: Request, search_term: str, limit: int) -> Tuple[Li
     rows = manager.search_concepts_by_type(search_term, LINKABLE_CONCEPT_TYPES, limit=MAX_CONCEPT_MATCHES)
     # Neither the app's metamodel classes nor the graph nodes of app entities
     # (urn:ontos:<type>:<id>, e.g. a draft product) are concepts to link to.
+    from src.tools.read_access import graph_entity
     rows = [
         r for r in rows
-        if not str(r.get("value", "")).startswith((ONTOS_NS, APP_ENTITY_IRI_PREFIX))
+        if not str(r.get("value", "")).startswith(ONTOS_NS) and graph_entity(r.get("value")) is None
     ]
     collection_labels: Dict[str, str] = manager._scheme_labels_by_source_key()
 
@@ -263,26 +242,89 @@ def _compute_score(name: str, description: Optional[str], tags: Optional[list], 
     return score
 
 
-def _named_candidates(
-    rows: List[Any], target_type: str, search_term: str, limit: int,
+def _ilike_pattern(term: str) -> str:
+    """``%term%`` with LIKE wildcards in the term taken literally (escape character ``\\``)."""
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _candidate(obj: Any, target_type: str, search_term: str, *, with_description: bool = True) -> LinkCandidate:
+    description = getattr(obj, "description", None) if with_description else None
+    status = getattr(obj, "status", None)
+    return LinkCandidate(
+        id=str(obj.id),
+        name=getattr(obj, "name", None) or str(obj.id),
+        entity_type=target_type,
+        description=description if isinstance(description, str) else None,
+        status=getattr(status, "value", status),
+        score=_compute_score(getattr(obj, "name", None) or "", None, None, search_term),
+    )
+
+
+def _page(rows: List[Any], target_type: str, search_term: str, limit: int,
+          **kwargs: Any) -> Tuple[List[LinkCandidate], int]:
+    """The first ``limit`` rows by name as candidates, and the number of rows."""
+    rows = sorted(rows, key=lambda r: (getattr(r, "name", None) or "").lower())
+    return [_candidate(r, target_type, search_term, **kwargs) for r in rows[:limit]], len(rows)
+
+
+def _product_candidates(
+    db: Session, request: Request, user: Optional[UserInfo], search_term: str, limit: int,
 ) -> Tuple[List[LinkCandidate], int]:
-    """Candidates from rows (ORM rows or API models) whose name contains the term."""
-    needle = (search_term or "").lower()
-    matching = [r for r in rows if not needle or needle in (getattr(r, "name", None) or "").lower()]
-    matching.sort(key=lambda r: (getattr(r, "name", None) or "").lower())
-    candidates = []
-    for obj in matching[:limit]:
-        description = getattr(obj, "description", None)
-        status = getattr(obj, "status", None)
-        candidates.append(LinkCandidate(
-            id=str(obj.id),
-            name=getattr(obj, "name", None) or str(obj.id),
-            entity_type=target_type,
-            description=description if isinstance(description, str) else None,
-            status=getattr(status, "value", status),
-            score=_compute_score(getattr(obj, "name", None) or "", None, None, search_term),
-        ))
-    return candidates, len(matching)
+    """Products the caller can open, by the product read rule (``common.product_read_rule``).
+
+    Published products for everyone; others for data-products admins and the
+    product's draft owner, owning team and project members. The caller's teams
+    and projects are looked up once, in a savepoint; a failed lookup leaves the
+    published products and the caller's own drafts (fail closed). SQL keeps a
+    superset of the readable rows (name, published status or an ownership
+    match) and the rule decides each of them.
+    """
+    from sqlalchemy.orm import load_only
+
+    from src.common import product_read_rule as rule
+    from src.common.version_visibility import CONSUMER_VISIBLE_STATUSES
+    from src.db_models.data_products import DataProductDb
+
+    email = user.email if user else None
+    groups = list(user.groups or []) if user else []
+    is_admin = rule.is_product_read_admin(request, user)
+    team_ids: set = set()
+    project_ids: Any = set()
+    if not is_admin:
+        try:
+            with db.begin_nested():
+                team_ids = rule.lookup_team_ids(db, email, groups)
+                project_ids = rule.lookup_member_project_ids(db, email, groups)
+        except Exception:
+            logger.exception("Ownership lookup failed for %s; offering published products only", email)
+            team_ids, project_ids = set(), set()
+
+    model = DataProductDb
+    q = db.query(model).options(load_only(
+        model.id, model.name, model.status, model.draft_owner_id, model.owner_team_id, model.project_id,
+    ))
+    if search_term:
+        q = q.filter(model.name.ilike(_ilike_pattern(search_term), escape="\\"))
+    if not is_admin:
+        clauses = [func.lower(model.status).in_(sorted(CONSUMER_VISIBLE_STATUSES))]
+        if email:
+            clauses.append(func.lower(model.draft_owner_id) == email.lower())
+        if team_ids:
+            clauses.append(model.owner_team_id.in_(sorted(team_ids)))
+        if project_ids is rule.ALL_PROJECTS:
+            clauses.append(model.project_id.isnot(None))
+        elif project_ids:
+            clauses.append(model.project_id.in_(sorted(project_ids)))
+        q = q.filter(or_(*clauses))
+    rows = [
+        p for p in q.all()
+        if rule.can_read_product(
+            db, p, is_admin=is_admin, caller_email=email, caller_groups=groups,
+            caller_team_ids=team_ids, caller_project_ids=project_ids,
+        )
+    ]
+    return _page(rows, "DataProduct", search_term, limit, with_description=False)
 
 
 def _search_dedicated_type(
@@ -291,46 +333,56 @@ def _search_dedicated_type(
     target_type: str,
     search_term: str,
     limit: int,
-    scope: Dict[str, Any],
+    *,
+    user: Optional[UserInfo],
+    contract_scope: Dict[str, Any],
+    contracts_manager: Any = None,
 ) -> Tuple[List[LinkCandidate], int]:
     """Search dedicated entity types (DataProduct, DataDomain, ...) by name.
 
-    Products, contracts and projects are filtered with their read rules and the
-    caller's scope (``_read_scope``), so nothing the caller couldn't open is
-    offered here (drafts and proposals of others, projects the caller isn't
-    related to).
+    Only entities the caller could open are offered:
+    - products: the product read rule (``_product_candidates``);
+    - contracts: ``readable_contracts``, the rule for opening a contract by id
+      (published, or a family the caller or their team owns, never another
+      user's personal draft), with the contract list's scope;
+    - projects: the projects list's rule (admins all, others the projects
+      related to their domains);
+    - domains and teams: all of them, as in their lists.
     """
     if target_type == "DataProduct":
-        from src.common import product_read_rule as rule
-        from src.db_models.data_products import DataProductDb
+        return _product_candidates(db, request, user, search_term, limit)
 
-        q = db.query(DataProductDb)
-        if search_term:
-            q = q.filter(DataProductDb.name.ilike(f"%{search_term}%"))
-        rows = [p for p in q.all() if rule.can_read_product(db, p, **scope)]
-        return _named_candidates(rows, target_type, search_term, limit)
-    if target_type == "DataContract":
-        from src.common.manager_dependencies import get_data_contracts_manager
-        rows = get_data_contracts_manager(request).list_contracts_from_db(db, **scope)
-        return _named_candidates(rows, target_type, search_term, limit)
-    if target_type == "Project":
-        from src.controller.projects_manager import projects_manager
-        rows = projects_manager.get_all_projects(db, **scope)
-        return _named_candidates(rows, target_type, search_term, limit)
-
+    from src.db_models.data_contracts import DataContractDb
     from src.db_models.data_domains import DataDomain
+    from src.db_models.projects import ProjectDb
     from src.db_models.teams import TeamDb
 
-    model = {"DataDomain": DataDomain, "Team": TeamDb}.get(target_type)
+    models = {"DataContract": DataContractDb, "Project": ProjectDb, "DataDomain": DataDomain, "Team": TeamDb}
+    model = models.get(target_type)
     if model is None:
         return [], 0
     q = db.query(model)
     if search_term:
-        q = q.filter(model.name.ilike(f"%{search_term}%"))
+        q = q.filter(model.name.ilike(_ilike_pattern(search_term), escape="\\"))
+
+    if target_type == "DataContract":
+        return _page(contracts_manager.readable_contracts(db, q.all(), **contract_scope),
+                     target_type, search_term, limit)
+    if target_type == "Project":
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+        from src.repositories.projects_repository import project_repo
+
+        groups = list(user.groups or []) if user else []
+        if not is_user_admin(groups, get_settings()):
+            visible = {p.id for p in project_repo.get_projects_by_domain_relationship(
+                db, user.email if user else None, groups)}
+            q = q.filter(model.id.in_(sorted(visible))) if visible else q.filter(False)
+        return _page(q.all(), target_type, search_term, limit)
+
     total = q.count()
     rows = q.order_by(model.name).limit(limit).all()
-    candidates, _ = _named_candidates(rows, target_type, search_term, limit)
-    return candidates, total
+    return [_candidate(r, target_type, search_term) for r in rows], total
 
 
 def register_routes(app):

@@ -345,20 +345,62 @@ class TestVisibility:
         assert _names(admin, "DataContract") == {
             "Active contract", "Someone's draft", "Proposed contract", "My draft", "Team proposal"}
 
-    def test_projects_come_from_the_callers_project_list(self, make_client, monkeypatch):
-        from src.controller.projects_manager import projects_manager
+    def test_projects_follow_the_projects_list_rule(self, make_client, db_session, monkeypatch):
+        from src.db_models.projects import ProjectDb
+        from src.repositories.projects_repository import project_repo
 
+        db_session.add_all([ProjectDb(id="p1", name="Mine", created_by="t", updated_by="t"), ProjectDb(id="p2", name="Not mine", created_by="t", updated_by="t")])
+        db_session.commit()
         calls = []
 
-        def fake_get_all_projects(db, *, user_identifier, user_groups, is_admin, **_):
-            calls.append((user_identifier, list(user_groups), is_admin))
-            return [SimpleNamespace(id="p1", name="Mine", description=None, status=None)]
+        def visible(db, user_identifier, user_groups):
+            calls.append((user_identifier, list(user_groups)))
+            return [SimpleNamespace(id="p1")]
 
-        monkeypatch.setattr(projects_manager, "get_all_projects", fake_get_all_projects)
+        monkeypatch.setattr(project_repo, "get_projects_by_domain_relationship", visible)
         client, _ = make_client(permissions={"projects": RO}, email="me@example.com", groups=("analysts",))
 
         assert _names(client, "Project") == {"Mine"}
-        assert calls == [("me@example.com", ["analysts"], False)]
+        assert calls == [("me@example.com", ["analysts"])]
+
+    def test_a_teammates_personal_draft_contract_is_not_offered(self, make_client, db_session):
+        team_id = _team_with_member(db_session, "me@example.com")
+        _contract(db_session, "Team proposal", "proposed", owner_team_id=team_id)
+        _contract(db_session, "Teammate's draft", "draft", owner_team_id=team_id,
+                  draft_owner_id="teammate@example.com")
+        client, _ = make_client(permissions=CONTRACT_READ, email="me@example.com")
+
+        # The contract page would answer 404 for the teammate's personal draft.
+        assert _names(client, "DataContract") == {"Team proposal"}
+
+    def test_a_failed_ownership_lookup_offers_published_products_only(self, make_client, db_session, monkeypatch):
+        from src.common import product_read_rule as rule
+
+        team_id = _team_with_member(db_session, "me@example.com")
+        _product(db_session, "Published", "active")
+        _product(db_session, "Team draft", "draft", owner_team_id=team_id)
+
+        def boom(*_a, **_k):
+            raise RuntimeError("teams lookup failed")
+
+        monkeypatch.setattr(rule, "lookup_team_ids", boom)
+        client, _ = make_client(permissions=PRODUCT_READ, email="me@example.com")
+
+        assert _names(client, "DataProduct") == {"Published"}
+
+    def test_like_wildcards_in_the_query_are_literal(self, make_client, db_session):
+        _domains(db_session, "eu_sales", "euXsales", "100% EU")
+        client, _ = make_client()
+
+        assert {c["name"] for c in _candidates(client, target_type="DataDomain", query="eu_sales")["candidates"]} == {"eu_sales"}
+        data = _candidates(client, target_type="DataDomain", query="100%")
+        assert ([c["name"] for c in data["candidates"]], data["total"]) == (["100% EU"], 1)
+
+    def test_a_missing_contracts_service_is_a_503(self, make_client):
+        client, app = make_client(permissions=CONTRACT_READ)
+        app.state.data_contracts_manager = None
+
+        assert client.get("/api/suggestions/link-candidates", params={"target_type": "DataContract"}).status_code == 503
 
     def test_app_entity_graph_nodes_are_not_concept_candidates(self, make_client):
         concepts = CONCEPTS + [{

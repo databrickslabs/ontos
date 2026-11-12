@@ -430,6 +430,8 @@ export function AddRelationshipDialog({
   };
 
   const handleTypeSelect = (typeId: string) => {
+    requestSeq.current += 1;
+    setAccessDenied(false);
     setSelectedTypeId(typeId);
     setBrowseFilter('');
     fetchBrowseAssets(typeId);
@@ -506,6 +508,7 @@ export function AddRelationshipDialog({
   };
 
   const resetState = () => {
+    requestSeq.current += 1; // answers to requests of the closed dialog are dropped
     setAccessDenied(false);
     setSelectedRelType('');
     setSelectedTarget(null);
@@ -623,7 +626,7 @@ export function AddRelationshipDialog({
 
               {/* Content area */}
               <div className="flex-1 min-h-0 px-6 overflow-hidden">
-                {isUnsupported || accessDenied ? (
+                {isUnsupported || (accessDenied && (usesCandidates || mode === 'search')) ? (
                   <div className="min-h-[200px] flex items-center justify-center">
                     <p className="text-sm text-muted-foreground text-center max-w-sm">
                       {accessDenied
@@ -760,9 +763,11 @@ export function AddRelationshipDialog({
                                 selectedId={selectedTarget?.id ?? null}
                                 onSelect={handleSelectTarget}
                                 emptyMessage={
-                                  browseFilter.length >= 2
-                                    ? t('common:addRelationship.noMatchingEntities')
-                                    : t('common:addRelationship.noEntitiesOfType')
+                                  accessDenied
+                                    ? t('common:addRelationship.noAccessToTarget', { type: selectedTypeName || targetTypeLabel })
+                                    : browseFilter.length >= 2
+                                      ? t('common:addRelationship.noMatchingEntities')
+                                      : t('common:addRelationship.noEntitiesOfType')
                                 }
                               />
                             </div>

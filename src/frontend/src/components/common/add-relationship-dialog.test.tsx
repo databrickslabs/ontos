@@ -338,6 +338,33 @@ describe('AddRelationshipDialog target sources (#956, #957, #959)', () => {
     expect(screen.queryByText(/don't have access/i)).toBeNull();
   });
 
+  it('keeps the asset type picker when one asset type answers 403', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/ontology/entity-types/relationships')) {
+        return { data: { ...LOGICAL_ENTITY_RELS, outgoing: [rel('consumesFrom', 'consumes from', 'Asset', 'Asset')] } };
+      }
+      if (url.startsWith('/api/asset-types')) {
+        return { data: [
+          { id: 'tb', name: 'Table', category: 'data', status: 'active', asset_count: 1 },
+          { id: 'vw', name: 'View', category: 'data', status: 'active', asset_count: 1 },
+        ] };
+      }
+      if (url.startsWith('/api/assets?asset_type_id=tb')) return { data: {}, error: 'Forbidden', status: 403 };
+      if (url.startsWith('/api/assets?asset_type_id=vw')) {
+        return { data: { items: [{ id: 'v1', name: 'orders_v', asset_type_name: 'View' }], total: 1 } };
+      }
+      return { data: null };
+    });
+    await open(/consumes from/i);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Table/ }));
+    expect(await screen.findByText(/don't have access to Table/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
+    expect(await screen.findByText('orders_v')).toBeInTheDocument();
+    expect(screen.queryByText(/don't have access/i)).toBeNull();
+  });
+
   it('says when a target type is managed elsewhere', async () => {
     await open(/has owner/i);
 

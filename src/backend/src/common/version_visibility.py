@@ -44,6 +44,9 @@ _STATUS_RANK_CONSUMER: dict[str, int] = {
     "deprecated": 1,
 }
 
+# The published lifecycle statuses: what every reader sees.
+CONSUMER_VISIBLE_STATUSES: frozenset[str] = frozenset(_STATUS_RANK_CONSUMER)
+
 # Statuses visible to admins only (filtered out for everyone else).
 _ADMIN_ONLY_STATUSES: frozenset[str] = frozenset({"retired"})
 

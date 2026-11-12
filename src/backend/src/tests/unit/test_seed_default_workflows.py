@@ -46,7 +46,7 @@ def test_only_request_workflows_are_created_active(db_session, tmp_path):
 
     result = WorkflowsManager(db_session).load_from_yaml(path, requests_only_active=True)
 
-    assert result == {'created': 5, 'updated': 0, 'skipped': 0}
+    assert result == {'created': 5, 'updated': 0, 'skipped': 0, 'kept_edited': 0, 'kept_edited_names': []}
     assert _active(db_session) == {
         'Review request': True,
         'Disabled request': False,
@@ -63,7 +63,7 @@ def test_existing_workflows_are_left_untouched(db_session, tmp_path):
 
     result = WorkflowsManager(db_session).load_from_yaml(first, requests_only_active=True)
 
-    assert result == {'created': 0, 'updated': 0, 'skipped': 1}
+    assert result == {'created': 0, 'updated': 0, 'skipped': 1, 'kept_edited': 0, 'kept_edited_names': []}
     assert _active(db_session) == {'Naming check': True}
 
 

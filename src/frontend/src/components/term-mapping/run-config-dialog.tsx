@@ -157,7 +157,7 @@ export default function RunConfigDialog({
   const fetchAssetTypes = async () => {
     setAssetTypesLoading(true);
     try {
-      const res = await get<AssetTypeRead[]>('/api/asset-types?limit=100');
+      const res = await get<AssetTypeRead[]>('/api/asset-types');
       if (res.error) throw new Error(res.error);
       const list = Array.isArray(res.data) ? res.data : [];
       setAssetTypes(list.filter((at) => at.status !== 'deprecated'));

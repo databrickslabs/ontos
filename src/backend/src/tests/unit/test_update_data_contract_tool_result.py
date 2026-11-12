@@ -37,8 +37,10 @@ def manager() -> DataContractsManager:
 
 def _contract(db_session, status='draft') -> str:
     cid = str(uuid.uuid4())
+    # The editor's own draft: the tool applies the contract read rule first.
     db_session.add(DataContractDb(
         id=cid, name=f'Contract {cid[:8]}', version='1.0.0', status=status,
+        draft_owner_id=EDITOR.email,
     ))
     db_session.commit()
     return cid

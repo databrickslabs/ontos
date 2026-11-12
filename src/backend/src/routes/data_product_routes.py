@@ -45,10 +45,7 @@ from src.common.dependencies import (
     AuditCurrentUserDep,
     ChangeLogManagerDep,
 )
-from src.common.workflow_triggers import (
-    fire_trigger_safe, get_trigger_registry, request_submitted_message, request_workflow_outcome,
-)
-from src.models.process_workflows import EntityType
+from src.common.workflow_triggers import request_submitted_message, request_workflow_outcome
 from src.models.notifications import NotificationType
 from src.models.import_results import BatchImportResult
 from src.common.upload_limits import read_uploads_capped
@@ -93,20 +90,17 @@ def _caller_can_read_product(request, db, current_user, manager, product) -> boo
     by whoever can decide an open review or approval of it
     (``caller_is_pending_reviewer``, #1117).
     This stops a consumer from reading an unpublished product by its id
-    (ONT-NEG-011). Fails closed on error; the database lookups run in
-    savepoints, so a failed one doesn't abort the caller's transaction (the
-    approvals queue checks row after row).
+    (ONT-NEG-011). The published and ownership rules live in
+    ``src.common.product_read_rule`` (shared with the assistant tools). Fails
+    closed on error; the database lookups run in savepoints, so a failed one
+    doesn't abort the caller's transaction (the approvals queue checks row
+    after row).
     """
+    from src.common import product_read_rule as rule
+
     product_id = str(getattr(product, "id", "") or "")
     try:
-        from types import SimpleNamespace
-        from src.common.version_visibility import is_visible_consumer
-
-        # Normalize status (may be an enum on the API model) for the
-        # consumer-visibility check (active/deprecated are readable by all).
-        raw_status = getattr(product, "status", None)
-        status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "")
-        if is_visible_consumer(SimpleNamespace(status=status_str)):
+        if rule.is_published_product(product):
             return True
         if _caller_owns_product_or_denies(request, db, current_user, product):
             return True
@@ -144,82 +138,21 @@ def _caller_owns_product(request, db, current_user, product) -> bool:
 
     Admin: data-products ADMIN, incl. via an in-app role override. Owner: the
     draft owner, a member of the owning team, or a member of the product's
-    project. The read gate's ownership facts, also required to request a review
-    (whose named reviewer then reads the product, #1117). May raise: callers
-    fail closed.
+    project (``src.common.product_read_rule``, membership resolved against this
+    product only, ONT-NEG-011). The read gate's ownership facts, also required
+    to request a review (whose named reviewer then reads the product, #1117).
+    May raise: callers fail closed.
     """
-    auth_manager = getattr(request.app.state, "authorization_manager", None)
-    caller_email = current_user.email if current_user else None
-    user_groups = current_user.groups if current_user else []
+    from src.common import product_read_rule as rule
 
-    if auth_manager and current_user:
-        eff = effective_permissions_for_request(request, caller_email, user_groups or [], auth_manager)
-        if auth_manager.has_permission(eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN):
-            return True
-
-    # Non-admin: grant only if the caller genuinely OWNS *this* product.
-    #
-    # ONT-NEG-011 follow-up (PR #535 was ineffective): the prior fix
-    # resolved the caller's scope via ``projects_manager.get_user_projects``
-    # and then checked membership of ``manager.list_products(...)``. But
-    # ``get_user_projects`` treats *any* group whose name merely contains
-    # the substring "admin" (e.g. the ubiquitous workspace ``admins``
-    # group) as a global admin and returns EVERY project. A Data Consumer
-    # in such a group therefore got ``caller_project_ids`` = all projects,
-    # which matched the draft's ``project_id`` in ``list_products`` and
-    # leaked the draft. We must NOT trust that broad, substring-admin
-    # scope. Instead resolve the three ownership facts against THIS product
-    # only, using membership-based checks (no substring-admin shortcut):
-    #   * draft_owner_id == caller (creator ownership)
-    #   * owner_team_id in caller's real team memberships
-    #   * project_id where the caller is a genuine project member
-    from src.controller.teams_manager import teams_manager
-    from src.controller.projects_manager import projects_manager
-
-    if not caller_email:
-        return False
-
-    owner_email = getattr(product, "draft_owner_id", None)
-    if owner_email and str(owner_email).lower() == str(caller_email).lower():
+    if rule.is_product_read_admin(request, current_user):
         return True
-
-    product_team_id = getattr(product, "owner_team_id", None)
-    if product_team_id:
-        try:
-            with db.begin_nested():
-                user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
-            if any(str(getattr(t, "id", None)) == str(product_team_id) for t in user_teams):
-                return True
-        except Exception:
-            logger.exception(
-                "Team-membership resolution failed for %s in product read gate",
-                caller_email,
-            )
-
-    product_project_id = getattr(product, "project_id", None)
-    if product_project_id:
-        try:
-            from src.common.config import get_settings
-            # ``is_user_project_member`` uses configured admin groups
-            # (is_user_admin), not a substring match, and verifies real
-            # team membership of the project — so it does not over-grant.
-            with db.begin_nested():
-                is_member = projects_manager.is_user_project_member(
-                    db=db,
-                    user_identifier=caller_email,
-                    user_groups=user_groups or [],
-                    project_id=str(product_project_id),
-                    settings=get_settings(),
-                )
-            if is_member:
-                return True
-        except Exception:
-            logger.exception(
-                "Project-membership resolution failed for %s in product read gate",
-                caller_email,
-            )
-
-    return False
+    return rule.caller_owns_product(
+        db,
+        product,
+        caller_email=current_user.email if current_user else None,
+        caller_groups=(current_user.groups if current_user else None) or [],
+    )
 
 
 def readable_product(
@@ -492,29 +425,9 @@ async def unpublish_product(
 ):
     """Remove a data product from the marketplace (set publication_scope to none)."""
     try:
-        product_db = manager._repo.get(db=db, id=product_id)
-        if not product_db:
+        # Unpublishes and fires on_unpublish
+        if not manager.unpublish_product(product_id, current_user.username, db=db):
             raise HTTPException(status_code=404, detail="Data product not found")
-
-        was_published = (product_db.publication_scope or "none").lower() != "none"
-        product_db.publication_scope = "none"
-        product_db.published_at = None
-        product_db.published_by = None
-        db.add(product_db)
-        db.commit()
-
-        # Same rule as set-publication-scope: unpublish workflows run only on a real change
-        if was_published:
-            try:
-                get_trigger_registry(db).on_unpublish(
-                    EntityType.DATA_PRODUCT,
-                    product_id,
-                    entity_name=product_db.name,
-                    user_email=current_user.username,
-                )
-            except Exception:
-                # The unpublish is committed; its on_unpublish workflows didn't run
-                logger.exception("on_unpublish trigger failed for data product %s", product_id)
 
         audit_manager.log_action(
             db=db,
@@ -577,26 +490,10 @@ async def request_certify_product(
             details={"certification_level": certification_level, "message": message},
         )
 
-        # Advance the lifecycle so the product surfaces in the review/approvals
-        # queue. A pre-review product (draft/sandbox) moves to 'proposed' on a
-        # successful certification request; products already in-flight keep their
-        # current status. Without this the documented draft -> proposed
-        # transition never happened (ONT-CUJ-019).
-        current_status = (product_db.status or 'draft').lower()
-        if current_status in ('draft', 'sandbox'):
-            manager.submit_for_review(product_id, username)
-
-        get_trigger_registry(db).on_request_certify(
-            EntityType.DATA_PRODUCT,
-            product_id,
-            entity_name=product_db.name,
-            entity_data={
-                "requested_certification_level": certification_level,
-                "message": message,
-                "requester": username,
-            },
-            user_email=username,
-            blocking=True,
+        # Moves a draft/sandbox product to 'proposed' (ONT-CUJ-019) and runs the
+        # on_request_certify workflows
+        manager.request_certification(
+            product_id, certification_level, message, username, db=db
         )
 
         audit_manager.log_action(
@@ -634,8 +531,6 @@ async def handle_certify_product(
     _: bool = Depends(ApprovalChecker('PRODUCTS')),
 ):
     """Approve or deny a certification request for a data product."""
-    from datetime import datetime, timezone
-
     if body.get("approved") is None:
         raise HTTPException(status_code=422, detail="approved is required")
 
@@ -684,13 +579,10 @@ async def handle_certify_product(
         if not level:
             raise HTTPException(status_code=404, detail=f"Certification level {certification_level} not found")
 
-        product_db.certification_level = certification_level
-        product_db.certified_at = datetime.now(timezone.utc)
-        product_db.certified_by = username
-        product_db.certification_notes = notes
-        db.add(product_db)
-        db.commit()
-        db.refresh(product_db)
+        # Certifies, propagates downstream and fires on_certify
+        product_db = manager.certify_at_level(
+            product_id, certification_level, username, notes=notes, db=db
+        )
 
         audit_manager.log_action(
             db=db,
@@ -701,27 +593,6 @@ async def handle_certify_product(
             success=True,
             details={'product_id': product_id, 'certification_level': certification_level},
         )
-
-        from src.controller.certification_propagator import propagate_certification
-
-        propagate_certification(db, "DataProduct", product_id)
-        db.commit()
-
-        try:
-            get_trigger_registry(db).on_certify(
-                EntityType.DATA_PRODUCT,
-                product_id,
-                entity_name=product_db.name,
-                entity_data={
-                    "certification_level": certification_level,
-                    "notes": notes,
-                    "certified_by": username,
-                },
-                user_email=username,
-                blocking=False,
-            )
-        except Exception as trigger_err:
-            logger.warning("on_certify trigger error (non-fatal): %s", trigger_err)
 
         return {
             'certification_level': product_db.certification_level,
@@ -864,19 +735,9 @@ async def request_publish_product(
             details={"scope": scope, "justification": justification},
         )
 
-        executions = get_trigger_registry(db).on_request_publish(
-            EntityType.DATA_PRODUCT,
-            product_id,
-            entity_name=product_db.name,
-            entity_data={
-                "requested_scope": scope,
-                "justification": justification,
-                "requester": username,
-                # Same key as the data contract request (data_contracts_manager)
-                "current_status": current_status,
-            },
-            user_email=username,
-            blocking=True,
+        # Runs the on_request_publish workflows
+        executions = manager.request_publication(
+            product_id, scope, justification, username, current_status, db=db
         )
         outcome = request_workflow_outcome(executions)
 
@@ -926,7 +787,6 @@ async def certify_product(
     Requires active status. Certification is now a separate dimension from status.
     Body: { "certification_level": int, "notes": str? }
     """
-    from datetime import datetime, timezone
     certification_level = body.get("certification_level")
     if certification_level is None:
         raise HTTPException(status_code=422, detail="certification_level is required")
@@ -947,13 +807,12 @@ async def certify_product(
         if not level:
             raise HTTPException(status_code=404, detail=f"Certification level {certification_level} not found")
 
-        product_db.certification_level = certification_level
-        product_db.certified_at = datetime.now(timezone.utc)
-        product_db.certified_by = current_user.username if current_user else None
-        product_db.certification_notes = body.get("notes")
-        db.add(product_db)
-        db.commit()
-        db.refresh(product_db)
+        # Certifies, propagates downstream and fires on_certify
+        product_db = manager.certify_at_level(
+            product_id, certification_level,
+            current_user.username if current_user else None,
+            notes=body.get("notes"), db=db,
+        )
 
         audit_manager.log_action(
             db=db,
@@ -963,19 +822,6 @@ async def certify_product(
             action='CERTIFY',
             success=True,
             details={'product_id': product_id, 'certification_level': certification_level}
-        )
-
-        # Propagate certification to downstream entities
-        from src.controller.certification_propagator import propagate_certification
-        propagate_certification(db, "DataProduct", product_id)
-        db.commit()
-
-        get_trigger_registry(db).on_certify(
-            EntityType.DATA_PRODUCT,
-            product_id,
-            entity_name=product_db.name,
-            entity_data={"certification_level": product_db.certification_level},
-            user_email=current_user.username,
         )
 
         return {
@@ -1008,21 +854,8 @@ async def decertify_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        old_level = product_db.certification_level
-        product_db.certification_level = None
-        product_db.certified_at = None
-        product_db.certified_by = None
-        product_db.certification_expires_at = None
-        product_db.certification_notes = None
-        db.add(product_db)
-        db.commit()
-
-        get_trigger_registry(db).on_decertify(
-            EntityType.DATA_PRODUCT,
-            product_id,
-            entity_name=product_db.name,
-            user_email=current_user.username,
-        )
+        # Removes the certification and fires on_decertify
+        old_level = manager.decertify_product(product_id, current_user.username, db=db)
 
         audit_manager.log_action(
             db=db,
@@ -1202,7 +1035,8 @@ async def create_product_from_contract(
             contract_id=contract_id,
             product_name=product_name,
             version=version,
-            output_port_name=output_port_name
+            output_port_name=output_port_name,
+            user_email=current_user.email if current_user else None,
         )
 
         # Log audit event
@@ -1382,8 +1216,6 @@ async def get_product_linked_assets(
 
         try:
             accessible = dpm.list_products(
-                skip=0,
-                limit=10_000,
                 is_admin=False,
                 caller_email=caller_email,
                 caller_team_ids=caller_team_ids,
@@ -1632,7 +1464,7 @@ async def get_published_products(
     Optional ``scope`` narrows results to a single publication scope (case-insensitive).
     """
     try:
-        published_products = manager.get_published_products(limit=10000, scope=scope)
+        published_products = manager.get_published_products(scope=scope)
         logger.info(
             f"Retrieved {len(published_products)} published data products (scope={scope or 'all'})"
         )
@@ -1650,7 +1482,7 @@ async def get_my_subscriptions(
     current_user: CurrentUserDep,
     manager: DataProductsManager = Depends(get_data_products_manager),
     skip: int = 0,
-    limit: int = 100
+    limit: Optional[int] = None
 ):
     """Get all data products the current user is subscribed to."""
     if not current_user or not current_user.username:
@@ -1733,6 +1565,7 @@ async def upload_data_products(
             adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
             reveal_dup_detail=reveal_dup_detail,
+            workflow_user=current_user.email if current_user else None,
         )
 
         success = result.created > 0
@@ -1842,9 +1675,8 @@ async def get_data_products(
             wanted_domains.add(domain_id)
 
         # The domain filter is applied in-process (domain_ids are attached per product
-        # by the manager), so a domain-filtered request must load the full candidate set
-        # rather than the default page — otherwise products assigned to the domain past
-        # the first page would be silently dropped.
+        # by the manager), so the manager must return the full candidate set — it
+        # does by default (no limit, #1295).
         list_kwargs = dict(
             project_id=project_id,
             is_admin=is_admin,
@@ -1853,8 +1685,6 @@ async def get_data_products(
             caller_project_ids=caller_project_ids,
             include_history=include_history,
         )
-        if wanted_domains:
-            list_kwargs["limit"] = 10000
         products = manager.list_products(**list_kwargs)
 
         if wanted_domains:
@@ -1926,18 +1756,12 @@ async def create_data_product(
                     detail="You must be a member of the project to create a product in it"
                 )
 
-        created_product_response = manager.create_product(payload, db=db, user=current_user.username if current_user else None)
-        success = True
-
-        # Fire on_create workflow trigger
-        fire_trigger_safe(
-            db, "on_create",
-            entity_type=EntityType.DATA_PRODUCT,
-            entity_id=str(created_product_response.id) if created_product_response else str(payload.get('id', '')),
-            entity_name=getattr(created_product_response, 'name', None),
-            entity_data={"product_id": str(created_product_response.id), "name": getattr(created_product_response, 'name', None)},
-            user_email=current_user.email if current_user else None,
+        # Fires the on_create workflows for the user's email
+        created_product_response = manager.create_product(
+            payload, db=db, user=current_user.username if current_user else None,
+            workflow_user=current_user.email if current_user else None,
         )
+        success = True
 
         if created_product_response and hasattr(created_product_response, 'id'):
             details_for_audit["created_resource_id"] = str(created_product_response.id)
@@ -2231,6 +2055,10 @@ async def update_data_product(
 
     Validates that users can only update products belonging to projects
     they are members of (if the product has a project_id).
+
+    publication_scope, published_at and published_by are read-only: they are
+    accepted in the body (so a GET body can be sent back as is) but ignored.
+    Use POST /data-products/{id}/publish, /set-publication-scope or /unpublish.
     """
     # Parse and validate JSON body
     try:
@@ -2359,6 +2187,7 @@ async def update_data_product(
                 "falling back to ownership cascade"
             )
 
+        # Fires the on_update workflows (update_product)
         updated_product_response = manager.update_product_with_auth(
             product_id=product_id,
             product_data_dict=product_dict,
@@ -2376,16 +2205,6 @@ async def update_data_product(
 
         success = True
         response_status_code = 200
-
-        # Fire on_update workflow trigger
-        fire_trigger_safe(
-            db, "on_update",
-            entity_type=EntityType.DATA_PRODUCT,
-            entity_id=product_id,
-            entity_name=getattr(updated_product_response, 'name', None),
-            entity_data=product_dict,
-            user_email=current_user.email if current_user else None,
-        )
 
         logger.info(f"Successfully updated data product with ID: {product_id}")
 
@@ -2453,7 +2272,11 @@ async def delete_data_product(
 
     try:
         logger.info(f"Received request to delete data product ID: {product_id}")
-        deleted = manager.delete_product(product_id, user=current_user.username if current_user else None)
+        # Fires the on_delete workflows for the user's email
+        deleted = manager.delete_product(
+            product_id, user=current_user.username if current_user else None, db=db,
+            workflow_user=current_user.email if current_user else None,
+        )
         if not deleted:
             response_status_code = 404
             exc = HTTPException(status_code=response_status_code, detail="Data product not found")
@@ -2463,15 +2286,6 @@ async def delete_data_product(
 
         success = True
         response_status_code = 204 # Standard for successful DELETE
-
-        # Fire on_delete workflow trigger
-        fire_trigger_safe(
-            db, "on_delete",
-            entity_type=EntityType.DATA_PRODUCT,
-            entity_id=product_id,
-            entity_data={"product_id": product_id},
-            user_email=current_user.email if current_user else None,
-        )
 
         logger.info(f"Successfully deleted data product with ID: {product_id}")
         # No response body for 204, so no updated_product_response or response_preview
@@ -2685,17 +2499,8 @@ async def unsubscribe_from_product(
             db=db
         )
 
+        # (unsubscribe fires the on_unsubscribe workflows)
         success = True
-
-        # Fire on_unsubscribe workflow trigger
-        fire_trigger_safe(
-            db, "on_unsubscribe",
-            entity_type=EntityType.SUBSCRIPTION,
-            entity_id=product_id,
-            entity_name=product_id,
-            entity_data={"product_id": product_id, "subscriber_email": current_user.username},
-            user_email=current_user.username,
-        )
 
         return result
 
@@ -2739,7 +2544,7 @@ async def get_product_subscribers(
     current_user: CurrentUserDep,
     manager: DataProductsManager = Depends(get_data_products_manager),
     skip: int = 0,
-    limit: int = 100,
+    limit: Optional[int] = None,
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """Get all subscribers for a data product.

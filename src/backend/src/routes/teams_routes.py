@@ -113,7 +113,7 @@ def get_all_teams(
     db: DBSessionDep,
     manager = Depends(get_teams_manager),
     skip: int = 0,
-    limit: int = 100,
+    limit: Optional[int] = None,
     domain_id: Optional[str] = Query(None, description="Filter teams by a single domain ID (any-of)"),
     domain_ids: Optional[str] = Query(None, description="Filter teams by multiple domain IDs, comma-separated (any-of)")
 ):

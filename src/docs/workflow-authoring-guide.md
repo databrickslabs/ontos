@@ -44,7 +44,8 @@ The steps of one kind don't run in the other: a wizard step type put in a proces
 These rules explain most surprises:
 
 - **The first step is the entry step.** The executor starts at the first step of the workflow's step order. In the designer this is the step connected to the trigger. Through the API it is the first step of the `steps` list, unless you set `order` yourself.
-- **Steps don't run in list order.** After a step, the executor goes to its `on_pass` step if it passed, or to its `on_fail` step if it failed. A step with no next step for its outcome ends the execution, even if more steps follow it in the list.
+- **Steps don't run in list order.** After a step, the executor goes to its `on_pass` step if it passed, or to its `on_fail` step if it failed. A conditional step goes to `on_pass` when its condition is true and to `on_fail` when it is false (see below). A step with no next step for its outcome ends the execution, even if more steps follow it in the list.
+- **Pass and Fail steps end the execution.** They have no next step. A link out of one (older designers saved one that the canvas didn't show) is ignored when the workflow runs, reported by validation as `terminal_step_has_next`, and removed when the workflow is saved.
 - **The outcome is the last step's result.** When the execution ends on a step that passed, the execution is `succeeded`; when it ends on a step that failed, it is `failed`. A failure that is routed to a notification step, which passes, therefore ends as `succeeded`. End every failure branch with a **Fail** step if the execution should show as failed (and, for gates, if the change should be blocked).
 - **Execution is synchronous.** A workflow runs inside the request that fired it, until it ends or pauses. A slow webhook or script makes that request slow.
 - **Every matching workflow runs.** When several active workflows match the same trigger and entity type, all of them run, one after the other, in no fixed order. A request that reports "the" workflow (for example `execution_id` in the response of a status change request) reports the first one that ran. Two active workflows with an approval step on the same trigger send two approval requests.
@@ -55,7 +56,7 @@ An execution has one of these statuses:
 |--|--|
 | `running` | Steps are being executed (you rarely see it, since execution is synchronous) |
 | `paused` | Waiting at an approval step |
-| `succeeded` | Ended on a step that passed |
+| `succeeded` | Ended on a step that passed (a conditional step always passes when its condition could be evaluated) |
 | `failed` | Ended on a step that failed |
 | `cancelled` | Cancelled by an admin while running (a cancelled approval follows the step's `on_fail` instead, see Cancel below) |
 
@@ -79,7 +80,7 @@ A workflow runs only if Ontos fires its trigger for an entity type the workflow 
 | `on_request_deploy` | A contract deployment is requested | `data_contract` | No |
 | `on_request_access` | Access is requested | `access_grant`, `project`, `role` | No |
 | `on_publish`, `on_unpublish` | A product or contract is published or unpublished | `data_product`, `data_contract` | No |
-| `on_certify`, `on_decertify` | A contract is certified or decertified from the contract page | `data_contract` | No |
+| `on_certify`, `on_decertify` | A product or contract is certified or decertified | `data_product`, `data_contract` | No |
 | `on_subscribe` / `on_unsubscribe` | A user subscribes to / unsubscribes from a product | `data_product` / `subscription` | No |
 | `on_expiring`, `on_revoke` | An access grant is about to expire, or is revoked | `access_grant` | No |
 | `on_job_success`, `on_job_failure` | A background job ends | `job` | No |
@@ -90,6 +91,7 @@ A workflow runs only if Ontos fires its trigger for an entity type the workflow 
 
 Notes:
 
+- **Data products fire them whatever the entry point.** A product created, changed, deleted, certified or (un)published through the REST API, Ask Ontos, an MCP client or an ODPS import (one `on_create` per imported product) fires the same triggers, with the same gates, for the user who made the change.
 - **"After" triggers never undo the action.** The product is already created, updated or moved when an `on_*` workflow runs; if the workflow fails, the action stays done. Errors while firing them are logged and don't fail the action.
 - **`scheduled` is not run.** It can be selected and saved, but nothing in the current version starts scheduled workflows.
 - **`manual` runs see only what you pass.** A manual run passes `{id, name, type}` from the query as the trigger payload; without `entity_name`, `${entity_name}` is empty. Rule steps still see the stored entity (see below); notification texts and scripts only have those three fields.
@@ -104,17 +106,17 @@ Notes:
 
 - At startup, Ontos creates the default workflows that don't exist yet. Only the request workflows (`on_request_*`) are created active; the other defaults (automation, gates, UI wizards) are created inactive, so an upgrade doesn't turn on new automatic behavior. Workflows that already exist are left as they are.
 - **Load New Only** (`POST /api/workflows/load-defaults`) does the same, keeping each workflow's `is_active` from the shipped definition.
-- **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) rewrites every default workflow from the shipped definition, including `is_active`: defaults you had left inactive, such as "Naming Convention Validation", become active again. It also re-creates their steps, which removes the step history of their past executions (see [Debugging Recent Executions](#debugging-recent-executions)). Duplicates of defaults are not touched.
+- **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) asks first. It then resets every default workflow nobody edited to the shipped definition: description, trigger, scope, steps and their layout. Whether a workflow is active doesn't change. Defaults that a user saved since they were loaded are kept and listed; tick **Also reset default workflows that were edited** (`include_edited=true`) to reset them too, which discards those edits. Duplicates of defaults are not touched.
 - A duplicate (`POST /api/workflows/{id}/duplicate?new_name=...`) starts inactive and is not a default.
 
 ## Step Types and What Makes Them Pass
 
-Each step ends with a pass or a fail, which picks the next step. A step that raises an error fails, with the error text as its error.
+Each step ends with a pass or a fail, which picks the next step. A step that raises an error fails, with the error text as its error. A conditional step is the exception: its result only picks the branch.
 
 | Step | Passes when | Fails when |
 |--|--|--|
-| `validation` | The rule's `ASSERT` holds | The assertion is false, or the rule or the entity can't be evaluated |
-| `conditional` | The `condition` expression is true | It is false, or can't be evaluated |
+| `validation` | The rule's `ASSERT` holds | The assertion is false, or the rule or the entity can't be evaluated. A failed assertion is a step failure even when `on_fail` leads to another step |
+| `conditional` | The `condition` expression could be evaluated, true or false. True follows `on_pass`, false follows `on_fail`; the step shows the branch it took and a false condition doesn't count as a failure. A branch with no step ends the run as succeeded, so end the false branch of a gate with a Fail step | It can't be evaluated; the run then ends there as failed |
 | `policy_check` | The referenced compliance policy's rule holds, or the policy is inactive | The rule fails, or the policy doesn't exist |
 | `approval` | The approver approves (the step pauses first) | The approver rejects, or no approver could be resolved |
 | `notification` | At least one notification was created | None could be created |
@@ -166,7 +168,8 @@ Both `${name}` and `{{name}}` work. A variable that can't be resolved is left as
 | `${user_email}` | The user who fired the trigger; after an approval, the approver |
 | `${workflow_name}`, `${workflow_id}`, `${execution_id}` | The running workflow and execution |
 | `${entity.<field>}` | A field of the **trigger payload** (not of the stored entity). Nested paths work: `${entity.a.b}` |
-| `${step_results.<step_id>.passed}` | Whether an earlier step passed (rendered as `True` / `False`) |
+| `${step_results.<step_id>.passed}` | Whether an earlier step passed (rendered as `True` / `False`). A conditional step passes whenever its condition could be evaluated; use `branch` for its result |
+| `${step_results.<conditional_step_id>.branch}` | After a conditional step: `true` or `false` |
 | `${step_results.<step_id>.message}` | An earlier step's message |
 | `${step_results.<step_id>.data.<field>}` | A field of an earlier step's result data, for example a script's `data` |
 | `${step_results.<approval_step_id>.decision}` | After an approval: `approved` or `rejected` |
@@ -302,7 +305,7 @@ Each reason is the Fail step's `message` (or the failing step's message), so wri
 
 | What happens | Result |
 |--|--|
-| A step raises an error (SQL error, connection refused, ...) | The step fails with the error text; the executor follows its `on_fail` |
+| A step raises an error (SQL error, connection refused, ...) | The step fails with the error text; the executor follows its `on_fail` (a conditional step has no failure branch: the run ends as failed) |
 | `on_pass` / `on_fail` names a step that doesn't exist | Saving the workflow is refused (HTTP 400, `Step '<id>' references unknown step '<name>'`) |
 | An `on_*` workflow fails | The action that fired it is already done and stays done |
 | A gate fails or pauses | The action is refused |
@@ -475,7 +478,7 @@ As of this version:
 - An approval step's `timeout_days` is not enforced (#1119).
 - Saving a workflow's steps removes the step results of its past executions (fixed by WORKFLOWS_PR).
 - A validation step's failure message is not stored with the step (fixed by WORKFLOWS_PR).
-- Reload All Defaults also resets the defaults' active flag to the shipped value.
+- Reload All Defaults also reset the defaults' active flag to the shipped value, and reset defaults a user had edited (fixed by #1456: activation is kept, and edited defaults are kept unless you opt in).
 - After an approval, a field of the entity's latest completed request wizard replaces an approval field with the same name (`${step_results.<approval_step_id>.reason}` can be the requester's reason) (fixed by WORKFLOWS_PR).
 - The `config` example of the script step in the API schema uses `return`, which fails; set `result` instead (fixed by WORKFLOWS_PR).
 

@@ -137,6 +137,19 @@ def _seed_default_workflows() -> None:
     except Exception as e:
         logger.warning("Failed seeding default workflows: %s", e, exc_info=True)
     _warn_unmatched_trigger_entity_types()
+    _warn_changed_workflow_branching()
+
+
+def _warn_changed_workflow_branching() -> None:
+    """Log stored workflows whose Pass/Fail links or gate conditionals changed meaning."""
+    try:
+        from src.common.database import get_session_factory
+        with get_session_factory()() as db:
+            warned = workflows_routes.get_workflows_manager(db).log_branching_warnings()
+        if warned:
+            logger.warning("%d workflow(s) have branching that changed meaning, see above", warned)
+    except Exception as e:
+        logger.warning("Failed checking workflow branching: %s", e, exc_info=True)
 
 
 def _warn_unmatched_trigger_entity_types() -> None:

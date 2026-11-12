@@ -19,6 +19,13 @@ from .tags import AssignedTag, AssignedTagCreate
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
+# Server-managed publication fields (see DataProduct.publication_scope).
+_READ_ONLY = {"readOnly": True}
+_PUBLISH_HINT = (
+    "Read-only: ignored on create and update. Change it with "
+    "POST /data-products/{id}/publish, /set-publication-scope or /unpublish."
+)
+
 
 # ODPS has no status on an output port; the ODPS export carries Ontos's port status
 # as this port custom property, and imports read it back.
@@ -455,9 +462,18 @@ class DataProduct(BaseModel):
     )
 
     # Publication fields
-    publication_scope: Optional[str] = Field("none", description="Publication scope: none, domain, organization, external")
-    published_at: Optional[datetime] = Field(None, description="When published")
-    published_by: Optional[str] = Field(None, description="Who published")
+    # Server-managed: only the publish routes change these (see _PUBLISH_HINT).
+    publication_scope: Optional[str] = Field(
+        "none",
+        description="Publication scope: none, domain, organization, external. " + _PUBLISH_HINT,
+        json_schema_extra=_READ_ONLY,
+    )
+    published_at: Optional[datetime] = Field(
+        None, description="When published. " + _PUBLISH_HINT, json_schema_extra=_READ_ONLY
+    )
+    published_by: Optional[str] = Field(
+        None, description="Who published. " + _PUBLISH_HINT, json_schema_extra=_READ_ONLY
+    )
 
     # Certification fields
     certification_level: Optional[int] = Field(None, description="Ordinal of assigned certification level")

@@ -98,7 +98,9 @@ export function ProjectFormDialog({
           name: project.name,
           title: project.title || '',
           description: project.description || '',
-          tags: (project.tags || []).map((tag: any) => typeof tag === 'string' ? tag : (tag?.name ?? tag?.value ?? tag?.tag ?? '')),
+          // Keep the assigned tags as objects: AssignedTag has no `name`, so mapping
+          // them to strings turned every tag into '' (#1420).
+          tags: project.tags || [],
           team_ids: project.teams?.map(team => team.id) || [],
           project_type: (project.project_type as any) || 'TEAM',
         });

@@ -369,6 +369,15 @@ class TestInHandlerAdminChecks:
             self._req(auth, {"u@example.com": [team]}), MagicMock(), self._user(["data-consumers"]), product,
         ) is True
 
+    def test_product_read_admin_rule_counts_team_roles(self, auth):
+        # The assistant tools (tools/caller.py) use this rule directly.
+        from src.common.product_read_rule import is_product_read_admin
+
+        team = _team(("u@example.com", "Admin"))
+
+        assert not is_product_read_admin(self._req(auth, {}), self._user(["data-consumers"]))
+        assert is_product_read_admin(self._req(auth, {"u@example.com": [team]}), self._user(["data-consumers"]))
+
 
 class TestUserHasFeatureLevel:
     def test_sees_team_roles(self, auth):

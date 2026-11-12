@@ -91,7 +91,7 @@ def get_all_owners(
     db: DBSessionDep,
     manager=Depends(get_business_owners_manager),
     skip: int = 0,
-    limit: int = 100,
+    limit: Optional[int] = None,
     object_type: Optional[str] = Query(None),
     role_id: Optional[UUID] = Query(None),
     active_only: bool = Query(True),

@@ -94,6 +94,13 @@
       "generate_pdf": "Generar PDF",
       "deliver": "Entregar"
     },
+    "layout": {
+      "rearrange": "Reorganizar",
+      "rearrangeHint": "Organizar todos los pasos automáticamente",
+      "confirmTitle": "¿Reorganizar todos los pasos?",
+      "confirmDescription": "Los pasos se organizan automáticamente. Su diseño actual se reemplaza al guardar.",
+      "confirmAction": "Reorganizar"
+    },
     "discard": {
       "description": "Tienes cambios sin guardar en este flujo de trabajo. Si sales ahora, se perderán tus cambios.",
       "stay": "Permanecer",
@@ -212,7 +219,18 @@
       "selectSource": "Selecciona el origen",
       "sourceCurrentUser": "Usuario actual",
       "sourceProjectName": "Nombre del proyecto",
-      "sourceTimestamp": "Marca de tiempo"
+      "sourceTimestamp": "Marca de tiempo",
+      "valueMode": "Valor",
+      "modeFixed": "Valor fijo",
+      "modeSource": "Valor de la ejecución",
+      "modeNone": "Sin valor",
+      "fixedValue": "Valor de la etiqueta",
+      "fixedValuePlaceholder": "p. ej., confidencial",
+      "selectValue": "Seleccione un valor",
+      "noValueHelp": "La etiqueta se asigna sin valor. Se conserva el valor que la entidad ya tenga para esta etiqueta.",
+      "sourceEntityName": "Nombre de la entidad",
+      "tagNotFound": "Ninguna etiqueta tiene este nombre. El paso solo la establece para los pasos siguientes de la ejecución.",
+      "fixedValueRequired": "Introduzca un valor o elija «Sin valor» para asignar la etiqueta sin valor."
     },
     "approval": {
       "approversRole": "Aprobadores (rol)",
@@ -317,11 +335,18 @@
       "duplicateStepIds": "Dos pasos tienen el mismo ID.",
       "stepUnknownReference": "El paso \"{{step}}\" dirige su rama de {{branch}} a \"{{target}}\", que no está en el workflow.",
       "stepConfigMissing": "Al paso \"{{step}}\" le faltan ajustes obligatorios: {{fields}}.",
+      "assignTagValueSourceUnknown": "El paso «{{step}}» usa la fuente de valor desconocida «{{source}}».",
       "policyCheckPolicyMissing": "El paso \"{{step}}\" necesita una política de cumplimiento existente. Seleccione una en la configuración del paso.",
       "branch": {
         "on_pass": "éxito",
         "on_fail": "fallo"
       }
+    },
+    "edgeLabels": {
+      "pass": "Aprobado",
+      "fail": "Fallido",
+      "true": "Verdadero",
+      "false": "Falso"
     }
   },
   "approvalResponse": {
@@ -516,6 +541,10 @@
       "skipped": "Omitido",
       "waiting": "En espera"
     },
+    "conditionalBranch": {
+      "true": "La condición fue verdadera: se siguió la rama verdadera",
+      "false": "La condición fue falsa: se siguió la rama falsa"
+    },
     "executionStates": {
       "pending": "Pendiente",
       "running": "En ejecución",
@@ -673,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "Flujos de trabajo predeterminados",
       "newOnly": "Cargar solo los nuevos",
-      "reloadAll": "Recargar todos los predeterminados"
+      "reloadAll": "Recargar todos los predeterminados",
+      "confirmTitle": "¿Recargar todos los flujos de trabajo predeterminados?",
+      "confirmDescription": "Cada flujo de trabajo predeterminado se restablece a su definición original: descripción, disparador, ámbito, pasos y su disposición. El estado activo no cambia. Los predeterminados que usted u otro administrador editaron se conservan, salvo que también los restablezca abajo.",
+      "includeEdited": "Restablecer también los flujos predeterminados editados (se pierden sus cambios)",
+      "confirmAction": "Recargar",
+      "keptEdited": "Editados conservados: {{names}}.",
+      "result": "Creados: {{created}}, actualizados: {{updated}}, omitidos: {{skipped}}."
     },
     "badges": {
       "default": "Predeterminado",

@@ -2309,7 +2309,7 @@ Steps are the building blocks of workflows:
 | **Validation** | Evaluate a compliance rule | Rule DSL expression |
 | **Approval** | Request human approval | Approvers; require all (every approver decides: a user for themselves, any one member for a group or role, one person for one approver); timeout in days, `0` = no timeout, accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
 | **Notification** | Send a notification | Recipients, template, message |
-| **Assign Tag** | Add or update a tag | Key, value or value source |
+| **Assign Tag** | Add or update a tag | Key, and a fixed value, a value from the run, or no value |
 | **Remove Tag** | Remove a tag | Key to remove |
 | **Conditional** | Branch based on condition | Condition expression |
 | **Script** | Execute custom logic | Script code |
@@ -2408,7 +2408,7 @@ To change the recipients, edit the **Notify Owners** step. To write your own tex
 
 #### After an Upgrade
 
-The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
+The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. Defaults that someone edited are kept unless you tick **Also reset default workflows that were edited** in the confirmation, and the active state of a workflow is never changed. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
 
 Reloading replaces changes made to the default workflows themselves; duplicate a default before editing it to keep your version.
 
@@ -3021,6 +3021,38 @@ POST /mcp
 > user**, scoped to that user's grants. External agents calling with only an
 > `X-API-Key` (no forwarded user identity) run as the app service principal, as
 > before.
+>
+> **Who the tools act for.** With a forwarded user token
+> (`x-forwarded-access-token`), the caller is the user, or service principal,
+> that `current_user.me()` returns for that token; the `X-Forwarded-Email`
+> header never names the caller. The tools then apply the caller's Ontos roles
+> like the REST API: a tool that changes data needs the feature level of the
+> matching route (and `update_data_product` changes a product's fields only for
+> its owners or a data-products admin, as `PUT /api/data-products/{id}`; each
+> product change is audited under `data-products` and fires the workflow
+> triggers of its route), and data products and
+> contracts are returned only when the
+> caller has the feature's Read-only level (data-products, data-contracts) and
+> may read them (published ones, or drafts the caller owns or administers;
+> anything else is answered as not found). `global_search` also keeps only rows
+> of the features the caller reads, like `/api/search`. The token's scopes still
+> limit which tools can be called. A request with only an `X-API-Key` has no
+> user: it gets Read-only on the features its token's scopes name
+> (`data-products:*`, `contracts:*`, `domains:*`, `teams:*`, `projects:*`,
+> `semantic:*`, `tags:*`; `*` names them all), reads published products and
+> contracts only, and its tools that change data are refused.
+> `execute_sparql_query` is for semantic-models admins only.
+>
+> **Visibility.** The search and list tools (`search_*`, `list_*`, `global_search`,
+> `find_entities_by_concept`, `list_semantic_links`) take `visibility`:
+> `published` (active and published to the marketplace, the MCP default) or
+> `readable` (everything the caller may read, the Ask Ontos default). Searches
+> also take `min_certification_level` and `include_history` (default: the newest
+> version of each product or contract). Get-by-id tools are not affected.
+>
+> **Keyless MCP** (no `X-API-Key`, keyless default token enabled) is accepted only
+> with a forwarded user token; a request that carries only `X-Forwarded-Email` or
+> `X-Forwarded-User` is refused (`-32001`) and audited as `IDENTITY_REJECTED`.
 
 #### Authentication
 

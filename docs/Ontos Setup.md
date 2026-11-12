@@ -316,8 +316,9 @@ Both endpoints require the `ADMIN` permission on the `settings-general`
 feature (the Admin role). When you call them from Swagger, the app identifies
 you the same way as for any other request. If your identity does not carry that
 role (for example on a fresh install where no group is mapped yet), set the
-optional `DEMO_SETUP_TOKEN` app setting to a secret value of your choice,
-redeploy, click **Authorize** at the top of `/docs`, paste the value into the
+optional `DEMO_SETUP_TOKEN` app setting to a secret value of your choice
+(at least 32 characters; a shorter value is ignored and logged as an error at
+startup), redeploy, click **Authorize** at the top of `/docs`, paste the value into the
 `X-Demo-Setup-Token` field, and run the endpoint. A request with a valid token
 is accepted instead of the admin check; a wrong token, or any token while
 `DEMO_SETUP_TOKEN` is unset, does not grant access. Unset the setting once the

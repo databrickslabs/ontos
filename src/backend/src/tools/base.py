@@ -7,7 +7,7 @@ the LLM Search feature and MCP server endpoints.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -81,13 +81,58 @@ class ToolContext:
     """
     db: Session
     settings: Settings
-    workspace_client: Optional[Any] = None
+    # Replaced below by ``_WorkspaceClientAttr``: a value passed here is used as is;
+    # otherwise the client is built by ``workspace_client_factory`` on first read.
+    workspace_client: Optional[Any] = field(default=None, repr=False, compare=False)
     caller: Optional["ToolCaller"] = None
+    # Per-request memo for the read rules (src.tools.read_access).
+    cache: Dict[str, Any] = field(default_factory=dict)
+    # The search and list tools' default ``visibility`` (src.tools.visibility):
+    # "published" for MCP, "readable" for Ask Ontos.
+    default_visibility: str = "published"
     data_products_manager: Optional[Any] = None
     data_contracts_manager: Optional[Any] = None
     semantic_models_manager: Optional[Any] = None
     costs_manager: Optional[Any] = None
     search_manager: Optional[Any] = None
+    # Builds the workspace client the first time a tool reads ``workspace_client``
+    # (once per context). An error it raises reaches the tool's caller.
+    workspace_client_factory: Optional[Callable[[], Any]] = field(
+        default=None, repr=False, compare=False
+    )
+
+
+class _WorkspaceClientAttr:
+    """``ToolContext.workspace_client``: an explicit value, else built lazily.
+
+    ``dataclasses.replace`` and copies read every field, so they build the client.
+    Assigning ``None`` clears the cached client (a later read calls the factory
+    again); nothing does that today.
+    """
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return None
+        state = obj.__dict__
+        if "_workspace_client_set" not in state:
+            factory = state.get("workspace_client_factory")
+            if factory is None:
+                return None
+            # A factory that raises leaves the client unset; it owns what a retry does.
+            state["_workspace_client"] = factory()
+            state["_workspace_client_set"] = True
+        return state["_workspace_client"]
+
+    def __set__(self, obj, value):
+        # ``None`` means "not given": the factory (set later in ``__init__``) may build it.
+        obj.__dict__["_workspace_client"] = value
+        if value is None:
+            obj.__dict__.pop("_workspace_client_set", None)
+        else:
+            obj.__dict__["_workspace_client_set"] = True
+
+
+ToolContext.workspace_client = _WorkspaceClientAttr()
 
 
 @dataclass
@@ -107,6 +152,10 @@ class ToolResult:
     data: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
     error_code: Optional[str] = None
+    # Why the caller got less than the tool would return to an admin (e.g.
+    # ``not_readable``). For audit entries only: never sent to the client,
+    # where an unreadable item looks like a missing one.
+    denied_reason: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -132,14 +181,21 @@ class ToolCaller:
     same way as ``PermissionChecker`` (role override, team role, groups).
     ``auth_path`` says where the identity came from (``ask_ontos``,
     ``mcp_forwarded_token``, ...) for logs and audit entries.
-    ``full_access`` skips the feature checks; no caller sets it today (see
-    ``src.tools.caller.mcp_api_key_caller``).
+    ``products_admin`` / ``contracts_admin`` / ``team_ids`` are the inputs of
+    the product and contract read rules (``src.tools.read_access``).
+    ``full_access`` skips the feature checks and the read rules; no caller
+    sets it today (see ``src.tools.caller.mcp_api_key_caller``).
     """
     email: Optional[str]
     auth_path: str
     groups: List[str] = field(default_factory=list)
     permissions: Dict[str, FeatureAccessLevel] = field(default_factory=dict)
     full_access: bool = False
+    products_admin: bool = False
+    contracts_admin: bool = False
+    team_ids: set[str] = field(default_factory=set)
+    # Projects the caller is a member of; None = every project (admin groups).
+    project_ids: Optional[set[str]] = field(default_factory=set)
 
     def has_level(self, feature_id: str, required_level: FeatureAccessLevel) -> bool:
         if self.full_access:

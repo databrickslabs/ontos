@@ -59,9 +59,10 @@ def chat_as(client, db_session, test_settings, monkeypatch):
     test_settings.LLM_SYSTEM_PROMPT = None
     monkeypatch.setattr(config_module, 'get_settings', lambda: test_settings)
 
-    def _chat(level, product_id):
+    def _chat(level, product_id, tool='delete_data_product'):
         group = f'tool-level-{uuid.uuid4().hex[:6]}'
-        _add_role(db_session, group, level)
+        if level is not None:  # None: a user whose groups match no role
+            _add_role(db_session, group, level)
         user = UserInfo(email=f'{group}@example.com', username=group, user=group,
                         ip='127.0.0.1', groups=[group])
 
@@ -70,7 +71,7 @@ def chat_as(client, db_session, test_settings, monkeypatch):
 
         app.dependency_overrides[get_user_details_from_sdk] = _user
         call = SimpleNamespace(id='call-1', function=SimpleNamespace(
-            name='delete_data_product', arguments=json.dumps({'product_id': product_id})))
+            name=tool, arguments=json.dumps({'product_id': product_id})))
         llm = _ScriptedLLM([_response(tool_calls=[call]), _response(content='Done.')])
         monkeypatch.setattr(LLMSearchManager, '_get_openai_client',
                             lambda self, user_token=None: llm)
@@ -93,8 +94,8 @@ def product_id(client):
     return created.id
 
 
-def _source(body):
-    sources = [s for s in body['sources'] if s['tool'] == 'delete_data_product']
+def _source(body, tool='delete_data_product'):
+    sources = [s for s in body['sources'] if s['tool'] == tool]
     assert len(sources) == 1, body['sources']
     return sources[0]
 
@@ -118,3 +119,42 @@ def test_an_admin_deletes_a_product_through_the_chat(chat_as, product_id):
     source = _source(chat_as('Admin', product_id))
     assert source['success'] is True
     assert app.state.data_products_manager.get_product(product_id) is None
+
+
+def test_a_consumer_reads_a_draft_product_as_not_found(chat_as, product_id):
+    source = _source(chat_as('Read-only', product_id, 'get_data_product'), 'get_data_product')
+    assert source['success'] is False
+    assert source['error'] == f"Data product '{product_id}' not found"
+
+
+def test_an_admin_reads_a_draft_product(chat_as, product_id):
+    source = _source(chat_as('Admin', product_id, 'get_data_product'), 'get_data_product')
+    assert source['success'] is True
+
+
+@pytest.fixture
+def published_product_id(client):
+    manager = app.state.data_products_manager
+    manager._update_search_index = lambda *a, **k: None
+    created = manager.create_product({
+        'apiVersion': 'v1.0.0', 'kind': 'DataProduct', 'id': str(uuid.uuid4()),
+        'name': 'Chat published product', 'version': '1.0.0', 'status': 'active',
+    })
+    return created.id
+
+
+@pytest.mark.parametrize('level', ['None', None])
+def test_without_the_read_level_a_published_product_is_not_found(
+    chat_as, published_product_id, level
+):
+    # 'None': a role without data-products, as the default Security Officer; None: no role.
+    source = _source(chat_as(level, published_product_id, 'get_data_product'),
+                     'get_data_product')
+    assert source['success'] is False
+    assert source['error'] == f"Data product '{published_product_id}' not found"
+
+
+def test_a_consumer_reads_a_published_product(chat_as, published_product_id):
+    source = _source(chat_as('Read-only', published_product_id, 'get_data_product'),
+                     'get_data_product')
+    assert source['success'] is True

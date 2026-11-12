@@ -113,3 +113,57 @@ def test_a_snapshot_taken_without_levels_does_not_count(db_session, graph):
 def test_flag_off_keeps_today_behaviour(db_session, graph):
     result = AssetsManager().get_all_assets(db=db_session, owner_email=ME)
     assert {"never", "leveled", "below"} <= _names(result)
+
+
+def test_repository_filters_by_candidate_ids_in_sql(db_session, graph):
+    """Many snapshots per asset and assets of other owners: only the candidates come back."""
+    for i in range(30):
+        _snap(db_session, graph.other_owner, None, minutes_ago=100 + i)
+        _snap(db_session, graph.below, None, minutes_ago=100 + i)
+    db_session.flush()
+    ids = maturity_repo.entity_ids_below_first_level(
+        db_session, entity_type="Asset",
+        entity_ids=[str(graph.below.id), str(graph.leveled.id), str(graph.raised.id)],
+    )
+    assert ids == [str(graph.below.id)]
+    assert maturity_repo.entity_ids_below_first_level(
+        db_session, entity_type="Asset", entity_ids=[],
+    ) == []
+
+
+def test_the_manager_passes_the_owner_candidates_to_the_repository(
+    db_session, graph, monkeypatch,
+):
+    seen = {}
+    real = maturity_repo.entity_ids_below_first_level
+
+    def spy(db, *, entity_type, entity_ids=None):
+        seen["ids"] = None if entity_ids is None else {str(i) for i in entity_ids}
+        return real(db, entity_type=entity_type, entity_ids=entity_ids)
+
+    monkeypatch.setattr(maturity_repo, "entity_ids_below_first_level", spy)
+    AssetsManager().get_all_assets(
+        db=db_session, owner_email=ME, below_first_maturity_level=True,
+    )
+    assert seen["ids"] is not None
+    assert str(graph.other_owner.id) not in seen["ids"]
+    assert str(graph.below.id) in seen["ids"]
+
+
+def test_a_tie_on_evaluated_at_picks_the_same_snapshot_every_time(db_session, graph):
+    """Two snapshots at the same instant: the one with the highest id is the latest."""
+    low, high = sorted([uuid.uuid4(), uuid.uuid4()], key=str)
+    for snap_id, order in ((low, None), (high, 1)):
+        db_session.add(MaturitySnapshotDb(
+            id=snap_id, entity_type="Asset", entity_id=str(graph.never.id),
+            achieved_level_order=order, total_levels=4, evaluated_at=NOW,
+        ))
+    db_session.flush()
+    ids = maturity_repo.entity_ids_below_first_level(
+        db_session, entity_type="Asset", entity_ids=[str(graph.never.id)],
+    )
+    assert ids == []
+    latest = maturity_repo.get_latest_snapshot(
+        db_session, entity_type="Asset", entity_id=str(graph.never.id),
+    )
+    assert latest.id == high

@@ -46,7 +46,8 @@
       "title": "Tables below the first level",
       "description": "Your tables and views whose latest maturity evaluation reached no level.",
       "empty": "None of your evaluated tables is below the first level.",
-      "more": "Showing {{shown}} of {{total}}."
+      "more": "Showing {{shown}} of {{total}}.",
+      "error": "Couldn't load your tables below the first level."
     },
     "maintain": {
       "title": "Maintain",

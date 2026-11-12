@@ -46,7 +46,8 @@
       "title": "Tabellen unter der ersten Stufe",
       "description": "Ihre Tabellen und Views, deren letzte Reifegradbewertung keine Stufe erreicht hat.",
       "empty": "Keine Ihrer bewerteten Tabellen liegt unter der ersten Stufe.",
-      "more": "{{shown}} von {{total}} angezeigt."
+      "more": "{{shown}} von {{total}} angezeigt.",
+      "error": "Ihre Tabellen unterhalb der ersten Stufe konnten nicht geladen werden."
     },
     "maintain": {
       "title": "Pflegen",

@@ -23,6 +23,13 @@ from src.controller.authority_resolution_manager import AuthorityResolutionManag
 _manager = AuthorityResolutionManager()
 
 
+def _app_sp_workspace_client():
+    # Not ``ctx.workspace_client``: with a forwarded user token that is the
+    # caller's (OBO) client, and ``resolver_auth=app_sp`` must run as the app.
+    from src.common.workspace_client import get_workspace_client
+    return get_workspace_client()
+
+
 class ResolveAuthorityTool(BaseTool):
     name = "resolve_authority"
     description = (
@@ -60,14 +67,13 @@ class ResolveAuthorityTool(BaseTool):
             "cosign_present": kwargs.get("cosign_present"),
             "escalated": kwargs.get("escalated"),
         }
-        app_ws = ctx.workspace_client
         # Resolves may make blocking MCP/HTTP calls; keep them off the event loop.
         result = await run_in_threadpool(
             _manager.resolve,
             ctx.db, ar_id, req,
             semantic_models_manager=ctx.semantic_models_manager,
             obo_ws_factory=ctx.obo_workspace_client_factory,
-            app_ws_factory=(lambda: app_ws) if app_ws is not None else None,
+            app_ws_factory=_app_sp_workspace_client,
         )
         return ToolResult(success=True, data=result)
 
@@ -98,7 +104,6 @@ class FindAuthorityForConceptTool(BaseTool):
         concept_iri = kwargs.get("concept_iri")
         if not concept_iri:
             return ToolResult(success=False, error="concept_iri is required")
-        app_ws = ctx.workspace_client
         result = await run_in_threadpool(
             _manager.find_authority_for_concept,
             ctx.db, concept_iri,
@@ -107,7 +112,7 @@ class FindAuthorityForConceptTool(BaseTool):
             request=kwargs.get("request") or {},
             semantic_models_manager=ctx.semantic_models_manager,
             obo_ws_factory=ctx.obo_workspace_client_factory,
-            app_ws_factory=(lambda: app_ws) if app_ws is not None else None,
+            app_ws_factory=_app_sp_workspace_client,
         )
         return ToolResult(success=True, data=result)
 

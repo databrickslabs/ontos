@@ -2082,3 +2082,32 @@ def test_get_search_index_items_lists_families(db_session, monkeypatch):
     monkeypatch.setattr("src.common.database.get_session_factory", lambda: factory)
     ids = {i.id for i in mgr.get_search_index_items()}
     assert f"authority-relation::{rel.id}" in ids
+
+
+def test_mcp_tools_never_pass_the_callers_client_as_the_app_sp(monkeypatch):
+    """``resolver_auth=app_sp`` must run as the app: the tools' app-SP factory is
+    the app client, not ``ctx.workspace_client`` (the caller's OBO client when the
+    request carries a forwarded token)."""
+    import asyncio
+    from types import SimpleNamespace
+    from src.tools import authority_resolution as tools_mod
+
+    app_sp, caller = object(), object()
+    monkeypatch.setattr("src.common.workspace_client.get_workspace_client", lambda *a, **k: app_sp)
+    seen = {}
+
+    def fake_resolve(*args, **kwargs):
+        seen["resolve"] = kwargs["app_ws_factory"]()
+        return {"verdict": "approved"}
+
+    def fake_find(*args, **kwargs):
+        seen["find"] = kwargs["app_ws_factory"]()
+        return {"candidates": []}
+
+    monkeypatch.setattr(tools_mod._manager, "resolve", fake_resolve)
+    monkeypatch.setattr(tools_mod._manager, "find_authority_for_concept", fake_find)
+    ctx = SimpleNamespace(db=None, workspace_client=caller, semantic_models_manager=None,
+                          obo_workspace_client_factory=lambda: caller)
+    asyncio.run(tools_mod.ResolveAuthorityTool().execute(ctx, ar_id="x"))
+    asyncio.run(tools_mod.FindAuthorityForConceptTool().execute(ctx, concept_iri="urn:c"))
+    assert seen == {"resolve": app_sp, "find": app_sp}

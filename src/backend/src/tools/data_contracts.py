@@ -297,10 +297,11 @@ class UpdateDataContractTool(BaseTool):
         "status": {
             "type": "string",
             "description": (
-                "New status (draft, active, deprecated). Applied as a lifecycle transition: "
-                "only an allowed transition, and status change workflows can block it."
+                "New status (draft, active, deprecated, retired). Applied as a lifecycle "
+                "transition: only an allowed transition, and status change workflows can "
+                "block it."
             ),
-            "enum": ["draft", "active", "deprecated"]
+            "enum": ["draft", "active", "deprecated", "retired"]
         },
         "deprecation_reason": {
             "type": "string",

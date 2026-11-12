@@ -974,7 +974,7 @@ export default function DataProductDetails() {
         false,
         'Failed to add consumable',
       );
-      if (!applied) return; // versioning dialog is open
+      if (!applied) return false; // versioning dialog is open
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add consumable');
     }
@@ -990,7 +990,7 @@ export default function DataProductDetails() {
         false,
         'Failed to update consumable',
       );
-      if (!applied) return; // versioning dialog is open
+      if (!applied) return false; // versioning dialog is open
       setEditingInputPortIndex(null);
       toast({ title: t('data-products:details.toasts.consumableUpdatedTitle'), description: t('data-products:details.toasts.consumableUpdatedMessage') });
     } catch (e: any) {
@@ -1025,7 +1025,7 @@ export default function DataProductDetails() {
         false,
         'Failed to add deliverable',
       );
-      if (!applied) return; // versioning dialog is open
+      if (!applied) return false; // versioning dialog is open
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add deliverable');
     }
@@ -1041,7 +1041,7 @@ export default function DataProductDetails() {
         false,
         'Failed to update deliverable',
       );
-      if (!applied) return; // versioning dialog is open
+      if (!applied) return false; // versioning dialog is open
       setEditingOutputPortIndex(null);
       toast({ title: t('data-products:details.toasts.deliverableUpdatedTitle'), description: t('data-products:details.toasts.deliverableUpdatedMessage') });
     } catch (e: any) {
@@ -1076,7 +1076,7 @@ export default function DataProductDetails() {
         false,
         'Failed to add management port',
       );
-      if (!applied) return; // versioning dialog is open
+      if (!applied) return false; // versioning dialog is open
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add management port');
     }
@@ -1092,7 +1092,7 @@ export default function DataProductDetails() {
         false,
         'Failed to update management port',
       );
-      if (!applied) return; // versioning dialog is open
+      if (!applied) return false; // versioning dialog is open
       setEditingManagementPortIndex(null);
       toast({ title: t('data-products:details.toasts.managementPortUpdatedTitle'), description: t('data-products:details.toasts.managementPortUpdatedMessage') });
     } catch (e: any) {

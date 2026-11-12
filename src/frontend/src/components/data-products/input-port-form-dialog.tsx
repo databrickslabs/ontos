@@ -10,7 +10,8 @@ import type { InputPort } from '@/types/data-product';
 type InputPortFormProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (port: InputPort) => Promise<void>;
+  /** Resolve `false` when the change was not saved (e.g. the versioning dialog took over). */
+  onSubmit: (port: InputPort) => Promise<void | boolean>;
   initial?: InputPort;
 };
 
@@ -71,8 +72,9 @@ export default function InputPortFormDialog({ isOpen, onOpenChange, onSubmit, in
         assetIdentifier: assetIdentifier.trim() || undefined,
       };
 
-      await onSubmit(port);
+      const saved = await onSubmit(port);
       onOpenChange(false);
+      if (saved === false) return;
       toast({
         title: 'Success',
         description: initial ? 'Consumable updated' : 'Consumable added',

@@ -390,6 +390,19 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         read_model_of_deleted = self._convert_db_to_read_model(db_domain_to_delete, db)
 
         try:
+            # Their notes, links and documents go with them (as for assets);
+            # uploaded files are deleted from the volume once the delete commits.
+            # Before remove_entity_data below, which deletes the same rows
+            # without the metadata manager's own cleanup of imported Markdown.
+            from src.controller.metadata_manager import MetadataManager
+            metadata_manager = MetadataManager()
+            document_paths: List[str] = []
+            for did in affected_domain_ids:
+                _, paths = metadata_manager.remove_all_for_entity(
+                    db, entity_type='data_domain', entity_id=str(did),
+                )
+                document_paths.extend(paths)
+            metadata_manager.delete_document_files_after_commit(db, document_paths)
             # Clean up any additional-only association rows first (FK to data_domains has
             # no ON DELETE CASCADE), across the domain and its cascade-deleted descendants.
             for did in affected_domain_ids:

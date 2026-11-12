@@ -147,6 +147,33 @@ ASSERT LENGTH(obj.name) <= 64
 ASSERT LOWER(obj.name) = obj.name  # Enforce lowercase
 ```
 
+### LLM Check
+- `LLM_CHECK(text, 'criterion')` - Ask the configured serving endpoint (`LLM_ENDPOINT`)
+  whether the text meets the criterion; true or false, with a short reason
+
+```
+MATCH (t:table)
+ASSERT LLM_CHECK(t.comment, 'states the grain of the table')
+
+MATCH (d:domain)
+ASSERT LLM_CHECK(d.description, 'says who uses the data and for what')
+```
+
+The reason of a failed check is shown next to the result. Before saving, use
+**Test on a sample entity** in the rule editor to try a criterion on one entity.
+
+- Only evaluated in compliance runs, in `ASSERT`. In `WHERE`, in maturity gates
+  and in workflow policy checks the check fails (`llm_check_not_available`).
+- Fails closed: with LLM features off (`llm_check_disabled`), no endpoint
+  (`llm_check_no_endpoint`), a refusal, an empty or unfinished reply, or a reply
+  whose first line is not `PASS: <reason>` or `FAIL: <reason>`, the rule fails
+  for that entity, also under `NOT`. An empty text fails without a call.
+- Cached: a verdict is stored per text, criterion and endpoint, so a run over
+  unchanged text makes no call.
+- Budget: a run makes at most `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN` calls
+  (default 200; cached verdicts don't count). The checks past it fail with
+  `llm_check_budget_exceeded`, and the run reports how many.
+
 ## CASE Expressions
 
 Conditional logic for complex rules:

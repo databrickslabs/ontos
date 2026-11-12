@@ -289,14 +289,16 @@
     },
     "unresolved": {
       "notFound": "{{kind}} \"{{value}}\" non trovato",
-      "ambiguous": "{{kind}} \"{{value}}\" corrisponde a più entità"
+      "ambiguous": "{{kind}} \"{{value}}\" corrisponde a più entità",
+      "forbidden": "{{kind}} \"{{value}}\": non puoi modificare questo tipo di entità"
     },
     "reasons": {
       "too_large": "Il file supera 1 MB.",
       "not_utf8": "Il file non è testo UTF-8.",
       "front_matter_invalid": "Il front matter non è una mappa YAML valida.",
       "read_failed": "Impossibile leggere il file.",
-      "gone": "Il file non è più nella cartella: i suoi documenti sono stati rimossi da {{count}} entità."
+      "gone": "Il file non è più nella cartella: i suoi documenti sono stati rimossi da {{count}} entità.",
+      "not_text": "Il file contiene caratteri NUL; non è testo."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" non è un percorso all'interno di un volume Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>/<folder>.",
@@ -304,6 +306,9 @@
       "markdown_import_access_denied": "Non puoi leggere \"{{path}}\". Richiedi READ VOLUME sul volume.",
       "markdown_import_too_many_files": "\"{{path}}\" contiene più di {{max}} file Markdown. Importa una cartella più piccola.",
       "failed": "Importazione non riuscita."
+    },
+    "warnings": {
+      "empty_folder": "Nessun file Markdown trovato qui: i documenti importati in precedenza da questa cartella sono stati mantenuti."
     }
   }
 }

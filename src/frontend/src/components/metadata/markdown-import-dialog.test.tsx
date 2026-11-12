@@ -37,7 +37,10 @@ const RESULT: MarkdownImportResult = {
     {
       path: '/Volumes/main/docs/context/terms.md', status: 'updated', title: 'Terms',
       targets: [{ entity_type: 'concept', entity_id: 'http://ex.org#Churn', name: 'Churn' }],
-      unresolved: [{ kind: 'asset', value: 'main.crm.gone', reason: 'not_found' }],
+      unresolved: [
+        { kind: 'asset', value: 'main.crm.gone', reason: 'not_found' },
+        { kind: 'concept', value: 'Secret', reason: 'forbidden' },
+      ],
       removed: 1,
     },
     {
@@ -87,7 +90,9 @@ describe('MarkdownImportDialog', () => {
       'The file is gone from the folder: its documents were removed from 2 entities.',
     )).toBeInTheDocument();
     expect(screen.getByText('Linked to: Customer')).toBeInTheDocument();
-    expect(screen.getByText('Asset "main.crm.gone" not found')).toBeInTheDocument();
+    expect(screen.getByText(
+      'Asset "main.crm.gone" not found; Concept "Secret": you can\'t edit this kind of entity',
+    )).toBeInTheDocument();
     expect(screen.getByText('Removed from entities it no longer names: 1')).toBeInTheDocument();
     expect(screen.getByText('The front matter names no domain, asset or concept.'))
       .toBeInTheDocument();
@@ -126,10 +131,17 @@ describe('MarkdownImportDialog', () => {
   });
 
   it('does not report an import that changed nothing', async () => {
-    respond(200, { ...RESULT, added: 0, updated: 0, unchanged: 2, removed: 0, files: [] });
+    respond(200, {
+      ...RESULT, added: 0, updated: 0, unchanged: 2, removed: 0, files: [],
+      warnings: ['empty_folder'],
+    });
     const onImported = open();
     await waitFor(() => expect(screen.getByText('Unchanged: 2')).toBeInTheDocument());
     expect(screen.getByText('No Markdown files found at this path.')).toBeInTheDocument();
+    expect(screen.getByText(
+      'No Markdown files were found here, so the documents imported from this folder '
+      + 'before were kept.',
+    )).toBeInTheDocument();
     expect(onImported).not.toHaveBeenCalled();
   });
 });

@@ -33,6 +33,8 @@ from src.models.process_workflows import (
     ExecutionStatus,
     StepExecutionStatus,
     WorkflowStepExecutionResult,
+    ends_process_run,
+    is_conditional_step_type,
 )
 from src.repositories.process_workflows_repository import workflow_execution_repo
 
@@ -185,6 +187,37 @@ class StepResult:
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     blocking: bool = False  # If True, workflow pauses (e.g., approval)
+    # Set by a Conditional that evaluated cleanly: the step passed, and its
+    # result picks on_pass (True) or on_fail (False). None: follow ``passed``.
+    branch: Optional[bool] = None
+
+    def takes_pass_branch(self) -> bool:
+        return self.passed if self.branch is None else self.branch
+
+    def context_entry(self) -> Dict[str, Any]:
+        """This result as later steps see it in ``step_results``."""
+        entry: Dict[str, Any] = {'passed': self.passed, 'message': self.message, 'data': self.data}
+        if self.branch is not None:
+            entry['branch'] = 'true' if self.branch else 'false'
+        return entry
+
+
+def _next_step_id(workflow: 'ProcessWorkflow', step: 'WorkflowStep', result: StepResult) -> Optional[str]:
+    """The step to run after ``step``: none after a Pass or Fail step, else its branch.
+
+    A conditional's branches are its true and false results, so a condition that
+    couldn't be evaluated has no branch: the run ends there, failed.
+    """
+    if ends_process_run(getattr(workflow, 'workflow_type', None), step.step_type):
+        return None
+    if is_conditional_step_type(step.step_type) and result.branch is None:
+        return None
+    return step.on_pass if result.takes_pass_branch() else step.on_fail
+
+
+def _json_safe(value: Any) -> Any:
+    """``value`` if result data can store it as JSON, else its text."""
+    return value if value is None or isinstance(value, (bool, int, float, str)) else str(value)
 
 
 class StepHandler(ABC):
@@ -1374,42 +1407,66 @@ class AssignTagStepHandler(StepHandler):
         try:
             if value_source:
                 resolved_value = self._resolve_value_source(value_source, context)
+                if not resolved_value:
+                    return StepResult(passed=False, error="Could not resolve tag value")
             else:
-                resolved_value = value
-            
-            if not resolved_value:
-                return StepResult(passed=False, error="Could not resolve tag value")
-            
-            logger.info(f"Assigning tag {key}={resolved_value} to {context.entity_type} {context.entity_id}")
+                # No fixed value assigns the tag key-only (None, not '').
+                resolved_value = value if value not in (None, '') else None
 
-            # Persist via TagsManager
+            logger.info(
+                "Assigning tag %s%s to %s %s", key,
+                f"={resolved_value}" if resolved_value is not None else " (no value)",
+                context.entity_type, context.entity_id,
+            )
+
+            # Persist via TagsManager. ``effective_value`` is what the entity holds
+            # afterwards: a key-only assign keeps a value the entity already has.
             persisted = False
+            effective_value = resolved_value
             try:
                 from src.controller.tags_manager import TagsManager
                 tags_mgr = TagsManager()
                 tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
                 if tag:
-                    tags_mgr.add_tag_to_entity(
-                        db=self._db,
-                        entity_id=context.entity_id,
-                        entity_type=context.entity_type,
-                        tag_id=tag.id,
-                        assigned_value=resolved_value,
-                        user_email=context.user_email,
-                    )
+                    existing = None
+                    if resolved_value is None:
+                        existing = next(
+                            (t for t in tags_mgr.list_assigned_tags(
+                                self._db, entity_id=context.entity_id, entity_type=context.entity_type,
+                            ) if t.tag_id == tag.id),
+                            None,
+                        )
+                    if existing is not None:
+                        # Already assigned: nothing to write (and no change-log entry).
+                        effective_value = existing.assigned_value
+                    else:
+                        tags_mgr.add_tag_to_entity(
+                            db=self._db,
+                            entity_id=context.entity_id,
+                            entity_type=context.entity_type,
+                            tag_id=tag.id,
+                            assigned_value=resolved_value,
+                            user_email=context.user_email,
+                        )
                     persisted = True
                 else:
                     logger.warning(f"Tag '{key}' not found by FQN — context updated only")
             except Exception as e:
                 logger.warning(f"TagsManager integration failed (context still updated): {e}")
-            
+
             if 'tags' not in context.entity:
                 context.entity['tags'] = {}
-            context.entity['tags'][key] = resolved_value
-            
+            if effective_value is not None:
+                context.entity['tags'][key] = effective_value
+            else:
+                # Key-only, with no stored value: rules see the tag as true, like
+                # the compliance loader shows key-only tags.
+                context.entity['tags'].setdefault(key, True)
+
+            label = f"{key}={resolved_value}" if resolved_value is not None else key
             return StepResult(
                 passed=True,
-                message=f"Assigned tag {key}={resolved_value}" + (" (persisted)" if persisted else " (context only)"),
+                message=f"Assigned tag {label}" + (" (persisted)" if persisted else " (context only)"),
                 data={'key': key, 'value': resolved_value, 'persisted': persisted}
             )
         except Exception as e:
@@ -1494,10 +1551,14 @@ class ConditionalStepHandler(StepHandler):
             evaluator = Evaluator(_rule_object(self._db, context))
             result = evaluator.evaluate(ast)
             
+            # The condition was evaluated, so the step succeeded; its result only
+            # picks the branch. A false condition is not a failure.
+            branch = bool(result)
             return StepResult(
-                passed=bool(result),
+                passed=True,
+                branch=branch,
                 message=f"Condition evaluated to: {result}",
-                data={'condition': condition, 'result': result}
+                data={'condition': condition, 'result': _json_safe(result), 'branch': 'true' if branch else 'false'},
             )
         except Exception as e:
             logger.exception(f"Conditional step failed: {e}")
@@ -3176,11 +3237,7 @@ class WorkflowExecutor:
             )
             
             # Store result in context for subsequent steps
-            context.step_results[step.step_id] = {
-                'passed': result.passed,
-                'message': result.message,
-                'data': result.data,
-            }
+            context.step_results[step.step_id] = result.context_entry()
             
             # Update counters
             if result.passed:
@@ -3202,10 +3259,7 @@ class WorkflowExecutor:
                 break
             
             # Determine next step
-            if result.passed:
-                current_step_id = step.on_pass
-            else:
-                current_step_id = step.on_fail
+            current_step_id = _next_step_id(workflow, step, result)
             
             # If no next step, we're done
             if not current_step_id:
@@ -3775,11 +3829,7 @@ class WorkflowExecutor:
             )
             
             # Store result in context for subsequent steps
-            context.step_results[step.step_id] = {
-                'passed': result.passed,
-                'message': result.message,
-                'data': result.data,
-            }
+            context.step_results[step.step_id] = result.context_entry()
             
             # Update counters
             if result.passed:
@@ -3801,10 +3851,7 @@ class WorkflowExecutor:
                 break
             
             # Determine next step
-            if result.passed:
-                next_step_id = step.on_pass
-            else:
-                next_step_id = step.on_fail
+            next_step_id = _next_step_id(workflow, step, result)
             
             # If no next step, we're done
             if not next_step_id:

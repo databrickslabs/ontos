@@ -94,6 +94,13 @@
       "generate_pdf": "PDF generieren",
       "deliver": "Zustellen"
     },
+    "layout": {
+      "rearrange": "Neu anordnen",
+      "rearrangeHint": "Alle Schritte automatisch anordnen",
+      "confirmTitle": "Alle Schritte neu anordnen?",
+      "confirmDescription": "Die Schritte werden automatisch angeordnet. Ihr aktuelles Layout wird beim Speichern ersetzt.",
+      "confirmAction": "Neu anordnen"
+    },
     "discard": {
       "description": "Sie haben nicht gespeicherte Änderungen an diesem Workflow. Wenn Sie jetzt verlassen, gehen Ihre Änderungen verloren.",
       "stay": "Bleiben",
@@ -212,7 +219,18 @@
       "selectSource": "Quelle auswählen",
       "sourceCurrentUser": "Aktueller Benutzer",
       "sourceProjectName": "Projektname",
-      "sourceTimestamp": "Zeitstempel"
+      "sourceTimestamp": "Zeitstempel",
+      "valueMode": "Wert",
+      "modeFixed": "Fester Wert",
+      "modeSource": "Wert aus dem Lauf",
+      "modeNone": "Kein Wert",
+      "fixedValue": "Tag-Wert",
+      "fixedValuePlaceholder": "z. B. vertraulich",
+      "selectValue": "Wert auswählen",
+      "noValueHelp": "Das Tag wird ohne Wert zugewiesen. Ein Wert, den die Entität für dieses Tag bereits hat, bleibt erhalten.",
+      "sourceEntityName": "Entitätsname",
+      "tagNotFound": "Kein Tag hat diesen Namen. Der Schritt setzt es dann nur für die folgenden Schritte des Laufs.",
+      "fixedValueRequired": "Geben Sie einen Wert ein oder wählen Sie „Kein Wert“, um das Tag ohne Wert zuzuweisen."
     },
     "approval": {
       "approversRole": "Genehmiger (Rolle)",
@@ -317,11 +335,18 @@
       "duplicateStepIds": "Zwei Schritte haben dieselbe ID.",
       "stepUnknownReference": "Schritt \"{{step}}\" verweist mit seinem {{branch}}-Zweig auf \"{{target}}\", der nicht im Workflow ist.",
       "stepConfigMissing": "Bei Schritt \"{{step}}\" fehlen Pflichteinstellungen: {{fields}}.",
+      "assignTagValueSourceUnknown": "Schritt „{{step}}“ verwendet die unbekannte Wertquelle „{{source}}“.",
       "policyCheckPolicyMissing": "Der Schritt \"{{step}}\" benötigt eine vorhandene Compliance-Richtlinie. Wählen Sie in den Schritteinstellungen eine aus.",
       "branch": {
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
       }
+    },
+    "edgeLabels": {
+      "pass": "Bestanden",
+      "fail": "Fehlgeschlagen",
+      "true": "Wahr",
+      "false": "Falsch"
     }
   },
   "approvalResponse": {
@@ -516,6 +541,10 @@
       "skipped": "Übersprungen",
       "waiting": "Wartet"
     },
+    "conditionalBranch": {
+      "true": "Bedingung war wahr: Wahr-Zweig ausgeführt",
+      "false": "Bedingung war falsch: Falsch-Zweig ausgeführt"
+    },
     "executionStates": {
       "pending": "Ausstehend",
       "running": "Läuft",
@@ -673,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "Standard-Workflows",
       "newOnly": "Nur neue laden",
-      "reloadAll": "Alle Standardwerte neu laden"
+      "reloadAll": "Alle Standardwerte neu laden",
+      "confirmTitle": "Alle Standard-Workflows neu laden?",
+      "confirmDescription": "Jeder Standard-Workflow wird auf seine ausgelieferte Definition zurückgesetzt: Beschreibung, Auslöser, Geltungsbereich, Schritte und deren Anordnung. Ob ein Workflow aktiv ist, ändert sich nicht. Standard-Workflows, die Sie oder ein anderer Admin bearbeitet haben, bleiben erhalten, außer Sie setzen sie unten ebenfalls zurück.",
+      "includeEdited": "Auch bearbeitete Standard-Workflows zurücksetzen (ihre Änderungen gehen verloren)",
+      "confirmAction": "Neu laden",
+      "keptEdited": "Bearbeitete beibehalten: {{names}}.",
+      "result": "Erstellt: {{created}}, aktualisiert: {{updated}}, übersprungen: {{skipped}}."
     },
     "badges": {
       "default": "Standard",

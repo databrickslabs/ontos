@@ -11,7 +11,7 @@ IRIs; other IRIs unchanged). Rows that become the same link (the unique key cove
 the type columns) are merged: the oldest is kept, the others are deleted.
 
 Revision ID: r2_canonical_relationship_types
-Revises: o1_merge_r1_c7
+Revises: s1_workflow_is_customized
 Create Date: 2026-11-11
 """
 import re
@@ -23,7 +23,7 @@ from alembic import op
 
 
 revision: str = "r2_canonical_relationship_types"
-down_revision: Union[str, Sequence[str], None] = "o1_merge_r1_c7"
+down_revision: Union[str, Sequence[str], None] = "s1_workflow_is_customized"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

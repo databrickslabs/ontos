@@ -33,7 +33,7 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
             raise
 
     def get_multi_with_teams(
-        self, db: Session, *, skip: int = 0, limit: int = 100
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None
     ) -> List[ProjectDb]:
         """Gets multiple projects, eager loading teams and owner teams."""
         logger.debug(f"Fetching multiple {self.model.__name__} with teams, skip={skip}, limit={limit}")

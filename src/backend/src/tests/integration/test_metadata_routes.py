@@ -118,3 +118,61 @@ class TestMetadataRoutes:
             json=invalid_data,
         )
         assert response.status_code == 422
+
+
+class TestAssetMetadataRoutes:
+    """The asset detail view renders the metadata panel with entity_type="asset"."""
+
+    @pytest.fixture
+    def mock_ws(self, monkeypatch):
+        """Workspace client for uploads, via get_workspace_client's MOCK_WORKSPACE_CLIENT hook."""
+        import time
+        from unittest.mock import MagicMock
+        from src.common import workspace_client
+        from src.controller.metadata_manager import MetadataManager
+
+        ws = MagicMock()
+        monkeypatch.setenv("MOCK_WORKSPACE_CLIENT", "true")
+        monkeypatch.setitem(workspace_client._CLIENT_CACHE, "mock_ws", (ws, "mock", time.time()))
+        monkeypatch.setattr(MetadataManager, "ensure_volume_path", lambda self, ws, settings, base_dir: "/Volumes/c/s/v")
+        return ws
+
+    def test_create_rich_text_for_asset(self, client: TestClient):
+        response = client.post(
+            "/api/entities/asset/rich-texts",
+            params={"entity_id": "asset-1"},
+            json={"entity_id": "asset-1", "entity_type": "asset", "title": "Note", "content_markdown": "Body"},
+        )
+        assert response.status_code == 201, response.text
+
+        listed = client.get("/api/entities/asset/rich-texts", params={"entity_id": "asset-1"})
+        assert [rt["id"] for rt in listed.json()] == [response.json()["id"]]
+
+    def test_create_link_for_asset(self, client: TestClient):
+        response = client.post(
+            "/api/entities/asset/links",
+            params={"entity_id": "asset-1"},
+            json={"entity_id": "asset-1", "entity_type": "asset", "title": "Link", "url": "https://example.com"},
+        )
+        assert response.status_code == 201, response.text
+
+    def test_upload_document_for_asset(self, client: TestClient, mock_ws):
+        response = client.post(
+            "/api/entities/asset/documents",
+            params={"entity_id": "asset-1"},
+            data={"title": "Snapshot"},
+            files={"file": ("snapshot.png", b"\x89PNG", "image/png")},
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["entity_type"] == "asset"
+        mock_ws.files.upload.assert_called_once()
+
+    def test_upload_document_rejects_unknown_entity_type_before_writing(self, client: TestClient, mock_ws):
+        response = client.post(
+            "/api/entities/not_an_entity/documents",
+            params={"entity_id": "x-1"},
+            data={"title": "Snapshot"},
+            files={"file": ("snapshot.png", b"\x89PNG", "image/png")},
+        )
+        assert response.status_code == 422, response.text
+        mock_ws.files.upload.assert_not_called()

@@ -91,6 +91,12 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
         fields: Array.isArray(params.fields) ? params.fields.join(', ') : '',
         defaultValue: fallback,
       });
+    case 'assign_tag_value_source_unknown':
+      return t('workflows:designer.validationIssues.assignTagValueSourceUnknown', {
+        step: params.step,
+        source: params.source,
+        defaultValue: fallback,
+      });
     case 'policy_check_policy_missing':
       return t('workflows:designer.validationIssues.policyCheckPolicyMissing', {
         step: params.step,

@@ -491,7 +491,7 @@ async def load_demo_data(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: SettingsManager = Depends(get_settings_manager),
-    _: None = Depends(require_demo_admin_or_setup_token),
+    access_via: str = Depends(require_demo_admin_or_setup_token),
     preset: str = Query(
         default="retail",
         description=(
@@ -514,7 +514,9 @@ async def load_demo_data(
     """
     success = False
     preset_slug = (preset or "").strip().lower()
-    details: Dict[str, Any] = {"action": "load_demo_data", "preset": preset_slug}
+    details: Dict[str, Any] = {
+        "action": "load_demo_data", "preset": preset_slug, "via": access_via,
+    }
 
     if preset_slug not in DEMO_DATA_PRESETS:
         raise HTTPException(
@@ -667,7 +669,7 @@ async def clear_demo_data(
             "List what would be deleted, and what blocks the clear, without changing anything."
         ),
     ),
-    _: None = Depends(require_demo_admin_or_setup_token),
+    access_via: str = Depends(require_demo_admin_or_setup_token),
 ):
     """
     Clear all demo data from the database.
@@ -689,7 +691,7 @@ async def clear_demo_data(
     without changing anything.
     """
     success = False
-    details = {"action": "clear_demo_data", "dry_run": dry_run}
+    details = {"action": "clear_demo_data", "dry_run": dry_run, "via": access_via}
 
     try:
         from pathlib import Path

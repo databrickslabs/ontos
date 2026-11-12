@@ -229,12 +229,16 @@ def test_a_product_publication_request_returns_the_workflow_failure():
         ExecutionStatus.FAILED,
         steps=[('approval-gate', 'psycopg2.errors.UndefinedTable: relation "x" does not exist')],
     )
-    manager = MagicMock()
+    from src.controller.data_products_manager import DataProductsManager
+
+    # The route's manager, on a stub repository (the manager fires the trigger)
+    manager = DataProductsManager(db=MagicMock())
+    manager._repo = MagicMock()
     manager._repo.get.return_value = SimpleNamespace(name='p', status='active')
     request = MagicMock()
     request.client.host = '127.0.0.1'
 
-    with patch.object(data_product_routes, 'get_trigger_registry') as registry:
+    with patch('src.common.workflow_triggers.get_trigger_registry') as registry:
         registry.return_value.on_request_publish.return_value = [failed]
         response = asyncio.run(data_product_routes.request_publish_product(
             product_id='p-1', request=request, db=MagicMock(), audit_manager=MagicMock(),

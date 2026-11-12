@@ -30,3 +30,10 @@ body:
       description: Add any other context, references or screenshots about the feature request here.
     validations:
       required: false
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Are you willing to submit a PR?
+      description: "Not required, but we are happy to guide you through the contribution. See [CONTRIBUTING.md](https://github.com/databrickslabs/ontos/blob/development/CONTRIBUTING.md); [CI for pull requests from forks](https://github.com/databrickslabs/ontos/blob/development/CONTRIBUTING.md#ci-for-pull-requests-from-forks) is started by a maintainer."
+      options:
+        - label: Yes, I am willing to submit a PR!

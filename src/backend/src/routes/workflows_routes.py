@@ -915,6 +915,7 @@ async def update_workflow(
             trigger=workflow.trigger or existing.trigger,
             scope=workflow.scope or existing.scope,
             is_active=workflow.is_active if workflow.is_active is not None else existing.is_active,
+            workflow_type=workflow.workflow_type or existing.workflow_type,
             steps=workflow.steps,
         )
         validation = manager.validate_workflow(full_workflow)
@@ -1217,6 +1218,7 @@ async def load_default_workflows(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     update_existing: bool = False,
+    include_edited: bool = False,
     manager: WorkflowsManager = Depends(get_workflows_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.ADMIN)),
 ) -> dict:
@@ -1224,8 +1226,10 @@ async def load_default_workflows(
     
     Query params:
         update_existing: If true, updates existing default workflows to match YAML definitions.
+            Defaults a user edited are kept and listed in ``kept_edited_names``.
+        include_edited: With update_existing, also reset the defaults a user edited.
     """
-    result = manager.load_from_yaml(update_existing=update_existing)
+    result = manager.load_from_yaml(update_existing=update_existing, include_edited=include_edited)
     
     parts = []
     if result['created'] > 0:
@@ -1234,6 +1238,8 @@ async def load_default_workflows(
         parts.append(f"updated {result['updated']}")
     if result['skipped'] > 0:
         parts.append(f"skipped {result['skipped']} (already exist)")
+    if result['kept_edited'] > 0:
+        parts.append(f"kept {result['kept_edited']} edited")
     
     message = "Workflows: " + ", ".join(parts) if parts else "No workflows to load"
     
@@ -1244,7 +1250,10 @@ async def load_default_workflows(
         feature='process-workflows',
         action='LOAD_DEFAULTS',
         success=True,
-        details={'created': result['created'], 'updated': result['updated'], 'skipped': result['skipped']}
+        details={
+            'created': result['created'], 'updated': result['updated'], 'skipped': result['skipped'],
+            'kept_edited': result['kept_edited'], 'include_edited': include_edited,
+        }
     )
     
     return {"message": message, **result}

@@ -69,7 +69,7 @@ def test_upgrade_canonicalizes_and_merges(migration, engine):
         ("untouched", "Table", "t3", "Column", "c3", "hasColumn", 0),
     )
 
-    assert migration.down_revision == "o1_merge_r1_c7"
+    assert migration.down_revision == "s1_workflow_is_customized"
     _run(engine, migration.upgrade)
 
     assert _rows(engine) == {

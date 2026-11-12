@@ -94,6 +94,13 @@
       "generate_pdf": "Generate PDF",
       "deliver": "Deliver"
     },
+    "layout": {
+      "rearrange": "Rearrange",
+      "rearrangeHint": "Arrange all steps automatically",
+      "confirmTitle": "Rearrange all steps?",
+      "confirmDescription": "The steps are arranged automatically. Your current layout is replaced when you save.",
+      "confirmAction": "Rearrange"
+    },
     "discard": {
       "description": "You have unsaved changes to this workflow. If you leave now, your changes will be lost.",
       "stay": "Stay",
@@ -212,7 +219,18 @@
       "selectSource": "Select source",
       "sourceCurrentUser": "Current User",
       "sourceProjectName": "Project Name",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Value",
+      "modeFixed": "Fixed value",
+      "modeSource": "Value from the run",
+      "modeNone": "No value",
+      "fixedValue": "Tag value",
+      "fixedValuePlaceholder": "e.g., confidential",
+      "selectValue": "Select a value",
+      "noValueHelp": "The tag is assigned without a value. A value the entity already has for this tag is kept.",
+      "sourceEntityName": "Entity Name",
+      "tagNotFound": "No tag has this name. The step then only sets it for the following steps of the run.",
+      "fixedValueRequired": "Enter a value, or choose \"No value\" to assign the tag without one."
     },
     "approval": {
       "approversRole": "Approvers (Role)",
@@ -317,11 +335,18 @@
       "duplicateStepIds": "Two steps have the same ID.",
       "stepUnknownReference": "Step \"{{step}}\" points its {{branch}} branch at \"{{target}}\", which is not in the workflow.",
       "stepConfigMissing": "Step \"{{step}}\" is missing required settings: {{fields}}.",
+      "assignTagValueSourceUnknown": "Step \"{{step}}\" uses the unknown value source \"{{source}}\".",
       "policyCheckPolicyMissing": "Step \"{{step}}\" needs an existing compliance policy. Select one in the step's settings.",
       "branch": {
         "on_pass": "pass",
         "on_fail": "fail"
       }
+    },
+    "edgeLabels": {
+      "pass": "Pass",
+      "fail": "Fail",
+      "true": "True",
+      "false": "False"
     }
   },
   "approvalResponse": {
@@ -516,6 +541,10 @@
       "skipped": "Skipped",
       "waiting": "Waiting"
     },
+    "conditionalBranch": {
+      "true": "Condition was true: took the true branch",
+      "false": "Condition was false: took the false branch"
+    },
     "executionStates": {
       "pending": "Pending",
       "running": "Running",
@@ -673,7 +702,13 @@
     "loadDefaults": {
       "menuLabel": "Default Workflows",
       "newOnly": "Load New Only",
-      "reloadAll": "Reload All Defaults"
+      "reloadAll": "Reload All Defaults",
+      "confirmTitle": "Reload all default workflows?",
+      "confirmDescription": "Each default workflow is reset to its shipped definition: description, trigger, scope, steps and their layout. Whether a workflow is active doesn't change. Defaults that you or another admin edited are kept unless you also reset them below.",
+      "includeEdited": "Also reset default workflows that were edited (their changes are lost)",
+      "confirmAction": "Reload",
+      "keptEdited": "Kept edited: {{names}}.",
+      "result": "Created {{created}}, updated {{updated}}, skipped {{skipped}}."
     },
     "badges": {
       "default": "Default",

@@ -227,15 +227,26 @@ def test_sdk_already_exists_error_code_is_not_an_error(tag_sync):
     assert result.errors == []
 
 
-def test_tag_key_creation_failure_is_counted_as_an_error(tag_sync):
+def test_tag_key_creation_failure_is_counted_but_the_tag_is_still_set(tag_sync):
     ws = _ws_creating_tag_keys_fails("[PERMISSION_DENIED] cannot create tag key")
     spark = FakeSpark()
     direct = tag_sync.build_direct_link_infos([], None, None)
     result = tag_sync.sync_tags(ws, spark, [_dataset(tag_sync, "main.a.one")],
                                 direct, CFG, tag_sync.TagOwnership(), previous=None)
-    assert result.errors and "main.a.one" in result.errors[0]
-    assert result.updated == 0
-    assert spark.sets() == []
+    assert any("TABLE main.a.one" in e for e in result.errors)
+    assert any("TABLE main.a.one SET" in q for q in spark.sets())
+    assert result.failed_objects.count("TABLE main.a.one") == 1
+
+
+def test_tag_key_and_write_both_failing_fail_the_object_once(tag_sync):
+    ws = _ws_creating_tag_keys_fails("[PERMISSION_DENIED] cannot create tag key")
+    spark = FakeSpark({"ALTER TABLE main.a.one": "[PERMISSION_DENIED] APPLY TAG"})
+    direct = tag_sync.build_direct_link_infos([], None, None)
+    result = tag_sync.sync_tags(ws, spark, [_dataset(tag_sync, "main.a.one")],
+                                direct, CFG, tag_sync.TagOwnership(), previous=None)
+    table_errors = [e for e in result.errors if "TABLE main.a.one" in e]
+    assert len(table_errors) == 2
+    assert result.failed_objects.count("TABLE main.a.one") == 1
 
 
 def test_missing_object_while_creating_the_tag_key_is_skipped(tag_sync):

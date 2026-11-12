@@ -1072,7 +1072,7 @@ def ensure_tag_key(ws: WorkspaceClient, key: str) -> None:
     try:
         ws.tags.create(key=key)
     except Exception as e:
-        text = _error_text(e)
+        text = f"{getattr(e, 'error_code', '') or ''} {_error_text(e)}".upper()
         if "ALREADY_EXISTS" in text or "ALREADY EXISTS" in text:
             return
         raise

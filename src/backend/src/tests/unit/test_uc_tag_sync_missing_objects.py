@@ -215,6 +215,18 @@ def test_tag_key_that_already_exists_is_not_an_error(tag_sync):
     assert result.updated >= 1
 
 
+def test_sdk_already_exists_error_code_is_not_an_error(tag_sync):
+    class SdkError(Exception):
+        error_code = "RESOURCE_ALREADY_EXISTS"
+
+    ws = MagicMock()
+    ws.tags.create.side_effect = SdkError("tag key is taken")
+    direct = tag_sync.build_direct_link_infos([], None, None)
+    result = tag_sync.sync_tags(ws, FakeSpark(), [_dataset(tag_sync, "main.a.one")],
+                                direct, CFG, tag_sync.TagOwnership(), previous=None)
+    assert result.errors == []
+
+
 def test_tag_key_creation_failure_is_counted_as_an_error(tag_sync):
     ws = _ws_creating_tag_keys_fails("[PERMISSION_DENIED] cannot create tag key")
     spark = FakeSpark()

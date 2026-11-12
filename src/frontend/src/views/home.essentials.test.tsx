@@ -4,6 +4,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 import { FeatureAccessLevel, HomeSection } from '@/types/settings';
 import { ACCESS_LEVEL_ORDER } from '@/lib/permissions';
+import i18n from '@/i18n/config';
 
 const state = vi.hoisted(() => {
   // The UI customization store fetches on import; keep it offline until a test sets routes.
@@ -208,6 +209,7 @@ describe('Home by role home section', () => {
     expect(screen.getByTestId('essentials-section-understand')).toBeInTheDocument();
     expect(screen.queryByTestId('essentials-section-trust')).not.toBeInTheDocument();
     expect(screen.queryByTestId('essentials-section-publish')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('essentials-section-maturity')).not.toBeInTheDocument();
     expect(screen.queryByTestId('essentials-maintain-requests')).not.toBeInTheDocument();
     expect(screen.queryByTestId('essentials-maintain-reviews')).not.toBeInTheDocument();
     expect(screen.getByText('Nothing to follow up.')).toBeInTheDocument();
@@ -293,6 +295,44 @@ describe('Home by role home section', () => {
       'href', '/data-asset-reviews/r1',
     );
     expect(within(reviews).queryByText('Review r2')).not.toBeInTheDocument();
+  });
+
+  it('counts my tables below the first maturity level and links to each one', async () => {
+    state.routes['/api/assets?below_first_maturity_level=true'] = {
+      items: [{ id: 'a3', name: 'pedidos_diarios' }, { id: 'a4', name: 'entregas' }],
+      total: 7, skip: 0, limit: 5,
+    };
+    applyJourneyRole();
+    await i18n.changeLanguage('pt');
+    try {
+      renderWithProviders(<Home />);
+      const card = screen.getByTestId('essentials-section-maturity');
+      expect(within(card).getByText('Tabelas abaixo do primeiro nível')).toBeInTheDocument();
+      expect(await within(card).findByTestId('essentials-maturity-count')).toHaveTextContent('7');
+      expect(within(card).getByText('pedidos_diarios')).toHaveAttribute('href', '/assets/a3');
+      expect(within(card).getByText('entregas')).toHaveAttribute('href', '/assets/a4');
+      expect(within(card).getByText('Mostrando 2 de 7.')).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+    const call = state.calls.find((u) => u.includes('below_first_maturity_level'));
+    const q = new URL(call!, 'http://x').searchParams;
+    expect(q.get('owned_by_me')).toBe('true');
+    expect(q.get('limit')).toBe('5');
+  });
+
+  it('says none of my tables is below the first level when the list is empty', async () => {
+    state.routes['/api/assets?below_first_maturity_level=true'] = {
+      items: [], total: 0, skip: 0, limit: 5,
+    };
+    applyJourneyRole();
+    renderWithProviders(<Home />);
+    const card = screen.getByTestId('essentials-section-maturity');
+    expect(await within(card).findByText(
+      'None of your evaluated tables is below the first level.',
+    )).toBeInTheDocument();
+    expect(within(card).getByTestId('essentials-maturity-count')).toHaveTextContent('0');
+    expect(within(card).queryByTestId('essentials-maturity-list')).not.toBeInTheDocument();
   });
 
   it('a user whose groups match a role with the journey section gets the journey home', () => {

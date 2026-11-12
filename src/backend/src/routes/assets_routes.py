@@ -369,10 +369,15 @@ def get_all_assets(
     owned_by_me: bool = Query(
         False, description="Only assets the current user owns (active business owner)",
     ),
+    below_first_maturity_level: bool = Query(
+        False,
+        description="Only tables and views whose latest maturity evaluation reached no level",
+    ),
 ):
     """Lists all assets with optional filters. Returns paginated results.
 
-    ``owned_by_me`` narrows any of the branches below to the caller's owned assets.
+    ``owned_by_me`` narrows any of the branches below to the caller's owned assets, and
+    ``below_first_maturity_level`` to the assets below the first maturity level.
 
     Authorization (issue #347):
     - Users with ``assets:READ_WRITE`` or higher (Producers, Admins): see
@@ -414,6 +419,7 @@ def get_all_assets(
         platform=platform, domain_id=domain_id, domain_ids=domain_ids_list, status=asset_status, name=name,
         restrict_to_ids=restrict_ids,
         owner_email=(current_user.email or "") if owned_by_me else None,
+        below_first_maturity_level=below_first_maturity_level,
     )
 
 

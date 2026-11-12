@@ -42,6 +42,12 @@
       "pageSize": "Pro Seite",
       "requestReview": "Prüfung anfordern"
     },
+    "maturity": {
+      "title": "Tabellen unter der ersten Stufe",
+      "description": "Ihre Tabellen und Views, deren letzte Reifegradbewertung keine Stufe erreicht hat.",
+      "empty": "Keine Ihrer bewerteten Tabellen liegt unter der ersten Stufe.",
+      "more": "{{shown}} von {{total}} angezeigt."
+    },
     "maintain": {
       "title": "Pflegen",
       "description": "Ihre offenen Anfragen und Prüfungen.",

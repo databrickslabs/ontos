@@ -42,6 +42,12 @@
       "pageSize": "Par page",
       "requestReview": "Demander une revue"
     },
+    "maturity": {
+      "title": "Tables sous le premier niveau",
+      "description": "Vos tables et vues dont la dernière évaluation de maturité n'a atteint aucun niveau.",
+      "empty": "Aucune de vos tables évaluées n'est sous le premier niveau.",
+      "more": "{{shown}} sur {{total}} affichées."
+    },
     "maintain": {
       "title": "Maintenir",
       "description": "Vos demandes et revues en cours.",

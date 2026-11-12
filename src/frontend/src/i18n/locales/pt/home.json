@@ -42,6 +42,12 @@
       "pageSize": "Por página",
       "requestReview": "Solicitar revisão"
     },
+    "maturity": {
+      "title": "Tabelas abaixo do primeiro nível",
+      "description": "Suas tabelas e views cuja última avaliação de maturidade não alcançou nenhum nível.",
+      "empty": "Nenhuma das suas tabelas avaliadas está abaixo do primeiro nível.",
+      "more": "Mostrando {{shown}} de {{total}}."
+    },
     "maintain": {
       "title": "Manter",
       "description": "Suas solicitações e revisões em aberto.",

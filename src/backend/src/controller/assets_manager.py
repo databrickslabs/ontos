@@ -9,6 +9,7 @@ from src.repositories.assets_repository import asset_type_repo, asset_repo, asse
 from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.repositories.business_owners_repository import business_owner_repo
+from src.repositories.maturity_repository import maturity_repo
 from src.models.assets import (
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
     AssetCreate, AssetUpdate, AssetRead, AssetSummary,
@@ -338,6 +339,7 @@ class AssetsManager(SearchableAsset):
         status: Optional[str] = None, name: Optional[str] = None,
         restrict_to_ids: Optional[List[UUID]] = None,
         owner_email: Optional[str] = None,
+        below_first_maturity_level: bool = False,
     ) -> PaginatedAssetSummary:
         """Gets a paginated page of asset summaries.
 
@@ -349,9 +351,15 @@ class AssetsManager(SearchableAsset):
         ``owner_email`` (when not None) keeps only the assets with an active
         business-owner assignment for that user. It intersects with
         ``restrict_to_ids``, so it can only narrow the result.
+
+        ``below_first_maturity_level`` keeps only the assets whose latest maturity
+        evaluation reached no level (tables and views; never-evaluated assets are
+        left out). It narrows the same way.
         """
         if owner_email is not None:
             restrict_to_ids = self._narrow_to_owned(db, owner_email, restrict_to_ids)
+        if below_first_maturity_level:
+            restrict_to_ids = self._narrow_to_below_first_level(db, restrict_to_ids)
         filter_kwargs = dict(
             asset_type_id=asset_type_id, asset_type_names=asset_type_names,
             platform=platform, domain_id=domain_id, domain_ids=domain_ids, status=status, name=name,
@@ -399,6 +407,21 @@ class AssetsManager(SearchableAsset):
         if restrict_to_ids is not None:
             owned &= {UUID(str(i)) for i in restrict_to_ids}
         return sorted(owned, key=str)
+
+    @staticmethod
+    def _narrow_to_below_first_level(
+        db: Session, restrict_to_ids: Optional[List[UUID]],
+    ) -> List[UUID]:
+        """Asset IDs below the first maturity level, intersected with ``restrict_to_ids``."""
+        below: set = set()
+        for entity_id in maturity_repo.entity_ids_below_first_level(db, entity_type="Asset"):
+            try:
+                below.add(UUID(str(entity_id)))
+            except ValueError:
+                logger.warning("Skipping a maturity snapshot with a non-UUID asset id")
+        if restrict_to_ids is not None:
+            below &= {UUID(str(i)) for i in restrict_to_ids}
+        return sorted(below, key=str)
 
     def update_asset(self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str) -> AssetRead:
         db_asset = self._asset_repo.get(db, asset_id)

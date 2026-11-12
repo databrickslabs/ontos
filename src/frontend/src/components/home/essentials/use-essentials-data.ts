@@ -18,6 +18,8 @@ import {
  * - GET /api/data-asset-reviews        review requests (Trust, Publish, Maintain)
  * - GET /api/assets?owned_by_me=true   the user's assets, one page at a time (Publish)
  * - GET /api/access-grants/my-requests the user's access requests (Maintain)
+ * - GET /api/assets?below_first_maturity_level=true&owned_by_me=true
+ *                                      the user's tables below the first maturity level
  */
 
 /** Review requests read to compute statuses (the endpoint pages at 100 by default). */
@@ -154,6 +156,20 @@ export function useMyAccessRequests(enabled: boolean): Loadable<AccessRequestIte
 interface AssetPage {
   items: OwnedAsset[];
   total: number;
+}
+
+/** Shown in the "below the first level" card; the total is the full count. */
+export const BELOW_FIRST_LEVEL_LIMIT = 5;
+
+/** The user's tables and views whose latest maturity evaluation reached no level. */
+export function useOwnedBelowFirstLevel(enabled: boolean): Loadable<AssetPage | null> {
+  return useJson<AssetPage | null>(
+    enabled
+      ? '/api/assets?below_first_maturity_level=true&owned_by_me=true'
+        + `&skip=0&limit=${BELOW_FIRST_LEVEL_LIMIT}`
+      : null,
+    null,
+  );
 }
 
 const ownedPageUrl = (skip: number, limit: number) =>

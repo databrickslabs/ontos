@@ -42,6 +42,12 @@
       "pageSize": "Per page",
       "requestReview": "Request a review"
     },
+    "maturity": {
+      "title": "Tables below the first level",
+      "description": "Your tables and views whose latest maturity evaluation reached no level.",
+      "empty": "None of your evaluated tables is below the first level.",
+      "more": "Showing {{shown}} of {{total}}."
+    },
     "maintain": {
       "title": "Maintain",
       "description": "Your open requests and reviews.",

@@ -42,6 +42,12 @@
       "pageSize": "Per pagina",
       "requestReview": "Richiedi una revisione"
     },
+    "maturity": {
+      "title": "Tabelle sotto il primo livello",
+      "description": "Le tue tabelle e viste la cui ultima valutazione di maturità non ha raggiunto alcun livello.",
+      "empty": "Nessuna delle tue tabelle valutate è sotto il primo livello.",
+      "more": "Visualizzate {{shown}} di {{total}}."
+    },
     "maintain": {
       "title": "Mantenere",
       "description": "Le tue richieste e revisioni aperte.",

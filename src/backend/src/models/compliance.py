@@ -70,3 +70,32 @@ class ComplianceResultsResponse(BaseModel):
     results: List[ComplianceResult]
     only_failed: bool = False
     total: int
+
+
+class LlmCheckOutcome(BaseModel):
+    """One LLM_CHECK: the model's verdict and reason, or the code of why there is none."""
+    criterion: str
+    passed: bool
+    reason: str = ''
+    code: Optional[str] = Field(default=None, description="Error code; None for a model verdict")
+    cached: bool = False
+
+
+class LlmCheckTestRequest(BaseModel):
+    """POST /api/compliance/llm-check/test: try a rule on one entity before saving it."""
+    rule: str = Field(..., min_length=1, description="Rule in the compliance DSL")
+    entity: Optional[str] = Field(
+        default=None,
+        description="Name or id of the entity to try it on; default: the first match",
+    )
+
+
+class LlmCheckTestResponse(BaseModel):
+    entity_type: str
+    entity_id: Optional[str] = None
+    entity_name: Optional[str] = None
+    passed: bool
+    error_code: Optional[str] = Field(
+        default=None, description="Why the rule failed without a verdict",
+    )
+    llm_checks: List[LlmCheckOutcome] = Field(default_factory=list)

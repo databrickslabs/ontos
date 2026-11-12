@@ -1,13 +1,19 @@
 from typing import Optional
 
 from fastapi import APIRouter, FastAPI, HTTPException, Depends, Body, Query, Request
+from starlette.concurrency import run_in_threadpool
 
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker, user_has_feature_level
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
-from src.controller.compliance_manager import ComplianceManager, rule_changes_tags, rule_sends_notifications
+from src.controller.compliance_manager import (
+    ComplianceManager,
+    SampleEntityNotFoundError,
+    rule_changes_tags,
+    rule_sends_notifications,
+)
 from src.models.compliance import (
     CompliancePolicy,
     CompliancePolicyCreate,
@@ -15,6 +21,8 @@ from src.models.compliance import (
     ComplianceResult,
     ComplianceRunRequest,
     ComplianceResultsResponse,
+    LlmCheckTestRequest,
+    LlmCheckTestResponse,
 )
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
@@ -368,6 +376,35 @@ async def get_run_results(
         'only_failed': bool(only_failed),
         'total': len(results),
     }
+
+
+@router.post("/compliance/llm-check/test", response_model=LlmCheckTestResponse)
+async def test_llm_check(
+    db: DBSessionDep,
+    payload: LlmCheckTestRequest = Body(...),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Try a rule (and its LLM_CHECK criteria) on one entity before saving it.
+
+    READ_WRITE, as saving a rule: each LLM_CHECK calls the serving endpoint.
+    Nothing but cached verdicts is written.
+    """
+    _check_rule(payload.rule)
+    try:
+        # The model calls block: run them off the event loop
+        return await run_in_threadpool(
+            manager.test_rule_on_sample, db, rule=payload.rule, entity=payload.entity,
+        )
+    except SampleEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except RuntimeError as e:
+        if getattr(e, 'error_code', None) == 'workspace_client_unavailable':
+            raise HTTPException(
+                status_code=503, detail="Databricks workspace client unavailable",
+            ) from e
+        raise
 
 
 @router.get("/compliance/stats")

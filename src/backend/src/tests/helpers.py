@@ -331,3 +331,37 @@ def postgres_aborts(db):
     finally:
         event.remove(connection, 'before_cursor_execute', _before)
         event.remove(connection, 'after_cursor_execute', _after)
+
+
+def llm_reply(content, finish_reason='stop', refusal=None):
+    """A chat completion as the OpenAI client returns it, with one choice."""
+    from types import SimpleNamespace
+
+    message = SimpleNamespace(content=content, refusal=refusal)
+    return SimpleNamespace(choices=[SimpleNamespace(message=message, finish_reason=finish_reason)])
+
+
+class FakeLlm:
+    """An OpenAI-like client for LLM tests.
+
+    ``chat.completions.create`` records its arguments in ``calls`` and answers
+    with the given replies in turn (the last one repeats), or with
+    ``answer(kwargs)`` when given. An exception reply is raised.
+    """
+
+    def __init__(self, *replies, answer=None):
+        from types import SimpleNamespace
+
+        self.replies = list(replies)
+        self.answer = answer
+        self.calls: List[Dict[str, Any]] = []
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    def _create(self, **kwargs):
+        self.calls.append(kwargs)
+        if self.answer is not None:
+            return self.answer(kwargs)
+        reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        if isinstance(reply, Exception):
+            raise reply
+        return reply

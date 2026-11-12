@@ -68,3 +68,19 @@ class ComplianceResultDb(Base):
     run = relationship("ComplianceRunDb", back_populates="results")
 
 
+
+
+class ComplianceLlmCheckCacheDb(Base):
+    """Cached LLM_CHECK verdict, keyed by a hash of the text, the criterion and the model.
+
+    A rule run again over unchanged text reads the verdict here instead of calling
+    the serving endpoint. Only verdicts are stored (PASS / FAIL with the model's
+    reason); a check that failed with an error code is asked again next run.
+    """
+    __tablename__ = 'compliance_llm_check_cache'
+
+    key = Column(String(64), primary_key=True)  # sha256 hex, see compliance_llm_check.cache_key
+    model = Column(String, nullable=False)
+    passed = Column(Boolean, nullable=False)
+    reason = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

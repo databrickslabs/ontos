@@ -13,12 +13,23 @@ from src.repositories.compliance_repository import (
     compliance_run_repo,
     compliance_result_repo,
 )
-from ..models.compliance import CompliancePolicy, CompliancePolicyCreate, ComplianceRun, ComplianceResult
+from ..models.compliance import (
+    CompliancePolicy,
+    CompliancePolicyCreate,
+    ComplianceResult,
+    ComplianceRun,
+    LlmCheckOutcome,
+    LlmCheckTestResponse,
+)
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl, parse_rule, Evaluator
 from src.common.compliance_actions import (
     APP_ENTITY_TYPES, ActionContext, ActionError, ActionExecutor, get_action_registry,
 )
 from src.common.compliance_notifications import ComplianceRunNotifier
+from src.common.api_errors import CodedValueError
+from src.common.compliance_llm_check import (
+    BUDGET_EXCEEDED, DbLlmCheckCache, LlmCheckError, LlmChecker,
+)
 from src.common.compliance_entities import (
     create_entity_iterator,
     parse_entity_filter,
@@ -30,6 +41,29 @@ logger = get_logger(__name__)
 
 
 TAG_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
+# Rule test (test_rule_on_sample): entities scanned for the named one, and model calls
+SAMPLE_SCAN_LIMIT = 500
+TEST_MAX_CALLS = 5
+
+
+class SampleEntityNotFoundError(CodedValueError):
+    """A rule test found no entity to try the rule on."""
+
+    code = 'sample_entity_not_found'
+
+
+def _str_or_none(value) -> Optional[str]:
+    return None if value is None else str(value)
+
+
+def _result_details(action_outcomes, llm_checks) -> Optional[str]:
+    """The result's details_json: the actions' outcomes and the LLM_CHECK outcomes."""
+    details: Dict[str, object] = {}
+    if action_outcomes:
+        details['actions'] = action_outcomes
+    if llm_checks:
+        details['llm_checks'] = [c.to_dict() for c in llm_checks]
+    return json.dumps(details) if details else None
 
 
 def _rule_actions(rule: Optional[str]) -> List[dict]:
@@ -684,6 +718,74 @@ class ComplianceManager:
                 })
         return objs
 
+    @staticmethod
+    def _llm_checker(db: Session, max_calls: Optional[int] = None) -> LlmChecker:
+        """The LLM_CHECK runner of one run: the configured endpoint and budget, the DB cache."""
+        from src.common.config import get_settings
+
+        try:
+            settings = get_settings()
+        except RuntimeError:
+            # Not initialized: LLM_CHECK then fails closed (llm_check_disabled)
+            settings = None
+        return LlmChecker(settings, cache=DbLlmCheckCache(db), max_calls=max_calls)
+
+    def test_rule_on_sample(
+        self, db: Session, *, rule: str, entity: Optional[str] = None,
+    ) -> LlmCheckTestResponse:
+        """Evaluate a rule's ASSERT on one entity it matches, LLM_CHECKs included.
+
+        For trying a criterion in the rule editor before the rule is saved: no
+        run, result or action is written, only the verdicts to the cache. The
+        entity is the one named ``entity`` (name, id or full name) among the
+        first ``SAMPLE_SCAN_LIMIT`` the rule matches, else the first match.
+
+        Raises:
+            ValueError: the rule doesn't parse.
+            SampleEntityNotFoundError: no entity matches.
+        """
+        from types import SimpleNamespace
+
+        parsed = parse_rule(rule)
+        entity_filter = parse_entity_filter(rule, parsed=parsed)
+        source = SimpleNamespace(name='rule test', id='unsaved')
+        ws = self._workspace_client_for(entity_filter.entity_types, source)
+        iterator = create_entity_iterator(db=db, workspace_client=ws)
+        wanted = (entity or '').strip()
+        sample = None
+        for obj in iterator.iterate(
+            entity_filter, limit=SAMPLE_SCAN_LIMIT if wanted else 1, source='a rule test',
+        ):
+            names = {str(obj.get(k)) for k in ('name', 'id', 'full_name') if obj.get(k) is not None}
+            if not wanted or wanted in names:
+                sample = obj
+                break
+        if sample is None:
+            named = f" with the name '{wanted}'" if wanted else ""
+            raise SampleEntityNotFoundError(
+                f"No entity the rule matches was found{named}", entity=wanted,
+            )
+
+        evaluator = Evaluator(sample, llm_checker=self._llm_checker(db, max_calls=TEST_MAX_CALLS))
+        passed, error_code = True, None
+        if parsed.get('assert_clause') is not None:
+            try:
+                passed = bool(evaluator.evaluate(parsed['assert_clause']))
+            except LlmCheckError as e:
+                passed, error_code = False, e.code
+            except Exception as e:
+                logger.warning("Rule test evaluation failed: %s", e)
+                passed, error_code = False, 'rule_evaluation_failed'
+        db.commit()
+        return LlmCheckTestResponse(
+            entity_type=str(sample.get('type') or 'object'),
+            entity_id=_str_or_none(sample.get('id') or sample.get('full_name')),
+            entity_name=_str_or_none(sample.get('name')),
+            passed=passed,
+            error_code=error_code,
+            llm_checks=[LlmCheckOutcome(**c.to_dict()) for c in evaluator.llm_checks],
+        )
+
     def _workspace_client_for(self, entity_types: List[str], policy: CompliancePolicyDb):
         """Workspace client for a run, or None when the rule doesn't need one.
 
@@ -756,6 +858,8 @@ class ComplianceManager:
         notifier = ComplianceRunNotifier(
             db, policy_id=policy.id, policy_name=policy.name, run_id=run.id, run_user=current_user,
         )
+        # LLM_CHECK calls of this run: one budget, verdicts cached across runs
+        llm_checker = self._llm_checker(db)
 
         try:
             # Parse the rule using enhanced DSL
@@ -775,10 +879,10 @@ class ComplianceManager:
                 # Evaluate ASSERT clause
                 ok = True
                 msg = None
+                evaluator = Evaluator(obj, llm_checker=llm_checker)
 
                 if parsed_rule.get('assert_clause'):
                     try:
-                        evaluator = Evaluator(obj)
                         result = evaluator.evaluate(parsed_rule['assert_clause'])
                         ok = bool(result)
                         if not ok:
@@ -822,7 +926,10 @@ class ComplianceManager:
                     object_name=obj.get('name'),
                     passed=bool(ok),
                     message=msg,
-                    details_json=json.dumps({'actions': action_outcomes}) if action_outcomes else None,
+                    # The actions' outcomes, and the outcome of each LLM_CHECK: the model's
+                    # reason, or the code of why there is no verdict (the UI shows them by
+                    # the message)
+                    details_json=_result_details(action_outcomes, evaluator.llm_checks),
                 )
                 db.add(res)
 
@@ -844,6 +951,12 @@ class ComplianceManager:
                 warning_code, warning_params = 'rule_trailing_input', trailing
             elif not notified:
                 warning_code, warning_params = 'notifications_failed', {}
+            if llm_checker.budget_exceeded:
+                # Takes the place of the other warnings (a trailing-input warning is also
+                # reported when the rule is saved): these entities failed without being checked
+                warning_code, warning_params = BUDGET_EXCEEDED, {
+                    'count': llm_checker.budget_exceeded, 'budget': llm_checker.max_calls,
+                }
             self.complete_run(
                 db, run, success_count=success, failure_count=failure, score=score,
                 warning_code=warning_code, warning_params=warning_params,

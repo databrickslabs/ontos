@@ -200,6 +200,11 @@ class Settings(BaseSettings):
         LLM_INJECTION_CHECK_PROMPT_SECURE_DEFAULT,
         env='LLM_INJECTION_CHECK_PROMPT'
     )
+    # Most LLM_CHECK calls one compliance run makes to the serving endpoint (cached
+    # verdicts don't count); the checks past it fail with llm_check_budget_exceeded.
+    COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN: int = Field(
+        200, ge=0, env='COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN'
+    )
 
     # Sandbox allowlist settings
     sandbox_default_schema: str = Field('sandbox', validation_alias=AliasChoices('SANDBOX_DEFAULT_SCHEMA', 'sandbox_default_schema'))

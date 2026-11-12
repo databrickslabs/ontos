@@ -592,5 +592,27 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
             'params': {},
             'message': "The rule has no ASSERT clause, so every entity passes.",
         })
+    if _calls(parsed.get('where_clause'), 'LLM_CHECK'):
+        warnings.append({
+            'code': 'llm_check_in_where',
+            'params': {},
+            'message': "LLM_CHECK is only evaluated in ASSERT; in WHERE it fails, so the rule "
+                       "skips every entity. Move it to ASSERT.",
+        })
     return warnings
+
+
+def _calls(node: Any, name: str) -> bool:
+    """Whether a rule expression (AST node) calls the DSL function ``name``."""
+    from src.common.compliance_dsl import FunctionCall
+
+    if node is None:
+        return False
+    if isinstance(node, FunctionCall) and node.name == name:
+        return True
+    if isinstance(node, (list, tuple)):
+        return any(_calls(n, name) for n in node)
+    if hasattr(node, '__dataclass_fields__'):
+        return any(_calls(getattr(node, f), name) for f in node.__dataclass_fields__)
+    return False
 

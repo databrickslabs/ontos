@@ -137,7 +137,8 @@
       },
       "volume": {
         "label": "Volume",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "« {{value}} » ne désigne pas un volume Unity Catalog. Utilisez /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> ou un nom de volume ; un nom simple nécessite un catalogue et un schéma sans point, barre oblique ni espace."
       }
     },
     "instanceIdentity": {

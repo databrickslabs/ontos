@@ -137,7 +137,8 @@
       },
       "volume": {
         "label": "ボリューム",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "「{{value}}」は Unity Catalog のボリュームを指していません。/Volumes/<catalog>/<schema>/<volume>、<catalog>.<schema>.<volume>、またはボリューム名を使用してください。ボリューム名のみの場合は、ピリオド、スラッシュ、空白を含まないカタログとスキーマが必要です。"
       }
     },
     "instanceIdentity": {

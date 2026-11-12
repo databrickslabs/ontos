@@ -17,7 +17,9 @@ from src.common.instance_identity import (
     validate_instance_id,
     validate_instance_name,
 )
-from src.common.config import Settings
+from types import SimpleNamespace
+
+from src.common.config import Settings, resolve_volume
 from src.common.sanitization import (
     APP_SHORT_NAME_MAX_LEN,
     APP_TAGLINE_MAX_LEN,
@@ -1601,10 +1603,35 @@ class SettingsManager:
             error_summary = f"Failed to update {len(errors)} workflow(s): " + "; ".join(errors)
             raise RuntimeError(error_summary)
 
+    def _validate_volume_settings(self, settings: dict) -> None:
+        """Refuse a volume, catalog or schema that can't name a Unity Catalog volume.
+
+        Runs ``resolve_volume`` on the values the save would leave in effect and raises
+        its ``VolumeInvalidError`` (a coded ``ValueError``, answered as a 400 with the
+        code and params). Nothing is written yet when it raises.
+
+        Only the form of the value is checked, with no workspace call, so a save also
+        works when the workspace can't be reached. A volume that doesn't exist is only
+        found when it is used. The check runs only when the volume, catalog or schema
+        changes: the General form sends all three on every save, and a value stored
+        before this check must not block saving other settings.
+        """
+        keys = ('databricks_catalog', 'databricks_schema', 'databricks_volume')
+        if not any(key in settings for key in keys):
+            return
+        # An empty value keeps the one in effect, as the save below does.
+        current = {key: getattr(self._settings, key.upper()) for key in keys}
+        candidate = {key: (settings.get(key) or None) if key in settings else None for key in keys}
+        effective = {key: candidate[key] or current[key] for key in keys}
+        if effective == current:
+            return
+        resolve_volume(SimpleNamespace(**{key.upper(): value for key, value in effective.items()}))
+
     def update_settings(self, settings: dict) -> Settings:
         """Update settings"""
-        # Validate every UI customization value first, so a 400 leaves nothing changed.
+        # Validate everything that can be refused first, so a 400 leaves nothing changed.
         ui = self._validate_ui_settings(settings)
+        self._validate_volume_settings(settings)
         git_values_before = self._git_setting_values()
         # Persist configured cluster ID string; do not scan clusters
         cluster_in_payload = 'job_cluster_id' in settings

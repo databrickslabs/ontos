@@ -35,7 +35,7 @@ describe('InputPortFormDialog submit outcome', () => {
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
   });
 
-  it('closes without a success toast when the change was not saved (versioning dialog took over)', async () => {
+  it('closes without a success toast when the change was not saved', async () => {
     const onOpenChange = renderDialog(vi.fn().mockResolvedValue(false));
 
     fireEvent.click(screen.getByRole('button', { name: /save|update|submit/i }));

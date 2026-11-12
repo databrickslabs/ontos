@@ -154,6 +154,15 @@ class AssetBulkManager:
         self._rel_repo = asset_relationship_repo
         logger.debug("AssetBulkManager initialized.")
 
+    def _index_asset(self, db_asset) -> None:
+        """Upsert the asset in the search index, as single creates/updates do."""
+        if self._assets_manager is None:
+            return
+        try:
+            self._assets_manager._update_search_index(db_asset)
+        except Exception:
+            logger.warning("Failed to index asset %s after bulk import", db_asset.id, exc_info=True)
+
     def _set_asset_domains(self, db, asset_id, domain_ids, primary_domain_id, user):
         """Replace an asset's domain assignments from a bulk-import row (no-op if empty)."""
         from src.repositories.entity_domain_association_repository import entity_domain_repo
@@ -664,6 +673,7 @@ class AssetBulkManager:
                     item.asset_id = str(updated.id)
                     result.updated += 1
                     created_assets[name.lower()] = updated.id
+                    self._index_asset(updated)
                 else:
                     existing = self._asset_repo.get_by_identity(
                         db, name=name, asset_type_id=type_id,
@@ -685,6 +695,7 @@ class AssetBulkManager:
                         item.asset_id = str(updated.id)
                         result.updated += 1
                         created_assets[name.lower()] = updated.id
+                        self._index_asset(updated)
                     else:
                         create_data = {
                             "name": name,
@@ -706,6 +717,7 @@ class AssetBulkManager:
                         item.asset_id = str(db_asset.id)
                         result.created += 1
                         created_assets[name.lower()] = db_asset.id
+                        self._index_asset(db_asset)
 
             except Exception as e:
                 item.message = f"Error: {str(e)[:200]}"

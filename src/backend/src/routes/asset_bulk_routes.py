@@ -19,6 +19,7 @@ from src.common.dependencies import (
 )
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
+from src.routes.assets_routes import get_assets_manager
 from src.controller.asset_bulk_manager import (
     AssetBulkManager,
     ImportPreviewResult,
@@ -30,14 +31,14 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/assets/bulk", tags=["Asset Bulk"])
 FEATURE_ID = "assets"
 
-_bulk_manager: Optional[AssetBulkManager] = None
+def get_bulk_manager(request: Request = None) -> AssetBulkManager:
+    """Build the bulk manager around the AssetsManager wired at startup.
 
-
-def get_bulk_manager() -> AssetBulkManager:
-    global _bulk_manager
-    if _bulk_manager is None:
-        _bulk_manager = AssetBulkManager()
-    return _bulk_manager
+    The wired instance has the search manager, so bulk-created assets reach the
+    search index; the module singleton does not. Falls back to the singleton
+    when there is no request context.
+    """
+    return AssetBulkManager(assets_manager=get_assets_manager(request))
 
 
 # ------------------------------------------------------------------

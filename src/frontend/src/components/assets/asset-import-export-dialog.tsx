@@ -75,11 +75,13 @@ interface ImportResult {
   skipped: number;
   errors: number;
   warnings?: number;
+  /** What the import as a whole could not do (it still succeeded) */
+  warning_messages?: AssetCodedWarning[];
   items: ImportResultItem[];
   error_messages: string[];
 }
 
-/** A saved row's warnings (e.g. its description is not in Unity Catalog), translated. */
+/** Warnings of a saved row or of the whole import (e.g. Unity Catalog writes), translated. */
 export function ImportRowWarnings({ warnings }: { warnings?: AssetCodedWarning[] }) {
   const { t } = useTranslation(['assets']);
   if (!warnings || warnings.length === 0) return null;
@@ -515,6 +517,7 @@ export default function AssetImportExportDialog({
                 </AlertDescription>
               </Alert>
             )}
+            {importResult && <ImportRowWarnings warnings={importResult.warning_messages} />}
           </TabsContent>}
         </Tabs>
 

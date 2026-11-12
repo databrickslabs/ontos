@@ -43,7 +43,9 @@
       "uc_description_object_not_found": "{{object}} が Unity Catalog に見つかりませんでした。",
       "uc_description_user_token_required": "リクエストに Databricks のユーザートークンがなかったため、{{object}} の説明は Unity Catalog に書き込まれませんでした。",
       "uc_description_no_warehouse": "SQL ウェアハウスが設定されていないため、{{object}} の説明は Unity Catalog に書き込まれませんでした。",
-      "uc_description_write_failed": "{{object}} の説明を Unity Catalog に書き込めませんでした。"
+      "uc_description_write_failed": "{{object}} の説明を Unity Catalog に書き込めませんでした。",
+      "uc_description_import_write_limit": "このインポートは Unity Catalog に書き込む説明の上限 {{limit}} 件に達したため、{{object}} の説明は書き込まれませんでした。",
+      "uc_description_import_writes_failed": "アセットはインポートされましたが、説明を Unity Catalog に書き込めませんでした。"
     }
   },
   "deleteDialog": {

@@ -35,6 +35,10 @@ CODE_NOT_FOUND = 'uc_description_object_not_found'
 CODE_USER_TOKEN_REQUIRED = 'uc_description_user_token_required'
 CODE_NO_WAREHOUSE = 'uc_description_no_warehouse'
 CODE_WRITE_FAILED = 'uc_description_write_failed'
+# Bulk import: a row over the import's write limit (params: object, limit), and the
+# writes of a whole import not run (no params)
+CODE_IMPORT_WRITE_LIMIT = 'uc_description_import_write_limit'
+CODE_IMPORT_WRITES_FAILED = 'uc_description_import_writes_failed'
 
 _MESSAGES = {
     CODE_PERMISSION_DENIED: (
@@ -51,7 +55,27 @@ _MESSAGES = {
         "was not written to Unity Catalog."
     ),
     CODE_WRITE_FAILED: "Writing the description of {object} to Unity Catalog failed.",
+    CODE_IMPORT_WRITE_LIMIT: (
+        "This import reached its limit of {limit} descriptions written to Unity Catalog, "
+        "so the description of {object} was not written there."
+    ),
+    CODE_IMPORT_WRITES_FAILED: (
+        "The assets were imported, but their descriptions could not be written to "
+        "Unity Catalog."
+    ),
 }
+
+# Codes of the ``CodedValueError`` a user client factory raises -> warning codes
+_CLIENT_ERROR_CODES = {
+    'user_token_required': CODE_USER_TOKEN_REQUIRED,
+    CODE_IMPORT_WRITE_LIMIT: CODE_IMPORT_WRITE_LIMIT,
+}
+
+
+class ImportWriteLimitError(CodedValueError):
+    """A bulk import already wrote as many descriptions as its limit allows."""
+
+    code = CODE_IMPORT_WRITE_LIMIT
 
 _REASON_CODES = {PERMISSION_DENIED: CODE_PERMISSION_DENIED, NOT_FOUND: CODE_NOT_FOUND}
 
@@ -77,9 +101,14 @@ def uc_comment_target(asset: AssetDb) -> Optional[Tuple[str, Optional[str]]]:
     return None
 
 
-def _warning(code: str, target: str) -> CodedWarning:
-    return CodedWarning(code=code, message=_MESSAGES[code].format(object=target),
-                        params={'object': target})
+def _warning(code: str, target: str, **params: Any) -> CodedWarning:
+    params = {'object': target, **params}
+    return CodedWarning(code=code, message=_MESSAGES[code].format(**params), params=params)
+
+
+def import_writes_failed_warning() -> CodedWarning:
+    return CodedWarning(code=CODE_IMPORT_WRITES_FAILED,
+                        message=_MESSAGES[CODE_IMPORT_WRITES_FAILED])
 
 
 class UcDescriptionSyncManager:
@@ -143,9 +172,9 @@ class UcDescriptionSyncManager:
             ws = user_client()
         except CodedValueError as e:
             logger.info("No user client to write the description of %s: %s", label, e.code)
-            code = CODE_USER_TOKEN_REQUIRED if e.code == 'user_token_required' \
-                else CODE_WRITE_FAILED
-            return _warning(code, label)
+            code = _CLIENT_ERROR_CODES.get(e.code, CODE_WRITE_FAILED)
+            params = e.params if code == CODE_IMPORT_WRITE_LIMIT else {}
+            return _warning(code, label, **params)
         try:
             set_comment(ws, warehouse_id, table_fqn, column_name, asset.description)
         except CommentWriteError as e:

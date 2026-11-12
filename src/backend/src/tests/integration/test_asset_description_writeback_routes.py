@@ -72,6 +72,50 @@ def _fail_with(ws, message):
         statement_id='st-1')
 
 
+def _record_order(ws, monkeypatch):
+    """The order of database commits (any session) and Unity Catalog statement calls."""
+    from sqlalchemy.orm import Session
+
+    events = []
+    commit = Session.commit
+
+    def recording_commit(session):
+        events.append('commit')
+        commit(session)
+
+    monkeypatch.setattr(Session, 'commit', recording_commit)
+    from src.controller.asset_bulk_manager import AssetBulkManager
+    from src.controller.assets_manager import assets_manager
+
+    update, execute_import = assets_manager.update_asset, AssetBulkManager.execute_import
+
+    def recording_update(*args, **kwargs):
+        result = update(*args, **kwargs)
+        events.append('saved')
+        return result
+
+    def recording_import(self, *args, **kwargs):
+        result = execute_import(self, *args, **kwargs)
+        events.append('saved')
+        return result
+
+    monkeypatch.setattr(assets_manager, 'update_asset', recording_update)
+    monkeypatch.setattr(AssetBulkManager, 'execute_import', recording_import)
+    done = ws.statement_execution.execute_statement.return_value
+
+    def recording_execute(**kwargs):
+        events.append('execute')
+        return done
+
+    ws.statement_execution.execute_statement.side_effect = recording_execute
+    return events
+
+
+def _assert_committed_between_save_and_write(events):
+    saved, written = events.index('saved'), events.index('execute')
+    assert 'commit' in events[saved:written], events
+
+
 def _statements(ws):
     return [c.kwargs['statement'] for c in ws.statement_execution.execute_statement.call_args_list]
 
@@ -84,6 +128,14 @@ def _put(client, asset, description, headers=TOKEN):
 
 
 class TestDescriptionWriteback:
+    def test_the_save_is_committed_before_unity_catalog_is_written(
+            self, client, settings, table, user_ws, monkeypatch):
+        events = _record_order(user_ws, monkeypatch)
+
+        _put(client, table, 'Orders placed online')
+
+        _assert_committed_between_save_and_write(events)
+
     def test_a_table_description_is_written_as_the_user(self, client, settings, table, user_ws):
         body = _put(client, table, 'Orders placed online')
 
@@ -239,3 +291,59 @@ class TestBulkImportWriteback:
 
         db_session.refresh(table)
         assert table.properties['schema']['columns'][0]['description'] == 'Order key'
+
+    def test_the_import_is_committed_before_unity_catalog_is_written(
+            self, client, settings, table, user_ws, monkeypatch):
+        events = _record_order(user_ws, monkeypatch)
+
+        _import_csv(client, self.CSV)
+
+        _assert_committed_between_save_and_write(events)
+
+    def test_the_user_client_is_built_once_per_import(self, client, settings, db_session,
+                                                      monkeypatch):
+        from src.routes import assets_routes
+
+        ws = MagicMock()
+        ws.statement_execution.execute_statement.return_value = SimpleNamespace(
+            status=SimpleNamespace(state=StatementState.SUCCEEDED, error=None),
+            statement_id='st-1')
+        built = []
+        monkeypatch.setattr(assets_routes, 'get_obo_workspace_client',
+                            lambda request: built.append(1) or ws)
+
+        _import_csv(client, 'name,asset_type,platform,location,description\n'
+                            'a,Table,databricks,main.s.a,About a\n'
+                            'b,Table,databricks,main.s.b,About b\n')
+
+        assert len(built) == 1
+        assert len(_statements(ws)) == 2
+
+    def test_rows_over_the_write_limit_get_a_warning(self, client, settings, user_ws):
+        settings.UC_DESCRIPTION_IMPORT_WRITE_LIMIT = 1
+
+        body = _import_csv(client, 'name,asset_type,platform,location,description\n'
+                                   'a,Table,databricks,main.s.a,About a\n'
+                                   'b,Table,databricks,main.s.b,About b\n')
+
+        assert len(_statements(user_ws)) == 1
+        assert body['errors'] == 0 and body['warnings'] == 1
+        [limited] = [i for i in body['items'] if i['warnings']]
+        assert limited['name'] == 'b'
+        assert limited['warnings'][0]['code'] == 'uc_description_import_write_limit'
+        assert limited['warnings'][0]['params'] == {'object': 'main.s.b', 'limit': 1}
+
+    def test_a_failing_write_setup_keeps_the_import_result(self, client, settings, table,
+                                                           user_ws, monkeypatch):
+        from src.routes import asset_bulk_routes
+
+        def boom(*args, **kwargs):
+            raise RuntimeError('unexpected')
+
+        monkeypatch.setattr(asset_bulk_routes, 'UcDescriptionSyncManager', boom)
+
+        body = _import_csv(client, self.CSV)
+
+        assert body['updated'] == 1 and body['errors'] == 0
+        assert [w['code'] for w in body['warning_messages']] == [
+            'uc_description_import_writes_failed']

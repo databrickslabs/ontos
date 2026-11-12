@@ -43,7 +43,9 @@
       "uc_description_object_not_found": "{{object}} est introuvable dans Unity Catalog.",
       "uc_description_user_token_required": "La requête n'avait pas de jeton utilisateur Databricks, la description de {{object}} n'a donc pas été écrite dans Unity Catalog.",
       "uc_description_no_warehouse": "Aucun SQL warehouse n'est configuré, la description de {{object}} n'a donc pas été écrite dans Unity Catalog.",
-      "uc_description_write_failed": "L'écriture de la description de {{object}} dans Unity Catalog a échoué."
+      "uc_description_write_failed": "L'écriture de la description de {{object}} dans Unity Catalog a échoué.",
+      "uc_description_import_write_limit": "Cet import a atteint sa limite de {{limit}} descriptions écrites dans Unity Catalog, la description de {{object}} n'y a donc pas été écrite.",
+      "uc_description_import_writes_failed": "Les actifs ont été importés, mais leurs descriptions n'ont pas pu être écrites dans Unity Catalog."
     }
   },
   "deleteDialog": {

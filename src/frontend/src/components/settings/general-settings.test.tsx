@@ -171,6 +171,18 @@ describe('GeneralSettings - write asset descriptions to Unity Catalog', () => {
     await waitFor(() => expect(lastPutBody().uc_description_writeback_enabled).toBe(true));
   });
 
+  it('saves the bulk import write limit', async () => {
+    mockFetch({ ...baseResponse, uc_description_writeback_enabled: true,
+      uc_description_import_write_limit: 100 });
+    render(<GeneralSettings />);
+    const limit = await screen.findByLabelText('Max descriptions written per bulk import');
+    expect(limit).toHaveValue(100);
+    await userEvent.clear(limit);
+    await userEvent.type(limit, '25');
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(lastPutBody().uc_description_import_write_limit).toBe(25));
+  });
+
   it('shows the stored value', async () => {
     mockFetch({ ...baseResponse, uc_description_writeback_enabled: true });
     render(<GeneralSettings />);

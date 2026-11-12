@@ -5613,6 +5613,15 @@ class SemanticModelsManager(SearchableAsset):
             owner_iri = f"{concept_iri}/owner/{owner.get('user_uri', '').split(':')[-1]}"
             rdf_triples_repo.remove_by_subject(self._db, owner_iri, collection_iri)
 
+        # Its notes, links and documents go too (as for assets and domains);
+        # uploaded files are deleted from the volume once this commits.
+        from src.controller.metadata_manager import MetadataManager
+        metadata_manager = MetadataManager()
+        _, document_paths = metadata_manager.remove_all_for_entity(
+            self._db, entity_type='concept', entity_id=concept_iri,
+        )
+        metadata_manager.delete_document_files_after_commit(self._db, document_paths)
+
         # Remove from in-memory graph
         concept_uri = URIRef(concept_iri)
         coll_context = self._graph.get_context(URIRef(collection_iri))

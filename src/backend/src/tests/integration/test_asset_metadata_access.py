@@ -412,6 +412,58 @@ def test_assets_alone_cannot_attach_a_contract_note_to_an_asset(
     _assert_data_domains_refusal(response)
 
 
+@pytest.mark.parametrize('asset_type, seed_key', [
+    ('rich_text', 'note'), ('link', 'link'), ('document', 'doc'),
+])
+@pytest.mark.parametrize('entity_type', OTHER_TYPES)
+def test_a_steward_cannot_attach_a_row_of_an_asset_to_another_entity(
+        client, db_session, asset, ws, act_as, entity_type, asset_type, seed_key):
+    """The attached row would be returned to every data-domains reader of the entity."""
+    ids = _seed(db_session, 'asset', str(asset.id))
+    act_as('Data Steward')
+
+    response = client.post(f'/api/entities/{entity_type}/attachments',
+                           params={'entity_id': 'target-1'},
+                           json={'asset_type': asset_type, 'asset_id': ids[seed_key]})
+
+    assert response.status_code == 403, response.text
+    assert _code(response) == 'asset_read_denied'
+
+
+def test_a_steward_attaches_a_row_of_an_accessible_asset_to_another_entity(
+        client, db_session, asset, ws, act_as, linked_to_an_accessible_product):
+    ids = _seed(db_session, 'asset', str(asset.id))
+    act_as('Data Steward')
+
+    response = client.post('/api/entities/data_product/attachments',
+                           params={'entity_id': 'target-1'},
+                           json={'asset_type': 'rich_text', 'asset_id': ids['note']})
+
+    assert response.status_code == 201, response.text
+
+
+def test_a_steward_attaches_a_row_of_another_entity_to_a_product(
+        client, db_session, act_as):
+    note_id = _contract_note(db_session)
+    act_as('Data Steward')
+
+    response = client.post('/api/entities/data_product/attachments',
+                           params={'entity_id': 'target-1'},
+                           json={'asset_type': 'rich_text', 'asset_id': note_id})
+
+    assert response.status_code == 201, response.text
+
+
+def test_attaching_an_unknown_row_to_another_entity_keeps_working(client, act_as):
+    act_as('Data Steward')
+
+    response = client.post('/api/entities/data_product/attachments',
+                           params={'entity_id': 'target-1'},
+                           json={'asset_type': 'rich_text', 'asset_id': str(uuid.uuid4())})
+
+    assert response.status_code == 201, response.text
+
+
 def test_assets_alone_still_detaches_from_an_asset(client, db_session, asset, act_as):
     note_id = _contract_note(db_session)
     MetadataManager().attach_shared_asset(

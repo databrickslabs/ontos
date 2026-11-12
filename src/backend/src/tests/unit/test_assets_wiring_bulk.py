@@ -46,3 +46,40 @@ def test_bulk_import_updates_the_search_index_for_created_assets():
 
     assert result.created == 1, result.items
     wired._update_search_index.assert_called_once_with(created)
+
+
+def _run_update(csv_bytes, get_return, identity_return):
+    wired = MagicMock(spec=AssetsManager)
+    manager = AssetBulkManager(assets_manager=wired)
+    updated = MagicMock()
+    updated.id = "11111111-1111-1111-1111-111111111111"
+
+    with patch.object(manager, "_resolve_asset_types", return_value={"table": updated.id}), \
+         patch.object(manager, "_set_asset_domains"), \
+         patch.object(manager._asset_repo, "get", return_value=get_return), \
+         patch.object(manager._asset_repo, "get_by_identity", return_value=identity_return), \
+         patch.object(manager._asset_repo, "update", return_value=updated):
+        result = manager.execute_import(
+            MagicMock(), file_bytes=csv_bytes, filename="a.csv", current_user_id="u@x.com",
+        )
+    return wired, updated, result
+
+
+def test_bulk_import_updates_the_search_index_for_updates_by_id():
+    existing = MagicMock()
+    wired, updated, result = _run_update(
+        b"id,name,asset_type\n11111111-1111-1111-1111-111111111111,foo,table\n",
+        get_return=existing, identity_return=None,
+    )
+
+    assert result.updated == 1, result.items
+    wired._update_search_index.assert_called_once_with(updated)
+
+
+def test_bulk_import_updates_the_search_index_for_updates_by_identity():
+    wired, updated, result = _run_update(
+        b"name,asset_type\nfoo,table\n", get_return=None, identity_return=MagicMock(),
+    )
+
+    assert result.updated == 1, result.items
+    wired._update_search_index.assert_called_once_with(updated)

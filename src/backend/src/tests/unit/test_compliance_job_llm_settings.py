@@ -181,6 +181,10 @@ def test_an_older_job_gets_its_code_and_tasks_again(db_session, llm_settings, mo
     new_settings = manager._client.jobs.update.call_args.kwargs['new_settings']
     [task] = new_settings.tasks
     assert task.existing_cluster_id == 'cluster-1'
+    # The environment the tasks name comes along, with the YAML's dependencies
+    [env] = new_settings.environments
+    assert env.environment_key == 'compliance-checks-env'
+    assert 'databricks-sdk>=0.81.0' in env.spec.dependencies
     args = task.spark_python_task.parameters
     assert args[args.index('--llm_endpoint') + 1] == '{{job.parameters.llm_endpoint}}'
     # The schedule (and its pause status) is not rewritten

@@ -141,6 +141,38 @@ class JobsManager:
                 f"The job will be created but will fail at runtime."
             )
 
+    def _build_environments(self, wf_def: Dict[str, Any]) -> List[jobs.JobEnvironment]:
+        """The job environments the workflow YAML defines (none if it defines none)."""
+        if not isinstance(wf_def.get('environments'), list):
+            return []
+        env_objs: List[jobs.JobEnvironment] = []
+        for env in wf_def['environments']:
+            if not isinstance(env, dict):
+                continue
+            env_key = env.get('environment_key')
+            spec_dict = env.get('spec') or {}
+
+            # Convert dependencies list to proper format
+            if 'dependencies' in spec_dict and isinstance(spec_dict['dependencies'], list):
+                # Dependencies should be a list of strings like ["pkg==1.0.0", ...]
+                # Create Environment with proper client version
+                # Note: compute.Environment doesn't support env_vars directly
+                # Environment variables need to be passed via spark_conf or job run parameters
+                spec_obj = compute.Environment(
+                    client='1',  # Use default Databricks runtime
+                    dependencies=spec_dict['dependencies']
+                )
+            else:
+                # Try to create Environment from spec_dict as-is
+                try:
+                    spec_obj = compute.Environment(**spec_dict)
+                except Exception:
+                    # If it fails, pass as dict and let SDK handle it
+                    spec_obj = spec_dict
+
+            env_objs.append(jobs.JobEnvironment(environment_key=env_key, spec=spec_obj))
+        return env_objs
+
     def install_workflow(self, workflow_id: str, *, job_cluster_id: Optional[str] = None) -> int:
         wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
         self._deploy_workflow_code(workflow_id, wf_def)
@@ -153,35 +185,9 @@ class JobsManager:
         }
 
         # If YAML defines environments, convert and include them
-        if isinstance(wf_def.get('environments'), list):
-            env_objs: List[jobs.JobEnvironment] = []
-            for env in wf_def['environments']:
-                if not isinstance(env, dict):
-                    continue
-                env_key = env.get('environment_key')
-                spec_dict = env.get('spec') or {}
-                
-                # Convert dependencies list to proper format
-                if 'dependencies' in spec_dict and isinstance(spec_dict['dependencies'], list):
-                    # Dependencies should be a list of strings like ["pkg==1.0.0", ...]
-                    # Create Environment with proper client version
-                    # Note: compute.Environment doesn't support env_vars directly
-                    # Environment variables need to be passed via spark_conf or job run parameters
-                    spec_obj = compute.Environment(
-                        client='1',  # Use default Databricks runtime
-                        dependencies=spec_dict['dependencies']
-                    )
-                else:
-                    # Try to create Environment from spec_dict as-is
-                    try:
-                        spec_obj = compute.Environment(**spec_dict)
-                    except Exception:
-                        # If it fails, pass as dict and let SDK handle it
-                        spec_obj = spec_dict
-                        
-                env_objs.append(jobs.JobEnvironment(environment_key=env_key, spec=spec_obj))
-            if env_objs:
-                job_settings_kwargs['environments'] = env_objs
+        env_objs = self._build_environments(wf_def)
+        if env_objs:
+            job_settings_kwargs['environments'] = env_objs
 
         # Check if any tasks need serverless (no cluster_id specified)
         # If so, add default environment for serverless compute
@@ -572,9 +578,9 @@ class JobsManager:
 
         Unlike :meth:`refresh_installed_job_parameters`, this also gives a job
         installed by an older version the code and task arguments added since.
-        Only tasks and parameters change: the schedule (and whether it is
-        paused), notifications and the rest of the job are kept. Returns whether
-        an installed job was updated.
+        Only tasks, their environments and parameters change: the schedule (and
+        whether it is paused), notifications and the rest of the job are kept.
+        Returns whether an installed job was updated.
         """
         installation = workflow_installation_repo.get_by_workflow_id(
             self._db, workflow_id=workflow_id
@@ -587,6 +593,8 @@ class JobsManager:
             job_id=int(installation.job_id),
             new_settings=jobs.JobSettings(
                 tasks=self._build_tasks_from_definition(wf_def),
+                # The tasks name the YAML's environments (key and dependencies)
+                environments=self._build_environments(wf_def) or None,
                 parameters=self._build_persisted_job_parameters(workflow_id, wf_def),
             ),
         )

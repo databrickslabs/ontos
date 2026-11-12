@@ -35,6 +35,17 @@
     "deletedSuccess": "The asset was successfully deleted.",
     "errorLoadingData": "Error Loading Data"
   },
+  "descriptionSync": {
+    "notInSync": "Not in sync with Unity Catalog.",
+    "warningTitle": "Saved in Ontos, not in Unity Catalog",
+    "warnings": {
+      "uc_description_permission_denied": "Unity Catalog refused to change the description of {{object}} (MODIFY permission or ownership needed).",
+      "uc_description_object_not_found": "{{object}} was not found in Unity Catalog.",
+      "uc_description_user_token_required": "The request had no Databricks user token, so the description of {{object}} was not written to Unity Catalog.",
+      "uc_description_no_warehouse": "No SQL warehouse is configured, so the description of {{object}} was not written to Unity Catalog.",
+      "uc_description_write_failed": "Writing the description of {{object}} to Unity Catalog failed."
+    }
+  },
   "deleteDialog": {
     "title": "Delete Asset?",
     "description": "This action cannot be undone. This will permanently delete the asset and all its relationships.",

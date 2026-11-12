@@ -35,6 +35,17 @@
     "deletedSuccess": "O ativo foi excluído com sucesso.",
     "errorLoadingData": "Erro ao Carregar Dados"
   },
+  "descriptionSync": {
+    "notInSync": "Não sincronizado com o Unity Catalog.",
+    "warningTitle": "Salvo no Ontos, não no Unity Catalog",
+    "warnings": {
+      "uc_description_permission_denied": "O Unity Catalog recusou alterar a descrição de {{object}} (é preciso a permissão MODIFY ou ser o proprietário).",
+      "uc_description_object_not_found": "{{object}} não foi encontrado no Unity Catalog.",
+      "uc_description_user_token_required": "A requisição não tinha um token de usuário do Databricks, então a descrição de {{object}} não foi gravada no Unity Catalog.",
+      "uc_description_no_warehouse": "Nenhum SQL warehouse está configurado, então a descrição de {{object}} não foi gravada no Unity Catalog.",
+      "uc_description_write_failed": "Falha ao gravar a descrição de {{object}} no Unity Catalog."
+    }
+  },
   "deleteDialog": {
     "title": "Excluir Ativo?",
     "description": "Esta ação não pode ser desfeita. Isso excluirá permanentemente o ativo e todos os seus relacionamentos.",

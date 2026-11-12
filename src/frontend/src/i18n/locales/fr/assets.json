@@ -35,6 +35,17 @@
     "deletedSuccess": "L'actif a été supprimé avec succès.",
     "errorLoadingData": "Erreur lors du chargement des données"
   },
+  "descriptionSync": {
+    "notInSync": "Non synchronisé avec Unity Catalog.",
+    "warningTitle": "Enregistré dans Ontos, pas dans Unity Catalog",
+    "warnings": {
+      "uc_description_permission_denied": "Unity Catalog a refusé de modifier la description de {{object}} (permission MODIFY ou propriété requise).",
+      "uc_description_object_not_found": "{{object}} est introuvable dans Unity Catalog.",
+      "uc_description_user_token_required": "La requête n'avait pas de jeton utilisateur Databricks, la description de {{object}} n'a donc pas été écrite dans Unity Catalog.",
+      "uc_description_no_warehouse": "Aucun SQL warehouse n'est configuré, la description de {{object}} n'a donc pas été écrite dans Unity Catalog.",
+      "uc_description_write_failed": "L'écriture de la description de {{object}} dans Unity Catalog a échoué."
+    }
+  },
   "deleteDialog": {
     "title": "Supprimer l'actif ?",
     "description": "Cette action ne peut pas être annulée. Cela supprimera définitivement l'actif et toutes ses relations.",

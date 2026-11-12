@@ -35,6 +35,17 @@
     "deletedSuccess": "De asset is succesvol verwijderd.",
     "errorLoadingData": "Fout bij Laden Data"
   },
+  "descriptionSync": {
+    "notInSync": "Niet gesynchroniseerd met Unity Catalog.",
+    "warningTitle": "Opgeslagen in Ontos, niet in Unity Catalog",
+    "warnings": {
+      "uc_description_permission_denied": "Unity Catalog weigerde de beschrijving van {{object}} te wijzigen (MODIFY-machtiging of eigendom nodig).",
+      "uc_description_object_not_found": "{{object}} is niet gevonden in Unity Catalog.",
+      "uc_description_user_token_required": "Het verzoek had geen Databricks-gebruikerstoken, dus de beschrijving van {{object}} is niet naar Unity Catalog geschreven.",
+      "uc_description_no_warehouse": "Er is geen SQL warehouse geconfigureerd, dus de beschrijving van {{object}} is niet naar Unity Catalog geschreven.",
+      "uc_description_write_failed": "Het schrijven van de beschrijving van {{object}} naar Unity Catalog is mislukt."
+    }
+  },
   "deleteDialog": {
     "title": "Asset verwijderen?",
     "description": "Deze actie kan niet ongedaan worden gemaakt. Dit zal de asset en al zijn relaties permanent verwijderen.",

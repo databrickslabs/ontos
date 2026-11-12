@@ -140,6 +140,11 @@
         "placeholder": "app_files"
       }
     },
+    "ucDescriptionWriteback": {
+      "title": "Asset-Beschreibungen",
+      "label": "Asset-Beschreibungen in Unity Catalog schreiben",
+      "help": "Beim Speichern der Beschreibung einer Databricks-Tabelle, -View oder -Spalte wird auch ihr Unity-Catalog-Kommentar gesetzt, als der speichernde Benutzer. Ohne die Berechtigung MODIFY wird die Beschreibung nur in Ontos gespeichert, und das Asset zeigt an, dass es nicht synchron ist."
+    },
     "instanceIdentity": {
       "title": "Instanzidentität",
       "id": {

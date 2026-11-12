@@ -22,6 +22,7 @@ interface AppSettings {
   llmSystemPrompt: string;
   llmDisclaimerText: string;
   allowJobEnablementRequests: boolean;
+  ucDescriptionWritebackEnabled: boolean;
   schemaImportChildLimit: number;
   instanceId: string;
   instanceName: string;
@@ -58,6 +59,7 @@ export default function GeneralSettings() {
     llmSystemPrompt: '',
     llmDisclaimerText: '',
     allowJobEnablementRequests: false,
+    ucDescriptionWritebackEnabled: false,
     schemaImportChildLimit: 500,
     instanceId: '',
     instanceName: '',
@@ -84,6 +86,7 @@ export default function GeneralSettings() {
             llmSystemPrompt: data.llm_system_prompt || '',
             llmDisclaimerText: data.llm_disclaimer_text || '',
             allowJobEnablementRequests: data.allow_job_enablement_requests || false,
+            ucDescriptionWritebackEnabled: data.uc_description_writeback_enabled || false,
             schemaImportChildLimit: data.schema_import_child_limit ?? 500,
             instanceId: data.ontos_instance_id || '',
             instanceName: data.ontos_instance_name || '',
@@ -137,6 +140,7 @@ export default function GeneralSettings() {
           llm_system_prompt: settings.llmSystemPrompt,
           llm_disclaimer_text: settings.llmDisclaimerText,
           allow_job_enablement_requests: settings.allowJobEnablementRequests,
+          uc_description_writeback_enabled: settings.ucDescriptionWritebackEnabled,
           schema_import_child_limit: settings.schemaImportChildLimit,
           // A value equal to the default (or blank) clears the override, so an untouched
           // field never pins the derived default.
@@ -253,6 +257,42 @@ export default function GeneralSettings() {
           <p className="text-sm text-muted-foreground mt-2">
             {t('settings:general.unityCatalog.help', 'Unity Catalog location for storing application data.')}
           </p>
+        </div>
+
+        <Separator />
+
+        {/* Write asset descriptions to Unity Catalog */}
+        <div>
+          <h3 className="text-lg font-medium mb-3">
+            {t('settings:general.ucDescriptionWriteback.title', 'Asset Descriptions')}
+          </h3>
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="ucDescriptionWritebackEnabled"
+                checked={settings.ucDescriptionWritebackEnabled}
+                onCheckedChange={(checked) =>
+                  setSettings(prev => ({ ...prev, ucDescriptionWritebackEnabled: checked }))
+                }
+                disabled={!hasWriteAccess || isLoading}
+              />
+              <Label htmlFor="ucDescriptionWritebackEnabled">
+                {t(
+                  'settings:general.ucDescriptionWriteback.label',
+                  'Write asset descriptions to Unity Catalog'
+                )}
+              </Label>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {t(
+                'settings:general.ucDescriptionWriteback.help',
+                'Saving the description of a Databricks table, view or column also sets its ' +
+                  'Unity Catalog comment, as the user who saves it. Without the MODIFY ' +
+                  'permission the description is saved in Ontos only, and the asset shows ' +
+                  'that it is not in sync.'
+              )}
+            </p>
+          </div>
         </div>
 
         <Separator />

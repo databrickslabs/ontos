@@ -165,7 +165,8 @@ def test_request_access_error_answers(as_persona, hidden_project):
     assert missing.status_code == 404
     assert missing.json() == {"detail": "Project not found"}
 
-    already_member = as_persona("member").post(ACCESS_REQUEST, json={"project_id": hidden_project.id})
+    already_member = as_persona("member").post(
+        ACCESS_REQUEST, json={"project_id": hidden_project.id})
     assert already_member.status_code == 409
 
 
@@ -229,3 +230,33 @@ def test_admin_keeps_every_write_route(as_persona, hidden_project):
         response = client.request(method, path, json=body)
         assert response.status_code < 300, (method, path, response.status_code, response.text)
     assert client.get(f"/api/projects/{hidden_project.id}").status_code == 404
+
+
+@pytest.fixture
+def public_project(db_session):
+    """A project without an owning team, so everyone sees it; ``MEMBER`` is on
+    its assigned team."""
+    db_session.connection().begin_nested()
+    team = TeamDb(id=str(uuid.uuid4()), name=f"team-{uuid.uuid4().hex[:8]}",
+                  created_by=ADMIN, updated_by=ADMIN)
+    db_session.add(team)
+    db_session.flush()
+    db_session.add(TeamMemberDb(team_id=team.id, member_type="user",
+                                member_identifier=MEMBER, added_by=ADMIN))
+    project = ProjectDb(id=str(uuid.uuid4()), name=f"open-{uuid.uuid4().hex[:8]}",
+                        project_type="TEAM", created_by=ADMIN, updated_by=ADMIN)
+    db_session.add(project)
+    db_session.flush()
+    db_session.execute(project_team_association.insert().values(
+        project_id=project.id, team_id=team.id, assigned_by=ADMIN))
+    db_session.flush()
+    return project
+
+
+def test_request_access_to_a_visible_project_notifies_its_team(
+    as_persona, public_project, db_session
+):
+    response = as_persona("outsider").post(ACCESS_REQUEST, json={"project_id": public_project.id})
+    assert response.status_code == 201, response.text
+    assert response.json()["project_name"] == public_project.name
+    assert _access_request_notifications(db_session) >= 1

@@ -13,8 +13,10 @@ import {
   ARF_DIRECTIONS,
   type AuthorityCriterion,
   type CriterionInput,
+  type PolicyClause,
   type ReusableCheck,
 } from '@/types/authority-resolution';
+import { ClauseSelect } from '@/components/authority-resolution/rule-editor';
 
 /**
  * The AR's Compliance Checks: derived and aggregate predicates the ODRL rule
@@ -38,11 +40,12 @@ export interface CriterionRow {
   direction: string;
   weight: string;
   dimension: string;   // DNAco dimension (people|policy|…)
+  clauseRef: string;   // the Authority Policy clause this check enforces
 }
 
 export const emptyCriterionRow = (): CriterionRow => ({
   mode: 'raw', rawRule: '', policyId: '', name: '', failureMessage: '',
-  direction: 'actual-exceeds-documented', weight: '1.0', dimension: 'people',
+  direction: 'actual-exceeds-documented', weight: '1.0', dimension: 'people', clauseRef: '',
 });
 
 /** Existing criteria round-trip into raw rows (no rule parsing). */
@@ -53,6 +56,7 @@ export const rowsFromCriteria = (criteria?: AuthorityCriterion[] | null): Criter
     name: c.name || '', failureMessage: c.failure_message || '',
     direction: c.direction || 'neutral', weight: String(c.weight ?? 1.0),
     dimension: c.dimension || 'people',
+    clauseRef: c.policy_clause_ref || '',
   }));
 
 /** Convert editor rows into the API payload (skips empty rows). */
@@ -61,9 +65,10 @@ export function rowsToPayload(rows: CriterionRow[]): CriterionInput[] {
   rows.forEach((r, idx) => {
     const weight = parseFloat(r.weight) || 1.0;
     const dimension = (r.dimension || 'people').trim() || 'people';
+    const policy_clause_ref = r.clauseRef.trim() || undefined;
     if (r.mode === 'existing') {
       if (!r.policyId) return;
-      out.push({ policy_id: r.policyId, direction: r.direction, weight, dimension, order: idx, enabled: true });
+      out.push({ policy_id: r.policyId, direction: r.direction, weight, dimension, order: idx, enabled: true, policy_clause_ref });
       return;
     }
     const rule = r.rawRule.trim();
@@ -72,7 +77,7 @@ export function rowsToPayload(rows: CriterionRow[]): CriterionInput[] {
       name: r.name.trim() || `Criterion ${idx + 1}`,
       rule,
       failure_message: r.failureMessage.trim() || undefined,
-      direction: r.direction, weight, dimension, order: idx, enabled: true,
+      direction: r.direction, weight, dimension, order: idx, enabled: true, policy_clause_ref,
     });
   });
   return out;
@@ -87,9 +92,11 @@ interface Props {
    * variables and used as the validation sample. */
   params?: Record<string, any>;
   scopeKeys?: string[];
+  /** Clauses of the cited Authority Policy; each check may cite the one it enforces. */
+  clauses?: PolicyClause[];
 }
 
-export default function CriteriaBuilder({ rows, onChange, params = {}, scopeKeys = [] }: Props) {
+export default function CriteriaBuilder({ rows, onChange, params = {}, scopeKeys = [], clauses = [] }: Props) {
   const { t } = useTranslation(['authority-resolution']);
   const { get, post } = useApi();
   const [checks, setChecks] = useState<ReusableCheck[]>([]);
@@ -209,7 +216,7 @@ export default function CriteriaBuilder({ rows, onChange, params = {}, scopeKeys
             </div>
           )}
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1">
               <Label className="text-xs whitespace-nowrap">{t('criteria.divergence.direction')}</Label>
               <NativeSelect
@@ -230,6 +237,9 @@ export default function CriteriaBuilder({ rows, onChange, params = {}, scopeKeys
               <Input value={r.dimension} onChange={(e) => patch(idx, { dimension: e.target.value })}
                      className="h-8 w-24 text-xs" placeholder={t('criteria.divergence.dimensionPlaceholder')} />
             </div>
+            {(clauses.length > 0 || r.clauseRef) && (
+              <ClauseSelect value={r.clauseRef} clauses={clauses} onChange={(clauseRef) => patch(idx, { clauseRef })} />
+            )}
             {r.mode === 'existing' && <Badge variant="outline" className="text-xs">{t('criteria.divergence.reusedCheckBadge')}</Badge>}
           </div>
         </div>

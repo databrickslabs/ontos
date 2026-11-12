@@ -186,7 +186,7 @@ class MetadataManager:
         return False
 
     # --- Document ---
-    def create_document_record(self, db: Session, *, data: DocumentCreate, filename: str, content_type: Optional[str], size_bytes: Optional[int], storage_path: str, user_email: Optional[str]) -> Document:
+    def create_document_record(self, db: Session, *, data: DocumentCreate, filename: str, content_type: Optional[str], size_bytes: Optional[int], storage_path: str, user_email: Optional[str], content_sha256: Optional[str] = None) -> Document:
         # DocumentCreate has base fields; other metadata supplied by upload logic
         from src.db_models.metadata import DocumentMetadataDb
         db_obj = DocumentMetadataDb(
@@ -198,6 +198,7 @@ class MetadataManager:
             content_type=content_type,
             size_bytes=size_bytes,
             storage_path=storage_path,
+            content_sha256=content_sha256,
             created_by=user_email,
             updated_by=user_email,
         )

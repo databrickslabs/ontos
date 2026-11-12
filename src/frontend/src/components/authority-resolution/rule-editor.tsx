@@ -12,7 +12,7 @@ import { InfoHint } from '@/components/authority-resolution/info-hint';
 import {
   ARF_DIRECTIONS, ODRL_OPERATORS, RULE_REQUEST_OPERANDS, operandForKey, operandKey,
   type ArfRule, type DivergenceFacets, type DomainContext, type OdrlConstraint,
-  type OdrlOperator, type RuleConstraint,
+  type OdrlOperator, type PolicyClause, type RuleConstraint,
 } from '@/types/authority-resolution';
 
 /**
@@ -36,7 +36,7 @@ export interface PartDraft {
   value: string;        // literal; comma list for isAnyOf / isNoneOf
 }
 
-export interface ItemDraft extends Required<Pick<DivergenceFacets, 'name' | 'message' | 'direction' | 'dimension'>> {
+export interface ItemDraft extends Required<Pick<DivergenceFacets, 'name' | 'message' | 'direction' | 'dimension' | 'clause'>> {
   kind: ItemKind;
   action: string;       // duty action
   join: 'or' | 'and';
@@ -52,7 +52,7 @@ export const emptyItem = (kind: ItemKind): ItemDraft => ({
   action: kind === 'duty' ? 'arf:obtainCoApproval' : '',
   join: 'or',
   parts: [kind === 'constraint' ? emptyPart() : { ...emptyPart(), operand: 'arf:cosignPresent', operator: 'eq', value: 'true' }],
-  name: '', message: '',
+  name: '', message: '', clause: '',
   direction: kind === 'duty' ? 'documented-exceeds-actual' : 'actual-exceeds-documented',
   weight: '1.0', dimension: 'policy',
 });
@@ -77,7 +77,7 @@ function partFrom(c: OdrlConstraint): PartDraft {
 function facetsFrom(f: DivergenceFacets, kind: ItemKind) {
   const base = emptyItem(kind);
   return {
-    name: f.name || '', message: f.message || '',
+    name: f.name || '', message: f.message || '', clause: f.clause || '',
     direction: f.direction || base.direction,
     weight: f.weight != null ? String(f.weight) : '1.0',
     dimension: f.dimension || 'policy',
@@ -140,6 +140,7 @@ function facetsOut(it: ItemDraft): DivergenceFacets {
   f.weight = Number.isFinite(w) ? w : 1.0;
   if (it.name.trim()) f.name = it.name.trim();
   if (it.message.trim()) f.message = it.message.trim();
+  if (it.clause.trim()) f.clause = it.clause.trim();
   return f;
 }
 
@@ -176,6 +177,21 @@ export function ruleFromItems(items: ItemDraft[]): ArfRule | null {
 
 // ------------------------------------------------------------ component
 
+/** "Implements clause" picker; keeps a cited ref that is no longer on the policy. */
+export function ClauseSelect({ value, clauses, onChange }: { value: string; clauses: PolicyClause[]; onChange: (ref: string) => void }) {
+  const { t } = useTranslation(['authority-resolution']);
+  return (
+    <div className="flex items-center gap-1">
+      <Label className="text-xs whitespace-nowrap">{t('policy.citation.clause')}</Label>
+      <NativeSelect className="w-40" selectClassName="h-8 text-xs" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">—</option>
+        {clauses.map((c) => <option key={c.ref} value={c.ref}>{c.ref}{c.title ? ` ${c.title}` : ''}</option>)}
+        {value && !clauses.some((c) => c.ref === value) && <option value={value}>{value}</option>}
+      </NativeSelect>
+    </div>
+  );
+}
+
 interface Props {
   items: ItemDraft[];
   onChange: (items: ItemDraft[]) => void;
@@ -184,9 +200,11 @@ interface Props {
   scopeKeys: string[];
   /** Current domain context, for server-side validation. */
   domainContext?: DomainContext;
+  /** Clauses of the cited Authority Policy; each item may cite the one it implements. */
+  clauses?: PolicyClause[];
 }
 
-export default function RuleEditor({ items, onChange, paramKeys, scopeKeys, domainContext }: Props) {
+export default function RuleEditor({ items, onChange, paramKeys, scopeKeys, domainContext, clauses = [] }: Props) {
   const { t } = useTranslation(['authority-resolution']);
   const { post } = useApi();
   const [validating, setValidating] = useState(false);
@@ -331,6 +349,9 @@ export default function RuleEditor({ items, onChange, paramKeys, scopeKeys, doma
               <Input value={it.dimension} onChange={(e) => patch(i, { dimension: e.target.value })}
                      className="h-8 w-24 text-xs" placeholder="policy" />
             </div>
+            {(clauses.length > 0 || it.clause) && (
+              <ClauseSelect value={it.clause} clauses={clauses} onChange={(clause) => patch(i, { clause })} />
+            )}
           </div>
         </div>
       ))}

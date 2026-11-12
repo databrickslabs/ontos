@@ -24,6 +24,7 @@ import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
 import ArConceptLinks from '@/components/authority-resolution/ar-concept-links';
 import { DomainContextView, RuleView } from '@/components/authority-resolution/domain-context-view';
+import PolicyCitationView from '@/components/authority-resolution/policy-citation-view';
 import { MaturityInline } from '@/components/common/maturity-inline';
 import VersionNavigator from '@/components/common/version-navigator';
 import { DetailHeaderSkeleton, PanelSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
@@ -557,7 +558,7 @@ export default function AuthorityRelationDetails() {
             <div className="pt-2 text-muted-foreground">{t('details.labelDomainContext')}</div>
             <DomainContextView value={relation.domain_context} />
             <div className="pt-2 text-muted-foreground">{t('details.labelJustificationChain')}</div>
-            <JsonBlock data={relation.justification_chain} />
+            <PolicyCitationView citation={relation.policy} legacy={relation.justification_chain} />
           </CardContent>
         </Card>
         <Card>
@@ -572,6 +573,7 @@ export default function AuthorityRelationDetails() {
                   <div key={c.id} className="rounded border p-2 space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{c.name || t('details.criterion')}</span>
+                      {c.policy_clause_ref && <Badge variant="secondary" className="font-mono text-xs" title={t('policy.citation.enforces')}>{c.policy_clause_ref}</Badge>}
                       {!c.enabled && <Badge variant="outline" className="text-xs">{t('common:labels.disabled')}</Badge>}
                       <span className="ml-auto text-xs text-muted-foreground">
                         {t(`direction.${c.direction}`, { defaultValue: c.direction })} · w{c.weight}
@@ -858,7 +860,7 @@ function TestResolveDialog({ open, onOpenChange, relationId, scopeKeys }: {
                   <div className="pt-2 space-y-1">
                     <div className="text-xs text-muted-foreground">{t('details.testPendingDuties')}</div>
                     {(result.pending_duties || []).map((d, i) => (
-                      <div key={i} className="text-xs">• {d.message || d.duty}</div>
+                      <div key={i} className="text-xs">• {d.message || d.duty}{d.clause ? ` (${d.clause})` : ''}</div>
                     ))}
                   </div>
                 )}

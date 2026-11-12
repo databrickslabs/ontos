@@ -221,7 +221,8 @@
       "dnaSchedule": "Pianificazione del DNA-Coefficient",
       "tags": "Tag",
       "ownership": "Proprietà e progetto",
-      "rule": "Regola (ODRL)"
+      "rule": "Regola (ODRL)",
+      "justification": "Giustificazione (policy di autorità)"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Controlli che il gate applica dopo la regola (e rispetto ai quali il coefficiente DNA misura la divergenza). Ognuno è un <strong>Compliance Check</strong> riutilizzabile.",
@@ -231,7 +232,8 @@
       "resourceRefs": "Da dove provengono i valori dei campi. Invece di un semplice letterale, associa a un campo canonico (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) un puntatore tipizzato. Un riferimento a <strong>entità Ontos</strong> viene risolto di nuovo rispetto al knowledge graph al momento della valutazione, così il valore resta aggiornato quando cambiano il concetto, il prodotto o il dominio sottostante. I riferimenti a <strong>strumenti MCP</strong> chiamano un servizio MCP di Unity Catalog al momento della decisione; i criteri possono confrontarsi con il valore risolto come <code>obj.ref_{{fieldPlaceholder}}</code> (i punti diventano underscore, es. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "Con quale frequenza il DNA-Coefficient viene ricalcolato rispetto alle fonti di evidenza.",
       "domainContext": "L'ambito delimitato in cui vale questa autorità e i suoi parametri. Una richiesta fuori ambito riceve no_authority; la regola e i controlli leggono i parametri come ctx.<key>.",
-      "rule": "Ciò che l'autorità permette, in ODRL: <strong>vincoli</strong> che devono valere, <strong>obblighi</strong> ancora da adempiere (fino ad allora la decisione è <strong>condizionata</strong>, ad es. una co-approvazione) e <strong>divieti</strong>. Confronta con valori o variabili (<code>ctx.threshold</code>, <code>req.market</code>)."
+      "rule": "Ciò che l'autorità permette, in ODRL: <strong>vincoli</strong> che devono valere, <strong>obblighi</strong> ancora da adempiere (fino ad allora la decisione è <strong>condizionata</strong>, ad es. una co-approvazione) e <strong>divieti</strong>. Confronta con valori o variabili (<code>ctx.threshold</code>, <code>req.market</code>).",
+      "justification": "La versione della policy da cui deriva questa autorità e le clausole che applica. La risoluzione viene rifiutata se la policy non è approvata, è ritirata o fuori dal periodo di validità."
     },
     "fields": {
       "name": {
@@ -626,5 +628,125 @@
     "none": "Nessuna regola: solo i controlli regolano questa autorità.",
     "fulfilledWhen": "adempiuto quando",
     "prohibitedWhen": "vietato quando"
+  },
+  "nav": {
+    "relations": "Relazioni di autorità",
+    "policies": "Policy di autorità"
+  },
+  "policy": {
+    "list": {
+      "title": "Policy di autorità",
+      "description": "La base documentata da cui deriva un'autorità: schemi di delega dei poteri, mandati del consiglio, normative, policy di acquisto, SOP ed eccezioni registrate. Le relazioni di autorità citano una versione della policy e le clausole che applicano; una risoluzione senza una base di policy valida non restituisce alcuna autorità.",
+      "buttonNew": "Nuova policy",
+      "confirmDelete": "Eliminare {{key}} v{{version}}?",
+      "columnCitedBy": "Citata da"
+    },
+    "fields": {
+      "key": "Chiave della policy",
+      "version": "Versione",
+      "type": "Tipo",
+      "title": "Titolo",
+      "summary": "Sintesi",
+      "owner": "Team responsabile",
+      "jurisdiction": "Ambito",
+      "effectiveFrom": "In vigore dal",
+      "effectiveTo": "In vigore fino al",
+      "effective": "Validità",
+      "approvedBy": "Approvata da",
+      "approvalEvidence": "Prova di approvazione",
+      "derivedFrom": "Derivata da",
+      "withdrawnReason": "Motivo del ritiro",
+      "changeSummary": "Sintesi delle modifiche"
+    },
+    "type": {
+      "DOA": "Delega dei poteri",
+      "BOARD_MANDATE": "Mandato del consiglio",
+      "REGULATION": "Normativa",
+      "PROCUREMENT_POLICY": "Policy di acquisto",
+      "SOP": "Procedura operativa standard",
+      "EXCEPTION": "Eccezione"
+    },
+    "status": {
+      "draft": "Bozza",
+      "approved": "Approvata",
+      "superseded": "Sostituita",
+      "withdrawn": "Ritirata"
+    },
+    "openEnded": "senza scadenza",
+    "editor": {
+      "titleNew": "Nuova policy di autorità",
+      "titleEdit": "Modifica {{key}} v{{version}}",
+      "keyHint": "Identificativo stabile condiviso da tutte le versioni della policy, ad es. POL-DOA.",
+      "jurisdictionHint": "L'ambito coperto dalla policy, in JSON, ad es. {\"market\": [\"DE\", \"AT\"]}.",
+      "validation": {
+        "required": "Chiave e titolo sono obbligatori",
+        "title": "La policy non è valida",
+        "clauseRef": "Ogni clausola richiede un riferimento (ad es. §7.1).",
+        "clauseDuplicate": "Due clausole hanno lo stesso riferimento.",
+        "amount": "Il limite di una clausola deve essere un numero.",
+        "jurisdiction": "L'ambito deve essere un JSON valido."
+      }
+    },
+    "clauses": {
+      "title": "Clausole",
+      "hint": "Le disposizioni citabili della policy. Le relazioni di autorità citano le clausole che applicano; gli elementi di regola e i controlli citano la clausola che fanno rispettare, e un diniego la nomina.",
+      "titlePlaceholder": "Titolo della clausola",
+      "textPlaceholder": "Testo della clausola",
+      "amount": "Importo limite",
+      "currency": "Valuta",
+      "conditionsPlaceholder": "Condizioni, una per riga",
+      "add": "Aggiungi clausola",
+      "remove": "Rimuovi clausola",
+      "none": "Ancora nessuna clausola.",
+      "ref": "Rif.",
+      "clause": "Clausola",
+      "limit": "Limite"
+    },
+    "details": {
+      "defaultTitle": "Policy di autorità",
+      "notFound": "Policy di autorità non trovata.",
+      "backButton": "Torna alle policy",
+      "buttonNewVersion": "Nuova versione",
+      "buttonApprove": "Approva",
+      "buttonWithdraw": "Ritira",
+      "approved": "Policy approvata",
+      "withdrawn": "Policy ritirata",
+      "withdrawnMsg": "Le relazioni di autorità attive che la citano ora richiedono una revisione.",
+      "versionCreated": "Versione {{version}} creata in bozza",
+      "rootProblem": "Questa versione non può fondare un'autorità ora: {{problem}}.",
+      "cardBasis": "Base della policy",
+      "cardDocuments": "Documenti di origine",
+      "noDocuments": "Nessun documento di origine.",
+      "noDocumentsDraft": "Ancora nessun documento di origine. Caricali in Metadati qui sotto; ognuno viene salvato con il suo SHA-256.",
+      "documentsImmutable": "Questa versione non è più una bozza: i suoi documenti sono prove fisse e cambiano solo con una nuova versione.",
+      "cardDependents": "Citata da ({{count}})",
+      "noDependents": "Nessuna relazione di autorità cita questa versione."
+    },
+    "approve": {
+      "title": "Approva {{key}} v{{version}}",
+      "description": "Una versione approvata è immutabile e può fondare relazioni di autorità dalla sua data di entrata in vigore.",
+      "approverPlaceholder": "Per impostazione predefinita, tu",
+      "noEvidence": "Nessuna",
+      "supersedesHint": "L'approvazione sostituisce la v{{version}}: resta valida finché questa versione non entra in vigore."
+    },
+    "withdraw": {
+      "title": "Ritira {{key}} v{{version}}",
+      "description": "Relazioni di autorità che citano questa versione: {{count}}. Quelle attive passano in revisione, e nessuna viene risolta finché non cita una policy valida."
+    },
+    "newVersion": {
+      "title": "Nuova versione della policy",
+      "description": "Crea una bozza successiva con le stesse clausole. Modificala e approvala per sostituire questa versione."
+    },
+    "citation": {
+      "legacy": "Giustificazione libera (nessuna policy di autorità citata)",
+      "none": "Nessuna policy di autorità citata.",
+      "derivedFrom": "derivata dalla versione precedente",
+      "problem": "Nessuna base di policy valida: {{problem}}. Le risoluzioni non restituiscono autorità.",
+      "noClauses": "Nessuna clausola citata.",
+      "enforces": "Fa rispettare questa clausola della policy",
+      "clause": "Clausola",
+      "nonePicker": "Nessuna policy di autorità",
+      "notApprovedHint": "Questa versione è {{status}}: la relazione di autorità non verrà risolta finché non cita una versione approvata e in vigore."
+    }
   }
 }

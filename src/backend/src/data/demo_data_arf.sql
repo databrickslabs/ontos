@@ -16,6 +16,13 @@
 -- rule column carries constraints, duties (Trade Promotion's VP sign-off makes
 -- an over-threshold request 'conditional') and prohibitions (no self-grant).
 --
+-- Authority Policies (#1294 slice 2): each AR cites the policy version it
+-- derives from plus the clauses it implements; rule items and checks cite
+-- the clause they enforce. The trade-promotion policy has a superseded v1
+-- and an approved v2; the Ontos RBAC policy is still a draft (its AR can't
+-- resolve until it is approved) and the DP lifecycle policy is withdrawn
+-- (its AR sits in needs_review).
+--
 -- Four core Authority Relations covering distinct governance domains, each with:
 --   • an AR-ladder maturity level cached on the row
 --   • authored Compliance-DSL criteria (every criterion must link to a
@@ -40,6 +47,7 @@
 --   0a2 = authority_criteria
 --   0a3 = authority_prerequisites
 --   0a4 = authority_resource_refs
+--   0a5 = authority_policies
 --   015 = entity_semantic_links
 --   0f0 = business_roles
 --   0ff = maturity_levels (AR ladder)
@@ -208,6 +216,86 @@ ON CONFLICT (id) DO NOTHING;
 
 
 -- ============================================================================
+-- 4c. AUTHORITY POLICIES (the justification basis the ARs cite)
+-- ============================================================================
+-- Inserted before the ARs (authority_relations.authority_policy_id FK). No
+-- source documents are seeded: upload them on a draft version to see their
+-- SHA-256 on the policy and in decision provenance.
+
+INSERT INTO authority_policies (
+  id, policy_key, version, version_family_id, parent_policy_id, change_summary,
+  title, policy_type, summary, owner_team_id, jurisdiction,
+  effective_from, effective_to, status, approved_by, approved_at,
+  approval_evidence_document_id, withdrawn_reason, clauses,
+  created_by, created_at, updated_at
+) VALUES
+('0a500001-0005-4000-8000-000000000001', 'TP-POL', '1', '0a500001-0005-4000-8000-000000000001', NULL, NULL,
+ 'Commercial Policy Handbook: Trade Promotion Delegation', 'DOA',
+ 'Delegation of trade-promotion approvals to the Trade Marketing Director (2023 edition).', NULL,
+ '{"market": ["DE"], "channel": ["modern-trade"]}',
+ '2023-01-01 00:00:00+00', '2024-01-01 00:00:00+00', 'superseded', 'commercial.board@demo.local', '2022-12-12 10:00:00+00',
+ NULL, NULL,
+ '[{"ref": "§4.2", "title": "Delegated promotion approval", "text": "The Trade Marketing Director may approve trade promotions in modern trade DE up to USD 400,000 per proposal.", "limits": {"amount": 400000, "currency": "USD"}}]',
+ 'system@demo', NOW() - INTERVAL '700 days', NOW() - INTERVAL '320 days'),
+
+('0a500002-0005-4000-8000-000000000002', 'TP-POL', '2', '0a500001-0005-4000-8000-000000000001', '0a500001-0005-4000-8000-000000000001',
+ 'Threshold raised to USD 500,000; VP sign-off and margin floor made explicit clauses.',
+ 'Commercial Policy Handbook: Trade Promotion Delegation', 'DOA',
+ 'Delegation of trade-promotion approvals to the Trade Marketing Director, with VP co-approval above the threshold and a margin floor.', NULL,
+ '{"market": ["DE"], "channel": ["modern-trade"]}',
+ '2024-01-01 00:00:00+00', NULL, 'approved', 'commercial.board@demo.local', '2023-12-11 10:00:00+00',
+ NULL, NULL,
+ '[{"ref": "§4.2", "title": "Delegated promotion approval", "text": "The Trade Marketing Director may approve trade promotions in modern trade DE up to USD 500,000 per proposal.", "limits": {"amount": 500000, "currency": "USD"}}, {"ref": "§4.3", "title": "VP co-approval above the threshold", "text": "A proposal above the delegation threshold also needs the sign-off of the VP Commercial.", "conditions": ["budget above USD 500,000"]}, {"ref": "§4.4", "title": "Margin floor", "text": "The expected gross margin after discount must stay at or above 15%.", "conditions": ["expected margin >= 15%"]}]',
+ 'system@demo', NOW() - INTERVAL '340 days', NOW() - INTERVAL '320 days'),
+
+('0a500003-0005-4000-8000-000000000003', 'FIN-DOA', '2024', '0a500003-0005-4000-8000-000000000003', NULL, NULL,
+ 'Regional Finance Delegation of Authority', 'DOA',
+ 'Board-approved value bands for commercial spend delegated to regional finance.', NULL,
+ '{"region": ["EMEA-North"]}',
+ '2024-01-01 00:00:00+00', NULL, 'approved', 'cfo@demo.local', '2023-11-30 09:00:00+00',
+ NULL, NULL,
+ '[{"ref": "§2.1", "title": "Promotion spend ceiling", "text": "Regional finance may release promotion budgets up to USD 2,000,000 per proposal; above that the CFO decides.", "limits": {"amount": 2000000, "currency": "USD"}}]',
+ 'system@demo', NOW() - INTERVAL '360 days', NOW() - INTERVAL '360 days'),
+
+('0a500004-0005-4000-8000-000000000004', 'COM-MARKET', '2024', '0a500004-0005-4000-8000-000000000004', NULL, NULL,
+ 'Market Clearance Register', 'SOP',
+ 'The markets commercial compliance has cleared for promotional activity.', NULL,
+ NULL,
+ '2024-01-01 00:00:00+00', NULL, 'approved', 'commercial.compliance@demo.local', '2023-12-20 09:00:00+00',
+ NULL, NULL,
+ '[{"ref": "§1.1", "title": "Cleared markets", "text": "Promotional activity may run only in markets on the clearance register (currently DE, AT, CH).", "conditions": ["market in DE, AT, CH"]}]',
+ 'system@demo', NOW() - INTERVAL '330 days', NOW() - INTERVAL '330 days'),
+
+('0a500005-0005-4000-8000-000000000005', 'SEC-ACCESS', '2025', '0a500005-0005-4000-8000-000000000005', NULL, NULL,
+ 'Production Access Standard', 'SOP',
+ 'How production-tier platform access is granted (derived from InfoSec Standard SEC-STD-07).', NULL,
+ '{"env": ["production"]}',
+ '2025-01-15 00:00:00+00', NULL, 'approved', 'ciso@demo.local', '2025-01-10 09:00:00+00',
+ NULL, NULL,
+ '[{"ref": "§3.1", "title": "MFA on every grant", "text": "Production access is granted only to MFA-enabled identities."}, {"ref": "§3.2", "title": "Segregation of duties", "text": "A grant must not combine deploy and approve-deploy on the same tier."}, {"ref": "§3.4", "title": "No self-grant", "text": "No principal may grant production access to themselves."}]',
+ 'system@demo', NOW() - INTERVAL '400 days', NOW() - INTERVAL '400 days'),
+
+('0a500006-0005-4000-8000-000000000006', 'ONTOS-RBAC', '2025', '0a500006-0005-4000-8000-000000000006', NULL, NULL,
+ 'Ontos Application Role Policy', 'SOP',
+ 'Who may grant elevated Ontos application roles. Draft: under review by governance.', NULL,
+ '{"system": ["ontos"]}',
+ '2025-03-01 00:00:00+00', NULL, 'draft', NULL, NULL,
+ NULL, NULL,
+ '[{"ref": "§2.1", "title": "Sponsor", "text": "Every elevated-role request needs a Data Steward or Domain Owner as sponsor."}, {"ref": "§2.2", "title": "Expiry", "text": "Elevated roles are granted with an expiry date; no indefinite grants."}]',
+ 'system@demo', NOW() - INTERVAL '14 days', NOW() - INTERVAL '14 days'),
+
+('0a500007-0005-4000-8000-000000000007', 'DP-LIFECYCLE', '2025', '0a500007-0005-4000-8000-000000000007', NULL, NULL,
+ 'Data Lifecycle Standard', 'SOP',
+ 'Retirement of published data products.', NULL,
+ NULL,
+ '2025-02-01 00:00:00+00', NULL, 'withdrawn', 'cdo@demo.local', '2025-01-20 09:00:00+00',
+ NULL, 'Retention rules conflict with the 2026 records schedule; a revised standard is being drafted.',
+ '[{"ref": "§6.1", "title": "No active consumers", "text": "A data product is retired only once it has no active downstream consumers."}, {"ref": "§6.2", "title": "Retention plan", "text": "A retirement needs a retention or archival plan signed off by the data owner."}]',
+ 'system@demo', NOW() - INTERVAL '130 days', NOW() - INTERVAL '10 days')
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
 -- 5. AUTHORITY RELATIONS (the four demo ARs)
 -- ============================================================================
 -- Each AR is a single-version row for simplicity (version_family_id = id,
@@ -238,7 +326,7 @@ INSERT INTO authority_relations (
  'Trade Marketing Director', 'trade.marketing.director@demo.local', NOW() - INTERVAL '180 days', 'approve',
  'data_product', NULL, '["urn:demo:brand:alpha-cola","urn:demo:channel:modern-trade","urn:demo:market:DE"]',
  '{"scope": [{"leftOperand":"arf:market","operator":"eq","rightOperand":"DE"},{"leftOperand":"arf:channel","operator":"eq","rightOperand":"modern-trade"}],"params": {"brand":"Alpha Cola","threshold_usd": 500000,"margin_floor_pct": 15,"currency":"USD"}}',
- '{"permission": {"constraint": [],"duty": [{"action":"arf:obtainCoApproval","name":"VP sign-off above the delegation threshold","message":"VP sign-off is pending for a budget above the delegation threshold.","constraint": [{"or": [{"leftOperand":"arf:budget_usd","operator":"lteq","rightOperandReference":"ctx.threshold_usd"},{"leftOperand":"arf:has_vp_sign_off","operator":"eq","rightOperand": true}]}],"direction":"documented-exceeds-actual","weight": 1.0,"dimension":"policy"}]}}',
+ '{"permission": {"constraint": [],"duty": [{"action":"arf:obtainCoApproval","name":"VP sign-off above the delegation threshold","message":"VP sign-off is pending for a budget above the delegation threshold.","constraint": [{"or": [{"leftOperand":"arf:budget_usd","operator":"lteq","rightOperandReference":"ctx.threshold_usd"},{"leftOperand":"arf:has_vp_sign_off","operator":"eq","rightOperand": true}]}],"direction":"documented-exceeds-actual","weight": 1.0,"dimension":"policy","clause":"§4.3"}]}}',
  '{"policy_id":"TP-POL-2024","doc_url":"https://wiki.demo.local/commercial/trade-promo-policy","effective_date":"2024-01-01","derived_from":"Commercial Policy Handbook 2024 §4.2"}',
  '{"allowed_principals": ["role:Trade Marketing Director"],"threshold_usd": 500000,"required_affirmations": 3}',
  NULL,
@@ -262,7 +350,7 @@ INSERT INTO authority_relations (
  'Chief Information Security Officer', 'ciso@demo.local', NOW() - INTERVAL '365 days', 'approve',
  'asset', NULL, '["urn:demo:env:production","urn:demo:tier:platform"]',
  '{"scope": [{"leftOperand":"arf:env","operator":"eq","rightOperand":"production"},{"leftOperand":"arf:tier","operator":"eq","rightOperand":"platform"}],"params": {"requires_mfa": true,"requires_sod_check": true}}',
- '{"permission": {"constraint": [],"duty": []},"prohibition": [{"name":"No self-grant","message":"A principal may not grant production access to themselves.","constraint": [{"leftOperand":"arf:grantee","operator":"eq","rightOperandReference":"req.actor_identity"}],"direction":"actual-exceeds-documented","weight": 1.0,"dimension":"people"}]}',
+ '{"permission": {"constraint": [],"duty": []},"prohibition": [{"name":"No self-grant","message":"A principal may not grant production access to themselves.","constraint": [{"leftOperand":"arf:grantee","operator":"eq","rightOperandReference":"req.actor_identity"}],"direction":"actual-exceeds-documented","weight": 1.0,"dimension":"people","clause":"§3.4"}]}',
  '{"policy_id":"SEC-ACCESS-2025","doc_url":"https://wiki.demo.local/security/access-policy","effective_date":"2025-01-15","derived_from":"InfoSec Standard SEC-STD-07"}',
  '{"allowed_principals": ["role:Chief Information Security Officer","role:Platform Operations Lead"],"required_affirmations": 2}',
  NULL,
@@ -333,7 +421,7 @@ INSERT INTO authority_relations (
  'Commercial Compliance Lead', 'commercial.compliance@demo.local', NOW() - INTERVAL '300 days', 'approve',
  'data_product', NULL, '["urn:demo:channel:modern-trade"]',
  '{"scope": [],"params": {"cleared_markets": ["DE","AT","CH"]}}',
- '{"permission": {"constraint": [{"leftOperand":"arf:market","operator":"isAnyOf","rightOperandReference":"ctx.cleared_markets","name":"Promotion Market Clearance","message":"Promotion market is not cleared by commercial compliance.","direction":"neutral","weight": 1.0,"dimension":"policy"}],"duty": []}}',
+ '{"permission": {"constraint": [{"leftOperand":"arf:market","operator":"isAnyOf","rightOperandReference":"ctx.cleared_markets","name":"Promotion Market Clearance","message":"Promotion market is not cleared by commercial compliance.","direction":"neutral","weight": 1.0,"dimension":"policy","clause":"§1.1"}],"duty": []}}',
  '{"policy_id":"COM-COMPLIANCE-2024","doc_url":"https://wiki.demo.local/commercial/market-clearance","effective_date":"2024-01-01"}',
  NULL,
  NULL,
@@ -356,7 +444,7 @@ INSERT INTO authority_relations (
  'Regional Finance Controller', 'regional.finance@demo.local', NOW() - INTERVAL '300 days', 'approve',
  'data_product', NULL, NULL,
  '{"scope": [],"params": {"ceiling_usd": 2000000,"currency":"USD"}}',
- '{"permission": {"constraint": [{"leftOperand":"arf:budget_usd","operator":"lteq","rightOperandReference":"ctx.ceiling_usd","name":"Promotion Budget Delegation Ceiling","message":"Promotion budget exceeds the regional delegation ceiling.","direction":"neutral","weight": 1.0,"dimension":"policy"}],"duty": []}}',
+ '{"permission": {"constraint": [{"leftOperand":"arf:budget_usd","operator":"lteq","rightOperandReference":"ctx.ceiling_usd","name":"Promotion Budget Delegation Ceiling","message":"Promotion budget exceeds the regional delegation ceiling.","direction":"neutral","weight": 1.0,"dimension":"policy","clause":"§2.1"}],"duty": []}}',
  '{"policy_id":"FIN-DELEGATION-2024","doc_url":"https://wiki.demo.local/finance/delegation-of-authority","effective_date":"2024-01-01"}',
  NULL,
  NULL,
@@ -392,6 +480,26 @@ INSERT INTO authority_criteria (id, relation_id, compliance_policy_id, direction
 ('0a200008-0005-4000-8000-000000000008', '0a000004-0005-4000-8000-000000000004', '01100008-0005-4000-8000-000000000008', 'documented-exceeds-actual', 0.9, 'structural', 2, true, NOW())
 -- AR 5 / AR 6: no checks; their gates are rule constraints over their params
 ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 6b. POLICY CITATIONS (each AR's policy version + clauses; each check's clause)
+-- ============================================================================
+
+UPDATE authority_relations SET authority_policy_id = '0a500002-0005-4000-8000-000000000002', policy_clause_refs = '["§4.2", "§4.3", "§4.4"]' WHERE id = '0a000001-0005-4000-8000-000000000001';
+UPDATE authority_relations SET authority_policy_id = '0a500005-0005-4000-8000-000000000005', policy_clause_refs = '["§3.1", "§3.2", "§3.4"]' WHERE id = '0a000002-0005-4000-8000-000000000002';
+UPDATE authority_relations SET authority_policy_id = '0a500006-0005-4000-8000-000000000006', policy_clause_refs = '["§2.1", "§2.2"]' WHERE id = '0a000003-0005-4000-8000-000000000003';
+UPDATE authority_relations SET authority_policy_id = '0a500007-0005-4000-8000-000000000007', policy_clause_refs = '["§6.1", "§6.2"]' WHERE id = '0a000004-0005-4000-8000-000000000004';
+UPDATE authority_relations SET authority_policy_id = '0a500004-0005-4000-8000-000000000004', policy_clause_refs = '["§1.1"]' WHERE id = '0a000005-0005-4000-8000-000000000005';
+UPDATE authority_relations SET authority_policy_id = '0a500003-0005-4000-8000-000000000003', policy_clause_refs = '["§2.1"]' WHERE id = '0a000006-0005-4000-8000-000000000006';
+
+UPDATE authority_criteria SET policy_clause_ref = '§4.4' WHERE id = '0a200002-0005-4000-8000-000000000002';
+UPDATE authority_criteria SET policy_clause_ref = '§3.1' WHERE id = '0a200003-0005-4000-8000-000000000003';
+UPDATE authority_criteria SET policy_clause_ref = '§3.2' WHERE id = '0a200004-0005-4000-8000-000000000004';
+UPDATE authority_criteria SET policy_clause_ref = '§2.1' WHERE id = '0a200005-0005-4000-8000-000000000005';
+UPDATE authority_criteria SET policy_clause_ref = '§2.2' WHERE id = '0a200006-0005-4000-8000-000000000006';
+UPDATE authority_criteria SET policy_clause_ref = '§6.1' WHERE id = '0a200007-0005-4000-8000-000000000007';
+UPDATE authority_criteria SET policy_clause_ref = '§6.2' WHERE id = '0a200008-0005-4000-8000-000000000008';
 
 
 -- ============================================================================

@@ -9,7 +9,11 @@ from pydantic import BaseModel, Field, HttpUrl
 # ============================================================================
 # Entity Types Pattern
 # ============================================================================
-ENTITY_TYPE_PATTERN = r"^(data_domain|data_product|data_contract|dataset|asset)$"
+# Every entity kind the metadata panel is shown on (EntityMetadataPanel).
+ENTITY_TYPE_PATTERN = (
+    r"^(data_domain|data_product|data_contract|dataset|asset|concept|collection"
+    r"|compliance_policy|authority_relation|authority_policy)$"
+)
 
 
 # ============================================================================
@@ -118,6 +122,7 @@ class Document(DocumentBase):
     content_type: Optional[str] = None
     size_bytes: Optional[int] = None
     storage_path: str
+    content_sha256: Optional[str] = None
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
     created_at: datetime

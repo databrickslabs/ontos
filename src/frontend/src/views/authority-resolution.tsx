@@ -14,6 +14,7 @@ import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { VersionCountBadge } from '@/components/common/version-count-badge';
 import { Plus, AlertCircle, ShieldCheck, Eye, Pencil, Trash2, ChevronDown } from 'lucide-react';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
+import AuthorityNav from '@/components/authority-resolution/authority-nav';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import type { AuthorityRelation } from '@/types/authority-resolution';
 
@@ -200,6 +201,7 @@ export default function AuthorityResolution() {
         <ShieldCheck className="w-8 h-8" />
         {t('title.main')}
       </h1>
+      <AuthorityNav current="relations" />
 
       <p className="text-muted-foreground mb-6 max-w-3xl">
         {t('list.description')}

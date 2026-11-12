@@ -52,6 +52,7 @@ from . import ontology_generation_runs
 from . import schema_import_runs
 from . import term_mappings
 from . import authority_resolution
+from . import authority_policy
 from . import search_documents
 from . import metric_view_baselines
 from . import metric_view_change_requests

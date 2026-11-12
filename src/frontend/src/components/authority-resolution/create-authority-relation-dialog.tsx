@@ -31,7 +31,7 @@ import {
   ACTION_VOCAB,
   type AuthorityRelation, type AffirmationInput,
   type PrerequisiteInput, type AuthorityRelationSlug,
-  type ResourceRefInput, type EntityRefCandidate, type ResolverAuth,
+  type ResourceRefInput, type EntityRefCandidate, type ResolverAuth, type AuthorityPolicy,
 } from '@/types/authority-resolution';
 import type { BusinessRoleRead } from '@/types/business-role';
 
@@ -106,6 +106,9 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   const [slugCatalog, setSlugCatalog] = useState<AuthorityRelationSlug[]>([]);
   const [resourceRefs, setResourceRefs] = useState<ResourceRefInput[]>([]);
   const [resolverAuth, setResolverAuth] = useState<ResolverAuth>('obo');
+  const [policies, setPolicies] = useState<AuthorityPolicy[]>([]);
+  const [policyId, setPolicyId] = useState('');
+  const [clauseRefs, setClauseRefs] = useState<string[]>([]);
   // Picker catalog, keyed by (entity_type, search-term). The dialog debounces
   // searches per row so the picker stays cheap even with 100s of concepts.
   const [refCandidates, setRefCandidates] = useState<Record<string, EntityRefCandidate[]>>({});
@@ -118,6 +121,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
     setOwnerTeamId(''); setProjectId(currentProject?.id || '');
     setAffirmations(DEFAULT_AFFIRMATIONS); setTags([]); setScheduleCron(null);
     setPrerequisites([]); setResourceRefs([]); setResolverAuth('obo');
+    setPolicyId(''); setClauseRefs([]);
   };
 
   // Load active Business Roles for the participant role picker (Settings feature).
@@ -146,6 +150,17 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
         if (Array.isArray(data)) setSlugCatalog(data);
         setSlugsLoading(false);
       }
+    })();
+    return () => { cancelled = true; };
+  }, [open, get]);
+
+  // Every policy version (an AR cites an exact version), for the Justification picker.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await get<AuthorityPolicy[]>('/api/authority/policies?include_history=true');
+      if (!cancelled && Array.isArray(data)) setPolicies(data);
     })();
     return () => { cancelled = true; };
   }, [open, get]);
@@ -212,6 +227,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       setTags((relation.tags || []).map((t) => t.fully_qualified_name).filter(Boolean) as string[]);
       setScheduleCron(relation.schedule_cron ?? null);
       setResolverAuth(relation.resolver_auth ?? 'obo');
+      setPolicyId(relation.authority_policy_id || '');
+      setClauseRefs(relation.policy_clause_refs || []);
       setPrerequisites(
         (relation.prerequisites || []).map((p) => ({
           prerequisite_family_slug: p.prerequisite_family_slug,
@@ -242,6 +259,21 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   // The context as authored so far (for the rule editor's validation and the
   // checks' variables); invalid rows leave it undefined until fixed.
   const draftContext = toDomainContext(scopeRows, paramRows);
+  const citedPolicy = policies.find((p) => p.id === policyId);
+  const policyClauses = citedPolicy?.clauses || [];
+  // Approved versions first; withdrawn ones only when already cited.
+  const policyOptions = policies
+    .filter((p) => p.status !== 'withdrawn' || p.id === policyId)
+    .sort((a, b) => Number(b.status === 'approved') - Number(a.status === 'approved')
+      || a.policy_key.localeCompare(b.policy_key) || b.version.localeCompare(a.version, undefined, { numeric: true }));
+  const choosePolicy = (id: string) => {
+    setPolicyId(id);
+    // Citations of clauses the new version doesn't have go (AR, rule items, checks).
+    const refs = new Set((policies.find((p) => p.id === id)?.clauses || []).map((c) => c.ref));
+    setClauseRefs((prev) => prev.filter((r) => refs.has(r)));
+    setRuleItems((prev) => prev.map((it) => (it.clause && !refs.has(it.clause) ? { ...it, clause: '' } : it)));
+    setCriteriaRows((prev) => prev.map((r) => (r.clauseRef && !refs.has(r.clauseRef) ? { ...r, clauseRef: '' } : r)));
+  };
 
   const updateAffirmation = (idx: number, patch: Partial<AffirmationInput>) => {
     setAffirmations((prev) => prev.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
@@ -319,6 +351,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       object_id: objectId.trim() || undefined,
       domain_context: dc.value,
       rule,
+      authority_policy_id: policyId || null,
+      policy_clause_refs: policyId ? clauseRefs : [],
       criteria: rowsToPayload(criteriaRows),
       evidence_sources,
       dna_max_threshold: Number.isFinite(parseFloat(dnaMax)) ? parseFloat(dnaMax) : 0.3,
@@ -415,6 +449,40 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
           <SectionTitle title={t('editor.sections.domainContext')} info={t('editor.sectionDescriptions.domainContext')} />
           <DomainContextEditor scope={scopeRows} params={paramRows} onScopeChange={setScopeRows} onParamsChange={setParamRows} />
 
+          <SectionTitle title={t('editor.sections.justification')} info={t('editor.sectionDescriptions.justification')} />
+          <div className="space-y-2">
+            <NativeSelect value={policyId} onChange={(e) => choosePolicy(e.target.value)}>
+              <option value="">{t('policy.citation.nonePicker')}</option>
+              {policyOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.policy_key} v{p.version} — {p.title} ({t(`policy.status.${p.status}`)})
+                </option>
+              ))}
+            </NativeSelect>
+            {citedPolicy && citedPolicy.status !== 'approved' && (
+              <p className="text-xs text-amber-600">{t('policy.citation.notApprovedHint', { status: t(`policy.status.${citedPolicy.status}`) })}</p>
+            )}
+            {policyClauses.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {policyClauses.map((c) => {
+                  const on = clauseRefs.includes(c.ref);
+                  return (
+                    <button
+                      key={c.ref}
+                      type="button"
+                      title={c.text || c.title || c.ref}
+                      aria-pressed={on}
+                      onClick={() => setClauseRefs((prev) => (on ? prev.filter((r) => r !== c.ref) : [...prev, c.ref]))}
+                      className={`rounded border px-2 py-0.5 text-xs ${on ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'}`}
+                    >
+                      <span className="font-mono">{c.ref}</span>{c.title ? ` ${c.title}` : ''}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <SectionTitle
             title={t('editor.sections.rule')}
             info={<Trans i18nKey="editor.sectionDescriptions.rule" ns="authority-resolution" components={{ strong: <strong />, code: <code /> }} />}
@@ -425,6 +493,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             paramKeys={paramRows.map((p) => p.key.trim())}
             scopeKeys={scopeRows.map((r) => r.key.trim())}
             domainContext={draftContext.value}
+            clauses={policyClauses}
           />
 
           <SectionTitle
@@ -436,6 +505,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             onChange={setCriteriaRows}
             params={draftContext.value?.params}
             scopeKeys={scopeRows.map((r) => r.key.trim())}
+            clauses={policyClauses}
           />
 
           <div className="text-sm font-semibold text-muted-foreground pt-2">{t('editor.sections.domains')}</div>

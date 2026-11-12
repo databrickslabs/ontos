@@ -1,3 +1,4 @@
+import hashlib
 from io import BytesIO
 from typing import Annotated, List, Optional
 
@@ -30,6 +31,43 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["Metadata"])
 
 FEATURE_ID = "data-domains"  # Use domain feature for now; can widen later
+
+# Authority Policy source documents above this are refused before anything is
+# written to the Volume (other entities keep their uncapped uploads).
+MAX_DOCUMENT_BYTES = 25 * 1024 * 1024
+
+
+async def _read_upload(file: UploadFile, capped: bool = False) -> tuple[bytes, str]:
+    """The upload's bytes and SHA-256; 413 when ``capped`` and over the limit."""
+    if not capped:
+        content = await file.read()
+        return content, hashlib.sha256(content).hexdigest()
+    content = await file.read(MAX_DOCUMENT_BYTES + 1)
+    if len(content) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Document exceeds the {MAX_DOCUMENT_BYTES // (1024 * 1024)} MiB limit",
+        )
+    return content, hashlib.sha256(content).hexdigest()
+
+
+def _guard_policy_documents(db: Session, entity_type: str, entity_id: str, *, must_exist: bool = True) -> None:
+    """An approved Authority Policy's documents are its hashed evidence: they
+    change only through a new (draft) version. ``must_exist=False`` lets a
+    leftover document of a deleted policy be removed."""
+    if entity_type != "authority_policy":
+        return
+    from src.db_models.authority_policy import AuthorityPolicyDb
+    policy = db.get(AuthorityPolicyDb, entity_id)
+    if policy is None:
+        if not must_exist:
+            return
+        raise HTTPException(status_code=404, detail="Authority Policy not found")
+    if policy.status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Policy is {policy.status}; its documents change only through a new version",
+        )
 
 
 # --- Rich Text ---
@@ -269,14 +307,13 @@ async def upload_document(
             )
         except ValidationError as e:
             raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
-        
+        _guard_policy_documents(db, entity_type, entity_id)
+        content, sha256 = await _read_upload(file, capped=entity_type == "authority_policy")
+
         # Ensure volume/path
         base_dir = f"uploads/{entity_type}/{entity_id}"
         volume_fs_base = manager.ensure_volume_path(ws, settings, base_dir)
 
-        # Read file content
-        content = await file.read()
-        
         # SECURITY: Sanitize filename to prevent path traversal and other exploits
         raw_filename = file.filename or "document.bin"
         filename = sanitize_filename(raw_filename, default="document.bin")
@@ -304,6 +341,7 @@ async def upload_document(
             size_bytes=size_bytes,
             storage_path=dest_path,
             user_email=current_user.email if current_user else None,
+            content_sha256=sha256,
         )
         
         audit_manager.log_action(
@@ -358,6 +396,9 @@ async def delete_document(
     manager: MetadataManager = Depends(get_metadata_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
+    existing = manager.get_document(db, id=id)
+    if existing is not None:
+        _guard_policy_documents(db, existing.entity_type, existing.entity_id, must_exist=False)
     ok = manager.delete_document(db, id=id, user_email=current_user.email if current_user else None)
     if not ok:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -468,11 +509,22 @@ async def upload_shared_document(
 ):
     """Upload a new shared document asset. Stored in shared folder."""
     try:
+        # Validate and read the upload before touching the volume.
+        payload = DocumentCreate(
+            entity_type="data_domain",  # Shared assets use a generic type
+            entity_id=SHARED_ENTITY_ID,
+            title=title,
+            short_description=short_description,
+            is_shared=True,
+            level=level,
+            inheritable=inheritable,
+        )
+        content, sha256 = await _read_upload(file)
+
         # Use shared folder for shared documents
         base_dir = "uploads/__shared__"
         volume_fs_base = manager.ensure_volume_path(ws, settings, base_dir)
 
-        content = await file.read()
         raw_filename = file.filename or "document.bin"
         filename = sanitize_filename(raw_filename, default="document.bin")
         content_type = file.content_type
@@ -487,15 +539,6 @@ async def upload_shared_document(
 
         ws.files.upload(dest_path, BytesIO(content))
 
-        payload = DocumentCreate(
-            entity_type="data_domain",  # Shared assets use a generic type
-            entity_id=SHARED_ENTITY_ID,
-            title=title,
-            short_description=short_description,
-            is_shared=True,
-            level=level,
-            inheritable=inheritable,
-        )
         result = manager.create_document_record(
             db,
             data=payload,
@@ -504,6 +547,7 @@ async def upload_shared_document(
             size_bytes=size_bytes,
             storage_path=dest_path,
             user_email=current_user.email if current_user else None,
+            content_sha256=sha256,
         )
         
         audit_manager.log_action(
@@ -519,6 +563,8 @@ async def upload_shared_document(
         return result
     except HTTPException:
         raise
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
     except Exception as e:
         logger.exception("Failed uploading shared document")
         raise HTTPException(status_code=500, detail="Failed to upload shared document")
@@ -541,6 +587,8 @@ async def attach_shared_asset(
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Attach a shared metadata asset to an entity."""
+    if payload.asset_type == "document":
+        _guard_policy_documents(db, entity_type, entity_id)
     try:
         result = manager.attach_shared_asset(
             db, entity_type=entity_type, entity_id=entity_id,
@@ -589,6 +637,8 @@ async def detach_shared_asset(
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Detach a shared metadata asset from an entity."""
+    if asset_type == "document":
+        _guard_policy_documents(db, entity_type, entity_id, must_exist=False)
     ok = manager.detach_shared_asset(
         db, entity_type=entity_type, entity_id=entity_id,
         asset_type=asset_type, asset_id=asset_id, user_email=current_user.email if current_user else None

@@ -68,7 +68,8 @@ ODRL_CONTEXT_OPERANDS = ("spatial", "purpose", "dateTime", "industry", "language
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _OPERAND_RE = re.compile(r"^(?:[A-Za-z][A-Za-z0-9_-]*:)?[A-Za-z_][A-Za-z0-9_]*$")
 _REFERENCE_RE = re.compile(rf"^({NS_CTX}|{NS_REQ})\.([A-Za-z_][A-Za-z0-9_]*)$")
-_FACETS = ("name", "message", "direction", "weight", "dimension")
+# ``clause`` cites the Authority Policy clause the item implements (e.g. "§7.1").
+_FACETS = ("name", "message", "direction", "weight", "dimension", "clause")
 # Compliance-DSL keywords can't follow ``req.`` / ``ctx.`` / ``obj.`` in a rule.
 _DSL_KEYWORDS = frozenset({
     "MATCH", "WHERE", "ASSERT", "ON_PASS", "ON_FAIL", "CASE", "WHEN", "THEN", "ELSE", "END",
@@ -372,6 +373,7 @@ def _criterion(kind: str, code: str, expr: str, facets: Dict[str, Any], default_
         dimension=str(facets.get("dimension") or "policy"),
         message=facets.get("message") or None,
         kind=kind,
+        clause=str(facets["clause"]) if facets.get("clause") else None,
     )
 
 

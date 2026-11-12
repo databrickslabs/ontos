@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy.orm import Session
@@ -62,9 +63,13 @@ class ComplianceLlmCheckCacheRepository(
     def put_verdict(self, db: Session, *, key: str, model: str, passed: bool, reason: str) -> None:
         """Store a verdict, in a savepoint: a row another run wrote first is kept.
 
+        A row past its max age (asked again) is overwritten with the new verdict.
         Nothing is committed here; the run commits once when it completes.
         """
-        if db.get(ComplianceLlmCheckCacheDb, key) is not None:
+        existing = db.get(ComplianceLlmCheckCacheDb, key)
+        if existing is not None:
+            existing.model, existing.passed, existing.reason = model, passed, reason
+            existing.created_at = datetime.utcnow()
             return
         try:
             with db.begin_nested():
@@ -74,6 +79,16 @@ class ComplianceLlmCheckCacheRepository(
         except IntegrityError:
             # Written by a concurrent run between the read and the insert
             pass
+
+
+    def delete_older_than(self, db: Session, cutoff) -> int:
+        """Delete the verdicts written before ``cutoff``, in a savepoint; how many."""
+        with db.begin_nested():
+            return (
+                db.query(ComplianceLlmCheckCacheDb)
+                .filter(ComplianceLlmCheckCacheDb.created_at < cutoff)
+                .delete(synchronize_session=False)
+            )
 
 
 compliance_policy_repo = CompliancePolicyRepository()

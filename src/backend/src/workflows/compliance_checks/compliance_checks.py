@@ -414,7 +414,8 @@ def run_policy(
     db: Session,
     policy: Dict[str, Any],
     manager: Any,
-    entity_limit: Optional[int]
+    entity_limit: Optional[int],
+    llm_checker: Any = None,
 ) -> Dict[str, Any]:
     """Run a single compliance policy.
 
@@ -440,7 +441,9 @@ def run_policy(
 
     try:
         # Run policy using ComplianceManager
-        run = manager.run_policy_inline(db, policy=policy_db, limit=entity_limit)
+        run = manager.run_policy_inline(
+            db, policy=policy_db, limit=entity_limit, llm_checker=llm_checker,
+        )
 
         print(f"  Run ID: {run.id}")
         print(f"  Status: {run.status}")
@@ -595,8 +598,11 @@ def main() -> None:
         total_failed = 0
         total_entities = 0
 
+        # One LLM_CHECK budget for the whole job run, shared by its policies
+        llm_checker = manager.llm_checker(db, purge_expired=True)
+
         for policy in policies:
-            result = run_policy(db, policy, manager, entity_limit)
+            result = run_policy(db, policy, manager, entity_limit, llm_checker)
             results.append(result)
 
             if result.get("status") in ["succeeded", "running"]:

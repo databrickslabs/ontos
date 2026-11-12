@@ -259,7 +259,7 @@ def test_an_unreadable_object_is_kept_for_the_next_run(tag_sync, uc,
     first = _run(tag_sync, [_row("uc_column", COLUMN)], previous={})
 
     def unreadable(*_args):
-        raise RuntimeError("CATALOG_NOT_FOUND")
+        raise RuntimeError("warehouse temporarily unavailable")
 
     monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags", unreadable)
     second = _run(tag_sync, [], previous=first.delivered)

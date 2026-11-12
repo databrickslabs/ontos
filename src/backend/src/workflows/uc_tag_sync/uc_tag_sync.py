@@ -1958,8 +1958,14 @@ def sync_tags(
 
     def skip_missing(object_type: str, fqn: str) -> None:
         # Only the object type and name are logged: the SDK error text can carry paths.
-        print(f"[WARN] Skipped {object_type} {fqn}: not found in Unity Catalog")
+        print(f"[WARN] Skipped {object_type} {fqn}: {MISSING_OBJECT_SKIP_REASON}")
         result.skipped.append(f"{object_type} {fqn}: {MISSING_OBJECT_SKIP_REASON}")
+        # UC also answers "not found" for an object the job can't see (no USE CATALOG,
+        # catalog not bound to the workspace). Keep what an earlier run delivered there,
+        # so the tags are still removed once the object is reachable again.
+        kept = (previous or {}).get(object_type, {}).get(fqn)
+        if kept:
+            result.delivered[object_type][fqn] = dict(kept)
 
     def apply(
         object_type: str, fqn: str, desired: Dict[str, Optional[str]]
@@ -1980,7 +1986,6 @@ def sync_tags(
                                         previously_delivered=delivered_before,
                                         delivered=ours)
         except UcObjectMissing:
-            # Nothing is tagged there, so nothing is recorded as delivered either.
             skip_missing(object_type, fqn)
             return 0, 0
         except Exception as e:

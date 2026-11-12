@@ -100,6 +100,15 @@
       "score": "Score",
       "issues": "Issues"
     }
+  },
+  "complianceTemplates": {
+    "button": "Compliance",
+    "missingFields_one": "{{count}} mandatory field missing",
+    "missingFields_other": "{{count}} mandatory fields missing",
+    "complete": "All mandatory fields are filled",
+    "entityTypes": {
+      "data_product": "Data Products",
+      "asset": "Tables and views"
+    }
   }
 }
-

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, Power, PowerOff, Loader2, X, Pencil } from 'lucide-react';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from '@/components/ui/button';
@@ -60,9 +61,11 @@ interface ComplianceTemplate {
   fields: ComplianceField[];
 }
 
-// Slice 1: Data Products is the only bound entity type exercised end-to-end.
+// Entity types a template can be bound to. ``asset`` covers table and view
+// assets only (the backend refuses other asset types). Labels are i18n keys.
 const ENTITY_TYPE_OPTIONS = [
-  { value: 'data_product', label: 'Data Products' },
+  { value: 'data_product', labelKey: 'complianceTemplates.entityTypes.data_product' },
+  { value: 'asset', labelKey: 'complianceTemplates.entityTypes.asset' },
 ];
 
 interface DraftField {
@@ -128,6 +131,7 @@ function stringifyDefault(valueType: string, value: unknown): string {
 
 export default function ComplianceTemplatesSettings() {
   const { toast } = useToast();
+  const { t } = useTranslation('compliance');
   const { get, post, put, delete: apiDelete } = useApi();
 
   const [templates, setTemplates] = useState<ComplianceTemplate[]>([]);
@@ -332,8 +336,10 @@ export default function ComplianceTemplatesSettings() {
     setDeleteDialogOpen(false);
   };
 
-  const entityLabel = (value: string) =>
-    ENTITY_TYPE_OPTIONS.find((o) => o.value === value)?.label || value;
+  const entityLabel = (value: string) => {
+    const option = ENTITY_TYPE_OPTIONS.find((o) => o.value === value);
+    return option ? t(option.labelKey) : value;
+  };
 
   if (loading) {
     return <ListItemSkeleton count={3} height="h-16" className="space-y-2" />;
@@ -465,7 +471,7 @@ export default function ComplianceTemplatesSettings() {
                 onChange={(e) => setFormData((prev) => ({ ...prev, entity_type: e.target.value }))}
               >
                 {ENTITY_TYPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                  <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
                 ))}
               </select>
             </div>

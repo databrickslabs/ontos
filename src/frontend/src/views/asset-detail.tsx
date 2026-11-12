@@ -39,6 +39,10 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import EntityComplianceButton from '@/components/compliance/entity-compliance-button';
+
+// Asset types a compliance template (entity type ``asset``) applies to.
+const COMPLIANCE_TEMPLATE_ELIGIBLE_TYPES = new Set(['Table', 'View']);
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   draft: 'outline',
@@ -122,6 +126,10 @@ export default function AssetDetailView() {
   const canWrite = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
   const canAdmin = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.ADMIN);
   const canEditSemanticLinks = !permissionsLoading && hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
+  // Filling compliance values needs both the values feature and asset edit rights.
+  const canWriteCompliance =
+    canWrite &&
+    hasPermission('compliance-template-values', FeatureAccessLevel.READ_WRITE);
 
   const entityType = asset?.asset_type_name || 'Asset';
 
@@ -266,6 +274,13 @@ export default function AssetDetailView() {
           >
             <Network className="mr-2 h-4 w-4" /> View in Hierarchy
           </Button>
+          {COMPLIANCE_TEMPLATE_ELIGIBLE_TYPES.has(entityType) && (
+            <EntityComplianceButton
+              entityType="asset"
+              entityId={assetId!}
+              canWrite={canWriteCompliance}
+            />
+          )}
           {showLineageTab && canWrite && (
             <Button
               variant="outline"

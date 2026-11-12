@@ -4,15 +4,27 @@ Two RBAC surfaces:
 - ``settings-compliance-templates`` gates admin template *definition* management.
 - ``compliance-template-values`` gates per-entity value read (READ_ONLY) vs
   write (READ_WRITE).
+
+Values of table and view assets (``entity_type = "asset"``) also follow the
+asset routes' read and edit rules (see ``_ensure_entity_access``).
 """
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
-from src.common.authorization import PermissionChecker
+from src.common.authorization import PermissionChecker, get_user_details_from_sdk
 from src.common.dependencies import CurrentUserDep, DBSessionDep
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.assets_manager import assets_manager
+from src.controller.authorization_manager import AuthorizationManager
+from src.controller.compliance_template_assets import (
+    ASSET_ENTITY_TYPE,
+    ComplianceTemplateAssetError,
+    resolve_template_asset,
+)
 from src.controller.compliance_templates_manager import (
     ComplianceTemplateError,
     compliance_templates_manager,
@@ -28,6 +40,7 @@ from src.models.compliance_templates import (
     ComplianceValuesReplace,
     EntityComplianceRead,
 )
+from src.models.users import UserInfo
 
 logger = get_logger(__name__)
 
@@ -35,6 +48,73 @@ router = APIRouter(prefix="/api/compliance-templates", tags=["Compliance Templat
 
 ADMIN_FEATURE_ID = "settings-compliance-templates"
 VALUES_FEATURE_ID = "compliance-template-values"
+ASSETS_FEATURE_ID = "assets"
+
+
+async def _has_feature(
+    request: Request,
+    user: UserInfo,
+    auth_manager: AuthorizationManager,
+    feature_id: str,
+    level: FeatureAccessLevel,
+) -> bool:
+    """Whether the user has ``feature_id`` at ``level`` (the ``PermissionChecker`` rule)."""
+    try:
+        await PermissionChecker(feature_id, level)(request, user, auth_manager)
+        return True
+    except HTTPException as e:
+        if e.status_code == status.HTTP_403_FORBIDDEN:
+            return False
+        raise
+
+
+async def _ensure_entity_access(
+    request: Request,
+    db: Session,
+    user: UserInfo,
+    auth_manager: AuthorizationManager,
+    *,
+    entity_type: str,
+    entity_id: str,
+    write: bool,
+) -> None:
+    """Host entity checks on top of the values feature (only assets have them).
+
+    Asset values follow the asset routes' rules: writing needs ``assets`` at
+    READ_WRITE (as editing the asset); reading needs that, or a link to a data
+    product the user can access (as ``GET /api/assets/{id}``). The asset must
+    be a table or a view.
+    """
+    if entity_type != ASSET_ENTITY_TYPE:
+        return
+    try:
+        asset = resolve_template_asset(db, entity_id)
+    except ComplianceTemplateAssetError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_detail())
+    if await _has_feature(
+        request, user, auth_manager, ASSETS_FEATURE_ID, FeatureAccessLevel.READ_WRITE
+    ):
+        return
+    if not write:
+        dpm = getattr(request.app.state, "data_products_manager", None)
+        if dpm is not None and assets_manager.is_asset_accessible(
+            db, asset_id=asset.id, data_products_manager=dpm, is_admin=False
+        ):
+            return
+    code = (
+        "compliance_template_asset_write_forbidden"
+        if write
+        else "compliance_template_asset_read_forbidden"
+    )
+    message = (
+        "You can't change the compliance values of this asset."
+        if write
+        else "You can't view the compliance values of this asset."
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={"code": code, "message": message, "params": {"assetId": str(asset.id)}},
+    )
 
 
 # ----- Admin: template definitions ----------------------------------------
@@ -214,10 +294,17 @@ async def delete_template_field(
 async def read_entity_compliance(
     entity_type: str,
     entity_id: str,
+    request: Request,
     db: DBSessionDep,
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: None = Depends(PermissionChecker(VALUES_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     """Composed read: { template, fields, values } for an entity. Read-only allowed."""
+    await _ensure_entity_access(
+        request, db, user, auth_manager,
+        entity_type=entity_type, entity_id=entity_id, write=False,
+    )
     return compliance_templates_manager.read_for_entity(db, entity_type=entity_type, entity_id=entity_id)
 
 
@@ -225,10 +312,17 @@ async def read_entity_compliance(
 async def entity_completeness(
     entity_type: str,
     entity_id: str,
+    request: Request,
     db: DBSessionDep,
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: None = Depends(PermissionChecker(VALUES_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     """Advisory completeness result for an entity. Never blocks; read-only allowed."""
+    await _ensure_entity_access(
+        request, db, user, auth_manager,
+        entity_type=entity_type, entity_id=entity_id, write=False,
+    )
     applicable = compliance_templates_manager.has_active_template(db, entity_type=entity_type)
     result = compliance_templates_manager.check_completeness(db, entity_type=entity_type, entity_id=entity_id)
     return ComplianceCompletenessRead(
@@ -244,11 +338,18 @@ async def replace_entity_values(
     entity_type: str,
     entity_id: str,
     body: ComplianceValuesReplace,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: None = Depends(PermissionChecker(VALUES_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Replace-all write of an entity's values (the materialization event)."""
+    await _ensure_entity_access(
+        request, db, user, auth_manager,
+        entity_type=entity_type, entity_id=entity_id, write=True,
+    )
     try:
         return compliance_templates_manager.replace_values(
             db,

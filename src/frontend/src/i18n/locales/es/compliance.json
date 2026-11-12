@@ -100,6 +100,15 @@
       "score": "Puntuación",
       "issues": "Problemas"
     }
+  },
+  "complianceTemplates": {
+    "button": "Cumplimiento",
+    "missingFields_one": "Falta {{count}} campo obligatorio",
+    "missingFields_other": "Faltan {{count}} campos obligatorios",
+    "complete": "Todos los campos obligatorios están completos",
+    "entityTypes": {
+      "data_product": "Productos de datos",
+      "asset": "Tablas y vistas"
+    }
   }
 }
-

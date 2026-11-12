@@ -41,8 +41,9 @@ export default function EntityComplianceButton({
   const [open, setOpen] = useState(false);
 
   const loadCompleteness = useCallback(async () => {
+    const entityPath = `${entityType}/${encodeURIComponent(entityId)}`;
     const { data, error } = await get<ComplianceCompleteness>(
-      `/api/compliance-templates/entities/${entityType}/${encodeURIComponent(entityId)}/completeness`,
+      `/api/compliance-templates/entities/${entityPath}/completeness`,
     );
     if (error || !data) {
       setApplicable(false);

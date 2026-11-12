@@ -347,6 +347,22 @@
       "fail": "Fallito",
       "true": "Vero",
       "false": "Falso"
+    },
+    "checks": {
+      "button": "Verifica",
+      "buttonHint": "Verifica il workflow alla ricerca di problemi. Gli avvisi non impediscono il salvataggio.",
+      "clean": "Nessun problema trovato.",
+      "errorsCount_one": "{{count}} errore",
+      "errorsCount_other": "{{count}} errori",
+      "warningsCount_one": "{{count}} avviso",
+      "warningsCount_other": "{{count}} avvisi"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "Il passo \"{{step}}\" termina il workflow, quindi il suo collegamento a \"{{target}}\" viene ignorato e rimosso al salvataggio.",
+      "conditionalBranchMissing": "La condizione \"{{step}}\" non ha un passo sul ramo {{branch}}. Se la condizione è {{branch}}, il workflow termina con successo.",
+      "unreachableSteps": "Questi passi non sono raggiungibili dal primo passo: {{steps}}.",
+      "storedEntityTypeUnknown": "Il trigger elenca \"{{entityType}}\", un tipo di entità che non esiste più. Non si attiva mai per esso.",
+      "storedEntityTypeUnsupported": "Il trigger {{trigger}} non si attiva mai per {{entity}}."
     }
   },
   "approvalResponse": {
@@ -713,7 +729,9 @@
     "badges": {
       "default": "Predefinito",
       "approval": "Approvazione",
-      "process": "Processo"
+      "process": "Processo",
+      "triggerWarnings": "Avviso trigger",
+      "triggerWarningsHint": "Il trigger elenca tipi di entità che non corrispondono a nessun evento. Apri il workflow per vederli."
     },
     "columns": {
       "steps": "Passaggi",

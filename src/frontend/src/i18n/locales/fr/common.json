@@ -477,7 +477,8 @@
     "relationshipCreated": "Relation créée",
     "assetFallback": "Actif",
     "conceptRelationshipHint": "« {{relationship}} » relie cet élément à un concept sous forme de relation : elle apparaît dans Relations et dans le lignage. Pour afficher le concept dans les détails de cet élément et dans {{conceptSection}} sur la page du concept, utilisez plutôt {{section}}.",
-    "targetNotPickable": "{{type}} ne peut pas être choisi ici. Il est géré sur sa propre page."
+    "targetNotPickable": "{{type}} ne peut pas être choisi ici. Il est géré sur sa propre page.",
+    "noAccessToTarget": "Vous n'avez pas accès à {{type}}. Demandez un accès en lecture à un administrateur pour créer ce lien."
   },
   "assetForm": {
     "groups": {

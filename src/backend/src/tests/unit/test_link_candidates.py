@@ -7,6 +7,8 @@ the read permission of the feature that owns it.
 """
 
 import pytest
+from types import SimpleNamespace
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -67,14 +69,25 @@ CONCEPTS = [
 
 @pytest.fixture
 def make_client(db_session):
-    def _make(permissions=ALL_READ, concepts=CONCEPTS):
+    def _make(permissions=ALL_READ, concepts=CONCEPTS, email="u@example.com", groups=("g",)):
+        from pathlib import Path
+        from unittest.mock import MagicMock
+
+        from databricks.sdk import WorkspaceClient
+
+        from src.controller.data_contracts_manager import DataContractsManager
+        from src.controller.data_products_manager import DataProductsManager
+
         app = FastAPI()
         app.include_router(suggestion_routes.router)
         app.state.authorization_manager = _FakeAuthManager(permissions)
         app.state.settings_manager = None
         app.state.teams_manager = None
         app.state.semantic_models_manager = _FakeSemanticModels(concepts)
-        user = UserInfo(email="u@example.com", username="u", user="U", ip="127.0.0.1", groups=["g"])
+        app.state.data_products_manager = DataProductsManager(
+            db=db_session, ws_client=MagicMock(spec=WorkspaceClient))
+        app.state.data_contracts_manager = DataContractsManager(data_dir=Path("/tmp"))
+        user = UserInfo(email=email, username="u", user="U", ip="127.0.0.1", groups=list(groups))
 
         async def _user():
             return user
@@ -240,3 +253,118 @@ class TestOtherTypes:
 
         assert resp.status_code == 500
         assert "secret" not in resp.text
+
+
+PRODUCT_READ = {"data-products": RO}
+CONTRACT_READ = {"data-contracts": RO}
+
+
+def _product(db_session, name, status, **fields):
+    import uuid as _uuid
+    from src.db_models.data_products import DataProductDb
+
+    pid = str(_uuid.uuid4())
+    db_session.add(DataProductDb(id=pid, name=name, version="1.0.0", status=status,
+                                 version_family_id=pid, **fields))
+    db_session.commit()
+    return pid
+
+
+def _contract(db_session, name, status, **fields):
+    import uuid as _uuid
+    from src.db_models.data_contracts import DataContractDb
+
+    cid = str(_uuid.uuid4())
+    db_session.add(DataContractDb(id=cid, name=name, version="1.0.0", status=status,
+                                  version_family_id=cid, created_by="seed", **fields))
+    db_session.commit()
+    return cid
+
+
+def _team_with_member(db_session, member_email):
+    import uuid as _uuid
+    from src.db_models.teams import TeamMemberDb
+
+    team = TeamDb(id=str(_uuid.uuid4()), name=f"team-{_uuid.uuid4().hex[:6]}",
+                  created_by="t", updated_by="t", extra_metadata="{}")
+    db_session.add(team)
+    db_session.flush()
+    db_session.add(TeamMemberDb(team_id=team.id, member_type="user",
+                                member_identifier=member_email, added_by="seed"))
+    db_session.commit()
+    return team.id
+
+
+def _names(client, target_type):
+    return {c["name"] for c in _candidates(client, target_type=target_type, limit=100)["candidates"]}
+
+
+class TestVisibility:
+    """Candidates follow the list views' read rules, not just the feature level."""
+
+    def test_product_readers_see_published_products_and_their_own_drafts(self, make_client, db_session):
+        team_id = _team_with_member(db_session, "member@example.com")
+        _product(db_session, "Published", "active")
+        _product(db_session, "Someone's draft", "draft", draft_owner_id="other@example.com")
+        _product(db_session, "Proposed", "proposed", draft_owner_id="other@example.com")
+        _product(db_session, "My draft", "draft", draft_owner_id="me@example.com")
+        _product(db_session, "Team draft", "draft", owner_team_id=team_id)
+
+        reader, _ = make_client(permissions=PRODUCT_READ, email="me@example.com")
+        member, _ = make_client(permissions=PRODUCT_READ, email="member@example.com")
+        admin, _ = make_client(permissions={"data-products": FeatureAccessLevel.ADMIN}, email="admin@example.com")
+
+        assert _names(reader, "DataProduct") == {"Published", "My draft"}
+        assert _names(member, "DataProduct") == {"Published", "Team draft"}
+        assert _names(admin, "DataProduct") == {
+            "Published", "Someone's draft", "Proposed", "My draft", "Team draft"}
+
+    def test_product_totals_count_only_visible_products(self, make_client, db_session):
+        _product(db_session, "Published", "active")
+        _product(db_session, "Hidden draft", "draft", draft_owner_id="other@example.com")
+        reader, _ = make_client(permissions=PRODUCT_READ, email="me@example.com")
+
+        data = _candidates(reader, target_type="DataProduct", query="d")
+
+        assert ([c["name"] for c in data["candidates"]], data["total"]) == (["Published"], 1)
+
+    def test_contract_readers_see_published_contracts_and_their_own_drafts(self, make_client, db_session):
+        team_id = _team_with_member(db_session, "member@example.com")
+        _contract(db_session, "Active contract", "active")
+        _contract(db_session, "Someone's draft", "draft", draft_owner_id="other@example.com")
+        _contract(db_session, "Proposed contract", "proposed", draft_owner_id="other@example.com")
+        _contract(db_session, "My draft", "draft", draft_owner_id="me@example.com")
+        _contract(db_session, "Team proposal", "proposed", owner_team_id=team_id)
+
+        reader, _ = make_client(permissions=CONTRACT_READ, email="me@example.com")
+        member, _ = make_client(permissions=CONTRACT_READ, email="member@example.com")
+        admin, _ = make_client(permissions={"data-contracts": FeatureAccessLevel.ADMIN}, email="admin@example.com")
+
+        assert _names(reader, "DataContract") == {"Active contract", "My draft"}
+        assert _names(member, "DataContract") == {"Active contract", "Team proposal"}
+        assert _names(admin, "DataContract") == {
+            "Active contract", "Someone's draft", "Proposed contract", "My draft", "Team proposal"}
+
+    def test_projects_come_from_the_callers_project_list(self, make_client, monkeypatch):
+        from src.controller.projects_manager import projects_manager
+
+        calls = []
+
+        def fake_get_all_projects(db, *, user_identifier, user_groups, is_admin, **_):
+            calls.append((user_identifier, list(user_groups), is_admin))
+            return [SimpleNamespace(id="p1", name="Mine", description=None, status=None)]
+
+        monkeypatch.setattr(projects_manager, "get_all_projects", fake_get_all_projects)
+        client, _ = make_client(permissions={"projects": RO}, email="me@example.com", groups=("analysts",))
+
+        assert _names(client, "Project") == {"Mine"}
+        assert calls == [("me@example.com", ["analysts"], False)]
+
+    def test_app_entity_graph_nodes_are_not_concept_candidates(self, make_client):
+        concepts = CONCEPTS + [{
+            "value": "urn:ontos:data_product:p-draft", "label": "Draft product node",
+            "type": "individual", "source_context": "retail",
+        }]
+        client, _ = make_client(concepts=concepts)
+
+        assert "Draft product node" not in _names(client, "OntologyConcept")

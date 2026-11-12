@@ -313,6 +313,31 @@ describe('AddRelationshipDialog target sources (#956, #957, #959)', () => {
     await waitFor(() => expect(screen.queryByText(/can't be picked here/i)).toBeNull());
   });
 
+  it('says when the caller has no access to the target type, and clears it on a change', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/ontology/entity-types/relationships')) return { data: LOGICAL_ENTITY_RELS };
+      if (url.startsWith('/api/asset-types')) return { data: [] };
+      if (url.startsWith('/api/suggestions/link-candidates')) {
+        if (url.includes('target_type=OntologyConcept')) {
+          return { data: {}, error: 'Insufficient permissions', status: 403 };
+        }
+        return { data: { candidates: DOMAINS, total: 2 } };
+      }
+      return { data: null };
+    });
+    await open(/has concepts/i);
+
+    expect(await screen.findByText(/don't have access to Ontology Concept/i)).toBeInTheDocument();
+    expect(screen.queryByText(/No entities of this type/i)).toBeNull();
+
+    const option = await screen.findByRole('option', { name: /belongs to domain/i });
+    fireEvent.change(screen.getByRole('combobox', { name: 'relationship type' }), {
+      target: { value: (option as HTMLOptionElement).value },
+    });
+    expect(await screen.findByText('Sales')).toBeInTheDocument();
+    expect(screen.queryByText(/don't have access/i)).toBeNull();
+  });
+
   it('says when a target type is managed elsewhere', async () => {
     await open(/has owner/i);
 

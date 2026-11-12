@@ -477,7 +477,8 @@
     "relationshipCreated": "Beziehung erstellt",
     "assetFallback": "Asset",
     "conceptRelationshipHint": "„{{relationship}}“ verknüpft dieses Element als Beziehung mit einem Konzept: Sie erscheint unter Beziehungen und in der Lineage. Damit das Konzept in den Details dieses Elements und auf der Konzeptseite unter {{conceptSection}} erscheint, verwenden Sie stattdessen {{section}}.",
-    "targetNotPickable": "{{type}} kann hier nicht ausgewählt werden. Es wird auf einer eigenen Seite verwaltet."
+    "targetNotPickable": "{{type}} kann hier nicht ausgewählt werden. Es wird auf einer eigenen Seite verwaltet.",
+    "noAccessToTarget": "Sie haben keinen Zugriff auf {{type}}. Bitten Sie einen Administrator um Lesezugriff, um darauf zu verknüpfen."
   },
   "assetForm": {
     "groups": {

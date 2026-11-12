@@ -204,6 +204,8 @@ export function AddRelationshipDialog({
   const [typesLoaded, setTypesLoaded] = useState(false);
   // Bumped whenever the relationship type changes: answers to older requests are dropped.
   const requestSeq = useRef(0);
+  // The caller may not read the target type (403): say so instead of "nothing found".
+  const [accessDenied, setAccessDenied] = useState(false);
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   const [browseResults, setBrowseResults] = useState<TargetEntity[]>([]);
   const [browseTotal, setBrowseTotal] = useState(0);
@@ -315,6 +317,10 @@ export function AddRelationshipDialog({
       `/api/suggestions/link-candidates?${params}`,
     );
     if (seq !== requestSeq.current) return null; // the relationship type changed meanwhile
+    if (response.status === 403) {
+      setAccessDenied(true);
+      return { items: [], total: 0 };
+    }
     const candidates = response.data?.candidates;
     if (response.error || !Array.isArray(candidates)) return { items: [], total: 0 };
     return {
@@ -364,6 +370,7 @@ export function AddRelationshipDialog({
       }
       const response = await apiGet<{ items: any[]; total: number }>(url);
       if (seq !== requestSeq.current) return;
+      if (response.status === 403) setAccessDenied(true);
       const items = response.data?.items;
       if (!response.error && Array.isArray(items)) {
         setSearchResults(items.map(a => ({
@@ -392,6 +399,7 @@ export function AddRelationshipDialog({
       }
       const response = await apiGet<{ items: any[]; total: number }>(url);
       if (seq !== requestSeq.current) return;
+      if (response.status === 403) setAccessDenied(true);
       const items = response.data?.items;
       if (!response.error && Array.isArray(items)) {
         setBrowseResults(items.map(a => ({
@@ -451,6 +459,7 @@ export function AddRelationshipDialog({
 
   const handleRelTypeChange = (val: string) => {
     requestSeq.current += 1;
+    setAccessDenied(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (browseDebounceRef.current) clearTimeout(browseDebounceRef.current);
     setSelectedRelType(val);
@@ -497,6 +506,7 @@ export function AddRelationshipDialog({
   };
 
   const resetState = () => {
+    setAccessDenied(false);
     setSelectedRelType('');
     setSelectedTarget(null);
     setMode('browse');
@@ -613,10 +623,12 @@ export function AddRelationshipDialog({
 
               {/* Content area */}
               <div className="flex-1 min-h-0 px-6 overflow-hidden">
-                {isUnsupported ? (
+                {isUnsupported || accessDenied ? (
                   <div className="min-h-[200px] flex items-center justify-center">
                     <p className="text-sm text-muted-foreground text-center max-w-sm">
-                      {t('common:addRelationship.targetNotPickable', { type: targetTypeLabel })}
+                      {accessDenied
+                        ? t('common:addRelationship.noAccessToTarget', { type: targetTypeLabel })
+                        : t('common:addRelationship.targetNotPickable', { type: targetTypeLabel })}
                     </p>
                   </div>
                 ) : mode === 'search' ? (

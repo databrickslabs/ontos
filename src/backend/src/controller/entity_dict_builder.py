@@ -58,11 +58,13 @@ def build_data_product_dict(db: Session, product_id: str) -> Optional[Dict[str, 
     base["publication_scope"] = pub_scope
     base["is_published"] = pub_scope != "none"
 
+    # Compliance template (template_complete, template_field_<ref>, ...)
+    _add_compliance_template_fields(db, base, "data_product", product_id)
+
     # Relationship counts
     _add_relationship_counts(db, base, "DataProduct", product_id)
     _add_tag_count(db, base, product_id, "DataProduct")
     _add_quality_check_count(db, base, "DataProduct", product_id)
-    _add_compliance_template_fields(db, base, "data_product", product_id)
 
     return base
 

@@ -428,12 +428,35 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     return byContext;
   }, [treeData, groupByFile]);
 
+  const conceptLabel = useCallback(
+    (concept: OntologyConcept) => resolveLabel(concept, selectedLanguage),
+    [selectedLanguage],
+  );
+
+  // Order concept IRIs alphabetically by label in the selected language (same
+  // comparator as the list view), with the IRI as a deterministic tie-break.
+  // IRIs with no concept (group keys) fall back to the IRI text.
+  const sortByLabel = useCallback(
+    (iris: string[]): string[] => {
+      const labelOf = (iri: string) => {
+        const concept = treeData.conceptMap.get(iri);
+        return concept ? conceptLabel(concept) : iri;
+      };
+      return [...iris].sort(
+        (a, b) =>
+          labelOf(a).localeCompare(labelOf(b), undefined, { sensitivity: 'base' }) ||
+          (a < b ? -1 : a > b ? 1 : 0),
+      );
+    },
+    [treeData, conceptLabel],
+  );
+
   const rootConcepts = useMemo(() => {
     if (isGrouping) {
       return treeData.groupKeys;
     }
 
-    return Array.from(treeData.conceptMap.values())
+    const roots = Array.from(treeData.conceptMap.values())
       .filter(concept => {
         if (groupByDomain && concept.concept_type === 'property' && concept.domain) {
           return false;
@@ -442,11 +465,12 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                !concept.parent_concepts.some(parentIri => treeData.conceptMap.has(parentIri));
       })
       .map(concept => concept.iri);
-  }, [treeData, isGrouping, groupByDomain]);
+    return sortByLabel(roots);
+  }, [treeData, isGrouping, groupByDomain, sortByLabel]);
 
   const getChildren = useCallback((itemId: string): string[] => {
     if (isGrouping && treeData.groupKeys.includes(itemId)) {
-      return Array.from(treeData.conceptMap.values())
+      const groupRoots = Array.from(treeData.conceptMap.values())
         .filter(concept => {
           const matchesGroup = groupKeyOf(concept) === itemId;
           if (groupByDomain && concept.concept_type === 'property' && concept.domain) {
@@ -457,6 +481,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
           return matchesGroup && isRootLevel;
         })
         .map(concept => concept.iri);
+      return sortByLabel(groupRoots);
     }
 
     if (groupByDomain) {
@@ -464,11 +489,15 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       const propertiesWithThisDomain = Array.from(treeData.conceptMap.values())
         .filter(concept => concept.concept_type === 'property' && concept.domain === itemId)
         .map(concept => concept.iri);
-      return [...new Set([...regularChildren, ...propertiesWithThisDomain])];
+      // Child concepts first, then the properties whose domain is this
+      // concept; each block sorted by label.
+      const childSet = new Set(regularChildren);
+      const domainProps = propertiesWithThisDomain.filter(iri => !childSet.has(iri));
+      return [...sortByLabel(regularChildren), ...sortByLabel(domainProps)];
     }
 
-    return treeData.hierarchy.get(itemId) || [];
-  }, [treeData, isGrouping, groupKeyOf, groupByDomain]);
+    return sortByLabel(treeData.hierarchy.get(itemId) || []);
+  }, [treeData, isGrouping, groupKeyOf, groupByDomain, sortByLabel]);
 
   const isFolder = useCallback((itemId: string): boolean => {
     if (isGrouping && treeData.groupKeys.includes(itemId)) {
@@ -521,11 +550,6 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     }
     onSelectConcept(concept);
   }, [onSelectConcept, setConceptListScrollTop]);
-
-  const conceptLabel = useCallback(
-    (concept: OntologyConcept) => resolveLabel(concept, selectedLanguage),
-    [selectedLanguage],
-  );
 
   // Flat list (list view-mode only): all concepts from the same filtered/typed
   // selection the tree is built from, sorted alphabetically by label. No

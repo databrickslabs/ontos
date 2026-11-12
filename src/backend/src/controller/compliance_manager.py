@@ -42,7 +42,7 @@ logger = get_logger(__name__)
 
 TAG_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
 # Rule test (test_rule_on_sample): entities scanned for the named one, and model calls
-SAMPLE_SCAN_LIMIT = 500
+SAMPLE_SCAN_LIMIT = 200
 TEST_MAX_CALLS = 5
 
 

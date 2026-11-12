@@ -1,8 +1,12 @@
-from typing import Optional
+import threading
+import time
+from collections import defaultdict, deque
+from typing import Deque, Dict, Optional
 
 from fastapi import APIRouter, FastAPI, HTTPException, Depends, Body, Query, Request
 from starlette.concurrency import run_in_threadpool
 
+from src.common.api_errors import CodedValueError
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker, user_has_feature_level
@@ -380,18 +384,56 @@ async def get_run_results(
     }
 
 
+# Rule tests per user and window (seconds): each test can call the serving endpoint
+RULE_TEST_MAX_CALLS = 10
+RULE_TEST_WINDOW_SECONDS = 60.0
+_rule_tests: Dict[str, Deque[float]] = defaultdict(deque)
+_rule_tests_lock = threading.Lock()
+
+
+class RuleTestRateLimitedError(CodedValueError):
+    """A user ran more rule tests than the limit in the window."""
+
+    code = 'llm_check_test_rate_limited'
+
+
+def _throttle_rule_test(user: str) -> None:
+    """Count a rule test of ``user``; RuleTestRateLimitedError past the limit (in memory)."""
+    now = time.monotonic()
+    with _rule_tests_lock:
+        calls = _rule_tests[user]
+        while calls and now - calls[0] >= RULE_TEST_WINDOW_SECONDS:
+            calls.popleft()
+        if len(calls) >= RULE_TEST_MAX_CALLS:
+            retry_after = max(1, int(RULE_TEST_WINDOW_SECONDS - (now - calls[0])) + 1)
+            raise RuleTestRateLimitedError(
+                f"Too many rule tests; try again in {retry_after} seconds",
+                retryAfter=retry_after,
+            )
+        calls.append(now)
+
+
 @router.post("/compliance/llm-check/test", response_model=LlmCheckTestResponse)
 async def test_llm_check(
     db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
     payload: LlmCheckTestRequest = Body(...),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Try a rule (and its LLM_CHECK criteria) on one entity before saving it.
 
     READ_WRITE, as saving a rule: each LLM_CHECK calls the serving endpoint.
-    Nothing but cached verdicts is written.
+    At most RULE_TEST_MAX_CALLS tests per user a minute (429). Nothing but
+    cached verdicts is written.
     """
     _check_rule(payload.rule)
+    try:
+        _throttle_rule_test(current_user.username if current_user else 'unknown')
+    except RuleTestRateLimitedError as e:
+        raise HTTPException(
+            status_code=429, detail=str(e),
+            headers={'Retry-After': str(e.params['retryAfter'])},
+        ) from e
     try:
         # The model calls block: run them off the event loop
         return await run_in_threadpool(

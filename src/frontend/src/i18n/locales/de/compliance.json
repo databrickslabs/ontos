@@ -179,7 +179,8 @@
     "tags_load_failed": "Die Tags der {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden."
   },
   "saveErrors": {
-    "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax."
+    "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax.",
+    "llm_check_criterion_not_literal": "LLM_CHECK erwartet einen Text und ein Kriterium als String-Literal, zum Beispiel LLM_CHECK(t.comment, 'states the grain of the table')."
   },
   "runWarnings": {
     "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren.",
@@ -235,10 +236,12 @@
       "llm_check_truncated": "Die Antwort des Modells wurde nicht abgeschlossen.",
       "llm_check_invalid_reply": "Die Antwort des Modells war kein PASS- oder FAIL-Urteil.",
       "llm_check_empty_text": "Der Text ist leer.",
-      "rule_evaluation_failed": "Die Regel konnte für diese Entität nicht ausgewertet werden."
+      "rule_evaluation_failed": "Die Regel konnte für diese Entität nicht ausgewertet werden.",
+      "llm_check_text_rejected": "Nicht geprüft: Die Sicherheitsprüfung hat den Text markiert (zum Beispiel Anweisungen an das Modell)."
     },
     "errors": {
-      "sample_entity_not_found": "Es wurde keine Entität gefunden, auf die die Regel zutrifft. Prüfen Sie den Namen oder lassen Sie ihn leer, um den ersten Treffer zu verwenden."
+      "sample_entity_not_found": "Es wurde keine Entität gefunden, auf die die Regel zutrifft. Prüfen Sie den Namen oder lassen Sie ihn leer, um den ersten Treffer zu verwenden.",
+      "llm_check_test_rate_limited": "Zu viele Tests in kurzer Zeit. Versuchen Sie es in {{retryAfter}} Sekunden erneut."
     }
   }
 }

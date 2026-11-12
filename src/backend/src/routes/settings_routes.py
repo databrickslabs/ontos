@@ -108,7 +108,8 @@ async def update_settings(
 
         updated = manager.update_settings(settings_payload)
         success = True
-        return updated.to_dict()
+        # Saved, with what didn't apply ({code, params, message}; the UI translates the code)
+        return {**updated.to_dict(), 'warnings': manager.update_warnings}
     except ValueError as e:
         # Validation errors from manager (e.g. invalid branding URL, name too long)
         logger.warning(f"Settings validation error: {e}")

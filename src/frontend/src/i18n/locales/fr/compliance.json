@@ -179,7 +179,8 @@
     "tags_load_failed": "Les tags des entités {{entityType}} n'ont pas pu être chargés ; la règle n'a donc pas pu être évaluée."
   },
   "saveErrors": {
-    "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe."
+    "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe.",
+    "llm_check_criterion_not_literal": "LLM_CHECK prend un texte et un critère écrit comme littéral de chaîne, par exemple LLM_CHECK(t.comment, 'states the grain of the table')."
   },
   "runWarnings": {
     "rule_trailing_input": "Cette règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Il est ignoré à l'exécution, donc la règle peut vérifier moins que ce qu'elle indique. Modifiez la règle pour le corriger.",
@@ -235,10 +236,12 @@
       "llm_check_truncated": "La réponse du modèle ne s'est pas terminée.",
       "llm_check_invalid_reply": "La réponse du modèle n'était pas un verdict PASS ou FAIL.",
       "llm_check_empty_text": "Le texte est vide.",
-      "rule_evaluation_failed": "La règle n'a pas pu être évaluée sur cette entité."
+      "rule_evaluation_failed": "La règle n'a pas pu être évaluée sur cette entité.",
+      "llm_check_text_rejected": "Non vérifié : le contrôle de sécurité a signalé le texte (par exemple, des instructions au modèle)."
     },
     "errors": {
-      "sample_entity_not_found": "Aucune entité à laquelle la règle s'applique n'a été trouvée. Vérifiez le nom, ou laissez-le vide pour utiliser la première correspondance."
+      "sample_entity_not_found": "Aucune entité à laquelle la règle s'applique n'a été trouvée. Vérifiez le nom, ou laissez-le vide pour utiliser la première correspondance.",
+      "llm_check_test_rate_limited": "Trop de tests en peu de temps. Réessayez dans {{retryAfter}} secondes."
     }
   }
 }

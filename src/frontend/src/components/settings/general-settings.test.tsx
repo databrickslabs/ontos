@@ -153,3 +153,42 @@ describe('GeneralSettings - instance identity', () => {
     expect(screen.queryByRole('button', { name: /save settings/i })).not.toBeInTheDocument();
   });
 });
+
+describe('GeneralSettings - warnings of a saved update', () => {
+  beforeEach(() => {
+    canWrite = true;
+    toastMock.mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function mockSaveWithWarnings(warnings: unknown[]) {
+    fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') return { ok: true, json: async () => ({ warnings }) } as Response;
+      return { ok: true, json: async () => baseResponse } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  }
+
+  it('shows that the compliance job could not be updated', async () => {
+    mockSaveWithWarnings([{ code: 'compliance_job_not_updated', params: {}, message: 'English' }]);
+    render(<GeneralSettings />);
+    await screen.findByLabelText('Instance ID');
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    const shown = toastMock.mock.calls[toastMock.mock.calls.length - 1][0];
+    expect(shown.title).toBe('Settings saved successfully');
+    expect(shown.description).toMatch(/^The Compliance Checks job could not be updated/);
+    expect(shown.description).not.toBe('English');
+  });
+
+  it('saves without a description when there are no warnings', async () => {
+    mockSaveWithWarnings([]);
+    render(<GeneralSettings />);
+    await screen.findByLabelText('Instance ID');
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    expect(toastMock.mock.calls[toastMock.mock.calls.length - 1][0].description).toBeUndefined();
+  });
+});

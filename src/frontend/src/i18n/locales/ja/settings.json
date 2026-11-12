@@ -190,6 +190,10 @@
     "messages": {
       "saveSuccess": "設定が正常に保存されました",
       "saveError": "設定の保存に失敗しました"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "Compliance Checks ジョブを LLM 設定で更新できませんでした (アプリにジョブの権限がない可能性があります)。ジョブを再インストールするまで、スケジュールされた LLM_CHECK ルールは古い設定を使用します。",
+      "compliance_job_shape_unexpected": "Compliance Checks ジョブが Databricks で変更されているため、パラメーターのみを更新しました。スケジュールされた LLM_CHECK ルールが「LLM 機能がオフ」で失敗する場合は、ジョブを再インストールしてください。"
     }
   },
   "databricks": {

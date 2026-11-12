@@ -179,7 +179,8 @@
     "tags_load_failed": "Non è stato possibile caricare i tag delle entità {{entityType}}, quindi non è stato possibile valutare la regola."
   },
   "saveErrors": {
-    "rule_trailing_input": "La regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Tutto ciò che segue verrebbe ignorato e la regola verificherebbe meno di quanto dichiara. Rimuovila o correggi la sintassi."
+    "rule_trailing_input": "La regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Tutto ciò che segue verrebbe ignorato e la regola verificherebbe meno di quanto dichiara. Rimuovila o correggi la sintassi.",
+    "llm_check_criterion_not_literal": "LLM_CHECK accetta un testo e un criterio scritto come stringa letterale, ad esempio LLM_CHECK(t.comment, 'states the grain of the table')."
   },
   "runWarnings": {
     "rule_trailing_input": "Questa regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Viene ignorata durante l'esecuzione, quindi la regola potrebbe verificare meno di quanto dichiara. Modifica la regola per correggerla.",
@@ -235,10 +236,12 @@
       "llm_check_truncated": "La risposta del modello non è stata completata.",
       "llm_check_invalid_reply": "La risposta del modello non era un verdetto PASS o FAIL.",
       "llm_check_empty_text": "Il testo è vuoto.",
-      "rule_evaluation_failed": "Non è stato possibile valutare la regola su questa entità."
+      "rule_evaluation_failed": "Non è stato possibile valutare la regola su questa entità.",
+      "llm_check_text_rejected": "Non verificato: il controllo di sicurezza ha segnalato il testo (ad esempio istruzioni al modello)."
     },
     "errors": {
-      "sample_entity_not_found": "Non è stata trovata alcuna entità a cui la regola si applica. Controlla il nome, oppure lascialo vuoto per usare la prima corrispondenza."
+      "sample_entity_not_found": "Non è stata trovata alcuna entità a cui la regola si applica. Controlla il nome, oppure lascialo vuoto per usare la prima corrispondenza.",
+      "llm_check_test_rate_limited": "Troppe prove in poco tempo. Riprova tra {{retryAfter}} secondi."
     }
   }
 }

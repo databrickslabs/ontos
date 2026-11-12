@@ -179,7 +179,8 @@
     "tags_load_failed": "Não foi possível carregar as tags das entidades {{entityType}}, por isso a regra não pôde ser avaliada."
   },
   "saveErrors": {
-    "rule_trailing_input": "A regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Tudo a partir dali seria ignorado, e a regra verificaria menos do que diz. Remova o trecho ou corrija a sintaxe."
+    "rule_trailing_input": "A regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Tudo a partir dali seria ignorado, e a regra verificaria menos do que diz. Remova o trecho ou corrija a sintaxe.",
+    "llm_check_criterion_not_literal": "LLM_CHECK recebe um texto e um critério escrito como string literal, por exemplo LLM_CHECK(t.comment, 'states the grain of the table')."
   },
   "runWarnings": {
     "rule_trailing_input": "Esta regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Ele é ignorado quando a regra é executada, então a regra pode verificar menos do que diz. Edite a regra para corrigir.",
@@ -235,10 +236,12 @@
       "llm_check_truncated": "A resposta do modelo não terminou.",
       "llm_check_invalid_reply": "A resposta do modelo não foi um veredito PASS ou FAIL.",
       "llm_check_empty_text": "O texto está vazio.",
-      "rule_evaluation_failed": "Não foi possível avaliar a regra nesta entidade."
+      "rule_evaluation_failed": "Não foi possível avaliar a regra nesta entidade.",
+      "llm_check_text_rejected": "Não verificado: a verificação de segurança sinalizou o texto (por exemplo, instruções para o modelo)."
     },
     "errors": {
-      "sample_entity_not_found": "Nenhuma entidade encontrada pela regra. Confira o nome ou deixe-o vazio para usar a primeira encontrada."
+      "sample_entity_not_found": "Nenhuma entidade encontrada pela regra. Confira o nome ou deixe-o vazio para usar a primeira encontrada.",
+      "llm_check_test_rate_limited": "Testes demais em pouco tempo. Tente de novo em {{retryAfter}} segundos."
     }
   }
 }

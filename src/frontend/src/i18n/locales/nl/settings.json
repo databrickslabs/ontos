@@ -197,6 +197,10 @@
         "label": "Max. aantal opgehaalde objecten per niveau",
         "help": "Maximaal aantal tabellen/views/objecten dat de importeur per catalogus of schema ophaalt tijdens het bladeren (1–10000). Verhoog dit voor grote omgevingen; voorbij deze limiet is er geen paginering."
       }
+    },
+    "warnings": {
+      "compliance_job_not_updated": "De Compliance Checks-job kon niet worden bijgewerkt met de LLM-instellingen (de app heeft mogelijk geen rechten op de job). Geplande LLM_CHECK-regels gebruiken de oude instellingen tot de job opnieuw is geïnstalleerd.",
+      "compliance_job_shape_unexpected": "De Compliance Checks-job is gewijzigd in Databricks, dus alleen de parameters zijn bijgewerkt. Als geplande LLM_CHECK-regels mislukken met \"LLM-functies staan uit\", installeer de job dan opnieuw."
     }
   },
   "databricks": {

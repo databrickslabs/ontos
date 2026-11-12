@@ -1535,28 +1535,53 @@ class SettingsManager:
             error_summary = f"Failed to update {len(errors)} workflow(s): " + "; ".join(errors)
             raise RuntimeError(error_summary)
 
-    def _refresh_llm_job_parameters(self) -> None:
-        """Give the installed compliance job the new LLM settings (best effort).
+    # Warnings of the installed compliance job sync, sent with the saved settings
+    COMPLIANCE_JOB_NOT_UPDATED = 'compliance_job_not_updated'
+    COMPLIANCE_JOB_SHAPE_UNEXPECTED = 'compliance_job_shape_unexpected'
+
+    @property
+    def update_warnings(self) -> List[Dict[str, Any]]:
+        """Warnings of the last update_settings, as ``{code, params, message}``."""
+        return list(getattr(self, '_update_warnings', []))
+
+    def _refresh_llm_job_parameters(self) -> Optional[Dict[str, Any]]:
+        """Give the installed compliance job the new LLM settings; a warning if it couldn't.
 
         Scheduled runs read them from the job's defaults, where they are written
         when the job is installed or updated (LLM_CHECK rules). A job installed
         before the job took LLM settings also gets their code and task arguments.
+        The settings are saved either way; the warning says what to do.
         """
         if not getattr(self, '_jobs', None):
-            return
-        from src.controller.jobs_manager import LLM_TASK_ARGUMENTS
+            return None
+        from src.controller.jobs_manager import JOB_SHAPE_UNEXPECTED, LLM_TASK_ARGUMENTS
 
         try:
-            self._jobs.sync_installed_workflow(
+            outcome = self._jobs.sync_installed_workflow(
                 'compliance_checks', required_arguments=LLM_TASK_ARGUMENTS,
             )
         except Exception as e:
             logger.warning(
                 "Could not update the LLM settings of the installed compliance job: %s", e,
             )
+            return {
+                'code': self.COMPLIANCE_JOB_NOT_UPDATED, 'params': {},
+                'message': "The Compliance Checks job could not be updated with the LLM "
+                           "settings (the app may lack permission on the job). Scheduled "
+                           "LLM_CHECK rules use the old settings until the job is reinstalled.",
+            }
+        if outcome == JOB_SHAPE_UNEXPECTED:
+            return {
+                'code': self.COMPLIANCE_JOB_SHAPE_UNEXPECTED, 'params': {},
+                'message': "The Compliance Checks job was changed in Databricks, so only its "
+                           "parameters were updated. If scheduled LLM_CHECK rules fail with "
+                           "llm_check_disabled, reinstall the job.",
+            }
+        return None
 
     def update_settings(self, settings: dict) -> Settings:
         """Update settings"""
+        self._update_warnings: List[Dict[str, Any]] = []
         git_values_before = self._git_setting_values()
         # Persist configured cluster ID string; do not scan clusters
         cluster_in_payload = 'job_cluster_id' in settings
@@ -1669,7 +1694,9 @@ class SettingsManager:
             logger.info(f"Updated LLM_ENDPOINT to: {value}")
 
         if 'llm_enabled' in settings or 'llm_endpoint' in settings:
-            self._refresh_llm_job_parameters()
+            warning = self._refresh_llm_job_parameters()
+            if warning:
+                self._update_warnings.append(warning)
         
         if 'llm_system_prompt' in settings:
             value = settings.get('llm_system_prompt') or None

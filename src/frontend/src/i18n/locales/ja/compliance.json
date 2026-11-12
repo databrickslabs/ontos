@@ -179,7 +179,8 @@
     "tags_load_failed": "{{entityType}} エンティティのタグを読み込めなかったため、ルールを評価できませんでした。"
   },
   "saveErrors": {
-    "rule_trailing_input": "ルールに無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。それ以降は無視されるため、ルールは記述より少ない内容しか検査しません。削除するか、構文を修正してください。"
+    "rule_trailing_input": "ルールに無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。それ以降は無視されるため、ルールは記述より少ない内容しか検査しません。削除するか、構文を修正してください。",
+    "llm_check_criterion_not_literal": "LLM_CHECK にはテキストと、文字列リテラルで書いた基準を指定します。例: LLM_CHECK(t.comment, 'states the grain of the table')。"
   },
   "runWarnings": {
     "rule_trailing_input": "このルールには無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。実行時には無視されるため、ルールは記述より少ない内容しか検査しない可能性があります。ルールを編集して修正してください。",
@@ -235,10 +236,12 @@
       "llm_check_truncated": "モデルの回答が完了しませんでした。",
       "llm_check_invalid_reply": "モデルの回答が PASS または FAIL の判定ではありませんでした。",
       "llm_check_empty_text": "テキストが空です。",
-      "rule_evaluation_failed": "このエンティティでルールを評価できませんでした。"
+      "rule_evaluation_failed": "このエンティティでルールを評価できませんでした。",
+      "llm_check_text_rejected": "未チェック: 安全性チェックがテキストを検出しました (モデルへの指示など)。"
     },
     "errors": {
-      "sample_entity_not_found": "ルールに一致するエンティティが見つかりませんでした。名前を確認するか、空欄にして最初の一致を使用してください。"
+      "sample_entity_not_found": "ルールに一致するエンティティが見つかりませんでした。名前を確認するか、空欄にして最初の一致を使用してください。",
+      "llm_check_test_rate_limited": "短時間にテストが多すぎます。{{retryAfter}} 秒後にもう一度お試しください。"
     }
   }
 }

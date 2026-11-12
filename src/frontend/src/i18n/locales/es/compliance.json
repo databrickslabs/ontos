@@ -179,7 +179,8 @@
     "tags_load_failed": "No se pudieron cargar las etiquetas de las entidades {{entityType}}, por lo que no se pudo evaluar la regla."
   },
   "saveErrors": {
-    "rule_trailing_input": "La regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Todo lo que sigue se ignoraría, y la regla comprobaría menos de lo que dice. Elimínelo o corrija la sintaxis."
+    "rule_trailing_input": "La regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Todo lo que sigue se ignoraría, y la regla comprobaría menos de lo que dice. Elimínelo o corrija la sintaxis.",
+    "llm_check_criterion_not_literal": "LLM_CHECK recibe un texto y un criterio escrito como literal de cadena, por ejemplo LLM_CHECK(t.comment, 'states the grain of the table')."
   },
   "runWarnings": {
     "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo.",
@@ -235,10 +236,12 @@
       "llm_check_truncated": "La respuesta del modelo no terminó.",
       "llm_check_invalid_reply": "La respuesta del modelo no fue un veredicto PASS o FAIL.",
       "llm_check_empty_text": "El texto está vacío.",
-      "rule_evaluation_failed": "No se pudo evaluar la regla en esta entidad."
+      "rule_evaluation_failed": "No se pudo evaluar la regla en esta entidad.",
+      "llm_check_text_rejected": "No comprobado: la revisión de seguridad marcó el texto (por ejemplo, instrucciones al modelo)."
     },
     "errors": {
-      "sample_entity_not_found": "No se encontró ninguna entidad que coincida con la regla. Revisa el nombre o déjalo vacío para usar la primera coincidencia."
+      "sample_entity_not_found": "No se encontró ninguna entidad que coincida con la regla. Revisa el nombre o déjalo vacío para usar la primera coincidencia.",
+      "llm_check_test_rate_limited": "Demasiadas pruebas en poco tiempo. Inténtalo de nuevo en {{retryAfter}} segundos."
     }
   }
 }

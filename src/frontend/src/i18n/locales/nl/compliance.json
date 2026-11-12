@@ -179,7 +179,8 @@
     "tags_load_failed": "De tags van de {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd."
   },
   "saveErrors": {
-    "rule_trailing_input": "De regel bevat ongeldige invoer, vanaf regel {{line}}, kolom {{column}} ('{{text}}'). Alles vanaf dat punt zou worden genegeerd, waardoor de regel minder controleert dan er staat. Verwijder het of corrigeer de syntaxis."
+    "rule_trailing_input": "De regel bevat ongeldige invoer, vanaf regel {{line}}, kolom {{column}} ('{{text}}'). Alles vanaf dat punt zou worden genegeerd, waardoor de regel minder controleert dan er staat. Verwijder het of corrigeer de syntaxis.",
+    "llm_check_criterion_not_literal": "LLM_CHECK verwacht een tekst en een criterium als string-literal, bijvoorbeeld LLM_CHECK(t.comment, 'states the grain of the table')."
   },
   "runWarnings": {
     "rule_trailing_input": "Deze regel bevat ongeldige invoer, vanaf regel {{line}}, kolom {{column}} ('{{text}}'). Die wordt bij het uitvoeren genegeerd, waardoor de regel mogelijk minder controleert dan er staat. Bewerk de regel om dit te herstellen.",
@@ -235,10 +236,12 @@
       "llm_check_truncated": "Het antwoord van het model werd niet afgemaakt.",
       "llm_check_invalid_reply": "Het antwoord van het model was geen PASS- of FAIL-oordeel.",
       "llm_check_empty_text": "De tekst is leeg.",
-      "rule_evaluation_failed": "De regel kon niet worden geëvalueerd op deze entiteit."
+      "rule_evaluation_failed": "De regel kon niet worden geëvalueerd op deze entiteit.",
+      "llm_check_text_rejected": "Niet gecontroleerd: de veiligheidscontrole heeft de tekst gemarkeerd (bijvoorbeeld instructies aan het model)."
     },
     "errors": {
-      "sample_entity_not_found": "Er is geen entiteit gevonden waarop de regel van toepassing is. Controleer de naam, of laat hem leeg om de eerste overeenkomst te gebruiken."
+      "sample_entity_not_found": "Er is geen entiteit gevonden waarop de regel van toepassing is. Controleer de naam, of laat hem leeg om de eerste overeenkomst te gebruiken.",
+      "llm_check_test_rate_limited": "Te veel tests in korte tijd. Probeer het over {{retryAfter}} seconden opnieuw."
     }
   }
 }

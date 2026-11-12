@@ -120,6 +120,14 @@ def volume(mock_workspace_client):
     return files
 
 
+@pytest.fixture
+def asset_type(db_session):
+    row = AssetTypeDb(name=f'Type {uuid.uuid4().hex[:8]}', category='data')
+    db_session.add(row)
+    db_session.flush()
+    return row
+
+
 def _import(client, path=ROOT):
     return client.post('/api/metadata/markdown-import', json={'path': path})
 
@@ -275,3 +283,114 @@ def test_imported_documents_are_in_the_search_index_at_startup(client, db_sessio
 
     assert [(item.title, item.description) for item in items] == [
         ('Glossary', 'Churn is defined here.\n')]
+
+
+def _single_file(volume, text):
+    """Make the volume hold one file, ROOT/only.md, with ``text``."""
+    volume.clear()
+    volume[f'{ROOT}/only.md'] = text
+
+
+def _targets(body):
+    [entry] = body['files']
+    return entry
+
+
+def test_targets_resolve_by_id_and_by_name(client, db_session, domain, asset, volume):
+    _single_file(volume, f"---\ndomain: {domain.id}\nassets: [{asset.id}, CUSTOMERS]\n---\nx\n")
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    entry = _targets(response.json())
+    # The asset is named twice (by id and by name): one document.
+    assert {(t['entity_type'], t['entity_id']) for t in entry['targets']} == {
+        ('data_domain', domain.id), ('asset', str(asset.id))}
+    assert entry['unresolved'] == []
+
+
+def test_a_name_of_several_assets_is_ambiguous(client, db_session, asset_type, volume):
+    for location in ('main.a.orders', 'main.b.orders'):
+        db_session.add(AssetDb(name='orders', asset_type_id=asset_type.id, location=location))
+    db_session.flush()
+    _single_file(volume, "---\nassets: orders\n---\nx\n")
+
+    entry = _targets(_import(client).json())
+
+    assert entry['status'] == 'unlinked'
+    assert entry['unresolved'] == [{'kind': 'asset', 'value': 'orders', 'reason': 'ambiguous'}]
+
+
+def test_a_changed_file_that_drops_a_target_leaves_that_entity(
+        client, db_session, domain, asset, volume):
+    _single_file(volume, "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv1\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+
+    volume[f'{ROOT}/only.md'] = "---\ndomain: Customer\n---\nv2\n"
+    entry = _targets(_import(client).json())
+
+    assert (entry['status'], entry['removed']) == ('updated', 1)
+    docs = db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.source_path == f'{ROOT}/only.md').all()
+    assert [(d.entity_type, d.content_text) for d in docs] == [
+        ('data_domain', "---\ndomain: Customer\n---\nv2\n")]
+    hits = client.get('/api/search', params={'search_term': 'v1'}).json()
+    assert not [hit for hit in hits if hit['type'] == 'document']
+
+
+def test_an_unchanged_file_keeps_its_documents_when_a_name_stops_resolving(
+        client, db_session, domain, volume):
+    _single_file(volume, "---\ndomain: Customer\n---\nbody\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+    domain.name = 'Clients'
+    db_session.flush()
+
+    entry = _targets(_import(client).json())
+
+    assert (entry['status'], entry['removed']) == ('unlinked', 0)
+    assert db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.entity_id == domain.id).count() == 1
+
+
+def test_the_import_is_audited_with_its_counts(client, db_session, domain, volume):
+    from src.db_models.audit_log import AuditLogDb
+
+    _single_file(volume, "---\ndomain: Customer\n---\nbody\n")
+    assert _import(client).status_code == 200
+
+    [entry] = db_session.query(AuditLogDb).filter_by(action='IMPORT_MARKDOWN').all()
+    assert (entry.feature, entry.success) == ('data-domains', True)
+    assert entry.details['path'] == ROOT
+    assert (entry.details['added'], entry.details['unlinked']) == (1, 0)
+
+
+def test_an_unexpected_failure_is_a_generic_500(client, monkeypatch, volume):
+    from src.controller.markdown_import_manager import MarkdownImportManager
+
+    def boom(self, db, ws, **kwargs):
+        raise RuntimeError('db exploded at /internal/path')
+    monkeypatch.setattr(MarkdownImportManager, 'import_from_volume', boom)
+
+    response = _import(client)
+
+    assert response.status_code == 500
+    assert response.json()['detail'] == 'Markdown import failed'
+    assert '/internal/path' not in response.text
+
+
+def test_an_uploaded_document_is_still_downloaded_from_the_volume(
+        client, db_session, domain, mock_workspace_client):
+    doc = DocumentMetadataDb(entity_type='data_domain', entity_id=domain.id, title='Upload',
+                             original_filename='u.txt', content_type='text/plain',
+                             storage_path='/Volumes/c/s/v/uploads/u.txt')
+    db_session.add(doc)
+    db_session.flush()
+    mock_workspace_client.files.download.side_effect = None
+    mock_workspace_client.files.download.return_value = SimpleNamespace(
+        contents=io.BytesIO(b'uploaded bytes'))
+
+    response = client.get(f'/api/documents/{doc.id}/content')
+
+    assert response.status_code == 200, response.text
+    assert response.content == b'uploaded bytes'
+    mock_workspace_client.files.download.assert_called_once_with('/Volumes/c/s/v/uploads/u.txt')

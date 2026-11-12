@@ -37,6 +37,7 @@ const RESULT: MarkdownImportResult = {
       path: '/Volumes/main/docs/context/terms.md', status: 'updated', title: 'Terms',
       targets: [{ entity_type: 'concept', entity_id: 'http://ex.org#Churn', name: 'Churn' }],
       unresolved: [{ kind: 'asset', value: 'main.crm.gone', reason: 'not_found' }],
+      removed: 1,
     },
     {
       path: '/Volumes/main/docs/context/loose.md', status: 'unlinked', title: 'Loose',
@@ -78,6 +79,7 @@ describe('MarkdownImportDialog', () => {
     expect(screen.getByText('Failed: 1')).toBeInTheDocument();
     expect(screen.getByText('Linked to: Customer')).toBeInTheDocument();
     expect(screen.getByText('Asset "main.crm.gone" not found')).toBeInTheDocument();
+    expect(screen.getByText('Removed from entities it no longer names: 1')).toBeInTheDocument();
     expect(screen.getByText('The front matter names no domain, asset or concept.'))
       .toBeInTheDocument();
     expect(screen.getByText('The front matter is not a valid YAML mapping.')).toBeInTheDocument();

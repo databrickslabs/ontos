@@ -277,6 +277,7 @@
       "failed": "失敗"
     },
     "linkedTo": "リンク先: {{targets}}",
+    "removed": "指定されなくなったエンティティから削除: {{count}}",
     "noTargets": "フロントマターにドメイン、アセット、コンセプトの指定がありません。",
     "noFiles": "このパスに Markdown ファイルが見つかりません。",
     "kinds": {

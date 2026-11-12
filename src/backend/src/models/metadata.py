@@ -170,6 +170,8 @@ class MarkdownImportFileResult(BaseModel):
     title: Optional[str] = None
     targets: List[MarkdownImportTarget] = Field(default_factory=list)
     unresolved: List[MarkdownImportUnresolved] = Field(default_factory=list)
+    # Documents removed because the changed file no longer names their entity
+    removed: int = 0
     reason: Optional[str] = None
 
 

@@ -12,7 +12,8 @@ documents panel lists) on every entity its YAML front matter names::
 
 Nothing is guessed: a file whose front matter names no existing entity is
 reported as unlinked. A re-run compares each file's SHA-256 with the stored one
-and only rewrites the documents of files that changed. Glossary terms in a file
+and only rewrites the documents of files that changed; a changed file that no
+longer names an entity takes its document off that entity. Glossary terms in a file
 stay document text; no concepts are created.
 
 The files are read with the caller's workspace client (on behalf of the user),
@@ -265,14 +266,18 @@ class MarkdownImportManager:
         resolver = _TargetResolver(db, self._semantic)
         result = MarkdownImportResult(path=root)
         changed: List[DocumentMetadataDb] = []
+        removed_ids: List[str] = []
         for file_path, size in files:
-            entry = self._import_file(db, ws, file_path, size, resolver, user_email, changed)
+            entry = self._import_file(db, ws, file_path, size, resolver, user_email,
+                                      changed, removed_ids)
             result.files.append(entry)
             setattr(result, entry.status, getattr(result, entry.status) + 1)
         db.commit()
         for doc in changed:
             db.refresh(doc)
             self._metadata.index_document(doc)
+        for document_id in removed_ids:
+            self._metadata.remove_document_from_index(document_id)
         logger.info(
             "Markdown import of %s: %d added, %d updated, %d unchanged, %d unlinked, %d failed",
             root, result.added, result.updated, result.unchanged, result.unlinked, result.failed,
@@ -333,6 +338,7 @@ class MarkdownImportManager:
     def _import_file(
         self, db: Session, ws: WorkspaceClient, path: str, size: Optional[int],
         resolver: _TargetResolver, user_email: Optional[str], changed: List[DocumentMetadataDb],
+        removed_ids: List[str],
     ) -> MarkdownImportFileResult:
         def failed(reason: str) -> MarkdownImportFileResult:
             return MarkdownImportFileResult(path=path, status='failed', reason=reason)
@@ -357,15 +363,33 @@ class MarkdownImportManager:
 
         title = document_title(front_matter, body, path)
         targets, unresolved = resolver.resolve(front_matter)
-        if not targets:
-            return MarkdownImportFileResult(path=path, status='unlinked', title=title,
-                                            unresolved=unresolved)
-
         digest = hashlib.sha256(raw).hexdigest()
         existing = {
             (doc.entity_type, doc.entity_id): doc
             for doc in self._documents.list_by_source_path(db, source_path=path)
         }
+
+        def log(doc: DocumentMetadataDb, action: str) -> None:
+            db.add(ChangeLogDb(
+                entity_type=f"{doc.entity_type}:document",
+                entity_id=doc.entity_id,
+                action=action,
+                username=user_email,
+                details_json=json.dumps({'source_path': path, 'title': title}),
+            ))
+
+        # A changed file no longer naming an entity takes its document off it.
+        # Only changed files: an unchanged one keeps its documents even when a
+        # name stops resolving (e.g. the entity was renamed).
+        wanted = {(target.entity_type, target.entity_id) for target in targets}
+        removed = 0
+        for key, doc in existing.items():
+            if key not in wanted and doc.content_hash != digest:
+                log(doc, 'DELETE')
+                removed_ids.append(str(doc.id))
+                db.delete(doc)
+                removed += 1
+
         added = updated = 0
         for target in targets:
             doc = existing.get((target.entity_type, target.entity_id))
@@ -385,7 +409,7 @@ class MarkdownImportManager:
                     updated_by=user_email,
                 )
                 db.add(doc)
-                action = 'CREATE'
+                log(doc, 'CREATE')
                 added += 1
             elif doc.content_hash != digest:
                 doc.title = title
@@ -393,25 +417,20 @@ class MarkdownImportManager:
                 doc.content_hash = digest
                 doc.content_text = text
                 doc.updated_by = user_email
-                action = 'UPDATE'
+                log(doc, 'UPDATE')
                 updated += 1
             else:
                 continue
             changed.append(doc)
-            db.add(ChangeLogDb(
-                entity_type=f"{target.entity_type}:document",
-                entity_id=target.entity_id,
-                action=action,
-                username=user_email,
-                details_json=json.dumps({'source_path': path, 'title': title}),
-            ))
         db.flush()
 
-        if added == len(targets):
+        if not targets:
+            status = 'unlinked'
+        elif added == len(targets) and not removed:
             status = 'added'
-        elif added == 0 and updated == 0:
+        elif not (added or updated or removed):
             status = 'unchanged'
         else:
             status = 'updated'
-        return MarkdownImportFileResult(path=path, status=status, title=title,
-                                        targets=targets, unresolved=unresolved)
+        return MarkdownImportFileResult(path=path, status=status, title=title, targets=targets,
+                                        unresolved=unresolved, removed=removed)

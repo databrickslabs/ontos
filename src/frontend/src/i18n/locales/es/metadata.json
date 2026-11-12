@@ -277,6 +277,7 @@
       "failed": "Con error"
     },
     "linkedTo": "Vinculado a: {{targets}}",
+    "removed": "Quitado de entidades que ya no nombra: {{count}}",
     "noTargets": "El front matter no nombra ningún dominio, activo ni concepto.",
     "noFiles": "No se encontraron archivos Markdown en esta ruta.",
     "kinds": {

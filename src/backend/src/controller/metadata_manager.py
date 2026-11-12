@@ -58,6 +58,12 @@ _ENTITY_LINKS = {
     'concept': '/concepts/browser?concept={id}',
 }
 _DOCUMENT_ITEM_PREFIX = 'document::'
+# Search shows an imported document to readers of its entity's feature.
+_ENTITY_FEATURES = {
+    'data_domain': 'data-domains',
+    'asset': 'assets',
+    'concept': 'semantic-models',
+}
 
 
 def strip_front_matter(text: str) -> str:
@@ -75,8 +81,8 @@ class MetadataManager(SearchableAsset):
     """Notes, links and documents on entities.
 
     Searchable: imported Markdown documents are indexed with their text (type
-    ``document``, under the documents' feature), so search finds their content
-    and leads to the entity they're linked to. Uploaded files aren't indexed.
+    ``document``, under the feature of the entity they're linked to), so search
+    finds their content and leads to that entity. Uploaded files aren't indexed.
     """
 
     def __init__(
@@ -284,7 +290,7 @@ class MetadataManager(SearchableAsset):
         return SearchIndexItem(
             id=f"{_DOCUMENT_ITEM_PREFIX}{doc.id}",
             type="document",
-            feature_id="data-domains",  # the documents' feature (see metadata_routes)
+            feature_id=_ENTITY_FEATURES[doc.entity_type],
             title=doc.title,
             description=strip_front_matter(doc.content_text),
             link=link.format(id=urllib.parse.quote(str(doc.entity_id), safe='')),

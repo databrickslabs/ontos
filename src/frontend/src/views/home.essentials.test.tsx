@@ -335,6 +335,20 @@ describe('Home by role home section', () => {
     expect(within(card).queryByTestId('essentials-maturity-list')).not.toBeInTheDocument();
   });
 
+  it('shows an error instead of a zero count when the card fails to load', async () => {
+    // No route for the below-first-level call: the fetch answers 404.
+    applyJourneyRole();
+    renderWithProviders(<Home />);
+    const card = screen.getByTestId('essentials-section-maturity');
+    expect(await within(card).findByTestId('essentials-maturity-error')).toHaveTextContent(
+      "Couldn't load your tables below the first level.",
+    );
+    expect(within(card).queryByTestId('essentials-maturity-count')).not.toBeInTheDocument();
+    expect(within(card).queryByText(
+      'None of your evaluated tables is below the first level.',
+    )).not.toBeInTheDocument();
+  });
+
   it('a user whose groups match a role with the journey section gets the journey home', () => {
     state.roles = [{
       id: 'consumers', name: 'Consumers', home_sections: [HomeSection.JOURNEY],

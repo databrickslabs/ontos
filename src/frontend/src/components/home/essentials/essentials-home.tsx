@@ -374,12 +374,16 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
               title={t('home:essentials.maturity.title')}
               description={t('home:essentials.maturity.description')}
             >
-              {belowFirst.loading ? null : (
+              {belowFirst.loading ? null : !belowFirst.data ? (
+                <p className="text-sm text-destructive" data-testid="essentials-maturity-error">
+                  {t('home:essentials.maturity.error')}
+                </p>
+              ) : (
                 <>
                   <p className="text-3xl font-bold" data-testid="essentials-maturity-count">
-                    {belowFirst.data?.total ?? 0}
+                    {belowFirst.data.total}
                   </p>
-                  {!belowFirst.data?.items.length ? (
+                  {!belowFirst.data.items.length ? (
                     <Empty>{t('home:essentials.maturity.empty')}</Empty>
                   ) : (
                     <ul className="space-y-1 text-sm" data-testid="essentials-maturity-list">
@@ -395,10 +399,10 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                       ))}
                     </ul>
                   )}
-                  {(belowFirst.data?.total ?? 0) > (belowFirst.data?.items.length ?? 0) && (
+                  {belowFirst.data.total > belowFirst.data.items.length && (
                     <Empty>
                       {t('home:essentials.maturity.more', {
-                        shown: belowFirst.data!.items.length, total: belowFirst.data!.total,
+                        shown: belowFirst.data.items.length, total: belowFirst.data.total,
                       })}
                     </Empty>
                   )}

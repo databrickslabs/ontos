@@ -46,7 +46,8 @@
       "title": "Tablas por debajo del primer nivel",
       "description": "Tus tablas y vistas cuya última evaluación de madurez no alcanzó ningún nivel.",
       "empty": "Ninguna de tus tablas evaluadas está por debajo del primer nivel.",
-      "more": "Mostrando {{shown}} de {{total}}."
+      "more": "Mostrando {{shown}} de {{total}}.",
+      "error": "No se pudieron cargar tus tablas por debajo del primer nivel."
     },
     "maintain": {
       "title": "Mantener",

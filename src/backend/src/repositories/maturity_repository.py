@@ -1,5 +1,5 @@
 """Repository for maturity levels, gates, and snapshots."""
-from typing import List, Optional
+from typing import Any, List, Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import func, select, and_
@@ -14,6 +14,10 @@ logger = get_logger(__name__)
 OWN_LADDER_ENTITY_TYPES = frozenset({"Asset"})
 # Entity types the shared ``all`` levels apply to
 SHARED_LEVEL_ENTITY_TYPES = ("DataProduct", "DataContract")
+
+
+# Candidate ids per IN clause (keeps under the bind-parameter limits)
+_ID_CHUNK = 5000
 
 
 class MaturityLevelRepository:
@@ -180,39 +184,59 @@ class MaturityLevelRepository:
             .all()
         )
 
-    def entity_ids_below_first_level(self, db: Session, *, entity_type: str) -> List[str]:
+    def entity_ids_below_first_level(
+        self, db: Session, *, entity_type: str,
+        entity_ids: Optional[Sequence[Any]] = None,
+    ) -> List[str]:
         """Ids of the entities whose latest snapshot reached no level.
 
         Only snapshots taken with levels defined count (``total_levels > 0``), and
         nothing counts while ``entity_type`` has no level of its own: an entity
         never evaluated, or evaluated without levels, isn't below the first level.
+
+        ``entity_ids`` (when not None) limits the search to those candidates in SQL;
+        an empty list returns nothing. The latest snapshot is the newest
+        ``evaluated_at``, ties broken by the highest ``id``.
         """
+        if entity_ids is not None and not entity_ids:
+            return []
         if self.is_empty(db, entity_type=entity_type):
             return []
-        latest = (
-            db.query(
-                MaturitySnapshotDb.entity_id.label("entity_id"),
-                func.max(MaturitySnapshotDb.evaluated_at).label("evaluated_at"),
+        candidates = None if entity_ids is None else [str(i) for i in entity_ids]
+        chunks = [None] if candidates is None else [
+            candidates[i:i + _ID_CHUNK] for i in range(0, len(candidates), _ID_CHUNK)
+        ]
+        found: List[str] = []
+        for chunk in chunks:
+            ranked = (
+                db.query(
+                    MaturitySnapshotDb.entity_id.label("entity_id"),
+                    MaturitySnapshotDb.achieved_level_order.label("achieved_level_order"),
+                    MaturitySnapshotDb.total_levels.label("total_levels"),
+                    func.row_number().over(
+                        partition_by=MaturitySnapshotDb.entity_id,
+                        order_by=(
+                            MaturitySnapshotDb.evaluated_at.desc(),
+                            MaturitySnapshotDb.id.desc(),
+                        ),
+                    ).label("rn"),
+                )
+                .filter(MaturitySnapshotDb.entity_type == entity_type)
             )
-            .filter(MaturitySnapshotDb.entity_type == entity_type)
-            .group_by(MaturitySnapshotDb.entity_id)
-            .subquery()
-        )
-        rows = (
-            db.query(MaturitySnapshotDb.entity_id)
-            .join(latest, and_(
-                MaturitySnapshotDb.entity_id == latest.c.entity_id,
-                MaturitySnapshotDb.evaluated_at == latest.c.evaluated_at,
-            ))
-            .filter(
-                MaturitySnapshotDb.entity_type == entity_type,
-                MaturitySnapshotDb.achieved_level_order.is_(None),
-                MaturitySnapshotDb.total_levels > 0,
+            if chunk is not None:
+                ranked = ranked.filter(MaturitySnapshotDb.entity_id.in_(chunk))
+            sub = ranked.subquery()
+            rows = (
+                db.query(sub.c.entity_id)
+                .filter(
+                    sub.c.rn == 1,
+                    sub.c.achieved_level_order.is_(None),
+                    sub.c.total_levels > 0,
+                )
+                .all()
             )
-            .distinct()
-            .all()
-        )
-        return [r.entity_id for r in rows]
+            found.extend(r.entity_id for r in rows)
+        return found
 
     def get_latest_snapshot(self, db: Session, *, entity_type: str,
                             entity_id: str) -> Optional[MaturitySnapshotDb]:
@@ -224,7 +248,7 @@ class MaturityLevelRepository:
                     MaturitySnapshotDb.entity_id == entity_id,
                 )
             )
-            .order_by(MaturitySnapshotDb.evaluated_at.desc())
+            .order_by(MaturitySnapshotDb.evaluated_at.desc(), MaturitySnapshotDb.id.desc())
             .first()
         )
 

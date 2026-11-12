@@ -414,7 +414,10 @@ class AssetsManager(SearchableAsset):
     ) -> List[UUID]:
         """Asset IDs below the first maturity level, intersected with ``restrict_to_ids``."""
         below: set = set()
-        for entity_id in maturity_repo.entity_ids_below_first_level(db, entity_type="Asset"):
+        candidates = None if restrict_to_ids is None else [str(i) for i in restrict_to_ids]
+        for entity_id in maturity_repo.entity_ids_below_first_level(
+            db, entity_type="Asset", entity_ids=candidates,
+        ):
             try:
                 below.add(UUID(str(entity_id)))
             except ValueError:

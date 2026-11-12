@@ -28,6 +28,7 @@ import {
   Play,
   Pause,
   AlertCircle,
+  AlertTriangle,
   ChevronDown,
   XCircle,
   RotateCcw,
@@ -981,6 +982,16 @@ export default function Workflows() {
           </button>
           {row.original.is_default && (
             <Badge variant="secondary" className="text-xs">{t('workflows:view.badges.default')}</Badge>
+          )}
+          {(row.original.trigger_warnings?.length ?? 0) > 0 && (
+            <Badge
+              variant="outline"
+              className="text-xs gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30 dark:text-amber-400"
+              title={t('workflows:view.badges.triggerWarningsHint')}
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {t('workflows:view.badges.triggerWarnings')}
+            </Badge>
           )}
           {row.original.workflow_type === 'approval' ? (
             <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">{t('workflows:view.badges.approval')}</Badge>

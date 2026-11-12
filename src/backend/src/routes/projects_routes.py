@@ -505,9 +505,14 @@ async def request_project_access(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     notifications_manager: NotificationsManagerDep,
+    settings: Settings = Depends(get_settings),
     manager = Depends(get_projects_manager)
 ):
-    """Request access to a project by sending notifications to project team members."""
+    """Request access to a project by sending notifications to project team members.
+
+    A project the caller doesn't see on the list answers as a missing one, and
+    its teams aren't notified.
+    """
     success = False
     details_for_audit = {
         "params": {"project_id": request.project_id, "requester": current_user.email},
@@ -515,6 +520,8 @@ async def request_project_access(
 
     logger.info(f"User '{current_user.email}' requesting access to project: {request.project_id}")
     try:
+        if not _visible_project_ids(db, manager, [request.project_id], current_user, settings):
+            raise NotFoundError(f"Project with id '{request.project_id}' not found.")
         user_groups = current_user.groups or []
         response = await manager.request_project_access(
             db=db,
@@ -528,17 +535,17 @@ async def request_project_access(
         return response
     except NotFoundError as e:
         db.rollback()
-        logger.error("Project not found for access request %s: %s", project_id, e)
+        logger.error("Project not found for access request %s: %s", request.project_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     except ConflictError as e:
         db.rollback()
-        logger.error("Project access request conflict %s: %s", project_id, e)
+        logger.error("Project access request conflict %s: %s", request.project_id, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Access request conflict")
     except Exception as e:
         db.rollback()
-        logger.exception("Failed to request project access for %s", project_id)
+        logger.exception("Failed to request project access for %s", request.project_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to request project access: {e!s}")
     finally:

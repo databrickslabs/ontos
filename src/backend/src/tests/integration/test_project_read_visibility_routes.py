@@ -17,6 +17,7 @@ from src.common.authorization import get_user_details_from_sdk
 from src.common.config import get_settings
 from src.db_models.data_domains import DataDomain
 from src.db_models.domain_associations import EntityDomainAssociationDb
+from src.db_models.notifications import NotificationDb
 from src.db_models.projects import ProjectDb, project_team_association
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.models.users import UserInfo
@@ -26,7 +27,8 @@ OUTSIDER = "outsider@example.com"
 ADMIN = "admin@example.com"
 
 # email, groups. "data-consumers" maps to the Data Consumer role (Read-only on
-# Projects); "test_admins" is APP_ADMIN_DEFAULT_GROUPS in the test settings.
+# Projects), "data-producers" to Data Producer (Read/Write on Projects);
+# "test_admins" is APP_ADMIN_DEFAULT_GROUPS in the test settings.
 PERSONAS = {
     "member": (MEMBER, ["data-consumers"]),
     "outsider": (OUTSIDER, ["data-consumers"]),
@@ -144,3 +146,31 @@ def test_configured_admin_group_sees_every_project_on_user_projects(as_persona, 
     response = as_persona("admin").get("/api/user/projects")
     assert response.status_code == 200
     assert hidden_project.id in {p["id"] for p in response.json()["projects"]}
+
+
+ACCESS_REQUEST = "/api/user/request-project-access"
+
+
+def _access_request_notifications(db_session):
+    return db_session.query(NotificationDb).filter(
+        NotificationDb.recipient == MEMBER,
+        NotificationDb.action_type == "project_access_request",
+    ).count()
+
+
+def test_request_access_error_answers(as_persona, hidden_project):
+    missing = as_persona("outsider").post(ACCESS_REQUEST, json={"project_id": "no-such-project"})
+    assert missing.status_code == 404
+    assert missing.json() == {"detail": "Project not found"}
+
+    already_member = as_persona("member").post(ACCESS_REQUEST, json={"project_id": hidden_project.id})
+    assert already_member.status_code == 409
+
+
+def test_request_access_to_a_hidden_project_is_404_and_notifies_nobody(
+    as_persona, hidden_project, db_session
+):
+    response = as_persona("outsider").post(ACCESS_REQUEST, json={"project_id": hidden_project.id})
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Project not found"}
+    assert _access_request_notifications(db_session) == 0

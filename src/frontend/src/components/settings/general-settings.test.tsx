@@ -125,7 +125,11 @@ describe('GeneralSettings - instance identity', () => {
         return {
           ok: false,
           json: async () => ({
-            detail: { code: 'volume_invalid', message: 'english fallback', params: { value: 'a.b', catalog: 'c', schema: 's' } },
+            detail: {
+              code: 'volume_invalid',
+              message: 'english fallback',
+              params: { value: 'a.b', catalog: 'c', schema: 's' },
+            },
           }),
         } as Response;
       }

@@ -257,7 +257,9 @@ def test_rejected_branding_save_leaves_earlier_keys_unchanged(client: TestClient
     assert client.get("/api/settings/ui-customization").json() == before
 
 
-def test_invalid_volume_is_rejected_with_a_code_and_stores_nothing(client: TestClient, test_settings):
+def test_invalid_volume_is_rejected_with_a_code_and_stores_nothing(
+    client: TestClient, test_settings
+):
     """A volume that can't name a UC volume answers 400 with code + params and changes nothing."""
     response = client.put(
         "/api/settings",

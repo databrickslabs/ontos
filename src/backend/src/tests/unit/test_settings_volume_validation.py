@@ -53,7 +53,8 @@ def test_a_rejected_save_stores_nothing(manager):
 
     assert manager._settings.DATABRICKS_CATALOG == "app_ontos"
     assert manager._settings.DATABRICKS_VOLUME == "app_files"
-    assert manager._db.query(AppSettingDb).filter(AppSettingDb.key.like("DATABRICKS_%")).count() == 0
+    stored = manager._db.query(AppSettingDb).filter(AppSettingDb.key.like("DATABRICKS_%"))
+    assert stored.count() == 0
     assert manager._db.query(AppSettingDb).filter(AppSettingDb.key == "LLM_ENABLED").count() == 0
 
 

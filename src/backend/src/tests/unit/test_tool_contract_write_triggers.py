@@ -212,6 +212,18 @@ class TestBlockingGates:
         assert _stored(world).description_purpose == 'changed'
         assert _actions(world) == [('UPDATE', True)]
 
+    def test_run_update_gates_returns_pass_when_the_registry_raises(self, world, monkeypatch):
+        import src.common.workflow_triggers as triggers
+
+        class _Registry:
+            def before_update(self, **kwargs):
+                raise RuntimeError('gate crashed')
+
+        monkeypatch.setattr(triggers, 'get_trigger_registry', lambda db: _Registry())
+        assert world.contracts.run_update_gates(
+            world.db, world.row, {'description': 'x'}, SUE.email
+        ) == (True, [])
+
     def test_a_status_change_alone_runs_no_before_update_gate(self, world, run):
         # As change-status, which runs the before_status_change gates only.
         gate = _workflow(world.db, 'before_update', step_type='fail')

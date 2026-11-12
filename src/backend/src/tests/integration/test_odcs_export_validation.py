@@ -240,9 +240,20 @@ class TestODCSExportValidation:
         db_session.add(contract)
         db_session.commit()
 
-        # Add tags
+        # Add tags: the ODCS row and the tag assignment it's mirrored to, as an
+        # import (and migration t1) leaves them; the export reads the assignment
         tag = DataContractTagDb(contract_id=contract.id, name="transactions")
         db_session.add(tag)
+        from src.repositories.tags_repository import entity_tag_repo, tag_namespace_repo, tag_repo
+        default_ns = tag_namespace_repo.get_or_create_default_namespace(db_session, user_email="test")
+        tag_db = tag_repo.find_or_create_tag(
+            db_session, tag_name="transactions", namespace_name=None, user_email="test",
+            default_namespace_id=default_ns.id,
+        )
+        db_session.flush()
+        entity_tag_repo.add_tag_to_entity(
+            db_session, entity_id=contract.id, entity_type="data_contract", tag_id=tag_db.id,
+        )
 
         # Add team members
         team_members = [

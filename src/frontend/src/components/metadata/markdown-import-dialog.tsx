@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useApi } from '@/hooks/use-api';
 
-export type MarkdownImportStatus = 'added' | 'updated' | 'unchanged' | 'unlinked' | 'failed';
+export type MarkdownImportStatus =
+  'added' | 'updated' | 'unchanged' | 'unlinked' | 'failed' | 'removed';
 
 export interface MarkdownImportFileResult {
   path: string;
@@ -32,10 +33,14 @@ export interface MarkdownImportResult {
   unchanged: number;
   unlinked: number;
   failed: number;
+  /** Files imported from this folder before that are gone (their documents were removed). */
+  removed: number;
   files: MarkdownImportFileResult[];
 }
 
-const STATUSES: MarkdownImportStatus[] = ['added', 'updated', 'unchanged', 'unlinked', 'failed'];
+const STATUSES: MarkdownImportStatus[] = [
+  'added', 'updated', 'unchanged', 'unlinked', 'failed', 'removed',
+];
 
 // Codes the import answers with; any other error shows the server's text.
 const ERROR_CODES = new Set([
@@ -53,6 +58,7 @@ const STATUS_VARIANT: Record<MarkdownImportStatus, BadgeVariant> = {
   unchanged: 'secondary',
   unlinked: 'outline',
   failed: 'destructive',
+  removed: 'secondary',
 };
 
 const targetNames = (file: MarkdownImportFileResult) =>
@@ -100,7 +106,8 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
       return;
     }
     setResult(response.data);
-    if (response.data.added || response.data.updated) onImported?.(response.data);
+    const { added, updated, removed } = response.data;
+    if (added || updated || removed) onImported?.(response.data);
   };
 
   const describeUnresolved = (file: MarkdownImportFileResult) => file.unresolved
@@ -172,7 +179,9 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
                       )}
                       {(file.removed ?? 0) > 0 && (
                         <div className="text-xs text-muted-foreground">
-                          {t('markdownImport.removed', { count: file.removed })}
+                          {t(file.status === 'removed'
+                            ? 'markdownImport.reasons.gone'
+                            : 'markdownImport.removed', { count: file.removed })}
                         </div>
                       )}
                       {file.unresolved.length > 0 && (

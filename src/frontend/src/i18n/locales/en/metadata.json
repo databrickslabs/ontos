@@ -267,14 +267,16 @@
       "updated": "Updated: {{count}}",
       "unchanged": "Unchanged: {{count}}",
       "unlinked": "Unlinked: {{count}}",
-      "failed": "Failed: {{count}}"
+      "failed": "Failed: {{count}}",
+      "removed": "Removed: {{count}}"
     },
     "status": {
       "added": "Added",
       "updated": "Updated",
       "unchanged": "Unchanged",
       "unlinked": "Unlinked",
-      "failed": "Failed"
+      "failed": "Failed",
+      "removed": "Removed"
     },
     "linkedTo": "Linked to: {{targets}}",
     "removed": "Removed from entities it no longer names: {{count}}",
@@ -293,7 +295,8 @@
       "too_large": "The file is larger than 1 MB.",
       "not_utf8": "The file is not UTF-8 text.",
       "front_matter_invalid": "The front matter is not a valid YAML mapping.",
-      "read_failed": "The file could not be read."
+      "read_failed": "The file could not be read.",
+      "gone": "The file is gone from the folder: its documents were removed from {{count}} entities."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" is not a path inside a Unity Catalog volume. Use /Volumes/<catalog>/<schema>/<volume>/<folder>.",

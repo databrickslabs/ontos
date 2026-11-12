@@ -267,14 +267,16 @@
       "updated": "Aktualisiert: {{count}}",
       "unchanged": "Unverändert: {{count}}",
       "unlinked": "Nicht verknüpft: {{count}}",
-      "failed": "Fehlgeschlagen: {{count}}"
+      "failed": "Fehlgeschlagen: {{count}}",
+      "removed": "Entfernt: {{count}}"
     },
     "status": {
       "added": "Hinzugefügt",
       "updated": "Aktualisiert",
       "unchanged": "Unverändert",
       "unlinked": "Nicht verknüpft",
-      "failed": "Fehlgeschlagen"
+      "failed": "Fehlgeschlagen",
+      "removed": "Entfernt"
     },
     "linkedTo": "Verknüpft mit: {{targets}}",
     "removed": "Von Einträgen entfernt, die die Datei nicht mehr nennt: {{count}}",
@@ -293,7 +295,8 @@
       "too_large": "Die Datei ist größer als 1 MB.",
       "not_utf8": "Die Datei ist kein UTF-8-Text.",
       "front_matter_invalid": "Das Front Matter ist keine gültige YAML-Zuordnung.",
-      "read_failed": "Die Datei konnte nicht gelesen werden."
+      "read_failed": "Die Datei konnte nicht gelesen werden.",
+      "gone": "Die Datei ist nicht mehr im Ordner: ihre Dokumente wurden bei {{count}} Einträgen entfernt."
     },
     "errors": {
       "markdown_import_path_invalid": "„{{path}}“ ist kein Pfad in einem Unity-Catalog-Volume. Verwenden Sie /Volumes/<catalog>/<schema>/<volume>/<folder>.",

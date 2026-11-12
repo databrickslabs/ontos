@@ -267,14 +267,16 @@
       "updated": "Bijgewerkt: {{count}}",
       "unchanged": "Ongewijzigd: {{count}}",
       "unlinked": "Niet gekoppeld: {{count}}",
-      "failed": "Mislukt: {{count}}"
+      "failed": "Mislukt: {{count}}",
+      "removed": "Verwijderd: {{count}}"
     },
     "status": {
       "added": "Toegevoegd",
       "updated": "Bijgewerkt",
       "unchanged": "Ongewijzigd",
       "unlinked": "Niet gekoppeld",
-      "failed": "Mislukt"
+      "failed": "Mislukt",
+      "removed": "Verwijderd"
     },
     "linkedTo": "Gekoppeld aan: {{targets}}",
     "removed": "Verwijderd bij entiteiten die het niet meer noemt: {{count}}",
@@ -293,7 +295,8 @@
       "too_large": "Het bestand is groter dan 1 MB.",
       "not_utf8": "Het bestand is geen UTF-8-tekst.",
       "front_matter_invalid": "De front matter is geen geldige YAML-mapping.",
-      "read_failed": "Het bestand kon niet worden gelezen."
+      "read_failed": "Het bestand kon niet worden gelezen.",
+      "gone": "Het bestand staat niet meer in de map: de documenten zijn bij {{count}} entiteiten verwijderd."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" is geen pad in een Unity Catalog-volume. Gebruik /Volumes/<catalog>/<schema>/<volume>/<folder>.",

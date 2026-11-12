@@ -267,14 +267,16 @@
       "updated": "Mis à jour : {{count}}",
       "unchanged": "Inchangés : {{count}}",
       "unlinked": "Non liés : {{count}}",
-      "failed": "En échec : {{count}}"
+      "failed": "En échec : {{count}}",
+      "removed": "Retirés : {{count}}"
     },
     "status": {
       "added": "Ajouté",
       "updated": "Mis à jour",
       "unchanged": "Inchangé",
       "unlinked": "Non lié",
-      "failed": "En échec"
+      "failed": "En échec",
+      "removed": "Retiré"
     },
     "linkedTo": "Lié à : {{targets}}",
     "removed": "Retiré des entités qu’il ne nomme plus : {{count}}",
@@ -293,7 +295,8 @@
       "too_large": "Le fichier dépasse 1 Mo.",
       "not_utf8": "Le fichier n’est pas du texte UTF-8.",
       "front_matter_invalid": "Le front matter n’est pas un mappage YAML valide.",
-      "read_failed": "Le fichier n’a pas pu être lu."
+      "read_failed": "Le fichier n’a pas pu être lu.",
+      "gone": "Le fichier n’est plus dans le dossier : ses documents ont été retirés de {{count}} entités."
     },
     "errors": {
       "markdown_import_path_invalid": "« {{path}} » n’est pas un chemin dans un volume Unity Catalog. Utilisez /Volumes/<catalog>/<schema>/<volume>/<folder>.",

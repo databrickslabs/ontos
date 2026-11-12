@@ -166,6 +166,15 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
             .all()
         )
 
+    def list_imported_under(self, db: Session, *, folder: str) -> List[DocumentMetadataDb]:
+        """Documents imported from files under a volume folder (subfolders included)."""
+        prefix = folder.rstrip('/') + '/'
+        return (
+            db.query(DocumentMetadataDb)
+            .filter(DocumentMetadataDb.source_path.startswith(prefix, autoescape=True))
+            .all()
+        )
+
     def list_imported(self, db: Session) -> List[DocumentMetadataDb]:
         """Every document imported from a Markdown file."""
         return (

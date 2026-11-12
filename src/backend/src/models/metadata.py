@@ -162,8 +162,9 @@ class MarkdownImportFileResult(BaseModel):
     """What the import did with one file.
 
     ``status``: added (new documents only), updated (a document changed or a
-    target was added), unchanged, unlinked (no target resolved), or failed
-    (``reason``: too_large | not_utf8 | front_matter_invalid | read_failed).
+    target was added), unchanged, unlinked (no target resolved), failed
+    (``reason``: too_large | not_utf8 | front_matter_invalid | read_failed), or
+    removed (the file, imported before, is gone; its documents were removed).
     """
     path: str
     status: str
@@ -183,6 +184,8 @@ class MarkdownImportResult(BaseModel):
     unchanged: int = 0
     unlinked: int = 0
     failed: int = 0
+    # Files imported from this folder before that are gone (deleted or renamed)
+    removed: int = 0
     files: List[MarkdownImportFileResult] = Field(default_factory=list)
 
 

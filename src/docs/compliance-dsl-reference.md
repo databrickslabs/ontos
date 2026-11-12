@@ -175,8 +175,8 @@ The reason of a failed check is shown next to the result. Before saving, use
   (default 200; cached verdicts don't count). The checks past it fail with
   `llm_check_budget_exceeded`, and the run reports how many.
 - Scheduled runs (the Compliance Checks job) use the app's LLM settings: they
-  are written into the installed job when it is installed or updated, and when
-  the LLM settings change in Settings.
+  are written into the installed job when it is installed, and when the general
+  settings (which include the LLM settings) are saved.
 
 ## CASE Expressions
 

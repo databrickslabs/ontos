@@ -267,14 +267,16 @@
       "updated": "Atualizados: {{count}}",
       "unchanged": "Sem alteração: {{count}}",
       "unlinked": "Não vinculados: {{count}}",
-      "failed": "Com falha: {{count}}"
+      "failed": "Com falha: {{count}}",
+      "removed": "Removidos: {{count}}"
     },
     "status": {
       "added": "Adicionado",
       "updated": "Atualizado",
       "unchanged": "Sem alteração",
       "unlinked": "Não vinculado",
-      "failed": "Com falha"
+      "failed": "Com falha",
+      "removed": "Removido"
     },
     "linkedTo": "Vinculado a: {{targets}}",
     "removed": "Removido das entidades que não indica mais: {{count}}",
@@ -293,7 +295,8 @@
       "too_large": "O arquivo tem mais de 1 MB.",
       "not_utf8": "O arquivo não é texto UTF-8.",
       "front_matter_invalid": "O front matter não é um mapeamento YAML válido.",
-      "read_failed": "Não foi possível ler o arquivo."
+      "read_failed": "Não foi possível ler o arquivo.",
+      "gone": "O arquivo não está mais na pasta: os documentos foram removidos de {{count}} entidades."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" não é um caminho dentro de um volume do Unity Catalog. Use /Volumes/<catalog>/<schema>/<volume>/<folder>.",

@@ -394,3 +394,71 @@ def test_an_uploaded_document_is_still_downloaded_from_the_volume(
     assert response.status_code == 200, response.text
     assert response.content == b'uploaded bytes'
     mock_workspace_client.files.download.assert_called_once_with('/Volumes/c/s/v/uploads/u.txt')
+
+
+# --- Files gone from the imported folder ------------------------------------
+
+def _sources(db_session):
+    return sorted({d.source_path for d in db_session.query(DocumentMetadataDb).all()})
+
+
+def test_a_deleted_file_takes_its_documents_away(client, db_session, domain, asset, volume):
+    assert _import(client).status_code == 200
+    del volume[f'{ROOT}/domain.md']
+
+    body = _import(client).json()
+
+    assert (body['removed'], body['added'], body['unchanged']) == (1, 0, 1)
+    gone = _by_path(body)[f'{ROOT}/domain.md']
+    assert (gone['status'], gone['removed']) == ('removed', 1)
+    assert _sources(db_session) == [f'{ROOT}/glossary/terms.md']
+    hits = client.get('/api/search', params={'search_term': 'zorbleflux'}).json()
+    assert not [hit for hit in hits if hit['type'] == 'document']
+
+
+def test_a_renamed_file_is_removed_and_added(client, db_session, domain, volume):
+    assert _import(client).status_code == 200
+    volume[f'{ROOT}/customer.md'] = volume.pop(f'{ROOT}/domain.md')
+
+    body = _import(client).json()
+
+    assert (body['removed'], body['added']) == (1, 1)
+    files = _by_path(body)
+    assert files[f'{ROOT}/domain.md']['status'] == 'removed'
+    assert files[f'{ROOT}/customer.md']['status'] == 'added'
+    docs = db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.entity_id == domain.id).all()
+    assert [d.source_path for d in docs] == [f'{ROOT}/customer.md']
+
+
+def test_documents_imported_from_another_path_are_untouched(client, db_session, domain, volume):
+    # A sibling folder whose name starts like ROOT, and a folder elsewhere
+    for other in (f'{ROOT}-old/notes.md', '/Volumes/main/docs/other/notes.md'):
+        volume.clear()
+        volume[other] = "---\ndomain: Customer\n---\nother\n"
+        assert _import(client, other.rsplit('/', 1)[0]).json()['added'] == 1
+    volume.clear()
+    volume[f'{ROOT}/domain.md'] = DOMAIN_FILE
+
+    body = _import(client).json()
+
+    assert (body['added'], body['removed']) == (1, 0)
+    assert _sources(db_session) == sorted([
+        f'{ROOT}-old/notes.md', '/Volumes/main/docs/other/notes.md', f'{ROOT}/domain.md'])
+
+
+def test_files_in_an_unreadable_subfolder_are_kept(
+        client, db_session, domain, asset, volume, mock_workspace_client):
+    assert _import(client).status_code == 200
+    listing = mock_workspace_client.files.list_directory_contents.side_effect
+
+    def no_glossary(folder):
+        if folder == f'{ROOT}/glossary':
+            raise PermissionDenied('no access')
+        return listing(folder)
+    mock_workspace_client.files.list_directory_contents.side_effect = no_glossary
+
+    body = _import(client).json()
+
+    assert body['removed'] == 0
+    assert f'{ROOT}/glossary/terms.md' in _sources(db_session)

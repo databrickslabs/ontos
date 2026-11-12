@@ -690,6 +690,7 @@ def import_markdown_from_volume(
         details={
             'path': result.path, 'added': result.added, 'updated': result.updated,
             'unchanged': result.unchanged, 'unlinked': result.unlinked, 'failed': result.failed,
+            'removed': result.removed,
         },
     )
     return result

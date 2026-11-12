@@ -28,6 +28,7 @@ const RESULT: MarkdownImportResult = {
   unchanged: 0,
   unlinked: 1,
   failed: 1,
+  removed: 1,
   files: [
     {
       path: '/Volumes/main/docs/context/domain.md', status: 'added', title: 'Customer',
@@ -46,6 +47,10 @@ const RESULT: MarkdownImportResult = {
     {
       path: '/Volumes/main/docs/context/bad.md', status: 'failed', targets: [], unresolved: [],
       reason: 'front_matter_invalid',
+    },
+    {
+      path: '/Volumes/main/docs/context/old.md', status: 'removed', title: 'Old',
+      targets: [], unresolved: [], removed: 2,
     },
   ],
 };
@@ -77,6 +82,10 @@ describe('MarkdownImportDialog', () => {
     expect(screen.getByText('Unchanged: 0')).toBeInTheDocument();
     expect(screen.getByText('Unlinked: 1')).toBeInTheDocument();
     expect(screen.getByText('Failed: 1')).toBeInTheDocument();
+    expect(screen.getByText('Removed: 1')).toBeInTheDocument();
+    expect(screen.getByText(
+      'The file is gone from the folder: its documents were removed from 2 entities.',
+    )).toBeInTheDocument();
     expect(screen.getByText('Linked to: Customer')).toBeInTheDocument();
     expect(screen.getByText('Asset "main.crm.gone" not found')).toBeInTheDocument();
     expect(screen.getByText('Removed from entities it no longer names: 1')).toBeInTheDocument();
@@ -117,7 +126,7 @@ describe('MarkdownImportDialog', () => {
   });
 
   it('does not report an import that changed nothing', async () => {
-    respond(200, { ...RESULT, added: 0, updated: 0, unchanged: 2, files: [] });
+    respond(200, { ...RESULT, added: 0, updated: 0, unchanged: 2, removed: 0, files: [] });
     const onImported = open();
     await waitFor(() => expect(screen.getByText('Unchanged: 2')).toBeInTheDocument());
     expect(screen.getByText('No Markdown files found at this path.')).toBeInTheDocument();

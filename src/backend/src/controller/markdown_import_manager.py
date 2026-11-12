@@ -13,7 +13,8 @@ documents panel lists) on every entity its YAML front matter names::
 Nothing is guessed: a file whose front matter names no existing entity is
 reported as unlinked. A re-run compares each file's SHA-256 with the stored one
 and only rewrites the documents of files that changed; a changed file that no
-longer names an entity takes its document off that entity. Glossary terms in a file
+longer names an entity takes its document off that entity, and a file gone
+from the folder (deleted or renamed) takes all its documents away. Glossary terms in a file
 stay document text; no concepts are created.
 
 The files are read with the caller's workspace client (on behalf of the user),
@@ -262,7 +263,8 @@ class MarkdownImportManager:
             MarkdownImportAccessDeniedError, MarkdownImportTooManyFilesError
         """
         root = normalize_volume_path(path)
-        files = self._list_markdown_files(ws, root)
+        unread: List[str] = []
+        files = self._list_markdown_files(ws, root, unread)
         resolver = _TargetResolver(db, self._semantic)
         result = MarkdownImportResult(path=root)
         changed: List[DocumentMetadataDb] = []
@@ -272,6 +274,9 @@ class MarkdownImportManager:
                                       changed, removed_ids)
             result.files.append(entry)
             setattr(result, entry.status, getattr(result, entry.status) + 1)
+        for entry in self._remove_gone_files(db, root, files, unread, user_email, removed_ids):
+            result.files.append(entry)
+            result.removed += 1
         db.commit()
         for doc in changed:
             db.refresh(doc)
@@ -279,15 +284,22 @@ class MarkdownImportManager:
         for document_id in removed_ids:
             self._metadata.remove_document_from_index(document_id)
         logger.info(
-            "Markdown import of %s: %d added, %d updated, %d unchanged, %d unlinked, %d failed",
-            root, result.added, result.updated, result.unchanged, result.unlinked, result.failed,
+            "Markdown import of %s: %d added, %d updated, %d unchanged, %d unlinked, "
+            "%d failed, %d removed", root, result.added, result.updated, result.unchanged,
+            result.unlinked, result.failed, result.removed,
         )
         return result
 
     # --- Volume access ---
     def _list_markdown_files(
-        self, ws: WorkspaceClient, root: str,
+        self, ws: WorkspaceClient, root: str, unread: Optional[List[str]] = None,
     ) -> List[Tuple[str, Optional[int]]]:
+        """The ``.md`` files under ``root``, with their sizes.
+
+        Subfolders that couldn't be listed (gone, no access, deeper than
+        MAX_DEPTH) go to ``unread``: their files are unknown, not deleted.
+        """
+        unread = unread if unread is not None else []
         if root.lower().endswith('.md'):
             try:
                 metadata = ws.files.get_metadata(root)
@@ -306,16 +318,20 @@ class MarkdownImportManager:
                 # BadRequest: the path is a file, not a folder
                 if folder == root:
                     raise MarkdownImportPathNotFoundError(f"No folder at {root}", path=root) from e
+                unread.append(folder)
                 continue
             except (PermissionDenied, Unauthenticated) as e:
                 if folder == root:
                     raise MarkdownImportAccessDeniedError(f"Can't read {root}", path=root) from e
+                unread.append(folder)
                 continue
             for entry in entries:
                 entry_path = entry.path or posixpath.join(folder, entry.name or '')
                 if entry.is_directory:
                     if depth + 1 <= MAX_DEPTH:
                         pending.append((entry_path, depth + 1))
+                    else:
+                        unread.append(entry_path)
                 elif entry_path.lower().endswith('.md'):
                     found.append((entry_path, entry.file_size))
                     if len(found) > MAX_FILES:
@@ -325,6 +341,45 @@ class MarkdownImportManager:
                         )
         found.sort()
         return found
+
+    def _remove_gone_files(
+        self, db: Session, root: str, files: List[Tuple[str, Optional[int]]],
+        unread: List[str], user_email: Optional[str], removed_ids: List[str],
+    ) -> List[MarkdownImportFileResult]:
+        """Remove the documents of files imported from under ``root`` that are gone.
+
+        The files are the source of truth: a file deleted (or renamed) since an
+        earlier import of this folder takes its documents off their entities.
+        Documents imported from elsewhere, or from subfolders that couldn't be
+        listed this time, stay.
+        """
+        if root.lower().endswith('.md'):
+            return []  # one file: it exists, or the import was refused
+        present = {path for path, _ in files}
+        skipped = tuple(folder.rstrip('/') + '/' for folder in unread)
+        gone: Dict[str, List[DocumentMetadataDb]] = {}
+        for doc in self._documents.list_imported_under(db, folder=root):
+            if doc.source_path in present or (skipped and doc.source_path.startswith(skipped)):
+                continue
+            gone.setdefault(doc.source_path, []).append(doc)
+        entries = []
+        for path, docs in sorted(gone.items()):
+            for doc in docs:
+                db.add(ChangeLogDb(
+                    entity_type=f"{doc.entity_type}:document",
+                    entity_id=doc.entity_id,
+                    action='DELETE',
+                    username=user_email,
+                    details_json=json.dumps({'source_path': path, 'title': doc.title,
+                                             'reason': 'source_file_gone'}),
+                ))
+                removed_ids.append(str(doc.id))
+                db.delete(doc)
+            entries.append(MarkdownImportFileResult(
+                path=path, status='removed', title=docs[0].title, removed=len(docs),
+            ))
+        db.flush()
+        return entries
 
     @staticmethod
     def _download(ws: WorkspaceClient, path: str) -> bytes:

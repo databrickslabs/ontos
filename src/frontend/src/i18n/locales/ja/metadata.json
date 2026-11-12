@@ -267,14 +267,16 @@
       "updated": "更新: {{count}}",
       "unchanged": "変更なし: {{count}}",
       "unlinked": "未リンク: {{count}}",
-      "failed": "失敗: {{count}}"
+      "failed": "失敗: {{count}}",
+      "removed": "削除: {{count}}"
     },
     "status": {
       "added": "追加",
       "updated": "更新",
       "unchanged": "変更なし",
       "unlinked": "未リンク",
-      "failed": "失敗"
+      "failed": "失敗",
+      "removed": "削除"
     },
     "linkedTo": "リンク先: {{targets}}",
     "removed": "指定されなくなったエンティティから削除: {{count}}",
@@ -293,7 +295,8 @@
       "too_large": "ファイルが 1 MB を超えています。",
       "not_utf8": "ファイルが UTF-8 テキストではありません。",
       "front_matter_invalid": "フロントマターが有効な YAML マッピングではありません。",
-      "read_failed": "ファイルを読み取れませんでした。"
+      "read_failed": "ファイルを読み取れませんでした。",
+      "gone": "ファイルがフォルダーにありません。{{count}} 件のエンティティからドキュメントを削除しました。"
     },
     "errors": {
       "markdown_import_path_invalid": "「{{path}}」は Unity Catalog ボリューム内のパスではありません。/Volumes/<catalog>/<schema>/<volume>/<folder> を使用してください。",

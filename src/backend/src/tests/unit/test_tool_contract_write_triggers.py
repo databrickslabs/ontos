@@ -5,7 +5,8 @@
 the change succeeded (not blocking: a failing workflow doesn't undo the change),
 and ``PUT`` first runs the blocking ``before_update`` gates (a failing gate
 answers 400 and nothing is written). Each route writes its data-contracts audit
-entry (CREATE / UPDATE / DELETE, and CHANGE_STATUS for ``change-status``).
+entry (CREATE / UPDATE / DELETE, and for ``change-status`` DEPRECATE / RETIRE /
+CHANGE_STATUS).
 The tools ``create_draft_data_contract``, ``update_data_contract`` and
 ``delete_data_contract`` do the same, for the caller, through Ask Ontos
 (``ToolRegistry.execute``) and MCP (``check_tool_permission`` + ``tool.execute``,
@@ -195,6 +196,22 @@ class TestBlockingGates:
         assert _runs(world.db, gate) == [(world.row.id, 'before_update', SUE.email)]
         assert _stored(world).description_purpose == 'changed'
 
+    def test_a_before_update_gate_that_raises_lets_the_update_through(
+        self, world, run, monkeypatch
+    ):
+        # Fail-open, as PUT /data-contracts/{id} (workflow-authoring-guide, #1103).
+        import src.common.workflow_triggers as triggers
+
+        def _boom(db):
+            raise RuntimeError('registry down')
+
+        monkeypatch.setattr(triggers, 'get_trigger_registry', _boom)
+        res = run(_ctx(world), 'update_data_contract',
+                  {'contract_id': world.row.id, 'description': 'changed'})
+        assert res.success is True, res.error
+        assert _stored(world).description_purpose == 'changed'
+        assert _actions(world) == [('UPDATE', True)]
+
     def test_a_status_change_alone_runs_no_before_update_gate(self, world, run):
         # As change-status, which runs the before_status_change gates only.
         gate = _workflow(world.db, 'before_update', step_type='fail')
@@ -245,16 +262,39 @@ class TestAuditAndCaller:
         assert world.audit[0]['username'] == SUE.email
         assert world.audit[0]['details']['updated_resource_id'] == world.row.id
 
-    def test_a_status_change_is_audited_as_change_status(self, world, run):
+    def test_a_deprecation_is_audited_as_deprecate_with_its_details(self, world, run):
+        # As POST /data-contracts/{id}/change-status.
         res = run(_ctx(world), 'update_data_contract',
                   {'contract_id': world.row.id, 'status': 'deprecated',
                    'deprecation_reason': 'Replaced'})
         assert res.success is True, res.error
         assert _stored(world).updated_by == SUE.email
-        assert _actions(world) == [('CHANGE_STATUS', True)]
+        assert _actions(world) == [('DEPRECATE', True)]
         details = world.audit[0]['details']
         assert (details['contract_id'], details['from'], details['to']) == (
             world.row.id, 'active', 'deprecated')
+        assert details['deprecation_reason'] == 'Replaced'
+        assert details['sunset_date'] is None
+        assert details['replacement_contract_id'] is None
+
+    def test_a_retirement_is_audited_as_retire(self, world, run):
+        world.row.status = 'deprecated'
+        world.db.commit()
+        res = run(_ctx(world), 'update_data_contract',
+                  {'contract_id': world.row.id, 'status': 'retired'})
+        assert res.success is True, res.error
+        assert _actions(world) == [('RETIRE', True)]
+        details = world.audit[0]['details']
+        assert (details['from'], details['to']) == ('deprecated', 'retired')
+        assert 'deprecation_reason' not in details
+
+    def test_any_other_status_change_is_audited_as_change_status(self, world, run):
+        world.row.status = 'deprecated'
+        world.db.commit()
+        res = run(_ctx(world), 'update_data_contract',
+                  {'contract_id': world.row.id, 'status': 'active'})
+        assert res.success is True, res.error
+        assert _actions(world) == [('CHANGE_STATUS', True)]
 
     def test_a_delete_is_audited_and_names_the_caller(self, world, run, monkeypatch):
         seen = {}

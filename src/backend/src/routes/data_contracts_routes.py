@@ -59,7 +59,7 @@ from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
 from src.common.features import FeatureAccessLevel
 from src.common.lifecycle_status import check_status_unchanged
-from src.controller.lifecycle_fields import LIFECYCLE_AUDIT_ACTIONS, LifecycleFieldError
+from src.controller.lifecycle_fields import contract_status_audit, LifecycleFieldError
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.models.data_products import DeprecationPayload
@@ -472,20 +472,17 @@ async def change_contract_status(
         )
         
         # Audit
-        lifecycle_audit = {
-            'deprecation_reason': updated.deprecation_reason,
-            'sunset_date': updated.sunset_date.isoformat() if updated.sunset_date else None,
-            'replacement_contract_id': updated.replacement_contract_id,
-        } if new_status == 'deprecated' else {}
+        audit_action, audit_details = contract_status_audit(
+            updated, contract_id, from_status, new_status
+        )
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'anonymous',
             ip_address=request.client.host if request.client else None,
             feature='data-contracts',
-            action=LIFECYCLE_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
+            action=audit_action,
             success=True,
-            details={'contract_id': contract_id, 'from': from_status, 'to': updated.status,
-                     **lifecycle_audit},
+            details=audit_details,
         )
         return {'status': updated.status, 'from': from_status, 'to': updated.status}
     except ValueError as e:

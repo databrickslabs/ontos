@@ -13,7 +13,9 @@ from src.tools import visibility as vis
 
 from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
-from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.controller.lifecycle_fields import (
+    LIFECYCLE_AUDIT_ACTIONS, contract_status_audit, deprecation_details_from_strings,
+)
 from src.tools.base import (
     BaseTool, ToolContext, ToolResult, invalid_transition, tool_failure,
 )
@@ -98,17 +100,19 @@ def _transition_status(
     ctx: ToolContext, tool_name: str, contract_id: str, from_status: str, status: str,
     **kwargs: Any,
 ) -> Any:
-    """The change-status route's call (the caller for the gates), audited as CHANGE_STATUS.
+    """The change-status route's call (the caller for the gates), audited as the route does
+    (``DEPRECATE`` / ``RETIRE`` for those targets, ``CHANGE_STATUS`` otherwise).
 
     ``kwargs`` go to ``transition_status``.
     """
     details = {"contract_id": contract_id, "from": from_status}
-    with audited(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, "CHANGE_STATUS", details) as outcome:
+    action = LIFECYCLE_AUDIT_ACTIONS.get(status.lower(), "CHANGE_STATUS")
+    with audited(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, action, details) as outcome:
         updated = ctx.data_contracts_manager.transition_status(
             db=ctx.db, contract_id=contract_id, new_status=status,
             current_user=caller_email(ctx), **kwargs,
         )
-        details["to"] = updated.status
+        details.update(contract_status_audit(updated, contract_id, from_status, status)[1])
         outcome["success"] = True
     return updated
 

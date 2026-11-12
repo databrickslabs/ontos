@@ -1010,7 +1010,17 @@
     "required": "Erforderlich",
     "advisory": "Beratend",
     "overTime": "Reifegrad im Zeitverlauf",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "currentLevel": "Aktuelle Stufe",
+    "nextLevel": "Nächste Stufe",
+    "belowFirstLevel": "Unter der ersten Stufe",
+    "topLevelReached": "Höchste Stufe erreicht",
+    "noLevels": "Für diesen Typ sind noch keine Reifegradstufen definiert.",
+    "gateStatus": {
+      "pass": "Bestanden",
+      "fail": "Nicht bestanden",
+      "warn": "Nicht erfüllt"
+    }
   },
   "maturityGateCodes": {
     "maturity_uc_table_client_unavailable": "Unity Catalog ist nicht erreichbar, daher fehlen die Felder der Tabelle {{tableName}}.",

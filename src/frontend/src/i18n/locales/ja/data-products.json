@@ -1010,7 +1010,17 @@
     "required": "必須",
     "advisory": "推奨",
     "overTime": "成熟度の推移",
-    "retry": "再試行"
+    "retry": "再試行",
+    "currentLevel": "現在のレベル",
+    "nextLevel": "次のレベル",
+    "belowFirstLevel": "最初のレベル未満",
+    "topLevelReached": "最高レベルに到達済み",
+    "noLevels": "この種類の成熟度レベルはまだ定義されていません。",
+    "gateStatus": {
+      "pass": "合格",
+      "fail": "不合格",
+      "warn": "未達成"
+    }
   },
   "maturityGateCodes": {
     "maturity_uc_table_client_unavailable": "Unity Catalog に接続できないため、テーブル {{tableName}} のフィールドがありません。",

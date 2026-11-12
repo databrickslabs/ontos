@@ -188,13 +188,15 @@ export function AssetFormDialog({
         };
         const response = await apiPut<AssetUpdateResult>(`/api/assets/${asset.id}`, payload);
         if (response.error) throw new Error(response.error);
-        toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });
         // Saved, but e.g. the description could not be written to Unity Catalog
-        for (const warning of response.data?.warnings ?? []) {
+        const warnings = response.data?.warnings ?? [];
+        if (warnings.length > 0) {
           toast({
             title: t('assets:descriptionSync.warningTitle', 'Saved in Ontos, not in Unity Catalog'),
-            description: descriptionSyncText(t, warning),
+            description: warnings.map((w) => descriptionSyncText(t, w)).join(' '),
           });
+        } else {
+          toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });
         }
         onSuccess(response.data!);
       } else {

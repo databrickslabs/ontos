@@ -1,4 +1,4 @@
-"""The "write asset descriptions to Unity Catalog" setting: off by default, saved, reloaded (#1477)."""
+"""The "write asset descriptions to Unity Catalog" setting: off by default, saved, reloaded."""
 from unittest.mock import MagicMock, patch
 
 from src.common.config import Settings

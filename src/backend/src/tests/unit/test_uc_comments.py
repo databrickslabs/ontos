@@ -103,3 +103,16 @@ def test_any_other_error_is_a_failure():
         set_comment(ws, 'wh-1', 'main.sales.orders', None, 'x')
 
     assert raised.value.reason == FAILED
+
+
+def test_a_statement_still_running_at_the_timeout_is_cancelled(monkeypatch):
+    clock = iter([0, 0, 100])
+    monkeypatch.setattr(uc_comments.time, 'monotonic', lambda: next(clock))
+    monkeypatch.setattr(uc_comments.time, 'sleep', lambda s: None)
+    ws = _ws(_response(StatementState.RUNNING), _response(StatementState.RUNNING))
+
+    with pytest.raises(CommentWriteError) as raised:
+        set_comment(ws, 'wh-1', 'main.sales.orders', None, 'x', timeout_seconds=10)
+
+    assert raised.value.reason == FAILED
+    ws.statement_execution.cancel_execution.assert_called_once_with('st-1')

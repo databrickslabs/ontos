@@ -1313,6 +1313,15 @@ def reconcile_tags(
     for k, v in to_upsert.items():
         try:
             ensure_tag_key(ws, k)
+        except Exception as e:
+            if is_missing_object_error(e):
+                raise UcObjectMissing(object_type, object_name) from None
+            # Reported, but the write is still tried: the key may exist under a name
+            # the check missed, or the job may be allowed to set tags it can't create.
+            msg = f"Failed to create tag key {k} for {object_type} {object_name}: {e}"
+            print(f"[WARN] {msg}")
+            errors.append(msg)
+        try:
             assign_tag(spark, object_type, object_name, k, v)
             updated += 1
             ours[k] = v

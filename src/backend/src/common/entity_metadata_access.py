@@ -8,6 +8,8 @@ an asset (``entity_type == "asset"``) the asset's own rules apply instead
   a Data Product the user can access, see ``asset_access``);
 - changing needs ``assets`` READ_WRITE (attaching a shared or another
   entity's row also needs ``data-domains`` READ, the right to read that row);
+- attaching a row that belongs to an asset to any other entity needs that asset
+  to be readable too, as its merged metadata goes to every ``data-domains`` reader;
 - the asset must exist (404 ``asset_not_found``), except on the routes that
   address a row by its own id, so orphaned rows can still be cleaned up.
 
@@ -92,6 +94,30 @@ async def _ensure_asset(
         ))
 
 
+async def _ensure_attached_row_readable(request: Request, db, user_details, auth_manager) -> None:
+    """The row to attach belongs to an asset: its reader must be able to read that asset.
+
+    The attach body isn't validated yet (dependencies run first), so a body or
+    row that can't be read is left to the route to answer, as before.
+    """
+    try:
+        body = await request.json()
+        manager = get_metadata_manager(request)
+        load_row = {
+            'rich_text': manager.get_rich_text, 'link': manager.get_link,
+            'document': manager.get_document,
+        }.get(body.get('asset_type'))
+        row = load_row(db, id=str(body.get('asset_id'))) if load_row else None
+    except Exception:
+        logger.warning("Could not load the row to attach on %s", request.url.path)
+        return
+    if row is not None and getattr(row, 'entity_type', None) == ASSET_ENTITY_TYPE:
+        await _ensure_asset(
+            request, db, user_details, auth_manager, row.entity_id, FeatureAccessLevel.READ_ONLY,
+            require_asset=False,
+        )
+
+
 class EntityMetadataPermission:
     """Dependency for the routes with ``{entity_type}`` in the path.
 
@@ -130,6 +156,8 @@ class EntityMetadataPermission:
         entity_type = request.path_params.get('entity_type')
         if entity_type != ASSET_ENTITY_TYPE:
             await self._domain_checker(request, user_details, auth_manager)
+            if self.attaching:
+                await _ensure_attached_row_readable(request, db, user_details, auth_manager)
             return
         entity_id = request.path_params.get('entity_id') or request.query_params.get('entity_id')
         await _ensure_asset(

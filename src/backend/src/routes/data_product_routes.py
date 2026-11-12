@@ -2106,7 +2106,9 @@ async def update_data_product(
             
             if not force_update:
                 # Analyze the impact of proposed changes
-                product_dict = product_update.model_dump(by_alias=True)
+                # Field names (what the analyzer reads); exclude_unset so a
+                # partial update that omits ports is not read as removing them.
+                product_dict = product_update.model_dump(by_alias=False, exclude_unset=True)
                 impact_analysis = manager.analyze_update_impact(
                     product_id=product_id,
                     proposed_changes=product_dict,

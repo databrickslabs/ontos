@@ -1010,7 +1010,17 @@
     "required": "Obrigatório",
     "advisory": "Recomendado",
     "overTime": "Maturidade ao longo do tempo",
-    "retry": "Tentar novamente"
+    "retry": "Tentar novamente",
+    "currentLevel": "Nível atual",
+    "nextLevel": "Próximo nível",
+    "belowFirstLevel": "Abaixo do primeiro nível",
+    "topLevelReached": "Nível mais alto alcançado",
+    "noLevels": "Ainda não há níveis de maturidade definidos para este tipo.",
+    "gateStatus": {
+      "pass": "Aprovado",
+      "fail": "Reprovado",
+      "warn": "Não atendido"
+    }
   },
   "maturityGateCodes": {
     "maturity_uc_table_client_unavailable": "Não foi possível acessar o Unity Catalog, então faltam os campos da tabela {{tableName}}.",

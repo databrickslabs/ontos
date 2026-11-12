@@ -104,6 +104,8 @@ class GateResult(BaseModel):
     # False when the gate's rule reads fields that couldn't be loaded (an asset's
     # unreadable UC table): ``passed`` is then False and says nothing about the rule
     evaluated: bool = True
+    # The gate policy's own failure text (ON_FAIL), set on a failed gate
+    failure_message: Optional[str] = None
 
 
 class MaturityNotice(BaseModel):

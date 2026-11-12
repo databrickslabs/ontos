@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.controller.data_contracts_manager import DataContractsManager
@@ -147,7 +148,7 @@ class TestCreateWithRelations:
 
     def test_a_tag_failure_does_not_fail_the_create(self, db_session: Session, tags):
         manager = _manager()
-        with patch.object(manager._tags_manager, "set_tags_for_entity", side_effect=RuntimeError("boom")):
+        with patch.object(manager._tags_manager, "set_tags_for_entity", side_effect=SQLAlchemyError("boom")):
             created = manager.create_contract_with_relations(
                 db=db_session,
                 contract_data={"name": _name(), "tags": [_fqn(tags[0])]},
@@ -213,6 +214,65 @@ class TestOdcsCreatePaths:
         assert (result.created, result.failed) == (2, 0)
         assigned = [_assigned(db_session, cid) for cid in result.created_ids]
         assert sorted(next(iter(a)) for a in assigned) == sorted([classification.name, region.name])
+
+
+class TestExportAndSearch:
+    def test_export_lists_the_tags_of_a_dialog_created_contract(self, db_session: Session, tags):
+        classification, _ = tags
+        manager = _manager()
+        created = manager.create_contract_with_relations(
+            db=db_session, contract_data={"name": _name(), "tags": [_fqn(classification)]},
+            current_user="alice@example.com",
+        )
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert odcs["tags"] == [classification.name]
+
+    def test_export_writes_other_namespaces_with_their_name(self, db_session: Session):
+        from src.db_models.tags import TagNamespaceDb
+
+        ns = TagNamespaceDb(name=f"gov_{uuid.uuid4().hex[:6]}")
+        db_session.add(ns)
+        db_session.commit()
+        manager = _manager()
+        created = manager.create_contract_with_relations(
+            db=db_session, contract_data={"name": _name(), "tags": [f"{ns.name}/restricted"]},
+            current_user="alice@example.com",
+        )
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert odcs["tags"] == [f"{ns.name}/restricted"]
+
+    def test_export_of_an_upload_keeps_the_file_tags(self, db_session: Session, tags):
+        classification, _ = tags
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft", "tags": [classification.name],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert odcs["tags"] == [classification.name]
+
+    def test_search_lists_an_uploaded_tag_once(self, db_session: Session, tags):
+        classification, _ = tags
+        manager = DataContractsManager(data_dir=Path("/tmp"), tags_manager=TagsManager())
+        manager._queue_delivery = lambda *a, **k: None
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft", "tags": [classification.name],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+
+        item = manager._build_search_index_item(db_session.get(DataContractDb, created.id), db_session)
+
+        assert item.tags == [_fqn(classification)]
 
 
 class TestNewVersions:

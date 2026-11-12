@@ -60,9 +60,11 @@ def _upsert_custom_property(data: dict, prop: str, value) -> None:
     data['customProperties'] = cprops
 
 import yaml
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.models.import_results import BatchImportResult, ImportItemResult
+from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
 from src.common.lifecycle_status import (
@@ -491,13 +493,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         description = str(description_usage) if description_usage else ""
 
         tag_names: List[str] = []
+        legacy_names: List[str] = []
 
-        # 1. Legacy ODCS tags (DataContractTagDb) -- still uses selectin, lightweight
+        # 1. Legacy ODCS tags (DataContractTagDb) -- still uses selectin, lightweight.
+        # Added after the unified tags, skipping names those already cover (#1484:
+        # an upload writes each file tag to both stores).
         try:
             if getattr(contract_db_obj, 'tags', None):
                 for t in contract_db_obj.tags:
                     if getattr(t, 'name', None):
-                        tag_names.append(t.name)
+                        legacy_names.append(t.name)
         except Exception:
             pass
 
@@ -517,6 +522,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         tag_names.append(tag.fully_qualified_name)
             except Exception as tag_err:
                 logger.debug(f"Could not load unified tags for contract {contract_id}: {tag_err}")
+        covered = set(tag_names) | {n.split(TAG_NAMESPACE_SEPARATOR, 1)[-1] for n in tag_names}
+        tag_names.extend(n for n in legacy_names if n not in covered)
 
         # Owner/team: resolve the native owning team, then fall back to the ODCS-supplied team
         # (team-object name + member names) so a contract whose owner_team_id is unset is still
@@ -1505,8 +1512,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 auth_defs.append(ad_item)
             odcs['authoritativeDefinitions'] = auth_defs
 
-        # Legacy support for tags and roles
-        if hasattr(db_obj, 'tags') and db_obj.tags:
+        # Tags: the tag assignments the contract page shows (#1484), a name in the
+        # default namespace written without it; the ODCS tag rows of older
+        # imports when the contract has no assignment.
+        exported_tags = self._odcs_tag_names(db_session, db_obj.id) if db_session is not None else []
+        if exported_tags:
+            odcs['tags'] = exported_tags
+        elif hasattr(db_obj, 'tags') and db_obj.tags:
             odcs['tags'] = [t.name for t in db_obj.tags]
             
         if hasattr(db_obj, 'roles') and db_obj.roles:
@@ -2306,7 +2318,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     tag_creates.append(AssignedTagCreate(**tag))
                 elif hasattr(tag, 'model_dump'):
                     tag_creates.append(AssignedTagCreate(**tag.model_dump()))
-            except Exception as e:
+            except (ValueError, TypeError) as e:  # pydantic's ValidationError is a ValueError
                 logger.warning("Skipping unreadable tag %r: %s", tag, e)
         return tag_creates
 
@@ -2326,7 +2338,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not tag_creates:
             logger.warning("No readable tag in the create payload of contract %s", contract_id)
             return
-        from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR, TagNamespaceCreate
+        from src.models.tags import TagNamespaceCreate
         from src.repositories.tags_repository import tag_namespace_repo
 
         # A name in a namespace that doesn't exist can't be created and would fail
@@ -2347,11 +2359,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             return
         tag_creates = resolvable
 
+        # Flush the create's own rows first, so their errors surface as themselves
+        # and not as a tag failure (begin_nested flushes before its SAVEPOINT).
+        db.flush()
         try:
             with db.begin_nested():
                 # Startup seeds the default namespace. If it's missing, create it here
-                # with a flush: the repository's own create commits, which would end
-                # this savepoint and the create's transaction.
+                # with a flush: set_tags_for_entity would otherwise call
+                # get_or_create_default_namespace, which commits, ending this
+                # savepoint and the create's transaction.
                 if not tag_namespace_repo.get_by_name(db, name=DEFAULT_NAMESPACE_NAME):
                     tag_namespace_repo.create(
                         db,
@@ -2363,7 +2379,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     db, entity_id=str(contract_id), entity_type="data_contract",
                     tags=tag_creates, user_email=current_user, commit=False,
                 )
-        except Exception as e:
+        except (SQLAlchemyError, ValueError) as e:
             logger.error("Failed to assign tags to new contract %s: %s", contract_id, e, exc_info=True)
 
     @staticmethod
@@ -2376,6 +2392,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from src.db_models.tags import EntityTagAssociationDb
         from src.repositories.tags_repository import entity_tag_repo
 
+        db.flush()  # the new version's own rows first, see _assign_tags_on_create
         try:
             with db.begin_nested():
                 source = db.query(EntityTagAssociationDb).filter_by(
@@ -2387,8 +2404,23 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         tag_id=assoc.tag_id, assigned_value=assoc.assigned_value,
                         assigned_by=current_user,
                     )
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error("Failed to copy tags from contract %s to %s: %s", source_id, target_id, e, exc_info=True)
+
+    @staticmethod
+    def _odcs_tag_names(db, contract_id: str) -> List[str]:
+        """ODCS ``tags`` strings from a contract's tag assignments (default-namespace names bare)."""
+        from src.repositories.tags_repository import entity_tag_repo
+
+        names = []
+        for tag in entity_tag_repo.get_assigned_tags_for_entity(
+            db, entity_id=str(contract_id), entity_type="data_contract",
+        ):
+            if tag.namespace_name == DEFAULT_NAMESPACE_NAME:
+                names.append(tag.tag_name)
+            else:
+                names.append(tag.fully_qualified_name)
+        return names
 
     def _create_tags(self, db, contract_id: str, tags: List[str]):
         """Create tags from ODCS tags array."""
@@ -5084,7 +5116,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 cloned_tags = cloner.clone_tags(source_contract.tags, new_contract.id)
                 for tag_data in cloned_tags:
                     db.add(DataContractTagDb(**tag_data))
-            self._copy_tags(db, source_contract.id, new_contract.id, current_user)
+            self._copy_tags(db, source_contract.id, new_contract.id, current_user or "system")
             
             # Servers
             if source_contract.servers:
@@ -5569,8 +5601,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     ) -> DataContractDb:
         """Create a new version of a contract with basic metadata cloning.
         
-        This is a lightweight version creation that only clones core metadata
-        without nested entities. For a complete deep clone, use clone_contract_for_new_version().
+        This is a lightweight version creation that clones core metadata, the
+        domain assignments and the tag assignments, without nested entities.
+        For a complete deep clone, use clone_contract_for_new_version().
         
         Args:
             db: Database session

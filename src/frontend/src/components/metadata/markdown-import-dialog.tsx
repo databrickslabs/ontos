@@ -20,6 +20,8 @@ export interface MarkdownImportFileResult {
   title?: string | null;
   targets: { entity_type: string; entity_id: string; name?: string | null }[];
   unresolved: { kind: string; value: string; reason: string }[];
+  /** Documents removed because the changed file no longer names their entity. */
+  removed?: number;
   reason?: string | null;
 }
 
@@ -166,6 +168,11 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
                       {file.targets.length > 0 && (
                         <div className="text-xs text-muted-foreground">
                           {t('markdownImport.linkedTo', { targets: targetNames(file) })}
+                        </div>
+                      )}
+                      {(file.removed ?? 0) > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          {t('markdownImport.removed', { count: file.removed })}
                         </div>
                       )}
                       {file.unresolved.length > 0 && (

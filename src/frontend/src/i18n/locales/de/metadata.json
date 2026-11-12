@@ -277,6 +277,7 @@
       "failed": "Fehlgeschlagen"
     },
     "linkedTo": "Verknüpft mit: {{targets}}",
+    "removed": "Von Einträgen entfernt, die die Datei nicht mehr nennt: {{count}}",
     "noTargets": "Das Front Matter nennt keine Domäne, kein Asset und kein Konzept.",
     "noFiles": "Unter diesem Pfad wurden keine Markdown-Dateien gefunden.",
     "kinds": {

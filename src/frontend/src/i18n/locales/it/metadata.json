@@ -277,6 +277,7 @@
       "failed": "Non riuscito"
     },
     "linkedTo": "Collegato a: {{targets}}",
+    "removed": "Rimosso dalle entità che non indica più: {{count}}",
     "noTargets": "Il front matter non indica alcun dominio, asset o concetto.",
     "noFiles": "Nessun file Markdown trovato in questo percorso.",
     "kinds": {

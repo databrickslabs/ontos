@@ -188,14 +188,14 @@ class TestFileFailures:
         ws = MagicMock()
         ws.files.download.return_value = SimpleNamespace(contents=io.BytesIO(content))
         entry = MarkdownImportManager(MagicMock())._import_file(
-            MagicMock(), ws, '/Volumes/c/s/v/a.md', size, MagicMock(), None, [])
+            MagicMock(), ws, '/Volumes/c/s/v/a.md', size, MagicMock(), None, [], [])
         assert (entry.status, entry.reason) == ('failed', reason)
 
     def test_a_read_error_is_read_failed(self):
         ws = MagicMock()
         ws.files.download.side_effect = PermissionDenied('no')
         entry = MarkdownImportManager(MagicMock())._import_file(
-            MagicMock(), ws, '/Volumes/c/s/v/a.md', None, MagicMock(), None, [])
+            MagicMock(), ws, '/Volumes/c/s/v/a.md', None, MagicMock(), None, [], [])
         assert (entry.status, entry.reason) == ('failed', 'read_failed')
 
 
@@ -214,10 +214,17 @@ class TestSearchItem:
         doc = self._doc()
         item = MetadataManager().build_document_search_item(doc)
         assert item.id == f'document::{doc.id}'
-        assert (item.type, item.feature_id) == ('document', 'data-domains')
+        assert (item.type, item.feature_id) == ('document', 'semantic-models')
         assert item.description == 'Churn means no order.\n'
         assert item.link == '/concepts/browser?concept=http%3A%2F%2Fex.org%2Fonto%23Customer'
         assert item.extra_data['source_path'] == '/Volumes/c/s/v/t.md'
+
+    @pytest.mark.parametrize('entity_type, feature', [
+        ('data_domain', 'data-domains'), ('asset', 'assets'), ('concept', 'semantic-models'),
+    ])
+    def test_readers_of_the_entity_feature_see_it(self, entity_type, feature):
+        item = MetadataManager().build_document_search_item(self._doc(entity_type=entity_type))
+        assert item.feature_id == feature
 
     def test_uploads_are_not_indexed(self):
         doc = self._doc(source_path=None, content_text=None)

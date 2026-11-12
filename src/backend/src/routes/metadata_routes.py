@@ -648,8 +648,10 @@ def _user_workspace_client(request: Request) -> WorkspaceClient:
     return get_obo_workspace_client(request)
 
 
+# Plain ``def``: FastAPI runs it in its threadpool, so the volume reads don't
+# block the event loop.
 @router.post("/metadata/markdown-import", response_model=MarkdownImportResult)
-async def import_markdown_from_volume(
+def import_markdown_from_volume(
     payload: MarkdownImportRequest,
     request: Request,
     db: DBSessionDep,

@@ -277,6 +277,7 @@
       "failed": "Mislukt"
     },
     "linkedTo": "Gekoppeld aan: {{targets}}",
+    "removed": "Verwijderd bij entiteiten die het niet meer noemt: {{count}}",
     "noTargets": "De front matter noemt geen domein, asset of concept.",
     "noFiles": "Geen Markdown-bestanden gevonden op dit pad.",
     "kinds": {

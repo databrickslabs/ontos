@@ -162,7 +162,7 @@ class TestTagKeys:
 
         assert AssignTagAction(fqn, '').execute(_context(TagsManagerTagAdapter(db_session))).success is True
         [assoc] = _assoc(db_session)
-        assert assoc.assigned_value == ''
+        assert assoc.assigned_value is None  # '' clears; stored as no value (#1434)
 
     def test_remove_namespaced_tag(self, db_session, namespaced_tag):
         tag, fqn = namespaced_tag

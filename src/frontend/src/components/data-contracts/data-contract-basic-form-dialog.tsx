@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast'
 import type { DataContractCreate } from '@/types/data-contract'
 import type { TeamSummary } from '@/types/team'
 import TagSelector from '@/components/ui/tag-selector'
+import { tagsForCreate, tagsForUpdate } from '@/lib/tag-payload'
 import type { AssignedTag } from '@/components/ui/tag-chip'
 import { useProjectContext } from '@/stores/project-store'
 
@@ -198,14 +199,6 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     
     setIsSubmitting(true)
     try {
-      // Normalize tags to FQNs (strings) for backend compatibility
-      // Use fully_qualified_name so backend can look up existing tags by FQN
-      const normalizedTags = tags.map((tag: any) => {
-        if (typeof tag === 'string') return tag;
-        // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-        return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-      });
-
       const payload: DataContractCreate = {
         name: name.trim(),
         version: version.trim() || '0.0.1',
@@ -217,7 +210,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         domainIds: domainIds,
         primaryDomainId: primaryDomainId,
         tenant: tenant.trim() || undefined,
-        tags: normalizedTags.length > 0 ? normalizedTags as any : undefined,
+        // On edit, only a changed selection is sent ([] removes every tag, #1435).
+        tags: (isEdit ? tagsForUpdate(tags, initialFormValues?.tags) : tagsForCreate(tags)) as any,
         description: {
           usage: descriptionUsage.trim() || undefined,
           purpose: descriptionPurpose.trim() || undefined,

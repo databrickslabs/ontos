@@ -62,6 +62,7 @@ def _upsert_custom_property(data: dict, prop: str, value) -> None:
 import yaml
 from sqlalchemy.orm import Session
 
+from src.controller.entity_data_cleanup import remove_entity_data
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
@@ -2929,6 +2930,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         # Remove domain assignments, then perform deletion
         entity_domain_repo.remove_all_for_entity(db, entity_type="data_contract", entity_id=contract_id)
+        remove_entity_data(db, entity_type="data_contract", entity_id=contract_id)
         data_contract_repo.remove(db=db, id=contract_id)
         
         # Log to change log for timeline

@@ -5,6 +5,7 @@ from databricks.sdk import WorkspaceClient
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.exc import IntegrityError
 
+from src.controller.entity_data_cleanup import remove_entity_rows
 from src.repositories.assets_repository import asset_type_repo, asset_repo, asset_relationship_repo
 from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
@@ -510,13 +511,11 @@ class AssetsManager(SearchableAsset):
                     db, entity_type="asset", entity_id=entity_id,
                 ),
             }
-            metadata_counts, paths = self._metadata_manager.remove_all_for_entity(
+            entity_rows, paths = remove_entity_rows(
                 db, entity_type="asset", entity_id=entity_id,
+                metadata_manager=self._metadata_manager, costs_manager=self._costs_manager,
             )
-            removed.update(metadata_counts)
-            removed["cost_items"] = self._costs_manager.remove_all_for_entity(
-                db, entity_type="asset", entity_id=entity_id,
-            )
+            removed.update(entity_rows)
             self._asset_repo.remove(db=db, id=asset_id)
         self._metadata_manager.delete_document_files_after_commit(db, paths, ws)
         return removed

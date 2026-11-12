@@ -4088,6 +4088,13 @@ class SemanticModelsManager(SearchableAsset):
         concept_versions_repo.delete_for_collection(self._db, collection_iri)
         concept_versions_repo.delete_by_iris(self._db, subject_iris)
 
+        # Notes, links, documents and cost items of the collection and of every
+        # concept that lived in it go with them, in the same transaction (#1431).
+        from src.controller.entity_data_cleanup import remove_entity_data
+        remove_entity_data(self._db, entity_type="collection", entity_id=collection_iri)
+        for subject_iri in subject_iris:
+            remove_entity_data(self._db, entity_type="concept", entity_id=subject_iri)
+
         # Remove from in-memory graph
         meta_context = self._graph.get_context(URIRef(META_CONTEXT))
         coll_uri = URIRef(collection_iri)
@@ -5569,6 +5576,10 @@ class SemanticModelsManager(SearchableAsset):
         # which already calls delete_for_collection for the same reason.
         from src.repositories.concept_versions_repository import concept_versions_repo
         concept_versions_repo.delete_by_iri(self._db, concept_iri)
+
+        # And its notes, links, documents and cost items (#1431).
+        from src.controller.entity_data_cleanup import remove_entity_data
+        remove_entity_data(self._db, entity_type="concept", entity_id=concept_iri)
 
         # Also remove any ownership records
         for owner in existing.get("owners", []):

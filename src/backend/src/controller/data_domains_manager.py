@@ -5,6 +5,7 @@ import json # Import json
 from sqlalchemy.orm import Session, joinedload, selectinload # Added joinedload, selectinload
 from sqlalchemy.exc import IntegrityError # Import IntegrityError
 
+from src.controller.entity_data_cleanup import remove_entity_data
 from src.repositories.data_domain_repository import DataDomainRepository
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.data_domains import DataDomainCreate, DataDomainUpdate, DataDomainRead, DataDomainBasicInfo # Added DataDomainBasicInfo
@@ -393,6 +394,9 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
             # no ON DELETE CASCADE), across the domain and its cascade-deleted descendants.
             for did in affected_domain_ids:
                 entity_domain_repo.remove_all_for_domain(db, domain_id=did)
+                # Notes, links, documents and cost items of the domain and of each
+                # cascade-deleted descendant (#1431).
+                remove_entity_data(db, entity_type="data_domain", entity_id=did)
             # The repository.remove(db, id) should work.
             # The actual object `db_domain_to_delete` will become stale after deletion from session.
             self.repository.remove(db=db, id=domain_id)

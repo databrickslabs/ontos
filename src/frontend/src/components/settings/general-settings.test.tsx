@@ -153,3 +153,29 @@ describe('GeneralSettings - instance identity', () => {
     expect(screen.queryByRole('button', { name: /save settings/i })).not.toBeInTheDocument();
   });
 });
+
+describe('GeneralSettings - write asset descriptions to Unity Catalog', () => {
+  beforeEach(() => {
+    canWrite = true;
+    toastMock.mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is off by default and saves the switch', async () => {
+    mockFetch();
+    render(<GeneralSettings />);
+    const toggle = await screen.findByLabelText('Write asset descriptions to Unity Catalog');
+    expect(toggle).not.toBeChecked();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(lastPutBody().uc_description_writeback_enabled).toBe(true));
+  });
+
+  it('shows the stored value', async () => {
+    mockFetch({ ...baseResponse, uc_description_writeback_enabled: true });
+    render(<GeneralSettings />);
+    expect(
+      await screen.findByLabelText('Write asset descriptions to Unity Catalog')
+    ).toBeChecked();
+  });
+});

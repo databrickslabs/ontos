@@ -35,6 +35,7 @@ import EntityQualityPanel from '@/components/quality/entity-quality-panel';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
 import AssetMetricViewCard, { mayBeMetricView } from '@/components/assets/asset-metric-view-card';
+import { DescriptionSyncNotice } from '@/components/assets/description-sync-notice';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
@@ -312,6 +313,7 @@ export default function AssetDetailView() {
         {asset.description && (
           <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{asset.description}</p>
         )}
+        <DescriptionSyncNotice sync={asset.description_sync} />
       </div>
 
       {/* Tabs */}

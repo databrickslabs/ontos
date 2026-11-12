@@ -140,6 +140,11 @@
         "placeholder": "app_files"
       }
     },
+    "ucDescriptionWriteback": {
+      "title": "Assetbeschrijvingen",
+      "label": "Assetbeschrijvingen naar Unity Catalog schrijven",
+      "help": "Bij het opslaan van de beschrijving van een Databricks-tabel, -view of -kolom wordt ook het Unity Catalog-commentaar ingesteld, als de gebruiker die opslaat. Zonder de MODIFY-machtiging wordt de beschrijving alleen in Ontos opgeslagen en geeft de asset aan dat deze niet gesynchroniseerd is."
+    },
     "instanceIdentity": {
       "title": "Instantie-identiteit",
       "id": {

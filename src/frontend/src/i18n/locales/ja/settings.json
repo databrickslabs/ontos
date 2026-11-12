@@ -140,6 +140,11 @@
         "placeholder": "app_files"
       }
     },
+    "ucDescriptionWriteback": {
+      "title": "アセットの説明",
+      "label": "アセットの説明を Unity Catalog に書き込む",
+      "help": "Databricks のテーブル、ビュー、列の説明を保存すると、保存したユーザーとして Unity Catalog のコメントも設定されます。MODIFY 権限がない場合、説明は Ontos にのみ保存され、アセットには同期されていないことが表示されます。"
+    },
     "instanceIdentity": {
       "title": "インスタンスの識別情報",
       "id": {

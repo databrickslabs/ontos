@@ -35,6 +35,17 @@
     "deletedSuccess": "アセットが正常に削除されました。",
     "errorLoadingData": "データの読み込みエラー"
   },
+  "descriptionSync": {
+    "notInSync": "Unity Catalog と同期されていません。",
+    "warningTitle": "Ontos に保存されましたが、Unity Catalog には保存されていません",
+    "warnings": {
+      "uc_description_permission_denied": "Unity Catalog は {{object}} の説明の変更を拒否しました (MODIFY 権限または所有権が必要です)。",
+      "uc_description_object_not_found": "{{object}} が Unity Catalog に見つかりませんでした。",
+      "uc_description_user_token_required": "リクエストに Databricks のユーザートークンがなかったため、{{object}} の説明は Unity Catalog に書き込まれませんでした。",
+      "uc_description_no_warehouse": "SQL ウェアハウスが設定されていないため、{{object}} の説明は Unity Catalog に書き込まれませんでした。",
+      "uc_description_write_failed": "{{object}} の説明を Unity Catalog に書き込めませんでした。"
+    }
+  },
   "deleteDialog": {
     "title": "アセットを削除しますか？",
     "description": "この操作は元に戻せません。アセットとそのすべての関係が完全に削除されます。",

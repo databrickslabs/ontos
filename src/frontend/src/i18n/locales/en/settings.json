@@ -140,6 +140,11 @@
         "placeholder": "app_files"
       }
     },
+    "ucDescriptionWriteback": {
+      "title": "Asset Descriptions",
+      "label": "Write asset descriptions to Unity Catalog",
+      "help": "Saving the description of a Databricks table, view or column also sets its Unity Catalog comment, as the user who saves it. Without the MODIFY permission the description is saved in Ontos only, and the asset shows that it is not in sync."
+    },
     "instanceIdentity": {
       "title": "Instance Identity",
       "id": {

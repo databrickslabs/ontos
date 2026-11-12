@@ -18,7 +18,8 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
-import { AssetRead, AssetCreate, AssetUpdate } from '@/types/asset';
+import { AssetRead, AssetCreate, AssetUpdate, AssetUpdateResult } from '@/types/asset';
+import { descriptionSyncText } from '@/components/assets/description-sync-notice';
 import { EntityFieldDefinition, EntityTypeSchema } from '@/types/ontology-schema';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
@@ -185,9 +186,16 @@ export function AssetFormDialog({
           primary_domain_id: values.primary_domain_id ?? null,
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
-        const response = await apiPut<AssetRead>(`/api/assets/${asset.id}`, payload);
+        const response = await apiPut<AssetUpdateResult>(`/api/assets/${asset.id}`, payload);
         if (response.error) throw new Error(response.error);
         toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });
+        // Saved, but e.g. the description could not be written to Unity Catalog
+        for (const warning of response.data?.warnings ?? []) {
+          toast({
+            title: t('assets:descriptionSync.warningTitle', 'Saved in Ontos, not in Unity Catalog'),
+            description: descriptionSyncText(t, warning),
+          });
+        }
         onSuccess(response.data!);
       } else {
         const payload: AssetCreate = {

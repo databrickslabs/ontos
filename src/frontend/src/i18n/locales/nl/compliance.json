@@ -169,7 +169,8 @@
   },
   "ruleWarnings": {
     "unsupported_match_type": "Het MATCH-type '{{type}}' wordt niet ondersteund, dus de regel controleert geen entiteiten. Ondersteunde typen: {{supported}}, of Object voor allemaal.",
-    "missing_assert": "De regel heeft geen ASSERT-clausule, dus elke entiteit slaagt."
+    "missing_assert": "De regel heeft geen ASSERT-clausule, dus elke entiteit slaagt.",
+    "llm_check_in_where": "LLM_CHECK wordt alleen in de ASSERT geëvalueerd. In de WHERE mislukt het, dus de regel slaat elke entiteit over. Verplaats het naar de ASSERT."
   },
   "runErrors": {
     "entities_load_failed": "De {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd.",
@@ -182,7 +183,8 @@
   },
   "runWarnings": {
     "rule_trailing_input": "Deze regel bevat ongeldige invoer, vanaf regel {{line}}, kolom {{column}} ('{{text}}'). Die wordt bij het uitvoeren genegeerd, waardoor de regel mogelijk minder controleert dan er staat. Bewerk de regel om dit te herstellen.",
-    "notifications_failed": "De meldingen van het beleid (NOTIFY) konden voor deze uitvoering niet worden verzonden. De resultaten zijn volledig."
+    "notifications_failed": "De meldingen van het beleid (NOTIFY) konden voor deze uitvoering niet worden verzonden. De resultaten zijn volledig.",
+    "llm_check_budget_exceeded": "{{count}} LLM-controles zijn niet uitgevoerd omdat de run zijn budget van {{budget}} modelaanroepen heeft bereikt, dus die entiteiten zijn afgekeurd. Voer de run opnieuw uit (oordelen uit de cache tellen niet mee) of verhoog COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN."
   },
   "actionOutcomes": {
     "status": {
@@ -203,6 +205,40 @@
       "notification_manager_unavailable": "Meldingen zijn in deze uitvoering niet beschikbaar",
       "notify_no_recipients": "{{recipients}} levert geen ontvanger op",
       "action_failed": "De actie is mislukt"
+    }
+  },
+  "llmCheck": {
+    "pass": "PASS",
+    "fail": "FAIL",
+    "cached": "(uit cache)",
+    "failedReason": "LLM_CHECK '{{criterion}}': {{reason}}",
+    "test": {
+      "title": "Testen op een voorbeeldentiteit",
+      "hint": "Voert de ASSERT van de regel, inclusief de LLM_CHECK-criteria, uit op één entiteit waarop de regel van toepassing is. De regel wordt niet opgeslagen.",
+      "entityPlaceholder": "Naam of id van de entiteit (leeg: de eerste overeenkomst)",
+      "run": "Testen",
+      "running": "Bezig met testen...",
+      "noRule": "Voer eerst een regel in.",
+      "failed": "De regel kon niet worden getest.",
+      "entity": "{{type}} {{name}}",
+      "noChecks": "Er is geen LLM_CHECK geëvalueerd voor deze entiteit."
+    },
+    "codes": {
+      "llm_check_not_available": "LLM_CHECK wordt alleen geëvalueerd in compliance-runs, in de ASSERT.",
+      "llm_check_disabled": "De LLM-functies staan uit, dus LLM_CHECK mislukt.",
+      "llm_check_no_endpoint": "Er is geen serving-endpoint geconfigureerd, dus LLM_CHECK mislukt.",
+      "llm_check_budget_exceeded": "Niet gecontroleerd: de run heeft zijn budget aan modelaanroepen bereikt.",
+      "llm_check_text_too_long": "Niet gecontroleerd: de tekst is te lang.",
+      "llm_check_call_failed": "Het serving-endpoint kon niet worden aangeroepen.",
+      "llm_check_refused": "Het model weigerde de tekst te beoordelen.",
+      "llm_check_empty_reply": "Het model gaf geen antwoord.",
+      "llm_check_truncated": "Het antwoord van het model werd niet afgemaakt.",
+      "llm_check_invalid_reply": "Het antwoord van het model was geen PASS- of FAIL-oordeel.",
+      "llm_check_empty_text": "De tekst is leeg.",
+      "rule_evaluation_failed": "De regel kon niet worden geëvalueerd op deze entiteit."
+    },
+    "errors": {
+      "sample_entity_not_found": "Er is geen entiteit gevonden waarop de regel van toepassing is. Controleer de naam, of laat hem leeg om de eerste overeenkomst te gebruiken."
     }
   }
 }

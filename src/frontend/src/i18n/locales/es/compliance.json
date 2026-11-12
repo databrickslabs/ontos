@@ -169,7 +169,8 @@
   },
   "ruleWarnings": {
     "unsupported_match_type": "El tipo '{{type}}' de MATCH no es compatible, así que la regla no evalúa ninguna entidad. Tipos compatibles: {{supported}}, u Object para todos ellos.",
-    "missing_assert": "La regla no tiene cláusula ASSERT, así que todas las entidades pasan."
+    "missing_assert": "La regla no tiene cláusula ASSERT, así que todas las entidades pasan.",
+    "llm_check_in_where": "LLM_CHECK solo se evalúa en el ASSERT. En el WHERE falla, por lo que la regla omite todas las entidades. Muévelo al ASSERT."
   },
   "runErrors": {
     "entities_load_failed": "No se pudieron cargar las entidades {{entityType}}, por lo que no se pudo evaluar la regla.",
@@ -182,7 +183,8 @@
   },
   "runWarnings": {
     "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo.",
-    "notifications_failed": "No se pudieron enviar las notificaciones de la política (NOTIFY) en esta ejecución. Los resultados están completos."
+    "notifications_failed": "No se pudieron enviar las notificaciones de la política (NOTIFY) en esta ejecución. Los resultados están completos.",
+    "llm_check_budget_exceeded": "{{count}} comprobaciones de LLM no se ejecutaron porque la ejecución alcanzó su presupuesto de {{budget}} llamadas al modelo, por lo que esas entidades fallaron. Vuelve a ejecutarla (los veredictos en caché no cuentan) o aumenta COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN."
   },
   "actionOutcomes": {
     "status": {
@@ -203,6 +205,40 @@
       "notification_manager_unavailable": "Las notificaciones no están disponibles en esta ejecución",
       "notify_no_recipients": "{{recipients}} no corresponde a ningún destinatario",
       "action_failed": "La acción falló"
+    }
+  },
+  "llmCheck": {
+    "pass": "PASS",
+    "fail": "FAIL",
+    "cached": "(en caché)",
+    "failedReason": "LLM_CHECK '{{criterion}}': {{reason}}",
+    "test": {
+      "title": "Probar en una entidad de ejemplo",
+      "hint": "Ejecuta el ASSERT de la regla, incluidos los criterios de LLM_CHECK, en una entidad que coincide con la regla. La regla no se guarda.",
+      "entityPlaceholder": "Nombre o id de la entidad (vacío: la primera coincidencia)",
+      "run": "Probar",
+      "running": "Probando...",
+      "noRule": "Primero introduce una regla.",
+      "failed": "No se pudo probar la regla.",
+      "entity": "{{type}} {{name}}",
+      "noChecks": "No se evaluó ningún LLM_CHECK para esta entidad."
+    },
+    "codes": {
+      "llm_check_not_available": "LLM_CHECK solo se evalúa en ejecuciones de cumplimiento, en el ASSERT.",
+      "llm_check_disabled": "Las funciones de LLM están desactivadas, por lo que LLM_CHECK falla.",
+      "llm_check_no_endpoint": "No hay ningún endpoint de serving configurado, por lo que LLM_CHECK falla.",
+      "llm_check_budget_exceeded": "No comprobado: la ejecución alcanzó su presupuesto de llamadas al modelo.",
+      "llm_check_text_too_long": "No comprobado: el texto es demasiado largo.",
+      "llm_check_call_failed": "No se pudo llamar al endpoint de serving.",
+      "llm_check_refused": "El modelo se negó a evaluar el texto.",
+      "llm_check_empty_reply": "El modelo no devolvió ninguna respuesta.",
+      "llm_check_truncated": "La respuesta del modelo no terminó.",
+      "llm_check_invalid_reply": "La respuesta del modelo no fue un veredicto PASS o FAIL.",
+      "llm_check_empty_text": "El texto está vacío.",
+      "rule_evaluation_failed": "No se pudo evaluar la regla en esta entidad."
+    },
+    "errors": {
+      "sample_entity_not_found": "No se encontró ninguna entidad que coincida con la regla. Revisa el nombre o déjalo vacío para usar la primera coincidencia."
     }
   }
 }

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import {
   LockKeyhole, FileText, BookOpen, Activity, ShieldCheck,
@@ -28,6 +29,8 @@ interface MaturityBadgeProps {
   levelColor?: string | null;
   levelOrder?: number | null;
   totalLevels?: number;
+  /** Text without a level; defaults to "Not assessed" */
+  emptyLabel?: string;
   className?: string;
 }
 
@@ -37,12 +40,14 @@ export function MaturityBadge({
   levelColor,
   levelOrder,
   totalLevels,
+  emptyLabel,
   className,
 }: MaturityBadgeProps) {
+  const { t } = useTranslation('common');
   if (!levelName) {
     return (
       <Badge variant="outline" className={`text-muted-foreground ${className || ''}`}>
-        Not assessed
+        {emptyLabel ?? t('common:maturity.notAssessed')}
       </Badge>
     );
   }

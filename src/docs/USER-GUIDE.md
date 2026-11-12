@@ -2232,8 +2232,10 @@ Click on a run to see:
 Table and view assets have their own maturity ladder (levels with entity type **Asset**,
 in **Settings → Maturity Levels**). Each level has gates: compliance policies evaluated
 against the asset. A table reaches a level when it passes the required gates of that
-level and of every level below it. The level shows on the asset's page next to its
-details, with the gates of each level on hover and a button to re-evaluate it.
+level and of every level below it. The asset's page has a **Maturity** card: the current
+level, the next level to reach, and the gates of that level, each passed or failed with
+the reason (the policy's failure message, or why a Unity Catalog field is missing), plus a
+button to re-evaluate it.
 
 **Default ladder.** No asset ladder is created at startup. While there is none,
 **Load default asset levels** adds this one, with one example policy per gate (category

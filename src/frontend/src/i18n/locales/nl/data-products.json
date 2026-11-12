@@ -1010,7 +1010,17 @@
     "required": "Vereist",
     "advisory": "Adviserend",
     "overTime": "Volwassenheid in de tijd",
-    "retry": "Opnieuw proberen"
+    "retry": "Opnieuw proberen",
+    "currentLevel": "Huidig niveau",
+    "nextLevel": "Volgend niveau",
+    "belowFirstLevel": "Onder het eerste niveau",
+    "topLevelReached": "Hoogste niveau bereikt",
+    "noLevels": "Er zijn nog geen volwassenheidsniveaus voor dit type gedefinieerd.",
+    "gateStatus": {
+      "pass": "Geslaagd",
+      "fail": "Niet geslaagd",
+      "warn": "Niet voldaan"
+    }
   },
   "maturityGateCodes": {
     "maturity_uc_table_client_unavailable": "Unity Catalog is niet bereikbaar, dus de velden van tabel {{tableName}} ontbreken.",

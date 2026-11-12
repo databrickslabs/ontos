@@ -32,6 +32,8 @@ export interface GateResult {
   /** Set when the gate failed for a known reason, e.g. the asset's UC table couldn't be read */
   message_code?: string | null;
   message_params?: Record<string, unknown> | null;
+  /** The gate policy's own failure text, set on a failed gate */
+  failure_message?: string | null;
 }
 
 export interface MaturityNotice {

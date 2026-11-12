@@ -101,6 +101,8 @@ class GateResult(BaseModel):
     # (e.g. the asset's Unity Catalog table couldn't be read)
     message_code: Optional[str] = None
     message_params: Optional[Dict[str, Any]] = None
+    # The gate policy's own failure text (ON_FAIL), set on a failed gate
+    failure_message: Optional[str] = None
 
 
 class MaturityNotice(BaseModel):

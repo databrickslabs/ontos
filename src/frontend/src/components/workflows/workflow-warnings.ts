@@ -44,6 +44,12 @@ export function workflowWarningText(issue: WorkflowValidationIssue, t: TFunction
         entity: getEntityTypeLabel(String(params.entityType) as EntityType, t),
         defaultValue: fallback,
       });
+    case 'policy_check_policy_missing':
+      // Same text as the error of an active workflow (workflows:designer.validationIssues)
+      return t('workflows:designer.validationIssues.policyCheckPolicyMissing', {
+        step: params.step,
+        defaultValue: fallback,
+      });
     default:
       return fallback;
   }

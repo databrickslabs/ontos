@@ -495,6 +495,21 @@ def test_a_row_that_cannot_be_loaded_is_not_attached_to_another_entity(
         db_session, entity_type='data_product', entity_id='target-1') == []
 
 
+def test_attaching_a_row_of_another_asset_to_an_asset_needs_assets_read_write(
+        client, db_session, asset, ws, act_as):
+    """With assets READ_WRITE the source asset is readable: the check is in depth."""
+    other = AssetDb(name='other', asset_type_id=asset.asset_type_id, platform='databricks')
+    db_session.add(other)
+    db_session.flush()
+    ids = _seed(db_session, 'asset', str(other.id))
+    act_as('Admin')
+
+    response = client.post('/api/entities/asset/attachments', params={'entity_id': str(asset.id)},
+                           json={'asset_type': 'rich_text', 'asset_id': ids['note']})
+
+    assert response.status_code == 201, response.text
+
+
 def test_assets_alone_still_detaches_from_an_asset(client, db_session, asset, act_as):
     note_id = _contract_note(db_session)
     MetadataManager().attach_shared_asset(

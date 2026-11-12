@@ -171,6 +171,7 @@ class EntityMetadataPermission:
             await self._domain_checker(request, user_details, auth_manager)
         if self.attaching:
             await self._domain_read_checker(request, user_details, auth_manager)
+            await _ensure_attached_row_readable(request, db, user_details, auth_manager)
 
 
 def _rich_text_owner(request: Request, db):

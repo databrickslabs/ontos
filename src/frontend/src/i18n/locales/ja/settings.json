@@ -112,7 +112,8 @@
     "connectors": "コネクタ",
     "schemaImporter": "スキーマインポーター",
     "certificationLevels": "認定レベル",
-    "maturityLevels": "成熟度レベル"
+    "maturityLevels": "成熟度レベル",
+    "notificationRecipients": "通知先"
   },
   "accessDenied": {
     "title": "アクセス拒否",
@@ -1359,6 +1360,48 @@
       "saveError": "保存に失敗しました",
       "clearTitleError": "タイトルのクリアに失敗しました",
       "clearError": "クリアに失敗しました"
+    }
+  },
+  "notificationRecipients": {
+    "description": "コンプライアンスポリシーの NOTIFY アクションで使う名前付きの通知先です。ポリシーでは recipient:'名前' と指定します。許可されたロールのメンバーだけが自分のポリシーで使えます。管理者は常に使えます。",
+    "add": "通知先を追加",
+    "edit": "通知先を編集",
+    "delete": "削除",
+    "deleteConfirm": "通知先「{{name}}」を削除しますか？この通知先を指定しているポリシーの NOTIFY アクションは失敗します。",
+    "dialogDescription": "通知を受け取るユーザー、グループ、ロールと、この通知先をポリシーで指定できるロールです。",
+    "empty": "通知先はまだありません。",
+    "noAllowedRoles": "管理者のみ",
+    "saved": "通知先を保存しました",
+    "deleted": "通知先を削除しました",
+    "saveFailed": "通知先を保存できませんでした",
+    "columns": {
+      "name": "名前",
+      "targets": "通知先",
+      "allowedRoles": "使用できるロール",
+      "status": "状態"
+    },
+    "status": {
+      "active": "有効",
+      "disabled": "無効"
+    },
+    "fields": {
+      "name": "名前",
+      "nameHint": "ルールでは recipient:'名前' と書きます。カンマと引用符は使えません。",
+      "namePlaceholder": "例: Data Stewards",
+      "description": "説明",
+      "principals": "ユーザーとグループ",
+      "principalsPlaceholder": "ユーザーまたはグループを追加",
+      "roleTargets": "通知するアプリロール",
+      "allowedRoles": "使用を許可するロール",
+      "allowedRolesHint": "これらのロールのメンバーは、この通知先をコンプライアンスポリシーで指定できます。管理者は常に指定できます。",
+      "active": "有効",
+      "activeHint": "無効な通知先を指定した NOTIFY アクションは、理由を示して失敗します。"
+    },
+    "errors": {
+      "notification_recipient_name_taken": "同じ名前の通知先が既にあります",
+      "notification_recipient_name_invalid": "名前は空にできず、カンマ、引用符、制御文字を含めることはできません",
+      "notification_recipient_target_invalid": "'{{target}}' は指定できません。対象は固定のメール、グループ、ロールです",
+      "notification_recipient_role_unknown": "アプリロール '{{role}}' は存在しません"
     }
   }
 }

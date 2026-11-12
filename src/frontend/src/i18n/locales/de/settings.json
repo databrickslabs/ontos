@@ -112,7 +112,8 @@
     "connectors": "Konnektoren",
     "schemaImporter": "Schema-Importer",
     "certificationLevels": "Zertifizierungsstufen",
-    "maturityLevels": "Reifegradstufen"
+    "maturityLevels": "Reifegradstufen",
+    "notificationRecipients": "Benachrichtigungsempfänger"
   },
   "accessDenied": {
     "title": "Zugriff verweigert",
@@ -1359,6 +1360,48 @@
       "saveError": "Speichern fehlgeschlagen",
       "clearTitleError": "Titel konnte nicht gelöscht werden",
       "clearError": "Löschen fehlgeschlagen"
+    }
+  },
+  "notificationRecipients": {
+    "description": "Benannte Empfänger für die NOTIFY-Aktion von Compliance-Richtlinien. Eine Richtlinie nennt sie als recipient:'Name'. Nur Mitglieder der erlaubten Rollen können einen Empfänger in ihren Richtlinien verwenden; Admins können das immer.",
+    "add": "Empfänger hinzufügen",
+    "edit": "Empfänger bearbeiten",
+    "delete": "Löschen",
+    "deleteConfirm": "Empfänger '{{name}}' löschen? Richtlinien, die ihn nennen, schlagen bei ihrer NOTIFY-Aktion fehl.",
+    "dialogDescription": "Benutzer, Gruppen und Rollen, die die Benachrichtigung erhalten, und die Rollen, die diesen Empfänger in ihren Richtlinien nennen dürfen.",
+    "empty": "Noch keine Empfänger.",
+    "noAllowedRoles": "Nur Admins",
+    "saved": "Empfänger gespeichert",
+    "deleted": "Empfänger gelöscht",
+    "saveFailed": "Empfänger konnte nicht gespeichert werden",
+    "columns": {
+      "name": "Name",
+      "targets": "Benachrichtigt",
+      "allowedRoles": "Verwendbar für",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Aktiv",
+      "disabled": "Deaktiviert"
+    },
+    "fields": {
+      "name": "Name",
+      "nameHint": "Wird in Regeln als recipient:'Name' verwendet. Keine Kommas oder Anführungszeichen.",
+      "namePlaceholder": "z. B. Data Stewards",
+      "description": "Beschreibung",
+      "principals": "Benutzer und Gruppen",
+      "principalsPlaceholder": "Benutzer oder Gruppen hinzufügen",
+      "roleTargets": "Anzuweisende App-Rollen",
+      "allowedRoles": "Rollen, die ihn verwenden dürfen",
+      "allowedRolesHint": "Mitglieder dieser Rollen dürfen diesen Empfänger in ihren Compliance-Richtlinien nennen. Admins dürfen das immer.",
+      "active": "Aktiv",
+      "activeHint": "Ein deaktivierter Empfänger lässt die NOTIFY-Aktionen, die ihn nennen, mit einer Begründung fehlschlagen."
+    },
+    "errors": {
+      "notification_recipient_name_taken": "Ein Empfänger mit diesem Namen existiert bereits",
+      "notification_recipient_name_invalid": "Der Name darf nicht leer sein und keine Kommas, Anführungszeichen oder Steuerzeichen enthalten",
+      "notification_recipient_target_invalid": "'{{target}}' kann kein Ziel sein: Ziele sind feste E-Mails, Gruppen oder Rollen",
+      "notification_recipient_role_unknown": "App-Rolle '{{role}}' existiert nicht"
     }
   }
 }

@@ -28,7 +28,11 @@
     "rulePlaceholder": "Entrez la règle de conformité au format DSL",
     "failureMessage": "Message d'Échec",
     "failureMessagePlaceholder": "ex. Les noms doivent utiliser snake_case (minuscules avec underscores)",
-    "failureMessageHint": "Message lisible affiché aux utilisateurs lorsque cette politique échoue. Aide à expliquer le problème et comment le résoudre."
+    "failureMessageHint": "Message lisible affiché aux utilisateurs lorsque cette politique échoue. Aide à expliquer le problème et comment le résoudre.",
+    "notifyRecipients": "Destinataires de notification",
+    "insertNotifyRecipient": "Insérer un NOTIFY pour un destinataire",
+    "notifyRecipientsHint": "Insère NOTIFY recipient:'Nom' à la position du curseur. Vous pouvez utiliser les destinataires autorisés par vos rôles.",
+    "noNotifyRecipients": "Aucun destinataire de notification n'est disponible pour vos rôles. Les administrateurs les définissent dans les Paramètres."
   },
   "categories": {
     "security": "Sécurité",
@@ -178,7 +182,10 @@
     "tags_load_failed": "Les tags des entités {{entityType}} n'ont pas pu être chargés ; la règle n'a donc pas pu être évaluée."
   },
   "saveErrors": {
-    "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe."
+    "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe.",
+    "notify_target_not_allowed": "Cette politique ne peut pas notifier '{{target}}'. Les administrateurs peuvent notifier n'importe qui. Les autres peuvent se notifier eux-mêmes, les propriétaires de l'entité et les destinataires autorisés par leurs rôles.",
+    "notify_recipient_not_allowed": "Vos rôles ne peuvent pas utiliser le destinataire '{{recipient}}'",
+    "notify_recipient_not_found": "Le destinataire '{{recipient}}' n'existe pas"
   },
   "runWarnings": {
     "rule_trailing_input": "Cette règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Il est ignoré à l'exécution, donc la règle peut vérifier moins que ce qu'elle indique. Modifiez la règle pour le corriger.",
@@ -202,7 +209,11 @@
       "tag_entity_without_id": "L'entité n'a pas d'identifiant",
       "notification_manager_unavailable": "Les notifications ne sont pas disponibles dans cette exécution",
       "notify_no_recipients": "{{recipients}} ne correspond à aucun destinataire",
-      "action_failed": "L'action a échoué"
+      "action_failed": "L'action a échoué",
+      "notify_recipient_disabled": "Le destinataire '{{recipient}}' est désactivé",
+      "notify_recipient_not_allowed": "L'auteur de la politique ne peut pas utiliser le destinataire '{{recipient}}'",
+      "notify_recipient_not_found": "Le destinataire '{{recipient}}' n'existe pas",
+      "notify_target_not_allowed": "L'auteur de la politique ne peut pas notifier '{{target}}'"
     }
   }
 }

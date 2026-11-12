@@ -28,7 +28,11 @@
     "rulePlaceholder": "Enter the compliance rule in Compliance DSL format",
     "failureMessage": "Failure Message",
     "failureMessagePlaceholder": "e.g., Names must use snake_case (lowercase with underscores)",
-    "failureMessageHint": "Human-readable message shown to users when this policy fails. Helps explain what went wrong and how to fix it."
+    "failureMessageHint": "Human-readable message shown to users when this policy fails. Helps explain what went wrong and how to fix it.",
+    "notifyRecipients": "Notification recipients",
+    "insertNotifyRecipient": "Insert a NOTIFY for a recipient",
+    "notifyRecipientsHint": "Inserts NOTIFY recipient:'Name' at the cursor. You can use the recipients your roles allow.",
+    "noNotifyRecipients": "No notification recipients are available to your roles. Admins define them in Settings."
   },
   "categories": {
     "security": "Security",
@@ -178,7 +182,10 @@
     "tags_load_failed": "The tags of the {{entityType}} entities could not be loaded, so the rule could not be evaluated."
   },
   "saveErrors": {
-    "rule_trailing_input": "The rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). Everything from there on would be ignored, so the rule would check less than it says. Remove it or fix the syntax."
+    "rule_trailing_input": "The rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). Everything from there on would be ignored, so the rule would check less than it says. Remove it or fix the syntax.",
+    "notify_target_not_allowed": "This policy may not notify '{{target}}'. Admins can notify anyone. Others can notify themselves, the entity's owners and the notification recipients their roles allow.",
+    "notify_recipient_not_allowed": "Your roles may not use the notification recipient '{{recipient}}'",
+    "notify_recipient_not_found": "The notification recipient '{{recipient}}' does not exist"
   },
   "runWarnings": {
     "rule_trailing_input": "This rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). It is ignored when the rule runs, so the rule may check less than it says. Edit the rule to fix it.",
@@ -202,7 +209,11 @@
       "tag_entity_without_id": "The entity has no id",
       "notification_manager_unavailable": "Notifications are not available in this run",
       "notify_no_recipients": "{{recipients}} resolved to no recipient",
-      "action_failed": "The action failed"
+      "action_failed": "The action failed",
+      "notify_recipient_disabled": "Notification recipient '{{recipient}}' is disabled",
+      "notify_recipient_not_allowed": "The policy's author may not use recipient '{{recipient}}'",
+      "notify_recipient_not_found": "Notification recipient '{{recipient}}' does not exist",
+      "notify_target_not_allowed": "The policy's author may not notify '{{target}}'"
     }
   }
 }

@@ -19,6 +19,8 @@ from src.common.compliance_actions import (
     APP_ENTITY_TYPES, ActionContext, ActionError, ActionExecutor, get_action_registry,
 )
 from src.common.compliance_notifications import ComplianceRunNotifier
+from src.common.notification_audience import audience_for
+from src.repositories.notification_recipient_repository import json_list
 from src.common.compliance_entities import (
     create_entity_iterator,
     parse_entity_filter,
@@ -32,6 +34,12 @@ logger = get_logger(__name__)
 TAG_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
 
 
+def _author_columns(author: Optional[Tuple[Optional[str], List[str]]]) -> dict:
+    """The policy columns that record the rule's author (email and groups)."""
+    email, groups = author or (None, [])
+    return {'rule_author_email': email, 'rule_author_groups': json.dumps(list(groups or []))}
+
+
 def _rule_actions(rule: Optional[str]) -> List[dict]:
     if not rule:
         return []
@@ -42,9 +50,9 @@ def _rule_actions(rule: Optional[str]) -> List[dict]:
     return (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
 
 
-def rule_sends_notifications(rule: Optional[str]) -> bool:
-    """Whether a rule has NOTIFY actions (False if it doesn't parse)."""
-    return any(action.get('type') == 'NOTIFY' for action in _rule_actions(rule))
+def rule_notify_targets(rule: Optional[str]) -> List[str]:
+    """The recipients of each NOTIFY action of a rule (empty if it doesn't parse)."""
+    return [action.get('recipients') or '' for action in _rule_actions(rule) if action.get('type') == 'NOTIFY']
 
 
 def rule_changes_tags(rule: Optional[str]) -> bool:
@@ -228,6 +236,10 @@ class ComplianceManager:
                 # Upsert by id
                 existing = db.get(CompliancePolicyDb, str(model.id))
                 if existing:
+                    if existing.rule != model.rule:
+                        # The new rule has no recorded author; its NOTIFY targets are refused until one saves it
+                        existing.rule_author_email = None
+                        existing.rule_author_groups = None
                     existing.name = model.name
                     existing.description = model.description
                     existing.rule = model.rule
@@ -360,6 +372,7 @@ class ComplianceManager:
         db: Session,
         policy: CompliancePolicyCreate,
         current_user: Optional[str] = None,
+        author: Optional[Tuple[Optional[str], List[str]]] = None,
     ) -> CompliancePolicyDb:
         db_obj = CompliancePolicyDb(
             id=str(uuid.uuid4()),  # Server-generated UUID
@@ -370,6 +383,7 @@ class ComplianceManager:
             category=policy.category,
             severity=policy.severity,
             is_active=policy.is_active,
+            **_author_columns(author),
         )
         db.add(db_obj)
         
@@ -397,10 +411,15 @@ class ComplianceManager:
         policy_id: str, 
         policy: CompliancePolicy,
         current_user: Optional[str] = None,
+        author: Optional[Tuple[Optional[str], List[str]]] = None,
     ) -> Optional[CompliancePolicyDb]:
         existing = db.get(CompliancePolicyDb, policy_id)
         if not existing:
             return None
+        if author is not None:
+            columns = _author_columns(author)
+            existing.rule_author_email = columns['rule_author_email']
+            existing.rule_author_groups = columns['rule_author_groups']
         existing.name = policy.name
         existing.description = policy.description
         existing.failure_message = policy.failure_message
@@ -753,8 +772,11 @@ class ComplianceManager:
         # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context;
         # NOTIFY collects per recipient and sends one notification when the run ends
         tag_manager = TagsManagerTagAdapter(db, user_email=current_user)
+        # NOTIFY is checked against the policy's author, not the user who runs it (#1450)
+        audience = audience_for(db, policy.rule_author_email, json_list(policy.rule_author_groups))
         notifier = ComplianceRunNotifier(
-            db, policy_id=policy.id, policy_name=policy.name, run_id=run.id, run_user=current_user,
+            db, policy_id=policy.id, policy_name=policy.name, run_id=run.id, audience=audience,
+            run_user=current_user,
         )
 
         try:
@@ -858,7 +880,11 @@ class ComplianceManager:
                     entity_id=policy.id,
                     action='RUN',
                     username=current_user,
-                    details={"run_id": run.id, "status": run.status, "score": run.score}
+                    details={
+                        "run_id": run.id, "status": run.status, "score": run.score,
+                        # How many recipients were notified (counts only, no names)
+                        "notifications": notifier.sent,
+                    }
                 )
             except Exception as log_err:
                 logger.warning(f"Failed to log change for policy run: {log_err}")

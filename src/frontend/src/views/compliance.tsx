@@ -33,6 +33,7 @@ import {
 } from '@/components/common/list-view-skeleton';
 import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
+import { NotifyRecipientInsert } from '@/components/compliance/notify-recipient-insert';
 
 interface CompliancePolicy {
   id: string; // UUID
@@ -458,6 +459,7 @@ export default function Compliance() {
                     required
                     placeholder={t('compliance:form.rulePlaceholder')}
                   />
+                  <NotifyRecipientInsert textareaId="rule" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="failure_message">{t('compliance:form.failureMessage')}</Label>

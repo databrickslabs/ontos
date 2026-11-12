@@ -7,7 +7,7 @@ from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker, user_has_feature_level
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
-from src.controller.compliance_manager import ComplianceManager, rule_changes_tags, rule_sends_notifications
+from src.controller.compliance_manager import ComplianceManager, rule_changes_tags, rule_notify_targets
 from src.models.compliance import (
     CompliancePolicy,
     CompliancePolicyCreate,
@@ -19,6 +19,7 @@ from src.models.compliance import (
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
 from src.common.compliance_entities import validate_rule
+from src.common.notification_audience import NotifyAudience, audience_for, violation_text, violations as notify_violations
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -81,22 +82,31 @@ def require_tag_write_for_tag_actions(rule: Optional[str], auth_manager, current
         )
 
 
-def require_compliance_admin_for_notify(rule: Optional[str], auth_manager, current_user) -> None:
-    """NOTIFY creates in-app notifications for any user, group or role, so saving or
-    running a rule that uses it needs admin access to compliance (Data Governance
-    Officers and Admins by default), not just write access.
+def require_notify_audience(db, rule: Optional[str], audience: NotifyAudience) -> None:
+    """NOTIFY may only name targets the rule's author may use (#1450): admins anyone; other
+    users themselves, the entity's owners, and the Notification Recipients their roles are
+    allowed. Refused with 400: the first violation's code, and every violation in ``violations``.
 
-    Scheduled runs have no acting user; they run rules saved by users who had
-    that access.
+    A run checks the same rule again, against its author, and fails a refused NOTIFY action.
     """
-    if rule_sends_notifications(rule) and not user_has_feature_level(
-        auth_manager, current_user, FEATURE_ID, FeatureAccessLevel.ADMIN
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="This policy sends notifications (NOTIFY); saving or running it "
-                   "requires admin access to compliance",
-        )
+    found = [v for recipients in rule_notify_targets(rule) for v in notify_violations(db, recipients, audience)]
+    if not found:
+        return
+    code, _target, params = found[0]
+    raise HTTPException(
+        status_code=400,
+        detail={
+            'code': code,
+            'message': violation_text(code, params),
+            'params': params,
+            'violations': [{'code': c, 'target': t, 'params': p} for c, t, p in found],
+        },
+    )
+
+
+def _author(current_user) -> tuple:
+    """The rule author recorded on a save: the user's email and groups now."""
+    return (current_user.email if current_user else None, list(current_user.groups or []) if current_user else [])
 
 
 @router.post("/compliance/policies")
@@ -111,11 +121,14 @@ async def create_policy(
 ):
     warnings = _check_rule(policy.rule)
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
-    require_compliance_admin_for_notify(policy.rule, auth_manager, current_user)
+    author = _author(current_user)
+    if rule_notify_targets(policy.rule):
+        require_notify_audience(db, policy.rule, audience_for(db, author[0], author[1]))
     created = manager.create_policy(
         db, 
         policy, 
-        current_user=current_user.username if current_user else None
+        current_user=current_user.username if current_user else None,
+        author=author,
     )
     
     audit_manager.log_action(
@@ -160,14 +173,27 @@ async def update_policy(
     existing = manager.get_policy(db, policy_id)
     rule_changed = existing is None or existing.rule != policy.rule
     warnings = _check_rule(policy.rule) if rule_changed else []
+    author = _author(current_user)
+    # The audience is only needed for NOTIFY rules, or to let an admin claim a policy with no author
+    unclaimed = existing is not None and existing.rule_author_email is None
+    audience = None
+    if rule_changed and rule_notify_targets(policy.rule) or unclaimed:
+        audience = audience_for(db, author[0], author[1])
+    author_to_record = None
     if rule_changed:
         require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
-        require_compliance_admin_for_notify(policy.rule, auth_manager, current_user)
+        if audience is not None:
+            require_notify_audience(db, policy.rule, audience)
+        author_to_record = author
+    elif unclaimed and audience is not None and audience.is_admin:
+        # A policy saved before authors were recorded: an admin's save (rule unchanged) claims it
+        author_to_record = author
     updated = manager.update_policy(
         db, 
         policy_id, 
         policy,
-        current_user=current_user.username if current_user else None
+        current_user=current_user.username if current_user else None,
+        author=author_to_record,
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Policy not found")
@@ -268,7 +294,6 @@ async def run_policy(
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
-    require_compliance_admin_for_notify(policy.rule, auth_manager, current_user)
 
     # For now, implement inline only; async can be backed by Databricks job later
     run = manager.run_policy_inline(

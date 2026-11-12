@@ -28,7 +28,11 @@
     "rulePlaceholder": "Inserisci la regola di conformità in formato DSL",
     "failureMessage": "Messaggio di Errore",
     "failureMessagePlaceholder": "es. I nomi devono usare snake_case (minuscole con underscore)",
-    "failureMessageHint": "Messaggio leggibile mostrato agli utenti quando questa policy fallisce. Aiuta a spiegare cosa è andato storto e come correggerlo."
+    "failureMessageHint": "Messaggio leggibile mostrato agli utenti quando questa policy fallisce. Aiuta a spiegare cosa è andato storto e come correggerlo.",
+    "notifyRecipients": "Destinatari delle notifiche",
+    "insertNotifyRecipient": "Inserisci un NOTIFY per un destinatario",
+    "notifyRecipientsHint": "Inserisce NOTIFY recipient:'Nome' nel cursore. Puoi usare i destinatari consentiti dai tuoi ruoli.",
+    "noNotifyRecipients": "Nessun destinatario di notifica è disponibile per i tuoi ruoli. Gli amministratori li definiscono nelle Impostazioni."
   },
   "categories": {
     "security": "Sicurezza",
@@ -178,7 +182,10 @@
     "tags_load_failed": "Non è stato possibile caricare i tag delle entità {{entityType}}, quindi non è stato possibile valutare la regola."
   },
   "saveErrors": {
-    "rule_trailing_input": "La regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Tutto ciò che segue verrebbe ignorato e la regola verificherebbe meno di quanto dichiara. Rimuovila o correggi la sintassi."
+    "rule_trailing_input": "La regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Tutto ciò che segue verrebbe ignorato e la regola verificherebbe meno di quanto dichiara. Rimuovila o correggi la sintassi.",
+    "notify_target_not_allowed": "Questa policy non può notificare '{{target}}'. Gli amministratori possono notificare chiunque. Gli altri possono notificare se stessi, i proprietari dell'entità e i destinatari consentiti dai propri ruoli.",
+    "notify_recipient_not_allowed": "I tuoi ruoli non possono usare il destinatario '{{recipient}}'",
+    "notify_recipient_not_found": "Il destinatario '{{recipient}}' non esiste"
   },
   "runWarnings": {
     "rule_trailing_input": "Questa regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Viene ignorata durante l'esecuzione, quindi la regola potrebbe verificare meno di quanto dichiara. Modifica la regola per correggerla.",
@@ -202,7 +209,11 @@
       "tag_entity_without_id": "L'entità non ha un id",
       "notification_manager_unavailable": "Le notifiche non sono disponibili in questa esecuzione",
       "notify_no_recipients": "{{recipients}} non corrisponde a nessun destinatario",
-      "action_failed": "L'azione non è riuscita"
+      "action_failed": "L'azione non è riuscita",
+      "notify_recipient_disabled": "Il destinatario '{{recipient}}' è disattivato",
+      "notify_recipient_not_allowed": "L'autore della policy non può usare il destinatario '{{recipient}}'",
+      "notify_recipient_not_found": "Il destinatario '{{recipient}}' non esiste",
+      "notify_target_not_allowed": "L'autore della policy non può notificare '{{target}}'"
     }
   }
 }

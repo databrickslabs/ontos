@@ -17,6 +17,11 @@ that don't depend on the entity are resolved once per run. ``requester`` /
 ``trigger_user`` is the user who started the run, so it resolves to nobody for
 scheduled runs of the compliance-checks job.
 
+``self`` is the policy's author, and ``recipient:<name>`` expands to the targets of a
+Notification Recipient (#1450). Each NOTIFY is first checked against the author's
+audience (``notification_audience``); a target the author may not use fails that action
+with a coded reason, and the run carries on.
+
 Notifications are flushed into the run's session; the run's own commit stores
 them. Only the in-app channel is used.
 """
@@ -30,7 +35,9 @@ from sqlalchemy.orm import Session
 
 from src.common.compliance_actions import APP_ENTITY_TYPES, ActionContext, ActionError
 from src.common.logging import get_logger
+from src.common.notification_audience import NotifyAudience, RECIPIENT_PREFIX, SELF_TOKEN, violation_text, violations
 from src.common.notification_i18n import notification_i18n_data
+from src.repositories.notification_recipient_repository import json_list, notification_recipient_repo
 
 logger = get_logger(__name__)
 
@@ -67,15 +74,20 @@ class ComplianceRunNotifier:
         policy_id: str,
         policy_name: str,
         run_id: str,
+        audience: NotifyAudience,
         run_user: Optional[str] = None,
     ):
         self._db = db
         self._policy_id = policy_id
         self._policy_name = policy_name
         self._run_id = run_id
+        self._audience = audience
         self._run_user = run_user
         self._buckets: Dict[Tuple[str, Optional[str]], _Bucket] = {}
         self._cache: Dict[str, List[Tuple[str, Optional[str]]]] = {}
+        self._checked: Dict[str, list] = {}
+        # Notifications created by flush(): a count for the run's change log
+        self.sent = 0
 
     def _step_context(self, context: ActionContext):
         from src.common.workflow_executor import StepContext
@@ -97,6 +109,25 @@ class ComplianceRunNotifier:
             step_results={},
         )
 
+    def _resolve_recipient(self, name: str, context: ActionContext) -> List[Tuple[str, Optional[str]]]:
+        """The users of a Notification Recipient: its targets, resolved as recipients."""
+        key = f'{RECIPIENT_PREFIX}{name.strip().lower()}'
+        if key in self._cache:
+            return self._cache[key]
+        recipient = notification_recipient_repo.get_by_name(self._db, name)
+        if recipient is None:
+            raise ActionError(
+                'notify_recipient_not_found', f"Notification recipient '{name}' does not exist", recipient=name,
+            )
+        if not recipient.is_active:
+            raise ActionError(
+                'notify_recipient_disabled', f"Notification recipient '{recipient.name}' is disabled",
+                recipient=recipient.name,
+            )
+        targets = ','.join(json_list(recipient.targets))
+        self._cache[key] = self._resolve(targets, context) if targets else []
+        return self._cache[key]
+
     def _resolve(self, recipients: str, context: ActionContext) -> List[Tuple[str, Optional[str]]]:
         from src.common.workflow_executor import _resolve_role_to_users
 
@@ -104,6 +135,14 @@ class ComplianceRunNotifier:
         step_context = None
         for token in (t.strip() for t in recipients.split(',')):
             if not token:
+                continue
+            if token.lower().startswith(RECIPIENT_PREFIX):
+                resolved.extend(self._resolve_recipient(token[len(RECIPIENT_PREFIX):].strip(), context))
+                continue
+            if token.lower() == SELF_TOKEN:
+                # The policy's author, not the user who runs it (a scheduled run has none)
+                if self._audience.email:
+                    resolved.append((self._audience.email, None))
                 continue
             cacheable = not _entity_dependent(token)
             if cacheable and token in self._cache:
@@ -120,7 +159,14 @@ class ComplianceRunNotifier:
         return list(dict.fromkeys(resolved))
 
     def notify(self, recipients: str, context: ActionContext) -> None:
-        """Queue the entity for every recipient ``recipients`` resolves to."""
+        """Queue the entity for every recipient ``recipients`` resolves to.
+
+        Raises ActionError (coded) if the policy's author may not notify a target.
+        """
+        if recipients not in self._checked:
+            self._checked[recipients] = violations(self._db, recipients, self._audience)
+        for code, _target, params in self._checked[recipients]:
+            raise ActionError(code, violation_text(code, params), **params)
         resolved = self._resolve(recipients, context)
         if not resolved:
             raise ActionError(
@@ -200,6 +246,7 @@ class ComplianceRunNotifier:
             )
             notification_repo.create(db=self._db, obj_in=notification)
             created += 1
+        self.sent += created
         if created:
             logger.info(
                 "Compliance run %s of policy %s: %d notification(s) created",

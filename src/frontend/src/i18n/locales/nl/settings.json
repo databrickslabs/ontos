@@ -112,7 +112,8 @@
     "connectors": "Connectors",
     "schemaImporter": "Schema-importer",
     "certificationLevels": "Certificeringsniveaus",
-    "maturityLevels": "Volwassenheidsniveaus"
+    "maturityLevels": "Volwassenheidsniveaus",
+    "notificationRecipients": "Meldingsontvangers"
   },
   "accessDenied": {
     "title": "Toegang Geweigerd",
@@ -1377,6 +1378,48 @@
       "saveError": "Kon niet opslaan",
       "clearTitleError": "Kon titel niet wissen",
       "clearError": "Kon niet wissen"
+    }
+  },
+  "notificationRecipients": {
+    "description": "Benoemde ontvangers voor de NOTIFY-actie van compliancebeleid. Een beleid verwijst ernaar als recipient:'Naam'. Alleen leden van de toegestane rollen kunnen een ontvanger in hun beleid gebruiken; beheerders kunnen dat altijd.",
+    "add": "Ontvanger toevoegen",
+    "edit": "Ontvanger bewerken",
+    "delete": "Verwijderen",
+    "deleteConfirm": "Ontvanger '{{name}}' verwijderen? Beleid dat hem noemt, faalt bij de NOTIFY-actie.",
+    "dialogDescription": "Gebruikers, groepen en rollen die de melding ontvangen, en de rollen die deze ontvanger in hun beleid mogen noemen.",
+    "empty": "Nog geen ontvangers.",
+    "noAllowedRoles": "Alleen beheerders",
+    "saved": "Ontvanger opgeslagen",
+    "deleted": "Ontvanger verwijderd",
+    "saveFailed": "Ontvanger kon niet worden opgeslagen",
+    "columns": {
+      "name": "Naam",
+      "targets": "Meldt aan",
+      "allowedRoles": "Te gebruiken door",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Actief",
+      "disabled": "Uitgeschakeld"
+    },
+    "fields": {
+      "name": "Naam",
+      "nameHint": "Gebruikt in regels als recipient:'Naam'. Geen komma's of aanhalingstekens.",
+      "namePlaceholder": "bijv. Data Stewards",
+      "description": "Beschrijving",
+      "principals": "Gebruikers en groepen",
+      "principalsPlaceholder": "Gebruikers of groepen toevoegen",
+      "roleTargets": "App-rollen om te informeren",
+      "allowedRoles": "Rollen die het mogen gebruiken",
+      "allowedRolesHint": "Leden van deze rollen kunnen deze ontvanger in hun compliancebeleid noemen. Beheerders kunnen dat altijd.",
+      "active": "Actief",
+      "activeHint": "Een uitgeschakelde ontvanger laat de NOTIFY-acties die hem noemen mislukken, met een reden."
+    },
+    "errors": {
+      "notification_recipient_name_taken": "Er bestaat al een ontvanger met deze naam",
+      "notification_recipient_name_invalid": "De naam mag niet leeg zijn en geen komma's, aanhalingstekens of besturingstekens bevatten",
+      "notification_recipient_target_invalid": "'{{target}}' kan geen doel zijn: doelen zijn vaste e-mailadressen, groepen of rollen",
+      "notification_recipient_role_unknown": "App-rol '{{role}}' bestaat niet"
     }
   }
 }

@@ -56,7 +56,7 @@ has a tag of that name on the entity (see the
 | `FAIL` | `FAIL 'message'` | Mark as failed with custom message |
 | `ASSIGN_TAG` | `ASSIGN_TAG key: 'value'`, `ASSIGN_TAG 'namespace/name': 'value'`, `ASSIGN_TAG 'namespace/name'` | Add or update a tag on the entity. Quote the key for a tag outside the default namespace. Without a value only the tag is assigned and an existing value is kept; `''` clears the value |
 | `REMOVE_TAG` | `REMOVE_TAG key`, `REMOVE_TAG 'namespace/name'` | Remove a tag from the entity |
-| `NOTIFY` | `NOTIFY 'email@example.com'` | Send an in-app notification. Each recipient gets one notification per run that summarizes the entities |
+| `NOTIFY` | `NOTIFY 'email@example.com'` or `NOTIFY recipient:'Data Stewards'` | Send an in-app notification. Each recipient gets one notification per run that summarizes the entities. Non-admins may notify themselves (`self`), the entity's owners and the Notification Recipients their roles allow |
 
 ## Practical Examples
 

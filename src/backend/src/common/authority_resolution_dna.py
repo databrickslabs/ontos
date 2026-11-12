@@ -51,6 +51,10 @@ class Criterion:
     weight: float = 1.0
     dimension: str = "people"                    # which DNAco dimension this criterion scores
     message: Optional[str] = None
+    # How the runtime gate treats a failure (src.common.authority_rule): a check
+    # or rule constraint denies, an unfulfilled duty makes the decision
+    # conditional. The DNA engine counts every failure as a divergence.
+    kind: str = "check"
 
 
 @dataclass

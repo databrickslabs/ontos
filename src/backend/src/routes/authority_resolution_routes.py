@@ -37,6 +37,10 @@ def _resolve_req_dict(req: ResolveRequest) -> dict:
         "escalated": req.escalated,
     }
     base.update(req.params or {})
+    # Context adds keys; it never overrides a typed field the caller set.
+    for k, v in (req.context or {}).items():
+        if base.get(k) is None:
+            base[k] = v
     return base
 
 
@@ -569,19 +573,60 @@ async def validate_criterion(
 ):
     """Live-validate a single criterion's DSL rule against a sample request object.
 
-    Body: ``{rule, object}``. The ``ASSERT`` keyword is prepended if omitted.
-    Returns ``{passed, message}``.
+    Body: ``{rule, object, params?, context?}``. The ``ASSERT`` keyword is
+    prepended if omitted. The rule sees ``object`` (plus ``context``) as
+    ``obj.<field>`` / ``req.<key>`` and ``params`` as ``ctx.<key>``, as at
+    resolve time. Returns ``{passed, message}``.
     """
+    from src.common import authority_rule
     from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
     rule = (payload.get("rule") or "").strip()
     if rule and not rule.upper().startswith("ASSERT"):
         rule = "ASSERT " + rule
-    obj = payload.get("object") or {}
+    flat = {**(payload.get("object") or {}), **(payload.get("context") or {})}
+    obj = authority_rule.evaluation_object(flat, payload.get("params") or {})
     try:
         passed, msg = eval_dsl(rule, obj)
         return {"passed": passed, "message": msg}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Rule validation failed: {e}")
+
+
+@router.post("/authority/rule/validate")
+async def validate_rule(
+    db: DBSessionDep,
+    payload: dict = Body(...),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Validate an AR's domain context and ODRL rule, and try them on a sample request.
+
+    Body: ``{rule?, domain_context?, request?}`` (``request`` is the flat request
+    plus its context, as ``POST /resolve`` builds it). Returns ``{valid, error?,
+    compiled: [{kind, name, rule}], scope?, verdict?, reason?, pending_duties?}``;
+    the verdict covers the scope and the rule only (no checks, prerequisites or refs).
+    """
+    from types import SimpleNamespace
+    from src.common import authority_rule
+    try:
+        domain_context = authority_rule.normalize_domain_context(payload.get("domain_context"), strict=True)
+        compiled = authority_rule.compile_rule(payload.get("rule"))
+    except ValueError as e:
+        return {"valid": False, "error": str(e), "compiled": []}
+    out = {
+        "valid": True,
+        "compiled": [{"kind": c.kind, "name": c.code, "rule": c.rule} for c in compiled],
+    }
+    req = payload.get("request")
+    if isinstance(req, dict):
+        in_scope, reason, results = authority_rule.check_scope(domain_context, req)
+        out["scope"] = results
+        if not in_scope:
+            out.update({"verdict": "no_authority", "reason": reason, "pending_duties": []})
+            return out
+        probe = SimpleNamespace(id=None, rule=payload.get("rule"), domain_context=domain_context, criteria=[])
+        verdict, reason, pending = manager._evaluate_decision(probe, req)
+        out.update({"verdict": verdict, "reason": reason, "pending_duties": pending})
+    return out
 
 
 @router.post("/authority/recompute-scheduled")

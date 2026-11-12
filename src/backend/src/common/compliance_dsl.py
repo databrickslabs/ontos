@@ -110,6 +110,13 @@ class Token:
     column: int
 
 
+# Tokens that end a value: a '-' after one of these is not a negative literal.
+_VALUE_END_TOKENS = frozenset({
+    TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER, TokenType.TRUE,
+    TokenType.FALSE, TokenType.RPAREN, TokenType.RBRACKET,
+})
+
+
 class Lexer:
     """Tokenize DSL input."""
 
@@ -237,10 +244,17 @@ class Lexer:
                 tokens.append(Token(TokenType.STRING, value, line, column))
                 continue
 
-            # Numbers
-            if char.isdigit():
+            # Numbers (a '-' right before a digit is a negative literal where a
+            # value can start: at the beginning, after an operator, '(' '[' or ',')
+            if char.isdigit() or (
+                char == '-' and (self.peek(1) or '').isdigit()
+                and (not tokens or tokens[-1].type not in _VALUE_END_TOKENS)
+            ):
+                negative = char == '-'
+                if negative:
+                    self.advance()
                 value = self.read_number()
-                tokens.append(Token(TokenType.NUMBER, value, line, column))
+                tokens.append(Token(TokenType.NUMBER, -value if negative else value, line, column))
                 continue
 
             # Identifiers and keywords
@@ -552,6 +566,10 @@ class Parser:
         return self.parse_or_expression()
 
 
+# Property roots that read a nested namespace of the evaluated object.
+NAMESPACE_ROOTS = ("ctx", "req")
+
+
 class Evaluator:
     """Evaluate AST against an object."""
 
@@ -570,6 +588,13 @@ class Evaluator:
             return [self.evaluate(v) for v in node.values]
 
         if isinstance(node, PropertyAccess):
+            # ``ctx.x`` / ``req.x`` read a namespace when the object carries it
+            # (Authority Relations: AR parameters / request context); any other
+            # prefix (``obj.``, ``p.``…) reads the object's top-level key.
+            if node.object in NAMESPACE_ROOTS:
+                scoped = self.obj.get(node.object)
+                if isinstance(scoped, dict):
+                    return scoped.get(node.property)
             return self.obj.get(node.property)
 
         if isinstance(node, FunctionCall):

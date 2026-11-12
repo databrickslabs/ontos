@@ -36,11 +36,15 @@ class ResolveAuthorityTool(BaseTool):
         "Resolve whether a decision is authorized against a specific Authority "
         "Relation (ARF). Provide the Authority Relation id (or slug) and the "
         "decision parameters (who is signing off, the action, the value, whether "
-        "a co-sign is present, whether it was escalated). Returns a deterministic "
-        "verdict: 'approved', 'denied' (with a reason), or 'no_authority' when no "
-        "active Authority Relation matches — in which case defer to a human. "
-        "The response lists the prerequisite ARs walked (prerequisite_chain) and "
-        "where each AR field value came from (resolved_refs)."
+        "a co-sign is present, whether it was escalated) and the decision context "
+        "(e.g. {\"market\": \"DE\"}) the AR's scope is checked against. Returns a "
+        "deterministic verdict: 'approved', 'conditional' (permitted once the "
+        "listed pending_duties, e.g. a co-approval, are fulfilled), 'denied' (with "
+        "a reason), or 'no_authority' when no active Authority Relation matches or "
+        "the context is outside its scope (a missing context key included) — in "
+        "which case defer to a human. The response lists the scope checks "
+        "(scope_check), the prerequisite ARs walked (prerequisite_chain) and where "
+        "each AR field value came from (resolved_refs)."
     )
     parameters = {
         "ar_id": {"type": "string", "description": "Authority Relation id or slug to resolve against."},
@@ -50,6 +54,7 @@ class ResolveAuthorityTool(BaseTool):
         "value": {"type": "number", "description": "The decision's numeric value (e.g. discount fraction) for threshold checks."},
         "cosign_present": {"type": "boolean", "description": "Whether a required co-sign is present."},
         "escalated": {"type": "boolean", "description": "Whether an over-threshold value was escalated."},
+        "context": {"type": "object", "description": "Decision context checked against the AR's scope, e.g. {\"market\": \"DE\", \"legal_entity\": \"NBG-CH\"}."},
     }
     required_params = ["ar_id"]
     required_scope = "authority:read"
@@ -67,6 +72,12 @@ class ResolveAuthorityTool(BaseTool):
             "cosign_present": kwargs.get("cosign_present"),
             "escalated": kwargs.get("escalated"),
         }
+        context = kwargs.get("context")
+        if isinstance(context, dict):
+            # Context adds keys; it never overrides a typed field the caller set.
+            for k, v in context.items():
+                if req.get(k) is None:
+                    req[k] = v
         # Resolves may make blocking MCP/HTTP calls; keep them off the event loop.
         result = await run_in_threadpool(
             _manager.resolve,

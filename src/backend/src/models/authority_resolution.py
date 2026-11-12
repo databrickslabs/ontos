@@ -112,7 +112,10 @@ class AuthorityRelationCreate(BaseModel):
     object_type: Optional[str] = None
     object_id: Optional[str] = None
     object_resolves_to: Optional[List[str]] = None
+    # {scope: [ODRL constraints], params: {...}}; a legacy flat object is taken as params.
     domain_context: Optional[Dict[str, Any]] = None
+    # ODRL-shaped rule: {permission: {constraint, duty}, prohibition} (src.common.authority_rule).
+    rule: Optional[Dict[str, Any]] = None
     justification_chain: Optional[Dict[str, Any]] = None
     decision_logic: Optional[Dict[str, Any]] = None
     evidence_binding: Optional[EvidenceBinding] = None
@@ -153,7 +156,9 @@ class AuthorityRelationUpdate(BaseModel):
     object_type: Optional[str] = None
     object_id: Optional[str] = None
     object_resolves_to: Optional[List[str]] = None
+    # Each part sent (scope / params) replaces that part; the other is kept.
     domain_context: Optional[Dict[str, Any]] = None
+    rule: Optional[Dict[str, Any]] = None
     justification_chain: Optional[Dict[str, Any]] = None
     decision_logic: Optional[Dict[str, Any]] = None
     evidence_binding: Optional[EvidenceBinding] = None
@@ -196,6 +201,9 @@ class ResolveRequest(BaseModel):
     cosign_present: Optional[bool] = None
     escalated: Optional[bool] = None
     params: Dict[str, Any] = Field(default_factory=dict)
+    # Request context checked against the AR's scope and read by rules as
+    # ``req.<key>`` (e.g. {"market": "DE"}). Merged with ``params``.
+    context: Dict[str, Any] = Field(default_factory=dict)
 
 
 class FindAuthorityForConceptRequest(BaseModel):
@@ -211,7 +219,7 @@ class FindAuthorityForConceptRequest(BaseModel):
 
 
 class ResolveResponse(BaseModel):
-    verdict: str                                # approved|denied|no_authority|conflict
+    verdict: str                                # approved|conditional|denied|no_authority|conflict
     reason: str
     relation_id: Optional[str] = None
     relation_slug: Optional[str] = None
@@ -228,3 +236,7 @@ class ResolveResponse(BaseModel):
     # provenance audit trail) know whether a scalar came from a literal, an
     # Ontos entity lookup, or an MCP tool call.
     resolved_refs: List[Dict[str, Any]] = Field(default_factory=list)
+    # Each scope constraint checked: ``{operand, operator, expected, actual, passed}``.
+    scope_check: List[Dict[str, Any]] = Field(default_factory=list)
+    # Duties still to fulfil when the verdict is ``conditional``: ``{duty, message}``.
+    pending_duties: List[Dict[str, Any]] = Field(default_factory=list)

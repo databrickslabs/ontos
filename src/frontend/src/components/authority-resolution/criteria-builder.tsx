@@ -17,29 +17,22 @@ import {
 } from '@/types/authority-resolution';
 
 /**
- * Author-configurable decision criteria. Each row is a Compliance Check attached
- * to the AR — authored with a structured builder (the ASSERT rule is generated),
- * a raw ASSERT escape-hatch, or by reusing an existing check. `direction`/`weight`
- * are the ARF divergence facets carried on the link. The gate needs only pass/fail,
- * so one row can be a whole compound rule; split rows only when you want per-reason
- * divergence attribution with distinct direction/weight.
+ * The AR's Compliance Checks: derived and aggregate predicates the ODRL rule
+ * doesn't express (the rule editor carries scope-like bounds, duties and
+ * prohibitions). Each row is a raw `ASSERT` rule authored here or a reused
+ * check; rules read the request as `obj.<field>` / `req.<key>` and the AR's
+ * parameters as `ctx.<param>`. `direction`/`weight` are the ARF divergence
+ * facets carried on the link. The gate needs only pass/fail, so one row can be
+ * a whole compound rule; split rows only when you want per-reason divergence
+ * attribution with distinct direction/weight.
  */
 
-type Mode = 'builder' | 'raw' | 'existing';
-type Predicate = 'allowlist' | 'ceiling' | 'required_flag' | 'action_match';
+type Mode = 'raw' | 'existing';
 
 export interface CriterionRow {
   mode: Mode;
-  // builder fields
-  predicate: Predicate;
-  field: string;
-  values: string;        // comma list (allowlist) / single value (action_match)
-  max: string;           // ceiling
-  allowEscalation: boolean;
-  // raw / existing
   rawRule: string;
   policyId: string;
-  // shared
   name: string;
   failureMessage: string;
   direction: string;
@@ -47,17 +40,8 @@ export interface CriterionRow {
   dimension: string;   // DNAco dimension (people|policy|…)
 }
 
-const getPREDICATE_DEFAULTS = (t: (key: string, options?: any) => string): Record<Predicate, { field: string; direction: string; name: string; fail: string }> => ({
-  allowlist: { field: 'actor_identity', direction: 'actual-exceeds-documented', name: t('criteria.predicateDefaults.allowlistName'), fail: t('criteria.predicateDefaults.allowlistFailure') },
-  ceiling: { field: 'value', direction: 'actual-exceeds-documented', name: t('criteria.predicateDefaults.ceilingName'), fail: t('criteria.predicateDefaults.ceilingFailure') },
-  required_flag: { field: 'cosign_present', direction: 'documented-exceeds-actual', name: t('criteria.predicateDefaults.requiredFlagName'), fail: t('criteria.predicateDefaults.requiredFlagFailure') },
-  action_match: { field: 'action', direction: 'neutral', name: t('criteria.predicateDefaults.actionMatchName'), fail: t('criteria.predicateDefaults.actionMatchFailure') },
-});
-
-export const emptyCriterionRow = (t: (key: string, options?: any) => string): CriterionRow => ({
-  mode: 'builder', predicate: 'allowlist', field: 'actor_identity', values: '', max: '0.15',
-  allowEscalation: true, rawRule: '', policyId: '',
-  name: getPREDICATE_DEFAULTS(t).allowlist.name, failureMessage: getPREDICATE_DEFAULTS(t).allowlist.fail,
+export const emptyCriterionRow = (): CriterionRow => ({
+  mode: 'raw', rawRule: '', policyId: '', name: '', failureMessage: '',
   direction: 'actual-exceeds-documented', weight: '1.0', dimension: 'people',
 });
 
@@ -65,36 +49,11 @@ export const emptyCriterionRow = (t: (key: string, options?: any) => string): Cr
 export const rowsFromCriteria = (criteria?: AuthorityCriterion[] | null): CriterionRow[] =>
   (criteria || []).map((c) => ({
     mode: 'raw' as Mode,
-    predicate: 'allowlist' as Predicate, field: '', values: '', max: '', allowEscalation: false,
     rawRule: c.rule || '', policyId: '',
     name: c.name || '', failureMessage: c.failure_message || '',
     direction: c.direction || 'neutral', weight: String(c.weight ?? 1.0),
     dimension: c.dimension || 'people',
   }));
-
-/** Build the ASSERT condition from a builder row (without the ASSERT keyword). */
-function builderRule(r: CriterionRow): string {
-  const f = (r.field || '').trim() || 'value';
-  switch (r.predicate) {
-    case 'allowlist': {
-      const list = r.values.split(',').map((v) => v.trim()).filter(Boolean).map((v) => `'${v}'`).join(', ');
-      return `obj.${f} IN [${list}]`;
-    }
-    case 'ceiling':
-      return `obj.${f} <= ${(r.max || '0').trim()}${r.allowEscalation ? ' OR obj.escalated = True' : ''}`;
-    case 'required_flag':
-      return `obj.${f} = True`;
-    case 'action_match':
-      return `obj.${f} = '${(r.values || '').trim()}'`;
-    default:
-      return '';
-  }
-}
-
-/** The rule a row will submit (builder-generated or raw). */
-export function ruleForRow(r: CriterionRow): string {
-  return r.mode === 'raw' ? r.rawRule.trim() : builderRule(r);
-}
 
 /** Convert editor rows into the API payload (skips empty rows). */
 export function rowsToPayload(rows: CriterionRow[]): CriterionInput[] {
@@ -107,7 +66,7 @@ export function rowsToPayload(rows: CriterionRow[]): CriterionInput[] {
       out.push({ policy_id: r.policyId, direction: r.direction, weight, dimension, order: idx, enabled: true });
       return;
     }
-    const rule = ruleForRow(r);
+    const rule = r.rawRule.trim();
     if (!rule) return;
     out.push({
       name: r.name.trim() || `Criterion ${idx + 1}`,
@@ -119,12 +78,18 @@ export function rowsToPayload(rows: CriterionRow[]): CriterionInput[] {
   return out;
 }
 
+const SAMPLE_REQUEST = { actor_identity: 'test-signer', value: 0, escalated: false, cosign_present: true, action: 'approve' };
+
 interface Props {
   rows: CriterionRow[];
   onChange: (rows: CriterionRow[]) => void;
+  /** The AR's parameters (ctx.<key>) and scope keys (req.<key>): offered as
+   * variables and used as the validation sample. */
+  params?: Record<string, any>;
+  scopeKeys?: string[];
 }
 
-export default function CriteriaBuilder({ rows, onChange }: Props) {
+export default function CriteriaBuilder({ rows, onChange, params = {}, scopeKeys = [] }: Props) {
   const { t } = useTranslation(['authority-resolution']);
   const { get, post } = useApi();
   const [checks, setChecks] = useState<ReusableCheck[]>([]);
@@ -144,20 +109,25 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
     return () => { cancelled = true; };
   }, [get]);
 
+  const variables = [
+    ...Object.keys(params).map((k) => `ctx.${k}`),
+    ...Array.from(new Set([...scopeKeys.filter(Boolean), ...Object.keys(SAMPLE_REQUEST)])).map((k) => `req.${k}`),
+  ];
+
   const patch = (idx: number, p: Partial<CriterionRow>) =>
     onChange(rows.map((r, i) => (i === idx ? { ...r, ...p } : r)));
 
-  const setPredicate = (idx: number, predicate: Predicate) => {
-    const defaults = getPREDICATE_DEFAULTS(t);
-    const d = defaults[predicate];
-    patch(idx, { predicate, field: d.field, direction: d.direction, name: d.name, failureMessage: d.fail });
+  const insertVariable = (idx: number, v: string) => {
+    const rule = rows[idx].rawRule;
+    patch(idx, { rawRule: rule ? `${rule.replace(/\s+$/, '')} ${v}` : v });
   };
 
   const validate = async (idx: number) => {
-    const rule = ruleForRow(rows[idx]);
     const { data } = await post<{ passed: boolean; message?: string | null }>('/api/authority/criteria/validate', {
-      rule,
-      object: { actor_identity: 'test-signer', value: 0, escalated: false, cosign_present: true, action: 'approve' },
+      rule: rows[idx].rawRule.trim(),
+      object: SAMPLE_REQUEST,
+      context: Object.fromEntries(scopeKeys.filter(Boolean).map((k) => [k, ''])),
+      params,
     });
     if (data) setValidation((v) => ({ ...v, [idx]: data }));
   };
@@ -177,7 +147,6 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
               value={r.mode}
               onChange={(e) => patch(idx, { mode: e.target.value as Mode })}
             >
-              <option value="builder">{t('criteria.mode.builder')}</option>
               <option value="raw">{t('criteria.mode.raw')}</option>
               <option value="existing">{t('criteria.mode.existing')}</option>
             </NativeSelect>
@@ -199,7 +168,7 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
                 {checks.map((c) => <option key={c.id} value={c.id}>{c.name}{c.category ? ` (${c.category})` : ''}</option>)}
               </NativeSelect>
             )
-          ) : r.mode === 'raw' ? (
+          ) : (
             <div className="space-y-1">
               <Input
                 value={r.name}
@@ -213,38 +182,17 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
                 className="font-mono text-xs"
                 placeholder={t('criteria.fields.rawRulePlaceholder')}
               />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="grid grid-cols-[1fr_1fr] gap-2">
-                <NativeSelect
-                  value={r.predicate}
-                  onChange={(e) => setPredicate(idx, e.target.value as Predicate)}
-                >
-                  <option value="allowlist">{t('criteria.predicate.allowlist')}</option>
-                  <option value="ceiling">{t('criteria.predicate.ceiling')}</option>
-                  <option value="required_flag">{t('criteria.predicate.requiredFlag')}</option>
-                  <option value="action_match">{t('criteria.predicate.actionMatch')}</option>
-                </NativeSelect>
-                <Input value={r.field} onChange={(e) => patch(idx, { field: e.target.value })} placeholder={t('criteria.fields.fieldPlaceholder')} />
-              </div>
-              {r.predicate === 'allowlist' && (
-                <Input value={r.values} onChange={(e) => patch(idx, { values: e.target.value })} placeholder={t('criteria.fields.allowlistPlaceholder')} />
-              )}
-              {r.predicate === 'action_match' && (
-                <Input value={r.values} onChange={(e) => patch(idx, { values: e.target.value })} placeholder={t('criteria.fields.actionMatchPlaceholder')} />
-              )}
-              {r.predicate === 'ceiling' && (
-                <div className="flex items-center gap-3">
-                  <Input value={r.max} onChange={(e) => patch(idx, { max: e.target.value })} placeholder={t('criteria.fields.ceilingPlaceholder')} className="max-w-[140px]" />
-                  <label className="flex items-center gap-1 text-xs">
-                    <input type="checkbox" checked={r.allowEscalation} onChange={(e) => patch(idx, { allowEscalation: e.target.checked })} />
-                    {t('criteria.fields.ceilingAllowEscalation')}
-                  </label>
+              {variables.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-xs text-muted-foreground">{t('criteria.variables')}</span>
+                  {variables.map((v) => (
+                    <button key={v} type="button" onClick={() => insertVariable(idx, v)}
+                            className="rounded border px-1.5 py-0.5 font-mono text-[11px] hover:bg-muted">
+                      {v}
+                    </button>
+                  ))}
                 </div>
               )}
-              <div className="text-xs font-mono text-muted-foreground break-all">{t('criteria.assertPrefix')} {builderRule(r)}</div>
-              <Input value={r.name} onChange={(e) => patch(idx, { name: e.target.value })} placeholder={t('criteria.fields.criterionNamePlaceholder')} />
               <Input value={r.failureMessage} onChange={(e) => patch(idx, { failureMessage: e.target.value })} placeholder={t('criteria.fields.failureMessagePlaceholder')} />
             </div>
           )}
@@ -287,7 +235,7 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
         </div>
       ))}
 
-      <Button variant="outline" size="sm" onClick={() => onChange([...rows, emptyCriterionRow(t)])}>
+      <Button variant="outline" size="sm" onClick={() => onChange([...rows, emptyCriterionRow()])}>
         <Plus className="h-4 w-4 mr-1" /> {t('criteria.buttons.addCriterion')}
       </Button>
     </div>

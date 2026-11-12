@@ -107,7 +107,14 @@
     "testEscalatedLabel": "エスカレーション済み",
     "testPrerequisiteChain": "前提条件チェーン",
     "testResolvedRefs": "解決済みリソース参照",
-    "buttonTestResolve": "解決"
+    "buttonTestResolve": "解決",
+    "labelRule": "ルール",
+    "testContextLabel": "コンテキスト",
+    "testContextValuePlaceholder": "値",
+    "testContextAdd": "コンテキストキーを追加",
+    "testPendingDuties": "未履行の義務",
+    "testScopeCheck": "スコープチェック",
+    "testScopeMissing": "なし"
   },
   "conceptLinks": {
     "failedLink": "コンセプトのリンクに失敗しました",
@@ -126,7 +133,8 @@
     "denied": "拒否",
     "conflict": "競合",
     "no_authority": "権限なし",
-    "error": "エラー"
+    "error": "エラー",
+    "conditional": "条件付き"
   },
   "refType": {
     "literal": "リテラル",
@@ -187,9 +195,6 @@
       "action": "アクション",
       "objectType": "オブジェクトタイプ",
       "objectId": "オブジェクト ID",
-      "threshold": "しきい値",
-      "currency": "通貨",
-      "market": "市場",
       "time": "時刻",
       "dayOfWeek": "曜日",
       "minuteOfHour": "分",
@@ -199,7 +204,6 @@
     "hints": {
       "slug": "エージェントがこの AR を呼び出すための固定キー。ファミリー内のすべてのバージョンで共通です。",
       "authorityRelation": "ARF タプル: <strong>誰が</strong>（アクターのロール + 署名 ID）、どの<strong>オブジェクト</strong>に対して、どの<strong>アクション</strong>を実行できるか。",
-      "domainContext": "評価可能な述語: この権限が成立するコンテキスト（しきい値、通貨、市場）。基準はこれに対して評価されます。",
       "dnaMaxThreshold": "乖離の上限。DNA-Coefficient は、過去の決定がこのルールからどれだけ<strong>乖離</strong>しているかを測定します（0.0 = 完全一致、値が大きいほど悪い）。AR は、測定値がこの上限以下の間のみ有効化できます。有効な AR の値が後から上限を超えた場合は、自動的に<strong>要レビュー</strong>としてフラグが付きます。",
       "mcpResolverCredentials": "<strong>OBO:</strong> MCP ツールは呼び出し元自身の権限で実行されます。トークンが転送されない呼び出し元には no_authority が返されます。<strong>アプリのサービスプリンシパル:</strong> ツールはすべての呼び出し元に対して Ontos アプリとして実行されるため、結果は問い合わせ元に依存しなくなります。呼び出し元が参照できないデータをツールが参照する必要がある場合にのみ使用してください。",
       "mcpNoCallerToken": "呼び出し元のトークンが転送されなかったため、この一覧は Ontos アプリのサービスプリンシパルとして取得されました。OBO 認証の AR の呼び出し元は、これらのサービスにアクセスできない可能性があります。"
@@ -207,7 +211,7 @@
     "sections": {
       "authorityRelation": "Authority Relation",
       "domainContext": "ドメインコンテキスト",
-      "decisionCriteria": "判定基準",
+      "decisionCriteria": "Compliance Checks",
       "domains": "ドメイン",
       "evidenceSources": "エビデンスソース",
       "participants": "参加者",
@@ -216,16 +220,18 @@
       "mcpResolverCredentials": "MCP リゾルバーの認証情報",
       "dnaSchedule": "DNA-Coefficient のスケジュール",
       "tags": "タグ",
-      "ownership": "所有者とプロジェクト"
+      "ownership": "所有者とプロジェクト",
+      "rule": "ルール (ODRL)"
     },
     "sectionDescriptions": {
-      "decisionCriteria": "解決ゲートが適用するルール（および DNA-Coefficient が乖離を測定する基準）を定義します。各基準は再利用可能な<strong>コンプライアンスチェック</strong>です。",
+      "decisionCriteria": "ルールの後にゲートが適用するチェックです(DNA 係数はこれに対する乖離を測定します)。それぞれ再利用可能な <strong>Compliance Check</strong> です。",
       "evidenceSources": "DNA-Coefficient の測定対象となる過去の決定を紐付けます。<strong>Delta テーブル</strong>、<strong>データプロダクト</strong>、<strong>アセット</strong>（ボリュームファイル、テーブル、ビュー）を 1 つ以上追加します。各ソースは、カラムマップを使ってそのカラムを標準の AR 要素にマッピングします。",
       "participants": "N 機能ゲートとレビュー。<strong>承認者</strong>は承認ゲートの集計対象になります。<strong> レビュアー</strong>は、リレーションが実態を反映していることを確認するため、レビュープロセス中にヒアリングされます。1 人のプリンシパルが両方を兼ねることもできます。",
       "requires": "前提となる AR: この AR が判定する前に、それぞれが<strong>承認</strong>に解決される必要があります。バージョンではなくファミリーのスラッグで指定するため、前提条件のバージョンが更新されてもこの AR は引き続き機能します。保存するには、この AR 自身のスラッグが必要です。",
       "resourceRefs": "フィールド値の取得元。単純なリテラルの代わりに、標準フィールド（<code>actor_identity</code>、<code>object_id</code>、<code>domain_context.{{keyPlaceholder}}</code>）を型付きポインタで裏付けます。<strong> Ontos エンティティ</strong>参照は評価時にナレッジグラフに対して再解決されるため、基になるコンセプト、プロダクト、ドメインが変更されても値は最新に保たれます。<strong> MCP ツール</strong>参照は決定時に Unity Catalog の MCP サービスを呼び出します。基準では解決された値を <code>obj.ref_{{fieldPlaceholder}}</code>（ドットはアンダースコアになります。例: <code>obj.ref_actor_identity</code>）として比較できます。",
       "dnaSchedule": "エビデンスソースに対して DNA-Coefficient を再計算する頻度。",
-      "domainContext": "評価可能な述語: この権限が成立するコンテキスト（しきい値、通貨、市場）。基準はこれに対して評価されます。"
+      "domainContext": "この権限が有効な限定されたスコープとそのパラメーターです。スコープ外のリクエストには no_authority が返り、ルールとチェックはパラメーターを ctx.<key> として読みます。",
+      "rule": "権限が許可する内容を ODRL で表します: 満たすべき<strong>制約</strong>、まだ履行が必要な<strong>義務</strong>(それまで決定は<strong>条件付き</strong>、例: 共同承認)、そして<strong>禁止</strong>です。値または変数 (<code>ctx.threshold</code>, <code>req.market</code>) と比較します。"
     },
     "fields": {
       "name": {
@@ -245,15 +251,6 @@
       },
       "objectId": {
         "placeholder": "dp-1234"
-      },
-      "threshold": {
-        "placeholder": "0.15"
-      },
-      "currency": {
-        "placeholder": "EUR"
-      },
-      "market": {
-        "placeholder": "emea-north"
       },
       "dnaMaxThreshold": {
         "placeholder": "0.3"
@@ -343,41 +340,15 @@
     }
   },
   "criteria": {
-    "description": "ゲートは、有効なすべての基準を満たした場合にのみ承認します。過去の決定で満たされなかった基準は、方向に応じて重み付けと符号付けがされ、DNA-Coefficient における乖離としてカウントされます。複合ルールを 1 つにまとめても構いません。理由ごとの乖離が必要な場合にのみ、基準を分割してください。",
+    "description": "ルールでは表現しない派生・集計の述語です。すべてのチェックに合格した場合にのみゲートは承認します。過去の決定で失敗したチェックは DNA 係数の乖離として、方向に応じた符号と重みで計上されます。ルールはリクエストを obj.<field> / req.<key>、パラメーターを ctx.<param> として読みます。",
     "mode": {
-      "builder": "構造化",
       "raw": "Raw ASSERT",
       "existing": "既存のチェックを再利用"
     },
-    "predicate": {
-      "allowlist": "署名者の許可リスト",
-      "ceiling": "数値の上限",
-      "requiredFlag": "必須フラグ",
-      "actionMatch": "アクション一致"
-    },
-    "predicateDefaults": {
-      "allowlistField": "actor_identity",
-      "allowlistName": "承認された署名者",
-      "allowlistFailure": "署名者は承認されていません。",
-      "ceilingField": "value",
-      "ceilingName": "しきい値以内",
-      "ceilingFailure": "エスカレーションなしで値がしきい値を超えています。",
-      "requiredFlagField": "cosign_present",
-      "requiredFlagName": "必須フラグあり",
-      "requiredFlagFailure": "必要な条件が満たされていません。",
-      "actionMatchField": "action",
-      "actionMatchName": "アクション一致",
-      "actionMatchFailure": "このアクションは許可されていません。"
-    },
     "fields": {
-      "fieldPlaceholder": "フィールド（例: actor_identity）",
-      "allowlistPlaceholder": "rsm-east, rsm-west",
-      "actionMatchPlaceholder": "approve",
-      "ceilingPlaceholder": "0.15",
-      "ceilingAllowEscalation": "エスカレーション時は許可",
       "criterionNamePlaceholder": "基準名",
       "failureMessagePlaceholder": "失敗時に表示する拒否メッセージ",
-      "rawRulePlaceholder": "obj.actor_identity IN ['rsm-east'] AND (obj.value <= 0.15 OR obj.escalated = True)"
+      "rawRulePlaceholder": "req.value <= ctx.threshold OR obj.escalated = True"
     },
     "validation": {
       "validateButton": "検証",
@@ -397,7 +368,7 @@
     "selections": {
       "selectComplianceCheck": "コンプライアンスチェックを選択…"
     },
-    "assertPrefix": "ASSERT"
+    "variables": "変数:"
   },
   "mcp": {
     "extraSchemas": {
@@ -484,7 +455,8 @@
       "empty": "—",
       "evidenceSources": "エビデンスソース",
       "evidenceBinding": "エビデンスの紐付け",
-      "justificationChain": "正当化チェーン"
+      "justificationChain": "正当化チェーン",
+      "rule": "ルール"
     },
     "questionnaire": {
       "confirmation": "確認",
@@ -536,5 +508,123 @@
       "changeStatus": "ステータスを変更",
       "sendRequest": "リクエストを送信"
     }
+  },
+  "domainContext": {
+    "scope": {
+      "label": "スコープ",
+      "hint": "この権限が有効な範囲です。リクエストのコンテキストには各キーと一致する値が必要で、そうでない場合(キーがない場合も)解決は no_authority を返します。キーは ODRL オペランドとして保存されます(market → arf:market。spatial、purpose などは ODRL 名のまま)。",
+      "keyPlaceholder": "キー (例: market)",
+      "valuesPlaceholder": "DE, AT, CH",
+      "add": "キーを追加",
+      "unscoped": "スコープなし(すべてのコンテキストで有効)",
+      "match": {
+        "in": "次のいずれか",
+        "notIn": "次のいずれでもない",
+        "lt": "<",
+        "lteq": "≤",
+        "gt": ">",
+        "gteq": "≥"
+      }
+    },
+    "params": {
+      "label": "パラメーター",
+      "hint": "ルールとチェックが ctx.<key> として読む値です(例: しきい値や承認済み市場)。各ルールを編集する代わりにここで変更します。",
+      "keyPlaceholder": "名前 (例: threshold)",
+      "valuePlaceholder": "値",
+      "listPlaceholder": "a, b, c",
+      "add": "パラメーターを追加",
+      "type": {
+        "string": "テキスト",
+        "number": "数値",
+        "boolean": "はい/いいえ",
+        "list": "リスト",
+        "json": "JSON"
+      }
+    },
+    "remove": "削除",
+    "validation": {
+      "title": "ドメインコンテキストが不完全です",
+      "invalidKey": "'{{key}}' は有効なキーではありません。英字、数字、_ を使用してください。",
+      "missingValue": "キー '{{key}}' には値が必要です。",
+      "notANumber": "パラメーター '{{key}}' は数値である必要があります。",
+      "badJson": "パラメーター '{{key}}' は有効な JSON ではありません。"
+    }
+  },
+  "rule": {
+    "kind": {
+      "constraint": "制約",
+      "duty": "義務",
+      "prohibition": "禁止"
+    },
+    "kindHint": {
+      "constraint": "満たされない場合は拒否",
+      "duty": "未履行 → 条件付き",
+      "prohibition": "成立した場合は拒否"
+    },
+    "buttons": {
+      "remove": "削除",
+      "removeAlternative": "条件を削除",
+      "addCondition": "条件を追加",
+      "add": {
+        "constraint": "制約",
+        "duty": "義務",
+        "prohibition": "禁止"
+      }
+    },
+    "operand": {
+      "value": "値 (payAmount)",
+      "actor_identity": "署名者 (arf:actor)",
+      "action": "アクション",
+      "object_id": "オブジェクト ID",
+      "cosign_present": "連署あり",
+      "escalated": "エスカレート済み",
+      "custom": "コンテキストキー…"
+    },
+    "customKeyPlaceholder": "キー",
+    "operator": {
+      "eq": "等しい",
+      "neq": "等しくない",
+      "lt": "未満",
+      "lteq": "以下",
+      "gt": "より大きい",
+      "gteq": "以上",
+      "isAnyOf": "次のいずれか",
+      "isNoneOf": "次のいずれでもない"
+    },
+    "operatorSymbol": {
+      "eq": "=",
+      "neq": "≠",
+      "lt": "<",
+      "lteq": "≤",
+      "gt": ">",
+      "gteq": "≥",
+      "isAnyOf": "∈",
+      "isNoneOf": "∉"
+    },
+    "rightValue": "値…",
+    "valuePlaceholder": "値",
+    "valueListPlaceholder": "a, b, c",
+    "join": {
+      "or": "いずれか (or)",
+      "and": "すべて (and)",
+      "orWord": "または",
+      "andWord": "かつ"
+    },
+    "namePlaceholder": "名前 (任意)",
+    "messagePlaceholder": {
+      "constraint": "満たされない場合の拒否メッセージ",
+      "duty": "義務が未履行の間のメッセージ",
+      "prohibition": "禁止時の拒否メッセージ"
+    },
+    "variablesHint": "固定値の代わりに変数と比較できます。ctx.<param> は AR のパラメーター、req.<key> はリクエストとそのコンテキストを読みます。派生・集計のロジックは下の Compliance Checks に記述します。",
+    "rawJsonHint": "この条件にはエディターで表示できない入れ子のロジックが含まれています。ODRL JSON として編集してください。",
+    "validation": {
+      "title": "ルールが不完全です",
+      "badJson": "条件の ODRL JSON が有効な JSON ではありません。",
+      "valid": "ルールは有効です"
+    },
+    "none": "ルールなし: チェックのみがこの権限を制御します。",
+    "fulfilledWhen": "履行条件:",
+    "prohibitedWhen": "禁止条件:"
   }
 }

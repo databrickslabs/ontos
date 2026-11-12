@@ -525,7 +525,8 @@ describe('putProductUpdate', () => {
     };
     const fetchFn = vi.fn().mockResolvedValue(jsonResponse(409, { detail }));
 
-    const result = await putProductUpdate('p1', { outputPorts: [] }, false, 'Failed to delete deliverable', fetchFn);
+    const label = 'Failed to delete deliverable';
+    const result = await putProductUpdate('p1', { outputPorts: [] }, false, label, fetchFn);
 
     expect(result).toEqual({ status: 'versioning', detail });
     expect(fetchFn.mock.calls[0][1].headers['X-Force-Update']).toBeUndefined();
@@ -549,8 +550,7 @@ describe('putProductUpdate', () => {
 
   it('throws with the failure label on other errors, including a 409 without versioning', async () => {
     const fetchFn = vi.fn().mockResolvedValue(jsonResponse(409, { detail: 'conflict' }));
-    await expect(putProductUpdate('p1', {}, false, 'Failed to add deliverable', fetchFn)).rejects.toThrow(
-      'Failed to add deliverable (409)',
-    );
+    const call = putProductUpdate('p1', {}, false, 'Failed to add deliverable', fetchFn);
+    await expect(call).rejects.toThrow('Failed to add deliverable (409)');
   });
 });

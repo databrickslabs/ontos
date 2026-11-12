@@ -79,6 +79,7 @@ export interface AuthorityCriterion {
   dimension?: string;                // DNAco dimension (people|policy|…)
   order: number;
   enabled: boolean;
+  policy_clause_ref?: string | null; // the Authority Policy clause this check enforces
 }
 
 export interface CriterionInput {
@@ -91,6 +92,7 @@ export interface CriterionInput {
   dimension?: string;
   order: number;
   enabled: boolean;
+  policy_clause_ref?: string;
 }
 
 export interface ReusableCheck {
@@ -119,6 +121,7 @@ export interface DivergenceFacets {
   direction?: string;
   weight?: number;
   dimension?: string;
+  clause?: string;                   // the Authority Policy clause the item implements
 }
 
 export interface OdrlConstraint extends DivergenceFacets {
@@ -185,7 +188,10 @@ export interface AuthorityRelation {
   object_resolves_to?: string[] | null;
   domain_context?: DomainContext | null;
   rule?: ArfRule | null;
-  justification_chain?: Record<string, any> | null;
+  justification_chain?: Record<string, any> | null;   // legacy free-form basis
+  authority_policy_id?: string | null;
+  policy_clause_refs?: string[];
+  policy?: PolicyCitation | null;
   decision_logic?: Record<string, any> | null;
   evidence_binding?: EvidenceBinding | null;
   evidence_sources?: EvidenceSource[] | null;
@@ -367,6 +373,7 @@ export interface PrerequisiteChainEntry {
 export interface PendingDuty {
   duty: string;
   message?: string | null;
+  clause?: string | null;
 }
 
 export interface ScopeCheckEntry {
@@ -419,6 +426,87 @@ export interface ResolveResponse {
   resolved_refs?: ResolvedRefEntry[];
   scope_check?: ScopeCheckEntry[];
   pending_duties?: PendingDuty[];
+  policy?: PolicyCitation | null;
+}
+
+// ------------------------------------------------------- Authority Policy
+
+export type PolicyType = 'DOA' | 'BOARD_MANDATE' | 'REGULATION' | 'PROCUREMENT_POLICY' | 'SOP' | 'EXCEPTION';
+export const POLICY_TYPES: PolicyType[] = ['DOA', 'BOARD_MANDATE', 'REGULATION', 'PROCUREMENT_POLICY', 'SOP', 'EXCEPTION'];
+export type PolicyStatus = 'draft' | 'approved' | 'superseded' | 'withdrawn';
+
+export interface PolicyClause {
+  ref: string;                       // e.g. §7.1
+  title?: string;
+  text?: string;
+  limits?: { amount?: number; currency?: string };
+  conditions?: string[];
+}
+
+export interface PolicyDocument {
+  id: string;
+  title?: string;
+  filename: string;
+  content_type?: string | null;
+  size_bytes?: number | null;
+  sha256?: string | null;
+}
+
+export interface AuthorityPolicy {
+  id: string;
+  policy_key: string;
+  version: string;
+  version_family_id?: string | null;
+  version_count?: number | null;
+  parent_policy_id?: string | null;
+  parent_version?: string | null;
+  change_summary?: string | null;
+  title: string;
+  policy_type: PolicyType;
+  summary?: string | null;
+  owner_team_id?: string | null;
+  owner_team_name?: string | null;
+  jurisdiction?: Record<string, any> | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  status: PolicyStatus;
+  root_problem?: string | null;      // why it can't ground an authority now (null = valid)
+  approved_by?: string | null;
+  approved_at?: string | null;
+  approval_evidence_document_id?: string | null;
+  withdrawn_reason?: string | null;
+  clauses: PolicyClause[];
+  documents: PolicyDocument[];
+  dependent_count?: number;
+  tags?: { fully_qualified_name?: string | null; assigned_value?: string | null }[];
+  created_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** What an AR cites (its read view and decision provenance). */
+export interface PolicyCitation {
+  authority_policy_id: string;
+  clause_refs: string[];
+  problem?: string | null;
+  policy_key?: string;
+  version?: string;
+  title?: string;
+  status?: PolicyStatus;
+  policy_type?: PolicyType;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  parent_policy_id?: string | null;
+  clauses?: PolicyClause[];
+  documents?: { id: string; filename: string; sha256?: string | null }[];
+}
+
+export interface PolicyDependent {
+  id: string;
+  name: string;
+  version: string;
+  status: string;
+  clause_refs: string[];
 }
 
 // Left operands the rule editor offers for the canonical request fields.

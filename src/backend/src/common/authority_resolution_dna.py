@@ -55,6 +55,8 @@ class Criterion:
     # or rule constraint denies, an unfulfilled duty makes the decision
     # conditional. The DNA engine counts every failure as a divergence.
     kind: str = "check"
+    # The Authority Policy clause this criterion enforces; cited in denial reasons.
+    clause: Optional[str] = None
 
 
 @dataclass

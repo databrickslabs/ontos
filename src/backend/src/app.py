@@ -82,6 +82,7 @@ from src.routes import (
     directory_routes,
     term_mapping_routes,
     authority_resolution_routes,
+    authority_policy_routes,
 )
 
 from src.common.database import init_db, get_session_factory, SQLAlchemySession
@@ -282,6 +283,7 @@ async def startup_event():
         # The AR manager is a module-level singleton in its routes module; expose it on
         # app.state so it is indexed and receives the SearchManager like the others.
         app.state.authority_resolution_manager = authority_resolution_routes.manager
+        app.state.authority_policy_manager = authority_policy_routes.manager
         searchable_managers_instances = []
         for attr_name, manager_instance in list(getattr(app.state, '_state', {}).items()):
             try:
@@ -504,6 +506,7 @@ security_features_routes.register_routes(app)
 entitlements_routes.register_routes(app)
 entitlements_sync_routes.register_routes(app)
 authority_resolution_routes.register_routes(app)
+authority_policy_routes.register_routes(app)
 access_grants_routes.register_routes(app)
 
 # System - Utilities, configuration, auxiliary services

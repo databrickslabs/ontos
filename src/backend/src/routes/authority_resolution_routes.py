@@ -320,6 +320,8 @@ async def list_decisions(
             "id": d.id, "source": d.source, "verdict": d.verdict, "reason": d.reason,
             "actor_identity": d.actor_identity, "action": d.action, "object_id": d.object_id,
             "relation_version": d.relation_version, "divergence_magnitude": d.divergence_magnitude,
+            # The prerequisite chain, resolved refs, scope check and cited policy the verdict rested on.
+            "provenance": d.provenance,
             "created_at": d.created_at,
         }
         for d in rows

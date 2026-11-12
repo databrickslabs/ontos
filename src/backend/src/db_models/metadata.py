@@ -98,6 +98,7 @@ class DocumentMetadataDb(Base):
     content_type = Column(String, nullable=True)
     size_bytes = Column(Integer, nullable=True)
     storage_path = Column(String, nullable=False)  # Path in Databricks Volume
+    content_sha256 = Column(String(64), nullable=True)  # hex digest of the uploaded bytes
 
     # Sharing and inheritance fields
     is_shared = Column(Boolean, nullable=False, default=False, index=True)

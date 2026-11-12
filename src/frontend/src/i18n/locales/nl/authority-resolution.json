@@ -221,7 +221,8 @@
       "dnaSchedule": "DNA-Coefficient-schema",
       "tags": "Tags",
       "ownership": "Eigenaarschap & project",
-      "rule": "Regel (ODRL)"
+      "rule": "Regel (ODRL)",
+      "justification": "Onderbouwing (bevoegdheidsbeleid)"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Controles die de gate na de regel afdwingt (en waartegen de DNA-coëfficiënt afwijkingen meet). Elk is een herbruikbare <strong>Compliance Check</strong>.",
@@ -231,7 +232,8 @@
       "resourceRefs": "Waar veldwaarden vandaan komen. In plaats van een gewone letterlijke waarde ondersteun je een canoniek veld (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) met een getypeerde verwijzing. Een <strong> Ontos-entiteit</strong>-verwijzing wordt bij evaluatie opnieuw opgelost tegen de kennisgraaf, zodat de waarde actueel blijft wanneer het onderliggende concept, product of domein verandert. <strong> MCP-tool</strong>-verwijzingen roepen op beslissingstijd een Unity Catalog MCP-service aan; criteria kunnen vergelijken met de opgeloste waarde als <code>obj.ref_{{fieldPlaceholder}}</code> (punten worden underscores, bijv. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "Hoe vaak de DNA-Coefficient opnieuw wordt berekend tegen de bewijsbronnen.",
       "domainContext": "Het afgebakende bereik waarin deze bevoegdheid geldt, en haar parameters. Een verzoek buiten het bereik krijgt no_authority; de regel en de controles lezen de parameters als ctx.<key>.",
-      "rule": "Wat de bevoegdheid toestaat, als ODRL: <strong>voorwaarden</strong> die moeten gelden, nog te vervullen <strong>verplichtingen</strong> (tot dan is de beslissing <strong>voorwaardelijk</strong>, bijv. een mede-goedkeuring) en <strong>verboden</strong>. Vergelijk met waarden of variabelen (<code>ctx.threshold</code>, <code>req.market</code>)."
+      "rule": "Wat de bevoegdheid toestaat, als ODRL: <strong>voorwaarden</strong> die moeten gelden, nog te vervullen <strong>verplichtingen</strong> (tot dan is de beslissing <strong>voorwaardelijk</strong>, bijv. een mede-goedkeuring) en <strong>verboden</strong>. Vergelijk met waarden of variabelen (<code>ctx.threshold</code>, <code>req.market</code>).",
+      "justification": "De beleidsversie waaraan deze bevoegdheid wordt ontleend en de clausules die ze uitvoert. De resolutie weigert als het beleid niet is goedgekeurd, is ingetrokken of buiten de geldigheid valt."
     },
     "fields": {
       "name": {
@@ -626,5 +628,125 @@
     "none": "Geen regel: alleen de controles bepalen deze bevoegdheid.",
     "fulfilledWhen": "vervuld als",
     "prohibitedWhen": "verboden als"
+  },
+  "nav": {
+    "relations": "Bevoegdheidsrelaties",
+    "policies": "Bevoegdheidsbeleid"
+  },
+  "policy": {
+    "list": {
+      "title": "Bevoegdheidsbeleid",
+      "description": "De gedocumenteerde basis waaraan een bevoegdheid wordt ontleend: mandaatregelingen, bestuursmandaten, regelgeving, inkoopbeleid, SOP's en vastgelegde uitzonderingen. Bevoegdheidsrelaties citeren een beleidsversie en de clausules die ze uitvoeren; een resolutie zonder geldige beleidsbasis levert geen bevoegdheid op.",
+      "buttonNew": "Nieuw beleid",
+      "confirmDelete": "{{key}} v{{version}} verwijderen?",
+      "columnCitedBy": "Geciteerd door"
+    },
+    "fields": {
+      "key": "Beleidssleutel",
+      "version": "Versie",
+      "type": "Type",
+      "title": "Titel",
+      "summary": "Samenvatting",
+      "owner": "Eigenaarsteam",
+      "jurisdiction": "Toepassingsgebied",
+      "effectiveFrom": "Geldig vanaf",
+      "effectiveTo": "Geldig tot",
+      "effective": "Geldigheid",
+      "approvedBy": "Goedgekeurd door",
+      "approvalEvidence": "Bewijs van goedkeuring",
+      "derivedFrom": "Afgeleid van",
+      "withdrawnReason": "Reden van intrekking",
+      "changeSummary": "Samenvatting van wijzigingen"
+    },
+    "type": {
+      "DOA": "Mandaatregeling",
+      "BOARD_MANDATE": "Bestuursmandaat",
+      "REGULATION": "Regelgeving",
+      "PROCUREMENT_POLICY": "Inkoopbeleid",
+      "SOP": "Standaardwerkprocedure",
+      "EXCEPTION": "Uitzondering"
+    },
+    "status": {
+      "draft": "Concept",
+      "approved": "Goedgekeurd",
+      "superseded": "Vervangen",
+      "withdrawn": "Ingetrokken"
+    },
+    "openEnded": "onbepaalde tijd",
+    "editor": {
+      "titleNew": "Nieuw bevoegdheidsbeleid",
+      "titleEdit": "{{key}} v{{version}} bewerken",
+      "keyHint": "Vaste identificatie die alle versies van het beleid delen, bijv. POL-DOA.",
+      "jurisdictionHint": "Het gebied dat het beleid dekt, als JSON, bijv. {\"market\": [\"DE\", \"AT\"]}.",
+      "validation": {
+        "required": "Sleutel en titel zijn verplicht",
+        "title": "Het beleid is ongeldig",
+        "clauseRef": "Elke clausule heeft een verwijzing nodig (bijv. §7.1).",
+        "clauseDuplicate": "Twee clausules hebben dezelfde verwijzing.",
+        "amount": "Een clausulelimiet moet een getal zijn.",
+        "jurisdiction": "Het toepassingsgebied moet geldige JSON zijn."
+      }
+    },
+    "clauses": {
+      "title": "Clausules",
+      "hint": "De citeerbare bepalingen van het beleid. Bevoegdheidsrelaties citeren de clausules die ze uitvoeren; regelonderdelen en controles citeren de clausule die ze handhaven, en een weigering noemt die.",
+      "titlePlaceholder": "Titel van de clausule",
+      "textPlaceholder": "Tekst van de clausule",
+      "amount": "Limietbedrag",
+      "currency": "Valuta",
+      "conditionsPlaceholder": "Voorwaarden, één per regel",
+      "add": "Clausule toevoegen",
+      "remove": "Clausule verwijderen",
+      "none": "Nog geen clausules.",
+      "ref": "Ref.",
+      "clause": "Clausule",
+      "limit": "Limiet"
+    },
+    "details": {
+      "defaultTitle": "Bevoegdheidsbeleid",
+      "notFound": "Bevoegdheidsbeleid niet gevonden.",
+      "backButton": "Terug naar beleid",
+      "buttonNewVersion": "Nieuwe versie",
+      "buttonApprove": "Goedkeuren",
+      "buttonWithdraw": "Intrekken",
+      "approved": "Beleid goedgekeurd",
+      "withdrawn": "Beleid ingetrokken",
+      "withdrawnMsg": "Actieve bevoegdheidsrelaties die het citeren, moeten nu worden beoordeeld.",
+      "versionCreated": "Versie {{version}} als concept aangemaakt",
+      "rootProblem": "Deze versie kan nu geen bevoegdheid onderbouwen: {{problem}}.",
+      "cardBasis": "Beleidsbasis",
+      "cardDocuments": "Brondocumenten",
+      "noDocuments": "Geen brondocumenten.",
+      "noDocumentsDraft": "Nog geen brondocumenten. Upload ze hieronder onder Metadata; elk wordt opgeslagen met zijn SHA-256.",
+      "documentsImmutable": "Deze versie is geen concept meer: de documenten zijn vastgelegd bewijs en veranderen alleen via een nieuwe versie.",
+      "cardDependents": "Geciteerd door ({{count}})",
+      "noDependents": "Geen bevoegdheidsrelatie citeert deze versie."
+    },
+    "approve": {
+      "title": "{{key}} v{{version}} goedkeuren",
+      "description": "Een goedgekeurde versie is onveranderlijk en kan vanaf de ingangsdatum bevoegdheidsrelaties onderbouwen.",
+      "approverPlaceholder": "Standaard uzelf",
+      "noEvidence": "Geen",
+      "supersedesHint": "Goedkeuren vervangt v{{version}}: die blijft geldig tot deze versie ingaat."
+    },
+    "withdraw": {
+      "title": "{{key}} v{{version}} intrekken",
+      "description": "Bevoegdheidsrelaties die deze versie citeren: {{count}}. Actieve worden op beoordeling gezet, en geen enkele wordt opgelost tot ze een geldig beleid citeert."
+    },
+    "newVersion": {
+      "title": "Nieuwe beleidsversie",
+      "description": "Maakt een opvolger als concept met dezelfde clausules. Bewerk en keur die goed om deze versie te vervangen."
+    },
+    "citation": {
+      "legacy": "Vrije onderbouwing (geen bevoegdheidsbeleid geciteerd)",
+      "none": "Geen bevoegdheidsbeleid geciteerd.",
+      "derivedFrom": "afgeleid van de vorige versie",
+      "problem": "Geen geldige beleidsbasis: {{problem}}. Resoluties leveren geen bevoegdheid op.",
+      "noClauses": "Geen clausules geciteerd.",
+      "enforces": "Handhaaft deze beleidsclausule",
+      "clause": "Clausule",
+      "nonePicker": "Geen bevoegdheidsbeleid",
+      "notApprovedHint": "Deze versie is {{status}}: de bevoegdheidsrelatie wordt pas opgelost als ze een goedgekeurde, geldige versie citeert."
+    }
   }
 }

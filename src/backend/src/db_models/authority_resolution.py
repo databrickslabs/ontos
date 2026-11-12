@@ -79,7 +79,10 @@ class AuthorityRelationDb(Base):
     rule = Column(JSON, nullable=True)
 
     # --- ARF tuple: Justification-Chain -------------------------------------
-    justification_chain = Column(JSON, nullable=True)  # {policy_id, effective_date, derived_from, doc_url}
+    justification_chain = Column(JSON, nullable=True)  # legacy free-form {policy_id, effective_date, derived_from, doc_url}
+    # The Authority Policy version this authority derives from, and the clauses it implements.
+    authority_policy_id = Column(String, ForeignKey('authority_policies.id', ondelete='SET NULL'), nullable=True, index=True)
+    policy_clause_refs = Column(JSON, nullable=True)  # ["§7.1", "§7.3"]
 
     # --- Ontos-compiled deterministic runtime rule --------------------------
     decision_logic = Column(JSON, nullable=True)      # {allowed_principals, threshold, required_affirmations, ...}
@@ -217,6 +220,8 @@ class AuthorityCriterionDb(Base):
     dimension = Column(String, nullable=False, default='people')
     display_order = Column(Integer, nullable=False, default=0)
     enabled = Column(Boolean, nullable=False, default=True)
+    # The clause of the AR's Authority Policy this check enforces (e.g. "§7.2").
+    policy_clause_ref = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
     relation = relationship("AuthorityRelationDb", back_populates="criteria")

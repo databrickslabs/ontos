@@ -40,6 +40,8 @@ import Entitlements from './views/entitlements';
 import EntitlementsSync from './views/entitlements-sync';
 import AuthorityResolution from './views/authority-resolution';
 import AuthorityRelationDetails from './views/authority-relation-details';
+import AuthorityPolicies from './views/authority-policies';
+import AuthorityPolicyDetails from './views/authority-policy-details';
 import DataAssetReviews from './views/data-asset-reviews';
 import DataAssetReviewDetails from './views/data-asset-review-details';
 import DataCatalog from './views/data-catalog';
@@ -258,6 +260,8 @@ export default function App() {
               <Route path="/entitlements" element={<Entitlements />} />
               <Route path="/entitlements-sync" element={<EntitlementsSync />} />
               <Route path="/authority-resolution" element={<AuthorityResolution />} />
+              <Route path="/authority-resolution/policies" element={<AuthorityPolicies />} />
+              <Route path="/authority-resolution/policies/:policyId" element={<AuthorityPolicyDetails />} />
               <Route path="/authority-resolution/:relationId" element={<AuthorityRelationDetails />} />
 
               {/* Settings - sidebar layout with nested routes */}

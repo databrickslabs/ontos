@@ -221,7 +221,8 @@
       "dnaSchedule": "DNA-Coefficient のスケジュール",
       "tags": "タグ",
       "ownership": "所有者とプロジェクト",
-      "rule": "ルール (ODRL)"
+      "rule": "ルール (ODRL)",
+      "justification": "根拠（権限ポリシー）"
     },
     "sectionDescriptions": {
       "decisionCriteria": "ルールの後にゲートが適用するチェックです(DNA 係数はこれに対する乖離を測定します)。それぞれ再利用可能な <strong>Compliance Check</strong> です。",
@@ -231,7 +232,8 @@
       "resourceRefs": "フィールド値の取得元。単純なリテラルの代わりに、標準フィールド（<code>actor_identity</code>、<code>object_id</code>、<code>domain_context.{{keyPlaceholder}}</code>）を型付きポインタで裏付けます。<strong> Ontos エンティティ</strong>参照は評価時にナレッジグラフに対して再解決されるため、基になるコンセプト、プロダクト、ドメインが変更されても値は最新に保たれます。<strong> MCP ツール</strong>参照は決定時に Unity Catalog の MCP サービスを呼び出します。基準では解決された値を <code>obj.ref_{{fieldPlaceholder}}</code>（ドットはアンダースコアになります。例: <code>obj.ref_actor_identity</code>）として比較できます。",
       "dnaSchedule": "エビデンスソースに対して DNA-Coefficient を再計算する頻度。",
       "domainContext": "この権限が有効な限定されたスコープとそのパラメーターです。スコープ外のリクエストには no_authority が返り、ルールとチェックはパラメーターを ctx.<key> として読みます。",
-      "rule": "権限が許可する内容を ODRL で表します: 満たすべき<strong>制約</strong>、まだ履行が必要な<strong>義務</strong>(それまで決定は<strong>条件付き</strong>、例: 共同承認)、そして<strong>禁止</strong>です。値または変数 (<code>ctx.threshold</code>, <code>req.market</code>) と比較します。"
+      "rule": "権限が許可する内容を ODRL で表します: 満たすべき<strong>制約</strong>、まだ履行が必要な<strong>義務</strong>(それまで決定は<strong>条件付き</strong>、例: 共同承認)、そして<strong>禁止</strong>です。値または変数 (<code>ctx.threshold</code>, <code>req.market</code>) と比較します。",
+      "justification": "この権限の根拠となるポリシーのバージョンと、実装する条項です。ポリシーが未承認、撤回済み、または有効期間外の場合、解決は拒否されます。"
     },
     "fields": {
       "name": {
@@ -626,5 +628,125 @@
     "none": "ルールなし: チェックのみがこの権限を制御します。",
     "fulfilledWhen": "履行条件:",
     "prohibitedWhen": "禁止条件:"
+  },
+  "nav": {
+    "relations": "権限リレーション",
+    "policies": "権限ポリシー"
+  },
+  "policy": {
+    "list": {
+      "title": "権限ポリシー",
+      "description": "権限の根拠となる文書化された基盤です。職務権限規程、取締役会の委任、法規制、調達ポリシー、SOP、記録された例外などが該当します。権限リレーションはポリシーのバージョンと実装する条項を引用します。有効なポリシー根拠がない解決は「権限なし」を返します。",
+      "buttonNew": "新規ポリシー",
+      "confirmDelete": "{{key}} v{{version}} を削除しますか？",
+      "columnCitedBy": "引用元"
+    },
+    "fields": {
+      "key": "ポリシーキー",
+      "version": "バージョン",
+      "type": "種類",
+      "title": "タイトル",
+      "summary": "概要",
+      "owner": "所有チーム",
+      "jurisdiction": "適用範囲",
+      "effectiveFrom": "発効日",
+      "effectiveTo": "失効日",
+      "effective": "有効期間",
+      "approvedBy": "承認者",
+      "approvalEvidence": "承認の証跡",
+      "derivedFrom": "派生元",
+      "withdrawnReason": "撤回理由",
+      "changeSummary": "変更の概要"
+    },
+    "type": {
+      "DOA": "職務権限規程",
+      "BOARD_MANDATE": "取締役会の委任",
+      "REGULATION": "法規制",
+      "PROCUREMENT_POLICY": "調達ポリシー",
+      "SOP": "標準作業手順",
+      "EXCEPTION": "例外"
+    },
+    "status": {
+      "draft": "下書き",
+      "approved": "承認済み",
+      "superseded": "置き換え済み",
+      "withdrawn": "撤回済み"
+    },
+    "openEnded": "期限なし",
+    "editor": {
+      "titleNew": "新規権限ポリシー",
+      "titleEdit": "{{key}} v{{version}} を編集",
+      "keyHint": "ポリシーの全バージョンで共有される固定の識別子（例: POL-DOA）。",
+      "jurisdictionHint": "ポリシーの適用範囲を JSON で指定します（例: {\"market\": [\"DE\", \"AT\"]}）。",
+      "validation": {
+        "required": "キーとタイトルは必須です",
+        "title": "ポリシーが無効です",
+        "clauseRef": "各条項には参照が必要です（例: §7.1）。",
+        "clauseDuplicate": "2 つの条項の参照が重複しています。",
+        "amount": "条項の上限は数値である必要があります。",
+        "jurisdiction": "適用範囲は有効な JSON である必要があります。"
+      }
+    },
+    "clauses": {
+      "title": "条項",
+      "hint": "ポリシーの引用可能な規定です。権限リレーションは実装する条項を引用し、ルール項目とチェックは適用する条項を引用します。拒否時にはその条項が示されます。",
+      "titlePlaceholder": "条項のタイトル",
+      "textPlaceholder": "条項の本文",
+      "amount": "上限額",
+      "currency": "通貨",
+      "conditionsPlaceholder": "条件（1 行に 1 つ）",
+      "add": "条項を追加",
+      "remove": "条項を削除",
+      "none": "条項はまだありません。",
+      "ref": "参照",
+      "clause": "条項",
+      "limit": "上限"
+    },
+    "details": {
+      "defaultTitle": "権限ポリシー",
+      "notFound": "権限ポリシーが見つかりません。",
+      "backButton": "ポリシー一覧に戻る",
+      "buttonNewVersion": "新しいバージョン",
+      "buttonApprove": "承認",
+      "buttonWithdraw": "撤回",
+      "approved": "ポリシーを承認しました",
+      "withdrawn": "ポリシーを撤回しました",
+      "withdrawnMsg": "このポリシーを引用するアクティブな権限リレーションはレビューが必要になりました。",
+      "versionCreated": "バージョン {{version}} を下書きとして作成しました",
+      "rootProblem": "このバージョンは現在、権限の根拠になれません: {{problem}}。",
+      "cardBasis": "ポリシーの根拠",
+      "cardDocuments": "原本ドキュメント",
+      "noDocuments": "原本ドキュメントはありません。",
+      "noDocumentsDraft": "原本ドキュメントはまだありません。下のメタデータからアップロードしてください。各ドキュメントは SHA-256 とともに保存されます。",
+      "documentsImmutable": "このバージョンは下書きではなくなりました。ドキュメントは確定した証跡であり、新しいバージョンでのみ変更できます。",
+      "cardDependents": "引用元 ({{count}})",
+      "noDependents": "このバージョンを引用する権限リレーションはありません。"
+    },
+    "approve": {
+      "title": "{{key}} v{{version}} を承認",
+      "description": "承認済みのバージョンは変更できず、発効日から権限リレーションの根拠になれます。",
+      "approverPlaceholder": "既定ではあなた",
+      "noEvidence": "なし",
+      "supersedesHint": "承認すると v{{version}} が置き換えられます。このバージョンが発効するまでは有効なままです。"
+    },
+    "withdraw": {
+      "title": "{{key}} v{{version}} を撤回",
+      "description": "このバージョンを引用する権限リレーション: {{count}} 件。アクティブなものはレビュー待ちになり、有効なポリシーを引用するまで解決されません。"
+    },
+    "newVersion": {
+      "title": "ポリシーの新しいバージョン",
+      "description": "同じ条項を持つ後継バージョンを下書きとして作成します。編集して承認すると、このバージョンが置き換えられます。"
+    },
+    "citation": {
+      "legacy": "自由記述の根拠（権限ポリシーの引用なし）",
+      "none": "権限ポリシーは引用されていません。",
+      "derivedFrom": "前のバージョンから派生",
+      "problem": "有効なポリシー根拠がありません: {{problem}}。解決は「権限なし」を返します。",
+      "noClauses": "条項は引用されていません。",
+      "enforces": "このポリシー条項を適用します",
+      "clause": "条項",
+      "nonePicker": "権限ポリシーなし",
+      "notApprovedHint": "このバージョンは{{status}}です。承認済みで有効なバージョンを引用するまで、権限リレーションは解決されません。"
+    }
   }
 }

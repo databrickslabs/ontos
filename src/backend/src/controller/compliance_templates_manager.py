@@ -1,12 +1,13 @@
 """Manager for Compliance Templates: validation + composed reads over the repository."""
 import re
+from typing import Any, Iterable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from src.common.compliance_completeness import CompletenessResult, FieldSpec, check_completeness
 from src.common.compliance_reconcile import FieldDesc, reconcile
-from src.common.compliance_value_types import ValueTypeError, coerce_value
+from src.common.compliance_value_types import ValueTypeError, coerce_value, is_set
 from src.common.logging import get_logger
 from src.models.compliance_templates import (
     ComplianceFieldCreate,
@@ -23,6 +24,22 @@ logger = get_logger(__name__)
 
 # Reference ids are validated slugs: lowercase alphanumerics and separators.
 _REFERENCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+
+# Keys added to the objects compliance rules and maturity gates evaluate
+# (see ``ComplianceTemplatesManager.rule_fields_for_entities``).
+RULE_KEY_APPLICABLE = "template_applicable"
+RULE_KEY_MISSING_COUNT = "template_mandatory_missing_count"
+RULE_KEY_COMPLETE = "template_complete"
+RULE_FIELD_PREFIX = "template_field_"
+
+
+def rule_field_key(reference_id: str) -> str:
+    """Rule key of a field's value: ``template_field_<reference id>``.
+
+    The DSL reads one identifier level (letters, digits, ``_``), so a ``-`` in
+    the reference id becomes ``_``.
+    """
+    return RULE_FIELD_PREFIX + reference_id.replace("-", "_")
 
 
 class ComplianceTemplateError(ValueError):
@@ -440,6 +457,59 @@ class ComplianceTemplatesManager:
             logger.warning(
                 f"Compliance reconcile failed for {entity_type} {entity_id}: {e}"
             )
+
+    def rule_fields_for_entities(
+        self, db: Session, *, entity_type: str, entity_ids: Iterable[Any]
+    ) -> dict[str, dict[str, Any]]:
+        """Template keys for the rule objects of entities, by entity id (as str).
+
+        Per entity: ``template_applicable`` (a template is active for the
+        entity type), ``template_mandatory_missing_count``, ``template_complete``
+        (the publish-gate check: true when nothing is missing, so also when no
+        template is active) and one ``template_field_<reference id>`` per field
+        of the active template with its effective value (stored value if set,
+        else the field's default; ``None`` when neither). Values are read in one
+        query for all entities.
+        """
+        ids = [str(i) for i in entity_ids]
+        active = compliance_templates_repo.get_active_template(db, entity_type=entity_type)
+        if not active:
+            return {
+                i: {RULE_KEY_APPLICABLE: False, RULE_KEY_MISSING_COUNT: 0, RULE_KEY_COMPLETE: True}
+                for i in ids
+            }
+        fields = compliance_templates_repo.list_fields(db, template_id=active.id)
+        rows = compliance_templates_repo.list_values_for_entities(
+            db, entity_type=entity_type, entity_ids=ids, field_ids=[f.id for f in fields]
+        )
+        stored_by_entity: dict[str, dict] = {}
+        for row in rows:
+            stored_by_entity.setdefault(str(row.entity_id), {})[row.field_id] = row.value
+        specs = [
+            FieldSpec(
+                field_id=f.id,
+                label=f.label,
+                value_type=f.value_type,
+                is_mandatory=f.is_mandatory,
+                default_value=f.default_value,
+            )
+            for f in fields
+        ]
+        result: dict[str, dict[str, Any]] = {}
+        for entity_id in ids:
+            stored = stored_by_entity.get(entity_id, {})
+            completeness = check_completeness(specs, stored)
+            keys: dict[str, Any] = {}
+            for f in fields:
+                value = stored.get(f.id)
+                if f.id not in stored or not is_set(f.value_type, value):
+                    value = f.default_value
+                keys[rule_field_key(f.reference_id)] = value
+            keys[RULE_KEY_APPLICABLE] = True
+            keys[RULE_KEY_MISSING_COUNT] = len(completeness.missing)
+            keys[RULE_KEY_COMPLETE] = completeness.passed
+            result[entity_id] = keys
+        return result
 
     def has_active_template(self, db: Session, *, entity_type: str) -> bool:
         return compliance_templates_repo.get_active_template(db, entity_type=entity_type) is not None

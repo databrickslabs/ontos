@@ -206,6 +206,23 @@ class AppEntityLoader(EntityLoader):
             'review',
         ]
 
+    def _template_fields(self, entity_type: str, entities: List[Any]) -> Dict[str, Dict[str, Any]]:
+        """Compliance template keys (``template_complete``, ...) by entity id.
+
+        Empty when they can't be read, so the entities still load (rules on the
+        keys then see ``None``).
+        """
+        if not entities:
+            return {}
+        try:
+            from src.controller.compliance_templates_manager import compliance_templates_manager
+            return compliance_templates_manager.rule_fields_for_entities(
+                self.db, entity_type=entity_type, entity_ids=[e.id for e in entities]
+            )
+        except Exception:
+            logger.exception("Failed to load compliance template fields for %s", entity_type)
+            return {}
+
     def load_entities(
         self,
         entity_types: List[str],
@@ -232,6 +249,7 @@ class AppEntityLoader(EntityLoader):
                 domains_map = entity_domain_repo.get_domains_for_entities(
                     self.db, entity_type="data_product", entity_ids=[str(p.id) for p in products]
                 ) if products else {}
+                template_fields = self._template_fields("data_product", products)
                 for product in products:
                     assigned = domains_map.get(str(product.id), [])
                     primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
@@ -248,6 +266,7 @@ class AppEntityLoader(EntityLoader):
                         'tags': {},
                         'created_at': getattr(product, 'created_at', None),
                         'updated_at': getattr(product, 'updated_at', None),
+                        **template_fields.get(str(product.id), {}),
                     }
             except Exception:
                 logger.exception("Failed to load data products for compliance")

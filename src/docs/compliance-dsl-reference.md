@@ -273,6 +273,30 @@ Entities have different properties based on their type:
 - `created_at` - Creation timestamp
 - `updated_at` - Last update timestamp
 
+### Compliance Template Fields
+
+Data products carry the state of the active compliance template (Settings > Compliance
+Templates) in compliance runs (`MATCH (p:data_product)`) and in maturity gates:
+
+- `template_applicable` - `true` when a template is active for data products
+- `template_mandatory_missing_count` - mandatory fields without a value (stored or default)
+- `template_complete` - `true` when no mandatory field is missing (the publish check);
+  also `true` when no template is active, so combine it with `template_applicable` to
+  require a template
+- `template_field_<reference id>` - the field's value: the stored value, else the
+  field's default, else `null`. A `-` in the reference id becomes `_`
+  (`intended-use` is `template_field_intended_use`)
+
+A maturity gate that requires a filled template is a policy such as:
+
+```
+MATCH (p:data_product)
+ASSERT p.template_applicable AND p.template_complete
+```
+
+or `ASSERT p.template_mandatory_missing_count = 0`. Rules on field values work like any
+other property, for example `ASSERT p.template_field_retention_days >= 30`.
+
 ## Best Practices
 
 1. **Use WHERE to Filter**: Narrow down entities before ASSERT evaluation for performance

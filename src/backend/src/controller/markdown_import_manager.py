@@ -68,6 +68,8 @@ TARGET_FEATURES = {
     'asset': 'assets',
     'concept': 'semantic-models',
 }
+# The target kind of a document's entity_type
+_ENTITY_KINDS = {'data_domain': 'domain', 'asset': 'asset', 'concept': 'concept'}
 MAX_FRONT_MATTER_BYTES = 32 * 1024
 
 
@@ -194,6 +196,10 @@ class _TargetResolver:
         self._writable = writable_kinds
         self._cache: Dict[Tuple[str, str], _Lookup] = {}
 
+    def may_write(self, entity_type: str) -> bool:
+        """Whether the caller may change documents on an entity of this type."""
+        return self._writable is None or _ENTITY_KINDS.get(entity_type) in self._writable
+
     def resolve(
         self, front_matter: Dict[str, Any],
     ) -> Tuple[List[MarkdownImportTarget], List[MarkdownImportUnresolved]]:
@@ -310,7 +316,8 @@ class MarkdownImportManager:
             # An empty listing may be a transient or permission glitch: keep
             # what was imported from here before rather than wipe it.
             result.warnings.append('empty_folder')
-        for entry in self._remove_gone_files(db, root, files, unread, user_email, removed_ids):
+        gone = self._remove_gone_files(db, root, files, unread, user_email, removed_ids, resolver)
+        for entry in gone:
             result.files.append(entry)
             result.removed += 1
         db.commit()
@@ -381,13 +388,15 @@ class MarkdownImportManager:
     def _remove_gone_files(
         self, db: Session, root: str, files: List[Tuple[str, Optional[int]]],
         unread: List[str], user_email: Optional[str], removed_ids: List[str],
+        resolver: _TargetResolver,
     ) -> List[MarkdownImportFileResult]:
         """Remove the documents of files imported from under ``root`` that are gone.
 
         The files are the source of truth: a file deleted (or renamed) since an
         earlier import of this folder takes its documents off their entities.
         Documents imported from elsewhere, or from subfolders that couldn't be
-        listed this time, stay.
+        listed this time, stay, and so do documents on entities of a kind the
+        caller can't edit.
         """
         if root.lower().endswith('.md') or not files:
             return []  # one file, or nothing listed: never remove
@@ -396,6 +405,8 @@ class MarkdownImportManager:
         gone: Dict[str, List[DocumentMetadataDb]] = {}
         for doc in self._documents.list_imported_under(db, folder=root):
             if doc.source_path in present or (skipped and doc.source_path.startswith(skipped)):
+                continue
+            if not resolver.may_write(doc.entity_type):
                 continue
             gone.setdefault(doc.source_path, []).append(doc)
         entries = []
@@ -477,7 +488,7 @@ class MarkdownImportManager:
         wanted = {(target.entity_type, target.entity_id) for target in targets}
         removed = 0
         for key, doc in existing.items():
-            if key not in wanted and doc.content_hash != digest:
+            if key not in wanted and doc.content_hash != digest and resolver.may_write(key[0]):
                 log(doc, 'DELETE')
                 removed_ids.append(str(doc.id))
                 db.delete(doc)

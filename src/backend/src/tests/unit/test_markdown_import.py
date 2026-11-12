@@ -160,6 +160,24 @@ class TestListing:
         found = MarkdownImportManager(MagicMock())._list_markdown_files(ws, '/Volumes/c/s/v')
         assert found == [('/Volumes/c/s/v/b.md', 3), ('/Volumes/c/s/v/sub/A.MD', 5)]
 
+    def test_folders_past_the_depth_limit_are_unread(self, monkeypatch):
+        monkeypatch.setattr(mim, 'MAX_DEPTH', 1)
+        ws = self._ws({
+            '/Volumes/c/s/v': [DirectoryEntry(path='/Volumes/c/s/v/sub', is_directory=True)],
+            '/Volumes/c/s/v/sub': [
+                DirectoryEntry(path='/Volumes/c/s/v/sub/a.md', is_directory=False),
+                DirectoryEntry(path='/Volumes/c/s/v/sub/deep', is_directory=True),
+            ],
+            '/Volumes/c/s/v/sub/deep': [
+                DirectoryEntry(path='/Volumes/c/s/v/sub/deep/x.md', is_directory=False),
+            ],
+        })
+        unread = []
+        found = MarkdownImportManager(MagicMock())._list_markdown_files(
+            ws, '/Volumes/c/s/v', unread)
+        assert found == [('/Volumes/c/s/v/sub/a.md', None)]
+        assert unread == ['/Volumes/c/s/v/sub/deep']
+
     def test_a_missing_folder_or_no_access_is_coded(self):
         manager = MarkdownImportManager(MagicMock())
         with pytest.raises(MarkdownImportPathNotFoundError):

@@ -82,6 +82,18 @@ def allowed_features(ctx: ToolContext) -> Optional[List[str]]:
     return sorted(features)
 
 
+def is_user_without_groups(ctx: ToolContext) -> bool:
+    """A resolved user or service principal with no groups: ``/api/search``
+    returns nothing to them (``SearchManager.search``). The API-key policy and a
+    context without a caller have no user, so this is not them."""
+    from src.tools.caller import MCP_API_KEY_AUTH_PATH
+
+    caller = _caller(ctx)
+    if caller is _ANONYMOUS or caller.auth_path == MCP_API_KEY_AUTH_PATH:
+        return False
+    return not caller.groups and not caller.full_access
+
+
 def can_read_product(ctx: ToolContext, product: Any) -> bool:
     caller = _caller(ctx)
     if caller.full_access:

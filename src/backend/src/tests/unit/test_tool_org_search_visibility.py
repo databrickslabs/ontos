@@ -36,12 +36,14 @@ from src.tools.registry import create_default_registry
 RO = FeatureAccessLevel.READ_ONLY
 LEVELS = {'teams': RO, 'projects': RO}
 # No team: sees the public projects only.
-OUTSIDER = ToolCaller(email='carl@example.com', auth_path='test', permissions=LEVELS)
+OUTSIDER = ToolCaller(email='carl@example.com', auth_path='test', permissions=LEVELS,
+                      groups=['users'])
 # Member of the team that owns the private project.
-MEMBER = ToolCaller(email='tom@example.com', auth_path='test', permissions=LEVELS)
+MEMBER = ToolCaller(email='tom@example.com', auth_path='test', permissions=LEVELS,
+                    groups=['users'])
 # In the configured admin groups (resolve_tool_caller: project_ids None).
 ADMIN = ToolCaller(email='ann@example.com', auth_path='test', permissions=LEVELS,
-                   project_ids=None)
+                   groups=['admins'], project_ids=None)
 # No level on either feature (e.g. no role).
 NO_LEVEL = ToolCaller(email='tom@example.com', auth_path='test')
 # Read-only on domains and tags too.
@@ -201,6 +203,26 @@ class TestGlobalSearch:
         mcp = self._projects(_call(world, OUTSIDER, 'global_search', query='customer',
                                    limit=100))
         assert rest == mcp == {world.public.id}
+
+
+class TestGlobalSearchWithoutGroups:
+    """/api/search returns nothing to a user with no groups (SearchManager.search)."""
+
+    def test_a_user_without_groups_gets_nothing(self, world):
+        caller = ToolCaller(email='carl@example.com', auth_path='test', permissions=LEVELS)
+        data = _call(world, caller, 'global_search', limit=100)
+        assert data['results'] == [] and data['total_count'] == 0
+
+    def test_the_same_user_with_a_group_gets_results(self, world):
+        caller = ToolCaller(email='carl@example.com', auth_path='test', permissions=LEVELS,
+                            groups=['users'])
+        assert _call(world, caller, 'global_search', limit=100)['total_count'] == 2
+
+    def test_the_api_key_policy_is_not_a_user(self, world):
+        # No user and no groups: its reads come from the token's scopes.
+        caller = mcp_api_key_caller(SimpleNamespace(scopes=['teams:read']))
+        data = _call(world, caller, 'global_search', limit=100)
+        assert _ids(data['results']) == {world.team.id}
 
 
 class TestGetTeam:

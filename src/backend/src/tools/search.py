@@ -94,8 +94,12 @@ class GlobalSearchTool(BaseTool):
                     **read_access.allowed_project_ids_by_type(ctx, type),
                 },
                 # Rows of features without the caller's Read-only level are
-                # dropped too, as /api/search does by feature_id.
-                allowed_features=read_access.allowed_features(ctx),
+                # dropped too, as /api/search does by feature_id; and a user
+                # with no groups gets nothing, as there.
+                allowed_features=(
+                    [] if read_access.is_user_without_groups(ctx)
+                    else read_access.allowed_features(ctx)
+                ),
             )
             vis.annotate(ctx, data["results"])
             data["visibility"] = applied

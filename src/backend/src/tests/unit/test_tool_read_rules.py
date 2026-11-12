@@ -38,11 +38,14 @@ IRI = 'http://example.com/onto#Customer'
 # Read-only on both features, as the default Data Consumer role.
 READ = {'data-products': FeatureAccessLevel.READ_ONLY,
         'data-contracts': FeatureAccessLevel.READ_ONLY}
-CONSUMER = ToolCaller(email='carl@example.com', auth_path='test', permissions=READ)
-OWNER = ToolCaller(email='sue@example.com', auth_path='test', permissions=READ)
+# Users have groups (/api/search and global_search return nothing to a user without).
+CONSUMER = ToolCaller(email='carl@example.com', auth_path='test', permissions=READ,
+                      groups=['users'])
+OWNER = ToolCaller(email='sue@example.com', auth_path='test', permissions=READ,
+                   groups=['users'])
 MEMBER = ToolCaller(email='tom@example.com', auth_path='test', team_ids={TEAM},
-                    permissions=READ)
-ADMIN = ToolCaller(email='ann@example.com', auth_path='test',
+                    permissions=READ, groups=['users'])
+ADMIN = ToolCaller(email='ann@example.com', auth_path='test', groups=['users'],
                    products_admin=True, contracts_admin=True)
 # No level on either feature, as the default Security Officer role or no role:
 # owning a draft doesn't help.
@@ -718,7 +721,7 @@ class TestReadLevel:
         res = _call(world, 'consumer', 'global_search', query='*', limit=100)
         assert 'glossary-term' not in res.data['facets'].get('type', {})
         assert res.data['total_count'] == 2  # the published product and contract
-        reader = ToolCaller(email='carl@example.com', auth_path='test',
+        reader = ToolCaller(email='carl@example.com', auth_path='test', groups=['users'],
                             permissions={**READ, 'semantic-models': FeatureAccessLevel.READ_ONLY})
         res = _run(create_default_registry().execute(
             'global_search', _ctx(world, reader), {'query': '*', 'limit': 100}))

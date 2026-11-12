@@ -531,3 +531,41 @@ def test_a_single_file_import_removes_nothing(
 
     assert body['removed'] == 0
     assert f'{ROOT}/glossary/terms.md' in _sources(db_session)
+
+
+def _domain_only_user(db_session, mock_test_user):
+    _add_role(db_session, {'data-domains': 'Read/Write', 'assets': 'Read-only'}, 'domain-editors')
+    mock_test_user.groups = ['domain-editors']
+
+
+def _kinds(db_session, path):
+    return sorted(d.entity_type for d in db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.source_path == path))
+
+
+def test_a_changed_file_keeps_documents_the_user_cannot_edit(
+        client, db_session, domain, asset, volume, mock_test_user):
+    _single_file(volume, "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv1\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+    _domain_only_user(db_session, mock_test_user)
+    volume[f'{ROOT}/only.md'] = "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv2\n"
+
+    entry = _targets(_import(client).json())
+
+    assert entry['removed'] == 0
+    assert _kinds(db_session, f'{ROOT}/only.md') == ['asset', 'data_domain']
+
+
+def test_a_gone_file_keeps_documents_the_user_cannot_edit(
+        client, db_session, domain, asset, volume, mock_test_user):
+    _single_file(volume, "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv1\n")
+    volume[f'{ROOT}/keep.md'] = "---\ndomain: Customer\n---\nkeep\n"
+    assert _import(client).json()['added'] == 2
+    _domain_only_user(db_session, mock_test_user)
+    del volume[f'{ROOT}/only.md']
+
+    body = _import(client).json()
+
+    gone = _by_path(body)[f'{ROOT}/only.md']
+    assert (gone['status'], gone['removed']) == ('removed', 1)
+    assert _kinds(db_session, f'{ROOT}/only.md') == ['asset']

@@ -16,6 +16,7 @@ from src.common.dependencies import (
     AuditCurrentUserDep,
     AuditManagerDep,
     DBSessionDep,
+    SettingsDep,
 )
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
@@ -24,6 +25,7 @@ from src.controller.asset_bulk_manager import (
     ImportPreviewResult,
     ImportResult,
 )
+from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
 
 logger = get_logger(__name__)
 
@@ -152,26 +154,45 @@ async def preview_import(
 )
 async def execute_import(
     request: Request,
+    settings: SettingsDep,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     file: UploadFile = File(..., description="CSV or XLSX file to import"),
     manager: AssetBulkManager = Depends(get_bulk_manager),
 ):
-    """Upload a file and execute the import, creating/updating assets."""
+    """Upload a file and execute the import, creating/updating assets.
+
+    With the "write asset descriptions to Unity Catalog" setting on, imported
+    table, view and column descriptions are written there as the user, as on
+    a single save; a failed write is a warning on its row, never an error.
+    """
+    from src.routes.assets_routes import _user_workspace_client
+
     success = False
     details: dict = {"params": {"filename": file.filename}}
+    description_sync = UcDescriptionSyncManager(settings)
+
+    def after_save(asset_id, previous_description):
+        warning, _ = description_sync.sync_after_update(
+            db, asset_id, description_sent=True, previous_description=previous_description,
+            user_client=lambda: _user_workspace_client(request),
+        )
+        return warning
+
     try:
         contents = await file.read()
         filename = file.filename or "upload.csv"
         result = manager.execute_import(
             db, file_bytes=contents, filename=filename, current_user_id=current_user.email,
+            after_save=after_save,
         )
         success = result.errors == 0
         details["result"] = {
             "created": result.created,
             "updated": result.updated,
             "errors": result.errors,
+            "warnings": result.warnings,
         }
         return result
     except Exception as e:

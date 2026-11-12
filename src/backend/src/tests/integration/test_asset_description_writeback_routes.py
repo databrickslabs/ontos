@@ -155,3 +155,50 @@ class TestDescriptionWriteback:
         settings.UC_DESCRIPTION_WRITEBACK_ENABLED = False
 
         assert client.get(f'/api/assets/{table.id}').json()['description_sync'] is None
+
+
+def _import_csv(client, csv_text, headers=TOKEN):
+    response = client.post(
+        '/api/assets/bulk/import', headers=headers,
+        files={'file': ('assets.csv', csv_text.encode('utf-8'), 'text/csv')},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+class TestBulkImportWriteback:
+    CSV = ('name,asset_type,platform,location,description\n'
+           'orders,Table,databricks,main.sales.orders,Orders placed online\n'
+           'notes,Table,snowflake,db.s.notes,Not in Unity Catalog\n')
+
+    def test_imported_descriptions_are_written_as_the_user(self, client, settings, table,
+                                                          user_ws):
+        body = _import_csv(client, self.CSV)
+
+        assert body['updated'] == 1 and body['created'] == 1 and body['errors'] == 0
+        assert _statements(user_ws) == [
+            "COMMENT ON TABLE `main`.`sales`.`orders` IS 'Orders placed online'"]
+        assert all(item['warnings'] == [] for item in body['items'])
+
+    def test_a_failed_write_is_a_row_warning_not_an_error(self, client, settings, table,
+                                                         user_ws):
+        _fail_with(user_ws, '[INSUFFICIENT_PERMISSIONS] User does not have MODIFY')
+
+        body = _import_csv(client, self.CSV)
+
+        assert body['errors'] == 0 and body['warnings'] == 1
+        row = next(i for i in body['items'] if i['name'] == 'orders')
+        assert row['action'] == 'update'
+        assert [w['code'] for w in row['warnings']] == ['uc_description_permission_denied']
+        read = client.get(f'/api/assets/{table.id}').json()
+        assert read['description'] == 'Orders placed online'
+        assert read['description_sync']['code'] == 'uc_description_permission_denied'
+
+    def test_with_the_setting_off_the_import_writes_nothing(self, client, settings, table,
+                                                           user_ws):
+        settings.UC_DESCRIPTION_WRITEBACK_ENABLED = False
+
+        body = _import_csv(client, self.CSV)
+
+        assert body['errors'] == 0 and body['warnings'] == 0
+        user_ws.statement_execution.execute_statement.assert_not_called()

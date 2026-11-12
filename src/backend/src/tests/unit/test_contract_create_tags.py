@@ -22,6 +22,37 @@ from src.models.tags import DEFAULT_NAMESPACE_NAME, AssignedTagCreate
 from src.repositories.tags_repository import tag_namespace_repo
 
 
+@pytest.fixture(autouse=True)
+def _remove_what_the_test_committed(db_session: Session):
+    """The managers commit, which the session fixture's rollback doesn't undo, so
+    remove the contracts, tags and namespaces a test added: other suites count
+    contracts and tags."""
+    from src.db_models.tags import TagNamespaceDb
+
+    contracts = {c for (c,) in db_session.query(DataContractDb.id)}
+    tag_ids = {t for (t,) in db_session.query(TagDb.id)}
+    namespaces = {n for (n,) in db_session.query(TagNamespaceDb.id)}
+    yield
+    db_session.rollback()
+    new_contracts = [c for (c,) in db_session.query(DataContractDb.id) if c not in contracts]
+    if new_contracts:
+        db_session.query(EntityTagAssociationDb).filter(
+            EntityTagAssociationDb.entity_type == "data_contract",
+            EntityTagAssociationDb.entity_id.in_([str(c) for c in new_contracts]),
+        ).delete(synchronize_session=False)
+        db_session.query(DataContractTagDb).filter(
+            DataContractTagDb.contract_id.in_(new_contracts)
+        ).delete(synchronize_session=False)
+        for contract in db_session.query(DataContractDb).filter(DataContractDb.id.in_(new_contracts)):
+            db_session.delete(contract)
+    db_session.query(EntityTagAssociationDb).filter(
+        ~EntityTagAssociationDb.tag_id.in_(tag_ids)
+    ).delete(synchronize_session=False)
+    db_session.query(TagDb).filter(~TagDb.id.in_(tag_ids)).delete(synchronize_session=False)
+    db_session.query(TagNamespaceDb).filter(~TagNamespaceDb.id.in_(namespaces)).delete(synchronize_session=False)
+    db_session.commit()
+
+
 def _manager(tags_manager=None):
     mgr = DataContractsManager(data_dir=Path("/tmp"), tags_manager=tags_manager or TagsManager())
     mgr._queue_delivery = lambda *a, **k: None

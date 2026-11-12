@@ -1064,12 +1064,18 @@ def build_variables_for_dataset(d: DatasetTagInfo, link: Optional[SemanticLink] 
 # Databricks governed tags helpers ------------------------------------------------
 
 def ensure_tag_key(ws: WorkspaceClient, key: str) -> None:
-    # SDK doesn't yet expose create-if-missing uniformly for all backends; attempt idempotent create.
+    """Create the governed tag key if it is missing.
+
+    A key that already exists is fine. Any other failure is raised, so the caller counts
+    it as an error for the object instead of going on as if the key were there.
+    """
     try:
         ws.tags.create(key=key)
-    except Exception:
-        # Assume it exists already or creation is not required in this workspace
-        pass
+    except Exception as e:
+        text = _error_text(e)
+        if "ALREADY_EXISTS" in text or "ALREADY EXISTS" in text:
+            return
+        raise
 
 
 def get_existing_prefixed_tags(spark: SparkSession, object_type: str, object_name: str, prefix: str) -> Dict[str, Optional[str]]:
@@ -1525,6 +1531,8 @@ class SyncResult:
     )
     # Objects not tagged on purpose, with the reason. They don't fail the run.
     skipped: List[str] = field(default_factory=list)
+    # Objects ("TYPE fqn") that had at least one tag error this run.
+    failed_objects: List[str] = field(default_factory=list)
 
 
 # Unity Catalog documents no column tag DDL for a metric view's dimensions and measures:
@@ -1994,11 +2002,14 @@ def sync_tags(
             msg = f"Failed to sync tags of {object_type} {fqn}: {e}"
             print(f"[WARN] {msg}")
             result.errors.append(msg)
+            result.failed_objects.append(f"{object_type} {fqn}")
             result.delivered[object_type][fqn] = dict(recorded)
             return 0, 0
         result.updated += u
         result.removed += r
         result.errors.extend(errs)
+        if errs:
+            result.failed_objects.append(f"{object_type} {fqn}")
         # Only the tags the job holds on the object: a failed assignment isn't recorded.
         result.delivered[object_type].setdefault(fqn, {}).update(ours)
         if partial:
@@ -2080,10 +2091,13 @@ def sync_tags(
                 msg = f"Failed to clean up tags of {object_type} {fqn}: {e}"
                 print(f"[WARN] {msg}")
                 result.errors.append(msg)
+                result.failed_objects.append(f"{object_type} {fqn}")
                 result.delivered[object_type][fqn] = dict(tags)
                 continue
             result.removed += r
             result.errors.extend(errs)
+            if errs:
+                result.failed_objects.append(f"{object_type} {fqn}")
             if still_delivered:
                 result.delivered[object_type][fqn] = still_delivered
             if verbose:
@@ -2454,7 +2468,8 @@ def main() -> None:
 
     print("\n" + "=" * 80)
     msg = f"Summary: updated={updated_total} removed={removed_total} errors="
-    print(f"{msg}{len(all_errors)} skipped={len(result.skipped)}")
+    print(f"{msg}{len(all_errors)} skipped={len(result.skipped)} "
+          f"failed_objects={len(result.failed_objects)}")
 
     if result.skipped:
         print(f"\n{len(result.skipped)} object(s) skipped (not errors):")

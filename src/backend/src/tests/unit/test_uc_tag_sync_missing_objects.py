@@ -198,3 +198,45 @@ def test_skip_warning_names_the_object_not_the_error(tag_sync, capsys):
     out = capsys.readouterr().out
     assert "gone.crm.customers" in out
     assert secret not in out
+
+
+def _ws_creating_tag_keys_fails(message):
+    ws = MagicMock()
+    ws.tags.create.side_effect = Exception(message)
+    return ws
+
+
+def test_tag_key_that_already_exists_is_not_an_error(tag_sync):
+    ws = _ws_creating_tag_keys_fails("Tag key ontos_x ALREADY_EXISTS")
+    direct = tag_sync.build_direct_link_infos([], None, None)
+    result = tag_sync.sync_tags(ws, FakeSpark(), [_dataset(tag_sync, "main.a.one")],
+                                direct, CFG, tag_sync.TagOwnership(), previous=None)
+    assert result.errors == []
+    assert result.updated >= 1
+
+
+def test_tag_key_creation_failure_is_counted_as_an_error(tag_sync):
+    ws = _ws_creating_tag_keys_fails("[PERMISSION_DENIED] cannot create tag key")
+    spark = FakeSpark()
+    direct = tag_sync.build_direct_link_infos([], None, None)
+    result = tag_sync.sync_tags(ws, spark, [_dataset(tag_sync, "main.a.one")],
+                                direct, CFG, tag_sync.TagOwnership(), previous=None)
+    assert result.errors and "main.a.one" in result.errors[0]
+    assert result.updated == 0
+    assert spark.sets() == []
+
+
+def test_missing_object_while_creating_the_tag_key_is_skipped(tag_sync):
+    ws = _ws_creating_tag_keys_fails("[TABLE_OR_VIEW_NOT_FOUND] x")
+    direct = tag_sync.build_direct_link_infos([], None, None)
+    result = tag_sync.sync_tags(ws, FakeSpark(), [_dataset(tag_sync, "main.a.one")],
+                                direct, CFG, tag_sync.TagOwnership(), previous=None)
+    assert result.errors == []
+    assert any("TABLE main.a.one" in item for item in result.skipped)
+
+
+def test_failed_objects_are_counted_once_each(tag_sync):
+    spark = FakeSpark({"ALTER TABLE main.a.one": "[PERMISSION_DENIED] APPLY TAG"})
+    result = _run(tag_sync, spark, ["main.a.one", "main.a.three"])
+    assert result.failed_objects == ["TABLE main.a.one"]
+    assert len(result.errors) == 1

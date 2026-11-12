@@ -66,13 +66,11 @@ def test_a_volume_name_needs_a_usable_catalog_and_schema(manager):
     assert raised.value.params["catalog"] == "my.catalog"
 
 
-@pytest.mark.parametrize("volume", [
-    "other_vol", "cat.sch.vol", "/Volumes/cat/sch/vol", "",
-])
+@pytest.mark.parametrize("volume", ["other_vol", "cat.sch.vol", "/Volumes/cat/sch/vol"])
 def test_a_valid_volume_is_saved(manager, volume):
     _save(manager, {"databricks_volume": volume})
 
-    assert manager._settings.DATABRICKS_VOLUME == (volume or "app_files")
+    assert manager._settings.DATABRICKS_VOLUME == volume
 
 
 def test_an_unchanged_legacy_value_does_not_block_other_settings(manager):
@@ -87,3 +85,28 @@ def test_an_unchanged_legacy_value_does_not_block_other_settings(manager):
     })
 
     assert manager._settings.DATABRICKS_VOLUME == "a.b"
+
+
+def test_clearing_the_volume_leaves_memory_as_a_restart_would(manager, monkeypatch):
+    monkeypatch.delenv("DATABRICKS_VOLUME", raising=False)
+
+    _save(manager, {"databricks_volume": ""})
+
+    stored = manager._db.query(AppSettingDb).filter(AppSettingDb.key == "DATABRICKS_VOLUME").one()
+    assert stored.value is None
+    assert manager._settings.DATABRICKS_VOLUME is None
+
+
+def test_clearing_the_volume_falls_back_to_the_environment_value(manager, monkeypatch):
+    monkeypatch.setenv("DATABRICKS_VOLUME", "/Volumes/c/s/env_vol")
+
+    _save(manager, {"databricks_volume": ""})
+
+    assert manager._settings.DATABRICKS_VOLUME == "/Volumes/c/s/env_vol"
+
+
+def test_clearing_the_volume_checks_the_environment_value(manager, monkeypatch):
+    monkeypatch.setenv("DATABRICKS_VOLUME", "a.b")
+
+    with pytest.raises(VolumeInvalidError):
+        _save(manager, {"databricks_volume": ""})

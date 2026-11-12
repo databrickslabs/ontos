@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
+import os
 import uuid
 import yaml
 
@@ -1603,6 +1604,11 @@ class SettingsManager:
             error_summary = f"Failed to update {len(errors)} workflow(s): " + "; ".join(errors)
             raise RuntimeError(error_summary)
 
+    @staticmethod
+    def _env_volume() -> Optional[str]:
+        """The volume the environment configures: what applies once the override is cleared."""
+        return os.environ.get('DATABRICKS_VOLUME') or None
+
     def _validate_volume_settings(self, settings: dict) -> None:
         """Refuse a volume, catalog or schema that can't name a Unity Catalog volume.
 
@@ -1619,10 +1625,13 @@ class SettingsManager:
         keys = ('databricks_catalog', 'databricks_schema', 'databricks_volume')
         if not any(key in settings for key in keys):
             return
-        # An empty value keeps the one in effect, as the save below does.
+        # An empty catalog or schema keeps the one in effect, as the save below does;
+        # an empty volume clears the override and the environment value applies.
         current = {key: getattr(self._settings, key.upper()) for key in keys}
         candidate = {key: (settings.get(key) or None) if key in settings else None for key in keys}
         effective = {key: candidate[key] or current[key] for key in keys}
+        if 'databricks_volume' in settings and not candidate['databricks_volume']:
+            effective['databricks_volume'] = self._env_volume()
         if effective == current:
             return
         resolve_volume(SimpleNamespace(**{key.upper(): value for key, value in effective.items()}))
@@ -1719,7 +1728,8 @@ class SettingsManager:
         if 'databricks_volume' in settings:
             value = settings.get('databricks_volume') or None
             app_settings_repo.set(self._db, 'DATABRICKS_VOLUME', value)
-            self._settings.DATABRICKS_VOLUME = value or self._settings.DATABRICKS_VOLUME
+            # Clearing the override leaves what a restart would load: the environment value.
+            self._settings.DATABRICKS_VOLUME = value or self._env_volume()
             logger.info(f"Updated DATABRICKS_VOLUME to: {value}")
         
         # Handle audit log directory

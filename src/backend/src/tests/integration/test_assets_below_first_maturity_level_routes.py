@@ -1,4 +1,4 @@
-"""GET /api/assets?below_first_maturity_level=true: assets whose latest evaluation reached no level."""
+"""GET /api/assets?below_first_maturity_level=true: assets whose latest evaluation has no level."""
 import uuid
 from datetime import datetime, timedelta, timezone
 

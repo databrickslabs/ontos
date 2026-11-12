@@ -347,6 +347,11 @@ class SettingsManager:
                 self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS = all_settings['ALLOW_JOB_ENABLEMENT_REQUESTS'].lower() == 'true'
                 logger.debug(f"Loaded ALLOW_JOB_ENABLEMENT_REQUESTS from database: {self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS}")
 
+            # Write asset descriptions to Unity Catalog
+            stored = all_settings.get('UC_DESCRIPTION_WRITEBACK_ENABLED')
+            if stored is not None:
+                self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED = stored.lower() == 'true'
+
             # Delivery mode settings
             if 'DELIVERY_MODE_DIRECT' in all_settings and all_settings['DELIVERY_MODE_DIRECT'] is not None:
                 self._settings.DELIVERY_MODE_DIRECT = all_settings['DELIVERY_MODE_DIRECT'].lower() == 'true'
@@ -1364,6 +1369,8 @@ class SettingsManager:
             'tag_display_format': tag_display_format,
             # Background job enablement requests
             'allow_job_enablement_requests': self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS,
+            # Write asset descriptions to Unity Catalog (as the user)
+            'uc_description_writeback_enabled': self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED,
             # Delivery mode settings
             'delivery_mode_direct': self._settings.DELIVERY_MODE_DIRECT,
             'delivery_mode_indirect': self._settings.DELIVERY_MODE_INDIRECT,
@@ -1676,6 +1683,12 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'ALLOW_JOB_ENABLEMENT_REQUESTS', str(value).lower() if value is not None else None)
             self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS = bool(value) if value is not None else self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS
             logger.info(f"Updated ALLOW_JOB_ENABLEMENT_REQUESTS to: {value}")
+
+        if 'uc_description_writeback_enabled' in settings:
+            value = bool(settings.get('uc_description_writeback_enabled'))
+            app_settings_repo.set(self._db, 'UC_DESCRIPTION_WRITEBACK_ENABLED', str(value).lower())
+            self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED = value
+            logger.info("Updated UC_DESCRIPTION_WRITEBACK_ENABLED to: %s", value)
 
         # Handle delivery mode settings
         if 'delivery_mode_direct' in settings:

@@ -9,6 +9,7 @@ from src.repositories.assets_repository import asset_type_repo, asset_repo, asse
 from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.assets import (
+    description_sync_state,
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
     AssetCreate, AssetUpdate, AssetRead, AssetSummary,
     AssetRelationshipCreate, AssetRelationshipRead,
@@ -62,6 +63,7 @@ class AssetsManager(SearchableAsset):
         if db_asset.target_relationships:
             rels.extend([AssetRelationshipRead.model_validate(r) for r in db_asset.target_relationships])
         read.relationships = rels
+        read.description_sync = description_sync_state(db_asset.properties)
         # Attach polymorphic domain assignments from the junction table.
         session = object_session(db_asset)
         if session is not None:

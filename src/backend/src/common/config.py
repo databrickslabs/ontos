@@ -213,6 +213,10 @@ class Settings(BaseSettings):
     # send an ACTION_REQUIRED notification to the Admin role asking for it to be enabled.
     ALLOW_JOB_ENABLEMENT_REQUESTS: bool = Field(False, env='ALLOW_JOB_ENABLEMENT_REQUESTS')
 
+    # Write table, view and column descriptions saved in Ontos to Unity Catalog as
+    # comments, as the user (on-behalf-of token), so Unity Catalog permissions decide.
+    UC_DESCRIPTION_WRITEBACK_ENABLED: bool = Field(False, env='UC_DESCRIPTION_WRITEBACK_ENABLED')
+
     # Delivery Mode settings
     # Controls how governance changes (GRANTs, tag assignments, etc.) are propagated
     DELIVERY_MODE_DIRECT: bool = Field(False, env='DELIVERY_MODE_DIRECT')  # Apply changes directly to Unity Catalog via SDK

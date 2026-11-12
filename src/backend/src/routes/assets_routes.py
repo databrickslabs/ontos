@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 
 from src.models.assets import (
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
-    AssetCreate, AssetUpdate, AssetRead, AssetSummary,
+    AssetCreate, AssetUpdate, AssetRead, AssetSummary, AssetUpdateResult,
     AssetRelationshipCreate, AssetRelationshipRead,
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteRequest, CascadeDeleteResult,
@@ -16,6 +16,8 @@ from src.controller.metric_views_manager import (
 )
 from src.common.workspace_client import get_obo_workspace_client
 from src.controller.semantic_links_manager import SemanticLinksManager
+from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
+from src.db_models.assets import AssetDb
 from src.models.metric_views import MetricViewRead
 from src.controller.metric_view_change_requests_manager import (
     ChangeRequestError, MetricViewChangeRequestsManager,
@@ -30,6 +32,7 @@ from src.common.dependencies import (
     CurrentUserDep,
     AuditManagerDep,
     AuditCurrentUserDep,
+    SettingsDep,
 )
 from src.common.errors import NotFoundError, ConflictError, ValidationError
 from src.common.logging import get_logger
@@ -424,7 +427,7 @@ def get_asset(
 
 @assets_router.put(
     "/{asset_id}",
-    response_model=AssetRead,
+    response_model=AssetUpdateResult,
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
 )
 def update_asset(
@@ -432,15 +435,36 @@ def update_asset(
     request: Request,
     asset_in: AssetUpdate,
     db: DBSessionDep,
+    settings: SettingsDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager=Depends(get_assets_manager),
 ):
-    """Updates an existing asset."""
+    """Updates an existing asset.
+
+    With the "write asset descriptions to Unity Catalog" setting on, a changed
+    description of a Databricks table, view or column is also written to Unity
+    Catalog as the user. A failed write doesn't fail the save: the response
+    carries a coded warning and the asset's ``description_sync`` state.
+    """
     success = False
     details = {"params": {"asset_id": str(asset_id)}}
     try:
+        existing = db.get(AssetDb, asset_id)
+        previous_description = existing.description if existing is not None else None
         result = manager.update_asset(db=db, asset_id=asset_id, asset_in=asset_in, current_user_id=current_user.email)
+        warning, sync_state = UcDescriptionSyncManager(settings).sync_after_update(
+            db, asset_id,
+            description_sent='description' in asset_in.model_fields_set,
+            previous_description=previous_description,
+            user_client=lambda: _user_workspace_client(request),
+        )
+        result = AssetUpdateResult(
+            **result.model_dump(), warnings=[warning] if warning else [],
+        )
+        result.description_sync = sync_state
+        if warning:
+            details["uc_description_warning"] = warning.code
         success = True
         return result
     except NotFoundError as e:

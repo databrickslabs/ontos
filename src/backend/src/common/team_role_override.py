@@ -9,33 +9,27 @@ def member_type_of(member) -> str:
     return "group" if str(value or "").strip().lower() == "group" else "user"
 
 
-def team_role_overrides(teams: Iterable, user_identifier: str, user_groups: List[str]) -> List[str]:
-    """Every app role override from team entries that apply to the user, once each.
+def team_role_overrides(members: Iterable, user_identifier: str, user_groups: List[str]) -> List[str]:
+    """Ids of every app role override from team entries that apply to the user, once each.
 
-    A user entry applies when its identifier is the user's (case-insensitive); a
-    group entry applies when it names one of the user's groups. The user's own
-    entries come first. For permissions the roles are combined by highest level per
-    feature, so the order doesn't change the result.
+    ``members`` are team member entries (``member_type``, ``member_identifier``,
+    ``app_role_override_id``) of any teams. A user entry applies when its identifier
+    is the user's (case-insensitive); a group entry applies when it names one of the
+    user's groups. The user's own entries come first. For permissions the roles are
+    combined by highest level per feature, so the order doesn't change the result.
     """
     identifier = (user_identifier or "").strip().lower()
     groups = {g.strip().lower() for g in user_groups or [] if g}
     direct: List[str] = []
     via_group: List[str] = []
-    for team in teams:
-        for member in team.members:
-            role = (member.app_role_override or "").strip()
-            if not role:
-                continue
-            member_identifier = (member.member_identifier or "").strip().lower()
-            if member_type_of(member) == "group":
-                if member_identifier in groups:
-                    via_group.append(role)
-            elif identifier and member_identifier == identifier:
-                direct.append(role)
-    # The user's own entries first, as before #1245: callers that need one role name
-    # (comment audiences) keep getting the user's own override.
-    roles: List[str] = []
-    for role in direct + via_group:
-        if role not in roles:
-            roles.append(role)
-    return roles
+    for member in members:
+        role_id = (member.app_role_override_id or "").strip()
+        if not role_id:
+            continue
+        member_identifier = (member.member_identifier or "").strip().lower()
+        if member_type_of(member) == "group":
+            if member_identifier in groups:
+                via_group.append(role_id)
+        elif identifier and member_identifier == identifier:
+            direct.append(role_id)
+    return list(dict.fromkeys(direct + via_group))

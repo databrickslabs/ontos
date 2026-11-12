@@ -424,9 +424,9 @@ def _request_cache(request: Request, attr: str) -> dict:
 
 
 def lookup_user_team_roles(request: Request, user_identifier: Optional[str], user_groups: List[str]) -> List[str]:
-    """Every team role override that applies to the user, through their own entry or a group's.
+    """Ids of every team role override that applies to the user, through their own entry or a group's.
 
-    Teams are found by the user's identifier and by each of their groups, so a team
+    An entry counts through the user's identifier or one of their groups, so a team
     the user belongs to only through a group counts too (#1245). The user's own
     entries come first. A failed lookup grants nothing: it returns no roles. Cached
     on ``request.state`` for the rest of the request.
@@ -451,9 +451,9 @@ def _load_user_team_roles(request: Request, user_identifier: Optional[str], user
         db_gen = get_db()
         db = next(db_gen)
         try:
-            # Team rows with their members only; no read-model conversion per team.
-            user_teams = teams_manager.get_team_rows_for_user(db, user_identifier or "", list(user_groups or []))
-            roles = team_role_overrides(user_teams, user_identifier or "", user_groups or [])
+            # Only the override entries that could apply (#1453): one indexed query.
+            members = teams_manager.get_role_override_members_for_user(db, user_identifier or "", list(user_groups or []))
+            roles = team_role_overrides(members, user_identifier or "", user_groups or [])
             if roles:
                 logger.debug("Team role overrides for user %s: %s", user_identifier, roles)
             return roles
@@ -464,26 +464,16 @@ def _load_user_team_roles(request: Request, user_identifier: Optional[str], user
         return []
 
 
-async def get_user_team_role_overrides(user_identifier: str, user_groups: List[str], request: Request) -> Optional[str]:
-    """The first team role override that applies to the user, or None.
-
-    For role-name matching only (e.g. comment audiences). Permission checks combine
-    every override; use ``resolve_effective_permissions``.
-    """
-    roles = lookup_user_team_roles(request, user_identifier, user_groups)
-    return roles[0] if roles else None
-
-
 def effective_permissions_for(
     auth_manager: AuthorizationManager,
     settings_manager: Optional[SettingsManager],
     user_email: Optional[str],
     user_groups: Optional[List[str]],
-    team_roles: List[str],
+    team_role_ids: List[str],
     *,
     apply_role_override: bool = True,
 ) -> Dict[str, FeatureAccessLevel]:
-    """Effective permissions from the given team roles plus the user's groups and email.
+    """Effective permissions from the given team role ids plus the user's groups and email.
 
     An applied role override ("act as role", from the role switcher) replaces
     everything when ``apply_role_override`` is set. Otherwise the user's group and
@@ -506,7 +496,7 @@ def effective_permissions_for(
                     applied_role_id, user_email,
                 )
     return auth_manager.get_user_effective_permissions(
-        user_groups or [], team_roles, user_email=user_email,
+        user_groups or [], team_role_ids, user_email=user_email,
     )
 
 
@@ -544,9 +534,9 @@ def effective_permissions_for_request(
         return cache[key]
 
     settings_manager = getattr(request.app.state, "settings_manager", None)
-    team_roles = lookup_user_team_roles(request, user_email, list(user_groups or []))
+    team_role_ids = lookup_user_team_roles(request, user_email, list(user_groups or []))
     permissions = effective_permissions_for(
-        auth_manager, settings_manager, user_email, user_groups, team_roles,
+        auth_manager, settings_manager, user_email, user_groups, team_role_ids,
         apply_role_override=apply_role_override,
     )
     cache[key] = permissions

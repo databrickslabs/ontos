@@ -1049,13 +1049,16 @@ class SettingsManager:
                 logger.info(f"Created Admin Team with id: {admin_team.id}")
                 
                 # Add admin groups as team members
+                admin_role = self.app_role_repo.get_by_name(db=self._db, name='Admin')
+                if admin_role is None:
+                    logger.warning("No 'Admin' app role found; Admin Team members get no role override.")
                 for group_name in admin_groups:
                     try:
                         member = TeamMemberDb(
                             team_id=admin_team.id,
                             member_type='group',
                             member_identifier=group_name,
-                            app_role_override='Admin',
+                            app_role_override_id=admin_role.id if admin_role else None,
                             added_by='system@startup.ucapp'
                         )
                         self._db.add(member)

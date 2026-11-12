@@ -723,6 +723,10 @@ def update_team_member(
         logger.error("Team or member not found for update %s/%s: %s", team_id, member_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team or member not found")
+    except InvalidMemberSetError as e:
+        db.rollback()
+        details_for_audit["exception"] = {"type": "InvalidMemberSetError", "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=INVALID_MEMBER_SET_DETAIL)
     except Exception as e:
         db.rollback()
         logger.exception("Failed to update team member %s/%s", team_id, member_id)

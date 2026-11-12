@@ -58,7 +58,8 @@
     "failed": "Fehlgeschlagen",
     "showFailed": "Fehlgeschlagene anzeigen",
     "showAll": "Alle anzeigen",
-    "empty": "-"
+    "empty": "-",
+    "actions": "Aktionen"
   },
   "policyDetails": {
     "backToList": "Zurück zur Liste",
@@ -180,6 +181,28 @@
     "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax."
   },
   "runWarnings": {
-    "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren."
+    "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren.",
+    "notifications_failed": "Die Benachrichtigungen der Richtlinie (NOTIFY) konnten für diesen Lauf nicht gesendet werden. Die Ergebnisse sind vollständig."
+  },
+  "actionOutcomes": {
+    "status": {
+      "done": "Erledigt",
+      "failed": "Fehlgeschlagen"
+    },
+    "types": {
+      "ASSIGN_TAG": "Tag {{target}} zuweisen",
+      "REMOVE_TAG": "Tag {{target}} entfernen",
+      "NOTIFY": "{{target}} benachrichtigen"
+    },
+    "errors": {
+      "tag_manager_unavailable": "Tags können in diesem Lauf nicht geändert werden",
+      "tag_not_found": "Tag {{tag}} nicht gefunden",
+      "tag_value_not_allowed": "Wert {{value}} ist für {{tag}} nicht erlaubt (erlaubt: {{allowed}})",
+      "tag_entity_type_unsupported": "Für {{entityType}}-Objekte können keine Tags gesetzt werden",
+      "tag_entity_without_id": "Das Objekt hat keine ID",
+      "notification_manager_unavailable": "Benachrichtigungen sind in diesem Lauf nicht verfügbar",
+      "notify_no_recipients": "{{recipients}} ergibt keinen Empfänger",
+      "action_failed": "Die Aktion ist fehlgeschlagen"
+    }
   }
 }

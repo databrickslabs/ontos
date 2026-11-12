@@ -58,7 +58,8 @@
     "failed": "Échoué",
     "showFailed": "Afficher les échecs",
     "showAll": "Tout afficher",
-    "empty": "-"
+    "empty": "-",
+    "actions": "Actions"
   },
   "policyDetails": {
     "backToList": "Retour à la liste",
@@ -180,6 +181,28 @@
     "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe."
   },
   "runWarnings": {
-    "rule_trailing_input": "Cette règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Il est ignoré à l'exécution, donc la règle peut vérifier moins que ce qu'elle indique. Modifiez la règle pour le corriger."
+    "rule_trailing_input": "Cette règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Il est ignoré à l'exécution, donc la règle peut vérifier moins que ce qu'elle indique. Modifiez la règle pour le corriger.",
+    "notifications_failed": "Les notifications de la politique (NOTIFY) n'ont pas pu être envoyées pour cette exécution. Les résultats sont complets."
+  },
+  "actionOutcomes": {
+    "status": {
+      "done": "Fait",
+      "failed": "Échec"
+    },
+    "types": {
+      "ASSIGN_TAG": "Attribuer le tag {{target}}",
+      "REMOVE_TAG": "Retirer le tag {{target}}",
+      "NOTIFY": "Notifier {{target}}"
+    },
+    "errors": {
+      "tag_manager_unavailable": "Les tags ne peuvent pas être modifiés dans cette exécution",
+      "tag_not_found": "Tag {{tag}} introuvable",
+      "tag_value_not_allowed": "La valeur {{value}} n'est pas autorisée pour {{tag}} (autorisées : {{allowed}})",
+      "tag_entity_type_unsupported": "Impossible de définir des tags sur les entités {{entityType}}",
+      "tag_entity_without_id": "L'entité n'a pas d'identifiant",
+      "notification_manager_unavailable": "Les notifications ne sont pas disponibles dans cette exécution",
+      "notify_no_recipients": "{{recipients}} ne correspond à aucun destinataire",
+      "action_failed": "L'action a échoué"
+    }
   }
 }

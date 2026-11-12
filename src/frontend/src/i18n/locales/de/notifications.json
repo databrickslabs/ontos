@@ -257,6 +257,13 @@
       "replacementVersion": "Ersatz: {{replacementName}} (Version {{replacementVersion}})"
     }
   },
+  "complianceRun": {
+    "title": "Compliance: {{policyName}}",
+    "summary": "Richtlinie {{policyName}}: {{failedCount}} fehlgeschlagen, {{passedCount}} bestanden.",
+    "failedEntities": "Fehlgeschlagen: {{names}}",
+    "passedEntities": "Bestanden: {{names}}",
+    "namesWithMore": "{{names}} und {{count}} weitere"
+  },
   "metricViewChangeManual": {
     "title": "Änderung der Metric View anwenden",
     "description": "Die Änderungsanfrage für die Metric View {{fqn}} wurde genehmigt. Führen Sie diese Anweisung aus, um sie anzuwenden:\n\n{{ddl}}"

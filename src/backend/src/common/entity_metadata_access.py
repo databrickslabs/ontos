@@ -97,20 +97,23 @@ async def _ensure_asset(
 async def _ensure_attached_row_readable(request: Request, db, user_details, auth_manager) -> None:
     """The row to attach belongs to an asset: its reader must be able to read that asset.
 
-    The attach body isn't validated yet (dependencies run first), so a body or
-    row that can't be read is left to the route to answer, as before.
+    The attach body isn't validated yet (dependencies run first): a body that
+    isn't a JSON object, or doesn't name a row, is left to the route's 422. A
+    row that fails to load fails the request (500), never lets it through.
     """
     try:
         body = await request.json()
-        manager = get_metadata_manager(request)
-        load_row = {
-            'rich_text': manager.get_rich_text, 'link': manager.get_link,
-            'document': manager.get_document,
-        }.get(body.get('asset_type'))
-        row = load_row(db, id=str(body.get('asset_id'))) if load_row else None
-    except Exception:
-        logger.warning("Could not load the row to attach on %s", request.url.path)
+        asset_type, row_id = body.get('asset_type'), body.get('asset_id')
+    except (ValueError, AttributeError):
         return
+    manager = get_metadata_manager(request)
+    load_row = {
+        'rich_text': manager.get_rich_text, 'link': manager.get_link,
+        'document': manager.get_document,
+    }.get(asset_type)
+    if load_row is None or row_id is None:
+        return
+    row = load_row(db, id=str(row_id))
     if row is not None and getattr(row, 'entity_type', None) == ASSET_ENTITY_TYPE:
         await _ensure_asset(
             request, db, user_details, auth_manager, row.entity_id, FeatureAccessLevel.READ_ONLY,

@@ -41,6 +41,27 @@ from databricks.sdk import WorkspaceClient
 _extracted_backend_sources: Dict[str, str] = {}
 
 
+# Job parameter -> setting: the app's effective LLM settings (Settings > LLM over
+# its env), passed by the app because the job has no access to them otherwise
+_LLM_PARAMETERS = {
+    'llm_enabled': 'LLM_ENABLED',
+    'llm_endpoint': 'LLM_ENDPOINT',
+    'llm_check_max_calls_per_run': 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN',
+}
+
+
+def _apply_llm_parameters(args: argparse.Namespace) -> None:
+    """Set the LLM settings the app passed as environment variables, before init_config.
+
+    An empty parameter (a job installed before these existed) leaves the job's
+    environment as it is.
+    """
+    for parameter, setting in _LLM_PARAMETERS.items():
+        value = getattr(args, parameter, None)
+        if value is not None and value.strip():
+            os.environ[setting] = value.strip()
+
+
 def _initialize_application_config(ws_client: WorkspaceClient) -> None:
     from src.common.config import init_config
 
@@ -478,8 +499,12 @@ def main() -> None:
     # Telemetry parameters (passed from app)
     parser.add_argument("--product_name", type=str, default="ontos")
     parser.add_argument("--product_version", type=str, default="0.0.0")
+    # LLM settings for LLM_CHECK rules (passed from app)
+    for parameter in _LLM_PARAMETERS:
+        parser.add_argument(f"--{parameter}", type=str, default=None)
 
     args, _ = parser.parse_known_args()
+    _apply_llm_parameters(args)
 
     import_path = _add_backend_source_path(args.backend_source_path)
 

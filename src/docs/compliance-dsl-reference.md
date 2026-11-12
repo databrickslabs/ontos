@@ -174,6 +174,9 @@ The reason of a failed check is shown next to the result. Before saving, use
 - Budget: a run makes at most `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN` calls
   (default 200; cached verdicts don't count). The checks past it fail with
   `llm_check_budget_exceeded`, and the run reports how many.
+- Scheduled runs (the Compliance Checks job) use the app's LLM settings: they
+  are written into the installed job when it is installed or updated, and when
+  the LLM settings change in Settings.
 
 ## CASE Expressions
 

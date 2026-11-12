@@ -1243,6 +1243,7 @@ def reconcile_tags(
     dry_run: bool = False,
     previously_delivered: Optional[Dict[str, Optional[str]]] = None,
     delivered: Optional[Dict[str, Optional[str]]] = None,
+    warnings: Optional[List[str]] = None,
 ) -> Tuple[int, int, List[str]]:
     """Make the job's tags on one object match ``desired``.
 
@@ -1311,23 +1312,31 @@ def reconcile_tags(
             ours[k] = existing.get(k)
 
     for k, v in to_upsert.items():
+        key_error: Optional[str] = None
         try:
             ensure_tag_key(ws, k)
         except Exception as e:
             if is_missing_object_error(e):
                 raise UcObjectMissing(object_type, object_name) from None
-            # Reported, but the write is still tried: the key may exist under a name
-            # the check missed, or the job may be allowed to set tags it can't create.
-            msg = f"Failed to create tag key {k} for {object_type} {object_name}: {e}"
-            print(f"[WARN] {msg}")
-            errors.append(msg)
+            # The write is still tried: the key may exist under a name the check
+            # missed, or the job may be allowed to set tags it can't create.
+            key_error = f"Failed to create tag key {k} for {object_type} {object_name}: {e}"
         try:
             assign_tag(spark, object_type, object_name, k, v)
             updated += 1
             ours[k] = v
+            if key_error is not None:
+                # The tag is on the object: a warning, without the SDK text.
+                msg = f"{object_type} {object_name}: tag key {k} could not be created"
+                print(f"[WARN] {msg}")
+                if warnings is not None:
+                    warnings.append(msg)
         except Exception as e:
             if is_missing_object_error(e):
                 raise UcObjectMissing(object_type, object_name) from None
+            if key_error is not None:
+                print(f"[WARN] {key_error}")
+                errors.append(key_error)
             msg = f"Failed to assign tag {k}={v} to {object_type} {object_name}: {e}"
             print(f"[WARN] {msg}")
             errors.append(msg)
@@ -1542,6 +1551,8 @@ class SyncResult:
     skipped: List[str] = field(default_factory=list)
     # Objects ("TYPE fqn") that had at least one tag error this run.
     failed_objects: List[str] = field(default_factory=list)
+    # Things worth a look that did not stop a tag from being written.
+    warnings: List[str] = field(default_factory=list)
 
 
 # Unity Catalog documents no column tag DDL for a metric view's dimensions and measures:
@@ -2001,7 +2012,8 @@ def sync_tags(
             u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, ownership,
                                         dry_run=dry_run,
                                         previously_delivered=delivered_before,
-                                        delivered=ours)
+                                        delivered=ours,
+                                        warnings=result.warnings)
         except UcObjectMissing:
             skip_missing(object_type, fqn)
             return 0, 0
@@ -2478,11 +2490,17 @@ def main() -> None:
     print("\n" + "=" * 80)
     msg = f"Summary: updated={updated_total} removed={removed_total} errors="
     print(f"{msg}{len(all_errors)} skipped={len(result.skipped)} "
-          f"failed_objects={len(result.failed_objects)}")
+          f"failed_objects={len(result.failed_objects)} "
+          f"warnings={len(result.warnings)}")
 
     if result.skipped:
         print(f"\n{len(result.skipped)} object(s) skipped (not errors):")
         for item in result.skipped:
+            print(f"  - {item}")
+
+    if result.warnings:
+        print(f"\n{len(result.warnings)} warning(s) (tags written):")
+        for item in result.warnings:
             print(f"  - {item}")
 
     if all_errors:

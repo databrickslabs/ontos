@@ -403,6 +403,7 @@ def get_all_assets(
 def get_asset(
     asset_id: UUID,
     request: Request,
+    settings: SettingsDep,
     db: DBSessionDep,
     current_user: CurrentUserDep,
     manager=Depends(get_assets_manager),
@@ -422,6 +423,9 @@ def get_asset(
     result = manager.get_asset(db=db, asset_id=asset_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
+    if not UcDescriptionSyncManager(settings).enabled:
+        # Writing to Unity Catalog is off, so an older "not in sync" mark means nothing
+        result.description_sync = None
     return result
 
 

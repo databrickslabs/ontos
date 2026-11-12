@@ -183,3 +183,16 @@ def test_a_databricks_platform_is_matched_in_any_case(db_session):
     asset = _asset(db_session, type_name='View', platform='Databricks')
 
     assert uc_comment_target(asset) == ('main.sales.orders', None)
+
+
+def test_with_the_setting_off_a_save_clears_an_old_mark(db_session):
+    asset = _asset(db_session)
+    _sync(db_session, asset, _ws(StatementState.FAILED, 'PERMISSION_DENIED'))
+    ws = _ws()
+
+    warning, state = _sync(db_session, asset, ws, enabled=False, previous='New text')
+
+    assert (warning, state) == (None, None)
+    ws.statement_execution.execute_statement.assert_not_called()
+    db_session.refresh(asset)
+    assert DESCRIPTION_SYNC_PROPERTY not in (asset.properties or {})

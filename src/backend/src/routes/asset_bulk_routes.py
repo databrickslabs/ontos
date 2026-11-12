@@ -26,7 +26,9 @@ from src.controller.asset_bulk_manager import (
     ImportPreviewResult,
     ImportResult,
 )
-from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
+from src.controller.uc_description_sync_manager import (
+    ImportWriteLimitError, UcDescriptionSyncManager, import_writes_failed_warning,
+)
 from src.db_models.assets import AssetDb
 
 logger = get_logger(__name__)
@@ -212,19 +214,49 @@ def _write_imported_descriptions(
     db, settings, request: Request, result: ImportResult,
     saved: List[Tuple[UUID, Optional[str]]],
 ) -> None:
-    """Write the committed rows' descriptions to Unity Catalog; failures become row warnings."""
-    from src.routes.assets_routes import _user_workspace_client
+    """Write the committed rows' descriptions to Unity Catalog; failures become warnings.
 
-    description_sync = UcDescriptionSyncManager(settings)
-    items = {item.asset_id: item for item in result.items if item.asset_id}
+    The user's client is built once per import, and at most
+    ``UC_DESCRIPTION_IMPORT_WRITE_LIMIT`` descriptions are written; the rows
+    over the limit get a warning. Never raises: the import is committed, so
+    a failure here is a warning on the result.
+    """
+    try:
+        from src.routes.assets_routes import _user_workspace_client
+
+        description_sync = UcDescriptionSyncManager(settings)
+        limit = int(getattr(settings, 'UC_DESCRIPTION_IMPORT_WRITE_LIMIT', 100) or 0)
+        items = {item.asset_id: item for item in result.items if item.asset_id}
+    except Exception:
+        logger.warning("Could not prepare the Unity Catalog writes of an import", exc_info=True)
+        result.warning_messages.append(import_writes_failed_warning())
+        return
+
+    client: dict = {}
+
+    def user_client():
+        """The user's client, built on the first write; one write per call."""
+        if client.get('writes', 0) >= limit:
+            raise ImportWriteLimitError('The import write limit is reached.', limit=limit)
+        if 'error' in client:
+            raise client['error']
+        if 'ws' not in client:
+            try:
+                client['ws'] = _user_workspace_client(request)
+            except Exception as e:
+                client['error'] = e
+                raise
+        client['writes'] = client.get('writes', 0) + 1
+        return client['ws']
+
     for asset_id, previous_description in saved:
-        asset = db.get(AssetDb, asset_id)
         try:
+            asset = db.get(AssetDb, asset_id)
             warning, _ = description_sync.sync_after_update(
                 db, asset_id,
                 description_sent=bool(asset is not None and asset.description),
                 previous_description=previous_description,
-                user_client=lambda: _user_workspace_client(request),
+                user_client=user_client,
             )
         except Exception:
             logger.warning("Writing the imported description of asset %s failed", asset_id,

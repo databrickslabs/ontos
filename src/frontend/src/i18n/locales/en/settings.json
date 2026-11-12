@@ -143,7 +143,11 @@
     "ucDescriptionWriteback": {
       "title": "Asset Descriptions",
       "label": "Write asset descriptions to Unity Catalog",
-      "help": "Saving the description of a Databricks table, view or column also sets its Unity Catalog comment, as the user who saves it. Without the MODIFY permission the description is saved in Ontos only, and the asset shows that it is not in sync."
+      "help": "Saving the description of a Databricks table, view or column also sets its Unity Catalog comment, as the user who saves it. Without the MODIFY permission the description is saved in Ontos only, and the asset shows that it is not in sync.",
+      "importLimit": {
+        "label": "Max descriptions written per bulk import",
+        "help": "A CSV/XLSX import writes at most this many descriptions to Unity Catalog (1–10000); the rows over the limit are saved in Ontos with a warning."
+      }
     },
     "instanceIdentity": {
       "title": "Instance Identity",

@@ -351,6 +351,13 @@ class SettingsManager:
             stored = all_settings.get('UC_DESCRIPTION_WRITEBACK_ENABLED')
             if stored is not None:
                 self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED = stored.lower() == 'true'
+            stored = all_settings.get('UC_DESCRIPTION_IMPORT_WRITE_LIMIT')
+            if stored is not None:
+                try:
+                    self._settings.UC_DESCRIPTION_IMPORT_WRITE_LIMIT = int(stored)
+                except (ValueError, TypeError):
+                    logger.warning("Invalid UC_DESCRIPTION_IMPORT_WRITE_LIMIT in database: %s",
+                                   stored)
 
             # Delivery mode settings
             if 'DELIVERY_MODE_DIRECT' in all_settings and all_settings['DELIVERY_MODE_DIRECT'] is not None:
@@ -1371,6 +1378,7 @@ class SettingsManager:
             'allow_job_enablement_requests': self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS,
             # Write asset descriptions to Unity Catalog (as the user)
             'uc_description_writeback_enabled': self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED,
+            'uc_description_import_write_limit': self._settings.UC_DESCRIPTION_IMPORT_WRITE_LIMIT,
             # Delivery mode settings
             'delivery_mode_direct': self._settings.DELIVERY_MODE_DIRECT,
             'delivery_mode_indirect': self._settings.DELIVERY_MODE_INDIRECT,
@@ -1689,6 +1697,19 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'UC_DESCRIPTION_WRITEBACK_ENABLED', str(value).lower())
             self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED = value
             logger.info("Updated UC_DESCRIPTION_WRITEBACK_ENABLED to: %s", value)
+
+        # Bulk import: most descriptions written to Unity Catalog per import (1..10000)
+        if 'uc_description_import_write_limit' in settings:
+            try:
+                int_val = int(settings.get('uc_description_import_write_limit'))
+            except (ValueError, TypeError):
+                raise ValueError(
+                    "uc_description_import_write_limit must be an integer between 1 and 10000")
+            if not (1 <= int_val <= 10000):
+                raise ValueError("uc_description_import_write_limit must be between 1 and 10000")
+            app_settings_repo.set(self._db, 'UC_DESCRIPTION_IMPORT_WRITE_LIMIT', str(int_val))
+            self._settings.UC_DESCRIPTION_IMPORT_WRITE_LIMIT = int_val
+            logger.info("Updated UC_DESCRIPTION_IMPORT_WRITE_LIMIT to: %s", int_val)
 
         # Handle delivery mode settings
         if 'delivery_mode_direct' in settings:

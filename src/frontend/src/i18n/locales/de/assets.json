@@ -43,7 +43,9 @@
       "uc_description_object_not_found": "{{object}} wurde in Unity Catalog nicht gefunden.",
       "uc_description_user_token_required": "Die Anfrage hatte kein Databricks-Benutzertoken, daher wurde die Beschreibung von {{object}} nicht in Unity Catalog geschrieben.",
       "uc_description_no_warehouse": "Es ist kein SQL Warehouse konfiguriert, daher wurde die Beschreibung von {{object}} nicht in Unity Catalog geschrieben.",
-      "uc_description_write_failed": "Das Schreiben der Beschreibung von {{object}} in Unity Catalog ist fehlgeschlagen."
+      "uc_description_write_failed": "Das Schreiben der Beschreibung von {{object}} in Unity Catalog ist fehlgeschlagen.",
+      "uc_description_import_write_limit": "Dieser Import hat sein Limit von {{limit}} in Unity Catalog geschriebenen Beschreibungen erreicht, daher wurde die Beschreibung von {{object}} dort nicht geschrieben.",
+      "uc_description_import_writes_failed": "Die Assets wurden importiert, aber ihre Beschreibungen konnten nicht in Unity Catalog geschrieben werden."
     }
   },
   "deleteDialog": {

@@ -454,6 +454,9 @@ def update_asset(
         # With the setting on, a changed table, view or column description is also
         # written to Unity Catalog as the user. A failed write doesn't fail the save:
         # the response carries a coded warning and the asset's description_sync state.
+        # The save is committed first: no row locks are held while Unity Catalog is
+        # written, and Unity Catalog never gets ahead of a save that failed to commit.
+        db.commit()
         warning, sync_state = UcDescriptionSyncManager(settings).sync_after_update(
             db, asset_id,
             description_sent='description' in asset_in.model_fields_set,

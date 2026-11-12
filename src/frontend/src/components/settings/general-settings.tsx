@@ -23,6 +23,7 @@ interface AppSettings {
   llmDisclaimerText: string;
   allowJobEnablementRequests: boolean;
   ucDescriptionWritebackEnabled: boolean;
+  ucDescriptionImportWriteLimit: number;
   schemaImportChildLimit: number;
   instanceId: string;
   instanceName: string;
@@ -60,6 +61,7 @@ export default function GeneralSettings() {
     llmDisclaimerText: '',
     allowJobEnablementRequests: false,
     ucDescriptionWritebackEnabled: false,
+    ucDescriptionImportWriteLimit: 100,
     schemaImportChildLimit: 500,
     instanceId: '',
     instanceName: '',
@@ -87,6 +89,7 @@ export default function GeneralSettings() {
             llmDisclaimerText: data.llm_disclaimer_text || '',
             allowJobEnablementRequests: data.allow_job_enablement_requests || false,
             ucDescriptionWritebackEnabled: data.uc_description_writeback_enabled || false,
+            ucDescriptionImportWriteLimit: data.uc_description_import_write_limit ?? 100,
             schemaImportChildLimit: data.schema_import_child_limit ?? 500,
             instanceId: data.ontos_instance_id || '',
             instanceName: data.ontos_instance_name || '',
@@ -141,6 +144,7 @@ export default function GeneralSettings() {
           llm_disclaimer_text: settings.llmDisclaimerText,
           allow_job_enablement_requests: settings.allowJobEnablementRequests,
           uc_description_writeback_enabled: settings.ucDescriptionWritebackEnabled,
+          uc_description_import_write_limit: settings.ucDescriptionImportWriteLimit,
           schema_import_child_limit: settings.schemaImportChildLimit,
           // A value equal to the default (or blank) clears the override, so an untouched
           // field never pins the derived default.
@@ -290,6 +294,37 @@ export default function GeneralSettings() {
                   'Unity Catalog comment, as the user who saves it. Without the MODIFY ' +
                   'permission the description is saved in Ontos only, and the asset shows ' +
                   'that it is not in sync.'
+              )}
+            </p>
+          </div>
+          <div className="space-y-2 max-w-xs mt-4">
+            <Label htmlFor="ucDescriptionImportWriteLimit">
+              {t(
+                'settings:general.ucDescriptionWriteback.importLimit.label',
+                'Max descriptions written per bulk import'
+              )}
+            </Label>
+            <Input
+              id="ucDescriptionImportWriteLimit"
+              name="ucDescriptionImportWriteLimit"
+              type="number"
+              min={1}
+              max={10000}
+              value={settings.ucDescriptionImportWriteLimit}
+              onChange={(e) =>
+                setSettings(prev => ({
+                  ...prev,
+                  ucDescriptionImportWriteLimit:
+                    e.target.value === '' ? 0 : parseInt(e.target.value, 10),
+                }))
+              }
+              disabled={!hasWriteAccess || isLoading || !settings.ucDescriptionWritebackEnabled}
+            />
+            <p className="text-sm text-muted-foreground">
+              {t(
+                'settings:general.ucDescriptionWriteback.importLimit.help',
+                'A CSV/XLSX import writes at most this many descriptions to Unity Catalog ' +
+                  '(1–10000); the rows over the limit are saved in Ontos with a warning.'
               )}
             </p>
           </div>

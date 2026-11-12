@@ -43,7 +43,9 @@
       "uc_description_object_not_found": "{{object}} não foi encontrado no Unity Catalog.",
       "uc_description_user_token_required": "A requisição não tinha um token de usuário do Databricks, então a descrição de {{object}} não foi gravada no Unity Catalog.",
       "uc_description_no_warehouse": "Nenhum SQL warehouse está configurado, então a descrição de {{object}} não foi gravada no Unity Catalog.",
-      "uc_description_write_failed": "Falha ao gravar a descrição de {{object}} no Unity Catalog."
+      "uc_description_write_failed": "Falha ao gravar a descrição de {{object}} no Unity Catalog.",
+      "uc_description_import_write_limit": "Esta importação atingiu o limite de {{limit}} descrições gravadas no Unity Catalog, então a descrição de {{object}} não foi gravada lá.",
+      "uc_description_import_writes_failed": "Os ativos foram importados, mas as descrições não puderam ser gravadas no Unity Catalog."
     }
   },
   "deleteDialog": {

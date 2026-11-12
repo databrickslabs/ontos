@@ -35,3 +35,19 @@ def test_saving_the_setting_stores_it_and_a_new_manager_loads_it(db_session):
     reloaded = _settings()
     _manager(db_session, reloaded)
     assert reloaded.UC_DESCRIPTION_WRITEBACK_ENABLED is True
+
+
+def test_the_import_write_limit_is_saved_reloaded_and_bounded(db_session):
+    import pytest
+
+    manager = _manager(db_session, _settings())
+    assert manager.get_settings()['uc_description_import_write_limit'] == 100
+
+    with patch('src.common.git.reinitialize_git_service'):
+        manager.update_settings({'uc_description_import_write_limit': 25})
+        with pytest.raises(ValueError):
+            manager.update_settings({'uc_description_import_write_limit': 0})
+
+    reloaded = _settings()
+    _manager(db_session, reloaded)
+    assert reloaded.UC_DESCRIPTION_IMPORT_WRITE_LIMIT == 25

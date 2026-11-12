@@ -43,7 +43,9 @@
       "uc_description_object_not_found": "{{object}} is niet gevonden in Unity Catalog.",
       "uc_description_user_token_required": "Het verzoek had geen Databricks-gebruikerstoken, dus de beschrijving van {{object}} is niet naar Unity Catalog geschreven.",
       "uc_description_no_warehouse": "Er is geen SQL warehouse geconfigureerd, dus de beschrijving van {{object}} is niet naar Unity Catalog geschreven.",
-      "uc_description_write_failed": "Het schrijven van de beschrijving van {{object}} naar Unity Catalog is mislukt."
+      "uc_description_write_failed": "Het schrijven van de beschrijving van {{object}} naar Unity Catalog is mislukt.",
+      "uc_description_import_write_limit": "Deze import heeft zijn limiet van {{limit}} naar Unity Catalog geschreven beschrijvingen bereikt, dus de beschrijving van {{object}} is daar niet geschreven.",
+      "uc_description_import_writes_failed": "De assets zijn geïmporteerd, maar hun beschrijvingen konden niet naar Unity Catalog worden geschreven."
     }
   },
   "deleteDialog": {

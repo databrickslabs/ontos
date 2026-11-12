@@ -98,6 +98,9 @@ async def update_settings(
         if 'uc_description_writeback_enabled' in settings_payload:
             details['uc_description_writeback_enabled'] = settings_payload.get(
                 'uc_description_writeback_enabled')
+        if 'uc_description_import_write_limit' in settings_payload:
+            details['uc_description_import_write_limit'] = settings_payload.get(
+                'uc_description_import_write_limit')
         # The Git token itself never goes to the audit log, only what happened to it.
         if settings_payload.get('git_password'):
             details['git_password'] = 'set'

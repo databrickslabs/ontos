@@ -119,6 +119,8 @@ class ImportResult(BaseModel):
     skipped: int = 0
     errors: int = 0
     warnings: int = 0
+    # What the import as a whole could not do (it still succeeded); per-row ones are on the items
+    warning_messages: List[CodedWarning] = Field(default_factory=list)
     items: List[ImportResultItem] = Field(default_factory=list)
     error_messages: List[str] = Field(default_factory=list)
 

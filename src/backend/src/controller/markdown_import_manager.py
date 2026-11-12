@@ -25,7 +25,7 @@ import hashlib
 import json
 import posixpath
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Collection, Dict, List, Optional, Tuple
 from uuid import UUID
 
 import yaml
@@ -62,6 +62,13 @@ _TARGET_KEYS = {
     'asset': ('asset', 'assets'),
     'concept': ('concept', 'concepts'),
 }
+# The feature whose Read/Write level a user needs to link a document to that kind.
+TARGET_FEATURES = {
+    'domain': 'data-domains',
+    'asset': 'assets',
+    'concept': 'semantic-models',
+}
+MAX_FRONT_MATTER_BYTES = 32 * 1024
 
 
 class MarkdownImportPathInvalidError(CodedValueError):
@@ -112,11 +119,22 @@ def normalize_volume_path(raw: str) -> str:
     return cleaned
 
 
+class _NoAliasSafeLoader(yaml.SafeLoader):
+    """SafeLoader that refuses anchors and aliases (no "billion laughs" expansion)."""
+
+    def compose_node(self, parent, index):
+        event = self.peek_event()
+        if isinstance(event, yaml.AliasEvent) or getattr(event, 'anchor', None):
+            raise yaml.YAMLError("Anchors and aliases are not allowed in front matter")
+        return super().compose_node(parent, index)
+
+
 def parse_front_matter(text: str) -> Tuple[Dict[str, Any], str]:
     """(front matter, body) of a Markdown text; ({}, text) without front matter.
 
     Raises:
-        FrontMatterError: The block isn't valid YAML, or isn't a mapping.
+        FrontMatterError: The block isn't valid YAML, isn't a mapping, is larger
+            than MAX_FRONT_MATTER_BYTES, or uses anchors/aliases.
     """
     lines = text.splitlines(keepends=True)
     if not lines or lines[0].strip() != '---':
@@ -125,8 +143,10 @@ def parse_front_matter(text: str) -> Tuple[Dict[str, Any], str]:
         if line.strip() in ('---', '...'):
             block = ''.join(lines[1:index])
             body = ''.join(lines[index + 1:])
+            if len(block.encode('utf-8')) > MAX_FRONT_MATTER_BYTES:
+                raise FrontMatterError("Front matter is larger than 32 KB")
             try:
-                data = yaml.safe_load(block) if block.strip() else {}
+                data = yaml.load(block, Loader=_NoAliasSafeLoader) if block.strip() else {}
             except yaml.YAMLError as e:
                 raise FrontMatterError("Front matter is not valid YAML") from e
             if data is None:
@@ -166,9 +186,12 @@ _Lookup = Tuple[Optional[MarkdownImportTarget], Optional[str]]
 class _TargetResolver:
     """Resolves front matter values to entities, once per value per import."""
 
-    def __init__(self, db: Session, semantic_models_manager: Any = None):
+    def __init__(self, db: Session, semantic_models_manager: Any = None,
+                 writable_kinds: Optional[Collection[str]] = None):
         self._db = db
         self._semantic = semantic_models_manager
+        # Kinds (domain/asset/concept) the caller may write; None = all.
+        self._writable = writable_kinds
         self._cache: Dict[Tuple[str, str], _Lookup] = {}
 
     def resolve(
@@ -178,6 +201,11 @@ class _TargetResolver:
         unresolved: List[MarkdownImportUnresolved] = []
         for kind, keys in _TARGET_KEYS.items():
             for value in _values(front_matter, keys):
+                if self._writable is not None and kind not in self._writable:
+                    # Not even looked up: the caller can't attach documents there.
+                    unresolved.append(
+                        MarkdownImportUnresolved(kind=kind, value=value, reason='forbidden'))
+                    continue
                 key = (kind, value)
                 if key not in self._cache:
                     self._cache[key] = self._lookup(kind, value)
@@ -255,8 +283,12 @@ class MarkdownImportManager:
 
     def import_from_volume(
         self, db: Session, ws: WorkspaceClient, *, path: str, user_email: Optional[str],
+        writable_kinds: Collection[str],
     ) -> MarkdownImportResult:
         """Import every ``.md`` file under ``path`` (a volume folder, or one file).
+
+        ``writable_kinds``: the target kinds (keys of TARGET_FEATURES) the caller
+        has Read/Write on; values naming another kind are reported ``forbidden``.
 
         Raises:
             MarkdownImportPathInvalidError, MarkdownImportPathNotFoundError,
@@ -265,7 +297,7 @@ class MarkdownImportManager:
         root = normalize_volume_path(path)
         unread: List[str] = []
         files = self._list_markdown_files(ws, root, unread)
-        resolver = _TargetResolver(db, self._semantic)
+        resolver = _TargetResolver(db, self._semantic, writable_kinds)
         result = MarkdownImportResult(path=root)
         changed: List[DocumentMetadataDb] = []
         removed_ids: List[str] = []
@@ -274,6 +306,10 @@ class MarkdownImportManager:
                                       changed, removed_ids)
             result.files.append(entry)
             setattr(result, entry.status, getattr(result, entry.status) + 1)
+        if not files and not root.lower().endswith('.md'):
+            # An empty listing may be a transient or permission glitch: keep
+            # what was imported from here before rather than wipe it.
+            result.warnings.append('empty_folder')
         for entry in self._remove_gone_files(db, root, files, unread, user_email, removed_ids):
             result.files.append(entry)
             result.removed += 1
@@ -353,8 +389,8 @@ class MarkdownImportManager:
         Documents imported from elsewhere, or from subfolders that couldn't be
         listed this time, stay.
         """
-        if root.lower().endswith('.md'):
-            return []  # one file: it exists, or the import was refused
+        if root.lower().endswith('.md') or not files:
+            return []  # one file, or nothing listed: never remove
         present = {path for path, _ in files}
         skipped = tuple(folder.rstrip('/') + '/' for folder in unread)
         gone: Dict[str, List[DocumentMetadataDb]] = {}
@@ -411,6 +447,8 @@ class MarkdownImportManager:
             text = raw.decode('utf-8-sig')
         except UnicodeDecodeError:
             return failed('not_utf8')
+        if '\x00' in text:
+            return failed('not_text')  # Postgres text columns reject NUL
         try:
             front_matter, body = parse_front_matter(text)
         except FrontMatterError:

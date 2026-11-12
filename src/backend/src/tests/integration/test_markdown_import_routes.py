@@ -462,3 +462,72 @@ def test_files_in_an_unreadable_subfolder_are_kept(
 
     assert body['removed'] == 0
     assert f'{ROOT}/glossary/terms.md' in _sources(db_session)
+
+
+# --- Review round 2: per-target rights, hostile files, empty listings -------
+
+def _add_role(db_session, feature_permissions, group):
+    import json as _json
+    from src.db_models.settings import AppRoleDb
+    db_session.add(AppRoleDb(
+        id=str(uuid.uuid4()), name=f'Domain editor {uuid.uuid4().hex[:8]}', description='',
+        feature_permissions=_json.dumps(feature_permissions),
+        assigned_groups=_json.dumps([group]), home_sections='[]', approval_privileges='{}',
+        is_admin=False,
+    ))
+    db_session.flush()
+
+
+def test_a_target_needs_write_access_to_its_feature(
+        client, db_session, domain, asset, volume, mock_test_user):
+    _add_role(db_session, {'data-domains': 'Read/Write', 'assets': 'Read-only'}, 'domain-editors')
+    mock_test_user.groups = ['domain-editors']
+    _single_file(volume, "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nx\n")
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    entry = _targets(response.json())
+    assert [t['entity_type'] for t in entry['targets']] == ['data_domain']
+    assert entry['unresolved'] == [
+        {'kind': 'asset', 'value': 'main.crm.customers', 'reason': 'forbidden'}]
+    assert db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.entity_id == str(asset.id)).count() == 0
+
+
+def test_a_nul_byte_fails_only_that_file(client, db_session, domain, volume):
+    volume.clear()
+    volume[f'{ROOT}/bad.md'] = "---\ndomain: Customer\n---\nnul \x00 here\n"
+    volume[f'{ROOT}/good.md'] = "---\ndomain: Customer\n---\nfine\n"
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    files = _by_path(response.json())
+    assert (files[f'{ROOT}/bad.md']['status'], files[f'{ROOT}/bad.md']['reason']) == (
+        'failed', 'not_text')
+    assert files[f'{ROOT}/good.md']['status'] == 'added'
+
+
+def test_an_empty_listing_removes_nothing_and_warns(client, db_session, domain, asset, volume):
+    assert _import(client).status_code == 200
+    before = _sources(db_session)
+    volume.clear()
+
+    body = _import(client).json()
+
+    assert body['removed'] == 0
+    assert body['warnings'] == ['empty_folder']
+    assert _sources(db_session) == before
+
+
+def test_a_single_file_import_removes_nothing(
+        client, db_session, domain, asset, volume, mock_workspace_client):
+    assert _import(client).status_code == 200
+    mock_workspace_client.files.get_metadata.side_effect = None
+    mock_workspace_client.files.get_metadata.return_value = SimpleNamespace(content_length=10)
+
+    body = _import(client, f'{ROOT}/domain.md').json()
+
+    assert body['removed'] == 0
+    assert f'{ROOT}/glossary/terms.md' in _sources(db_session)

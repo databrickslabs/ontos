@@ -9,7 +9,10 @@ from pydantic import ValidationError
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import PermissionChecker
+from src.common.authorization import (
+    PermissionChecker, get_user_details_from_sdk, resolve_effective_permissions,
+)
+from src.models.users import UserInfo
 from src.common.logging import get_logger
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header, is_safe_path_component
 from src.controller.metadata_manager import MetadataManager, SHARED_ENTITY_ID
@@ -22,7 +25,7 @@ from src.models.metadata import (
     SharedAssetListResponse, MergedMetadataResponse,
     MarkdownImportRequest, MarkdownImportResult,
 )
-from src.controller.markdown_import_manager import MarkdownImportManager
+from src.controller.markdown_import_manager import MarkdownImportManager, TARGET_FEATURES
 from src.common.api_errors import CodedValueError
 from src.common.config import get_settings, Settings
 from src.common.workspace_client import get_workspace_client, get_obo_workspace_client
@@ -648,6 +651,20 @@ def _user_workspace_client(request: Request) -> WorkspaceClient:
     return get_obo_workspace_client(request)
 
 
+async def _writable_target_kinds(
+    request: Request, user: UserInfo = Depends(get_user_details_from_sdk),
+) -> set:
+    """Target kinds the caller may link documents to: Read/Write on the kind's feature."""
+    auth_manager = getattr(request.app.state, 'authorization_manager', None)
+    if auth_manager is None:
+        return set()
+    permissions = await resolve_effective_permissions(user.email, user.groups, request)
+    return {
+        kind for kind, feature in TARGET_FEATURES.items()
+        if auth_manager.has_permission(permissions, feature, FeatureAccessLevel.READ_WRITE)
+    }
+
+
 # Plain ``def``: FastAPI runs it in its threadpool, so the volume reads don't
 # block the event loop.
 @router.post("/metadata/markdown-import", response_model=MarkdownImportResult)
@@ -659,6 +676,7 @@ def import_markdown_from_volume(
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
     ws: WorkspaceClient = Depends(_user_workspace_client),
+    writable_kinds: set = Depends(_writable_target_kinds),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Import the ``.md`` files of a volume folder as documents on the entities their
@@ -668,6 +686,7 @@ def import_markdown_from_volume(
     try:
         result = importer.import_from_volume(
             db, ws, path=payload.path, user_email=current_user.email if current_user else None,
+            writable_kinds=writable_kinds,
         )
     except CodedValueError as e:
         status_code = {

@@ -35,6 +35,8 @@ export interface MarkdownImportResult {
   failed: number;
   /** Files imported from this folder before that are gone (their documents were removed). */
   removed: number;
+  /** Codes, e.g. empty_folder (nothing listed, so nothing was removed). */
+  warnings?: string[];
   files: MarkdownImportFileResult[];
 }
 
@@ -49,6 +51,12 @@ const ERROR_CODES = new Set([
   'markdown_import_access_denied',
   'markdown_import_too_many_files',
 ]);
+
+const UNRESOLVED_KEYS: Record<string, string> = {
+  not_found: 'notFound',
+  ambiguous: 'ambiguous',
+  forbidden: 'forbidden',
+};
 
 type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 
@@ -112,7 +120,7 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
 
   const describeUnresolved = (file: MarkdownImportFileResult) => file.unresolved
     .map(u => {
-      const key = u.reason === 'ambiguous' ? 'ambiguous' : 'notFound';
+      const key = UNRESOLVED_KEYS[u.reason] ?? 'notFound';
       return t(`markdownImport.unresolved.${key}`, {
         kind: t(`markdownImport.kinds.${u.kind}`, { defaultValue: u.kind }),
         value: u.value,
@@ -157,6 +165,14 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
                 </Badge>
               ))}
             </div>
+            {(result.warnings ?? []).map(code => (
+              <Alert key={code}>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {t(`markdownImport.warnings.${code}`, { defaultValue: code })}
+                </AlertDescription>
+              </Alert>
+            ))}
             {result.files.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('markdownImport.noFiles')}</p>
             ) : (

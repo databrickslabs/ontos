@@ -289,14 +289,16 @@
     },
     "unresolved": {
       "notFound": "{{kind}} \"{{value}}\" niet gevonden",
-      "ambiguous": "{{kind}} \"{{value}}\" komt overeen met meerdere entiteiten"
+      "ambiguous": "{{kind}} \"{{value}}\" komt overeen met meerdere entiteiten",
+      "forbidden": "{{kind}} \"{{value}}\": u mag dit soort entiteit niet bewerken"
     },
     "reasons": {
       "too_large": "Het bestand is groter dan 1 MB.",
       "not_utf8": "Het bestand is geen UTF-8-tekst.",
       "front_matter_invalid": "De front matter is geen geldige YAML-mapping.",
       "read_failed": "Het bestand kon niet worden gelezen.",
-      "gone": "Het bestand staat niet meer in de map: de documenten zijn bij {{count}} entiteiten verwijderd."
+      "gone": "Het bestand staat niet meer in de map: de documenten zijn bij {{count}} entiteiten verwijderd.",
+      "not_text": "Het bestand bevat NUL-tekens; het is geen tekst."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" is geen pad in een Unity Catalog-volume. Gebruik /Volumes/<catalog>/<schema>/<volume>/<folder>.",
@@ -304,6 +306,9 @@
       "markdown_import_access_denied": "U kunt \"{{path}}\" niet lezen. Vraag READ VOLUME aan op het volume.",
       "markdown_import_too_many_files": "\"{{path}}\" bevat meer dan {{max}} Markdown-bestanden. Importeer een kleinere map.",
       "failed": "Het importeren is mislukt."
+    },
+    "warnings": {
+      "empty_folder": "Hier zijn geen Markdown-bestanden gevonden, dus de eerder uit deze map geïmporteerde documenten zijn behouden."
     }
   }
 }

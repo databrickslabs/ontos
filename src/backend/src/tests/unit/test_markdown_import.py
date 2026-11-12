@@ -62,6 +62,16 @@ class TestFrontMatter:
         with pytest.raises(FrontMatterError):
             parse_front_matter(text)
 
+    def test_aliases_and_anchors_are_refused(self):
+        bomb = '---\na: &a ["x", "x"]\nb: &b [*a, *a]\nc: [*b, *b]\n---\nbody'
+        with pytest.raises(FrontMatterError):
+            parse_front_matter(bomb)
+
+    def test_a_front_matter_block_over_the_cap_is_refused(self):
+        text = '---\ntitle: ' + 'x' * (mim.MAX_FRONT_MATTER_BYTES + 1) + '\n---\nbody'
+        with pytest.raises(FrontMatterError):
+            parse_front_matter(text)
+
     def test_strip_front_matter_keeps_the_body(self):
         assert strip_front_matter('---\na: 1\n---\n\nBody\n') == 'Body\n'
         assert strip_front_matter('Body only') == 'Body only'
@@ -182,6 +192,8 @@ class TestFileFailures:
     @pytest.mark.parametrize('content, size, reason', [
         (b'\xff\xfe\x00bad', None, 'not_utf8'),
         (b'---\n[1, 2]\n---\n', None, 'front_matter_invalid'),
+        (b'---\na: &x 1\nb: *x\n---\n', None, 'front_matter_invalid'),
+        (b'text \x00 nul', None, 'not_text'),
         (b'x', mim.MAX_FILE_BYTES + 1, 'too_large'),
     ])
     def test_reports_the_reason(self, content, size, reason):

@@ -152,7 +152,10 @@ class MarkdownImportTarget(BaseModel):
 
 
 class MarkdownImportUnresolved(BaseModel):
-    """A front matter value that names no entity (``reason``: not_found | ambiguous)."""
+    """A front matter value that names no entity it may link.
+
+    ``reason``: not_found | ambiguous | forbidden (no Read/Write on the kind's feature).
+    """
     kind: str = Field(..., description="domain | asset | concept")
     value: str
     reason: str
@@ -163,7 +166,8 @@ class MarkdownImportFileResult(BaseModel):
 
     ``status``: added (new documents only), updated (a document changed or a
     target was added), unchanged, unlinked (no target resolved), failed
-    (``reason``: too_large | not_utf8 | front_matter_invalid | read_failed), or
+    (``reason``: too_large | not_utf8 | not_text | front_matter_invalid |
+    read_failed), or
     removed (the file, imported before, is gone; its documents were removed).
     """
     path: str
@@ -186,6 +190,8 @@ class MarkdownImportResult(BaseModel):
     failed: int = 0
     # Files imported from this folder before that are gone (deleted or renamed)
     removed: int = 0
+    # Codes for the UI: empty_folder (nothing listed, so nothing was removed)
+    warnings: List[str] = Field(default_factory=list)
     files: List[MarkdownImportFileResult] = Field(default_factory=list)
 
 

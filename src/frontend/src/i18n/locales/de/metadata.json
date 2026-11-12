@@ -289,14 +289,16 @@
     },
     "unresolved": {
       "notFound": "{{kind}} „{{value}}“ nicht gefunden",
-      "ambiguous": "{{kind}} „{{value}}“ passt zu mehreren Einträgen"
+      "ambiguous": "{{kind}} „{{value}}“ passt zu mehreren Einträgen",
+      "forbidden": "{{kind}} „{{value}}“: Sie dürfen diese Art von Eintrag nicht bearbeiten"
     },
     "reasons": {
       "too_large": "Die Datei ist größer als 1 MB.",
       "not_utf8": "Die Datei ist kein UTF-8-Text.",
       "front_matter_invalid": "Das Front Matter ist keine gültige YAML-Zuordnung.",
       "read_failed": "Die Datei konnte nicht gelesen werden.",
-      "gone": "Die Datei ist nicht mehr im Ordner: ihre Dokumente wurden bei {{count}} Einträgen entfernt."
+      "gone": "Die Datei ist nicht mehr im Ordner: ihre Dokumente wurden bei {{count}} Einträgen entfernt.",
+      "not_text": "Die Datei enthält NUL-Zeichen; sie ist kein Text."
     },
     "errors": {
       "markdown_import_path_invalid": "„{{path}}“ ist kein Pfad in einem Unity-Catalog-Volume. Verwenden Sie /Volumes/<catalog>/<schema>/<volume>/<folder>.",
@@ -304,6 +306,9 @@
       "markdown_import_access_denied": "Sie können „{{path}}“ nicht lesen. Fordern Sie READ VOLUME für das Volume an.",
       "markdown_import_too_many_files": "„{{path}}“ enthält mehr als {{max}} Markdown-Dateien. Importieren Sie einen kleineren Ordner.",
       "failed": "Der Import ist fehlgeschlagen."
+    },
+    "warnings": {
+      "empty_folder": "Hier wurden keine Markdown-Dateien gefunden; die früher aus diesem Ordner importierten Dokumente bleiben erhalten."
     }
   }
 }

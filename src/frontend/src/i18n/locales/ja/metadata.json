@@ -289,14 +289,16 @@
     },
     "unresolved": {
       "notFound": "{{kind}}「{{value}}」が見つかりません",
-      "ambiguous": "{{kind}}「{{value}}」が複数のエンティティに一致します"
+      "ambiguous": "{{kind}}「{{value}}」が複数のエンティティに一致します",
+      "forbidden": "{{kind}}「{{value}}」: この種類のエンティティを編集する権限がありません"
     },
     "reasons": {
       "too_large": "ファイルが 1 MB を超えています。",
       "not_utf8": "ファイルが UTF-8 テキストではありません。",
       "front_matter_invalid": "フロントマターが有効な YAML マッピングではありません。",
       "read_failed": "ファイルを読み取れませんでした。",
-      "gone": "ファイルがフォルダーにありません。{{count}} 件のエンティティからドキュメントを削除しました。"
+      "gone": "ファイルがフォルダーにありません。{{count}} 件のエンティティからドキュメントを削除しました。",
+      "not_text": "ファイルに NUL 文字が含まれています。テキストではありません。"
     },
     "errors": {
       "markdown_import_path_invalid": "「{{path}}」は Unity Catalog ボリューム内のパスではありません。/Volumes/<catalog>/<schema>/<volume>/<folder> を使用してください。",
@@ -304,6 +306,9 @@
       "markdown_import_access_denied": "「{{path}}」を読み取る権限がありません。ボリュームの READ VOLUME 権限を依頼してください。",
       "markdown_import_too_many_files": "「{{path}}」には {{max}} 個を超える Markdown ファイルがあります。より小さいフォルダーをインポートしてください。",
       "failed": "インポートに失敗しました。"
+    },
+    "warnings": {
+      "empty_folder": "ここに Markdown ファイルが見つからなかったため、このフォルダーから以前インポートしたドキュメントは保持されました。"
     }
   }
 }

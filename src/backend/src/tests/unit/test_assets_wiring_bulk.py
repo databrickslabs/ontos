@@ -99,3 +99,22 @@ def test_bulk_import_keeps_going_when_indexing_fails():
 
 def test_bulk_manager_without_assets_manager_skips_indexing():
     AssetBulkManager()._index_asset(MagicMock())
+
+
+def test_bulk_import_row_still_created_when_indexing_raises():
+    wired = MagicMock(spec=AssetsManager)
+    wired._update_search_index.side_effect = RuntimeError("index down")
+    manager = AssetBulkManager(assets_manager=wired)
+    created = MagicMock()
+    created.id = "11111111-1111-1111-1111-111111111111"
+
+    with patch.object(manager, "_resolve_asset_types", return_value={"table": created.id}), \
+         patch.object(manager, "_set_asset_domains"), \
+         patch.object(manager._asset_repo, "get_by_identity", return_value=None), \
+         patch("src.controller.asset_bulk_manager.AssetDb", return_value=created):
+        result = manager.execute_import(
+            MagicMock(), file_bytes=b"name,asset_type\nfoo,table\n",
+            filename="a.csv", current_user_id="u@x.com",
+        )
+
+    assert (result.created, result.errors) == (1, 0)

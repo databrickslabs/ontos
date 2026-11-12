@@ -18,7 +18,7 @@ from databricks.sdk.errors import NotFound
 from databricks.sdk.service.sql import StatementState
 
 from src.controller.data_asset_reviews_manager import DataAssetReviewManager
-from src.controller.metadata_generation_manager import MetadataGenerationManager, _string_literal
+from src.controller.metadata_generation_manager import MetadataGenerationManager
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.change_log import ChangeLogDb
 from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
@@ -185,8 +185,33 @@ def test_the_reviewers_edit_is_what_gets_applied(db_session, manager, uc):
     assert s.applied_text == "It's the key"
 
 
-def test_string_literals_escape_quotes_and_backslashes():
-    assert _string_literal("a'b\\c") == "'a\\'b\\\\c'"
+def test_view_comments_and_quoted_names_go_through_the_shared_builder(db_session, manager, uc):
+    view = "ma`in.sa'les.v`iew"
+    uc.tables_by_name[view] = {None: None, "c`ol": None}
+    run = _run(db_session)
+    suggestions = [
+        _suggestion(db_session, run, table=view),
+        _suggestion(db_session, run, "c`ol", table=view),
+    ]
+    review = manager.create_review_for_run(
+        db_session, run, requester_email=REQUESTER, reviewer_email=REVIEWER,
+    )
+    manager.decide(
+        db_session, run,
+        SuggestionDecisionBatch(
+            decisions=[SuggestionDecision(id=s.id, decision="accept") for s in suggestions],
+        ),
+        decided_by=REVIEWER,
+    )
+    manager.close_review(db_session, review.review_request_id, approved=True)
+
+    result = _apply(manager, db_session, run)
+
+    assert result.applied == 2
+    assert uc.statements == [
+        "COMMENT ON TABLE `ma``in`.`sa'les`.`v``iew` IS 'About orders'",
+        "COMMENT ON COLUMN `ma``in`.`sa'les`.`v``iew`.`c``ol` IS 'About c`ol'",
+    ]
 
 
 def test_text_already_in_uc_is_applied_without_a_write(db_session, manager, uc):

@@ -32,10 +32,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
+from src.common import uc_comments
 from src.common.config import Settings, resolve_volume
 from src.common.errors import ConflictError
 from src.common.logging import get_logger
 from src.common.notification_i18n import notification_i18n_data
+from src.common.uc_comments import CommentWriteError
 from src.db_models.assets import AssetDb
 from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
 from src.db_models.metadata_generation import DescriptionSuggestionDb, MetadataGenerationRunDb
@@ -96,8 +98,8 @@ _CLOSED_REVIEW_STATUSES = (
     ReviewRequestStatus.CANCELLED.value,
 )
 FEATURE_ID = "metadata-generation"
-# UC SQL errors that mean the app's service principal may not change the object
-_PERMISSION_ERRORS = ("PERMISSION_DENIED", "INSUFFICIENT_PERMISSIONS", "does not have MODIFY", "is not the owner")
+# A comment write waits as long as any other statement of this manager
+_COMMENT_TIMEOUT_SECONDS = 600
 
 
 class StatementError(RuntimeError):
@@ -106,15 +108,6 @@ class StatementError(RuntimeError):
 
 def _normalized(text: Optional[str]) -> Optional[str]:
     return (text or "").strip() or None
-
-
-def _quote_identifier(name: str) -> str:
-    return "`" + name.replace("`", "``") + "`"
-
-
-def _string_literal(text: str) -> str:
-    """A Databricks SQL string literal (backslash escapes are on by default)."""
-    return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
 class ActiveRunLimitError(ValueError):
@@ -1102,8 +1095,8 @@ class MetadataGenerationManager:
             if current != text:
                 try:
                     self._write_comment(ws, s, text)
-                except StatementError as e:
-                    if any(marker in str(e) for marker in _PERMISSION_ERRORS):
+                except CommentWriteError as e:
+                    if e.reason == uc_comments.PERMISSION_DENIED:
                         self._mark(s, SuggestionStatus.NOT_APPLICABLE, result, "The app may not change this object's description")
                     else:
                         logger.warning("Failed to write the description of %s: %s", self._target(s), e)
@@ -1137,12 +1130,10 @@ class MetadataGenerationManager:
             result.errors.append(f"{s.table_fqn}{'.' + s.column_name if s.column_name else ''}: {error}")
 
     def _write_comment(self, ws: Any, s: DescriptionSuggestionDb, text: str) -> None:
-        table = ".".join(_quote_identifier(part) for part in s.table_fqn.split("."))
-        if s.column_name:
-            statement = f"COMMENT ON COLUMN {table}.{_quote_identifier(s.column_name)} IS {_string_literal(text)}"
-        else:
-            statement = f"COMMENT ON TABLE {table} IS {_string_literal(text)}"
-        self._execute_statement(ws, statement)
+        uc_comments.set_comment(
+            ws, self._settings.DATABRICKS_WAREHOUSE_ID, s.table_fqn, s.column_name, text,
+            timeout_seconds=_COMMENT_TIMEOUT_SECONDS,
+        )
 
     def _applied(
         self,

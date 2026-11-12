@@ -21,6 +21,7 @@
 
 ## ✨ Features
 
+- **lists**: list views keep their search, column filters, page and page size when you open an item and come back (Back, or a reload). Stored per list in the browser's localStorage, next to the sort order. The Data Products and Data Contracts "Show all versions" toggle and the Data Products "My Subscriptions" toggle, and the Asset Explorer name filter and page, are kept the same way. Stored filters for columns that no longer exist are dropped, and a stored page past the last page is clamped. Settings > Roles and Tags/Permissions, and Asset Reviews, now remember their sort order too (#966)
 - **maturity**: add configurable multi-level maturity assessment for data products and contracts
 - **term-mapping**: ontology term suggestion, AR-based review, inline suggester
 - **semantic-models**: humanize RDF source labels across UI

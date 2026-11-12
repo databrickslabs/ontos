@@ -180,6 +180,40 @@ class MaturityLevelRepository:
             .all()
         )
 
+    def entity_ids_below_first_level(self, db: Session, *, entity_type: str) -> List[str]:
+        """Ids of the entities whose latest snapshot reached no level.
+
+        Only snapshots taken with levels defined count (``total_levels > 0``), and
+        nothing counts while ``entity_type`` has no level of its own: an entity
+        never evaluated, or evaluated without levels, isn't below the first level.
+        """
+        if self.is_empty(db, entity_type=entity_type):
+            return []
+        latest = (
+            db.query(
+                MaturitySnapshotDb.entity_id.label("entity_id"),
+                func.max(MaturitySnapshotDb.evaluated_at).label("evaluated_at"),
+            )
+            .filter(MaturitySnapshotDb.entity_type == entity_type)
+            .group_by(MaturitySnapshotDb.entity_id)
+            .subquery()
+        )
+        rows = (
+            db.query(MaturitySnapshotDb.entity_id)
+            .join(latest, and_(
+                MaturitySnapshotDb.entity_id == latest.c.entity_id,
+                MaturitySnapshotDb.evaluated_at == latest.c.evaluated_at,
+            ))
+            .filter(
+                MaturitySnapshotDb.entity_type == entity_type,
+                MaturitySnapshotDb.achieved_level_order.is_(None),
+                MaturitySnapshotDb.total_levels > 0,
+            )
+            .distinct()
+            .all()
+        )
+        return [r.entity_id for r in rows]
+
     def get_latest_snapshot(self, db: Session, *, entity_type: str,
                             entity_id: str) -> Optional[MaturitySnapshotDb]:
         return (

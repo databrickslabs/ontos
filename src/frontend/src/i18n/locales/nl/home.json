@@ -42,6 +42,12 @@
       "pageSize": "Per pagina",
       "requestReview": "Beoordeling aanvragen"
     },
+    "maturity": {
+      "title": "Tabellen onder het eerste niveau",
+      "description": "Uw tabellen en views waarvan de laatste volwassenheidsbeoordeling geen niveau bereikte.",
+      "empty": "Geen van uw beoordeelde tabellen zit onder het eerste niveau.",
+      "more": "{{shown}} van {{total}} getoond."
+    },
     "maintain": {
       "title": "Onderhouden",
       "description": "Je openstaande aanvragen en beoordelingen.",

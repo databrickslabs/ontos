@@ -129,17 +129,50 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
     def remove_all_for_entity(
         self, db: Session, *, entity_type: str, entity_id: str,
     ) -> List[str]:
-        """Delete the entity's documents; returns the volume paths of their files."""
+        """Delete the entity's documents; returns the volume paths of their uploaded files.
+
+        Imported Markdown documents point to their source file, which isn't the
+        app's to delete: their paths are left out.
+        """
         paths = [
             path for (path,) in db.query(DocumentMetadataDb.storage_path).filter(
                 DocumentMetadataDb.entity_type == entity_type,
                 DocumentMetadataDb.entity_id == entity_id,
+                DocumentMetadataDb.source_path.is_(None),
             )
         ]
         _remove_all_for_entity(
             db, DocumentMetadataDb, entity_type=entity_type, entity_id=entity_id,
         )
         return paths
+
+    def imported_ids_for_entity(
+        self, db: Session, *, entity_type: str, entity_id: str,
+    ) -> List[str]:
+        """Ids of the entity's imported Markdown documents (the ones in the search index)."""
+        return [
+            str(doc_id) for (doc_id,) in db.query(DocumentMetadataDb.id).filter(
+                DocumentMetadataDb.entity_type == entity_type,
+                DocumentMetadataDb.entity_id == entity_id,
+                DocumentMetadataDb.source_path.isnot(None),
+            )
+        ]
+
+    def list_by_source_path(self, db: Session, *, source_path: str) -> List[DocumentMetadataDb]:
+        """Documents imported from one source file (one per linked entity)."""
+        return (
+            db.query(DocumentMetadataDb)
+            .filter(DocumentMetadataDb.source_path == source_path)
+            .all()
+        )
+
+    def list_imported(self, db: Session) -> List[DocumentMetadataDb]:
+        """Every document imported from a Markdown file."""
+        return (
+            db.query(DocumentMetadataDb)
+            .filter(DocumentMetadataDb.source_path.isnot(None))
+            .all()
+        )
 
     def list_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> List[DocumentMetadataDb]:
         """List documents directly attached to an entity."""

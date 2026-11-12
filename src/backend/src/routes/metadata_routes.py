@@ -20,9 +20,12 @@ from src.models.metadata import (
     Document, DocumentCreate,
     MetadataAttachment, MetadataAttachmentCreate,
     SharedAssetListResponse, MergedMetadataResponse,
+    MarkdownImportRequest, MarkdownImportResult,
 )
+from src.controller.markdown_import_manager import MarkdownImportManager
+from src.common.api_errors import CodedValueError
 from src.common.config import get_settings, Settings
-from src.common.workspace_client import get_workspace_client
+from src.common.workspace_client import get_workspace_client, get_obo_workspace_client
 from databricks.sdk import WorkspaceClient
 
 logger = get_logger(__name__)
@@ -636,6 +639,60 @@ async def get_merged_metadata(
     )
 
 
+# =========================================================================
+# Markdown import (volume folder -> documents on the entities it names)
+# =========================================================================
+
+def _user_workspace_client(request: Request) -> WorkspaceClient:
+    """The caller's client: an import reads only files the user can read."""
+    return get_obo_workspace_client(request)
+
+
+@router.post("/metadata/markdown-import", response_model=MarkdownImportResult)
+async def import_markdown_from_volume(
+    payload: MarkdownImportRequest,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: MetadataManager = Depends(get_metadata_manager),
+    ws: WorkspaceClient = Depends(_user_workspace_client),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Import the ``.md`` files of a volume folder as documents on the entities their
+    front matter names; a re-run updates only the files that changed."""
+    semantic_models_manager = getattr(request.app.state, 'semantic_models_manager', None)
+    importer = MarkdownImportManager(manager, semantic_models_manager=semantic_models_manager)
+    try:
+        result = importer.import_from_volume(
+            db, ws, path=payload.path, user_email=current_user.email if current_user else None,
+        )
+    except CodedValueError as e:
+        status_code = {
+            'markdown_import_path_not_found': 404,
+            'markdown_import_access_denied': 403,
+        }.get(e.code, 400)
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
+    except Exception:
+        db.rollback()
+        logger.exception("Markdown import from a volume failed")
+        raise HTTPException(status_code=500, detail="Markdown import failed")
+
+    audit_manager.log_action(
+        db=db,
+        username=current_user.username if current_user else 'unknown',
+        ip_address=request.client.host if request.client else None,
+        feature=FEATURE_ID,
+        action='IMPORT_MARKDOWN',
+        success=True,
+        details={
+            'path': result.path, 'added': result.added, 'updated': result.updated,
+            'unchanged': result.unchanged, 'unlinked': result.unlinked, 'failed': result.failed,
+        },
+    )
+    return result
+
+
 def register_routes(app):
     app.include_router(router)
     logger.info("Metadata routes registered with prefix /api")
@@ -646,14 +703,25 @@ async def get_document_content(
     id: str,
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    ws: WorkspaceClient = Depends(get_workspace_client),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     doc = manager.get_document(db, id=id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    if doc.source_path is not None:
+        # Imported Markdown is served as stored: the source volume may be one
+        # only the importing user can read.
+        text = manager.get_document_text(db, id=id) or ''
+        safe_filename = sanitize_filename_for_header(doc.original_filename, default="document.md")
+        return Response(
+            content=text.encode('utf-8'),
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f"inline; filename=\"{safe_filename}\""},
+        )
     try:
         # Download file from UC Volumes. SDK returns a DownloadResponse with a generator method `.contents()`.
+        # The client is built only here: imported documents don't need it.
+        ws = get_workspace_client()
         downloaded = ws.files.download(doc.storage_path)
 
         # Log shape once to aid debugging if needed

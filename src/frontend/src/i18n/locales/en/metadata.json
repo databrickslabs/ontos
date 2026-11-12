@@ -107,7 +107,8 @@
     "messages": {
       "deleteFailed": "Delete failed",
       "uploadFailed": "Upload failed"
-    }
+    },
+    "importedFrom": "Imported from {{path}}"
   },
   "sharedAssets": {
     "selectDescription": "Select a shared asset to attach to this entity",
@@ -251,5 +252,54 @@
     "goToDetails": "Go to Details",
     "alreadySubscribed": "Already Subscribed",
     "subscribe": "Subscribe"
+  },
+  "markdownImport": {
+    "open": "Import Markdown",
+    "title": "Import Markdown from volume",
+    "description": "Imports the .md files of a Unity Catalog volume folder (and its subfolders) as documents on the domains, assets and concepts their front matter names. Running it again updates only the files that changed.",
+    "pathLabel": "Volume folder or file",
+    "frontMatterHint": "Each file is linked through its front matter: domain:, assets: and concepts:, by name, id or FQN. Files without a known target are listed as unlinked; glossary terms stay document text.",
+    "submit": "Import",
+    "importing": "Importing…",
+    "close": "Close",
+    "summary": {
+      "added": "Added: {{count}}",
+      "updated": "Updated: {{count}}",
+      "unchanged": "Unchanged: {{count}}",
+      "unlinked": "Unlinked: {{count}}",
+      "failed": "Failed: {{count}}"
+    },
+    "status": {
+      "added": "Added",
+      "updated": "Updated",
+      "unchanged": "Unchanged",
+      "unlinked": "Unlinked",
+      "failed": "Failed"
+    },
+    "linkedTo": "Linked to: {{targets}}",
+    "noTargets": "The front matter names no domain, asset or concept.",
+    "noFiles": "No Markdown files found at this path.",
+    "kinds": {
+      "domain": "Domain",
+      "asset": "Asset",
+      "concept": "Concept"
+    },
+    "unresolved": {
+      "notFound": "{{kind}} \"{{value}}\" not found",
+      "ambiguous": "{{kind}} \"{{value}}\" matches several entities"
+    },
+    "reasons": {
+      "too_large": "The file is larger than 1 MB.",
+      "not_utf8": "The file is not UTF-8 text.",
+      "front_matter_invalid": "The front matter is not a valid YAML mapping.",
+      "read_failed": "The file could not be read."
+    },
+    "errors": {
+      "markdown_import_path_invalid": "\"{{path}}\" is not a path inside a Unity Catalog volume. Use /Volumes/<catalog>/<schema>/<volume>/<folder>.",
+      "markdown_import_path_not_found": "Nothing was found at \"{{path}}\".",
+      "markdown_import_access_denied": "You can't read \"{{path}}\". Ask for READ VOLUME on the volume.",
+      "markdown_import_too_many_files": "\"{{path}}\" holds more than {{max}} Markdown files. Import a smaller folder.",
+      "failed": "The import failed."
+    }
   }
 }

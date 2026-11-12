@@ -21,7 +21,8 @@ class GlobalSearchTool(BaseTool):
     category = "discovery"
     description = (
         "Search across all indexed features (data products, data contracts, glossary terms, "
-        "domains, tags, and more), ranked by relevance. Use FEW BROAD terms, not full "
+        "domains, tags, imported Markdown documents, and more), ranked by relevance. "
+        "Use FEW BROAD terms, not full "
         "sentences — each term is matched independently, so 'customer churn' finds items "
         "matching either word. Prefer narrowing with the 'type' filter and paginating with "
         "'offset' over broadening the query. Leave 'query' empty (or '*') to list everything; "
@@ -36,7 +37,10 @@ class GlobalSearchTool(BaseTool):
         },
         "type": {
             "type": "string",
-            "description": "Optional filter by item type (e.g., 'data-product', 'data-contract', 'glossary-term', 'data-domain', 'tag')."
+            "description": (
+                "Optional filter by item type (e.g., 'data-product', 'data-contract', "
+                "'glossary-term', 'data-domain', 'tag', 'document')."
+            ),
         },
         "limit": {
             "type": "integer",

@@ -107,7 +107,8 @@
     "messages": {
       "deleteFailed": "Falha ao excluir",
       "uploadFailed": "Falha ao enviar"
-    }
+    },
+    "importedFrom": "Importado de {{path}}"
   },
   "sharedAssets": {
     "selectDescription": "Selecione um ativo compartilhado para anexar a esta entidade",
@@ -251,5 +252,54 @@
     "goToDetails": "Ir para detalhes",
     "alreadySubscribed": "Já inscrito",
     "subscribe": "Inscrever-se"
+  },
+  "markdownImport": {
+    "open": "Importar Markdown",
+    "title": "Importar Markdown de um volume",
+    "description": "Importa os arquivos .md de uma pasta de um volume do Unity Catalog (e das subpastas) como documentos dos domínios, ativos e conceitos que o front matter de cada um indica. Ao rodar de novo, só os arquivos que mudaram são atualizados.",
+    "pathLabel": "Pasta ou arquivo do volume",
+    "frontMatterHint": "Cada arquivo é vinculado pelo front matter: domain:, assets: e concepts:, por nome, id ou FQN. Arquivos sem um destino conhecido aparecem como não vinculados; termos de glossário ficam como texto do documento.",
+    "submit": "Importar",
+    "importing": "Importando…",
+    "close": "Fechar",
+    "summary": {
+      "added": "Adicionados: {{count}}",
+      "updated": "Atualizados: {{count}}",
+      "unchanged": "Sem alteração: {{count}}",
+      "unlinked": "Não vinculados: {{count}}",
+      "failed": "Com falha: {{count}}"
+    },
+    "status": {
+      "added": "Adicionado",
+      "updated": "Atualizado",
+      "unchanged": "Sem alteração",
+      "unlinked": "Não vinculado",
+      "failed": "Com falha"
+    },
+    "linkedTo": "Vinculado a: {{targets}}",
+    "noTargets": "O front matter não indica nenhum domínio, ativo ou conceito.",
+    "noFiles": "Nenhum arquivo Markdown encontrado neste caminho.",
+    "kinds": {
+      "domain": "Domínio",
+      "asset": "Ativo",
+      "concept": "Conceito"
+    },
+    "unresolved": {
+      "notFound": "{{kind}} \"{{value}}\" não encontrado",
+      "ambiguous": "{{kind}} \"{{value}}\" corresponde a várias entidades"
+    },
+    "reasons": {
+      "too_large": "O arquivo tem mais de 1 MB.",
+      "not_utf8": "O arquivo não é texto UTF-8.",
+      "front_matter_invalid": "O front matter não é um mapeamento YAML válido.",
+      "read_failed": "Não foi possível ler o arquivo."
+    },
+    "errors": {
+      "markdown_import_path_invalid": "\"{{path}}\" não é um caminho dentro de um volume do Unity Catalog. Use /Volumes/<catalog>/<schema>/<volume>/<folder>.",
+      "markdown_import_path_not_found": "Nada foi encontrado em \"{{path}}\".",
+      "markdown_import_access_denied": "Você não pode ler \"{{path}}\". Peça READ VOLUME no volume.",
+      "markdown_import_too_many_files": "\"{{path}}\" tem mais de {{max}} arquivos Markdown. Importe uma pasta menor.",
+      "failed": "A importação falhou."
+    }
   }
 }

@@ -1,3 +1,4 @@
+import urllib.parse
 from typing import List, Optional, Dict, Any, Tuple
 
 from sqlalchemy import event
@@ -6,7 +7,10 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import VolumeType
 
 from src.common.logging import get_logger
+from src.common.app_state import get_app_state_manager
 from src.common.config import Settings, resolve_volume
+from src.common.database import get_session_factory
+from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.workspace_client import get_workspace_client
 from src.models.metadata import (
     RichText, RichTextCreate, RichTextUpdate,
@@ -21,7 +25,7 @@ from src.repositories.metadata_repository import (
 )
 from src.repositories.change_log_repository import change_log_repo
 from src.db_models.change_log import ChangeLogDb
-from src.db_models.metadata import MetadataAttachmentDb
+from src.db_models.metadata import DocumentMetadataDb, MetadataAttachmentDb
 
 logger = get_logger(__name__)
 
@@ -47,7 +51,34 @@ def _drop_pending_files(session: Session, previous_transaction) -> None:
         logger.info("Rolled back: %d document file(s) kept in the volume", len(pending))
 
 
-class MetadataManager:
+# Where the search result of an imported document leads: the page of its entity.
+_ENTITY_LINKS = {
+    'data_domain': '/settings/data-domains/{id}',
+    'asset': '/assets/{id}',
+    'concept': '/concepts/browser?concept={id}',
+}
+_DOCUMENT_ITEM_PREFIX = 'document::'
+
+
+def strip_front_matter(text: str) -> str:
+    """The Markdown after a leading ``---`` YAML front matter block, if there is one."""
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != '---':
+        return text
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() in ('---', '...'):
+            return ''.join(lines[index + 1:]).lstrip('\n')
+    return text
+
+
+class MetadataManager(SearchableAsset):
+    """Notes, links and documents on entities.
+
+    Searchable: imported Markdown documents are indexed with their text (type
+    ``document``, under the documents' feature), so search finds their content
+    and leads to the entity they're linked to. Uploaded files aren't indexed.
+    """
+
     def __init__(
         self,
         rich_text_repository: RichTextRepository = rich_text_repo,
@@ -216,9 +247,12 @@ class MetadataManager:
         if not db_obj:
             return False
         entity_type, entity_id = db_obj.entity_type, db_obj.entity_id
+        imported = db_obj.source_path is not None
         removed = self._document_repo.remove(db, id=id)
         if removed:
             db.commit()
+            if imported:
+                self.remove_document_from_index(id)
             self._log_change(db, entity_type=f"{entity_type}:document", entity_id=entity_id, action="DELETE", username=user_email)
             return True
         return False
@@ -228,6 +262,78 @@ class MetadataManager:
         if not db_obj:
             return None
         return Document.from_orm(db_obj)
+
+    def get_document_text(self, db: Session, *, id: str) -> Optional[str]:
+        """The stored Markdown of an imported document; None for an uploaded file."""
+        db_obj = self._document_repo.get(db, id=id)
+        return db_obj.content_text if db_obj else None
+
+    # --- Search (imported Markdown documents) ---
+    def _active_search_manager(self):
+        # Other managers keep their own MetadataManager (e.g. AssetsManager),
+        # which startup doesn't wire to search: use the app's search manager.
+        return self._search_manager or get_app_state_manager('search_manager')
+
+    def build_document_search_item(self, doc: DocumentMetadataDb) -> Optional[SearchIndexItem]:
+        """The search item of an imported Markdown document, or None for other documents."""
+        if doc.source_path is None or doc.content_text is None or doc.is_shared:
+            return None
+        link = _ENTITY_LINKS.get(doc.entity_type)
+        if not link:
+            return None
+        return SearchIndexItem(
+            id=f"{_DOCUMENT_ITEM_PREFIX}{doc.id}",
+            type="document",
+            feature_id="data-domains",  # the documents' feature (see metadata_routes)
+            title=doc.title,
+            description=strip_front_matter(doc.content_text),
+            link=link.format(id=urllib.parse.quote(str(doc.entity_id), safe='')),
+            tags=[],
+            extra_data={
+                "entity_type": doc.entity_type,
+                "entity_id": doc.entity_id,
+                "source_path": doc.source_path,
+            },
+        )
+
+    def index_document(self, doc: DocumentMetadataDb) -> None:
+        """Upsert an imported document in the search index (best effort)."""
+        item = self.build_document_search_item(doc)
+        search_manager = self._active_search_manager()
+        if item is None or search_manager is None:
+            return
+        try:
+            search_manager.upsert_item(item)
+        except Exception:
+            logger.warning("Failed to index document %s", doc.id, exc_info=True)
+
+    def remove_document_from_index(self, document_id: str) -> None:
+        """Drop a document from the search index (best effort; no-op if absent)."""
+        search_manager = self._active_search_manager()
+        if search_manager is None:
+            return
+        try:
+            search_manager.remove_item(f"{_DOCUMENT_ITEM_PREFIX}{document_id}")
+        except Exception:
+            logger.warning("Failed to remove document %s from the search index", document_id,
+                           exc_info=True)
+
+    def get_search_index_items(self) -> List[SearchIndexItem]:
+        """Imported Markdown documents, for the global search index."""
+        session_factory = get_session_factory()
+        if not session_factory:
+            logger.warning("Session factory not available; cannot index documents.")
+            return []
+        try:
+            with session_factory() as db:
+                docs = self._document_repo.list_imported(db)
+                items = [self.build_document_search_item(doc) for doc in docs]
+        except Exception:
+            logger.error("Failed to fetch imported documents for search", exc_info=True)
+            return []
+        items = [item for item in items if item is not None]
+        logger.info("Prepared %d imported documents for search index.", len(items))
+        return items
 
     # --- Entity deletion ---
     def remove_all_for_entity(
@@ -245,6 +351,9 @@ class MetadataManager:
         links = self._link_repo.remove_all_for_entity(
             db, entity_type=entity_type, entity_id=entity_id,
         )
+        imported_ids = self._document_repo.imported_ids_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id,
+        )
         paths = self._document_repo.remove_all_for_entity(
             db, entity_type=entity_type, entity_id=entity_id,
         )
@@ -252,9 +361,11 @@ class MetadataManager:
             db, entity_type=entity_type, entity_id=entity_id,
         )
         counts = {
-            'rich_texts': rich_texts, 'links': links, 'documents': len(paths),
-            'attachments': attachments,
+            'rich_texts': rich_texts, 'links': links,
+            'documents': len(paths) + len(imported_ids), 'attachments': attachments,
         }
+        for document_id in imported_ids:
+            self.remove_document_from_index(document_id)
         return counts, paths
 
     def delete_document_files(

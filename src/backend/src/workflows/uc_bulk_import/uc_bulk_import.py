@@ -435,19 +435,31 @@ def create_contracts(
                 stats["created"] += 1
                 continue
             
-            # Create contract
+            # Create contract. As for products, raw SQL gets no ORM defaults,
+            # so every NOT NULL column of DataContractDb is set here.
             contract_id = str(uuid4())
+            now = datetime.utcnow()
             contract_sql = text("""
                 INSERT INTO data_contracts (
-                    id, name, kind, api_version, version, status, created_at, updated_at
+                    id, name, kind, api_version, version, status,
+                    published, version_family_id, publication_scope, created_at, updated_at
                 ) VALUES (
-                    :id, :name, :kind, :api_version, :version, :status, :created_at, :updated_at
+                    :id, :name, :kind, :api_version, :version, :status,
+                    :published, :version_family_id, :publication_scope, :created_at, :updated_at
                 )
                 ON CONFLICT (id) DO UPDATE SET
                     updated_at = :updated_at
             """)
-            
-            with engine.connect() as conn:
+            schema_obj_sql = text("""
+                INSERT INTO data_contract_schema_objects (
+                    id, contract_id, name, logical_type, physical_name
+                ) VALUES (
+                    :id, :contract_id, :name, :logical_type, :physical_name
+                )
+            """)
+
+            # One transaction, as for products and their ports
+            with engine.begin() as conn:
                 conn.execute(contract_sql, {
                     "id": contract_id,
                     "name": contract_name,
@@ -455,37 +467,29 @@ def create_contracts(
                     "api_version": "v3.1.0",
                     "version": "1.0.0",
                     "status": "draft",
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
+                    "published": False,
+                    "version_family_id": contract_id,
+                    "publication_scope": "none",
+                    "created_at": now,
+                    "updated_at": now
                 })
-                conn.commit()
-            
-            # Create schema objects for each table
-            for obj in objects:
-                if obj.object_type != 'TABLE':
-                    continue
-                
-                qualified_name = qualify_table_name(obj.full_name, default_catalog, default_schema)
-                object_id = str(uuid4())
-                
-                schema_obj_sql = text("""
-                    INSERT INTO data_contract_schema_objects (
-                        id, contract_id, name, logical_type, physical_name
-                    ) VALUES (
-                        :id, :contract_id, :name, :logical_type, :physical_name
+
+                # Create schema objects for each table
+                for obj in objects:
+                    if obj.object_type != 'TABLE':
+                        continue
+
+                    qualified_name = qualify_table_name(
+                        obj.full_name, default_catalog, default_schema
                     )
-                """)
-                
-                with engine.connect() as conn:
                     conn.execute(schema_obj_sql, {
-                        "id": object_id,
+                        "id": str(uuid4()),
                         "contract_id": contract_id,
                         "name": obj.table or qualified_name,
                         "logical_type": "table",
                         "physical_name": qualified_name
                     })
-                    conn.commit()
-            
+
             if verbose:
                 print(f"    Created with {len([o for o in objects if o.object_type == 'TABLE'])} schema objects")
             stats["created"] += 1

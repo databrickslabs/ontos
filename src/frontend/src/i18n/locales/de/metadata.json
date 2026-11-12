@@ -106,7 +106,8 @@
     },
     "messages": {
       "deleteFailed": "Löschen fehlgeschlagen",
-      "uploadFailed": "Hochladen fehlgeschlagen"
+      "uploadFailed": "Hochladen fehlgeschlagen",
+      "volume_invalid": "„{{value}}“ bezeichnet kein Unity-Catalog-Volume. Verwenden Sie /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> oder einen Volume-Namen; ein einfacher Name benötigt Katalog und Schema ohne Punkte, Schrägstriche oder Leerzeichen. Bitten Sie einen Administrator, dies unter Einstellungen > Allgemein zu korrigieren."
     }
   },
   "sharedAssets": {

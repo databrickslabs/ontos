@@ -106,7 +106,8 @@
     },
     "messages": {
       "deleteFailed": "Verwijderen mislukt",
-      "uploadFailed": "Uploaden mislukt"
+      "uploadFailed": "Uploaden mislukt",
+      "volume_invalid": "\"{{value}}\" verwijst niet naar een Unity Catalog-volume. Gebruik /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> of een volumenaam; een gewone naam heeft een catalogus en schema nodig zonder punten, schuine strepen of spaties. Vraag een beheerder dit te corrigeren in Instellingen > Algemeen."
     }
   },
   "sharedAssets": {

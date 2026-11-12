@@ -106,7 +106,8 @@
     },
     "messages": {
       "deleteFailed": "Falha ao excluir",
-      "uploadFailed": "Falha ao enviar"
+      "uploadFailed": "Falha ao enviar",
+      "volume_invalid": "\"{{value}}\" não indica um volume do Unity Catalog. Use /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> ou o nome de um volume; um nome simples precisa de catálogo e schema sem pontos, barras ou espaços. Peça a um administrador que corrija em Configurações > Geral."
     }
   },
   "sharedAssets": {

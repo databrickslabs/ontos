@@ -176,3 +176,44 @@ class TestAssetMetadataRoutes:
         )
         assert response.status_code == 422, response.text
         mock_ws.files.upload.assert_not_called()
+
+
+class TestDocumentUploadInvalidVolume:
+    """An unusable volume setting answers a coded 400 on both upload routes, not a 500."""
+
+    @pytest.fixture(autouse=True)
+    def invalid_volume(self, test_settings, monkeypatch):
+        import time
+        from unittest.mock import MagicMock
+        from src.common import config as _config, workspace_client
+
+        monkeypatch.setenv("MOCK_WORKSPACE_CLIENT", "true")
+        monkeypatch.setitem(
+            workspace_client._CLIENT_CACHE, "mock_ws", (MagicMock(), "mock", time.time())
+        )
+        test_settings.DATABRICKS_VOLUME = "a.b"
+        # The upload routes read the process-wide settings
+        monkeypatch.setattr(_config, "_settings", test_settings)
+
+    def _assert_coded(self, response):
+        assert response.status_code == 400, response.text
+        detail = response.json()["detail"]
+        assert detail["code"] == "volume_invalid"
+        assert detail["params"]["value"] == "a.b"
+
+    def test_entity_document_upload(self, client: TestClient):
+        response = client.post(
+            "/api/entities/asset/documents",
+            params={"entity_id": "asset-1"},
+            data={"title": "Snapshot"},
+            files={"file": ("snapshot.png", b"\x89PNG", "image/png")},
+        )
+        self._assert_coded(response)
+
+    def test_shared_document_upload(self, client: TestClient):
+        response = client.post(
+            "/api/metadata/shared/documents",
+            data={"title": "Shared"},
+            files={"file": ("shared.png", b"\x89PNG", "image/png")},
+        )
+        self._assert_coded(response)

@@ -1513,13 +1513,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             odcs['authoritativeDefinitions'] = auth_defs
 
         # Tags: the tag assignments the contract page shows (#1484), a name in the
-        # default namespace written without it; the ODCS tag rows of older
-        # imports when the contract has no assignment.
+        # default namespace written without it. The ODCS tag rows of older imports
+        # are used when the contract has no assignment; otherwise only the rows an
+        # import couldn't assign (a namespace that doesn't exist) are added, since a
+        # tag removed on the page keeps its ODCS row.
+        legacy_tag_names = [t.name for t in (getattr(db_obj, 'tags', None) or []) if t.name]
         exported_tags = self._odcs_tag_names(db_session, db_obj.id) if db_session is not None else []
         if exported_tags:
+            for name in legacy_tag_names:
+                if name not in exported_tags and self._is_unassignable_tag_name(db_session, name):
+                    exported_tags.append(name)
             odcs['tags'] = exported_tags
-        elif hasattr(db_obj, 'tags') and db_obj.tags:
-            odcs['tags'] = [t.name for t in db_obj.tags]
+        elif legacy_tag_names:
+            odcs['tags'] = legacy_tag_names
             
         if hasattr(db_obj, 'roles') and db_obj.roles:
             roles = []
@@ -2406,6 +2412,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     )
         except SQLAlchemyError as e:
             logger.error("Failed to copy tags from contract %s to %s: %s", source_id, target_id, e, exc_info=True)
+
+    @staticmethod
+    def _is_unassignable_tag_name(db, name: str) -> bool:
+        """True for an ODCS tag name in a namespace that doesn't exist (an import skips it)."""
+        from src.repositories.tags_repository import tag_namespace_repo
+
+        if TAG_NAMESPACE_SEPARATOR not in name:
+            return False
+        namespace = name.split(TAG_NAMESPACE_SEPARATOR, 1)[0]
+        return tag_namespace_repo.get_by_name(db, name=namespace) is None
 
     @staticmethod
     def _odcs_tag_names(db, contract_id: str) -> List[str]:

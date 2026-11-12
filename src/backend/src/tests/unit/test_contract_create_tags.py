@@ -18,7 +18,7 @@ from src.controller.tags_manager import TagsManager
 from src.db_models.data_contracts import DataContractDb, DataContractTagDb
 from src.db_models.tags import EntityTagAssociationDb, TagDb
 from src.models.data_contracts_api import DataContractCreate
-from src.models.tags import DEFAULT_NAMESPACE_NAME
+from src.models.tags import DEFAULT_NAMESPACE_NAME, AssignedTagCreate
 from src.repositories.tags_repository import tag_namespace_repo
 
 
@@ -254,6 +254,52 @@ class TestExportAndSearch:
         }
         created = manager.create_from_upload(db_session, doc, current_user="alice")
         db_session.commit()
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert odcs["tags"] == [classification.name]
+
+    def test_export_of_a_contract_with_only_odcs_tag_rows(self, db_session: Session):
+        cid = str(uuid.uuid4())
+        db_session.add(DataContractDb(id=cid, name=_name(), version="1.0.0", status="active"))
+        db_session.add(DataContractTagDb(contract_id=cid, name="legacy"))
+        db_session.commit()
+        manager = _manager()
+        obj = db_session.get(DataContractDb, cid)
+
+        assert manager.build_odcs_from_db(obj, db_session)["tags"] == ["legacy"]
+        assert manager.build_odcs_from_db(obj)["tags"] == ["legacy"]
+
+    def test_export_keeps_a_file_tag_that_could_not_be_assigned(self, db_session: Session, tags):
+        classification, _ = tags
+        unassignable = f"nowhere_{uuid.uuid4().hex[:6]}/restricted"
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft",
+            "tags": [classification.name, unassignable],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert odcs["tags"] == [classification.name, unassignable]
+
+    def test_export_drops_a_tag_removed_on_the_page(self, db_session: Session, tags):
+        classification, region = tags
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft",
+            "tags": [classification.name, region.name],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+        manager._tags_manager.set_tags_for_entity(
+            db_session, entity_id=str(created.id), entity_type="data_contract",
+            tags=[AssignedTagCreate(tag_fqn=_fqn(classification))], user_email="bob",
+        )
 
         odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
 

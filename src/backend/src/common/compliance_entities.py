@@ -210,15 +210,17 @@ class AppEntityLoader(EntityLoader):
         """Compliance template keys (``template_complete``, ...) by entity id.
 
         Empty when they can't be read, so the entities still load (rules on the
-        keys then see ``None``).
+        keys then see ``None``). Read in a savepoint, so a failed query doesn't
+        abort the transaction the rest of the run uses.
         """
         if not entities:
             return {}
         try:
             from src.controller.compliance_templates_manager import compliance_templates_manager
-            return compliance_templates_manager.rule_fields_for_entities(
-                self.db, entity_type=entity_type, entity_ids=[e.id for e in entities]
-            )
+            with self.db.begin_nested():
+                return compliance_templates_manager.rule_fields_for_entities(
+                    self.db, entity_type=entity_type, entity_ids=[e.id for e in entities]
+                )
         except Exception:
             logger.exception("Failed to load compliance template fields for %s", entity_type)
             return {}

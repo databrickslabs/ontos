@@ -8,6 +8,7 @@ objects that compliance runs (``AppEntityLoader``) and maturity gates
 import uuid
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.common.compliance_dsl import evaluate_rule_on_object
@@ -175,12 +176,26 @@ class TestRuleObjects:
     def test_compliance_loader_still_loads_when_template_keys_fail(
         self, db_session: Session, product_with_values, monkeypatch
     ):
-        def _boom(*args, **kwargs):
-            raise RuntimeError("boom")
+        def _bad_query(db, **kwargs):
+            db.execute(text("SELECT * FROM no_such_compliance_table"))
 
-        monkeypatch.setattr(compliance_templates_manager, "rule_fields_for_entities", _boom)
+        monkeypatch.setattr(compliance_templates_manager, "rule_fields_for_entities", _bad_query)
         loaded = {
             str(e["id"]): e
-            for e in AppEntityLoader(db_session).load_entities(["data_product"])
+            for e in AppEntityLoader(db_session).load_entities(["data_product", "domain"])
         }
         assert "template_complete" not in loaded[product_with_values]
+        assert db_session.get(DataProductDb, product_with_values) is not None
+
+    def test_maturity_dict_without_template_keys_when_they_fail(
+        self, db_session: Session, product_with_values, monkeypatch
+    ):
+        def _bad_query(db, **kwargs):
+            db.execute(text("SELECT * FROM no_such_compliance_table"))
+
+        monkeypatch.setattr(compliance_templates_manager, "rule_fields_for_entities", _bad_query)
+        d = build_data_product_dict(db_session, product_with_values)
+        assert d is not None and d["name"]
+        assert "template_complete" not in d
+        # The failed read was rolled back to its savepoint; the session still works.
+        assert db_session.get(DataProductDb, product_with_values) is not None

@@ -1633,7 +1633,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if decision not in ('approve', 'deny', 'clarify'):
             raise ValueError("Decision must be 'approve', 'deny', or 'clarify'")
         
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         notification_title = ""
         notification_desc = ""
         

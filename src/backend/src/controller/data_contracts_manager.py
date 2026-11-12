@@ -5946,7 +5946,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # Notify requester (receipt)
         requester_note = Notification(
             id=str(uuid4()),
-            created_at=now,
+            created_at=datetime.now(timezone.utc),
             type=NotificationType.INFO,
             title="Deploy Request Submitted",
             subtitle=f"Contract: {contract.name}",
@@ -5959,7 +5959,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # Notify admins
         admin_note = Notification(
             id=str(uuid4()),
-            created_at=now,
+            created_at=datetime.now(timezone.utc),
             type=NotificationType.ACTION_REQUIRED,
             title="Contract Deployment Request",
             subtitle=f"From: {requester_email}",
@@ -6088,7 +6088,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if requester_email:
             requester_note = Notification(
                 id=str(uuid4()),
-                created_at=now,
+                created_at=datetime.now(timezone.utc),
                 type=NotificationType.INFO,
                 title=notification_title,
                 subtitle=f"Contract: {contract.name}",
@@ -6372,7 +6372,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if requester_email:
             requester_note = Notification(
                 id=str(uuid4()),
-                created_at=now,
+                created_at=datetime.now(timezone.utc),
                 type=NotificationType.INFO,
                 title=notification_title,
                 subtitle=f"Contract: {contract.name}",
@@ -6626,7 +6626,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # Notify requester
         requester_note = Notification(
             id=str(uuid4()),
-            created_at=now,
+            created_at=datetime.now(timezone.utc),
             type=NotificationType.INFO if decision == 'approve' else NotificationType.WARNING,
             title=notification_title,
             subtitle=f"Contract: {contract.name}",

@@ -33,13 +33,27 @@ def test_no_notification_is_built_with_naive_utcnow():
         if 'tests' in path.relative_to(SRC).parts:
             continue
         tree = ast.parse(path.read_text(encoding='utf-8'))
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and getattr(node.func, 'id', None) == 'Notification'
-            ):
+        for func in ast.walk(tree):
+            if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            naive_names = {
+                t.id
+                for n in ast.walk(func)
+                if isinstance(n, ast.Assign) and _is_naive_utcnow(n.value)
+                for t in n.targets
+                if isinstance(t, ast.Name)
+            }
+            for node in ast.walk(func):
+                if not (
+                    isinstance(node, ast.Call)
+                    and getattr(node.func, 'id', None) == 'Notification'
+                ):
+                    continue
                 for kw in node.keywords:
-                    if kw.arg in ('created_at', 'updated_at') and _is_naive_utcnow(kw.value):
+                    if kw.arg not in ('created_at', 'updated_at'):
+                        continue
+                    naive_name = isinstance(kw.value, ast.Name) and kw.value.id in naive_names
+                    if _is_naive_utcnow(kw.value) or naive_name:
                         offenders.append(f"{path.relative_to(SRC)}:{kw.value.lineno}")
     assert offenders == []
 

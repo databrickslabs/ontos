@@ -193,6 +193,9 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     console.log('  - domainIds:', domainIds)
     console.log('  - ownerTeamId:', ownerTeamId)
     
+    const domainsChanged = !initialFormValues
+      || [...domainIds].sort().join(',') !== [...(initialFormValues.domainIds || [])].sort().join(',')
+      || (primaryDomainId || '') !== (initialFormValues.primaryDomainId || '')
     setIsSubmitting(true)
     try {
       const payload: DataContractCreate = {
@@ -203,8 +206,9 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         project_id: projectId && projectId !== '__none__' ? projectId : undefined,
         kind: 'DataContract',
         apiVersion: 'v3.1.0',
-        domainIds: domainIds,
-        primaryDomainId: primaryDomainId,
+        // On edit, the domain assignment is sent only when it was changed, so a
+        // dialog opened with a partial assignment can't overwrite the stored one.
+        ...(!isEdit || domainsChanged ? { domainIds, primaryDomainId } : {}),
         tenant: tenant.trim() || undefined,
         // On edit, only a changed selection is sent ([] removes every tag, #1435).
         tags: (isEdit ? tagsForUpdate(tags, initialFormValues?.tags) : tagsForCreate(tags)) as any,

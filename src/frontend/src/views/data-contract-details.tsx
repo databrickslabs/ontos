@@ -3191,6 +3191,9 @@ export default function DataContractDetails() {
           owner_team_id: contract.owner_team_id,
           project_id: (contract as any).project_id,
           domain: contract.domainId,
+          // The full assignment, so a metadata edit keeps the additional domains
+          domainIds: contract.domainIds,
+          primaryDomainId: contract.primaryDomainId ?? contract.domainId ?? null,
           tenant: contract.tenant,
           descriptionUsage: contract.description?.usage,
           descriptionPurpose: contract.description?.purpose,

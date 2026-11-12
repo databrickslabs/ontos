@@ -87,4 +87,23 @@ describe('DataContractBasicFormDialog — tags', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0][0].tags).toEqual(['ns/other']);
   });
+
+  it('leaves the domain assignment out when it was not changed', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    renderWithProviders(
+      <DataContractBasicFormDialog
+        isOpen={true}
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        initial={{ ...initial, domainIds: ['d1', 'd2'], primaryDomainId: 'd1' } as any}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('pick other tag'));
+    save();
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('domainIds');
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('primaryDomainId');
+  });
 });

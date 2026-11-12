@@ -138,3 +138,17 @@ def test_migrating_a_draft_concept_keeps_its_metadata(client, semantic_models_ma
     assert new_iri != concept
     assert _count(db_session, "concept", concept) == 0
     assert _count(db_session, "concept", new_iri) == 3
+
+
+def test_migrating_a_draft_without_delete_source_keeps_its_metadata(client, semantic_models_manager, db_session):
+    """A draft can't be deprecated, so migrate deletes it even with delete_source=False; its data moves first."""
+    source = _collection(client)
+    target = _collection(client)
+    concept = _concept(client, source, "Draft Movable")
+    _seed(db_session, "concept", concept)
+
+    migrated = semantic_models_manager.migrate_concept(concept, target, delete_source=False, migrated_by="tester")
+    new_iri = migrated["iri"] if isinstance(migrated, dict) else migrated.iri
+
+    assert _count(db_session, "concept", concept) == 0
+    assert _count(db_session, "concept", new_iri) == 3

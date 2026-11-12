@@ -278,12 +278,14 @@ async def run_policy(
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user)
 
-    # For now, implement inline only; async can be backed by Databricks job later
-    run = manager.run_policy_inline(
-        db, 
-        policy=policy, 
+    # For now, implement inline only; async can be backed by Databricks job later.
+    # Off the event loop: LLM_CHECK rules call the serving endpoint per entity.
+    run = await run_in_threadpool(
+        manager.run_policy_inline,
+        db,
+        policy=policy,
         limit=payload.limit,
-        current_user=current_user.username if current_user else None
+        current_user=current_user.username if current_user else None,
     )
     
     audit_manager.log_action(

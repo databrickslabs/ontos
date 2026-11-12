@@ -946,17 +946,18 @@ class ComplianceManager:
             # the run says so, so the policies that need a fix can be found. A failed
             # notification flush is the other warning (the tail is what to fix first).
             trailing = parsed_rule.get('trailing_input')
+            # One warning per run: the rule's tail is what to fix first, then the
+            # entities that failed because the run reached its LLM_CHECK budget, then a
+            # failed notification flush
             warning_code, warning_params = None, None
             if trailing:
                 warning_code, warning_params = 'rule_trailing_input', trailing
-            elif not notified:
-                warning_code, warning_params = 'notifications_failed', {}
-            if llm_checker.budget_exceeded:
-                # Takes the place of the other warnings (a trailing-input warning is also
-                # reported when the rule is saved): these entities failed without being checked
+            elif llm_checker.budget_exceeded:
                 warning_code, warning_params = BUDGET_EXCEEDED, {
                     'count': llm_checker.budget_exceeded, 'budget': llm_checker.max_calls,
                 }
+            elif not notified:
+                warning_code, warning_params = 'notifications_failed', {}
             self.complete_run(
                 db, run, success_count=success, failure_count=failure, score=score,
                 warning_code=warning_code, warning_params=warning_params,

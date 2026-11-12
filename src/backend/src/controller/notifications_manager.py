@@ -593,7 +593,7 @@ class NotificationsManager:
             
             existing_payload['completed'] = True
             existing_payload['completed_by'] = completed_by
-            existing_payload['completed_at'] = datetime.utcnow().isoformat()
+            existing_payload['completed_at'] = datetime.now(timezone.utc).isoformat()
             if notes:
                 existing_payload['completion_notes'] = notes
             

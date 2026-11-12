@@ -6,6 +6,7 @@ Each token has a set of scopes that determine which tools it can access.
 """
 
 from datetime import datetime, timezone
+from src.common.time_utils import utc_now
 from typing import List, Optional
 from uuid import uuid4
 
@@ -40,7 +41,7 @@ class MCPTokenDb(Base):
     token_hash = Column(String(255), nullable=False, unique=True, index=True)
     scopes = Column(JSON, nullable=False, default=list)
     created_by = Column(String(255), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, index=True)

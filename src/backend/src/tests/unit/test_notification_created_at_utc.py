@@ -66,3 +66,32 @@ def test_create_user_notification_is_timezone_aware():
     created = repo.create.call_args.kwargs['obj_in']
     assert created.created_at.tzinfo is not None
     assert created.created_at.utcoffset().total_seconds() == 0
+
+
+def test_completed_delivery_notification_is_stamped_with_aware_utc():
+    from datetime import datetime
+
+    manager = NotificationsManager(settings_manager=MagicMock())
+    repo = manager._repo = MagicMock()
+    repo.get.return_value = MagicMock(action_payload=None)
+    repo.update.side_effect = lambda db, db_obj, obj_in: obj_in
+    try:
+        manager.complete_delivery_notification(db=MagicMock(), notification_id='n', completed_by='x')
+    except Exception:
+        pass
+    update_data = repo.update.call_args.kwargs['obj_in']
+    assert update_data['updated_at'].utcoffset().total_seconds() == 0
+    completed_at = datetime.fromisoformat(update_data['action_payload']['completed_at'])
+    assert completed_at.utcoffset().total_seconds() == 0
+
+
+def test_timestamptz_columns_do_not_default_to_naive_utcnow():
+    offenders = []
+    for path in (SRC / 'db_models').glob('*.py'):
+        tree = ast.parse(path.read_text(encoding='utf-8'))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.keyword) and node.arg in ('default', 'onupdate'):
+                v = node.value
+                if isinstance(v, ast.Attribute) and v.attr == 'utcnow':
+                    offenders.append(f"{path.name}:{v.lineno}")
+    assert offenders == []

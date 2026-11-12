@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID # Use generic String for broader compatibility
 import uuid
 from datetime import datetime
+from src.common.time_utils import utc_now
 
 from src.common.database import Base
 # Import Enums from Pydantic models to ensure consistency
@@ -19,8 +20,8 @@ class DataAssetReviewRequestDb(Base):
     title = Column(String(200), nullable=True)
     status = Column(String, default=ReviewRequestStatus.QUEUED.value, nullable=False, index=True)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
     # Project relationship (nullable for backward compatibility)
     project_id = Column(String, ForeignKey('projects.id'), nullable=True, index=True)
@@ -42,7 +43,7 @@ class ReviewedAssetDb(Base):
     asset_type = Column(String, nullable=False)
     status = Column(String, default=ReviewedAssetStatus.PENDING.value, nullable=False, index=True)
     comments = Column(Text, nullable=True)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
     # Relationship back to the Review Request
     review_request = relationship("DataAssetReviewRequestDb", back_populates="assets")

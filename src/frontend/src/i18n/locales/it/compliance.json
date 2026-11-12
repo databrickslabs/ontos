@@ -7,6 +7,16 @@
   "createNewRule": "Crea Nuova Regola di Conformità",
   "searchPlaceholder": "Cerca policy...",
   "loading": "Caricamento dati di conformità...",
+  "complianceTemplates": {
+    "button": "Conformità",
+    "missingFields_one": "Manca {{count}} campo obbligatorio",
+    "missingFields_other": "Mancano {{count}} campi obbligatori",
+    "complete": "Tutti i campi obbligatori sono compilati",
+    "entityTypes": {
+      "data_product": "Prodotti dati",
+      "asset": "Tabelle e viste"
+    }
+  },
   "stats": {
     "overallCompliance": "Conformità Globale",
     "acrossAllRules": "Su tutte le regole",
@@ -100,15 +110,6 @@
       "score": "Punteggio",
       "issues": "Problemi"
     }
-  },
-  "complianceTemplates": {
-    "button": "Conformità",
-    "missingFields_one": "Manca {{count}} campo obbligatorio",
-    "missingFields_other": "Mancano {{count}} campi obbligatori",
-    "complete": "Tutti i campi obbligatori sono compilati",
-    "entityTypes": {
-      "data_product": "Prodotti dati",
-      "asset": "Tabelle e viste"
-    }
   }
 }
+

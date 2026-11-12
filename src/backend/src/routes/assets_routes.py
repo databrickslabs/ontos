@@ -11,7 +11,6 @@ from src.models.assets import (
     DeletePreviewItem, CascadeDeleteRequest, CascadeDeleteResult,
 )
 from src.controller.assets_manager import assets_manager
-from src.controller.compliance_template_assets import reconcile_asset
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
@@ -22,6 +21,7 @@ from src.common.dependencies import (
 )
 from src.common.errors import NotFoundError, ConflictError, ValidationError
 from src.common.logging import get_logger
+from src.controller.compliance_template_assets import reconcile_asset
 
 logger = get_logger(__name__)
 

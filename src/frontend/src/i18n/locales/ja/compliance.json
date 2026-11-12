@@ -7,6 +7,16 @@
   "createNewRule": "新規コンプライアンスルールを作成",
   "searchPlaceholder": "ポリシーを検索...",
   "loading": "コンプライアンスデータを読み込み中...",
+  "complianceTemplates": {
+    "button": "コンプライアンス",
+    "missingFields_one": "必須フィールドが {{count}} 件未入力です",
+    "missingFields_other": "必須フィールドが {{count}} 件未入力です",
+    "complete": "すべての必須フィールドが入力済みです",
+    "entityTypes": {
+      "data_product": "データプロダクト",
+      "asset": "テーブルとビュー"
+    }
+  },
   "stats": {
     "overallCompliance": "全体のコンプライアンス",
     "acrossAllRules": "全ルール対象",
@@ -100,15 +110,6 @@
       "score": "スコア",
       "issues": "問題"
     }
-  },
-  "complianceTemplates": {
-    "button": "コンプライアンス",
-    "missingFields_one": "必須フィールドが {{count}} 件未入力です",
-    "missingFields_other": "必須フィールドが {{count}} 件未入力です",
-    "complete": "すべての必須フィールドが入力済みです",
-    "entityTypes": {
-      "data_product": "データプロダクト",
-      "asset": "テーブルとビュー"
-    }
   }
 }
+

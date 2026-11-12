@@ -7,6 +7,16 @@
   "createNewRule": "Neue Compliance-Regel erstellen",
   "searchPlaceholder": "Richtlinien suchen...",
   "loading": "Compliance-Daten werden geladen...",
+  "complianceTemplates": {
+    "button": "Compliance",
+    "missingFields_one": "{{count}} Pflichtfeld fehlt",
+    "missingFields_other": "{{count}} Pflichtfelder fehlen",
+    "complete": "Alle Pflichtfelder sind ausgefüllt",
+    "entityTypes": {
+      "data_product": "Datenprodukte",
+      "asset": "Tabellen und Views"
+    }
+  },
   "stats": {
     "overallCompliance": "Gesamte Compliance",
     "acrossAllRules": "Über alle Regeln",
@@ -100,15 +110,6 @@
       "score": "Score",
       "issues": "Probleme"
     }
-  },
-  "complianceTemplates": {
-    "button": "Compliance",
-    "missingFields_one": "{{count}} Pflichtfeld fehlt",
-    "missingFields_other": "{{count}} Pflichtfelder fehlen",
-    "complete": "Alle Pflichtfelder sind ausgefüllt",
-    "entityTypes": {
-      "data_product": "Datenprodukte",
-      "asset": "Tabellen und Views"
-    }
   }
 }
+

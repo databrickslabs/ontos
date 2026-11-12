@@ -7,6 +7,16 @@
   "createNewRule": "Crear Nueva Regla de Cumplimiento",
   "searchPlaceholder": "Buscar políticas...",
   "loading": "Cargando datos de cumplimiento...",
+  "complianceTemplates": {
+    "button": "Cumplimiento",
+    "missingFields_one": "Falta {{count}} campo obligatorio",
+    "missingFields_other": "Faltan {{count}} campos obligatorios",
+    "complete": "Todos los campos obligatorios están completos",
+    "entityTypes": {
+      "data_product": "Productos de datos",
+      "asset": "Tablas y vistas"
+    }
+  },
   "stats": {
     "overallCompliance": "Cumplimiento General",
     "acrossAllRules": "En todas las reglas",
@@ -100,15 +110,6 @@
       "score": "Puntuación",
       "issues": "Problemas"
     }
-  },
-  "complianceTemplates": {
-    "button": "Cumplimiento",
-    "missingFields_one": "Falta {{count}} campo obligatorio",
-    "missingFields_other": "Faltan {{count}} campos obligatorios",
-    "complete": "Todos los campos obligatorios están completos",
-    "entityTypes": {
-      "data_product": "Productos de datos",
-      "asset": "Tablas y vistas"
-    }
   }
 }
+

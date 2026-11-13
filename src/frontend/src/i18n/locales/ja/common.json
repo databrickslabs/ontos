@@ -565,16 +565,25 @@
     "removeConfirm": "この関係を削除してもよろしいですか？この操作は元に戻せません。"
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "{{kind}} を選択…",
     "latestSuffix": "{{name}}（最新）",
     "pinVersionTitle": "特定のバージョンに固定",
     "pinVersion": "バージョンを固定",
     "followLatestTitle": "常にファミリーの最新の表示可能なバージョンに従う",
     "followLatest": "最新に従う",
-    "searchPlaceholder": "{{kind}} を検索…",
     "loading": "読み込み中…",
-    "noMatching": "一致する {{kind}} がありません。",
     "unnamed": "（名前なし）"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "契約を選択…",
+      "search": "契約を検索…",
+      "noMatching": "一致する契約がありません。"
+    },
+    "product": {
+      "select": "データ製品を選択…",
+      "search": "データ製品を検索…",
+      "noMatching": "一致するデータ製品がありません。"
+    }
   },
   "entityTree": {
     "title": "関連エンティティ",

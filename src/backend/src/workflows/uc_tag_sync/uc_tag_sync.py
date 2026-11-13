@@ -1834,6 +1834,7 @@ def sync_tags(
     dry_run: bool = False,
     verbose: bool = False,
     partial: bool = False,
+    result: Optional[SyncResult] = None,
 ) -> SyncResult:
     """Reconcile UC tags for every linked object, then clean up lost links.
 
@@ -1845,8 +1846,13 @@ def sync_tags(
     still the delivered one), and cleans up the objects that lost their links. A partial
     run (``partial``, a --limit read) removes nothing and skips that cleanup, but keeps
     every record previous holds so the state is not lost.
+
+    ``result`` is filled as the run goes, so a caller that passes it can still save what
+    was delivered when the run stops part way (see keep_unvisited_records). An error on
+    one object is counted and the run goes on; that object keeps its previous record.
     """
-    result = SyncResult()
+    if result is None:
+        result = SyncResult()
 
     def apply(
         object_type: str, fqn: str, desired: Dict[str, Optional[str]]
@@ -1858,10 +1864,19 @@ def sync_tags(
             None if previous is None else {} if partial else recorded
         )
         ours: Dict[str, Optional[str]] = {}
-        u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, ownership,
-                                    dry_run=dry_run,
-                                    previously_delivered=delivered_before,
-                                    delivered=ours)
+        try:
+            u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, ownership,
+                                        dry_run=dry_run,
+                                        previously_delivered=delivered_before,
+                                        delivered=ours)
+        except Exception as e:
+            # E.g. its information_schema can't be read: the rest of the run goes on,
+            # and the object keeps the record of the previous run.
+            msg = f"Failed to sync tags of {object_type} {fqn}: {e}"
+            print(f"[WARN] {msg}")
+            result.errors.append(msg)
+            result.delivered[object_type][fqn] = dict(recorded)
+            return 0, 0
         result.updated += u
         result.removed += r
         result.errors.extend(errs)
@@ -1935,9 +1950,16 @@ def sync_tags(
         for fqn, tags in previous.get(object_type, {}).items():
             if fqn in result.delivered[object_type]:
                 continue
-            r, errs, still_delivered = remove_delivered_tags(
-                spark, object_type, fqn, tags, dry_run=dry_run
-            )
+            try:
+                r, errs, still_delivered = remove_delivered_tags(
+                    spark, object_type, fqn, tags, dry_run=dry_run
+                )
+            except Exception as e:
+                msg = f"Failed to clean up tags of {object_type} {fqn}: {e}"
+                print(f"[WARN] {msg}")
+                result.errors.append(msg)
+                result.delivered[object_type][fqn] = dict(tags)
+                continue
             result.removed += r
             result.errors.extend(errs)
             if still_delivered:
@@ -2108,6 +2130,34 @@ def build_desired_for_dataset(d: DatasetTagInfo, tag_sync_configs: List[Dict[str
     return desired
 
 
+def keep_unvisited_records(result: SyncResult, previous: Optional[DeliveryState]) -> None:
+    """After a run that stopped part way: keep the record of every object it didn't reach.
+
+    The objects it reached keep their new record. An object it had already cleaned up
+    gets its old record back, which is harmless: the next run finds nothing to remove.
+    """
+    for object_type in DELIVERY_OBJECT_TYPES:
+        for fqn, tags in (previous or {}).get(object_type, {}).items():
+            result.delivered[object_type].setdefault(fqn, dict(tags))
+
+
+def save_run_delivery_state(
+    engine: Engine,
+    result: SyncResult,
+    previous: Optional[DeliveryState],
+    ownership: TagOwnership,
+    is_partial_read: bool,
+) -> Optional[str]:
+    """Store what the run delivered. Returns an error message on failure.
+
+    A full run that read the previous state replaces the record; otherwise the run's
+    objects are merged into it.
+    """
+    replace = previous is not None and not is_partial_read
+    return save_delivery_state(engine, result.delivered, ownership.describe(),
+                               replace=replace)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sync Ontos metadata to UC governed tags")
     parser.add_argument("--tag_sync_configs", type=str, default="[]")
@@ -2222,25 +2272,34 @@ def main() -> None:
         print(f"  {count} object(s) had tags delivered last run")
 
     print(f"\nProcessing {len(datasets)} datasets (merged)...")
-    result = sync_tags(
-        ws,
-        spark,
-        datasets,
-        direct,
-        tag_sync_configs,
-        ownership,
-        previous=previous,
-        dry_run=dry_run,
-        verbose=verbose,
-        partial=is_partial_read,
-    )
+    result = SyncResult()
+    try:
+        sync_tags(
+            ws,
+            spark,
+            datasets,
+            direct,
+            tag_sync_configs,
+            ownership,
+            previous=previous,
+            dry_run=dry_run,
+            verbose=verbose,
+            partial=is_partial_read,
+            result=result,
+        )
+    except Exception:
+        # The tags written so far must not be lost from the state, or they are orphaned
+        # once their objects lose the link: save them with every record not reached.
+        if not dry_run:
+            keep_unvisited_records(result, previous)
+            save_run_delivery_state(engine, result, previous, ownership, is_partial_read)
+        raise
     updated_total, removed_total = result.updated, result.removed
     all_errors: List[str] = list(result.errors)
 
     if not dry_run:
-        save_error = save_delivery_state(engine, result.delivered, ownership.describe(),
-                                         replace=previous is not None and
-                                         not is_partial_read)
+        save_error = save_run_delivery_state(engine, result, previous, ownership,
+                                             is_partial_read)
         if save_error:
             all_errors.append(save_error)
 

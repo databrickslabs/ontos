@@ -649,6 +649,61 @@ def test_a_failed_update_keeps_the_value_the_job_wrote_before(tag_sync, job, mon
     assert job.state["TABLE"][ORDERS] == {DOMAIN_KEY: "Finance"}
 
 
+def test_an_error_on_one_object_keeps_the_run_going_and_its_records(
+    tag_sync, job, monkeypatch
+):
+    """OTHER's information_schema can't be read: ORDERS is still tagged and recorded,
+    OTHER keeps its record, and once both are unlinked no tag is left behind."""
+    _seed(job, OTHER, {DOMAIN_KEY: "Sales"})
+    job.state = _previous(OTHER, {DOMAIN_KEY: "Sales"})
+    real_existing = tag_sync.get_existing_prefixed_tags
+
+    def unreadable(spark, object_type, name, prefix):
+        if name == OTHER:
+            raise RuntimeError("information_schema unavailable")
+        return real_existing(spark, object_type, name, prefix)
+
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags", unreadable)
+    with pytest.raises(SystemExit):
+        job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                               _table(tag_sync, fqn=OTHER, domain="Finance")])
+
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}
+    assert job.state["TABLE"][ORDERS] == {DOMAIN_KEY: "Finance"}
+    assert job.state["TABLE"][OTHER] == {DOMAIN_KEY: "Sales"}
+
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags", real_existing)
+    job.run([DOMAIN_CFG], [])
+
+    assert job.store[("TABLE", ORDERS)] == {}
+    assert job.store[("TABLE", OTHER)] == {}
+
+
+def test_a_run_that_stops_part_way_saves_what_it_delivered(tag_sync, job, monkeypatch):
+    """The run aborts after tagging ORDERS: the state holds ORDERS and keeps the record
+    of the schema it never reached, so an unlink later leaves no orphan."""
+    _seed(job, SCHEMA, {DOMAIN_KEY: "Sales"}, object_type="SCHEMA")
+    job.state = _previous(SCHEMA, {DOMAIN_KEY: "Sales"}, object_type="SCHEMA")
+
+    real_aggregate = tag_sync.aggregate_parent_desired
+
+    def abort(*_a, **_k):
+        raise RuntimeError("aborted")
+
+    monkeypatch.setattr(tag_sync, "aggregate_parent_desired", abort)
+    with pytest.raises(RuntimeError):
+        job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
+
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}
+    assert job.state["TABLE"][ORDERS] == {DOMAIN_KEY: "Finance"}
+    assert job.state["SCHEMA"][SCHEMA] == {DOMAIN_KEY: "Sales"}
+
+    monkeypatch.setattr(tag_sync, "aggregate_parent_desired", real_aggregate)
+    job.run([DOMAIN_CFG], [])
+
+    assert job.store[("TABLE", ORDERS)] == {}
+    assert job.store[("SCHEMA", SCHEMA)] == {}
+
 
 def test_a_dry_run_splits_recorded_from_customer_owned_tags(tag_sync, job, capsys):
     """Dry run: the recorded tag will be removed, the customer's configured key is kept."""

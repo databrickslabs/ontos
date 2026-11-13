@@ -46,6 +46,8 @@ interface ImportPreviewItem {
   action: 'create' | 'update' | 'skip' | 'error';
   message?: string;
   existing_asset_id?: string;
+  /** What the row will do beyond its action, e.g. write its description to Unity Catalog */
+  warnings?: AssetCodedWarning[];
 }
 
 interface ImportPreviewResult {

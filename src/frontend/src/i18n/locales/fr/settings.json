@@ -142,6 +142,7 @@
     },
     "ucDescriptionWriteback": {
       "title": "Descriptions des actifs",
+      "adminOnly": "Seul un administrateur peut activer cette option.",
       "label": "Écrire les descriptions des actifs dans Unity Catalog",
       "help": "L'enregistrement de la description d'une table, d'une vue ou d'une colonne Databricks définit aussi son commentaire Unity Catalog, en tant qu'utilisateur qui l'enregistre. Sans la permission MODIFY, la description est enregistrée uniquement dans Ontos et l'actif indique qu'il n'est pas synchronisé.",
       "importLimit": {

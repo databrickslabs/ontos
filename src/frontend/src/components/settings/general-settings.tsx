@@ -49,6 +49,8 @@ export default function GeneralSettings() {
   const { toast } = useToast();
 
   const hasWriteAccess = hasPermission('settings-general', FeatureAccessLevel.READ_WRITE);
+  // Turning the Unity Catalog write-back on writes org-wide: only an admin may (turning it off is open to writers)
+  const hasAdminAccess = hasPermission('settings-general', FeatureAccessLevel.ADMIN);
 
   const [settings, setSettings] = useState<AppSettings>({
     databricksCatalog: '',
@@ -278,7 +280,10 @@ export default function GeneralSettings() {
                 onCheckedChange={(checked) =>
                   setSettings(prev => ({ ...prev, ucDescriptionWritebackEnabled: checked }))
                 }
-                disabled={!hasWriteAccess || isLoading}
+                disabled={
+                  !hasWriteAccess || isLoading ||
+                  (!hasAdminAccess && !settings.ucDescriptionWritebackEnabled)
+                }
               />
               <Label htmlFor="ucDescriptionWritebackEnabled">
                 {t(
@@ -296,6 +301,14 @@ export default function GeneralSettings() {
                   'that it is not in sync.'
               )}
             </p>
+            {!hasAdminAccess && (
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'settings:general.ucDescriptionWriteback.adminOnly',
+                  'Only an admin can turn this on.'
+                )}
+              </p>
+            )}
           </div>
           <div className="space-y-2 max-w-xs mt-4">
             <Label htmlFor="ucDescriptionImportWriteLimit">

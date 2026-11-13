@@ -40,12 +40,16 @@
     "warningTitle": "Salvo no Ontos, não no Unity Catalog",
     "warnings": {
       "uc_description_permission_denied": "O Unity Catalog recusou alterar a descrição de {{object}} (é preciso a permissão MODIFY ou ser o proprietário).",
-      "uc_description_object_not_found": "{{object}} não foi encontrado no Unity Catalog.",
+      "uc_description_object_not_found": "{{object}} não foi encontrado no Unity Catalog, ou você não tem acesso a ele; por isso a descrição não foi gravada lá.",
       "uc_description_user_token_required": "A requisição não tinha um token de usuário do Databricks, então a descrição de {{object}} não foi gravada no Unity Catalog.",
       "uc_description_no_warehouse": "Nenhum SQL warehouse está configurado, então a descrição de {{object}} não foi gravada no Unity Catalog.",
       "uc_description_write_failed": "Falha ao gravar a descrição de {{object}} no Unity Catalog.",
       "uc_description_import_write_limit": "Esta importação atingiu o limite de {{limit}} descrições gravadas no Unity Catalog, então a descrição de {{object}} não foi gravada lá.",
-      "uc_description_import_writes_failed": "Os ativos foram importados, mas as descrições não puderam ser gravadas no Unity Catalog."
+      "uc_description_import_writes_failed": "Os ativos foram importados, mas as descrições não puderam ser gravadas no Unity Catalog.",
+      "uc_description_existing_comment": "O Unity Catalog já tem outro comentário em {{object}}, então a descrição não foi escrita lá. Defina a descrição com esse comentário, ou altere o comentário no Unity Catalog, e salve de novo.",
+      "uc_description_unsupported_text": "A descrição de {{object}} tem um caractere que o Unity Catalog não consegue armazenar, então não foi escrita lá.",
+      "uc_description_import_time_budget": "Esta importação esgotou o tempo para gravações no Unity Catalog, então a descrição de {{object}} não foi escrita lá.",
+      "uc_description_import_writes_uc": "A descrição de {{object}} será gravada no Unity Catalog. Se já houver outro comentário lá, ele é mantido e a linha recebe um aviso."
     }
   },
   "deleteDialog": {

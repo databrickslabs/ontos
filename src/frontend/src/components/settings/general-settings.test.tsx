@@ -4,10 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { FeatureAccessLevel } from '@/types/settings';
 
 let canWrite = true;
+let canAdmin = true;
 vi.mock('@/stores/permissions-store', () => ({
   usePermissions: () => ({
     hasPermission: (_feature: string, level: FeatureAccessLevel) =>
-      level === FeatureAccessLevel.READ_ONLY || canWrite,
+      level === FeatureAccessLevel.ADMIN
+        ? canAdmin
+        : level === FeatureAccessLevel.READ_ONLY || canWrite,
   }),
 }));
 
@@ -157,9 +160,30 @@ describe('GeneralSettings - instance identity', () => {
 describe('GeneralSettings - write asset descriptions to Unity Catalog', () => {
   beforeEach(() => {
     canWrite = true;
+    canAdmin = true;
     toastMock.mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
+
+  it('lets only an admin turn the switch on', async () => {
+    canAdmin = false;
+    mockFetch();
+    render(<GeneralSettings />);
+    const toggle = await screen.findByLabelText('Write asset descriptions to Unity Catalog');
+    expect(toggle).toBeDisabled();
+    expect(screen.getByText('Only an admin can turn this on.')).toBeInTheDocument();
+  });
+
+  it('lets a non-admin turn an enabled switch off', async () => {
+    canAdmin = false;
+    mockFetch({ ...baseResponse, uc_description_writeback_enabled: true });
+    render(<GeneralSettings />);
+    const toggle = await screen.findByLabelText('Write asset descriptions to Unity Catalog');
+    expect(toggle).toBeEnabled();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(lastPutBody().uc_description_writeback_enabled).toBe(false));
+  });
 
   it('is off by default and saves the switch', async () => {
     mockFetch();

@@ -73,11 +73,11 @@ def _context(entity_type, entity_id):
     )
 
 
-@pytest.mark.parametrize('gdpr_exists', [False, True], ids=['context-only', 'persisted'])
-def test_a_rule_after_an_assign_tag_step_still_sees_the_stored_tags(db_session, gdpr_exists):
+def test_a_rule_after_an_assign_tag_step_still_sees_the_stored_tags(db_session):
     product = _product(db_session)
     _tag(db_session, 'owner', product.id, 'data_product')
-    key = _tag(db_session, 'gdpr')[1] if gdpr_exists else 'gdpr'
+    # An Assign Tag step fails for a tag that is not in the catalog
+    key = _tag(db_session, 'gdpr')[1]
     context = _context('data_product', product.id)
 
     assigned = AssignTagStepHandler(db_session, {'key': key, 'value': 'yes'}).execute(context)

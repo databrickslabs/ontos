@@ -37,6 +37,7 @@ from src.models.process_workflows import (
     is_conditional_step_type,
 )
 from src.repositories.process_workflows_repository import workflow_execution_repo
+from src.common.api_errors import CodedValueError
 
 if TYPE_CHECKING:
     from src.controller.lifecycle_fields import DeprecationDetails
@@ -1393,6 +1394,17 @@ class NotificationStepHandler(StepHandler):
             return NotificationType.INFO
 
 
+class TagNotFoundError(CodedValueError):
+    """An assign-tag step names a tag that is not in the catalog."""
+
+    code = 'tag_not_found'
+
+    def __init__(self, tag: str):
+        super().__init__(
+            f"Tag '{tag}' not found; create it in the tag catalog first", tag=tag,
+        )
+
+
 class AssignTagStepHandler(StepHandler):
     """Handler for tag assignment steps — persists via TagsManager."""
 
@@ -1450,7 +1462,8 @@ class AssignTagStepHandler(StepHandler):
                         )
                     persisted = True
                 else:
-                    logger.warning(f"Tag '{key}' not found by FQN — context updated only")
+                    # Nothing was assigned, so the step must not pass
+                    return _rule_step_error(TagNotFoundError(key))
             except Exception as e:
                 logger.warning(f"TagsManager integration failed (context still updated): {e}")
 

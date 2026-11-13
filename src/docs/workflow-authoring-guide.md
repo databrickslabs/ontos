@@ -120,7 +120,7 @@ Each step ends with a pass or a fail, which picks the next step. A step that rai
 | `policy_check` | The referenced compliance policy's rule holds, or the policy is inactive | The rule fails, or the policy doesn't exist |
 | `approval` | The approver approves (the step pauses first) | The approver rejects, or no approver could be resolved |
 | `notification` | At least one notification was created | None could be created |
-| `assign_tag`, `remove_tag` | The tag was written or removed | The value couldn't be resolved or written |
+| `assign_tag`, `remove_tag` | The tag was written or removed | The value couldn't be resolved or written, or the tag isn't in the catalog (`assign_tag` only, as `tag_not_found`) |
 | `script` | The script's `result` says so (see below) | `result` says not passed, the script raises, or times out |
 | `webhook` | The response code is a success code (default 200-299) | Other codes, or the call fails after `retry_count` retries |
 | `create_asset_review` | The review was created | It couldn't be created |

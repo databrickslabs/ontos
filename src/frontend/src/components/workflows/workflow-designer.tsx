@@ -10,6 +10,7 @@ import ReactFlow, {
   Background,
   MiniMap,
   useNodesState,
+  useReactFlow,
   useEdgesState,
   MarkerType,
   Panel,
@@ -728,6 +729,24 @@ const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shie
   { type: 'deliver', label: 'Deliver', icon: Send },
 ];
 
+// Fit options of the canvas: on first load and after Rearrange
+const FIT_VIEW_OPTIONS = { maxZoom: 1, padding: 0.2 };
+
+// Fits the view after a confirmed Rearrange, so a layout taller than the view isn't left
+// partly off-screen. Rendered inside ReactFlow (the hook needs its context). Deferred one
+// tick so the store has the new node positions first.
+function FitAfterRearrange({ version }: { version: number }) {
+  const { fitView } = useReactFlow();
+  const handled = useRef(version);
+  useEffect(() => {
+    if (version === handled.current) return undefined;
+    handled.current = version;
+    const timer = setTimeout(() => fitView(FIT_VIEW_OPTIONS), 0);
+    return () => clearTimeout(timer);
+  }, [version, fitView]);
+  return null;
+}
+
 // Layout helper
 // Label and colour of a step's outgoing edge. A conditional's edges are its true and
 // false branches: a false condition is a branch, not a failure (#1418).
@@ -897,6 +916,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [showRearrangeDialog, setShowRearrangeDialog] = useState(false);
+  const [rearrangeVersion, setRearrangeVersion] = useState(0);
   const [activationConflicts, setActivationConflicts] = useState<WorkflowActivationConflict[]>([]);
   const [showOverlapDialog, setShowOverlapDialog] = useState(false);
   // Preview wizard (issue #405) — design-time dry-run. Only meaningful once
@@ -1388,6 +1408,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setNodes(arranged);
     setSteps(prev => withNodePositions(prev, arranged));
     setShowRearrangeDialog(false);
+    setRearrangeVersion(v => v + 1);
   }, [nodes, edges, setNodes]);
 
   // Handle edge reconnection (drag an existing edge endpoint to a different node)
@@ -1930,7 +1951,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             edgesUpdatable
             edgesFocusable
             fitView
-            fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
+            fitViewOptions={FIT_VIEW_OPTIONS}
             minZoom={0.3}
             maxZoom={2}
             defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
@@ -1939,6 +1960,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             <Background />
             <Controls />
             <MiniMap />
+            <FitAfterRearrange version={rearrangeVersion} />
             
             {/* Step type toolbar */}
             <Panel position="top-left" className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-2 dark:bg-slate-800/95">

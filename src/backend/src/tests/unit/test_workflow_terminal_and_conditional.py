@@ -348,3 +348,54 @@ def test_a_condition_that_returns_a_value_is_stored_as_text(db_session):
     assert check.result_data['result'] == '2026-01-02 00:00:00'
     assert check.result_data['branch'] == 'true'
     assert execution.status.value == 'succeeded'
+
+
+# --- validate keeps the coded warnings next to policy and trigger errors -----
+
+
+def _validate(db, workflow):
+    import asyncio
+    from unittest.mock import MagicMock
+
+    from src.routes.workflows_routes import validate_workflow
+
+    return asyncio.run(validate_workflow(
+        request=MagicMock(), workflow=workflow, workflow_id=None,
+        manager=WorkflowsManager(db),
+    ))
+
+
+def _terminal_link_workflow(trigger, is_active):
+    return ProcessWorkflowCreate(
+        name='wf', trigger=trigger, is_active=is_active,
+        steps=[
+            _step('check', StepType.POLICY_CHECK, {'policy_id': 'missing'}, on_pass='done'),
+            _step('done', StepType.PASS, on_pass='stop'),
+            _step('stop', StepType.FAIL),
+        ],
+    )
+
+
+def test_validate_keeps_coded_warnings_next_to_policy_errors(db_session):
+    trigger = WorkflowTrigger(type=TriggerType.MANUAL, entity_types=[EntityType.TABLE])
+
+    result = _validate(db_session, _terminal_link_workflow(trigger, True))
+
+    assert [i.code for i in result.issues] == ['policy_check_policy_missing']
+    codes = {w.code for w in result.warning_issues}
+    assert 'terminal_step_has_next' in codes
+    assert 'workflow_validation_warning' not in codes
+
+
+def test_validate_keeps_coded_warnings_next_to_trigger_errors(db_session):
+    trigger = WorkflowTrigger(
+        type=TriggerType.MANUAL, entity_types=[EntityType.TABLE],
+        unknown_entity_types=['bogus'],
+    )
+
+    result = _validate(db_session, _terminal_link_workflow(trigger, False))
+
+    assert 'trigger_entity_type_unknown' in [i.code for i in result.issues]
+    codes = {w.code for w in result.warning_issues}
+    assert 'terminal_step_has_next' in codes
+    assert 'workflow_validation_warning' not in codes

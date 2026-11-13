@@ -177,6 +177,15 @@
     "workspace_client_unavailable": "L'espace de travail Databricks n'est pas disponible et cette règle vérifie des objets Unity Catalog ; elle n'a donc pas pu s'exécuter.",
     "tags_load_failed": "Les tags des entités {{entityType}} n'ont pas pu être chargés ; la règle n'a donc pas pu être évaluée."
   },
+  "tableSources": {
+    "runWarning": "Objets non évalués : {{count}}. La règle lit des champs de {{sources}}, qui n'ont pas pu être lus ({{reasons}}). Leurs résultats comptent comme des échecs.",
+    "notEvaluated": "Non évalué : impossible de lire {{fields}} depuis {{sources}} ({{reason}}).",
+    "reasons": {
+      "no_warehouse": "aucun SQL warehouse n'est configuré",
+      "no_access": "pas d'accès à la table système",
+      "query_failed": "la requête a échoué"
+    }
+  },
   "saveErrors": {
     "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe."
   },

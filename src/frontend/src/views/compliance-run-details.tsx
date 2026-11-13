@@ -16,7 +16,10 @@ import {
   TableSkeleton,
 } from '@/components/common/list-view-skeleton';
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
-import { complianceRunWarningText } from '@/lib/compliance-run-warning';
+import {
+  complianceResultMessageText,
+  complianceRunWarningText,
+} from '@/lib/compliance-run-warning';
 import {
   complianceActionError,
   complianceActionLabel,
@@ -76,7 +79,9 @@ export default function ComplianceRunDetails() {
       </Badge>
     ) },
     { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground break-words">{row.original.message || t('compliance:results.empty')}</span>
+      <span className="text-sm text-muted-foreground break-words">
+        {complianceResultMessageText(t, row.original) || t('compliance:results.empty')}
+      </span>
     ) },
     { id: 'actions', header: t('compliance:results.actions'), cell: ({ row }) => {
       const outcomes = complianceActionOutcomes(row.original.details_json);

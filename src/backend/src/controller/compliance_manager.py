@@ -23,6 +23,15 @@ from src.common.compliance_entities import (
     create_entity_iterator,
     parse_entity_filter,
     EntityFilter,
+    TableEnrichment,
+)
+from src.common.uc_table_enrichment import (
+    FIELD_GROUP,
+    WarehouseSqlRunner,
+    conditions_without,
+    fields_read,
+    groups_for_fields,
+    unavailable_fields_read,
 )
 
 
@@ -734,6 +743,32 @@ class ComplianceManager:
             )
             return False
 
+    def _table_enrichment_for(
+        self, parsed_rule: Dict, entity_types: List[str], ws,
+    ) -> Optional[TableEnrichment]:
+        """Tags / lineage to load for a run, or None when the rule reads neither.
+
+        They come from system tables through the SQL warehouse, so they are read
+        only for rules on tables or views that use them, and only for the tables
+        selected by the parts of the rule's WHERE that don't read them.
+        """
+        if ws is None or not any(t in ('table', 'view') for t in entity_types):
+            return None
+        where = parsed_rule.get('where_clause')
+        groups = groups_for_fields(fields_read(where, parsed_rule.get('assert_clause')))
+        if not groups:
+            return None
+        try:
+            from src.common.config import get_settings
+            warehouse_id = (get_settings().DATABRICKS_WAREHOUSE_ID or '').strip()
+        except Exception:
+            logger.warning("Settings unavailable; no SQL warehouse for tags and lineage")
+            warehouse_id = ''
+        runner = WarehouseSqlRunner(ws, warehouse_id) if warehouse_id else None
+        return TableEnrichment(
+            groups=groups, runner=runner, scope=conditions_without(where, FIELD_GROUP),
+        )
+
     def run_policy_inline(
         self, 
         db: Session, 
@@ -750,6 +785,9 @@ class ComplianceManager:
         run = self.create_run(db, policy_id=policy.id)
         success = 0
         failure = 0
+        # Entities not evaluated because a field the rule reads could not be loaded
+        not_evaluated = 0
+        unavailable_sources: Dict[str, str] = {}
         # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context;
         # NOTIFY collects per recipient and sends one notification when the run ends
         tag_manager = TagsManagerTagAdapter(db, user_email=current_user)
@@ -766,7 +804,15 @@ class ComplianceManager:
 
             # Create entity iterator
             ws = self._workspace_client_for(entity_filter.entity_types, policy)
-            entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
+            entity_iterator = create_entity_iterator(
+                db=db, workspace_client=ws,
+                table_enrichment=self._table_enrichment_for(
+                    parsed_rule, entity_filter.entity_types, ws,
+                ),
+            )
+            rule_fields = fields_read(
+                parsed_rule.get('where_clause'), parsed_rule.get('assert_clause'),
+            )
 
             # Iterate over entities
             for obj in entity_iterator.iterate(
@@ -775,8 +821,26 @@ class ComplianceManager:
                 # Evaluate ASSERT clause
                 ok = True
                 msg = None
+                details = None
+                missing = unavailable_fields_read(obj, rule_fields)
 
-                if parsed_rule.get('assert_clause'):
+                if missing:
+                    # Neither pass nor a real failure: the result says which
+                    # source is missing, and no ON_PASS / ON_FAIL action runs
+                    ok = False
+                    fields = ', '.join(sorted(missing))
+                    sources = ', '.join(sorted({m['source'] for m in missing.values()}))
+                    reasons = ', '.join(sorted({m['reason'] for m in missing.values()}))
+                    for m in missing.values():
+                        unavailable_sources[m['source']] = m['reason']
+                    not_evaluated += 1
+                    msg = (f"Not evaluated: {fields} could not be read from {sources} "
+                           f"({reasons})")
+                    details = json.dumps({
+                        'code': 'rule_field_unavailable',
+                        'params': {'fields': fields, 'sources': sources, 'reason': reasons},
+                    })
+                elif parsed_rule.get('assert_clause'):
                     try:
                         evaluator = Evaluator(obj)
                         result = evaluator.evaluate(parsed_rule['assert_clause'])
@@ -788,7 +852,9 @@ class ComplianceManager:
                         msg = f"Evaluation error: {str(e)}"
 
                 # Execute actions
-                actions = parsed_rule.get('on_pass_actions' if ok else 'on_fail_actions', [])
+                actions = [] if missing else parsed_rule.get(
+                    'on_pass_actions' if ok else 'on_fail_actions', [],
+                )
                 action_outcomes = None
                 if actions:
                     action_context = ActionContext(
@@ -812,6 +878,10 @@ class ComplianceManager:
                     ]
                     if fail_messages:
                         msg = "; ".join(fail_messages)
+                if action_outcomes:
+                    # Actions run only on evaluated entities, so this never
+                    # replaces the not-evaluated details above
+                    details = json.dumps({'actions': action_outcomes})
 
                 # Store result
                 res = ComplianceResultDb(
@@ -822,7 +892,7 @@ class ComplianceManager:
                     object_name=obj.get('name'),
                     passed=bool(ok),
                     message=msg,
-                    details_json=json.dumps({'actions': action_outcomes}) if action_outcomes else None,
+                    details_json=details,
                 )
                 db.add(res)
 
@@ -836,12 +906,21 @@ class ComplianceManager:
             total = max(1, success + failure)
             score = round(100.0 * (success / total), 2)
             # A stored rule with trailing input keeps running with its tail ignored;
-            # the run says so, so the policies that need a fix can be found. A failed
-            # notification flush is the other warning (the tail is what to fix first).
+            # the run says so, so the policies that need a fix can be found. Entities
+            # not evaluated and a failed notification flush are the other warnings, in
+            # that order (the tail is what to fix first).
             trailing = parsed_rule.get('trailing_input')
             warning_code, warning_params = None, None
             if trailing:
                 warning_code, warning_params = 'rule_trailing_input', trailing
+            elif not_evaluated:
+                # Counted as failures; the warning says how many and which source
+                warning_code = 'rule_fields_unavailable'
+                warning_params = {
+                    'count': not_evaluated,
+                    'sources': ', '.join(sorted(unavailable_sources)),
+                    'reasons': ', '.join(sorted(set(unavailable_sources.values()))),
+                }
             elif not notified:
                 warning_code, warning_params = 'notifications_failed', {}
             self.complete_run(

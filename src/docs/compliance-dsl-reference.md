@@ -137,6 +137,10 @@ repeat across namespaces, use the fully qualified name
 `True`. If the tags can't be loaded, the run fails instead of treating the
 entities as untagged.
 
+For Unity Catalog tables and views, `key` is the governed tag's key, and a tag
+without a value has the value `True`. See [Table and View Tags and
+Lineage](#table-and-view-tags-and-lineage) for where the tags come from.
+
 ### String Functions
 - `UPPER(str)` - Convert to uppercase
 - `LOWER(str)` - Convert to lowercase
@@ -333,7 +337,8 @@ Entities have different properties based on their type:
 Tables and views also carry fields computed from their columns, as returned by Unity Catalog
 when Ontos lists the tables (no extra call per table):
 
-- `columns` - List of `{name, type, comment, is_partition_key}`
+- `columns` - List of `{name, type, comment, is_partition_key}`; with `tags` (the column's
+  governed tags) when the rule reads table tags
 - `column_count` - Number of columns
 - `columns_without_comment_count` - Columns with no comment; a comment of only spaces counts
   as missing
@@ -350,7 +355,38 @@ MATCH (t:table) ASSERT t.partition_columns_without_comment_count = 0
 MATCH (v:view) ASSERT v.columns_without_comment_count = 0
 ```
 
-Column tags, table tags, keys and lineage are not available yet.
+Primary and foreign keys are not available yet.
+
+#### Table and View Tags and Lineage
+These fields come from system tables, read through the SQL warehouse the app is configured
+with (`DATABRICKS_WAREHOUSE_ID`). They are loaded only for a rule that reads them, with one
+statement per catalog and field group (never one per table), restricted to the catalogs and
+schemas selected by the `AND`-ed parts of the rule's `WHERE` that don't read these fields:
+
+- `tags` - The table's governed tags as `{key: value}`, read with `HAS_TAG` / `TAG`. Source:
+  `system.information_schema.table_tags`; the same statement fills `columns[].tags` from
+  `system.information_schema.column_tags`
+- `upstream_count` - Distinct tables this table was written from, in
+  `system.access.table_lineage`
+- `downstream_count` - Distinct tables written from this table
+
+Lineage counts only events of the last 90 days and only table-to-table lineage (rows whose
+source or target is a path, a notebook or a dashboard are not counted); a table with no event
+in that window has `0`.
+
+```
+MATCH (t:table) ASSERT HAS_TAG('data_classification')
+MATCH (t:table) ASSERT TAG('data_classification') IN ['public', 'internal', 'confidential']
+MATCH (t:table) WHERE t.catalog = 'production' ASSERT t.upstream_count > 0
+MATCH (v:view) ASSERT v.downstream_count > 0 OR HAS_TAG('deprecated')
+```
+
+If a source can't be read (no SQL warehouse configured, no access to the system table, or the
+statement fails), its fields are left out and every entity whose rule reads them gets a failed
+result marked *not evaluated* with the field, the source and the reason; its `ON_PASS` /
+`ON_FAIL` actions don't run. When the `WHERE` reads a missing field, the entity is kept only
+if the `AND`-ed parts of the `WHERE` that don't read it hold. The run ends with the warning `rule_fields_unavailable` and the
+number of such entities. Fields from a source that could be read are still evaluated.
 
 ### Application Entities
 - `type` - Entity type
@@ -414,6 +450,8 @@ Extend the evaluator to support custom functions by modifying `evaluate_function
 - **Batch Processing**: Entity loading is batched for efficiency
 - **Lazy Evaluation**: Entities are loaded on-demand as iterators
 - **WHERE Filtering**: Applied before ASSERT to reduce evaluations
+- **Tags and Lineage**: Read from system tables only when the rule uses them, once per
+  catalog, and only for the schemas a `WHERE` on catalog or schema selects
 - **Limits**: Use the `limit` parameter when testing rules
 
 ## Integration

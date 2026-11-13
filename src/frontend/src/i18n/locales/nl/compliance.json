@@ -177,6 +177,15 @@
     "workspace_client_unavailable": "De Databricks-workspace is niet beschikbaar en deze regel controleert Unity Catalog-objecten, dus kon hij niet worden uitgevoerd.",
     "tags_load_failed": "De tags van de {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd."
   },
+  "tableSources": {
+    "runWarning": "Niet geëvalueerde objecten: {{count}}. De regel leest velden uit {{sources}}, die niet gelezen konden worden ({{reasons}}). Hun resultaten tellen als mislukt.",
+    "notEvaluated": "Niet geëvalueerd: {{fields}} kon niet worden gelezen uit {{sources}} ({{reason}}).",
+    "reasons": {
+      "no_warehouse": "er is geen SQL-warehouse geconfigureerd",
+      "no_access": "geen toegang tot de systeemtabel",
+      "query_failed": "de query is mislukt"
+    }
+  },
   "saveErrors": {
     "rule_trailing_input": "De regel bevat ongeldige invoer, vanaf regel {{line}}, kolom {{column}} ('{{text}}'). Alles vanaf dat punt zou worden genegeerd, waardoor de regel minder controleert dan er staat. Verwijder het of corrigeer de syntaxis."
   },

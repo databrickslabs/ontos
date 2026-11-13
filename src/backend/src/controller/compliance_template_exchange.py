@@ -11,6 +11,7 @@ skipped). When it can't be applied (no active template, no matching asset, or
 the importing user may not write the values) the entry stays an ordinary
 custom property, so nothing is lost.
 """
+import json
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
@@ -28,6 +29,7 @@ from src.controller.compliance_template_assets import (
 )
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.compliance_templates import ComplianceTemplateValueDb
+from src.db_models.data_products import CustomPropertyDb
 from src.db_models.entity_relationships import EntityRelationshipDb
 from src.models.users import UserInfo
 from src.repositories.compliance_templates_repository import compliance_templates_repo
@@ -93,14 +95,32 @@ def apply_to_document(doc: Dict[str, Any], values: Optional[Dict[str, Any]]) -> 
 
 
 def read_entry(custom_props: Any) -> Optional[Dict[str, Any]]:
-    """The entry's reference id -> value mapping, or ``None`` (absent or not a mapping)."""
+    """The entry's reference id -> value mapping, or ``None`` (absent or not a mapping).
+
+    A JSON text is read too: data products store custom property values as text.
+    """
     if isinstance(custom_props, dict):
         value = custom_props.get(COMPLIANCE_VALUES_PROPERTY)
     elif isinstance(custom_props, list):
         value = next((p.get("value") for p in custom_props if _is_entry(p)), None)
     else:
         value = None
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return None
     return value if isinstance(value, dict) else None
+
+
+def _with_entry(custom_props: Any, values: Dict[str, Any]) -> Any:
+    """``custom_props`` with the entry set to ``values`` (removed when empty)."""
+    props = without_entry(custom_props)
+    if not values:
+        return props
+    if isinstance(props, dict):
+        return {**props, COMPLIANCE_VALUES_PROPERTY: values}
+    return [*(props or []), {"property": COMPLIANCE_VALUES_PROPERTY, "value": values}]
 
 
 def without_entry(custom_props: Any) -> Any:
@@ -233,15 +253,19 @@ def schema_values(
     return entity_values(db, entity_type=ASSET_ENTITY_TYPE, entity_id=str(asset.id))
 
 
-def take_schema_entries(db: Session, schema_data: list) -> list[Tuple[AssetDb, Dict[str, Any]]]:
-    """Detach the entries of schema objects that map to a table or view asset.
+def import_schema_values(
+    db: Session, schema_data: list, *, user_email: Optional[str]
+) -> list[Tuple[AssetDb, list[str]]]:
+    """Write the entries of schema objects that map to a table or view asset.
 
-    Returns ``(asset, values)`` to apply once the contract is created; the entry
-    is removed from those schema objects only (others keep it as a custom property).
+    Runs in the import's transaction, before the schema objects are stored. The
+    values written leave the schema object's entry; the rest (unknown reference
+    ids, values that don't fit) stay in it, as does the whole entry of an object
+    that maps to no asset. Returns ``(asset, reference ids written)``.
     """
     if not has_active_template(db, ASSET_ENTITY_TYPE):
         return []
-    pending: list[Tuple[AssetDb, Dict[str, Any]]] = []
+    imported: list[Tuple[AssetDb, list[str]]] = []
     for schema in schema_data:
         if not isinstance(schema, dict):
             continue
@@ -255,9 +279,34 @@ def take_schema_entries(db: Session, schema_data: list) -> list[Tuple[AssetDb, D
         )
         if asset is None:
             continue
-        schema[key] = without_entry(schema.get(key))
-        pending.append((asset, values))
-    return pending
+        written = apply_imported_values(
+            db, entity_type=ASSET_ENTITY_TYPE, entity_id=str(asset.id), values=values,
+            user_email=user_email,
+        )
+        schema[key] = _with_entry(schema.get(key), unwritten(values, written))
+        imported.append((asset, written))
+    return imported
+
+
+def unwritten(values: Dict[str, Any], written: list[str]) -> Dict[str, Any]:
+    return {ref: value for ref, value in values.items() if ref not in written}
+
+
+def keep_unwritten_product_values(
+    db: Session, *, product_id: str, values: Dict[str, Any], written: list[str]
+) -> None:
+    """Leave only the values not written in the product's stored entry (none: drop it)."""
+    rest = unwritten(values, written)
+    rows = db.query(CustomPropertyDb).filter(
+        CustomPropertyDb.product_id == str(product_id),
+        CustomPropertyDb.property == COMPLIANCE_VALUES_PROPERTY,
+    ).all()
+    for row in rows:
+        if rest:
+            row.value = json.dumps(rest)
+        else:
+            db.delete(row)
+    db.flush()
 
 
 async def can_import_values(

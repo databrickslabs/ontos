@@ -2992,18 +2992,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Parse and create schema objects if present
             # Accept both ODCS standard 'schema' and Pydantic field name 'contract_schema'
             schema_data = parsed_odcs.get('schema') or parsed_odcs.get('contract_schema', [])
-            compliance_values = []
             if compliance_values_user and isinstance(schema_data, list):
-                compliance_values = compliance_template_exchange.take_schema_entries(
-                    db, schema_data
+                compliance_template_exchange.import_schema_values(
+                    db, schema_data, user_email=compliance_values_user
                 )
             if isinstance(schema_data, list) and schema_data:
                 self._create_schema_objects(db, created.id, schema_data, current_user)
-            for asset, values in compliance_values:
-                compliance_template_exchange.apply_imported_values(
-                    db, entity_type="asset", entity_id=str(asset.id), values=values,
-                    user_email=compliance_values_user,
-                )
             
             # Create team members and metadata if present (v3.1.0: team can be object or deprecated array)
             team_raw = parsed_odcs.get('team')

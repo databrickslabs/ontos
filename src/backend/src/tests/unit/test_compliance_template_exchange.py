@@ -6,6 +6,7 @@ is the asset; ODPS carries a data product's values on the product. Both use one
 run on the test database; the route permission check is mocked.
 """
 import asyncio
+import contextlib
 import copy
 import uuid
 from pathlib import Path
@@ -124,6 +125,12 @@ def _contract_doc(physical_name: str, values: dict | None = None) -> dict:
     }
 
 
+@pytest.fixture(autouse=True)
+def _commit_is_flush(db_session: Session, monkeypatch):
+    """Keep the managers' commits in the test transaction, so they roll back with it."""
+    monkeypatch.setattr(db_session, "commit", db_session.flush)
+
+
 @pytest.fixture
 def contracts(tmp_path: Path):
     return DataContractsManager(data_dir=tmp_path)
@@ -138,8 +145,16 @@ def _import_contract(contracts, db: Session, doc: dict, values_user: str | None)
 
 
 def _export_contract(contracts, db: Session, contract_id: str) -> dict:
+    """``build_odcs_from_db``; its own semantic-links session reuses the test session."""
+    @contextlib.contextmanager
+    def _same_session():
+        yield db
+
     db.expire_all()
-    return contracts.build_odcs_from_db(data_contract_repo.get_with_all(db, id=contract_id), db)
+    with patch("src.common.database.get_db_session", _same_session):
+        return contracts.build_odcs_from_db(
+            data_contract_repo.get_with_all(db, id=contract_id), db
+        )
 
 
 class TestOdcs:
@@ -188,26 +203,50 @@ class TestOdcs:
             "limitacoes": "Nova", "refresh-hours": 1,
         }
 
+    def test_import_overwrites_a_stored_value(self, db_session, contracts):
+        template = _template(db_session, "asset")
+        table = _asset(db_session, "main.sales.orders_over")
+        _fill(db_session, template, "asset", table.id, {"limitacoes": "old"})
+        doc = _contract_doc("main.sales.orders_over", {"limitacoes": "new"})
+        _import_contract(contracts, db_session, doc, "importer@example.com")
+        rows = db_session.query(ComplianceTemplateValueDb).filter_by(
+            entity_type="asset", entity_id=str(table.id),
+            field_id=_field_id(template, "limitacoes"),
+        ).all()
+        assert [(r.value, r.filled_by) for r in rows] == [("new", "importer@example.com")]
+
     def test_unmatched_schema_object_keeps_the_entry(self, db_session):
         _template(db_session, "asset")
         matched = _asset(db_session, "main.sales.orders_known")
         schema = _contract_doc("main.sales.not_registered", {"limitacoes": "kept"})["schema"]
         schema += _contract_doc("main.sales.orders_known", {"limitacoes": "moved"})["schema"]
 
-        pending = cte.take_schema_entries(db_session, schema)
+        imported = cte.import_schema_values(db_session, schema, user_email="u@example.com")
 
-        assert [(asset.id, values) for asset, values in pending] == [
-            (matched.id, {"limitacoes": "moved"}),
+        assert [(asset.id, written) for asset, written in imported] == [
+            (matched.id, ["limitacoes"]),
         ]
         # The unmatched object keeps the entry as an ordinary custom property.
         assert cte.read_entry(schema[0]["customProperties"]) == {"limitacoes": "kept"}
         assert schema[1]["customProperties"] == [{"property": "owner", "value": "sales"}]
 
+    def test_values_not_written_stay_in_the_entry(self, db_session):
+        _template(db_session, "asset")
+        _asset(db_session, "main.sales.orders_rest")
+        schema = _contract_doc(
+            "main.sales.orders_rest",
+            {"limitacoes": "ok", "refresh-hours": "soon", "unknown": 1},
+        )["schema"]
+        cte.import_schema_values(db_session, schema, user_email="u@example.com")
+        assert cte.read_entry(schema[0]["customProperties"]) == {
+            "refresh-hours": "soon", "unknown": 1,
+        }
+
     def test_without_the_right_to_write_values_nothing_is_written(self, db_session, contracts):
         template = _template(db_session, "asset")
         table = _asset(db_session, "main.sales.orders_ro")
         doc = _contract_doc("main.sales.orders_ro", {"limitacoes": "x"})
-        with patch.object(cte, "take_schema_entries") as take:
+        with patch.object(cte, "import_schema_values") as take:
             _import_contract(contracts, db_session, doc, None)
         take.assert_not_called()
         assert _stored(db_session, template, "asset", table.id) == {}
@@ -216,7 +255,7 @@ class TestOdcs:
         _drop_templates(db_session, "asset")
         _asset(db_session, "main.sales.orders_none")
         schema = _contract_doc("main.sales.orders_none", {"limitacoes": "kept"})["schema"]
-        assert cte.take_schema_entries(db_session, schema) == []
+        assert cte.import_schema_values(db_session, schema, user_email="u@example.com") == []
         assert cte.read_entry(schema[0]["customProperties"]) == {"limitacoes": "kept"}
 
     def test_export_replaces_a_stored_entry_with_the_live_values(self):
@@ -332,6 +371,32 @@ class TestOdps:
         exported = _export_product(manager, db_session, product_id)
         assert _entry(exported["customProperties"]) == {"limitacoes": "Revisado"}
 
+    def test_values_not_written_stay_a_custom_property(self, db_session):
+        template = _template(db_session, "data_product")
+        manager, product_id = _upload(
+            db_session, _product_doc({"limitacoes": "ok", "unknown": 1}), "importer@example.com",
+        )
+        assert _stored(db_session, template, "data_product", product_id) == {"limitacoes": "ok"}
+        exported = _export_product(manager, db_session, product_id)
+        # The export shows the live values; the stored remainder is still on the product.
+        assert _entry(exported["customProperties"]) == {"limitacoes": "ok"}
+        product = db_session.get(DataProductDb, product_id)
+        stored = [p for p in product.custom_properties if p.property == PROP]
+        assert [cte.read_entry([{"property": PROP, "value": p.value}]) for p in stored] == [
+            {"unknown": 1},
+        ]
+
+    def test_a_failed_write_keeps_the_product_and_the_entry(self, db_session):
+        template = _template(db_session, "data_product")
+        with patch.object(cte, "apply_imported_values", side_effect=RuntimeError("boom")):
+            _, product_id = _upload(
+                db_session, _product_doc({"limitacoes": "x"}), "importer@example.com",
+            )
+        assert db_session.get(DataProductDb, product_id) is not None
+        assert _stored(db_session, template, "data_product", product_id) == {}
+        product = db_session.get(DataProductDb, product_id)
+        assert PROP in [p.property for p in product.custom_properties]
+
     def test_without_the_right_to_write_values_nothing_is_written(self, db_session):
         template = _template(db_session, "data_product")
         _, product_id = _upload(db_session, _product_doc({"limitacoes": "x"}), None)
@@ -371,6 +436,7 @@ class TestDocumentHelpers:
         assert cte.read_entry({PROP: {"a": 1}, "x": 1}) == {"a": 1}
         assert cte.without_entry({PROP: {"a": 1}, "x": 1}) == {"x": 1}
         assert cte.read_entry([{"property": PROP, "value": "not a mapping"}]) is None
+        assert cte.read_entry([{"property": PROP, "value": '{"a": 1}'}]) == {"a": 1}
         assert cte.read_entry(None) is None
 
     def test_imported_values_that_do_not_fit_are_skipped(self, db_session):

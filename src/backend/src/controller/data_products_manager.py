@@ -1627,12 +1627,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 # stores any non-UUID original id as a sourceId custom property
                 compliance_values = None
                 if import_compliance_values:
-                    props = product_data.get('customProperties')
-                    compliance_values = compliance_template_exchange.read_entry(props)
-                    if compliance_values is not None:
-                        product_data['customProperties'] = (
-                            compliance_template_exchange.without_entry(props)
-                        )
+                    compliance_values = compliance_template_exchange.read_entry(
+                        product_data.get('customProperties')
+                    )
                 created_product = self.create_product(product_data, preserve_source_id=True)
                 if compliance_values:
                     self._import_compliance_values(
@@ -1659,18 +1656,26 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     def _import_compliance_values(
         self, product_id: str, values: Dict[str, Any], current_user: Optional[str]
     ) -> None:
-        """Store an imported product's template values; the product stays if this fails."""
+        """Store an imported product's template values.
+
+        The product was stored with the entry as a custom property; the values
+        written leave it. If this fails, the product keeps the whole entry.
+        """
         try:
-            compliance_template_exchange.apply_imported_values(
-                self._db, entity_type="data_product", entity_id=str(product_id),
-                values=values, user_email=current_user,
-            )
-            self._db.commit()
+            with self._db.begin_nested():
+                written = compliance_template_exchange.apply_imported_values(
+                    self._db, entity_type="data_product", entity_id=str(product_id),
+                    values=values, user_email=current_user,
+                )
+                compliance_template_exchange.keep_unwritten_product_values(
+                    self._db, product_id=str(product_id), values=values, written=written
+                )
         except Exception:
-            self._db.rollback()
             logger.warning(
                 "Compliance values of imported product %s not stored", product_id, exc_info=True
             )
+            return
+        self._db.commit()
 
     def create_new_version(self, original_product_id: str, request: NewVersionRequest) -> DataProductApi:
         """Creates a new version of an ODPS v1.0.0 data product."""

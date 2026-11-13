@@ -125,7 +125,8 @@ from src.utils.contract_owner_team import (
 )
 from src.utils.odcs_values import page_text, typed_text, typed_value
 from src.utils.odcs_quality_operators import (
-    implementation_text, odcs_quality_check, operator_columns, tags_text,
+    implementation_page_text, implementation_text, odcs_quality_check, operator_columns,
+    tags_text,
 )
 from src.utils.schema_editor_fields import keep_unsent_fields
 from src.utils.property_custom_properties import SCHEMA_PROPERTY_ORDER
@@ -2028,7 +2029,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             **operator_columns(rule_dict),
         )
 
-    def _create_quality_checks(self, db, contract_id: str, quality_rules: List):
+    def _create_quality_checks(self, db, contract_id: str, quality_rules: List,
+                               previous: Optional[Dict[str, str]] = None):
         """
         Create object-level quality checks for a contract.
 
@@ -2036,6 +2038,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db: Database session
             contract_id: Contract UUID
             quality_rules: List of quality rule data (can be Pydantic models or dicts)
+            previous: name -> stored implementation of the checks being replaced;
+                a rule sending back the implementation the API showed keeps it
         """
         # Get the first schema object to attach quality checks to
         schema_obj = db.query(SchemaObjectDb).filter(SchemaObjectDb.contract_id == contract_id).first()
@@ -2044,7 +2048,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             return
 
         for rule_data in quality_rules:
-            db.add(self._build_quality_check_db(rule_data, object_id=schema_obj.id))
+            check = self._build_quality_check_db(rule_data, object_id=schema_obj.id)
+            stored = (previous or {}).get(check.name)
+            sent = rule_data.get('implementation') if isinstance(rule_data, dict) else getattr(
+                rule_data, 'implementation', None)
+            if stored is not None and sent == implementation_page_text(stored):
+                check.implementation = stored
+            db.add(check)
     
     def _process_semantic_links(self, db, contract_id: str, contract_data, current_user: Optional[str] = None):
         """
@@ -2768,15 +2778,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     # Property-level (column) checks are owned by the schema
                     # recreation path above; deleting them here would drop the
                     # column rules that were just persisted from the same save.
+                    previous: Dict[str, str] = {}
                     for schema_obj in schema_objects:
-                        db.query(DataQualityCheckDb).filter(
+                        replaced = db.query(DataQualityCheckDb).filter(
                             DataQualityCheckDb.object_id == schema_obj.id,
                             DataQualityCheckDb.property_id.is_(None),
-                        ).delete()
+                        )
+                        for check in replaced:
+                            if check.name and check.implementation is not None:
+                                previous.setdefault(check.name, check.implementation)
+                        replaced.delete()
 
                     # Add new object-level quality rules
                     if data_dict['qualityRules']:
-                        self._create_quality_checks(db, contract_id, data_dict['qualityRules'])
+                        self._create_quality_checks(
+                            db, contract_id, data_dict['qualityRules'], previous=previous)
             
             # Handle team members if provided (v3.1.0: team can be object with members or deprecated array)
             if data_dict.get('team') is not None:
@@ -7375,7 +7391,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 rule=check.rule,
                 query=check.query,
                 engine=check.engine,
-                implementation=check.implementation,
+                # The string, or an object's JSON text, as the forms edit it
+                implementation=implementation_page_text(check.implementation),
                 must_be=check.must_be,
                 must_not_be=check.must_not_be,
                 must_be_gt=check.must_be_gt,

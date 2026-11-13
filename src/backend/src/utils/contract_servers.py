@@ -7,10 +7,9 @@ A server row has the common fields (``id``, ``server``, ``type``,
 key/value row, so the fields of every ODCS server type round-trip, including
 the ones a type requires (``format`` for azure, ``dataset`` for bigquery ...).
 """
-import json
 from typing import Any, Dict, List, Optional
 
-from src.utils.odcs_values import strict_loads
+from src.utils.odcs_values import dumps, strict_loads
 
 # Server fields that are columns of the server row (or JSON columns), not key/value rows
 SERVER_COLUMNS = ('id', 'server', 'type', 'description', 'environment', 'roles',
@@ -28,7 +27,7 @@ def property_values(server: Dict[str, Any]) -> Dict[str, str]:
     for key, value in items:
         if key in SERVER_COLUMNS or value is None:
             continue
-        values[key] = value if isinstance(value, str) else json.dumps(value)
+        values[key] = value if isinstance(value, str) else dumps(value)
     return values
 
 
@@ -52,7 +51,7 @@ def odcs_property_value(key: str, text: Optional[str]) -> Any:
 
 def json_list_text(value: Any) -> Optional[str]:
     """``roles`` / ``customProperties`` for their JSON column."""
-    return json.dumps(value) if value else None
+    return dumps(value) if value else None
 
 
 def json_list(text: Optional[str]) -> Optional[List[Any]]:

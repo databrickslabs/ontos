@@ -15,6 +15,16 @@ def _no_constant(name: str):
     raise ValueError(name)
 
 
+def _not_json(value: Any) -> str:
+    """Values JSON has no type for (YAML dates and timestamps ...) as text."""
+    return value.isoformat() if hasattr(value, 'isoformat') else str(value)
+
+
+def dumps(value: Any) -> str:
+    """``json.dumps`` that writes a date or another non-JSON value as text."""
+    return json.dumps(value, default=_not_json)
+
+
 def strict_loads(text: str) -> Any:
     """``json.loads`` without the non-standard ``NaN`` / ``Infinity``, which
     aren't JSON (an API answer with them fails): such text stays text."""
@@ -33,7 +43,9 @@ def typed_text(value: Any) -> Optional[str]:
         return json.dumps(value)  # text that reads as JSON: keep it a string
     if isinstance(value, float) and not math.isfinite(value):
         return str(value)
-    return json.dumps(value)
+    if not isinstance(value, (bool, int, float, list, dict)):
+        return _not_json(value)  # a YAML date: its text, as before
+    return dumps(value)
 
 
 def typed_value(text: Optional[str]) -> Any:

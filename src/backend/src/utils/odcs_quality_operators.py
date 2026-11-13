@@ -11,10 +11,9 @@ they are numbers.
 A check's ``tags`` (an array) and an object ``implementation`` are stored as
 JSON text (the columns are text), and exported in the shape they came in.
 """
-import json
 from typing import Any, Dict, Optional
 
-from src.utils.odcs_values import strict_loads
+from src.utils.odcs_values import dumps, strict_loads
 
 # column -> accepted keys (ODCS name first)
 _SCALAR_OPERATORS = {
@@ -48,7 +47,7 @@ def _first(rule: Dict[str, Any], keys) -> Any:
 def _as_text(value: Any) -> Optional[str]:
     if value is None:
         return None
-    return value if isinstance(value, str) else json.dumps(value)
+    return value if isinstance(value, str) else dumps(value)
 
 
 def _as_value(text: Optional[str]) -> Any:
@@ -66,7 +65,7 @@ def tags_text(tags: Any) -> Optional[str]:
     the quality rule form sends) as is."""
     if tags is None or isinstance(tags, str):
         return tags
-    return json.dumps(list(tags) if isinstance(tags, tuple) else tags)
+    return dumps(list(tags) if isinstance(tags, tuple) else tags)
 
 
 def implementation_text(implementation: Any) -> Optional[str]:
@@ -77,9 +76,9 @@ def implementation_text(implementation: Any) -> Optional[str]:
         return None
     if isinstance(implementation, str):
         if implementation.lstrip()[:1] in ('{', '"'):
-            return json.dumps(implementation)
+            return dumps(implementation)
         return implementation
-    return json.dumps(implementation)
+    return dumps(implementation)
 
 
 def odcs_tags(text: Optional[str]) -> Optional[list]:
@@ -108,6 +107,13 @@ def odcs_implementation(text: Optional[str]) -> Any:
     except (TypeError, ValueError):
         return text
     return value if isinstance(value, (dict, str)) else text
+
+
+def implementation_page_text(text: Optional[str]) -> Optional[str]:
+    """A stored implementation as the API and the forms show it: a string as
+    the string, an object as its JSON text."""
+    value = odcs_implementation(text)
+    return value if isinstance(value, str) or value is None else text
 
 
 def operator_columns(rule: Dict[str, Any]) -> Dict[str, Optional[str]]:

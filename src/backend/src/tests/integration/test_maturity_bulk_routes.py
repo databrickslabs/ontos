@@ -53,7 +53,7 @@ class TestBulkAssetMaturityEvaluation:
 
         assert response.status_code == 202, response.text
         assert response.json()['scope'] == {'catalog': 'bulkt', 'schema': 'sales',
-                                            'asset_types': ['Table', 'View']}
+                                            'asset_types': ['Table', 'View', 'Metric View']}
         latest = client.get(LATEST)
         assert latest.status_code == 200, latest.text
         summary = latest.json()

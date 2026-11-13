@@ -111,7 +111,8 @@ def test_the_scope_is_normalised_and_checked():
     assert (scope.catalog, scope.schema_name, scope.asset_types) == (
         "main", "sales", ("View", "Table"),
     )
-    assert bulk.normalize_scope(None, None, None).asset_types == ("Table", "View")
+    # The default scope is every asset type the maturity levels apply to
+    assert bulk.normalize_scope(None, None, None).asset_types == ("Table", "View", "Metric View")
     for args in [(None, "sales", None), ("main.x", None, None), ("main", None, ["Dashboard"])]:
         with pytest.raises(bulk.MaturityBulkScopeError) as info:
             bulk.normalize_scope(*args)

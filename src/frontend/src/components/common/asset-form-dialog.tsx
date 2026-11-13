@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { Loader2 } from 'lucide-react';
 
@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useFormatLabel } from '@/lib/format-label';
+import { mergeEditedProperties, newAssetProperties } from './asset-form-properties';
 
 interface AssetFormDialogProps {
   isOpen: boolean;
@@ -91,6 +92,8 @@ export function AssetFormDialog({
   const form = useForm<Record<string, any>>({
     defaultValues: {},
   });
+  // The values the form opened with, to send only the properties the user edited
+  const openedWith = useRef<Record<string, any>>({});
 
   const fetchSchema = useCallback(async () => {
     if (!assetTypeIri) return;
@@ -151,6 +154,7 @@ export function AssetFormDialog({
         }
       }
     }
+    openedWith.current = defaults;
     form.reset(defaults);
   }, [isOpen, schema, isEdit, asset]);
 
@@ -165,15 +169,10 @@ export function AssetFormDialog({
   const onSubmit = async (values: Record<string, any>) => {
     setIsSubmitting(true);
     try {
-      const properties: Record<string, any> = {};
-      for (const [key, val] of Object.entries(values)) {
-        if (key.startsWith('prop_')) {
-          const propName = key.slice(5);
-          if (val !== '' && val !== null && val !== undefined) {
-            properties[propName] = val;
-          }
-        }
-      }
+      // On edit, keep the stored properties: the form shows only the ontology fields
+      const properties = isEdit && asset
+        ? mergeEditedProperties(asset.properties, values, openedWith.current)
+        : newAssetProperties(values);
 
       if (isEdit && asset) {
         const payload: AssetUpdate = {

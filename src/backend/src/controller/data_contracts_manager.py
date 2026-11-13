@@ -5795,8 +5795,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         was_published = (contract_db.publication_scope or "none").lower() != "none"
 
         if scope != "none":
-            status = (contract_db.status or "").lower()
-            if status not in ("active", "approved"):
+            # An active-category stage or the approve action's stage (approved)
+            if not lifecycle_service.contract_publishable(db, contract_db):
                 raise ValueError(
                     "Contract must be active or approved to publish. "
                     f"Current status: {contract_db.status}"
@@ -5884,8 +5884,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Contract not found")
         
         current_status = (contract.status or '').lower()
-        if current_status != 'approved':
-            raise ValueError(f"Cannot request publish from status {contract.status}. Must be APPROVED.")
+        # The same rule as publishing: an active-category stage or approved
+        if not lifecycle_service.contract_publishable(db, contract):
+            raise ValueError(
+                f"Cannot request publish from status {contract.status}. "
+                "Must be approved or active."
+            )
         
         pub_scope = (contract.publication_scope or "none").lower()
         if pub_scope != "none":
@@ -6298,8 +6302,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         
         # Update publication based on decision
         if decision == 'approve':
-            if contract.status.lower() != 'approved':
-                raise ValueError("Contract must be APPROVED to publish")
+            if not lifecycle_service.contract_publishable(db, contract):
+                raise ValueError("Contract must be approved or active to publish")
             was_effectively_published = (contract.publication_scope or "none").lower() != "none"
             contract.publication_scope = requested_scope
             if not was_effectively_published:

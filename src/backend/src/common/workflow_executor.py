@@ -3915,7 +3915,9 @@ class WorkflowExecutor:
         current_status = (contract.status or '').lower()
         if current_status == target_status:
             return
-        if current_status not in ('proposed', 'under_review'):
+        # A review stage that awaits a decision (proposed / under_review by default)
+        from src.controller.lifecycle_service import lifecycle_service
+        if not lifecycle_service.awaits_review_decision(self._db, 'data_contract', contract):
             reason = f"the contract is not under review (status '{current_status}')"
             logger.warning(
                 "Review decision for data contract %s not applied: %s", contract_id, reason,

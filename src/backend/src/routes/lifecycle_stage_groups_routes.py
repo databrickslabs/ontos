@@ -233,6 +233,13 @@ async def _owns(db, entity_type: str, entity: Any, user, request: Request) -> bo
 
 
 async def _can_read(db, entity_type: str, entity: Any, user, request: Request) -> bool:
+    if entity_type == 'data_contract':
+        # The contracts' own read rule (version family, team, personal drafts)
+        from src.routes.data_contracts_routes import (
+            contract_read_scope, get_data_contracts_manager,
+        )
+        scope = await contract_read_scope(request, db, user)
+        return get_data_contracts_manager(request).can_read_contract(db, entity, **scope)
     if await _is_admin(entity_type, user, request):
         return True
     if entity_type == 'asset':

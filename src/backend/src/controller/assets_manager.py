@@ -719,7 +719,9 @@ class AssetsManager(SearchableAsset):
         junction lookup once instead of querying per asset (avoids N+1); when omitted the
         single-item path queries via the object's session.
         """
-        if asset_db_obj.status == 'retired':
+        # A retired-category stage leaves the search index
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of_row(asset_db_obj) == 'retired':
             return None
         type_name = asset_db_obj.asset_type.name if asset_db_obj.asset_type else 'Asset'
         tags = list(asset_db_obj.tags) if isinstance(asset_db_obj.tags, list) else []
@@ -768,7 +770,9 @@ class AssetsManager(SearchableAsset):
                 return []
 
             with session_factory() as db:
-                all_assets = db.query(AssetDb).filter(AssetDb.status != 'retired').all()
+                from src.controller.lifecycle_service import lifecycle_service
+                retired = lifecycle_service.category_filter(db, AssetDb, 'asset', ['retired'])
+                all_assets = db.query(AssetDb).filter(~retired).all()
                 # Batch-load domains once for the whole index build (avoids N+1).
                 domains_map = entity_domain_repo.get_domains_for_entities(
                     db, entity_type="asset", entity_ids=[str(a.id) for a in all_assets]

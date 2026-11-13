@@ -569,7 +569,8 @@ async def handle_certify_product(
         if certification_level is None:
             raise HTTPException(status_code=422, detail="certification_level is required when approved is true")
 
-        if product_db.status not in ("active",):
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of(db, 'data_product', product_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Product must be active to certify. Current status: {product_db.status}",
@@ -720,9 +721,11 @@ async def request_publish_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        # Same rule as set-publication-scope: only active products are published.
+        # Same rule as set-publication-scope: only active-category products are published.
+        from src.controller.lifecycle_service import lifecycle_service
         current_status = (product_db.status or "").lower()
-        if scope != "none" and current_status != "active":
+        if scope != "none" and \
+                lifecycle_service.category_of(db, 'data_product', product_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Product must be active to publish. Current status: {product_db.status}"
@@ -798,7 +801,8 @@ async def certify_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        if product_db.status not in ("active",):
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of(db, 'data_product', product_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Product must be active to certify. Current status: {product_db.status}"
@@ -2104,7 +2108,10 @@ async def update_data_product(
 
         # Check if versioning is required for non-draft products
         current_product_db = manager.get_product(product_id)
-        if current_product_db and current_product_db.status and current_product_db.status.lower() != 'draft':
+        # A product past its draft-category stages is versioned
+        from src.controller.lifecycle_service import lifecycle_service
+        if current_product_db and current_product_db.status and \
+                lifecycle_service.category_of_row(current_product_db, db) != 'draft':
             # Check if caller explicitly forced the update
             force_update = request.headers.get('X-Force-Update') == 'true'
             

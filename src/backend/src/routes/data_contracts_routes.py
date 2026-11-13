@@ -1060,7 +1060,8 @@ async def certify_contract_direct(
         if not contract_db:
             raise HTTPException(status_code=404, detail="Contract not found")
 
-        if (contract_db.status or "").lower() != "active":
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of(db, 'data_contract', contract_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Contract must be active to certify. Current status: {contract_db.status}",
@@ -1514,7 +1515,9 @@ async def update_contract(
                 )
 
         # Check if versioning is required for non-draft contracts
-        if db_obj.status and db_obj.status.lower() != 'draft':
+        # A contract past its draft-category stages is versioned
+        from src.controller.lifecycle_service import lifecycle_service
+        if db_obj.status and lifecycle_service.category_of(db, 'data_contract', db_obj) != 'draft':
             # Check if caller explicitly forced the update
             force_update = request.headers.get('X-Force-Update') == 'true'
             

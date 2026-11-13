@@ -1593,7 +1593,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         product_db = self._repo.get(db=db, id=product_id)
         if not product_db:
             raise ValueError(f"Data product with ID {product_id} not found")
-        if (product_db.status or 'draft').lower() in ('draft', 'sandbox'):
+        # From a draft-category stage (draft or sandbox by default)
+        if not product_db.status or \
+                lifecycle_service.category_of(db, 'data_product', product_db) == 'draft':
             self.submit_for_review(product_id, requester)
 
         get_trigger_registry(db).on_request_certify(
@@ -2941,7 +2943,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Product not found")
         
         # Check if source is in an editable state - if so, don't clone
-        if source_product.status and source_product.status.lower() in ['draft', 'proposed']:
+        # A draft- or review-category stage is edited in place (as the UI does)
+        if source_product.status and lifecycle_service.category_of(
+                db, 'data_product', source_product) in ('draft', 'review'):
             raise ValueError("Product is already in an editable state. Edit directly instead of cloning.")
         
         # Use current version with -draft suffix
@@ -4629,8 +4633,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError(f"Product {product_id} not found")
 
             # Check if product is in a subscribable status
-            subscribable_statuses = ['active']
-            if product.status and product.status.lower() not in subscribable_statuses:
+            # Only an active-category stage is subscribable
+            if product.status and lifecycle_service.category_of_row(product) != 'active':
                 # Try to get replacement product info if available (from #1042)
                 replacement_id = None
                 replacement_name = None

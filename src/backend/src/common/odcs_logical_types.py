@@ -8,6 +8,7 @@ _BY_BASE_TYPE = {
     "timestamp_ntz": "timestamp",
     "timestamp_ltz": "timestamp",
     "datetime": "timestamp",
+    "time": "time",
     "tinyint": "integer",
     "byte": "integer",
     "smallint": "integer",

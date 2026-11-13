@@ -113,7 +113,9 @@ def _at(doc, path):
 
 def _same(path, sent, got):
     if path == "productCreatedTs":
-        parse = lambda s: datetime.datetime.fromisoformat(str(s).replace("Z", "+00:00"))  # noqa: E731
+        def parse(text):
+            return datetime.datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+
         return parse(sent) == parse(got)
     return sent == got
 

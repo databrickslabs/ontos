@@ -24,17 +24,38 @@ class NotificationNotFoundError(Exception):
     """Raised when a notification is not found."""
 
 
+# Explicit principals of the workflow resolver (``_resolve_role_to_users``,
+# #1151): a notification stores them with their prefix.
+USER_PRINCIPAL_PREFIX = 'user:'
+GROUP_PRINCIPAL_PREFIX = 'group:'
+EXPLICIT_PRINCIPAL_PREFIXES = (USER_PRINCIPAL_PREFIX, GROUP_PRINCIPAL_PREFIX)
+
+
+def principal_identity(recipient: str) -> str:
+    """``recipient`` without a ``user:`` prefix, lowercased: the form compared
+    with a user's email and username."""
+    value = recipient.strip()
+    if value.startswith(USER_PRINCIPAL_PREFIX):
+        value = value[len(USER_PRINCIPAL_PREFIX):].strip()
+    return value.lower()
+
+
 class _RecipientMembership:
     """Which notification recipients one user is: the user (email or
-    username, ignoring case), a member of a group, or a member of an app role
-    through its groups or its individually assigned users (``assigned_users``,
-    #760). A role with neither falls back to the admins. Built once per user
-    and check, so the roles are loaded once.
+    username, ignoring case), a member of a group (ignoring case), or a member
+    of an app role through its groups or its individually assigned users
+    (``assigned_users``, #760). A role with neither falls back to the admins.
+    Built once per user and check, so the roles are loaded once.
+
+    The explicit forms of the workflow resolver (#1151) never name a role:
+    ``user:<x>`` is only that email or username, ``group:<name>`` only the
+    members of that group.
     """
 
     def __init__(self, user_info: UserInfo, roles: List[Any], roles_loaded: bool = True):
         self.roles_loaded = roles_loaded
         self._groups = set(user_info.groups or [])
+        self._group_names = {str(g).strip().lower() for g in self._groups}
         self._identities = {
             str(v).strip().lower() for v in (user_info.email, user_info.username) if v
         }
@@ -62,14 +83,22 @@ class _RecipientMembership:
         return self.is_admin
 
     def is_user(self, recipient: Optional[str]) -> bool:
-        """Whether the recipient names the user (email or username)."""
-        return bool(recipient) and recipient.strip().lower() in self._identities
+        """Whether the recipient names the user (email or username, bare or
+        as ``user:<x>``)."""
+        return bool(recipient) and principal_identity(recipient) in self._identities
+
+    def in_group(self, name: Optional[str]) -> bool:
+        """Whether the user is a member of the group ``name`` (ignoring case)."""
+        return bool(name) and name.strip().lower() in self._group_names
 
     def role_of(self, recipient: Optional[str], recipient_role_id: Optional[str]) -> Optional[Any]:
-        """The app role a recipient names: by id, else by name (legacy)."""
+        """The app role a recipient names: by id, else by name (legacy). An
+        explicit ``user:`` / ``group:`` recipient names none."""
         if recipient_role_id and str(recipient_role_id) in self.role_by_id:
             return self.role_by_id[str(recipient_role_id)]
-        return self._role_by_name.get(recipient) if recipient else None
+        if not recipient or recipient.startswith(EXPLICIT_PRINCIPAL_PREFIXES):
+            return None
+        return self._role_by_name.get(recipient)
 
     def is_recipient(self, recipient: Optional[str], recipient_role_id: Optional[str]) -> bool:
         """Whether the user is this recipient, without the broadcast and admin
@@ -78,12 +107,15 @@ class _RecipientMembership:
             return False
         if self.is_user(recipient):
             return True
+        if recipient and recipient.startswith(GROUP_PRINCIPAL_PREFIX):
+            return self.in_group(recipient[len(GROUP_PRINCIPAL_PREFIX):])
+        if recipient and recipient.startswith(USER_PRINCIPAL_PREFIX):
+            return False
         role = self.role_of(recipient, recipient_role_id)
         if role is not None:
             return self.member_of(role)
-        # Group picked as a recipient / approver (the Workflow Designer's
-        # principal picker stores the group name)
-        return bool(not recipient_role_id and recipient in self._groups)
+        # A bare group name (stored before the designer sent ``group:``)
+        return bool(not recipient_role_id and self.in_group(recipient))
 
 class NotificationsManager:
     def __init__(self, settings_manager: 'SettingsManager'):
@@ -122,24 +154,6 @@ class NotificationsManager:
                  logger.error(f"Error validating Notification DB object (ID: {db_obj.id}): {e}")
                  continue # Skip this notification
 
-        # Notifications addressed to the user as ``user:<x>`` / ``group:<name>``
-        # pass the filter as the user's own; the stored recipient is restored
-        claimed: Dict[str, str] = {}
-        for n in all_notifications_api:
-            identity = _explicit_principal_identity(n.recipient, user_info) if user_info else None
-            if identity:
-                claimed[n.id] = n.recipient
-                n.recipient = identity
-        visible = self._filter_notifications(all_notifications_api, user_info)
-        for n in visible:
-            if n.id in claimed:
-                n.recipient = claimed[n.id]
-        return visible
-
-    def _filter_notifications(
-        self, all_notifications_api: List[Notification], user_info: Optional[UserInfo],
-    ) -> List[Notification]:
-        """The notifications the user is a recipient of (broadcasts included)."""
         # --- Filtering logic (similar to before, but uses API models and SettingsManager) ---
         if not user_info:
             # Return only broadcast notifications if no user info
@@ -166,20 +180,6 @@ class NotificationsManager:
         return filtered_notifications
 
     def can_user_access_notification(
-        self, db: Session, notification: Notification, user_info: UserInfo,
-        *, strict: bool = False,
-    ) -> bool:
-        """Whether the user can access a notification (see
-        ``_can_user_access_notification``). One addressed to the user as
-        ``user:<x>`` / ``group:<name>`` is checked as addressed to the user."""
-        identity = (
-            _explicit_principal_identity(notification.recipient, user_info) if user_info else None
-        )
-        if identity:
-            notification = notification.model_copy(update={'recipient': identity})
-        return self._can_user_access_notification(db, notification, user_info, strict=strict)
-
-    def _can_user_access_notification(
         self, db: Session, notification: Notification, user_info: UserInfo,
         *, strict: bool = False,
     ) -> bool:
@@ -689,27 +689,3 @@ class NotificationsManager:
         except Exception as e:
             logger.error(f"Error getting pending delivery notifications: {e}", exc_info=True)
             return []
-
-
-
-# Explicit principals of the workflow resolver (``_resolve_role_to_users``):
-# ``user:<x>`` / ``group:<name>`` never name an app role. A notification stores
-# them with their prefix; for the user they address, the filters below see that
-# user's own identity instead.
-_EXPLICIT_PREFIXES = ('user:', 'group:')
-
-
-def _explicit_principal_identity(recipient: Optional[str], user_info: UserInfo) -> Optional[str]:
-    """The user's own email / username when ``recipient`` is a ``user:<x>`` (that
-    email or username, ignoring case) or ``group:<name>`` (a group of the user)
-    principal naming the user; None otherwise."""
-    if not recipient or not recipient.startswith(_EXPLICIT_PREFIXES):
-        return None
-    kind, _, name = recipient.partition(':')
-    if kind == 'group':
-        named = name in set(user_info.groups or [])
-    else:
-        named = name.lower() in {
-            str(v).lower() for v in (user_info.email, user_info.username) if v
-        }
-    return (user_info.email or user_info.username) if named else None

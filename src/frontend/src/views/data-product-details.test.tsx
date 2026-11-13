@@ -16,7 +16,6 @@ import {
   computeDefaultViewMode,
   shouldShowSectionForViewMode,
   formatDateString,
-  IN_PLACE_EDITABLE_STATUSES,
   isStatusEditableInPlace,
   isPersonalDraftProduct,
   isProductReadOnly,
@@ -273,20 +272,8 @@ describe('formatDateString', () => {
   });
 });
 
-describe('IN_PLACE_EDITABLE_STATUSES', () => {
-  it('contains exactly the lifecycle statuses where in-place editing is allowed', () => {
-    expect(IN_PLACE_EDITABLE_STATUSES).toEqual([
-      'draft',
-      'sandbox',
-      'proposed',
-      'under_review',
-      'approved',
-    ]);
-  });
-});
-
 describe('isStatusEditableInPlace', () => {
-  it.each(['draft', 'sandbox', 'proposed', 'under_review', 'approved'])(
+  it.each(['draft', 'sandbox', 'proposed', 'under_review'])(
     "%s is editable in place",
     (status) => {
       expect(isStatusEditableInPlace(status)).toBe(true);
@@ -304,9 +291,11 @@ describe('isStatusEditableInPlace', () => {
     expect(isStatusEditableInPlace('ideation', 'draft')).toBe(true);
     expect(isStatusEditableInPlace('live', 'active')).toBe(false);
     expect(isStatusEditableInPlace('needs_review')).toBe(false);
+    // The approve action's review stage is past the decision, as in the backend
+    expect(isStatusEditableInPlace('approved', 'review')).toBe(false);
   });
 
-  it.each(['active', 'retired', 'deprecated'])(
+  it.each(['approved', 'active', 'retired', 'deprecated'])(
     "'%s' is NOT editable in place (must be cloned)",
     (status) => {
       expect(isStatusEditableInPlace(status)).toBe(false);

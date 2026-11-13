@@ -39,7 +39,9 @@ vi.mock('@/components/ui/select', () => ({
   SelectTrigger: () => null,
   SelectValue: () => null,
   SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
+  SelectItem: ({ value, children, disabled }: any) => (
+    <option value={value} disabled={disabled}>{children}</option>
+  ),
 }));
 
 const stage = (key: string, label: string, category: string, order: number) => ({
@@ -128,5 +130,19 @@ describe('RequestProductActionDialog lifecycle', () => {
     const select = document.querySelector('option[value="proposed"]')!.closest('select')!;
     expect(Array.from(select.querySelectorAll('option')).map((o) => o.textContent)
       .filter(Boolean)).toEqual(['Move to Sandbox', 'Submit for Review']);
+  });
+
+  it('offers a review from a draft product while its lifecycle can’t be read', async () => {
+    mockGet.mockImplementation(async () => ({ data: null, error: 'Entity not found' }));
+    renderWithProviders(
+      <RequestProductActionDialog isOpen onOpenChange={vi.fn()} productId="prod-1"
+        productName="Orders" productStatus="draft" defaultRequestType="review" />,
+    );
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/lifecycle/data_product/prod-1'));
+    const review = document.querySelector('option[value="review"]') as HTMLOptionElement;
+    expect(review.disabled).toBe(false);
+    expect((document.querySelector('option[value="publish"]') as HTMLOptionElement).disabled)
+      .toBe(true);
   });
 });

@@ -11,7 +11,8 @@ import LifecycleGroupPicker from './lifecycle-group-picker';
 import EntityLifecycleStatus from './entity-lifecycle-status';
 import { buildStageLookup } from '@/hooks/use-lifecycle-stage-groups';
 import {
-  awaitsReviewDecision, lifecycleErrorText, stageColorClass, stageLabel,
+  awaitsReviewDecision, categoryOf, isContractPublishable, lifecycleErrorText, stageColorClass,
+  stageLabel, transitionLabel,
 } from '@/lib/lifecycle-stages';
 import type { LifecycleStageGroup } from '@/types/lifecycle-stage-groups';
 
@@ -74,6 +75,36 @@ describe('stage helpers', () => {
     expect(awaitsReviewDecision({ status: 'approved', status_category: 'review' })).toBe(false);
     expect(awaitsReviewDecision({ status: 'proposed' })).toBe(true);
     expect(awaitsReviewDecision({ status: 'live', status_category: 'active' })).toBe(false);
+  });
+
+  it('reads the Stage Category from the API, else from the seeded keys', () => {
+    expect(categoryOf({ status: 'live', status_category: 'active' })).toBe('active');
+    expect(categoryOf({ status: 'live', statusCategory: 'active' })).toBe('active');
+    expect(categoryOf({ status: 'sandbox' })).toBe('draft');
+    expect(categoryOf({ status: 'live' })).toBeNull();
+  });
+
+  it('publishes a contract from an active stage or approved, as the backend does', () => {
+    expect(isContractPublishable({ status: 'live', status_category: 'active' })).toBe(true);
+    expect(isContractPublishable({ status: 'approved', status_category: 'review' })).toBe(true);
+    expect(isContractPublishable({ status: 'proposed', status_category: 'review' })).toBe(false);
+    expect(isContractPublishable({ status: 'vetting', status_category: 'review' })).toBe(false);
+    expect(isContractPublishable({ status: 'active', status_category: 'deprecated' })).toBe(false);
+  });
+
+  it('names a move between seeded stages by its action, any other by its stage', () => {
+    const st = (key: string, label: string) => ({ key, label });
+    expect(transitionLabel(st('draft', 'Draft'), st('proposed', 'Proposed'), i18n.t))
+      .toBe('Submit for Review');
+    expect(transitionLabel(st('under_review', 'Under Review'), st('draft', 'Draft'), i18n.t))
+      .toBe('Reject (Return to Draft)');
+    expect(transitionLabel(st('deprecated', 'Deprecated'), st('active', 'Active'), i18n.t))
+      .toBe('Reactivate');
+    expect(transitionLabel(st('active', 'Active'), st('needs_review', 'Needs Review'), i18n.t))
+      .toBe('Needs Review');
+    // A seeded key an admin relabelled is user data: its label, no verb
+    expect(transitionLabel(st('draft', 'Draft'), st('proposed', 'Submitted'), i18n.t))
+      .toBe('Submitted');
   });
 
   it('translates coded lifecycle errors with their parameters', () => {

@@ -6,7 +6,7 @@
  *
  * The Radix Select hangs in jsdom, so it is replaced by a native select.
  */
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
 import RequestContractActionDialog from './request-contract-action-dialog';
@@ -85,5 +85,30 @@ describe('RequestContractActionDialog lifecycle', () => {
     await waitFor(() => expect(requestType('publish').disabled).toBe(false));
     expect(requestType('review').disabled).toBe(true);
     expect(screen.queryByText('No transitions available from live status.')).toBeNull();
+  });
+
+  it('offers a publish from approved in the default lifecycle', async () => {
+    mockGet.mockImplementation(async (url: string) => url === '/api/lifecycle/data_contract/c-1'
+      ? { data: lifecycle(st('approved', 'review', 3), [st('active', 'active', 4)]) }
+      : OTHER);
+    render('approved');
+
+    await waitFor(() => expect(requestType('publish').disabled).toBe(false));
+  });
+
+  it('shows the lifecycle loading, and no terminal state when it can’t be read', async () => {
+    let answer: (value: unknown) => void = () => {};
+    mockGet.mockImplementation((url: string) => url === '/api/lifecycle/data_contract/c-1'
+      ? new Promise((resolve) => { answer = resolve; }) : Promise.resolve(OTHER));
+    render('active');
+    fireEvent.change(requestType('status_change').closest('select')!, {
+      target: { value: 'status_change' },
+    });
+
+    expect(await screen.findByText('Loading the lifecycle…')).toBeInTheDocument();
+    expect(screen.queryByText(/Terminal State/)).toBeNull();
+    await act(async () => { answer({ data: null, error: 'Entity not found' }); });
+    expect(await screen.findByText(/The lifecycle couldn’t be loaded/)).toBeInTheDocument();
+    expect(screen.queryByText(/Terminal State/)).toBeNull();
   });
 });

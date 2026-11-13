@@ -351,6 +351,14 @@ class LifecycleService:
             return False
         return _normalized(getattr(entity, 'status', None)) != NAMED_ACTIONS['approve'][0]
 
+    def editable_in_place(self, db: Optional[Session], entity_type: str, entity: Any) -> bool:
+        """Edited in place rather than versioned: a draft-category stage, or a review
+        stage that still awaits its decision (draft, sandbox, proposed, under_review
+        by default). The update routes' versioning check and the clone-for-editing
+        guard share this rule."""
+        return (self.category_of(db, entity_type, entity) == 'draft'
+                or self.awaits_review_decision(db, entity_type, entity))
+
     def contract_publishable(self, db: Optional[Session], entity: Any) -> bool:
         """A contract may be published (or its publication requested): it is in an
         active-category stage, or in the approve action's review stage (``approved``,
@@ -431,14 +439,16 @@ class LifecycleService:
         initial = group.initial
         return initial is not None and _normalized(getattr(row, 'status', None)) == initial.key
 
-    def first_stage_filter(self, model: Any, entity_type: str):
-        """SQL condition: the row is in its own group's first stage (cached groups;
-        rows of other or unknown groups in the default group's first stage)."""
+    def first_stage_filter(self, model: Any, entity_type: str, db: Optional[Session] = None):
+        """SQL condition: the row is in its own group's first stage (rows of other or
+        unknown groups in the default group's first stage). With ``db`` the groups
+        are (re)loaded first, so a cold or stale cache doesn't miss a custom group."""
         from sqlalchemy import and_, func, or_
 
+        self._ensure(db)
         status = func.lower(func.trim(func.coalesce(model.status, '')))
         column = model.lifecycle_stage_group_id
-        default = self.default_group(None, entity_type)
+        default = self.default_group(db, entity_type)
         others = [g for g in list(self._groups.values())
                   if g.entity_type == entity_type and g.id != default.id and g.initial]
         default_key = (default.initial or next(iter(default.stages.values()))).key

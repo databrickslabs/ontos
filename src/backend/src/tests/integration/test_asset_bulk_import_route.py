@@ -4,8 +4,9 @@ import uuid
 from src.controller.asset_bulk_manager import AssetBulkManager
 
 
-def _upload(name, type_name):
-    body = f"name,asset_type\n{name},{type_name}\n".encode()
+def _upload(names, type_name):
+    rows = "\n".join(f"{name},{type_name}" for name in names)
+    body = f"name,asset_type\n{rows}\n".encode()
     return {"file": ("assets.csv", body, "text/csv")}
 
 
@@ -23,13 +24,14 @@ def _asset_type(client):
 
 def test_bulk_import_route_indexes_committed_assets(client):
     type_name = _asset_type(client)
-    name = f"route-{uuid.uuid4().hex[:8]}"
+    names = [f"route-{uuid.uuid4().hex[:8]}" for _ in range(2)]
 
-    resp = client.post("/api/assets/bulk/import", files=_upload(name, type_name))
+    resp = client.post("/api/assets/bulk/import", files=_upload(names, type_name))
 
     assert resp.status_code == 200, resp.text
-    assert resp.json()["created"] == 1, resp.text
-    assert any(hit.startswith("asset::") for hit in _indexed_ids(client, name))
+    assert resp.json()["created"] == 2, resp.text
+    for name in names:
+        assert any(hit.startswith("asset::") for hit in _indexed_ids(client, name))
 
 
 def test_bulk_import_route_failure_leaves_no_index_entries(client, monkeypatch):
@@ -40,7 +42,7 @@ def test_bulk_import_route_failure_leaves_no_index_entries(client, monkeypatch):
         raise RuntimeError("parent wiring failed")
 
     monkeypatch.setattr(AssetBulkManager, "_wire_parent_relationships", boom)
-    resp = client.post("/api/assets/bulk/import", files=_upload(name, type_name))
+    resp = client.post("/api/assets/bulk/import", files=_upload([name], type_name))
 
     assert resp.status_code == 500, resp.text
     assert _indexed_ids(client, name) == []

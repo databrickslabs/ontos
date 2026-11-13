@@ -486,6 +486,9 @@ class WorkflowExecutionRepository:
             error_message=error_message,
             message=message,
             duration_ms=duration_ms,
+            # Set here, not left to func.now(): SQLite keeps whole seconds, so
+            # runs of one step in the same second would not sort by when they ran
+            started_at=utc_now(),
         )
         db.add(db_step_exec)
         db.commit()

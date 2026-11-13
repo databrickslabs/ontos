@@ -173,6 +173,14 @@ class InvalidVersionFormatError(CodedValueError):
         super().__init__(message, version=version)
 
 
+def relationship_stable_id(rel_data: Dict[str, Any]) -> Optional[str]:
+    """The ODCS id of an incoming relationship: `stableId` in an API payload
+    (where `id` is the row id), else the ODCS `id` of a document."""
+    if 'stableId' in rel_data:
+        return rel_data.get('stableId')
+    return rel_data.get('id')
+
+
 def _relationship_read(rel) -> Dict[str, Any]:
     """A stored schema-level relationship in its API (ODCS) form."""
     def _decode(raw):
@@ -180,8 +188,9 @@ def _relationship_read(rel) -> Dict[str, Any]:
             return json.loads(raw)
         except (json.JSONDecodeError, TypeError):
             return raw
-    # `id` is the ODCS id (v3.2.0), so an editor save sends it back
-    out: Dict[str, Any] = {'id': rel.stable_id, 'type': rel.relationship_type,
+    # `id` is the row id; the ODCS id (v3.2.0) is `stableId`, as for columns
+    out: Dict[str, Any] = {'id': rel.id, 'stableId': rel.stable_id,
+                           'type': rel.relationship_type,
                            'from': _decode(rel.from_value), 'to': _decode(rel.to_value)}
     if rel.custom_properties_json:
         out['customProperties'] = _decode(rel.custom_properties_json)
@@ -1873,7 +1882,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         all_prop_relationships.append(SchemaPropertyRelationshipDb(
                             id=str(uuid4()),
                             property_id=prop_id,
-                            stable_id=rel_data.get('id'),
+                            stable_id=relationship_stable_id(rel_data),
                             relationship_type=rel_data.get('type', 'foreignKey'),
                             to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
                             custom_properties_json=json.dumps(rel_data['customProperties']) if rel_data.get('customProperties') else None,
@@ -1896,7 +1905,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     all_obj_relationships.append(SchemaObjectRelationshipDb(
                         id=str(uuid4()),
                         schema_object_id=schema_obj_id,
-                        stable_id=rel_data.get('id'),
+                        stable_id=relationship_stable_id(rel_data),
                         relationship_type=rel_data.get('type', 'foreignKey'),
                         from_value=json.dumps(from_val) if isinstance(from_val, list) else str(from_val),
                         to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
@@ -2136,7 +2145,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     def _create_custom_properties(self, db, contract_id: str, custom_props,
                                   apply_lifecycle: bool = False,
                                   import_links: Optional[ImportLinks] = None,
-                                  source_id: Optional[str] = None) -> Dict[str, Any]:
+                                  source_id: Optional[str] = None,
+                                  previous_ids: Optional[Dict[str, str]] = None,
+                                  ) -> Dict[str, Any]:
         """Create custom properties from ODCS customProperties (handles both array and dict formats).
         
         ODCS uses array format: [{"property": "key", "value": "val"}, ...]
@@ -2176,10 +2187,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Legacy dict format
             for key, value in custom_props.items():
                 if value is not None:
+                    # The map the contract page sends back holds the stored
+                    # text (the contract API returns it as is): keep text as is
                     custom_prop_db = DataContractCustomPropertyDb(
                         contract_id=contract_id,
+                        # The map has no ids: keep the ones the properties had
+                        stable_id=(previous_ids or {}).get(key),
                         property=key,
-                        value=typed_text(value)
+                        value=value if isinstance(value, str) else typed_text(value)
                     )
                     db.add(custom_prop_db)
         return columns
@@ -2808,14 +2823,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Handle custom properties if provided
             if data_dict.get('customProperties') is not None:
                 from src.db_models.data_contracts import DataContractCustomPropertyDb
-                # Remove existing custom properties
-                db.query(DataContractCustomPropertyDb).filter(
+                existing = db.query(DataContractCustomPropertyDb).filter(
                     DataContractCustomPropertyDb.contract_id == contract_id
-                ).delete()
-                
+                )
+                previous_ids = {cp.property: cp.stable_id for cp in existing if cp.stable_id}
+                # Remove existing custom properties
+                existing.delete()
+
                 # Add new custom properties (handles both ODCS array and legacy dict formats)
                 if data_dict['customProperties']:
-                    self._create_custom_properties(db, contract_id, data_dict['customProperties'])
+                    self._create_custom_properties(
+                        db, contract_id, data_dict['customProperties'],
+                        previous_ids=previous_ids)
             
             # Handle contract-level semantic links if provided
             if data_dict.get('authoritativeDefinitions') is not None:
@@ -7248,7 +7267,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         sla = legacy_sla_from_rows(getattr(db_contract, 'sla_properties', None))
         sla_properties = [
             {k: v for k, v in {
-                'property': sp.property, 'value': sp.value, 'unit': sp.unit,
+                # Typed, as stored, with the ODCS id (a read-modify-write stores the same)
+                'id': sp.stable_id, 'property': sp.property, 'value': typed_value(sp.value),
+                'valueExt': typed_value(sp.value_ext), 'unit': sp.unit,
                 'element': sp.element, 'driver': sp.driver,
             }.items() if v is not None}
             for sp in (getattr(db_contract, 'sla_properties', None) or [])

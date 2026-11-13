@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 # ODCS v3.1.0 relationship model (schema-level and property-level)
 class SchemaRelationship(BaseModel):
     """ODCS v3.1.0 relationship (foreign key) at schema or property level."""
-    id: Optional[str] = None  # ODCS id (v3.2.0)
+    id: Optional[str] = None  # internal DB id (populated on read)
+    stableId: Optional[str] = None  # ODCS id (v3.2.0)
     type: str = "foreignKey"
     # from is a reserved word in Python; use Field alias
     from_value: Optional[Union[str, List[str]]] = Field(None, alias='from')
@@ -259,9 +260,10 @@ class AuthoritativeDefinition(BaseModel):
 
 class SLAProperty(BaseModel):
     """ODCS SLA Property"""
+    id: Optional[str] = None  # ODCS v3.1.0 StableId
     property: str
-    value: Union[str, int, float]
-    valueExt: Optional[Union[str, int, float]] = None
+    value: Any  # any JSON value (ODCS AnyNonCollectionType; kept with its type)
+    valueExt: Optional[Any] = None
     unit: Optional[str] = None
     element: Optional[str] = None
     driver: Optional[str] = None  # regulatory, analytics, operational

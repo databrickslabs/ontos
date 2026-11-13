@@ -7,7 +7,6 @@ import {
   Upload,
   Zap,
   ArrowUpFromLine,
-  Loader2,
   List,
   ListTree,
   Share2,
@@ -34,6 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { GuidedGenerateDialog } from '@/components/concepts/guided-generate-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // A recent creation-work item shown in the "In progress" list. Sourced from the
 // ontology generator runs endpoint (real data). Imports do not yet have a
@@ -111,9 +111,12 @@ type BuildsMap = Partial<Record<RungKey, 'yes' | 'file'>>;
 // produces; dims the rest. Same three icons, same order, in every card — so the
 // user reads them as the shared vocabulary from the legend above.
 function BuildsRow({ builds, note }: { builds: BuildsMap; note?: string }) {
+  const { t } = useTranslation(['semantic-models']);
   return (
     <div className="mt-3 pt-2.5 border-t">
-      <div className="text-[11px] font-medium text-muted-foreground mb-1.5">Builds</div>
+      <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
+        {t('semantic-models:define.builds')}
+      </div>
       <div className="flex items-center gap-2.5">
         {RUNGS.map((r) => {
           const state = builds[r.key];
@@ -288,7 +291,9 @@ export default function DefineView() {
           vocabulary once here, then show it per card. Glossary -> taxonomy ->
           ontology is a maturity progression: start simple, harden where needed. */}
       <div className="mb-6 rounded-lg border bg-muted/30 px-3.5 py-2.5 text-xs">
-        <div className="mb-1.5 font-medium text-foreground">What you can build</div>
+        <div className="mb-1.5 font-medium text-foreground">
+          {t('semantic-models:define.whatYouCanBuild')}
+        </div>
         <div className="flex flex-col gap-y-2 sm:flex-row sm:items-start sm:gap-x-3">
           {RUNGS.map((r, i) => (
             <Fragment key={r.key}>
@@ -322,7 +327,9 @@ export default function DefineView() {
                     </TooltipTrigger>
                     <TooltipContent className="max-w-[280px] text-xs">
                       <span className="font-mono">{r.vocab}</span>
-                      <span className="block mt-1 text-muted-foreground">Every scheme is a skos:ConceptScheme.</span>
+                      <span className="block mt-1 text-muted-foreground">
+                        {t('semantic-models:define.schemeRdfNote')}
+                      </span>
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -458,7 +465,7 @@ export default function DefineView() {
             </Button>
             <BuildsRow
               builds={{ glossary: 'file', taxonomy: 'file', ontology: 'file' }}
-              note="* Whatever the file contains. Imported terms stay read-only."
+              note={t('semantic-models:define.import.buildsNote')}
             />
           </CardContent>
         </Card>
@@ -469,9 +476,16 @@ export default function DefineView() {
         {t('semantic-models:define.inProgress', 'In progress')}
       </h3>
       {runsLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {t('common:status.loading', 'Loading…')}
+        <div className="space-y-2 py-1" data-testid="define-runs-loading">
+          {[0, 1].map((row) => (
+            <div key={row} className="flex items-center gap-3 rounded-lg border px-3 py-2">
+              <Skeleton className="h-7 w-7 rounded-md" />
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-4 flex-1" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+          ))}
         </div>
       ) : inProgress.length === 0 ? (
         <p className="text-sm text-muted-foreground py-4">

@@ -11,7 +11,9 @@
   "tabs": {
     "collections": "Schemes",
     "concepts": "Concepts",
-    "graph": "Graph"
+    "graph": "Graph",
+    "define": "Define",
+    "explore": "Explore"
   },
   "types": {
     "concept": "Concept",
@@ -27,21 +29,27 @@
     "empty": "No entities linked to this concept.",
     "removed": "Removed link to \"{{label}}\".",
     "removeFailed": "Failed to remove link.",
-    "removeAria": "Remove linked entity"
+    "removeAria": "Remove linked entity",
+    "open": "Open",
+    "removeConfirmTitle": "Remove this link?",
+    "removeConfirmBody": "This unlinks \"{{label}}\" from this concept. It does not delete the entity itself."
   },
   "neighborhood": {
     "title": "Concept Neighbourhood",
     "loading": "Loading neighbourhood...",
     "empty": "No related concepts.",
     "moreParents": "+{{count}} more",
-    "moreChildren": "+{{count}} more"
+    "moreChildren": "+{{count}} more",
+    "list": "List",
+    "graph": "Graph"
   },
   "relations": {
     "title": "Relations",
     "loading": "Loading relations...",
     "empty": "No concept-to-concept relations yet. Add broader / narrower / related links, or see the Linked Objects panel for assets and products linked to this concept.",
     "outgoingTooltip": "This concept → target",
-    "incomingTooltip": "Source → this concept"
+    "incomingTooltip": "Source → this concept",
+    "viewLabel": "Relations view"
   },
   "filters": {
     "allGlossaries": "All Glossaries",
@@ -70,7 +78,11 @@
     "groupTypeOntology": "ONTOLOGIES",
     "groupTypeOther": "OTHER",
     "importedDisable": "Imported — cannot delete",
-    "labelLanguage": "Label Language"
+    "labelLanguage": "Label Language",
+    "groupBy": "Group by",
+    "status": "Status",
+    "showStatuses": "Show statuses",
+    "statusHiddenNote": "{{count}} hidden"
   },
   "groupBy": {
     "collection": "By Scheme",
@@ -148,7 +160,8 @@
     "openIriAria": "Open IRI",
     "linkedAssets": "Linked Assets",
     "synonyms": "Synonyms",
-    "relatedTerms": "Related Terms"
+    "relatedTerms": "Related Terms",
+    "title": "Details"
   },
   "fields": {
     "definition": "Definition",
@@ -163,7 +176,11 @@
     "concepts": "Concepts",
     "source": "Source",
     "sourceFile": "Imported from",
-    "sourceUrl": "Source URL"
+    "sourceUrl": "Source URL",
+    "scheme": "Concept scheme",
+    "created": "Created",
+    "type": "Type",
+    "iri": "IRI"
   },
   "form": {
     "createTitle": "Create Term",
@@ -240,7 +257,28 @@
     "publish": "Publish",
     "certify": "Certify",
     "deprecate": "Deprecate",
-    "archive": "Archive"
+    "archive": "Archive",
+    "request": "Request",
+    "requestDialog": {
+      "describe": {
+        "submitReview": "Submit this concept for review. The reviewer is chosen in the next step.",
+        "approve": "Approve this concept so it can be published.",
+        "requestChanges": "Send this concept back to draft. You can add a comment in the next step.",
+        "publish": "Publish this concept so others can find and use it.",
+        "certify": "Mark this concept as certified, a trusted reference.",
+        "deprecate": "Deprecate this concept. It stays visible but is flagged as no longer recommended.",
+        "archive": "Archive this concept. It is retired and hidden from normal use.",
+        "generic": "Move this concept to the {{status}} status.",
+        "newVersion": "Save a new version of this concept. The IRI stays the same."
+      },
+      "createNewVersion": "Create New Version",
+      "title": "Request Action",
+      "descriptionWithLabel": "Choose what you want to do with the concept \"{{label}}\".",
+      "description": "Choose what you want to do with this concept.",
+      "currentStatus": "Current status: {{status}}.",
+      "pickerLabel": "What do you want to request?"
+    },
+    "requestReview": "Request Review"
   },
   "requestChanges": {
     "title": "Request changes",
@@ -326,7 +364,9 @@
     "none": "No previous versions yet.",
     "unavailable": "Version history is unavailable.",
     "replacedBy": "Replaced by {{label}}",
-    "saveNewVersionDraftLocked": "Available after this concept is approved (v1 must be approved before a new version)."
+    "saveNewVersionDraftLocked": "Available after this concept is approved (v1 must be approved before a new version).",
+    "readOnlyNote": "Versioning applies to governed (editable) concept schemes. This concept comes from a read-only source, so new versions cannot be saved here.",
+    "newVersion": "New Version"
   },
   "import": {
     "title": "Import files",
@@ -366,12 +406,28 @@
     "submit": "Import",
     "success": "Import successful",
     "conflict": {
-      "alreadyIn": "Already in {{scheme}}"
+      "alreadyIn": "Already in {{scheme}}",
+      "mustChoose": "Select how to handle conflicts.",
+      "title": "Concept IRI conflicts detected",
+      "description": "The following concepts already exist in this scheme. Choose how to handle them:",
+      "showLess": "Show fewer",
+      "showAll": "Check detailed list ({{count}})",
+      "update": "Update existing",
+      "updateDesc": "Overwrite existing concepts with new definitions",
+      "skip": "Import only new",
+      "skipDesc": "Skip conflicting IRIs, import the rest"
     },
-    "readOnlyHint": "Only editable schemes can receive imports. Imported and system schemes are read-only."
+    "readOnlyHint": "Only editable schemes can receive imports. Imported and system schemes are read-only.",
+    "summaryToast": "Imported {{files}} file(s).",
+    "perFileNote": "Each file creates a new scheme named after the file. No target selection needed."
   },
   "columns": {
-    "fromFile": "from {{file}}"
+    "fromFile": "from {{file}}",
+    "name": "Name",
+    "kind": "Kind",
+    "scheme": "Scheme",
+    "mapping": "Mapping",
+    "status": "Status"
   },
   "propertyTypes": {
     "object": "Object Property",
@@ -437,7 +493,8 @@
     "parentCollection": "Parent Scheme",
     "noneRootCollection": "None (root scheme)",
     "editable": "Editable",
-    "editableHelp": "Allow creating and editing concepts in this scheme"
+    "editableHelp": "Allow creating and editing concepts in this scheme",
+    "createTitle": "Create Scheme"
   },
   "promotion": {
     "promoteConcept": "Promote Concept",
@@ -626,6 +683,86 @@
     "emptyCta": "Go to Define"
   },
   "define": {
-    "requiresWrite": "Requires write access"
+    "requiresWrite": "Requires write access",
+    "builds": "Builds",
+    "whatYouCanBuild": "What you can build",
+    "schemeRdfNote": "Every scheme is a skos:ConceptScheme.",
+    "needsReview": "Needs review",
+    "running": "Running",
+    "startWith": "Start with…",
+    "author": {
+      "title": "Author",
+      "tip": "Creates skos:Concept entries in a new concept scheme (skos:ConceptScheme). Entries can later be typed as owl:Class or an OWL property as the scheme matures.",
+      "desc": "Write terms yourself.",
+      "cta": "New Concept Scheme"
+    },
+    "generate": {
+      "title": "Generate",
+      "tip": "A guided interview drafts an OWL ontology from your tables: classes (owl:Class, hierarchy via rdfs:subClassOf) and properties (owl:ObjectProperty / owl:DatatypeProperty). Every candidate carries its source and is saved as Draft for review.",
+      "desc": "Answer a few questions; Ontos drafts the scheme.",
+      "cta": "Start guided build"
+    },
+    "import": {
+      "title": "Import",
+      "tip": "Parses .ttl / .rdf / .owl / .n3 / .jsonld. Several files can merge into one scheme or land one scheme per file. The source graph is preserved for round-trip export.",
+      "desc": "Upload RDF files into a scheme.",
+      "cta": "Upload files",
+      "buildsNote": "* Whatever the file contains. Imported terms stay read-only."
+    },
+    "inProgress": "In progress",
+    "noInProgress": "No creation work in progress. Start with one of the paths above.",
+    "generatorRun": "Generator run",
+    "draftPending": "Draft not yet assigned to a concept scheme.",
+    "stepCount": "{{count}} steps",
+    "review": "Review",
+    "guided": {
+      "title": "Guided build",
+      "subtitle": "Answer a few questions. We turn them into a prompt for the generator, which drafts a concept scheme you review before keeping. Nothing is saved yet.",
+      "domainLabel": "What domain are you working in?",
+      "domainsLoading": "Loading data domains...",
+      "domainSelectLabel": "Data domain",
+      "domainSelectPlaceholder": "Pick a data domain",
+      "noDomain": "No data domain (type your own)",
+      "noDomainsHint": "No data domains defined yet. Describe your domain in your own words below.",
+      "domainPlaceholder": "e.g. Retail pricing, Clinical trials, Fleet logistics",
+      "questionsLabel": "What questions should it help answer? (optional)",
+      "questionAria": "Question {{n}}",
+      "questionPlaceholder": "e.g. Which customers churned last quarter?",
+      "removeQuestion": "Remove question {{n}}",
+      "addQuestion": "Add question",
+      "objectsLabel": "What objects do you work with? (optional)",
+      "objectsPlaceholder": "e.g. Customer, Order, Shipment, Invoice",
+      "previewLabel": "Prompt for the generator",
+      "continue": "Continue to generator"
+    }
+  },
+  "summary": {
+    "copyFailed": "Could not copy the IRI.",
+    "status": "Status",
+    "type": "Type",
+    "version": "Version",
+    "copyIri": "Copy IRI"
+  },
+  "advanced": {
+    "turtle": "RDF (Turtle)"
+  },
+  "mapping": {
+    "assetAndProduct": "Asset + product",
+    "asset": "Asset",
+    "product": "Product",
+    "none": "Not mapped"
+  },
+  "bulk": {
+    "partial": "Completed with some errors",
+    "statusResult": "{{label}}: {{ok}} updated, {{failed}} skipped",
+    "selectAll": "Select all",
+    "selected": "{{count}} selected",
+    "setStatus": "Set status"
+  },
+  "search": {
+    "matchedLanguage": "matched: {{lang}}"
+  },
+  "collection": {
+    "typeTooltip": "Glossary, taxonomy, and ontology are points on a maturity ladder, not different tools. Glossary = a flat list of agreed terms and definitions. Taxonomy = terms arranged in a broader/narrower hierarchy. Ontology = formal classes and properties a machine can reason over. Pick where you are today; you can add structure later."
   }
 }

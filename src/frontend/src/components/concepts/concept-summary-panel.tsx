@@ -69,7 +69,7 @@ export function ConceptSummaryPanel({
       await navigator.clipboard.writeText(concept.iri);
       toast({
         title: t('common:toast.success'),
-        description: t('common:messages.copiedToClipboard', { defaultValue: 'Copied to clipboard' }),
+        description: t('common:toast.copied'),
       });
     } catch {
       toast({
@@ -150,7 +150,7 @@ export function ConceptSummaryPanel({
           className="adv-only flex items-center gap-2 text-xs text-muted-foreground min-w-0"
           data-testid="concept-summary-iri"
         >
-          <span className={factLabel}>IRI:</span>
+          <span className={factLabel}>{t('semantic-models:fields.iri')}:</span>
           <code
             className="px-1.5 py-0.5 bg-muted rounded font-mono truncate"
             title={concept.iri}

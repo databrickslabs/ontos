@@ -11,7 +11,9 @@
   "tabs": {
     "collections": "Schémas de concepts",
     "concepts": "Concepts",
-    "graph": "Graphe"
+    "graph": "Graphe",
+    "define": "Définir",
+    "explore": "Explorer"
   },
   "types": {
     "concept": "Concept",
@@ -27,21 +29,27 @@
     "empty": "Aucune entité liée à ce concept.",
     "removed": "Lien vers \"{{label}}\" supprimé.",
     "removeFailed": "Impossible de supprimer le lien.",
-    "removeAria": "Supprimer l'entité liée"
+    "removeAria": "Supprimer l'entité liée",
+    "open": "Ouvrir",
+    "removeConfirmTitle": "Supprimer ce lien ?",
+    "removeConfirmBody": "Cela dissocie « {{label}} » de ce concept. L'entité elle-même n'est pas supprimée."
   },
   "neighborhood": {
     "title": "Voisinage du concept",
     "loading": "Chargement du voisinage...",
     "empty": "Aucun concept lié.",
     "moreParents": "+{{count}} de plus",
-    "moreChildren": "+{{count}} de plus"
+    "moreChildren": "+{{count}} de plus",
+    "list": "Liste",
+    "graph": "Graphe"
   },
   "relations": {
     "title": "Relations",
     "loading": "Chargement des relations...",
     "empty": "Aucune relation trouvée.",
     "outgoingTooltip": "Ce concept → cible",
-    "incomingTooltip": "Source → ce concept"
+    "incomingTooltip": "Source → ce concept",
+    "viewLabel": "Vue des relations"
   },
   "filters": {
     "allGlossaries": "Tous les Glossaires",
@@ -51,11 +59,30 @@
     "none": "Aucun",
     "groupBySource": "Grouper par Source",
     "showProperties": "Afficher les propriétés",
+    "showSystemSources": "Afficher les ontologies système",
     "groupByDomain": "Grouper par domaine",
+    "groupByNone": "Aucun",
+    "groupByScheme": "Schéma",
+    "groupByDimSource": "Source",
+    "groupByDimDomain": "Domaine",
+    "noSourceFile": "Aucun fichier source",
     "allTypes": "Tous les types",
     "allScopes": "Tous les périmètres",
     "allCollections": "Tous les schémas de concepts",
-    "labelLanguage": "Langue des libellés"
+    "searchSchemes": "Rechercher des schémas...",
+    "sortBy": "Trier par",
+    "sortName": "Nom",
+    "sortSize": "Taille",
+    "groupTypeGlossary": "GLOSSAIRES",
+    "groupTypeTaxonomy": "TAXONOMIES",
+    "groupTypeOntology": "ONTOLOGIES",
+    "groupTypeOther": "AUTRES",
+    "importedDisable": "Importé — suppression impossible",
+    "labelLanguage": "Langue des libellés",
+    "groupBy": "Regrouper par",
+    "status": "Statut",
+    "showStatuses": "Afficher les statuts",
+    "statusHiddenNote": "{{count}} masqué(s)"
   },
   "groupBy": {
     "collection": "Par schéma de concepts",
@@ -92,6 +119,10 @@
     "conceptUpdated": "Concept mis à jour avec succès",
     "conceptDeleted": "Concept supprimé avec succès",
     "submittedForReview": "Concept soumis pour revue",
+    "submitReview": "Soumis pour révision",
+    "submitReviewGoverned": "Soumis pour révision — en attente d'approbation.",
+    "changesRequested": "Renvoyé au propriétaire avec votre commentaire.",
+    "withdrawReview": "Révision retirée",
     "enterReviewerEmail": "Saisissez l'adresse e-mail du relecteur :",
     "conceptPromoted": "Concept promu avec succès",
     "conceptMigrated": "Concept migré avec succès",
@@ -100,6 +131,7 @@
     "selectConcept": "Sélectionnez un concept pour afficher les détails",
     "linkAdded": "Lien ajouté avec succès",
     "linkRemoved": "Lien supprimé avec succès",
+    "statusChanged": "Statut mis à jour",
     "saveFailed": "Échec de l'enregistrement du concept",
     "deleteConceptFailed": "Échec de la suppression du concept"
   },
@@ -128,7 +160,8 @@
     "openIriAria": "Ouvrir l'IRI",
     "linkedAssets": "Actifs Liés",
     "synonyms": "Synonymes",
-    "relatedTerms": "Termes Associés"
+    "relatedTerms": "Termes Associés",
+    "title": "Détails"
   },
   "fields": {
     "definition": "Définition",
@@ -142,7 +175,12 @@
     "scope": "Périmètre",
     "concepts": "Concepts",
     "source": "Source",
-    "sourceUrl": "URL de la source"
+    "sourceFile": "Importé depuis",
+    "sourceUrl": "URL de la source",
+    "scheme": "Schéma de concepts",
+    "created": "Créé le",
+    "type": "Type",
+    "iri": "IRI"
   },
   "form": {
     "createTitle": "Créer un Terme",
@@ -194,10 +232,92 @@
       "title": "Supprimer le concept",
       "description": "Êtes-vous sûr de vouloir supprimer « {{label}} » ? Cette action est irréversible. Seuls les concepts à l'état de brouillon peuvent être supprimés."
     },
+    "deleteScheme": {
+      "title": "Supprimer le schéma",
+      "description": "Voulez-vous vraiment supprimer « {{label}} » ? Tous les concepts de ce schéma seront supprimés et cette action est irréversible."
+    },
     "linkEditor": {
       "title": "Créer un lien",
       "description": "Définissez une relation entre deux concepts"
+    },
+    "deprecate": {
+      "title": "Rendre le concept obsolète",
+      "description": "Indiquez éventuellement un ou plusieurs concepts successeurs pour préciser par quoi ce concept a été remplacé.",
+      "successors": "Concepts successeurs",
+      "noSuccessors": "Aucune sélection",
+      "addSuccessor": "+ Ajouter un successeur"
     }
+  },
+  "lifecycle": {
+    "changeStatus": "Modifier le statut",
+    "submitReview": "Soumettre pour révision",
+    "withdrawReview": "Retirer la révision",
+    "approve": "Approuver",
+    "requestChanges": "Demander des modifications",
+    "publish": "Publier",
+    "certify": "Certifier",
+    "deprecate": "Rendre obsolète",
+    "archive": "Archiver",
+    "request": "Demander",
+    "requestDialog": {
+      "describe": {
+        "submitReview": "Soumettre ce concept pour revue. Le réviseur est choisi à l'étape suivante.",
+        "approve": "Approuver ce concept afin qu'il puisse être publié.",
+        "requestChanges": "Renvoyer ce concept à l'état de brouillon. Vous pourrez ajouter un commentaire à l'étape suivante.",
+        "publish": "Publier ce concept afin que d'autres puissent le trouver et l'utiliser.",
+        "certify": "Marquer ce concept comme certifié, une référence de confiance.",
+        "deprecate": "Rendre ce concept obsolète. Il reste visible mais est signalé comme n'étant plus recommandé.",
+        "archive": "Archiver ce concept. Il est retiré et masqué de l'usage courant.",
+        "generic": "Faire passer ce concept au statut {{status}}.",
+        "newVersion": "Enregistrer une nouvelle version de ce concept. L'IRI reste inchangé."
+      },
+      "createNewVersion": "Créer une nouvelle version",
+      "title": "Demander une action",
+      "descriptionWithLabel": "Choisissez ce que vous souhaitez faire avec le concept « {{label}} ».",
+      "description": "Choisissez ce que vous souhaitez faire avec ce concept.",
+      "currentStatus": "Statut actuel : {{status}}.",
+      "pickerLabel": "Que souhaitez-vous demander ?"
+    },
+    "requestReview": "Demander une revue"
+  },
+  "requestChanges": {
+    "title": "Demander des modifications",
+    "description": "Renvoyer ce concept au propriétaire à l'état de brouillon, avec votre commentaire.",
+    "comment": "Commentaire pour le propriétaire",
+    "placeholder": "Que faut-il modifier avant que ce concept puisse être approuvé ?",
+    "submit": "Renvoyer"
+  },
+  "submitReview": {
+    "title": "Soumettre pour révision",
+    "description": "Désignez un réviseur (facultatif) et ajoutez des notes.",
+    "reviewer": "Réviseur (facultatif)",
+    "reviewerPlaceholder": "Sélectionnez un réviseur...",
+    "notes": "Notes (facultatif)",
+    "notesPlaceholder": "Ajoutez du contexte ou des instructions...",
+    "submit": "Soumettre",
+    "checking": "Recherche d'un workflow d'approbation…",
+    "governedBanner": "Ce concept est régi par le workflow d'approbation « {{workflow}} ». La soumission lancera cette approbation : le concept passe à l'état En révision et attend la validation des approbateurs.",
+    "governedBannerMulti": "Ce concept est régi par {{count}} workflows d'approbation. La soumission lancera cette approbation : le concept passe à l'état En révision et attend la validation des approbateurs.",
+    "ungovernedBanner": "Aucun workflow d'approbation n'est associé. La soumission fait passer directement ce concept à l'état En révision ; tout utilisateur disposant d'un accès en écriture pourra alors l'approuver."
+  },
+  "concept": {
+    "inReview": "En révision",
+    "reviewerComment": "Commentaire du réviseur",
+    "sparql": "SPARQL",
+    "sparqlTitle": "Requête SPARQL",
+    "sparqlDescription": "Interrogez le graphe de connaissances. Pré-rempli avec ce concept."
+  },
+  "hierarchy": {
+    "title": "Hiérarchie",
+    "parent": "Parent",
+    "children": "Enfants",
+    "none": "Aucun concept plus large ou plus spécifique.",
+    "viewLabel": "Vue de la hiérarchie",
+    "list": "Liste",
+    "graph": "Graphe"
+  },
+  "versionDiff": {
+    "compare": "Comparer"
   },
   "rdfSources": {
     "syntaxColumn": "Syntaxe",
@@ -227,17 +347,87 @@
       "demoGraph": "Concepts métier de démonstration"
     }
   },
+  "versionHistory": {
+    "title": "Historique des versions",
+    "saveNewVersion": "Enregistrer une nouvelle version",
+    "saveDescription": "Modifiez la définition et enregistrez-la comme nouvelle version. La définition précédente est conservée dans l'historique.",
+    "willCreate": "Cette action créera la v{{next}}.",
+    "whatChanged": "Qu'est-ce qui a changé ?",
+    "notePlaceholder": "p. ex. formulation resserrée pour plus de clarté",
+    "saved": "Nouvelle version enregistrée",
+    "current": "Actuelle",
+    "previous": "Version précédente",
+    "previousDefinition": "Définition précédente :",
+    "noDefinition": "Aucune définition enregistrée pour cette version.",
+    "editedBy": "Modifié par {{who}} le {{when}}",
+    "unknownEditor": "quelqu'un",
+    "none": "Aucune version précédente pour le moment.",
+    "unavailable": "L'historique des versions n'est pas disponible.",
+    "replacedBy": "Remplacé par {{label}}",
+    "saveNewVersionDraftLocked": "Disponible une fois ce concept approuvé (la v1 doit être approuvée avant toute nouvelle version).",
+    "readOnlyNote": "Le versionnage s'applique aux schémas de concepts gouvernés (modifiables). Ce concept provient d'une source en lecture seule : aucune nouvelle version ne peut donc être enregistrée ici.",
+    "newVersion": "Nouvelle version"
+  },
   "import": {
+    "title": "Importer des concepts",
+    "descriptionMulti": "Déposez un ou plusieurs fichiers d'ontologie, puis choisissez comment les intégrer. Le fichier n'est qu'un support.",
+    "sourceFiles": "Fichiers source",
+    "addMoreFiles": "Ajouter d'autres fichiers…",
+    "chooseFiles": "Choisir des fichiers…",
+    "supportedFormats": "Pris en charge : Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
+    "howLand": "Comment ces fichiers doivent-ils être intégrés ?",
+    "oneScheme": "Un seul schéma",
+    "oneSchemeDesc": "Fusionner tous les fichiers dans un seul schéma de concepts.",
+    "oneSchemePerFile": "Un schéma par fichier",
+    "oneSchemePerFileDesc": "Chaque fichier devient son propre schéma de concepts.",
+    "perFileTodo": "L'option « un schéma par fichier » nécessite un backend qui crée un schéma par fichier ; pour l'instant, tous les fichiers sont intégrés dans le schéma ci-dessous.",
+    "targetCollection": "Schéma de concepts cible",
+    "selectCollection": "Sélectionner un schéma de concepts…",
+    "createNewScheme": "＋ Créer un nouveau schéma…",
+    "newSchemeName": "Nom du nouveau schéma (p. ex. Ontologie Finance)",
+    "noEditableCollections": "Aucun schéma de concepts modifiable disponible. Créez-en un d'abord.",
+    "reconcileNote": "Les termes qui se chevauchent ou sont en double entre schémas sont rapprochés ultérieurement dans le Review Board. L'import se contente d'intégrer le graphe.",
+    "summary": "{{files}} fichier(s) importé(s), {{count}} triplets au total.",
+    "summaryPending": "Téléversement soumis pour approbation ({{files}} fichier(s))",
+    "fileOk": "{{count}} triplets",
+    "filePending": "En attente d'approbation",
+    "allFailed": "Aucun fichier n'a pu être importé. Consultez les erreurs par fichier ci-dessous.",
+    "computingDiff": "Calcul des modifications…",
+    "changelogTitle": "Modifications appliquées depuis {{file}}",
+    "previewTitle": "Modifications depuis {{file}}",
+    "changelogSummary": "Modifie {{modified}}, ajoute {{added}}, supprime {{removed}} ({{unchanged}} inchangé(s)).",
+    "bucketModified": "Modifiés (nouvelle version)",
+    "bucketNew": "Nouveaux",
+    "bucketRemoved": "Retirés (obsolètes, non supprimés)",
+    "stillReferenced": "utilisé par {{count}}",
+    "submitMulti": "Importer {{count}} fichier(s)",
     "chooseFile": "Choisir un fichier…",
     "file": "Fichier",
-    "noEditableCollections": "Aucun schéma de concepts modifiable disponible. Créez-en un d'abord.",
-    "selectCollection": "Sélectionner un schéma de concepts…",
     "submit": "Importer",
     "success": "Importation réussie",
-    "supportedFormats": "Pris en charge : Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
-    "targetCollection": "Schéma de concepts cible",
-    "title": "Importer des concepts",
-    "readOnlyHint": "Seuls les schémas de concepts modifiables peuvent recevoir des imports. Les schémas importés et système sont en lecture seule."
+    "conflict": {
+      "alreadyIn": "Déjà présent dans {{scheme}}",
+      "mustChoose": "Sélectionnez comment gérer les conflits.",
+      "title": "Conflits d'IRI de concept détectés",
+      "description": "Les concepts suivants existent déjà dans ce schéma. Choisissez comment les gérer :",
+      "showLess": "Afficher moins",
+      "showAll": "Voir la liste détaillée ({{count}})",
+      "update": "Mettre à jour l'existant",
+      "updateDesc": "Remplacer les concepts existants par les nouvelles définitions",
+      "skip": "Importer uniquement les nouveaux",
+      "skipDesc": "Ignorer les IRI en conflit, importer le reste"
+    },
+    "readOnlyHint": "Seuls les schémas de concepts modifiables peuvent recevoir des imports. Les schémas importés et système sont en lecture seule.",
+    "summaryToast": "{{files}} fichier(s) importé(s).",
+    "perFileNote": "Chaque fichier crée un nouveau schéma portant le nom du fichier. Aucune sélection de cible n'est nécessaire."
+  },
+  "columns": {
+    "fromFile": "depuis {{file}}",
+    "name": "Nom",
+    "kind": "Type",
+    "scheme": "Schéma",
+    "mapping": "Mappage",
+    "status": "Statut"
   },
   "propertyTypes": {
     "object": "Propriété d'objet",
@@ -303,7 +493,8 @@
     "parentCollection": "Schéma de concepts parent",
     "noneRootCollection": "Aucun (schéma de concepts racine)",
     "editable": "Modifiable",
-    "editableHelp": "Autoriser la création et la modification de concepts dans ce schéma de concepts"
+    "editableHelp": "Autoriser la création et la modification de concepts dans ce schéma de concepts",
+    "createTitle": "Créer un schéma"
   },
   "promotion": {
     "promoteConcept": "Promouvoir le concept",
@@ -318,7 +509,7 @@
     "selectTargetPlaceholder": "Sélectionner le schéma de concepts cible...",
     "newIri": "Nouvel IRI",
     "sourceConcept": "Concept source",
-    "deprecateOriginal": "Déprécier l'original (recommandé)",
+    "deprecateOriginal": "Rendre l'original obsolète (recommandé)",
     "deleteOriginal": "Supprimer l'original",
     "deleteHelp": "Seuls les concepts à l'état de brouillon peuvent être supprimés. Les concepts publiés seront dépréciés.",
     "promoteWarning": "Les concepts promus nécessitent une nouvelle approbation au nouveau niveau de périmètre."
@@ -492,6 +683,86 @@
     "emptyCta": "Aller à Define"
   },
   "define": {
-    "requiresWrite": "Nécessite un accès en écriture"
+    "requiresWrite": "Nécessite un accès en écriture",
+    "builds": "Résultat",
+    "whatYouCanBuild": "Ce que vous pouvez créer",
+    "schemeRdfNote": "Chaque schéma est un skos:ConceptScheme.",
+    "needsReview": "Revue requise",
+    "running": "En cours d'exécution",
+    "startWith": "Commencer par…",
+    "author": {
+      "title": "Rédiger",
+      "tip": "Crée des entrées skos:Concept dans un nouveau schéma de concepts (skos:ConceptScheme). Les entrées pourront ensuite être typées comme owl:Class ou comme propriété OWL à mesure que le schéma mûrit.",
+      "desc": "Rédigez vous-même les termes.",
+      "cta": "Nouveau schéma de concepts"
+    },
+    "generate": {
+      "title": "Générer",
+      "tip": "Un entretien guidé ébauche une ontologie OWL à partir de vos tables : classes (owl:Class, hiérarchie via rdfs:subClassOf) et propriétés (owl:ObjectProperty / owl:DatatypeProperty). Chaque candidat indique sa source et est enregistré comme brouillon pour revue.",
+      "desc": "Répondez à quelques questions ; Ontos ébauche le schéma.",
+      "cta": "Lancer la création guidée"
+    },
+    "import": {
+      "title": "Importer",
+      "tip": "Analyse les fichiers .ttl / .rdf / .owl / .n3 / .jsonld. Plusieurs fichiers peuvent être fusionnés dans un seul schéma ou donner un schéma par fichier. Le graphe source est conservé pour un export aller-retour.",
+      "desc": "Téléversez des fichiers RDF dans un schéma.",
+      "cta": "Téléverser des fichiers",
+      "buildsNote": "* Tout ce que contient le fichier. Les termes importés restent en lecture seule."
+    },
+    "inProgress": "En cours",
+    "noInProgress": "Aucune création en cours. Commencez par l'un des parcours ci-dessus.",
+    "generatorRun": "Exécution du générateur",
+    "draftPending": "Brouillon pas encore affecté à un schéma de concepts.",
+    "stepCount": "{{count}} étapes",
+    "review": "Examiner",
+    "guided": {
+      "title": "Création guidée",
+      "subtitle": "Répondez à quelques questions. Nous les transformons en prompt pour le générateur, qui ébauche un schéma de concepts que vous examinez avant de le conserver. Rien n'est encore enregistré.",
+      "domainLabel": "Dans quel domaine travaillez-vous ?",
+      "domainsLoading": "Chargement des domaines de données...",
+      "domainSelectLabel": "Domaine de données",
+      "domainSelectPlaceholder": "Choisissez un domaine de données",
+      "noDomain": "Aucun domaine de données (saisir le vôtre)",
+      "noDomainsHint": "Aucun domaine de données défini pour l'instant. Décrivez votre domaine avec vos propres mots ci-dessous.",
+      "domainPlaceholder": "ex. Tarification retail, Essais cliniques, Logistique de flotte",
+      "questionsLabel": "À quelles questions doit-il aider à répondre ? (facultatif)",
+      "questionAria": "Question {{n}}",
+      "questionPlaceholder": "ex. Quels clients sont partis le trimestre dernier ?",
+      "removeQuestion": "Supprimer la question {{n}}",
+      "addQuestion": "Ajouter une question",
+      "objectsLabel": "Avec quels objets travaillez-vous ? (facultatif)",
+      "objectsPlaceholder": "ex. Client, Commande, Expédition, Facture",
+      "previewLabel": "Prompt pour le générateur",
+      "continue": "Continuer vers le générateur"
+    }
+  },
+  "summary": {
+    "copyFailed": "Impossible de copier l'IRI.",
+    "status": "Statut",
+    "type": "Type",
+    "version": "Version",
+    "copyIri": "Copier l'IRI"
+  },
+  "advanced": {
+    "turtle": "RDF (Turtle)"
+  },
+  "mapping": {
+    "assetAndProduct": "Actif + produit",
+    "asset": "Actif",
+    "product": "Produit",
+    "none": "Non mappé"
+  },
+  "bulk": {
+    "partial": "Terminé avec des erreurs",
+    "statusResult": "{{label}} : {{ok}} mis à jour, {{failed}} ignoré(s)",
+    "selectAll": "Tout sélectionner",
+    "selected": "{{count}} sélectionné(s)",
+    "setStatus": "Définir le statut"
+  },
+  "search": {
+    "matchedLanguage": "correspondance : {{lang}}"
+  },
+  "collection": {
+    "typeTooltip": "Glossaire, taxonomie et ontologie sont des étapes sur une échelle de maturité, pas des outils différents. Glossaire = une liste plate de termes et de définitions convenus. Taxonomie = des termes organisés en une hiérarchie générique/spécifique. Ontologie = des classes et propriétés formelles sur lesquelles une machine peut raisonner. Choisissez votre niveau actuel ; vous pourrez ajouter de la structure plus tard."
   }
 }

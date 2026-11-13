@@ -401,7 +401,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
             <div className="grid gap-4 py-4 px-1">
               {/* Type: fixed (preset on create, the entry's own on edit). */}
               <div className="flex items-center gap-2 text-sm" data-testid="concept-type-row">
-                <span className="text-muted-foreground">{t('Type')}:</span>
+                <span className="text-muted-foreground">{t('semantic-models:fields.type')}:</span>
                 <Badge variant="outline">{typeLabel}</Badge>
               </div>
 

@@ -11,6 +11,100 @@
     "import": "Importar",
     "mapping": "Mapeamento"
   },
+  "define": {
+    "description": "Crie, gere ou importe seus esquemas de conceitos de negócio."
+  },
+  "enrich": {
+    "deliver": {
+      "description": "Grave metadados governados nos ativos {{platform}} mapeados.",
+      "tags": {
+        "name": "Tags",
+        "desc": "Tags de governança chave/valor em tabelas e colunas. Impulsionam a descoberta e as políticas de acesso.",
+        "via": "via uc_tag_sync",
+        "notConfigured": "A entrega de tags não está configurada. Para ativá-la, o job uc_tag_sync precisa ser instalado em Configurações > Jobs.",
+        "note": "A entrega de tags é executada pelo job compartilhado uc_tag_sync, que também abrange outros aspectos além da atribuição semântica. Configure o escopo e o agendamento em Configurações > Jobs."
+      },
+      "desc": {
+        "name": "Descrições de colunas",
+        "desc": "Significado em linguagem simples nas colunas. É o que o Genie e a busca leem para responder com precisão.",
+        "assist": "O dbxmetagen pode gerar rascunhos"
+      },
+      "glossary": {
+        "name": "UC Glossary",
+        "desc": "O glossário de negócios governado na própria plataforma.",
+        "note": "Sincroniza conceitos com o glossário de negócios nativo do Unity Catalog, a camada governada que o Genie Ontology lê. Disponível a partir do GA do UC Glossary."
+      },
+      "title": "Entregar",
+      "tip": "A entrega grava seus metadados governados na plataforma. Ferramentas downstream (Genie, busca, agentes) os leem a partir dali. Tags = políticas e descoberta. Descrições = o que o Genie lê. Glossário = a camada de negócios governada.",
+      "pendingTitle": "Alterações de tags pendentes",
+      "pendingSubtitle": "Vínculos entre conceitos e ativos criados desde a última sincronização de tags bem-sucedida. Uma nova execução do uc_tag_sync os entregaria.",
+      "pendingEmpty": "Nada pendente.",
+      "pendingInScheme": "em",
+      "pendingAppliesTo": "aplica-se a",
+      "coverageSynced": "{{synced}} de {{total}} sincronizados · ",
+      "pendingCount": "{{pending}} pendentes",
+      "lastRun": " · última execução {{run}}",
+      "notSynced": "Ainda não sincronizado",
+      "manageInSettings": "Gerenciar em Configurações",
+      "configure": "Configurar",
+      "comingSoon": "Em breve: a configuração e a execução desta sincronização a partir do Ontos ainda não estão disponíveis.",
+      "syncNow": "Sincronizar agora",
+      "about": "Sobre este destino de entrega"
+    },
+    "subtitle": "Mapeie seus conceitos para ativos e depois entregue metadados governados na plataforma.",
+    "deliverTo": "Entregar em",
+    "platformTip": "As plataformas de entrega vêm das conexões configuradas em Configurações. O Unity Catalog é o padrão. Os destinos de entrega abaixo se adaptam à plataforma escolhida.",
+    "manageConnections": "Gerenciar conexões ↗",
+    "map": {
+      "title": "Mapear",
+      "suggest": "Sugerir correspondências",
+      "desc": "Vincule um conceito diretamente a um ativo do {{platform}} (o caminho padrão, sem necessidade de produto ou contrato) e, opcionalmente, adicione vínculos a produtos de dados e contratos de dados. Os três são independentes.",
+      "col": {
+        "scheme": "Esquema de conceitos",
+        "lastRun": "Última execução",
+        "concepts": "Conceitos",
+        "coverage": "Cobertura",
+        "products": "Produtos",
+        "contracts": "Contratos",
+        "assets": "Ativos",
+        "suggested": "Sugeridos"
+      },
+      "assetNote": "Os vínculos com ativos são o que a entrega enriquece na etapa 2. O vínculo direto com ativos funciona mesmo antes de existir qualquer produto ou contrato, o que resolve o dilema do ovo e da galinha.",
+      "review": "Revisar",
+      "allSelected": "Todos selecionados",
+      "unmappedNote": "{{unmapped}} conceitos ainda não têm vínculo.",
+      "coverageTip": "Cobertura = proporção dos conceitos de um esquema de conceitos com pelo menos um vínculo. Produtos e Contratos são vínculos extras opcionais, portanto as três contagens não somam o total. Apenas Ativos podem ser enriquecidos na etapa 2.",
+      "placeholderNote": "Os números de cobertura são dados de exemplo; o serviço de cobertura em tempo real está indisponível no momento."
+    },
+    "review": {
+      "title": "Revisar correspondências sugeridas",
+      "subtitle": "Aceite ou rejeite cada correspondência entre conceito e ativo. Nada é sincronizado até que você aceite.",
+      "loading": "Carregando correspondências sugeridas…",
+      "applied": "{{count}} correspondência(s) aplicada(s). Serão sincronizadas na próxima entrega.",
+      "applyError": "Não foi possível aplicar as correspondências: ",
+      "placeholderNote": "Correspondências de exemplo exibidas para ilustração.",
+      "reject": "Rejeitar",
+      "accept": "Aceitar",
+      "drift": "Desvio de schema a resolver",
+      "openFull": "Abrir o Review Board completo",
+      "applying": "Aplicando…",
+      "acceptApplyAll": "Aceitar e aplicar todas as {{count}}"
+    },
+    "modes": {
+      "direct": "Direto",
+      "directDesc": "O Ontos aplica as alterações neste workspace imediatamente por meio da service principal.",
+      "indirect": "Indireto",
+      "indirectDesc": "O Ontos grava YAML no Git para que seu pipeline de CI/CD faça a promoção (dev para staging para prod).",
+      "manual": "Manual",
+      "manualDesc": "O Ontos notifica uma pessoa para aplicar a alteração em outro lugar.",
+      "active": "ativo",
+      "manageLink": "O modo de entrega é definido por site em Configurações, Entrega"
+    }
+  },
+  "mode": {
+    "description": "A visualização avançada revela a camada de ontologia: RDF/SKOS, IRIs, domínio e intervalo de propriedades e configurações técnicas de entrega. A simples os oculta. Sua escolha é lembrada.",
+    "label": "Modo de visualização"
+  },
   "sections": {
     "label": "Seções de conceitos",
     "define": "Definir",
@@ -23,6 +117,9 @@
     "viewTree": "Árvore",
     "viewGraph": "Grafo",
     "createConcept": "Novo conceito",
-    "createScheme": "Novo esquema de conceitos"
+    "createScheme": "Novo esquema de conceitos",
+    "description": "Crie, navegue e entregue seus esquemas de conceitos de negócio.",
+    "sparql": "SPARQL",
+    "sparqlPanel": "SPARQL e busca no grafo de conhecimento"
   }
 }

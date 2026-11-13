@@ -11,7 +11,9 @@
   "tabs": {
     "collections": "Konzeptschemata",
     "concepts": "Konzepte",
-    "graph": "Graph"
+    "graph": "Graph",
+    "define": "Definieren",
+    "explore": "Erkunden"
   },
   "types": {
     "concept": "Konzept",
@@ -27,21 +29,27 @@
     "empty": "Keine Entitäten mit diesem Konzept verknüpft.",
     "removed": "Verknüpfung zu \"{{label}}\" entfernt.",
     "removeFailed": "Verknüpfung konnte nicht entfernt werden.",
-    "removeAria": "Verknüpfte Entität entfernen"
+    "removeAria": "Verknüpfte Entität entfernen",
+    "open": "Öffnen",
+    "removeConfirmTitle": "Diese Verknüpfung entfernen?",
+    "removeConfirmBody": "Dadurch wird „{{label}}“ von diesem Konzept getrennt. Die Entität selbst wird nicht gelöscht."
   },
   "neighborhood": {
     "title": "Konzeptumgebung",
     "loading": "Umgebung wird geladen...",
     "empty": "Keine verwandten Konzepte.",
     "moreParents": "+{{count}} weitere",
-    "moreChildren": "+{{count}} weitere"
+    "moreChildren": "+{{count}} weitere",
+    "list": "Liste",
+    "graph": "Graph"
   },
   "relations": {
     "title": "Beziehungen",
     "loading": "Beziehungen werden geladen...",
     "empty": "Keine Beziehungen gefunden.",
     "outgoingTooltip": "Dieses Konzept → Ziel",
-    "incomingTooltip": "Quelle → dieses Konzept"
+    "incomingTooltip": "Quelle → dieses Konzept",
+    "viewLabel": "Beziehungsansicht"
   },
   "filters": {
     "allGlossaries": "Alle Glossare",
@@ -51,11 +59,30 @@
     "none": "Keine",
     "groupBySource": "Nach Quelle gruppieren",
     "showProperties": "Eigenschaften anzeigen",
+    "showSystemSources": "Systemontologien anzeigen",
     "groupByDomain": "Nach Domäne gruppieren",
+    "groupByNone": "Keine",
+    "groupByScheme": "Schema",
+    "groupByDimSource": "Quelle",
+    "groupByDimDomain": "Domäne",
+    "noSourceFile": "Keine Quelldatei",
     "allTypes": "Alle Typen",
     "allScopes": "Alle Geltungsbereiche",
     "allCollections": "Alle Konzeptschemata",
-    "labelLanguage": "Beschriftungssprache"
+    "searchSchemes": "Schemata durchsuchen...",
+    "sortBy": "Sortieren nach",
+    "sortName": "Name",
+    "sortSize": "Größe",
+    "groupTypeGlossary": "GLOSSARE",
+    "groupTypeTaxonomy": "TAXONOMIEN",
+    "groupTypeOntology": "ONTOLOGIEN",
+    "groupTypeOther": "SONSTIGE",
+    "importedDisable": "Importiert — kann nicht gelöscht werden",
+    "labelLanguage": "Beschriftungssprache",
+    "groupBy": "Gruppieren nach",
+    "status": "Status",
+    "showStatuses": "Status anzeigen",
+    "statusHiddenNote": "{{count}} ausgeblendet"
   },
   "groupBy": {
     "collection": "Nach Konzeptschema",
@@ -92,6 +119,10 @@
     "conceptUpdated": "Konzept erfolgreich aktualisiert",
     "conceptDeleted": "Konzept erfolgreich gelöscht",
     "submittedForReview": "Konzept zur Prüfung eingereicht",
+    "submitReview": "Zur Prüfung eingereicht",
+    "submitReviewGoverned": "Zur Prüfung eingereicht — wartet auf Genehmigung.",
+    "changesRequested": "Mit Ihrem Kommentar an den Verantwortlichen zurückgesendet.",
+    "withdrawReview": "Prüfung zurückgezogen",
     "enterReviewerEmail": "E-Mail-Adresse des Prüfers eingeben:",
     "conceptPromoted": "Konzept erfolgreich hochgestuft",
     "conceptMigrated": "Konzept erfolgreich migriert",
@@ -100,6 +131,7 @@
     "selectConcept": "Konzept auswählen, um Details anzuzeigen",
     "linkAdded": "Verknüpfung erfolgreich hinzugefügt",
     "linkRemoved": "Verknüpfung erfolgreich entfernt",
+    "statusChanged": "Status aktualisiert",
     "saveFailed": "Konzept konnte nicht gespeichert werden",
     "deleteConceptFailed": "Konzept konnte nicht gelöscht werden"
   },
@@ -128,7 +160,8 @@
     "openIriAria": "IRI öffnen",
     "linkedAssets": "Verknüpfte Assets",
     "synonyms": "Synonyme",
-    "relatedTerms": "Verwandte Begriffe"
+    "relatedTerms": "Verwandte Begriffe",
+    "title": "Details"
   },
   "fields": {
     "definition": "Definition",
@@ -142,7 +175,12 @@
     "scope": "Geltungsbereich",
     "concepts": "Konzepte",
     "source": "Quelle",
-    "sourceUrl": "Quell-URL"
+    "sourceFile": "Importiert aus",
+    "sourceUrl": "Quell-URL",
+    "scheme": "Konzeptschema",
+    "created": "Erstellt",
+    "type": "Typ",
+    "iri": "IRI"
   },
   "form": {
     "createTitle": "Begriff erstellen",
@@ -194,10 +232,92 @@
       "title": "Konzept löschen",
       "description": "Möchten Sie \"{{label}}\" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden. Nur Konzepte im Entwurfsstatus können gelöscht werden."
     },
+    "deleteScheme": {
+      "title": "Schema löschen",
+      "description": "Möchten Sie \"{{label}}\" wirklich löschen? Dadurch werden alle Konzepte in diesem Schema gelöscht. Dies kann nicht rückgängig gemacht werden."
+    },
     "linkEditor": {
       "title": "Verknüpfung erstellen",
       "description": "Definieren Sie eine Beziehung zwischen zwei Konzepten"
+    },
+    "deprecate": {
+      "title": "Konzept als veraltet markieren",
+      "description": "Geben Sie optional ein oder mehrere Nachfolgekonzepte an, um anzuzeigen, wodurch dieses Konzept ersetzt wurde.",
+      "successors": "Nachfolgekonzepte",
+      "noSuccessors": "Keine ausgewählt",
+      "addSuccessor": "+ Nachfolger hinzufügen"
     }
+  },
+  "lifecycle": {
+    "changeStatus": "Status ändern",
+    "submitReview": "Zur Prüfung einreichen",
+    "withdrawReview": "Prüfung zurückziehen",
+    "approve": "Genehmigen",
+    "requestChanges": "Änderungen anfordern",
+    "publish": "Veröffentlichen",
+    "certify": "Zertifizieren",
+    "deprecate": "Als veraltet markieren",
+    "archive": "Archivieren",
+    "request": "Anfordern",
+    "requestDialog": {
+      "describe": {
+        "submitReview": "Reichen Sie dieses Konzept zur Prüfung ein. Die prüfende Person wählen Sie im nächsten Schritt.",
+        "approve": "Genehmigen Sie dieses Konzept, damit es veröffentlicht werden kann.",
+        "requestChanges": "Setzen Sie dieses Konzept auf Entwurf zurück. Im nächsten Schritt können Sie einen Kommentar hinzufügen.",
+        "publish": "Veröffentlichen Sie dieses Konzept, damit andere es finden und nutzen können.",
+        "certify": "Markieren Sie dieses Konzept als zertifiziert, also als vertrauenswürdige Referenz.",
+        "deprecate": "Kennzeichnen Sie dieses Konzept als veraltet. Es bleibt sichtbar, wird aber als nicht mehr empfohlen markiert.",
+        "archive": "Archivieren Sie dieses Konzept. Es wird außer Dienst gestellt und in der normalen Nutzung ausgeblendet.",
+        "generic": "Setzen Sie dieses Konzept auf den Status {{status}}.",
+        "newVersion": "Speichern Sie eine neue Version dieses Konzepts. Die IRI bleibt gleich."
+      },
+      "createNewVersion": "Neue Version erstellen",
+      "title": "Aktion anfordern",
+      "descriptionWithLabel": "Wählen Sie, was Sie mit dem Konzept „{{label}}“ tun möchten.",
+      "description": "Wählen Sie, was Sie mit diesem Konzept tun möchten.",
+      "currentStatus": "Aktueller Status: {{status}}.",
+      "pickerLabel": "Was möchten Sie anfordern?"
+    },
+    "requestReview": "Prüfung anfordern"
+  },
+  "requestChanges": {
+    "title": "Änderungen anfordern",
+    "description": "Senden Sie dieses Konzept mit Ihrem Kommentar als Entwurf an den Verantwortlichen zurück.",
+    "comment": "Kommentar für den Verantwortlichen",
+    "placeholder": "Was sollte geändert werden, bevor dies genehmigt werden kann?",
+    "submit": "Zurücksenden"
+  },
+  "submitReview": {
+    "title": "Zur Prüfung einreichen",
+    "description": "Weisen Sie optional einen Prüfer zu und fügen Sie Notizen hinzu.",
+    "reviewer": "Prüfer (optional)",
+    "reviewerPlaceholder": "Prüfer auswählen...",
+    "notes": "Notizen (optional)",
+    "notesPlaceholder": "Kontext oder Anweisungen hinzufügen...",
+    "submit": "Einreichen",
+    "checking": "Genehmigungsworkflow wird geprüft…",
+    "governedBanner": "Dieses Konzept unterliegt dem Genehmigungsworkflow '{{workflow}}'. Beim Einreichen wird diese Genehmigung gestartet — das Konzept wechselt in den Status In Prüfung und wartet auf die Freigabe durch die Genehmiger.",
+    "governedBannerMulti": "Dieses Konzept unterliegt {{count}} Genehmigungsworkflows. Beim Einreichen wird diese Genehmigung gestartet — das Konzept wechselt in den Status In Prüfung und wartet auf die Freigabe durch die Genehmiger.",
+    "ungovernedBanner": "Es ist kein Genehmigungsworkflow zugeordnet. Beim Einreichen wechselt dieses Konzept direkt in den Status In Prüfung; anschließend kann jeder Benutzer mit Schreibzugriff es genehmigen."
+  },
+  "concept": {
+    "inReview": "In Prüfung",
+    "reviewerComment": "Kommentar des Prüfers",
+    "sparql": "SPARQL",
+    "sparqlTitle": "SPARQL-Abfrage",
+    "sparqlDescription": "Den Knowledge Graph abfragen. Mit diesem Konzept vorbelegt."
+  },
+  "hierarchy": {
+    "title": "Hierarchie",
+    "parent": "Übergeordnet",
+    "children": "Untergeordnet",
+    "none": "Keine übergeordneten oder untergeordneten Konzepte.",
+    "viewLabel": "Hierarchieansicht",
+    "list": "Liste",
+    "graph": "Graph"
+  },
+  "versionDiff": {
+    "compare": "Vergleichen"
   },
   "rdfSources": {
     "syntaxColumn": "Syntax",
@@ -227,17 +347,87 @@
       "demoGraph": "Demo-Geschäftskonzepte"
     }
   },
+  "versionHistory": {
+    "title": "Versionsverlauf",
+    "saveNewVersion": "Neue Version speichern",
+    "saveDescription": "Bearbeiten Sie die Definition und speichern Sie sie als neue Version. Die vorherige Definition bleibt im Verlauf erhalten.",
+    "willCreate": "Dadurch wird v{{next}} erstellt.",
+    "whatChanged": "Was wurde geändert?",
+    "notePlaceholder": "z. B. Formulierung zur besseren Verständlichkeit präzisiert",
+    "saved": "Neue Version gespeichert",
+    "current": "Aktuell",
+    "previous": "Vorherige Version",
+    "previousDefinition": "Vorherige Definition:",
+    "noDefinition": "Für diese Version ist keine Definition erfasst.",
+    "editedBy": "Bearbeitet von {{who}} am {{when}}",
+    "unknownEditor": "jemandem",
+    "none": "Noch keine vorherigen Versionen.",
+    "unavailable": "Der Versionsverlauf ist nicht verfügbar.",
+    "replacedBy": "Ersetzt durch {{label}}",
+    "saveNewVersionDraftLocked": "Verfügbar, nachdem dieses Konzept genehmigt wurde (v1 muss vor einer neuen Version genehmigt werden).",
+    "readOnlyNote": "Versionierung gilt für verwaltete (bearbeitbare) Konzeptschemata. Dieses Konzept stammt aus einer schreibgeschützten Quelle, daher können hier keine neuen Versionen gespeichert werden.",
+    "newVersion": "Neue Version"
+  },
   "import": {
+    "title": "Konzepte importieren",
+    "descriptionMulti": "Legen Sie eine oder mehrere Ontologiedateien ab und wählen Sie dann, wie sie übernommen werden. Die Datei ist nur ein Träger.",
+    "sourceFiles": "Quelldateien",
+    "addMoreFiles": "Weitere Dateien hinzufügen…",
+    "chooseFiles": "Dateien auswählen…",
+    "supportedFormats": "Unterstützt: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
+    "howLand": "Wie sollen diese übernommen werden?",
+    "oneScheme": "Ein Schema",
+    "oneSchemeDesc": "Alle Dateien in einem einzigen Konzeptschema zusammenführen.",
+    "oneSchemePerFile": "Ein Schema pro Datei",
+    "oneSchemePerFileDesc": "Jede Datei wird zu einem eigenen Konzeptschema.",
+    "perFileTodo": "Ein Schema pro Datei erfordert ein Backend, das pro Datei ein Schema erstellt; vorerst werden alle Dateien in das unten angegebene Schema übernommen.",
+    "targetCollection": "Ziel-Konzeptschema",
+    "selectCollection": "Konzeptschema auswählen…",
+    "createNewScheme": "＋ Neues Schema erstellen…",
+    "newSchemeName": "Name des neuen Schemas (z. B. Finanzontologie)",
+    "noEditableCollections": "Keine bearbeitbaren Konzeptschemata verfügbar. Erstellen Sie zuerst eines.",
+    "reconcileNote": "Überschneidende oder doppelte Begriffe über Schemata hinweg werden später im Review Board abgeglichen. Der Import übernimmt nur den Graphen.",
+    "summary": "{{files}} Datei(en) importiert, insgesamt {{count}} Tripel.",
+    "summaryPending": "Upload zur Genehmigung eingereicht ({{files}} Datei(en))",
+    "fileOk": "{{count}} Tripel",
+    "filePending": "Genehmigung ausstehend",
+    "allFailed": "Es konnten keine Dateien importiert werden. Siehe Fehler pro Datei unten.",
+    "computingDiff": "Änderungen werden berechnet…",
+    "changelogTitle": "Aus {{file}} übernommene Änderungen",
+    "previewTitle": "Änderungen aus {{file}}",
+    "changelogSummary": "Ändert {{modified}}, fügt {{added}} hinzu, entfernt {{removed}} ({{unchanged}} unverändert).",
+    "bucketModified": "Geändert (neue Version)",
+    "bucketNew": "Neu",
+    "bucketRemoved": "Entfernt (als veraltet markiert, nicht gelöscht)",
+    "stillReferenced": "verwendet von {{count}}",
+    "submitMulti": "{{count}} Datei(en) importieren",
     "chooseFile": "Datei auswählen…",
     "file": "Datei",
-    "noEditableCollections": "Keine bearbeitbaren Konzeptschemata verfügbar. Erstellen Sie zuerst eines.",
-    "selectCollection": "Konzeptschema auswählen…",
     "submit": "Importieren",
     "success": "Import erfolgreich",
-    "supportedFormats": "Unterstützt: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
-    "targetCollection": "Ziel-Konzeptschema",
-    "title": "Konzepte importieren",
-    "readOnlyHint": "Nur bearbeitbare Konzeptschemata können Importe aufnehmen. Importierte und System-Konzeptschemata sind schreibgeschützt."
+    "conflict": {
+      "alreadyIn": "Bereits in {{scheme}}",
+      "mustChoose": "Wählen Sie aus, wie Konflikte behandelt werden sollen.",
+      "title": "Konflikte bei Konzept-IRIs erkannt",
+      "description": "Die folgenden Konzepte sind in diesem Schema bereits vorhanden. Wählen Sie, wie sie behandelt werden sollen:",
+      "showLess": "Weniger anzeigen",
+      "showAll": "Detaillierte Liste prüfen ({{count}})",
+      "update": "Vorhandene aktualisieren",
+      "updateDesc": "Vorhandene Konzepte mit neuen Definitionen überschreiben",
+      "skip": "Nur neue importieren",
+      "skipDesc": "Konfliktbehaftete IRIs überspringen, den Rest importieren"
+    },
+    "readOnlyHint": "Nur bearbeitbare Konzeptschemata können Importe aufnehmen. Importierte und System-Konzeptschemata sind schreibgeschützt.",
+    "summaryToast": "{{files}} Datei(en) importiert.",
+    "perFileNote": "Jede Datei erstellt ein neues Schema, das nach der Datei benannt wird. Keine Zielauswahl erforderlich."
+  },
+  "columns": {
+    "fromFile": "aus {{file}}",
+    "name": "Name",
+    "kind": "Art",
+    "scheme": "Schema",
+    "mapping": "Zuordnung",
+    "status": "Status"
   },
   "propertyTypes": {
     "object": "Objekteigenschaft",
@@ -303,7 +493,8 @@
     "parentCollection": "Übergeordnetes Konzeptschema",
     "noneRootCollection": "Keines (Stamm-Konzeptschema)",
     "editable": "Bearbeitbar",
-    "editableHelp": "Erstellen und Bearbeiten von Konzepten in diesem Konzeptschema zulassen"
+    "editableHelp": "Erstellen und Bearbeiten von Konzepten in diesem Konzeptschema zulassen",
+    "createTitle": "Schema erstellen"
   },
   "promotion": {
     "promoteConcept": "Konzept hochstufen",
@@ -492,6 +683,86 @@
     "emptyCta": "Zu Define wechseln"
   },
   "define": {
-    "requiresWrite": "Schreibzugriff erforderlich"
+    "requiresWrite": "Schreibzugriff erforderlich",
+    "builds": "Erstellt",
+    "whatYouCanBuild": "Was Sie erstellen können",
+    "schemeRdfNote": "Jedes Schema ist ein skos:ConceptScheme.",
+    "needsReview": "Prüfung erforderlich",
+    "running": "Läuft",
+    "startWith": "Beginnen mit…",
+    "author": {
+      "title": "Verfassen",
+      "tip": "Erstellt skos:Concept-Einträge in einem neuen Konzeptschema (skos:ConceptScheme). Mit zunehmender Reife des Schemas können Einträge später als owl:Class oder als OWL-Property typisiert werden.",
+      "desc": "Begriffe selbst verfassen.",
+      "cta": "Neues Konzeptschema"
+    },
+    "generate": {
+      "title": "Generieren",
+      "tip": "Ein geführtes Interview entwirft aus Ihren Tabellen eine OWL-Ontologie: Klassen (owl:Class, Hierarchie über rdfs:subClassOf) und Properties (owl:ObjectProperty / owl:DatatypeProperty). Jeder Kandidat führt seine Quelle mit und wird zur Prüfung als Entwurf gespeichert.",
+      "desc": "Beantworten Sie einige Fragen; Ontos entwirft das Schema.",
+      "cta": "Geführten Aufbau starten"
+    },
+    "import": {
+      "title": "Importieren",
+      "tip": "Verarbeitet .ttl / .rdf / .owl / .n3 / .jsonld. Mehrere Dateien können in ein Schema zusammengeführt oder als je ein Schema pro Datei angelegt werden. Der Quellgraph bleibt für den Round-Trip-Export erhalten.",
+      "desc": "RDF-Dateien in ein Schema hochladen.",
+      "cta": "Dateien hochladen",
+      "buildsNote": "* Je nach Dateiinhalt. Importierte Begriffe bleiben schreibgeschützt."
+    },
+    "inProgress": "In Bearbeitung",
+    "noInProgress": "Keine laufenden Erstellungsarbeiten. Beginnen Sie mit einem der obigen Wege.",
+    "generatorRun": "Generatorlauf",
+    "draftPending": "Entwurf noch keinem Konzeptschema zugewiesen.",
+    "stepCount": "{{count}} Schritte",
+    "review": "Prüfen",
+    "guided": {
+      "title": "Geführter Aufbau",
+      "subtitle": "Beantworten Sie einige Fragen. Daraus erstellen wir einen Prompt für den Generator, der ein Konzeptschema entwirft, das Sie vor dem Übernehmen prüfen. Noch wird nichts gespeichert.",
+      "domainLabel": "In welcher Domäne arbeiten Sie?",
+      "domainsLoading": "Datendomänen werden geladen...",
+      "domainSelectLabel": "Datendomäne",
+      "domainSelectPlaceholder": "Datendomäne auswählen",
+      "noDomain": "Keine Datendomäne (eigene eingeben)",
+      "noDomainsHint": "Noch keine Datendomänen definiert. Beschreiben Sie Ihre Domäne unten in eigenen Worten.",
+      "domainPlaceholder": "z. B. Einzelhandelspreise, klinische Studien, Flottenlogistik",
+      "questionsLabel": "Bei welchen Fragen soll es die Beantwortung unterstützen? (optional)",
+      "questionAria": "Frage {{n}}",
+      "questionPlaceholder": "z. B. Welche Kunden sind im letzten Quartal abgewandert?",
+      "removeQuestion": "Frage {{n}} entfernen",
+      "addQuestion": "Frage hinzufügen",
+      "objectsLabel": "Mit welchen Objekten arbeiten Sie? (optional)",
+      "objectsPlaceholder": "z. B. Kunde, Auftrag, Sendung, Rechnung",
+      "previewLabel": "Prompt für den Generator",
+      "continue": "Weiter zum Generator"
+    }
+  },
+  "summary": {
+    "copyFailed": "Die IRI konnte nicht kopiert werden.",
+    "status": "Status",
+    "type": "Typ",
+    "version": "Version",
+    "copyIri": "IRI kopieren"
+  },
+  "advanced": {
+    "turtle": "RDF (Turtle)"
+  },
+  "mapping": {
+    "assetAndProduct": "Asset + Produkt",
+    "asset": "Asset",
+    "product": "Produkt",
+    "none": "Nicht zugeordnet"
+  },
+  "bulk": {
+    "partial": "Mit einigen Fehlern abgeschlossen",
+    "statusResult": "{{label}}: {{ok}} aktualisiert, {{failed}} übersprungen",
+    "selectAll": "Alle auswählen",
+    "selected": "{{count}} ausgewählt",
+    "setStatus": "Status festlegen"
+  },
+  "search": {
+    "matchedLanguage": "Treffer in: {{lang}}"
+  },
+  "collection": {
+    "typeTooltip": "Glossar, Taxonomie und Ontologie sind Stufen auf einer Reifeskala, keine unterschiedlichen Werkzeuge. Glossar = eine flache Liste abgestimmter Begriffe und Definitionen. Taxonomie = Begriffe in einer Ober-/Unterbegriff-Hierarchie. Ontologie = formale Klassen und Eigenschaften, über die eine Maschine schlussfolgern kann. Wählen Sie Ihren aktuellen Stand; Struktur können Sie später ergänzen."
   }
 }

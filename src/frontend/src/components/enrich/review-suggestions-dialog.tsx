@@ -4,6 +4,7 @@ import { ArrowRight, Check, CheckCircle2, ExternalLink, Loader2, X } from 'lucid
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -181,9 +182,16 @@ export default function ReviewSuggestionsDialog({
               onNext={() => setActiveIndex((i) => Math.min(i + 1, suggestionRefs!.length - 1))}
             />
           ) : loading && !hasScheme && placeholders.length === 0 ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t('enrich.review.loading', 'Loading suggested matches…')}
+            <div className="space-y-3 py-2" data-testid="review-suggestions-loading">
+              {[0, 1, 2].map((row) => (
+                <div key={row} className="rounded-md border p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <Skeleton className="h-4 w-2/5" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-3 w-4/5" />
+                </div>
+              ))}
             </div>
           ) : hasScheme ? (
             // Live scheme-review path: list the scheme's pending suggestions and

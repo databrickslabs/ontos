@@ -11,7 +11,7 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { Card } from '@/components/ui/card'
-import { Loader2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useApi } from '@/hooks/use-api'
 import { OntologyConcept } from '@/types/ontology'
@@ -381,11 +381,10 @@ function ConceptNeighborhoodGraphInner({
 
   if (isLoading && !layout) {
     return (
-      <div className="flex items-center justify-center text-sm text-muted-foreground py-3 gap-2">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        {t('semantic-models:neighborhood.loading', {
-          defaultValue: 'Loading neighbourhood...',
-        })}
+      <div className="relative h-52 rounded-md border" data-testid="concept-neighborhood-loading">
+        <Skeleton className="absolute left-1/2 top-1/2 h-12 w-28 -translate-x-1/2 -translate-y-1/2 rounded-lg" />
+        <Skeleton className="absolute left-6 top-8 h-10 w-24 rounded-lg" />
+        <Skeleton className="absolute bottom-8 right-6 h-10 w-24 rounded-lg" />
       </div>
     )
   }

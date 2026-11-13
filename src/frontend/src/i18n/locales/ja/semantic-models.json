@@ -11,7 +11,9 @@
   "tabs": {
     "collections": "コンセプトスキーム",
     "concepts": "コンセプト",
-    "graph": "グラフ"
+    "graph": "グラフ",
+    "define": "定義",
+    "explore": "探索"
   },
   "types": {
     "concept": "コンセプト",
@@ -27,21 +29,27 @@
     "empty": "このコンセプトに関連付けられたエンティティはありません。",
     "removed": "「{{label}}」へのリンクを削除しました。",
     "removeFailed": "リンクを削除できませんでした。",
-    "removeAria": "関連エンティティを削除"
+    "removeAria": "関連エンティティを削除",
+    "open": "開く",
+    "removeConfirmTitle": "このリンクを削除しますか？",
+    "removeConfirmBody": "「{{label}}」とこのコンセプトのリンクを解除します。エンティティ自体は削除されません。"
   },
   "neighborhood": {
     "title": "コンセプトの近傍",
     "loading": "近傍を読み込み中...",
     "empty": "関連するコンセプトはありません。",
     "moreParents": "他 {{count}} 件",
-    "moreChildren": "他 {{count}} 件"
+    "moreChildren": "他 {{count}} 件",
+    "list": "リスト",
+    "graph": "グラフ"
   },
   "relations": {
     "title": "関係",
     "loading": "関係を読み込み中...",
     "empty": "関係が見つかりません。",
     "outgoingTooltip": "このコンセプト → 対象",
-    "incomingTooltip": "ソース → このコンセプト"
+    "incomingTooltip": "ソース → このコンセプト",
+    "viewLabel": "関係ビュー"
   },
   "filters": {
     "allGlossaries": "すべての用語集",
@@ -51,11 +59,30 @@
     "none": "なし",
     "groupBySource": "ソースでグループ化",
     "showProperties": "プロパティを表示",
+    "showSystemSources": "システムオントロジーを表示",
     "groupByDomain": "ドメインでグループ化",
+    "groupByNone": "なし",
+    "groupByScheme": "スキーム",
+    "groupByDimSource": "ソース",
+    "groupByDimDomain": "ドメイン",
+    "noSourceFile": "ソースファイルなし",
     "allTypes": "すべてのタイプ",
     "allScopes": "すべてのスコープ",
     "allCollections": "すべてのコンセプトスキーム",
-    "labelLanguage": "ラベルの言語"
+    "searchSchemes": "スキームを検索...",
+    "sortBy": "並べ替え",
+    "sortName": "名前",
+    "sortSize": "サイズ",
+    "groupTypeGlossary": "用語集",
+    "groupTypeTaxonomy": "タクソノミー",
+    "groupTypeOntology": "オントロジー",
+    "groupTypeOther": "その他",
+    "importedDisable": "インポート済み — 削除できません",
+    "labelLanguage": "ラベルの言語",
+    "groupBy": "グループ化",
+    "status": "ステータス",
+    "showStatuses": "表示するステータス",
+    "statusHiddenNote": "{{count}} 件非表示"
   },
   "groupBy": {
     "collection": "コンセプトスキーム別",
@@ -92,6 +119,10 @@
     "conceptUpdated": "コンセプトを更新しました",
     "conceptDeleted": "コンセプトを削除しました",
     "submittedForReview": "コンセプトをレビューに送信しました",
+    "submitReview": "レビューに提出しました",
+    "submitReviewGoverned": "レビューに提出しました — 承認待ちです。",
+    "changesRequested": "コメントを添えてオーナーに差し戻しました。",
+    "withdrawReview": "レビューを取り下げました",
     "enterReviewerEmail": "レビュー担当者のメールアドレスを入力してください:",
     "conceptPromoted": "コンセプトを昇格しました",
     "conceptMigrated": "コンセプトを移行しました",
@@ -100,6 +131,7 @@
     "selectConcept": "詳細を表示するコンセプトを選択してください",
     "linkAdded": "リンクを追加しました",
     "linkRemoved": "リンクを削除しました",
+    "statusChanged": "ステータスを更新しました",
     "saveFailed": "コンセプトの保存に失敗しました",
     "deleteConceptFailed": "コンセプトの削除に失敗しました"
   },
@@ -128,7 +160,8 @@
     "openIriAria": "IRI を開く",
     "linkedAssets": "リンクされたアセット",
     "synonyms": "同義語",
-    "relatedTerms": "関連用語"
+    "relatedTerms": "関連用語",
+    "title": "詳細"
   },
   "fields": {
     "definition": "定義",
@@ -142,7 +175,12 @@
     "scope": "スコープ",
     "concepts": "コンセプト",
     "source": "ソース",
-    "sourceUrl": "ソースURL"
+    "sourceFile": "インポート元",
+    "sourceUrl": "ソースURL",
+    "scheme": "コンセプトスキーム",
+    "created": "作成日",
+    "type": "タイプ",
+    "iri": "IRI"
   },
   "form": {
     "createTitle": "用語を作成",
@@ -194,10 +232,92 @@
       "title": "コンセプトを削除",
       "description": "「{{label}}」を削除してもよろしいですか？この操作は取り消せません。ドラフトのコンセプトのみ削除できます。"
     },
+    "deleteScheme": {
+      "title": "スキームを削除",
+      "description": "「{{label}}」を削除してもよろしいですか？このスキーム内のすべてのコンセプトが削除され、元に戻すことはできません。"
+    },
     "linkEditor": {
       "title": "リンクを作成",
       "description": "2つのコンセプト間の関係を定義します"
+    },
+    "deprecate": {
+      "title": "コンセプトを非推奨にする",
+      "description": "必要に応じて、このコンセプトの置き換え先を示す後継コンセプトを 1 つ以上指定してください。",
+      "successors": "後継コンセプト",
+      "noSuccessors": "選択されていません",
+      "addSuccessor": "+ 後継を追加"
     }
+  },
+  "lifecycle": {
+    "changeStatus": "ステータスを変更",
+    "submitReview": "レビューに提出",
+    "withdrawReview": "レビューを取り下げ",
+    "approve": "承認",
+    "requestChanges": "変更を依頼",
+    "publish": "公開",
+    "certify": "認定",
+    "deprecate": "非推奨にする",
+    "archive": "アーカイブ",
+    "request": "リクエスト",
+    "requestDialog": {
+      "describe": {
+        "submitReview": "このコンセプトをレビューに提出します。レビュー担当者は次のステップで選択します。",
+        "approve": "このコンセプトを承認し、公開できるようにします。",
+        "requestChanges": "このコンセプトを下書きに差し戻します。次のステップでコメントを追加できます。",
+        "publish": "このコンセプトを公開し、他のユーザーが検索して利用できるようにします。",
+        "certify": "このコンセプトを信頼できる参照として認定済みにします。",
+        "deprecate": "このコンセプトを非推奨にします。引き続き表示されますが、推奨されなくなったことを示すフラグが付きます。",
+        "archive": "このコンセプトをアーカイブします。廃止され、通常の利用では非表示になります。",
+        "generic": "このコンセプトを {{status}} ステータスに移行します。",
+        "newVersion": "このコンセプトの新しいバージョンを保存します。IRI は変わりません。"
+      },
+      "createNewVersion": "新しいバージョンを作成",
+      "title": "アクションをリクエスト",
+      "descriptionWithLabel": "コンセプト「{{label}}」に対して行う操作を選択してください。",
+      "description": "このコンセプトに対して行う操作を選択してください。",
+      "currentStatus": "現在のステータス: {{status}}。",
+      "pickerLabel": "何をリクエストしますか？"
+    },
+    "requestReview": "レビューをリクエスト"
+  },
+  "requestChanges": {
+    "title": "変更を依頼",
+    "description": "コメントを添えて、このコンセプトを下書きとしてオーナーに差し戻します。",
+    "comment": "オーナーへのコメント",
+    "placeholder": "承認前に何を変更すべきですか？",
+    "submit": "差し戻す"
+  },
+  "submitReview": {
+    "title": "レビューに提出",
+    "description": "必要に応じてレビュー担当者を割り当て、メモを追加します。",
+    "reviewer": "レビュー担当者（任意）",
+    "reviewerPlaceholder": "レビュー担当者を選択...",
+    "notes": "メモ（任意）",
+    "notesPlaceholder": "背景情報や指示を追加...",
+    "submit": "提出",
+    "checking": "承認ワークフローを確認中…",
+    "governedBanner": "このコンセプトは「{{workflow}}」承認ワークフローで管理されています。提出するとその承認が開始され、レビュー中に移行して承認者のサインオフを待ちます。",
+    "governedBannerMulti": "このコンセプトは {{count}} 件の承認ワークフローで管理されています。提出するとその承認が開始され、レビュー中に移行して承認者のサインオフを待ちます。",
+    "ungovernedBanner": "承認ワークフローが関連付けられていません。提出するとこのコンセプトは直接レビュー中に移行し、書き込み権限を持つ任意のユーザーが承認できるようになります。"
+  },
+  "concept": {
+    "inReview": "レビュー中",
+    "reviewerComment": "レビュー担当者のコメント",
+    "sparql": "SPARQL",
+    "sparqlTitle": "SPARQL クエリ",
+    "sparqlDescription": "ナレッジグラフをクエリします。このコンセプトが入力済みの状態で開きます。"
+  },
+  "hierarchy": {
+    "title": "階層",
+    "parent": "親",
+    "children": "子",
+    "none": "上位または下位のコンセプトはありません。",
+    "viewLabel": "階層ビュー",
+    "list": "リスト",
+    "graph": "グラフ"
+  },
+  "versionDiff": {
+    "compare": "比較"
   },
   "rdfSources": {
     "syntaxColumn": "構文",
@@ -227,17 +347,87 @@
       "demoGraph": "デモ用ビジネスコンセプト"
     }
   },
+  "versionHistory": {
+    "title": "バージョン履歴",
+    "saveNewVersion": "新しいバージョンを保存",
+    "saveDescription": "定義を編集して新しいバージョンとして保存します。以前の定義は履歴に保持されます。",
+    "willCreate": "v{{next}} が作成されます。",
+    "whatChanged": "何を変更しましたか？",
+    "notePlaceholder": "例: わかりやすくするため表現を簡潔にした",
+    "saved": "新しいバージョンを保存しました",
+    "current": "現在",
+    "previous": "以前のバージョン",
+    "previousDefinition": "以前の定義:",
+    "noDefinition": "このバージョンには定義が記録されていません。",
+    "editedBy": "{{when}} に {{who}} が編集",
+    "unknownEditor": "不明なユーザー",
+    "none": "以前のバージョンはまだありません。",
+    "unavailable": "バージョン履歴を利用できません。",
+    "replacedBy": "{{label}} に置き換え済み",
+    "saveNewVersionDraftLocked": "このコンセプトの承認後に利用できます（新しいバージョンを作成する前に v1 の承認が必要です）。",
+    "readOnlyNote": "バージョン管理は、ガバナンス対象（編集可能）のコンセプトスキームに適用されます。このコンセプトは読み取り専用のソースに由来するため、ここで新しいバージョンを保存することはできません。",
+    "newVersion": "新しいバージョン"
+  },
   "import": {
+    "title": "コンセプトをインポート",
+    "descriptionMulti": "1 つ以上のオントロジーファイルをドロップし、取り込み方法を選択してください。ファイルは単なる入れ物です。",
+    "sourceFiles": "ソースファイル",
+    "addMoreFiles": "ファイルを追加…",
+    "chooseFiles": "ファイルを選択…",
+    "supportedFormats": "対応形式: Turtle (.ttl)、RDF/XML (.rdf, .xml)、OWL (.owl)、N-Triples (.nt)、N3 (.n3)、JSON-LD (.jsonld, .json)",
+    "howLand": "どのように取り込みますか？",
+    "oneScheme": "単一スキーム",
+    "oneSchemeDesc": "すべてのファイルを 1 つのコンセプトスキームに統合します。",
+    "oneSchemePerFile": "ファイルごとに 1 スキーム",
+    "oneSchemePerFileDesc": "各ファイルがそれぞれ独自のコンセプトスキームになります。",
+    "perFileTodo": "ファイルごとに 1 スキームにするには、ファイルごとにスキームを作成するバックエンドが必要です。現時点では、すべてのファイルが下のスキームに取り込まれます。",
+    "targetCollection": "対象コンセプトスキーム",
+    "selectCollection": "コンセプトスキームを選択…",
+    "createNewScheme": "＋ 新しいスキームを作成…",
+    "newSchemeName": "新しいスキーム名（例: Finance Ontology）",
+    "noEditableCollections": "編集可能なコンセプトスキームがありません。先に作成してください。",
+    "reconcileNote": "スキーム間で重複する用語は、後でレビューボードで調整されます。インポートはグラフを取り込むだけです。",
+    "summary": "{{files}} 個のファイルをインポートしました（合計 {{count}} 件のトリプル）。",
+    "summaryPending": "アップロードを承認に提出しました（{{files}} 個のファイル）",
+    "fileOk": "{{count}} 件のトリプル",
+    "filePending": "承認待ち",
+    "allFailed": "インポートできたファイルはありません。以下のファイルごとのエラーを確認してください。",
+    "computingDiff": "変更を計算中…",
+    "changelogTitle": "{{file}} から適用された変更",
+    "previewTitle": "{{file}} からの変更",
+    "changelogSummary": "{{modified}} 件を変更、{{added}} 件を追加、{{removed}} 件を削除（{{unchanged}} 件は変更なし）。",
+    "bucketModified": "変更（新しいバージョン）",
+    "bucketNew": "新規",
+    "bucketRemoved": "除外（非推奨化のみ。削除はされません）",
+    "stillReferenced": "{{count}} 件で使用中",
+    "submitMulti": "{{count}} 個のファイルをインポート",
     "chooseFile": "ファイルを選択…",
     "file": "ファイル",
-    "noEditableCollections": "編集可能なコンセプトスキームがありません。先に作成してください。",
-    "selectCollection": "コンセプトスキームを選択…",
     "submit": "インポート",
     "success": "インポートに成功しました",
-    "supportedFormats": "対応形式: Turtle (.ttl)、RDF/XML (.rdf, .xml)、OWL (.owl)、N-Triples (.nt)、N3 (.n3)、JSON-LD (.jsonld, .json)",
-    "targetCollection": "対象コンセプトスキーム",
-    "title": "コンセプトをインポート",
-    "readOnlyHint": "インポートを受け付けられるのは編集可能なコンセプトスキームのみです。インポート済みスキームとシステムスキームは読み取り専用です。"
+    "conflict": {
+      "alreadyIn": "{{scheme}} に既に存在します",
+      "mustChoose": "競合の処理方法を選択してください。",
+      "title": "コンセプト IRI の競合が検出されました",
+      "description": "以下のコンセプトはこのスキームに既に存在します。処理方法を選択してください:",
+      "showLess": "表示を減らす",
+      "showAll": "詳細リストを確認（{{count}}）",
+      "update": "既存を更新",
+      "updateDesc": "既存のコンセプトを新しい定義で上書きします",
+      "skip": "新規のみインポート",
+      "skipDesc": "競合する IRI をスキップし、残りをインポートします"
+    },
+    "readOnlyHint": "インポートを受け付けられるのは編集可能なコンセプトスキームのみです。インポート済みスキームとシステムスキームは読み取り専用です。",
+    "summaryToast": "{{files}} 件のファイルをインポートしました。",
+    "perFileNote": "各ファイルはファイル名にちなんだ新しいスキームを作成します。インポート先の選択は不要です。"
+  },
+  "columns": {
+    "fromFile": "{{file}} から",
+    "name": "名前",
+    "kind": "種類",
+    "scheme": "スキーム",
+    "mapping": "マッピング",
+    "status": "ステータス"
   },
   "propertyTypes": {
     "object": "オブジェクトプロパティ",
@@ -303,7 +493,8 @@
     "parentCollection": "親コンセプトスキーム",
     "noneRootCollection": "なし（ルートコンセプトスキーム）",
     "editable": "編集可能",
-    "editableHelp": "このコンセプトスキームでコンセプトの作成と編集を許可する"
+    "editableHelp": "このコンセプトスキームでコンセプトの作成と編集を許可する",
+    "createTitle": "スキームを作成"
   },
   "promotion": {
     "promoteConcept": "コンセプトを昇格",
@@ -492,6 +683,86 @@
     "emptyCta": "Define に移動"
   },
   "define": {
-    "requiresWrite": "書き込み権限が必要です"
+    "requiresWrite": "書き込み権限が必要です",
+    "builds": "作成されるもの",
+    "whatYouCanBuild": "作成できるもの",
+    "schemeRdfNote": "すべてのスキームは skos:ConceptScheme です。",
+    "needsReview": "レビューが必要",
+    "running": "実行中",
+    "startWith": "開始方法…",
+    "author": {
+      "title": "作成",
+      "tip": "新しいコンセプトスキーム（skos:ConceptScheme）に skos:Concept エントリを作成します。スキームの成熟に合わせて、後からエントリを owl:Class または OWL プロパティとして型付けできます。",
+      "desc": "用語を自分で記述します。",
+      "cta": "新規コンセプトスキーム"
+    },
+    "generate": {
+      "title": "生成",
+      "tip": "ガイド付きのインタビューで、テーブルから OWL オントロジーの下書きを作成します。クラス（owl:Class、rdfs:subClassOf による階層）とプロパティ（owl:ObjectProperty / owl:DatatypeProperty）が対象です。各候補にはソースが記録され、レビュー用の下書きとして保存されます。",
+      "desc": "いくつかの質問に答えると、Ontos がスキームの下書きを作成します。",
+      "cta": "ガイド付き作成を開始"
+    },
+    "import": {
+      "title": "インポート",
+      "tip": ".ttl / .rdf / .owl / .n3 / .jsonld を解析します。複数のファイルを 1 つのスキームに統合することも、ファイルごとに 1 つのスキームを作成することもできます。ラウンドトリップエクスポートのため、ソースグラフは保持されます。",
+      "desc": "RDF ファイルをスキームにアップロードします。",
+      "cta": "ファイルをアップロード",
+      "buildsNote": "* ファイルの内容に依存します。インポートされた用語は読み取り専用のままです。"
+    },
+    "inProgress": "進行中",
+    "noInProgress": "進行中の作成作業はありません。上記のいずれかの方法で開始してください。",
+    "generatorRun": "ジェネレーターの実行",
+    "draftPending": "下書きはまだコンセプトスキームに割り当てられていません。",
+    "stepCount": "{{count}} ステップ",
+    "review": "レビュー",
+    "guided": {
+      "title": "ガイド付き作成",
+      "subtitle": "いくつかの質問に答えてください。回答はジェネレーター用のプロンプトに変換され、コンセプトスキームの下書きが作成されます。下書きは保存前にレビューできます。まだ何も保存されていません。",
+      "domainLabel": "どの分野で作業していますか？",
+      "domainsLoading": "データドメインを読み込み中...",
+      "domainSelectLabel": "データドメイン",
+      "domainSelectPlaceholder": "データドメインを選択",
+      "noDomain": "データドメインなし（自由入力）",
+      "noDomainsHint": "データドメインはまだ定義されていません。以下にご自身の言葉で分野を記述してください。",
+      "domainPlaceholder": "例: 小売価格設定、臨床試験、車両物流",
+      "questionsLabel": "どのような質問に答えられるようにしますか？（任意）",
+      "questionAria": "質問 {{n}}",
+      "questionPlaceholder": "例: 前四半期に解約した顧客は？",
+      "removeQuestion": "質問 {{n}} を削除",
+      "addQuestion": "質問を追加",
+      "objectsLabel": "どのようなオブジェクトを扱いますか？（任意）",
+      "objectsPlaceholder": "例: 顧客、注文、出荷、請求書",
+      "previewLabel": "ジェネレーター用のプロンプト",
+      "continue": "ジェネレーターに進む"
+    }
+  },
+  "summary": {
+    "copyFailed": "IRI をコピーできませんでした。",
+    "status": "ステータス",
+    "type": "タイプ",
+    "version": "バージョン",
+    "copyIri": "IRI をコピー"
+  },
+  "advanced": {
+    "turtle": "RDF (Turtle)"
+  },
+  "mapping": {
+    "assetAndProduct": "アセット + プロダクト",
+    "asset": "アセット",
+    "product": "プロダクト",
+    "none": "未マッピング"
+  },
+  "bulk": {
+    "partial": "一部エラーありで完了しました",
+    "statusResult": "{{label}}: {{ok}} 件更新、{{failed}} 件スキップ",
+    "selectAll": "すべて選択",
+    "selected": "{{count}} 件選択中",
+    "setStatus": "ステータスを設定"
+  },
+  "search": {
+    "matchedLanguage": "一致: {{lang}}"
+  },
+  "collection": {
+    "typeTooltip": "用語集、タクソノミー、オントロジーは別々のツールではなく、成熟度の段階を表します。用語集 = 合意された用語と定義のフラットなリスト。タクソノミー = 上位/下位の階層に整理された用語。オントロジー = 機械が推論できる形式的なクラスとプロパティ。現在の段階を選んでください。構造は後から追加できます。"
   }
 }

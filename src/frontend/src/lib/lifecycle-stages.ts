@@ -40,6 +40,21 @@ export function isSeededStage(stage: Pick<LifecycleStage, 'key' | 'label'>): boo
   return SEEDED_STAGE_LABELS[stage.key] === stage.label;
 }
 
+/**
+ * In a review stage that awaits a steward's decision (Approve / Reject): any
+ * review-category stage but the approve action's own `approved`, as the
+ * backend's lifecycle service decides (proposed / under_review by default). A
+ * row without its category (an older API) falls back to the seeded keys.
+ */
+export function awaitsReviewDecision(
+  entity: { status?: string | null; status_category?: string | null },
+): boolean {
+  const status = (entity.status || '').toLowerCase();
+  const category = entity.status_category
+    ?? (['proposed', 'under_review'].includes(status) ? 'review' : null);
+  return category === 'review' && status !== 'approved';
+}
+
 /** A Stage Category in the UI language. */
 export function categoryLabel(category: string, t: Translate): string {
   return t(`lifecycle:category.${category}`, { defaultValue: category });

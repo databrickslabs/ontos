@@ -35,6 +35,13 @@ describe('DataContractWizardDialog status', () => {
         stages: STAGES.map((key, order) => ({
           key, label: key, category: 'draft', color: null, order, is_initial: order === 0,
         })),
+      }, {
+        id: 'g-live', name: 'Certified feeds', entity_type: 'data_contract',
+        is_default_for_type: false, transitions: [],
+        stages: ['intake', 'live'].map((key, order) => ({
+          key, label: key, category: order ? 'active' : 'draft', color: null, order,
+          is_initial: order === 0,
+        })),
       }] : []),
     })))
   })
@@ -57,5 +64,24 @@ describe('DataContractWizardDialog status', () => {
     fireEvent.click(statusSelect!)
     const options = screen.getAllByRole('option').map((o) => o.textContent)
     expect(options).toEqual(STAGES)
+  })
+
+  it('offers an edited contract the stages of its own group', async () => {
+    renderWithProviders(
+      <DataContractWizardDialog isOpen={true} onOpenChange={vi.fn()} onSubmit={vi.fn()}
+        initial={{ name: 'Feed', version: '1.0.0', status: 'live',
+          lifecycle_stage_group_id: 'g-live' }} />,
+    )
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      '/api/lifecycle-stage-groups?entity_type=data_contract',
+    ))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const statusSelect = screen
+      .getAllByRole('combobox')
+      .find((el) => el.textContent === 'live')
+    expect(statusSelect).toBeDefined()
+    fireEvent.click(statusSelect!)
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['intake', 'live'])
   })
 })

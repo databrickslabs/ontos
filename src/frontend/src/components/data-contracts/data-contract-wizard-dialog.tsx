@@ -64,12 +64,19 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const { t } = useTranslation(['data-contracts', 'common'])
   const { refetch: refetchDomains } = useDomains()
   const { toast } = useToast()
-  // The stages of the default data contract lifecycle, from the API
+  // The stages of the contract's lifecycle (the default one for a new
+  // contract), from the API; an edited contract's status is always offered
   const { groups: lifecycleGroups } = useLifecycleStageGroups('data_contract')
-  const defaultLifecycle = selectedGroup(lifecycleGroups, null)
-  const statuses = defaultLifecycle
-    ? orderedStages(defaultLifecycle).map((st) => st.key)
+  const contractLifecycle = selectedGroup(
+    lifecycleGroups, initial?.lifecycle_stage_group_id ?? null,
+  )
+  const lifecycleKeys = contractLifecycle
+    ? orderedStages(contractLifecycle).map((st) => st.key)
     : ['draft']
+  const currentStatus = typeof initial?.status === 'string' ? initial.status.toLowerCase() : ''
+  const statuses = currentStatus && !lifecycleKeys.includes(currentStatus)
+    ? [currentStatus, ...lifecycleKeys]
+    : lifecycleKeys
 
   // Helper function to handle domain-related errors
   const handleDomainError = async (error: any) => {

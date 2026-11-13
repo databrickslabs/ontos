@@ -100,6 +100,11 @@ export function AssetFormDialog({
     entityId: isEdit ? asset?.id : null, groupId: isEdit ? null : groupId, enabled: isOpen,
   });
   const initialKey = statusOptions.initial?.key;
+  // A new asset starts in the default group; only when the dialog opens, so a
+  // group picked before the type's schema loads is kept
+  useEffect(() => {
+    if (isOpen && !isEdit) setGroupId(null);
+  }, [isOpen, isEdit]);
   useEffect(() => {
     if (isOpen && !isEdit && initialKey) form.setValue('status', initialKey);
   }, [isOpen, isEdit, initialKey, groupId, form]);
@@ -149,7 +154,6 @@ export function AssetFormDialog({
         }
       }
     } else {
-      setGroupId(null);
       defaults.name = '';
       defaults.description = '';
       defaults.status = initialKey || 'draft';

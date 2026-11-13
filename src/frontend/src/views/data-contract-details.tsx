@@ -70,6 +70,7 @@ import CertificationBadge from '@/components/common/certification-badge'
 import PublicationScopeBadge from '@/components/common/publication-scope-badge'
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs'
 import EntityLifecycleStatus from '@/components/lifecycle/entity-lifecycle-status'
+import { awaitsReviewDecision } from '@/lib/lifecycle-stages'
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
@@ -220,18 +221,6 @@ const formatDate = (dateString: string | undefined, fallback: string = 'N/A'): s
     return 'Invalid Date';
   }
 };
-
-/**
- * In a review stage that awaits a steward's decision (Approve / Reject): any
- * review-category stage but the approve action's own `approved`, as the
- * backend's lifecycle service decides (proposed / under_review by default).
- */
-function awaitsReviewDecision(contract: { status?: string; status_category?: string | null }) {
-  const status = (contract.status || '').toLowerCase();
-  const category = contract.status_category
-    ?? (['proposed', 'under_review'].includes(status) ? 'review' : null);
-  return category === 'review' && status !== 'approved';
-}
 
 export default function DataContractDetails() {
   const { t } = useTranslation(['data-contracts', 'common'])

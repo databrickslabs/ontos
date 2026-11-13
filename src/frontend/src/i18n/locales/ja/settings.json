@@ -1205,7 +1205,7 @@
     "title": "成熟度レベル",
     "description": "データプロダクトと契約の成熟度の段階を定義します。各レベルはコンプライアンスポリシーによってゲートされます。",
     "addLevel": "レベルを追加",
-    "allTypes": "すべてのタイプ",
+    "allTypes": "プロダクトと契約",
     "gateCount_one": "{{count}} 個のゲート",
     "gateCount_other": "{{count}} 個のゲート",
     "complianceGates": "コンプライアンスポリシーゲート",
@@ -1232,7 +1232,8 @@
       "levelNamePreview": "レベル名"
     },
     "entityTypes": {
-      "all": "すべてのエンティティタイプ",
+      "all": "データプロダクトとデータ契約",
+      "Asset": "アセット（テーブルとビュー）",
       "DataProduct": "データプロダクト",
       "DataContract": "データ契約"
     },

@@ -1223,7 +1223,7 @@
     "title": "Volwassenheidsniveaus",
     "description": "Definieer de volwassenheidsladder voor dataproducten en contracten. Elk niveau wordt afgeschermd door compliance-beleid.",
     "addLevel": "Niveau Toevoegen",
-    "allTypes": "Alle types",
+    "allTypes": "Producten en contracten",
     "gateCount_one": "{{count}} poort",
     "gateCount_other": "{{count}} poorten",
     "complianceGates": "Compliance-beleidspoorten",
@@ -1250,7 +1250,8 @@
       "levelNamePreview": "Niveaunaam"
     },
     "entityTypes": {
-      "all": "Alle Entiteitstypes",
+      "all": "Dataproducten en datacontracten",
+      "Asset": "Assets (tabellen en views)",
       "DataProduct": "Dataproducten",
       "DataContract": "Datacontracten"
     },

@@ -1012,6 +1012,12 @@
     "overTime": "Maturità nel tempo",
     "retry": "Riprova"
   },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog non è raggiungibile, quindi mancano i campi della tabella {{tableName}}.",
+    "maturity_uc_table_unreadable": "La tabella {{tableName}} non può essere letta da Unity Catalog, quindi i suoi campi mancano.",
+    "maturity_uc_table_read_failed": "Non è stato possibile leggere la tabella {{tableName}} da Unity Catalog, quindi mancano i suoi campi.",
+    "maturity_gate_error": "Non è stato possibile valutare il gate {{gateName}}. I dettagli sono nel log del server."
+  },
   "createDialog": {
     "editTitle": "Modifica metadati del prodotto dati",
     "createTitle": "Crea prodotto dati (ODPS v1.0.0)",

@@ -1012,6 +1012,12 @@
     "overTime": "Volwassenheid in de tijd",
     "retry": "Opnieuw proberen"
   },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog is niet bereikbaar, dus de velden van tabel {{tableName}} ontbreken.",
+    "maturity_uc_table_unreadable": "Tabel {{tableName}} kan niet uit Unity Catalog worden gelezen, dus de velden ontbreken.",
+    "maturity_uc_table_read_failed": "Tabel {{tableName}} kon niet uit Unity Catalog worden gelezen, dus de velden ontbreken.",
+    "maturity_gate_error": "Gate {{gateName}} kon niet worden geëvalueerd. De details staan in het serverlogboek."
+  },
   "createDialog": {
     "editTitle": "Dataproduct-metadata bewerken",
     "createTitle": "Dataproduct aanmaken (ODPS v1.0.0)",

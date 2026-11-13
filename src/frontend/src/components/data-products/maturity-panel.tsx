@@ -113,6 +113,14 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {report.notices?.map((notice) => (
+          <p key={notice.code} className="text-xs text-muted-foreground">
+            {t(`data-products:maturityGateCodes.${notice.code}`, {
+              ...(notice.params ?? {}),
+              defaultValue: notice.message,
+            })}
+          </p>
+        ))}
         {/* Level progression */}
         {report.levels.map((level: LevelResult) => {
           const isExpanded = expandedLevel === level.level_order;
@@ -153,7 +161,14 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium">{gate.policy_name}</p>
                           {gate.message && (
-                            <p className="text-xs text-muted-foreground">{gate.message}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {gate.message_code
+                                ? t(`data-products:maturityGateCodes.${gate.message_code}`, {
+                                  ...(gate.message_params ?? {}),
+                                  defaultValue: gate.message,
+                                })
+                                : gate.message}
+                            </p>
                           )}
                         </div>
                         <Badge variant="outline" className="text-[10px]">

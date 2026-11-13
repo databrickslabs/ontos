@@ -1205,7 +1205,7 @@
     "title": "Livelli di maturità",
     "description": "Definisci la scala di maturità per prodotti dati e contratti. Ogni livello è vincolato da criteri di conformità.",
     "addLevel": "Aggiungi livello",
-    "allTypes": "Tutti i tipi",
+    "allTypes": "Prodotti e contratti",
     "gateCount_one": "{{count}} gate",
     "gateCount_other": "{{count}} gate",
     "complianceGates": "Gate dei criteri di conformità",
@@ -1232,7 +1232,8 @@
       "levelNamePreview": "Nome livello"
     },
     "entityTypes": {
-      "all": "Tutti i tipi di entità",
+      "all": "Prodotti e contratti di dati",
+      "Asset": "Asset (tabelle e viste)",
       "DataProduct": "Prodotti dati",
       "DataContract": "Contratti dati"
     },

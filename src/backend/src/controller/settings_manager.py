@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
+import os
 import uuid
 import yaml
 
@@ -17,7 +18,9 @@ from src.common.instance_identity import (
     validate_instance_id,
     validate_instance_name,
 )
-from src.common.config import Settings
+from types import SimpleNamespace
+
+from src.common.config import Settings, resolve_volume
 from src.common.sanitization import (
     APP_SHORT_NAME_MAX_LEN,
     APP_TAGLINE_MAX_LEN,
@@ -1601,10 +1604,43 @@ class SettingsManager:
             error_summary = f"Failed to update {len(errors)} workflow(s): " + "; ".join(errors)
             raise RuntimeError(error_summary)
 
+    @staticmethod
+    def _env_volume() -> Optional[str]:
+        """The volume the environment configures: what applies once the override is cleared."""
+        return os.environ.get('DATABRICKS_VOLUME') or None
+
+    def _validate_volume_settings(self, settings: dict) -> None:
+        """Refuse a volume, catalog or schema that can't name a Unity Catalog volume.
+
+        Runs ``resolve_volume`` on the values the save would leave in effect and raises
+        its ``VolumeInvalidError`` (a coded ``ValueError``, answered as a 400 with the
+        code and params). Nothing is written yet when it raises.
+
+        Only the form of the value is checked, with no workspace call, so a save also
+        works when the workspace can't be reached. A volume that doesn't exist is only
+        found when it is used. The check runs only when the volume, catalog or schema
+        changes: the General form sends all three on every save, and a value stored
+        before this check must not block saving other settings.
+        """
+        keys = ('databricks_catalog', 'databricks_schema', 'databricks_volume')
+        if not any(key in settings for key in keys):
+            return
+        # An empty catalog or schema keeps the one in effect, as the save below does;
+        # an empty volume clears the override and the environment value applies.
+        current = {key: getattr(self._settings, key.upper()) for key in keys}
+        candidate = {key: (settings.get(key) or None) if key in settings else None for key in keys}
+        effective = {key: candidate[key] or current[key] for key in keys}
+        if 'databricks_volume' in settings and not candidate['databricks_volume']:
+            effective['databricks_volume'] = self._env_volume()
+        if effective == current:
+            return
+        resolve_volume(SimpleNamespace(**{key.upper(): value for key, value in effective.items()}))
+
     def update_settings(self, settings: dict) -> Settings:
         """Update settings"""
-        # Validate every UI customization value first, so a 400 leaves nothing changed.
+        # Validate everything that can be refused first, so a 400 leaves nothing changed.
         ui = self._validate_ui_settings(settings)
+        self._validate_volume_settings(settings)
         git_values_before = self._git_setting_values()
         # Persist configured cluster ID string; do not scan clusters
         cluster_in_payload = 'job_cluster_id' in settings
@@ -1692,7 +1728,8 @@ class SettingsManager:
         if 'databricks_volume' in settings:
             value = settings.get('databricks_volume') or None
             app_settings_repo.set(self._db, 'DATABRICKS_VOLUME', value)
-            self._settings.DATABRICKS_VOLUME = value or self._settings.DATABRICKS_VOLUME
+            # Clearing the override leaves what a restart would load: the environment value.
+            self._settings.DATABRICKS_VOLUME = value or self._env_volume()
             logger.info(f"Updated DATABRICKS_VOLUME to: {value}")
         
         # Handle audit log directory

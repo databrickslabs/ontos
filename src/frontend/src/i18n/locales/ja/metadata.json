@@ -106,7 +106,8 @@
     },
     "messages": {
       "deleteFailed": "削除に失敗しました",
-      "uploadFailed": "アップロードに失敗しました"
+      "uploadFailed": "アップロードに失敗しました",
+      "volume_invalid": "「{{value}}」は Unity Catalog のボリュームを指していません。/Volumes/<catalog>/<schema>/<volume>、<catalog>.<schema>.<volume>、またはボリューム名を使用してください。ボリューム名のみの場合は、ピリオド、スラッシュ、空白を含まないカタログとスキーマが必要です。 管理者に、設定 > 一般 で修正するよう依頼してください。"
     }
   },
   "sharedAssets": {

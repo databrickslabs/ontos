@@ -137,7 +137,8 @@
       },
       "volume": {
         "label": "Volume",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "The volume \"{{value}}\" doesn't name a Unity Catalog volume. Use /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume>, or a volume name; a plain name needs a catalog and schema without periods, slashes or spaces."
       }
     },
     "instanceIdentity": {

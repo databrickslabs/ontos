@@ -137,7 +137,8 @@
       },
       "volume": {
         "label": "Volume",
-        "placeholder": "app_files"
+        "placeholder": "app_files",
+        "invalid": "\"{{value}}\" verwijst niet naar een Unity Catalog-volume. Gebruik /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> of een volumenaam; een gewone naam heeft een catalogus en schema nodig zonder punten, schuine strepen of spaties."
       }
     },
     "instanceIdentity": {

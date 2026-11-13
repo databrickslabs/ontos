@@ -119,6 +119,39 @@ describe('GeneralSettings - instance identity', () => {
     );
   });
 
+  it('shows volume_invalid translated and keeps the form editable', async () => {
+    fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return {
+          ok: false,
+          json: async () => ({
+            detail: {
+              code: 'volume_invalid',
+              message: 'english fallback',
+              params: { value: 'a.b', catalog: 'c', schema: 's' },
+            },
+          }),
+        } as Response;
+      }
+      return { ok: true, json: async () => baseResponse } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<GeneralSettings />);
+    await screen.findByLabelText('Instance ID');
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: 'destructive',
+        description: expect.stringContaining('a.b'),
+      })
+    );
+    expect(toastMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ description: expect.stringContaining('english fallback') })
+    );
+    expect(screen.getByRole('button', { name: /save settings/i })).toBeEnabled();
+  });
+
   it('maps instance_name_invalid to the length and control-character message', async () => {
     fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       if (init?.method === 'PUT') {

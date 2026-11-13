@@ -95,6 +95,44 @@ def test_merge_appends_to_existing_section_and_inserts_new_in_order(tmp_path):
     assert merged.endswith("# Release Notes - v1.0.0 (2026-06-22)" + NOTES.split("(2026-06-22)")[1])
 
 
+MIXED = """# Release Notes - Unreleased
+
+## ✨ Features
+
+- old f
+
+## 🐛 Bug Fixes
+
+- old b
+
+# Release Notes - v1.0.0 (2026-06-22)
+"""
+
+
+def test_merge_appends_before_the_next_section(tmp_path):
+    _write(tmp_path, "features", "f.md", "- **f**: new")
+    fragments, _ = load_fragments(tmp_path)
+    merged = merge_into_unreleased(MIXED, fragments)
+    assert "- old f\n- **f**: new\n\n## 🐛 Bug Fixes\n\n- old b\n" in merged
+
+
+def test_merge_inserts_a_new_section_before_a_later_existing_one(tmp_path):
+    _write(tmp_path, "upgrade-notes", "u.md", "- **u**: note")
+    _write(tmp_path, "documentation", "d.md", "- **d**: docs")
+    fragments, _ = load_fragments(tmp_path)
+    merged = merge_into_unreleased(MIXED, fragments)
+    block = merged.split("# Release Notes - v1")[0]
+    headings = [ln for ln in block.splitlines() if ln.startswith("## ")]
+    assert headings == [
+        "## ⚠️ Upgrade Notes",
+        "## ✨ Features",
+        "## 🐛 Bug Fixes",
+        "## 📚 Documentation",
+    ]
+    assert "## ⚠️ Upgrade Notes\n\n- **u**: note\n\n## ✨ Features\n\n- old f" in merged
+    assert "- old b\n\n## 📚 Documentation\n\n- **d**: docs\n\n# Release Notes - v1" in merged
+
+
 def test_merge_creates_the_block_when_missing(tmp_path):
     _write(tmp_path, "bug-fixes", "x.md", "- **x**: fixed")
     fragments, _ = load_fragments(tmp_path)

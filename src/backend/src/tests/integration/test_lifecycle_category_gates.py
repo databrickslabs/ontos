@@ -97,7 +97,7 @@ def test_a_contract_in_a_custom_active_stage_can_be_certified(client, db_session
     db_session.commit()
     cid = _contract(db_session, 'live', _live_group(client, 'data_contract'))
     res = client.post(f'/api/data-contracts/{cid}/certify', json={"certification_level": 91})
-    assert res.status_code != 409, res.text
+    assert 200 <= res.status_code < 300, res.text
 
 
 def test_a_product_in_a_custom_active_stage_is_subscribable(client, db_session):
@@ -175,7 +175,8 @@ def test_product_certification_needs_an_active_category_stage(client, db_session
     group_id = _live_group(client, 'data_product')
     body = {'certification_level': 92, 'approved': True}
     live = _product(db_session, 'live', group_id)
-    assert client.post(f'/api/data-products/{live}/{route}', json=body).status_code != 409
+    res = client.post(f'/api/data-products/{live}/{route}', json=body)
+    assert 200 <= res.status_code < 300, res.text
     intake = _product(db_session, 'intake', group_id)
     res = client.post(f'/api/data-products/{intake}/{route}', json=body)
     assert res.status_code == 409, res.text
@@ -203,23 +204,26 @@ class TestVersioning:
 
     def test_a_product_update(self, client, db_session, impact):
         group_id = _live_group(client, 'data_product')
-        for status, group, versioned in (('sandbox', None, False), ('under_review', None, False),
-                                         ('approved', None, True), ('live', group_id, True)):
+        for status, group, versioned in (('sandbox', None, False), ('proposed', None, False),
+                                         ('under_review', None, True), ('approved', None, True),
+                                         ('live', group_id, True)):
             pid = _product(db_session, status, group)
-            client.put(f'/api/data-products/{pid}', json={
+            res = client.put(f'/api/data-products/{pid}', json={
                 'id': pid, 'name': 'Renamed', 'version': '1.0.0', 'status': status,
                 'apiVersion': 'v1.0.0', 'kind': 'DataProduct',
             })
+            assert 200 <= res.status_code < 300, (status, res.text)
             assert (pid in impact) is versioned, status
 
     def test_a_contract_update(self, client, db_session, impact):
         group_id = _live_group(client, 'data_contract')
         for status, group, versioned in (('draft', None, False), ('proposed', None, False),
-                                         ('live', group_id, True)):
+                                         ('under_review', None, True), ('live', group_id, True)):
             cid = _contract(db_session, status, group)
-            client.put(f'/api/data-contracts/{cid}', json={
+            res = client.put(f'/api/data-contracts/{cid}', json={
                 'name': 'Renamed', 'version': '1.0.0', 'status': status,
             })
+            assert 200 <= res.status_code < 300, (status, res.text)
             assert (cid in impact) is versioned, status
 
 
@@ -231,10 +235,13 @@ def test_cloning_for_editing_follows_the_same_rule(client, db_session):
     mgr = DataProductsManager(db=db_session, ws_client=MagicMock(),
                               notifications_manager=MagicMock(), tags_manager=MagicMock())
     group_id = _live_group(client, 'data_product')
-    for status, group in (('sandbox', None), ('under_review', None), ('intake', group_id)):
+    for status, group in (('sandbox', None), ('proposed', None), ('intake', group_id)):
         pid = _product(db_session, status, group)
         with pytest.raises(ValueError, match='editable state'):
             mgr.clone_product_for_editing(db_session, pid, 'u')
+    # Once its review started, a product is cloned for a new version
+    pid = _product(db_session, 'under_review')
+    assert mgr.clone_product_for_editing(db_session, pid, 'u').status == 'draft'
 
 
 def test_a_review_request_doesnt_skip_ahead_without_a_start_review_step(client, db_session):

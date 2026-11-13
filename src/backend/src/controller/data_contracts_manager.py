@@ -120,6 +120,7 @@ from src.utils.contract_servers import (
     json_list, json_list_text, keep_unsent_server_fields,
     odcs_property_value as odcs_server_value, property_values as server_property_values,
 )
+from src.utils.odcs_values import typed_text, typed_value
 from src.utils.odcs_quality_operators import (
     implementation_text, odcs_quality_check, operator_columns, tags_text,
 )
@@ -179,7 +180,8 @@ def _relationship_read(rel) -> Dict[str, Any]:
             return json.loads(raw)
         except (json.JSONDecodeError, TypeError):
             return raw
-    out: Dict[str, Any] = {'id': rel.id, 'type': rel.relationship_type,
+    # `id` is the ODCS id (v3.2.0), so an editor save sends it back
+    out: Dict[str, Any] = {'id': rel.stable_id, 'type': rel.relationship_type,
                            'from': _decode(rel.from_value), 'to': _decode(rel.to_value)}
     if rel.custom_properties_json:
         out['customProperties'] = _decode(rel.custom_properties_json)
@@ -1099,6 +1101,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 }
                 if getattr(schema_obj, 'stable_id', None):
                     schema_dict['id'] = schema_obj.stable_id
+                if schema_obj.logical_type:
+                    schema_dict['logicalType'] = schema_obj.logical_type
                 if schema_obj.physical_name:
                     schema_dict['physicalName'] = schema_obj.physical_name
                 if schema_obj.data_granularity_description:
@@ -1230,6 +1234,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_rels = []
                             for rel in prop.relationships:
                                 rel_dict = {'type': rel.relationship_type}
+                                if rel.stable_id:
+                                    rel_dict['id'] = rel.stable_id
                                 try:
                                     rel_dict['to'] = json.loads(rel.to_value)
                                 except (json.JSONDecodeError, TypeError):
@@ -1292,6 +1298,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     rels = []
                     for rel in schema_obj.relationships:
                         rel_dict = {'type': rel.relationship_type}
+                        if rel.stable_id:
+                            rel_dict['id'] = rel.stable_id
                         try:
                             rel_dict['from'] = json.loads(rel.from_value)
                         except (json.JSONDecodeError, TypeError):
@@ -1409,25 +1417,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 }
                 if getattr(prop, 'stable_id', None):
                     sla_item['id'] = prop.stable_id
-                # Add value, trying to preserve types
-                if prop.value:
-                    try:
-                        if '.' in prop.value:
-                            sla_item['value'] = float(prop.value)
-                        else:
-                            sla_item['value'] = int(prop.value)
-                    except (ValueError, TypeError):
-                        sla_item['value'] = prop.value
-
-                # Add additional ODCS SLA fields
-                if prop.value_ext:
-                    try:
-                        if '.' in prop.value_ext:
-                            sla_item['valueExt'] = float(prop.value_ext)
-                        else:
-                            sla_item['valueExt'] = int(prop.value_ext)
-                    except (ValueError, TypeError):
-                        sla_item['valueExt'] = prop.value_ext
+                # With their JSON type (see _create_sla_properties)
+                if prop.value not in (None, ''):
+                    sla_item['value'] = typed_value(prop.value)
+                if prop.value_ext not in (None, ''):
+                    sla_item['valueExt'] = typed_value(prop.value_ext)
 
                 if prop.unit:
                     sla_item['unit'] = prop.unit
@@ -1442,6 +1436,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # Build pricing information
         if hasattr(db_obj, 'pricing') and db_obj.pricing:
             price = {}
+            if db_obj.pricing.stable_id:
+                price['id'] = db_obj.pricing.stable_id
             if db_obj.pricing.price_amount:
                 try:
                     # Try to convert to numeric if possible
@@ -1462,16 +1458,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if hasattr(db_obj, 'custom_properties') and db_obj.custom_properties:
             custom_props_list = []
             for prop in db_obj.custom_properties:
-                prop_value: Any = prop.value
-                if isinstance(prop_value, str):
-                    try:
-                        parsed = json.loads(prop_value)
-                        prop_value = parsed
-                    except (json.JSONDecodeError, TypeError):
-                        pass
                 cp_item: Dict[str, Any] = {
                     'property': prop.property,
-                    'value': prop_value
+                    'value': typed_value(prop.value),
                 }
                 if getattr(prop, 'stable_id', None):
                     cp_item['id'] = prop.stable_id
@@ -1522,12 +1511,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if r.second_level_approvers:
                     role_dict['secondLevelApprovers'] = r.second_level_approvers
 
-                # Add role custom properties
-                if hasattr(r, 'custom_properties') and r.custom_properties:
-                    custom_props = {}
-                    for prop in r.custom_properties:
-                        custom_props[prop.property] = prop.value
-                    role_dict['customProperties'] = custom_props
+                # Role custom properties, as the ODCS list
+                if r.custom_properties:
+                    role_dict['customProperties'] = [
+                        {'property': prop.property, 'value': typed_value(prop.value),
+                         **({'id': prop.stable_id} if prop.stable_id else {})}
+                        for prop in r.custom_properties
+                    ]
 
                 roles.append(role_dict)
             odcs['roles'] = roles
@@ -1883,6 +1873,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         all_prop_relationships.append(SchemaPropertyRelationshipDb(
                             id=str(uuid4()),
                             property_id=prop_id,
+                            stable_id=rel_data.get('id'),
                             relationship_type=rel_data.get('type', 'foreignKey'),
                             to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
                             custom_properties_json=json.dumps(rel_data['customProperties']) if rel_data.get('customProperties') else None,
@@ -1905,6 +1896,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     all_obj_relationships.append(SchemaObjectRelationshipDb(
                         id=str(uuid4()),
                         schema_object_id=schema_obj_id,
+                        stable_id=rel_data.get('id'),
                         relationship_type=rel_data.get('type', 'foreignKey'),
                         from_value=json.dumps(from_val) if isinstance(from_val, list) else str(from_val),
                         to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
@@ -2134,6 +2126,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         
         pricing_db = DataContractPricingDb(
             contract_id=contract_id,
+            stable_id=price_data.get('id'),
             price_amount=price_data.get('priceAmount'),
             price_currency=price_data.get('priceCurrency'),
             price_unit=price_data.get('priceUnit')
@@ -2171,31 +2164,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 prop_name = prop_data.get('property')
                 prop_value = prop_data.get('value')
                 if prop_name and prop_value is not None:
-                    # Serialize complex values (dicts/lists) to JSON
-                    if isinstance(prop_value, (dict, list)):
-                        value_str = json.dumps(prop_value)
-                    else:
-                        value_str = str(prop_value)
+                    # As JSON when not plain text, so every value keeps its type
                     custom_prop_db = DataContractCustomPropertyDb(
                         contract_id=contract_id,
                         stable_id=prop_data.get('id'),
                         property=prop_name,
-                        value=value_str
+                        value=typed_text(prop_value)
                     )
                     db.add(custom_prop_db)
         elif isinstance(custom_props, dict):
             # Legacy dict format
             for key, value in custom_props.items():
                 if value is not None:
-                    # Serialize complex values (dicts/lists) to JSON
-                    if isinstance(value, (dict, list)):
-                        value_str = json.dumps(value)
-                    else:
-                        value_str = str(value)
                     custom_prop_db = DataContractCustomPropertyDb(
                         contract_id=contract_id,
                         property=key,
-                        value=value_str
+                        value=typed_text(value)
                     )
                     db.add(custom_prop_db)
         return columns
@@ -2211,8 +2195,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 contract_id=contract_id,
                 stable_id=sla_prop_data.get('id'),
                 property=sla_prop_data.get('property'),
-                value=str(sla_prop_data.get('value')) if sla_prop_data.get('value') is not None else None,
-                value_ext=json.dumps(sla_prop_data.get('valueExt')) if sla_prop_data.get('valueExt') else None,
+                # As JSON when not plain text, so `true` and `"42"` keep their type
+                value=typed_text(sla_prop_data.get('value')),
+                value_ext=typed_text(sla_prop_data.get('valueExt')),
                 unit=sla_prop_data.get('unit'),
                 element=sla_prop_data.get('element'),
                 driver=sla_prop_data.get('driver')
@@ -2301,17 +2286,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add(role_db)
             db.flush()
 
-            role_custom_props = role_data.get('customProperties', [])
+            # The ODCS list; also the {property: value} map older exports wrote
+            role_custom_props = role_data.get('customProperties') or []
+            if isinstance(role_custom_props, dict):
+                role_custom_props = [
+                    {'property': k, 'value': v} for k, v in role_custom_props.items()]
             if isinstance(role_custom_props, list):
+                from src.db_models.data_contracts import DataContractRolePropertyDb
                 for cp in role_custom_props:
                     if isinstance(cp, dict) and cp.get('property'):
-                        from src.db_models.data_contracts import DataContractRolePropertyDb
-                        prop_db = DataContractRolePropertyDb(
+                        db.add(DataContractRolePropertyDb(
                             role_id=role_db.id,
+                            stable_id=cp.get('id'),
                             property=cp['property'],
-                            value=str(cp['value']) if cp.get('value') is not None else None,
-                        )
-                        db.add(prop_db)
+                            value=typed_text(cp.get('value')),
+                        ))
     
     def _create_legacy_quality_rules(self, db, contract_id: str, quality_rules_data: List[dict]):
         """Create top-level quality rules (legacy ODCS format)."""

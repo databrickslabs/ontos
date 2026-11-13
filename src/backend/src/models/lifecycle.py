@@ -4,7 +4,10 @@ Provides:
 - EntityStatus: unified lifecycle status enum (replaces DataProductStatus, ContractStatus, etc.)
 - PublicationScope: scoped publication visibility
 - CertificationInfo / PublicationInfo: embedded metadata models
-- VALID_TRANSITIONS: per-entity-type transition maps
+
+The stages and transitions of products, contracts and assets are Lifecycle
+Stage Groups (``src.controller.lifecycle_service``; seeded defaults in
+``src.common.lifecycle_defaults``).
 """
 
 from datetime import datetime
@@ -33,31 +36,6 @@ class PublicationScope(str, Enum):
     ORGANIZATION = "organization"
     EXTERNAL = "external"
 
-
-# Per-entity-type transition maps (status -> list of allowed next statuses)
-DATA_PRODUCT_TRANSITIONS: dict[str, list[str]] = {
-    "draft": ["sandbox", "proposed", "deprecated"],
-    "sandbox": ["draft", "proposed", "deprecated"],
-    "proposed": ["draft", "under_review", "deprecated"],
-    "under_review": ["draft", "approved", "deprecated"],
-    "approved": ["active", "draft", "deprecated"],
-    "active": ["deprecated"],
-    "deprecated": ["retired", "active"],
-    "retired": [],
-}
-
-DATA_CONTRACT_TRANSITIONS: dict[str, list[str]] = {
-    "draft": ["proposed", "deprecated"],
-    # A steward can approve directly from "proposed" (the approve endpoint is
-    # documented as PROPOSED/UNDER_REVIEW -> APPROVED). "under_review" stays an
-    # optional intermediate step rather than a mandatory one.
-    "proposed": ["draft", "under_review", "approved", "deprecated"],
-    "under_review": ["draft", "approved", "deprecated"],
-    "approved": ["active", "draft", "deprecated"],
-    "active": ["deprecated"],
-    "deprecated": ["retired", "active"],
-    "retired": [],
-}
 
 class CertificationInfo(BaseModel):
     """Certification metadata embedded in entity responses."""

@@ -105,6 +105,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 api_version=obj_in.apiVersion,
                 kind=obj_in.kind,
                 status=obj_in.status,
+                lifecycle_stage_group_id=getattr(obj_in, 'lifecycle_stage_group_id', None),
                 name=obj_in.name,
                 version=obj_in.version,
                 tenant=obj_in.tenant,

@@ -4096,13 +4096,25 @@ class WorkflowExecutor:
                 from src.repositories.assets_repository import asset_repo
                 db_asset = asset_repo.get(db=self._db, id=entity_id)
                 if db_asset:
-                    if succeeded:
-                        db_asset.status = 'active'
-                        logger.info(f"Asset {entity_id} status updated to 'active' after review approval")
+                    # Publish on approval, back to the first draft stage on
+                    # rejection, as the asset's lifecycle stage group allows
+                    from src.controller.lifecycle_service import lifecycle_service
+                    action = 'publish' if succeeded else 'reject'
+                    try:
+                        target = lifecycle_service.resolve_action(
+                            self._db, 'asset', db_asset, action,
+                        )
+                    except ValueError as e:
+                        logger.warning(
+                            "Asset %s review %s: its lifecycle has no such move from '%s' (%s)",
+                            entity_id, 'approved' if succeeded else 'rejected',
+                            db_asset.status, e,
+                        )
                     else:
-                        db_asset.status = 'draft'
-                        logger.info(f"Asset {entity_id} status reverted to 'draft' after review rejection")
-                    self._db.commit()
+                        db_asset.status = target
+                        logger.info("Asset %s status set to '%s' after the review", entity_id,
+                                    target)
+                        self._db.commit()
                     
             # Data contract deploy request decided by an approver: record it in
             # the change log, as the legacy handle-deploy flow does. A

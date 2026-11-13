@@ -375,20 +375,20 @@ class LifecycleService:
                 return group.category(key)
         return DEFAULT_STAGE_CATEGORIES.get(key)
 
-    def initial_keys_anywhere(self) -> set:
-        """The first-stage keys of every known group (seeded or cached)."""
-        keys = {'draft'}
-        for group in list(self._groups.values()):
-            if group.initial is not None:
-                keys.add(group.initial.key)
-        return keys
-
     def keys_of_category_anywhere(self, category: str) -> set:
         """Stage keys in ``category`` in any known group (seeded or cached)."""
         keys = {k for k, c in DEFAULT_STAGE_CATEGORIES.items() if c == category}
         for group in list(self._groups.values()):
             keys.update(s.key for s in group.stages.values() if s.category == category)
         return keys
+
+    def is_side_draft_stage(self, row: Any) -> bool:
+        """A draft-category stage other than its group's first (``sandbox`` by default)."""
+        group_id = getattr(row, 'lifecycle_stage_group_id', None)
+        group = self.group(None, str(group_id)) if group_id else None
+        group = group or _BUILTIN['data_product']
+        stage = group.stages.get(_normalized(getattr(row, 'status', None)))
+        return bool(stage and stage.category == 'draft' and not stage.is_initial)
 
     def stage_order_of_row(self, row: Any, db: Optional[Session] = None) -> int:
         group_id = getattr(row, 'lifecycle_stage_group_id', None)
@@ -407,8 +407,36 @@ class LifecycleService:
         default = self.default_group(db, entity_type)
         for group in self.groups(db, entity_type) if db is not None else [default]:
             out[group.id] = [s.key for s in group.stages.values() if s.category in categories]
-        out[None] = [s.key for s in default.stages.values() if s.category in categories]
+        default_keys = [s.key for s in default.stages.values() if s.category in categories]
+        out[None] = default_keys
+        # Rows backfilled with the seeded default's id, while the groups aren't
+        # loaded (the cache holds the built-in default, whose id is None)
+        out.setdefault(DEFAULT_GROUP_IDS[entity_type], default_keys)
         return out
+
+    def first_stage_of_row(self, row: Any, entity_type: str) -> bool:
+        """Whether ``row`` is in its own group's first stage (a personal draft's)."""
+        group = self.group_for(None, entity_type, row)
+        initial = group.initial
+        return initial is not None and _normalized(getattr(row, 'status', None)) == initial.key
+
+    def first_stage_filter(self, model: Any, entity_type: str):
+        """SQL condition: the row is in its own group's first stage (cached groups;
+        rows of other or unknown groups in the default group's first stage)."""
+        from sqlalchemy import and_, func, or_
+
+        status = func.lower(func.trim(func.coalesce(model.status, '')))
+        column = model.lifecycle_stage_group_id
+        default = self.default_group(None, entity_type)
+        others = [g for g in list(self._groups.values())
+                  if g.entity_type == entity_type and g.id != default.id and g.initial]
+        default_key = (default.initial or next(iter(default.stages.values()))).key
+        clauses = [and_(column == g.id, status == g.initial.key) for g in others]
+        in_other = column.in_([g.id for g in others]) if others else None
+        default_rows = status == default_key
+        if in_other is not None:
+            default_rows = and_(or_(column.is_(None), ~in_other), default_rows)
+        return or_(default_rows, *clauses)
 
     def category_filter(self, db: Session, model: Any, entity_type: str,
                         categories: Iterable[str]):
@@ -482,8 +510,10 @@ class LifecycleService:
         ``ontosLifecycleStage`` / ``ontosLifecycleStageGroup`` custom properties."""
         group = self.group_for(db, entity_type, entity)
         key = _normalized(getattr(entity, 'status', None)) or 'draft'
-        category = group.category(key)
-        status = STANDARD_STATUS_BY_CATEGORY.get(category, key) if category else key
+        # A status that isn't a stage of the group (stored before the clean-up):
+        # its seeded category, else draft, so the export stays a standard value
+        category = group.category(key) or DEFAULT_STAGE_CATEGORIES.get(key) or 'draft'
+        status = STANDARD_STATUS_BY_CATEGORY[category]
         return status, {
             ONTOS_LIFECYCLE_STAGE_PROPERTY: key,
             ONTOS_LIFECYCLE_STAGE_GROUP_PROPERTY: group.name,
@@ -593,6 +623,13 @@ class LifecycleService:
             )
         target = self.require_group(db, entity_type, group_id)
         current = self.group_for(db, entity_type, entity)
+        if (target.id or DEFAULT_GROUP_IDS[entity_type]) == \
+                (current.id or DEFAULT_GROUP_IDS[entity_type]):
+            raise LifecycleGroupConflictError(
+                'lifecycle_change_same_group',
+                f"The entity already follows '{target.name}'; change its status instead",
+                entityId=str(entity.id), groupId=target.id,
+            )
         pending = pending_workflow_request(db, entity_type, str(entity.id))
         if pending:
             raise LifecycleGroupConflictError(
@@ -682,6 +719,14 @@ class LifecycleService:
                 'lifecycle_group_initial_stage',
                 f"A group needs exactly one first stage; it has {len(initial)}",
                 count=len(initial),
+            )
+        first = next(s for s in stages if s['key'] == initial[0])
+        if first['category'] != 'draft':
+            # A group change resets to the first stage: it must not skip review
+            raise LifecycleGroupInvalidError(
+                'lifecycle_group_initial_not_draft',
+                f"The first stage '{initial[0]}' must be in the draft category",
+                key=initial[0], category=first['category'],
             )
         reachable = {initial[0]}
         queue = deque(initial)

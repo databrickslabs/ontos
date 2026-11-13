@@ -26,6 +26,8 @@ import CertificationBadge from '@/components/common/certification-badge';
 import PublicationBadge from '@/components/common/publication-badge';
 import VersionCountBadge from '@/components/common/version-count-badge';
 import { Switch } from '@/components/ui/switch';
+import StageBadge from '@/components/lifecycle/stage-badge';
+import { useStageLookup } from '@/hooks/use-lifecycle-stage-groups';
 import type { CertificationLevel } from '@/types/lifecycle';
 import { useApi } from '@/hooks/use-api';
 import { usePersistentState } from '@/hooks/use-persistent-state';
@@ -386,18 +388,8 @@ export default function DataContracts() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'draft':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-      case 'active':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-      case 'deprecated':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-    }
-  };
+  // Status badges from the stage data of each contract's lifecycle stage group
+  const stageOf = useStageLookup('data_contract');
 
   // Filter contracts based on URL parameter
   const filteredContracts = useMemo(() => {
@@ -512,9 +504,10 @@ export default function DataContracts() {
                 {t('data-contracts:list.personal', 'Personal')}
               </Badge>
             )}
-            <Badge variant="outline" className={getStatusColor(row.getValue("status"))}>
-              {row.getValue("status")}
-            </Badge>
+            <StageBadge
+              stage={stageOf(contract.lifecycle_stage_group_id, row.getValue('status'))}
+              status={row.getValue('status')}
+            />
             <CertificationBadge
               certificationLevel={contract.certification_level}
               inheritedCertificationLevel={contract.inherited_certification_level}

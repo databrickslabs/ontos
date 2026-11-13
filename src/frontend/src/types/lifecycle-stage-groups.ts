@@ -67,4 +67,6 @@ export interface EntityLifecycle {
   status: string;
   stage: LifecycleStage | null;
   allowed_transitions: LifecycleStage[];
+  /** Whether the caller may change the entity's group (an admin or an owner) */
+  can_change_group?: boolean;
 }

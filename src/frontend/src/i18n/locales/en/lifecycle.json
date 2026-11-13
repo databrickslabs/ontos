@@ -119,5 +119,26 @@
     "orange": "Orange",
     "red": "Red",
     "pink": "Pink"
+  },
+  "picker": {
+    "label": "Lifecycle",
+    "hint": "The stages it moves through. Admins and owners can change it later; that resets the status to the first stage."
+  },
+  "status": {
+    "groupTitle": "Lifecycle stage group"
+  },
+  "change": {
+    "action": "Change lifecycle",
+    "title": "Change lifecycle",
+    "description": "It follows “{{group}}” now. Pick the lifecycle stage group it should follow instead.",
+    "newGroup": "New lifecycle",
+    "chooseGroup": "Choose a lifecycle…",
+    "reset": "The status resets to the first stage of the new lifecycle:",
+    "resetHint": "No workflow gates run. A published entity is unpublished, and the change is written to the change log. It is refused while a workflow request is pending.",
+    "confirm": "Change lifecycle"
+  },
+  "graph": {
+    "title": "Lifecycle: {{name}}",
+    "hint": "The current stage is outlined; moves back are dashed."
   }
 }

@@ -21,6 +21,8 @@ const FILL: Record<string, [string, string]> = {
 interface StageGraphPreviewProps {
   stages: Pick<LifecycleStage, 'key' | 'label' | 'color' | 'is_initial'>[];
   transitions: LifecycleStageTransition[];
+  /** The entity's current stage, outlined. */
+  currentKey?: string | null;
 }
 
 /**
@@ -28,7 +30,9 @@ interface StageGraphPreviewProps {
  * forward move as an arc above them and a backward one (a loop, such as
  * Active -> Needs Review -> Active) as an arc below.
  */
-export default function StageGraphPreview({ stages, transitions }: StageGraphPreviewProps) {
+export default function StageGraphPreview(
+  { stages, transitions, currentKey }: StageGraphPreviewProps,
+) {
   const { t } = useTranslation(['lifecycle']);
   const index = new Map(stages.map((s, i) => [s.key, i]));
   const edges = transitions.filter(
@@ -89,7 +93,12 @@ export default function StageGraphPreview({ stages, transitions }: StageGraphPre
           const [fill, stroke] = FILL[s.color ?? 'gray'] ?? FILL.gray;
           const x = PAD + i * (NODE_W + GAP);
           return (
-            <g key={s.key || i} data-node={s.key}>
+            <g key={s.key || i} data-node={s.key}
+              data-current={s.key === currentKey ? 'true' : undefined}>
+              {s.key === currentKey && (
+                <rect x={x - 3} y={top - 3} width={NODE_W + 6} height={NODE_H + 6} rx={8}
+                  fill="none" stroke="#2563eb" strokeWidth={2} />
+              )}
               <rect x={x} y={top} width={NODE_W} height={NODE_H} rx={6}
                 fill={fill} stroke={stroke} strokeWidth={s.is_initial ? 2.5 : 1} />
               <text x={x + NODE_W / 2} y={top + NODE_H / 2 + 4} textAnchor="middle"

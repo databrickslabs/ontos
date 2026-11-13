@@ -12,7 +12,8 @@
   takes ``expected_updated_at`` (the ``updated_at`` read) in the body (the query
   parameter still works): a group saved since is a 409 ``lifecycle_group_changed``.
 - ``GET /api/lifecycle/{entity_type}/{entity_id}``: the entity's group, stage and
-  allowed next stages, for whoever may read the entity.
+  allowed next stages, for whoever may read the entity, and whether the caller
+  may change its group (``can_change_group``).
 - ``POST /api/lifecycle/{entity_type}/{entity_id}/change-group``: Read/Write on
   the entity's feature (a write, as the entity's other updates), and Admin on it
   or ownership of the entity; resets the status to the new group's first stage,
@@ -287,7 +288,21 @@ async def get_entity_lifecycle(
     entity = _entity(db, entity_type, entity_id)
     if not await _can_read(db, entity_type, entity, current_user, request):
         raise HTTPException(status_code=404, detail="Entity not found")
-    return lifecycle_service.entity_lifecycle(db, entity_type, entity)
+    result = lifecycle_service.entity_lifecycle(db, entity_type, entity)
+    # The UI offers "Change lifecycle" only to whom change-group accepts
+    result['can_change_group'] = await _can_change_group(
+        db, entity_type, entity, current_user, request,
+    )
+    return result
+
+
+async def _can_change_group(db, entity_type: str, entity: Any, user, request: Request) -> bool:
+    if not await has_feature_permission(
+        ENTITY_FEATURES[entity_type], FeatureAccessLevel.READ_WRITE, user, request,
+    ):
+        return False
+    return (await _is_admin(entity_type, user, request)
+            or await _owns(db, entity_type, entity, user, request))
 
 
 @router.post('/lifecycle/{entity_type}/{entity_id}/change-group',
@@ -309,8 +324,7 @@ async def change_entity_lifecycle_group(
     feature = ENTITY_FEATURES[entity_type]
     await _require(feature, FeatureAccessLevel.READ_WRITE, current_user, request)
     entity = _entity(db, entity_type, entity_id)
-    if not (await _is_admin(entity_type, current_user, request)
-            or await _owns(db, entity_type, entity, current_user, request)):
+    if not await _can_change_group(db, entity_type, entity, current_user, request):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only an admin or an owner can change the lifecycle",

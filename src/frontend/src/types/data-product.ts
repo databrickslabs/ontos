@@ -250,7 +250,11 @@ export interface DataProduct {
   owner_team_name?: string // Display name of the owning team
   kind: string; // "DataProduct"
   id: string;
-  status: string; // proposed, draft, active, deprecated, retired
+  status: string; // a stage key of the product's lifecycle stage group
+  /** Lifecycle Stage Group; null = the default data product group */
+  lifecycleStageGroupId?: string | null;
+  /** Stage Category of `status` (draft, review, active, deprecated, retired) */
+  statusCategory?: string | null;
   // Set when the product moves to `deprecated`
   deprecation_reason?: string | null;
   sunset_date?: string | null; // YYYY-MM-DD

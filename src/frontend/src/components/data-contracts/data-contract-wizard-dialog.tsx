@@ -13,7 +13,9 @@ import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
-import { DataContractStatus } from '@/lib/odcs-lifecycle'
+import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups'
+import { selectedGroup } from '@/components/lifecycle/lifecycle-group-picker'
+import { orderedStages } from '@/lib/lifecycle-stages'
 
 type WizardProps = {
   isOpen: boolean
@@ -22,8 +24,6 @@ type WizardProps = {
   initial?: any
 }
 
-// The contract lifecycle statuses (archived is not one: it was renamed retired)
-const statuses = Object.values(DataContractStatus)
 
 interface SemanticConcept {
   iri: string
@@ -64,6 +64,12 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const { t } = useTranslation(['data-contracts', 'common'])
   const { refetch: refetchDomains } = useDomains()
   const { toast } = useToast()
+  // The stages of the default data contract lifecycle, from the API
+  const { groups: lifecycleGroups } = useLifecycleStageGroups('data_contract')
+  const defaultLifecycle = selectedGroup(lifecycleGroups, null)
+  const statuses = defaultLifecycle
+    ? orderedStages(defaultLifecycle).map((st) => st.key)
+    : ['draft']
 
   // Helper function to handle domain-related errors
   const handleDomainError = async (error: any) => {

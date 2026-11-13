@@ -480,17 +480,39 @@ export const ENTITY_STATUS_VALUES: Record<string, string[]> = {
 /**
  * Union of valid statuses across the given entity types (deduped, first-seen
  * order). Empty array = no known vocabulary (caller should allow free text).
+ *
+ * `lifecycleStages` (entity type -> the stage keys of its Lifecycle Stage
+ * Groups, from the API) replaces the seeded statuses of products, contracts
+ * and assets, so custom stages can be picked too.
  */
-export function statusValuesForEntities(entityTypes: string[] | undefined): string[] {
+export function statusValuesForEntities(
+  entityTypes: string[] | undefined,
+  lifecycleStages: Record<string, string[]> = {},
+): string[] {
   if (!entityTypes || entityTypes.length === 0) return [];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const et of entityTypes) {
-    for (const s of ENTITY_STATUS_VALUES[et] ?? []) {
+    const values = lifecycleStages[et]?.length ? lifecycleStages[et] : ENTITY_STATUS_VALUES[et];
+    for (const s of values ?? []) {
       if (!seen.has(s)) {
         seen.add(s);
         out.push(s);
       }
+    }
+  }
+  return out;
+}
+
+/** Entity type -> the stage keys of its Lifecycle Stage Groups (deduped, in stage order). */
+export function stageKeysByEntityType(
+  groups: { entity_type: string; stages: { key: string; order: number }[] }[],
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const group of groups) {
+    const keys = (out[group.entity_type] ??= []);
+    for (const stage of [...group.stages].sort((a, b) => a.order - b.order)) {
+      if (!keys.includes(stage.key)) keys.push(stage.key);
     }
   }
   return out;

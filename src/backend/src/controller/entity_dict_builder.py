@@ -16,11 +16,12 @@ from src.common.api_errors import CodedValueError
 from src.common.ontology_type_names import canonical_type_name
 from src.common.logging import get_logger
 from src.common.uc_table_columns import table_column_fields
+from src.models.assets import METRIC_VIEW_ASSET_TYPE
 
 logger = get_logger(__name__)
 
 # Asset types that maturity levels with entity type ``Asset`` apply to.
-MATURITY_ASSET_TYPES = ("Table", "View")
+MATURITY_ASSET_TYPES = ("Table", "View", METRIC_VIEW_ASSET_TYPE)
 
 # Fields that come from the Unity Catalog table an asset points to. Absent from
 # the dict when the asset isn't UC-backed or its table can't be read.
@@ -29,8 +30,9 @@ UC_TABLE_FIELDS = frozenset(table_column_fields(None))
 # ``uc_table_status`` values (``None`` = the asset doesn't point to a UC table).
 UC_TABLE_READ = "read"
 UC_TABLE_CLIENT_UNAVAILABLE = "client_unavailable"
-UC_TABLE_NOT_FOUND = "not_found"
-UC_TABLE_PERMISSION_DENIED = "permission_denied"
+# Not found, or not readable by the app: one status, so the stored result doesn't tell
+# anyone whether the table exists
+UC_TABLE_UNREADABLE = "unreadable"
 UC_TABLE_READ_FAILED = "read_failed"
 
 _UC_PLATFORMS = {"databricks", "unity catalog", "unity_catalog"}
@@ -189,6 +191,10 @@ def build_asset_dict(
     base["entity_type"] = "Asset"
     base["asset_type"] = asset_type
     base["has_description"] = bool(asset.description and asset.description.strip())
+    # Missing strings are '' not null: in the DSL ``None != ''`` is true, so a gate
+    # like ``obj.owner != ''`` would pass for an asset without an owner.
+    for key in ("platform", "location"):
+        base[key] = base.get(key) or ""
 
     _add_asset_owners(db, base, entity_id)
     _add_asset_domains(db, base, entity_id)
@@ -234,10 +240,8 @@ def uc_table_name(platform: Optional[str], location: Optional[str]) -> Optional[
 def _uc_read_status(error: Exception) -> str:
     from databricks.sdk.errors import NotFound, PermissionDenied, Unauthenticated
 
-    if isinstance(error, NotFound):
-        return UC_TABLE_NOT_FOUND
-    if isinstance(error, (PermissionDenied, Unauthenticated)):
-        return UC_TABLE_PERMISSION_DENIED
+    if isinstance(error, (NotFound, PermissionDenied, Unauthenticated)):
+        return UC_TABLE_UNREADABLE
     return UC_TABLE_READ_FAILED
 
 
@@ -291,7 +295,7 @@ def _add_asset_owners(db: Session, d: Dict[str, Any], asset_id: str) -> None:
     )
     owners: List[str] = list(dict.fromkeys(r.user_email for r in rows if r.user_email))
     d["owners"] = owners
-    d["owner"] = owners[0] if owners else None
+    d["owner"] = owners[0] if owners else ""
     d["owner_count"] = len(owners)
     d["has_owner"] = bool(owners)
 
@@ -304,8 +308,8 @@ def _add_asset_domains(db: Session, d: Dict[str, Any], asset_id: str) -> None:
     )
     primary = next((a for a in assigned if a.is_primary), assigned[0] if assigned else None)
     d["domain_ids"] = [a.domain_id for a in assigned]
-    d["domain_id"] = primary.domain_id if primary else None
-    d["domain_name"] = primary.domain_name if primary else None
+    d["domain_id"] = primary.domain_id if primary else ""
+    d["domain_name"] = primary.domain_name if primary else ""
     d["domain_count"] = len(assigned)
     d["has_domain"] = bool(assigned)
 
@@ -328,9 +332,15 @@ def _add_asset_properties(d: Dict[str, Any], properties: Any) -> None:
     d["properties"] = props
     d["property_count"] = sum(1 for v in props.values() if v not in (None, "", [], {}))
     for key, value in props.items():
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(key)):
+            continue
         name = f"prop_{key}"
-        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(key)) and name not in d:
+        present = value not in (None, "", [], {})
+        # ``prop_<key>`` of a property that isn't set is null; test ``has_prop_<key>``
+        if name not in d:
             d[name] = value
+        if f"has_prop_{key}" not in d:
+            d[f"has_prop_{key}"] = present
 
 
 def _relationships_of(db: Session, entity_type: str, entity_id: str) -> list:

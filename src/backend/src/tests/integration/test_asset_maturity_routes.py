@@ -117,15 +117,36 @@ class TestAssetMaturityRoutes:
         report = response.json()
         # Nothing was stored before, so no level is kept and none is reported
         assert report['achieved_level_order'] is None
-        gate = report['levels'][1]['gates'][0]
-        assert gate['passed'] is False
-        assert gate['message_code'] == 'maturity_uc_table_not_found'
-        assert gate['message_params'] == {'tableName': FQN}
+        assert report['levels'] == []
         assert 'gone' not in response.text
-        assert [n['code'] for n in report['notices']] == ['maturity_uc_table_not_found']
+        assert [n['code'] for n in report['notices']] == ['maturity_uc_table_unreadable']
+        assert report['notices'][0]['params'] == {'tableName': FQN}
 
         assert db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).count() == 0
         assert fired == []
+
+    def test_get_computes_without_storing_or_firing(self, client, db_session, uc_table, fired):
+        _asset_ladder(client, db_session)
+        asset = _asset(db_session, description='Orders')
+
+        response = client.get(f'/api/assets/{asset.id}/maturity')
+
+        assert response.status_code == 200, response.text
+        assert response.json()['achieved_level_order'] == 2
+        assert db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).count() == 0
+        assert fired == []
+
+    def test_moving_a_level_to_assets_checks_the_order(self, client, db_session):
+        _asset_ladder(client, db_session)
+        response = client.post('/api/maturity-levels', json={
+            'name': 'Products only', 'level_order': 1, 'entity_type': 'all',
+        })
+        assert response.status_code == 201, response.text
+        level_id = response.json()['id']
+
+        # Order 1 is taken by the Asset level 'Described'
+        response = client.put(f'/api/maturity-levels/{level_id}', json={'entity_type': 'Asset'})
+        assert response.status_code == 409, response.text
 
     def test_other_asset_types_answer_a_coded_400(self, client, db_session):
         asset = _asset(db_session, 'Dashboard')

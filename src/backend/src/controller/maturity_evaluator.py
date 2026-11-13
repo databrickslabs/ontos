@@ -36,16 +36,13 @@ _ENTITY_DICT_BUILDERS = {
 # Codes for a UC-backed asset whose table couldn't be read (by ``uc_table_status``)
 _UC_STATUS_CODES = {
     "client_unavailable": "maturity_uc_table_client_unavailable",
-    "not_found": "maturity_uc_table_not_found",
-    "permission_denied": "maturity_uc_table_permission_denied",
+    "unreadable": "maturity_uc_table_unreadable",
     "read_failed": "maturity_uc_table_read_failed",
 }
 _UC_STATUS_MESSAGES = {
     "client_unavailable": "Unity Catalog can't be reached, so the fields of table {tableName} "
                           "are missing.",
-    "not_found": "Table {tableName} was not found in Unity Catalog, so its fields are missing.",
-    "permission_denied": "The app may not read table {tableName} in Unity Catalog, so its "
-                         "fields are missing.",
+    "unreadable": "Table {tableName} can't be read from Unity Catalog, so its fields are missing.",
     "read_failed": "Table {tableName} could not be read from Unity Catalog, so its fields "
                    "are missing.",
 }
@@ -100,6 +97,11 @@ class MaturityEvaluator:
         if entity_type not in _ENTITY_DICT_BUILDERS and entity_type != "Asset":
             logger.warning("No entity dict builder for type: %s", entity_type)
             return None
+
+        if persist and entity_type == "Asset":
+            # Two evaluations of one asset (two quick edits) run one after the other:
+            # the second reads the snapshot the first stored, so it can't fire the same change
+            _lock_asset_row(db, entity_id)
 
         entity_dict = self._build_entity_dict(db, entity_type, entity_id)
         if entity_dict is None:
@@ -220,7 +222,7 @@ class MaturityEvaluator:
             notices=[uc_notice] if uc_notice else [],
         )
 
-        if persist and uc_gate_ran:
+        if uc_gate_ran:
             previous = maturity_repo.get_latest_snapshot(
                 db, entity_type=entity_type, entity_id=entity_id
             )
@@ -232,16 +234,25 @@ class MaturityEvaluator:
             )
             if not real_drop:
                 # The result depends on table fields that couldn't be read, so it is not a
-                # maturity outcome: keep the stored level, and store nothing, change
-                # nothing, fire nothing. The gate messages still say why the fields are
-                # missing.
-                report.achieved_level_order = prev_order
-                report.achieved_level_name = previous.achieved_level_name if previous else None
+                # maturity outcome: keep the stored level, store nothing, change nothing,
+                # fire nothing. The levels were computed from missing fields, so they are
+                # not reported; the notice says why.
                 logger.warning(
                     "Maturity of %s %s not updated: its UC table could not be read (%s)",
                     entity_type, entity_id, uc_notice.code,
                 )
-                return report
+                return MaturityReport(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    entity_name=entity_name,
+                    achieved_level_order=prev_order,
+                    achieved_level_name=previous.achieved_level_name if previous else None,
+                    total_levels=len(levels),
+                    evaluated_at=datetime.now(timezone.utc),
+                    evaluated_by=evaluated_by,
+                    levels=[],
+                    notices=[uc_notice],
+                )
 
         if persist:
             # Detect level change for trigger / change log
@@ -375,6 +386,7 @@ class MaturityEvaluator:
                 # Assets fire as the workflow entity type of their asset type
                 "Asset:Table": EntityType.TABLE,
                 "Asset:View": EntityType.VIEW,
+                "Asset:Metric View": EntityType.METRIC_VIEW,
             }
             key = f"Asset:{asset_type}" if entity_type == "Asset" else entity_type
             et_enum = et_map.get(key)
@@ -394,6 +406,16 @@ class MaturityEvaluator:
                 )
         except Exception as e:
             logger.warning(f"Failed to fire maturity trigger: {e}")
+
+
+def _lock_asset_row(db: Session, asset_id: str) -> None:
+    """Hold the asset's row lock until the evaluation commits (no-op if not a UUID)."""
+    from src.db_models.assets import AssetDb
+    try:
+        asset_uuid = uuid.UUID(str(asset_id))
+    except ValueError:
+        return
+    db.query(AssetDb.id).filter(AssetDb.id == asset_uuid).with_for_update().first()
 
 
 def _update_entity_cache(db: Session, *, entity_type: str, entity_id: str,

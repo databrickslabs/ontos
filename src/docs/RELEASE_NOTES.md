@@ -125,6 +125,7 @@
 
 ## 🐛 Bug Fixes
 
+- **catalog-commander**: the column schema of a table uses the same ODCS logical types as **Infer from Asset**: `TIMESTAMP` / `TIMESTAMP_NTZ` columns are `timestamp` (before: `date`) `TIME` is `time` and `INTERVAL` columns are `string` (before: `date` and `integer`)
 - **ui**: the contract and product picker (Link contract, product and contract versions) names the kind in the user's language: *Pesquisar contratos…* instead of *Pesquisar contract…*. The keys `common:entityVersionPicker.selectPlaceholder`, `searchPlaceholder` and `noMatching` are replaced by `common:entityVersionPickerKinds.<contract|product>.select`, `search` and `noMatching`
 - **ui**: lists and pickers that open from a popover inside a dialog can be clicked again, such as the contract list of a deliverable's **Link contract** dialog. Before, the list showed over the dialog but clicks went to the dialog under it (two copies of a Radix UI package; the frontend now pins one with an npm override). The Link contract dialog's buttons are now translated
 - **assets**: editing an asset in its Edit dialog keeps the properties the dialog doesn't show. Before, saving replaced them with the dialog's fields, so editing a column (for example ticking *is primary key*) dropped its `data_type`, `nullable` and comment. The dialog now sends the stored properties with only the fields you changed

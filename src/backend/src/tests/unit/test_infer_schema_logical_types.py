@@ -17,6 +17,7 @@ from src.db_models.assets import AssetDb, AssetRelationshipDb, AssetTypeDb
         ("TIMESTAMP", "timestamp"),
         ("timestamp_ntz", "timestamp"),
         ("TIMESTAMP_LTZ", "timestamp"),
+        ("TIME", "time"),
         ("TINYINT", "integer"),
         ("SMALLINT", "integer"),
         ("INT", "integer"),

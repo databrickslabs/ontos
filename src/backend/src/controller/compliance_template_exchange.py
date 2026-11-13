@@ -55,7 +55,7 @@ def has_active_template(db: Session, entity_type: str) -> bool:
 @dataclass(frozen=True)
 class LiveValues:
     """The stored values of an entity (reference id -> value, in field order) and the
-    reference ids of the active template's fields (the keys the live values own)."""
+    reference ids of the active template's fields."""
     values: Dict[str, Any]
     reference_ids: frozenset
 
@@ -84,8 +84,9 @@ def _is_entry(prop: Any) -> bool:
 def apply_to_document(doc: Dict[str, Any], live: Optional[LiveValues]) -> None:
     """Put the live values in the ``ontosComplianceValues`` entry of ``doc``.
 
-    The live values replace the stored entry's keys of the active template's
-    fields; its other keys (values an import couldn't write) are kept. ``live`` is
+    A live value replaces the stored entry's key; the stored keys with no live
+    value (values an import couldn't write) are kept. Written keys left the stored
+    entry on import, so a value cleared in the app doesn't come back. ``live`` is
     ``None`` when no template is active: the document is untouched. An entry left
     empty is removed.
     """
@@ -94,7 +95,7 @@ def apply_to_document(doc: Dict[str, Any], live: Optional[LiveValues]) -> None:
     current = doc.get("customProperties")
     kept = {
         ref: value for ref, value in (read_entry(current) or {}).items()
-        if ref not in live.reference_ids
+        if ref not in live.values
     }
     values = {**live.values, **kept}
     if isinstance(current, dict):

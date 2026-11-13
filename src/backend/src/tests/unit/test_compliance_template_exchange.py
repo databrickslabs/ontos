@@ -423,13 +423,15 @@ class TestDocumentHelpers:
         doc = {"customProperties": [{"property": PROP, "value": {"a": 1}}, {"property": "x"}]}
         cte.apply_to_document(doc, None)
         assert _entry(doc["customProperties"]) == {"a": 1}
-        cte.apply_to_document(doc, _live({"b": 2}, refs={"a", "b"}))
+        # A live value replaces its key; a stored key with no live value stays.
+        cte.apply_to_document(doc, _live({"a": 2, "b": 3}, refs={"a", "b"}))
         assert doc["customProperties"] == [
-            {"property": "x"}, {"property": PROP, "value": {"b": 2}},
+            {"property": "x"}, {"property": PROP, "value": {"a": 2, "b": 3}},
         ]
+        doc["customProperties"] = [{"property": "x"}]
         cte.apply_to_document(doc, _live({}, refs={"b"}))
         assert doc["customProperties"] == [{"property": "x"}]
-        only = {"customProperties": [{"property": PROP, "value": {"a": 1}}]}
+        only = {"customProperties": [{"property": PROP, "value": {}}]}
         cte.apply_to_document(only, _live({}, refs={"a"}))
         assert "customProperties" not in only
 
@@ -439,6 +441,23 @@ class TestDocumentHelpers:
         ]}
         cte.apply_to_document(doc, _live({"limitacoes": "new"}, refs={"limitacoes"}))
         assert _entry(doc["customProperties"]) == {"limitacoes": "new", "unknown": 1}
+
+    def test_export_keeps_a_known_field_value_that_did_not_fit(self, db_session):
+        _template(db_session, "data_product")
+        manager, product_id = _upload(
+            db_session, _product_doc({"limitacoes": "ok", "refresh-hours": "soon"}),
+            "importer@example.com",
+        )
+        exported = _export_product(manager, db_session, product_id)
+        assert _entry(exported["customProperties"]) == {
+            "limitacoes": "ok", "refresh-hours": "soon",
+        }
+
+    def test_export_keeps_an_entry_imported_without_rights(self, db_session):
+        _template(db_session, "data_product")
+        manager, product_id = _upload(db_session, _product_doc({"limitacoes": "x"}), None)
+        exported = _export_product(manager, db_session, product_id)
+        assert _entry(exported["customProperties"]) == {"limitacoes": "x"}
 
     def test_read_and_strip_the_entry(self):
         props = [{"property": "x", "value": 1}, {"property": PROP, "value": {"a": 1}}]

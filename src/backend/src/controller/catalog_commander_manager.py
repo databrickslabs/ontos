@@ -4,6 +4,7 @@ from databricks.sdk import WorkspaceClient
 from urllib.parse import quote
 
 from ..common.logging import get_logger
+from ..common.odcs_logical_types import odcs_logical_type
 from ..common.unity_catalog_utils import sanitize_uc_identifier
 from ..common.config import Settings
 
@@ -635,7 +636,7 @@ class CatalogCommanderManager:
                     partition_index = getattr(col, 'partition_index', None)
                     type_name = getattr(col, 'type_name', None)
 
-                logical_type = self._map_to_odcs_logical_type(col_type)
+                logical_type = odcs_logical_type(col_type)
 
                 column_meta = {
                     'name': col_name,
@@ -650,54 +651,6 @@ class CatalogCommanderManager:
                 schema.append(column_meta)
         
         return schema
-
-    def _map_to_odcs_logical_type(self, databricks_type: str) -> str:
-        """Map Databricks data types to ODCS logical types.
-
-        Args:
-            databricks_type: The Databricks data type (e.g., 'int', 'bigint', 'varchar(255)')
-
-        Returns:
-            ODCS-compliant logical type
-        """
-        if not databricks_type:
-            return 'string'
-
-        # Normalize type string
-        db_type = databricks_type.lower().strip()
-
-        # Check complex types first (most specific)
-
-        # Array types (check for array< or array() patterns)
-        if 'array' in db_type and ('<' in db_type or '(' in db_type):
-            return 'array'
-
-        # Object/struct types
-        if any(t in db_type for t in ['struct', 'map', 'object']):
-            return 'object'
-
-        # Boolean type
-        if 'boolean' in db_type or 'bool' in db_type:
-            return 'boolean'
-
-        # Date/time types
-        if any(t in db_type for t in ['date', 'timestamp', 'time']):
-            return 'date'
-
-        # Number types
-        if any(t in db_type for t in ['double', 'float', 'decimal', 'numeric']):
-            return 'number'
-
-        # Integer types
-        if any(t in db_type for t in ['int', 'bigint', 'smallint', 'tinyint']):
-            return 'integer'
-
-        # String types (least specific, check last)
-        if any(t in db_type for t in ['string', 'varchar', 'char', 'text']):
-            return 'string'
-
-        # Default fallback
-        return 'string'
 
     def health_check(self) -> Dict[str, str]:
         """Check if the catalog API is healthy.

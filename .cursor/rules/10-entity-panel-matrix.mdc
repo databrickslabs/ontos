@@ -44,6 +44,7 @@ These tables use an `entity_type` + `entity_id` pattern to link to any entity.
 | `access_grants` / `access_grant_requests` | Fine-grained access control |
 | `agreements` / `agreement_wizard_sessions` | Approval workflows |
 | `business_owners` | Owner assignments |
+| `compliance_template_values` | Values of the active compliance template (`entity_type` ∈ {`data_product`, `asset`}; `asset` = Table / View only) |
 
 ---
 
@@ -91,6 +92,7 @@ Legend: **Y** = yes, show/support | **—** = no, hide/skip | **Σ** = show summ
 | **Lineage** | — | Y | Y | — | — | — |
 | **Impact Analysis** | — | — | — | Y | — | — |
 | **Version History** | — | — | Y | — | — | — |
+| **Compliance Template** | — | Y | — | — | — | — |
 
 ### Notes – Tier 1
 
@@ -130,6 +132,7 @@ Legend: **Y** = show | **—** = hide | **Σ** = summary only
 | **Ownership** | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | — | Y |
 | **Lineage** | — | — | Y | Y | — | Y | — | — | Y | — | Y | — | — | — | — | — | — |
 | **Impact Analysis** | — | — | — | — | — | — | — | — | — | — | — | Y | Y | Y | — | — | — |
+| **Compliance Template** | — | — | Y | Y | — | — | — | — | — | — | — | — | — | — | — | — | — |
 
 ### Notes – Tier 2
 
@@ -189,6 +192,9 @@ const LINEAGE_ELIGIBLE_TYPES = new Set([
 const IMPACT_ELIGIBLE_TYPES = new Set([
   'Policy', 'Business Term', 'Logical Entity',
 ]);
+// Compliance button + modal (template bound to entity type `asset`); the
+// backend refuses other asset types.
+const COMPLIANCE_TEMPLATE_ELIGIBLE_TYPES = new Set(['Table', 'View']);
 const OWNERSHIP_ELIGIBLE_TYPES = new Set([
   'Table', 'View', 'Dataset', 'Dashboard', 'Notebook',
   'ML Model', 'API Endpoint', 'Stream', 'Policy',

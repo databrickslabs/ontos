@@ -58,6 +58,11 @@ from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
 from src.common.deployment_dependencies import get_deployment_policy_manager
 from src.controller.deployment_policy_manager import DeploymentPolicyManager
+from src.common.authorization import get_user_details_from_sdk
+from src.common.manager_dependencies import get_auth_manager
+from src.controller import compliance_template_exchange
+from src.controller.authorization_manager import AuthorizationManager
+from src.models.users import UserInfo
 from pydantic import BaseModel, Field
 import uuid
 import yaml
@@ -82,6 +87,13 @@ def get_data_contracts_manager(request: Request) -> DataContractsManager:
 def get_jobs_manager(request: Request):
     """Retrieves the JobsManager instance from app.state."""
     return getattr(request.app.state, 'jobs_manager', None)
+
+
+async def _compliance_import(
+    request: Request, user: UserInfo, auth_manager: AuthorizationManager
+) -> compliance_template_exchange.ComplianceImport:
+    """The importer's rights on table and view template values (and the audit record)."""
+    return await compliance_template_exchange.import_access(request, user, auth_manager)
 
  
 
@@ -1519,6 +1531,7 @@ async def delete_contract(
             details=details_for_audit,
         )
 
+
 @router.post('/data-contracts/upload')
 async def upload_contract(
     request: Request,
@@ -1528,6 +1541,8 @@ async def upload_contract(
     file: UploadFile = File(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
     """Upload a contract file and parse it into normalized ODCS structure"""
     # SECURITY: Sanitize filename for safe logging and processing
@@ -1557,11 +1572,14 @@ async def upload_contract(
             logger.warning(warning)
         
         # Create contract with all nested entities using manager
+        compliance_import = await _compliance_import(request, user, auth_manager)
         created = manager.create_from_upload(
             db=db,
             parsed_odcs=parsed,
-            current_user=current_user.username if current_user else None
+            current_user=current_user.username if current_user else None,
+            compliance_import=compliance_import,
         )
+        details_for_audit["compliance_values_written"] = compliance_import.written
         
         success = True
         created_contract_id = created.id
@@ -1626,6 +1644,8 @@ async def import_odcs_json(
     body: dict = Body(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
     """Import an ODCS contract from a pasted JSON object."""
     success = False
@@ -1645,11 +1665,14 @@ async def import_odcs_json(
         for warning in validation_warnings[:5]:
             logger.warning(warning)
 
+        compliance_import = await _compliance_import(request, user, auth_manager)
         created = manager.create_from_upload(
             db=db,
             parsed_odcs=parsed,
             current_user=current_user.username if current_user else None,
+            compliance_import=compliance_import,
         )
+        details_for_audit["compliance_values_written"] = compliance_import.written
 
         success = True
         created_contract_id = created.id
@@ -1876,14 +1899,26 @@ async def get_schema_properties(
 
 
 @router.get('/data-contracts/{contract_id}/odcs/export')
-async def export_odcs(contract_id: str, db: DBSessionDep, manager: DataContractsManager = Depends(get_data_contracts_manager), _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
+async def export_odcs(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+):
     try:
         from fastapi.responses import Response
 
         db_obj = data_contract_repo.get_with_all(db, id=contract_id)
         if not db_obj:
             raise HTTPException(status_code=404, detail="Contract not found")
-        odcs = manager.build_odcs_from_db(db_obj, db)
+        # Tables' compliance template values only for a user who may read them
+        compliance_read = await compliance_template_exchange.read_access(
+            request, user, auth_manager, db
+        )
+        odcs = manager.build_odcs_from_db(db_obj, db, compliance_read=compliance_read)
 
         # Convert to YAML format for ODCS compliance
         yaml_content = yaml.dump(odcs, default_flow_style=False, allow_unicode=True, sort_keys=False)

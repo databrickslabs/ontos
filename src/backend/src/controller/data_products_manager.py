@@ -73,6 +73,8 @@ from src.common.delivery_mixin import DeliveryMixin
 from src.repositories.entity_relationships_repository import entity_relationship_repo
 from src.repositories.assets_repository import asset_repo
 from src.controller.compliance_templates_manager import compliance_templates_manager
+from src.controller import compliance_template_exchange
+from src.models.data_products import SHOW_COMPLIANCE_UNMATCHED
 
 logger = get_logger(__name__)
 
@@ -1552,7 +1554,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     def upload_products_batch(
         self,
         file_content: bytes,
-        filename: str
+        filename: str,
+        compliance_import=None,
     ) -> tuple[List[DataProductApi], List[Dict[str, Any]]]:
         """
         Process and create multiple data products from uploaded YAML/JSON file.
@@ -1567,6 +1570,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Args:
             file_content: Raw file bytes
             filename: Original filename (used to detect format)
+            compliance_import: A ``ComplianceImport`` (the importer's rights): each
+                product's ``ontosComplianceValues`` are written to its compliance
+                template values, and what was written is recorded on it
 
         Returns:
             Tuple of (created_products, errors_list)
@@ -1617,7 +1623,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             try:
                 # create_product() always generates a UUID; preserve_source_id=True
                 # stores any non-UUID original id as a sourceId custom property
+                compliance_entries = None
+                if compliance_import is not None:
+                    compliance_entries = compliance_template_exchange.take_product_entries(
+                        product_data
+                    )
                 created_product = self.create_product(product_data, preserve_source_id=True)
+                if compliance_entries is not None:
+                    self._import_compliance_values(
+                        created_product.id, *compliance_entries, compliance_import
+                    )
                 created_products.append(created_product)
                 logger.info(f"Successfully created product {created_product.id} from batch upload")
 
@@ -1636,6 +1651,28 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         )
         return created_products, errors
 
+    def _import_compliance_values(
+        self, product_id: str, values, carried, compliance_import
+    ) -> None:
+        """Store an imported product's template values in the product's transaction.
+
+        The values are written in a savepoint and committed with the product, as
+        the batch upload commits it (this doesn't commit). What isn't written is
+        kept as the product's ``ontosComplianceValuesUnmatched`` custom property
+        when the importer may write values. A failure here rolls back only the
+        savepoint and leaves the product as it is.
+        """
+        try:
+            with self._db.begin_nested():
+                compliance_template_exchange.import_product_values(
+                    self._db, product_id=str(product_id), values=values, carried=carried,
+                    imp=compliance_import,
+                )
+        except Exception:
+            logger.warning(
+                "Compliance values of imported product %s not stored", product_id, exc_info=True
+            )
+
     def create_new_version(self, original_product_id: str, request: NewVersionRequest) -> DataProductApi:
         """Creates a new version of an ODPS v1.0.0 data product."""
         logger.info(f"Creating new ODPS version '{request.new_version}' from product {original_product_id}")
@@ -1646,7 +1683,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         # Create new product data (exclude id, created_at, updated_at)
         new_product_data = original_product.model_dump(
-            exclude={'id', 'created_at', 'updated_at'}
+            exclude={'id', 'created_at', 'updated_at'},
+            # A new version keeps the compliance values an import couldn't write
+            context={SHOW_COMPLIANCE_UNMATCHED: True},
         )
 
         # Generate new ID and set new version
@@ -3128,8 +3167,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         product_id: str,
         db: Optional[Session] = None,
+        compliance_read=None,
     ) -> Dict[str, Any]:
         """Build a full ODPS v1.0.0-compatible YAML export of a Data Product.
+
+        ``compliance_read`` (a ``ValuesReadAccess``): the exporting user's right to
+        read the product's compliance template values; without it they're omitted.
 
         Includes the standard ODPS structure plus entity relationship-based
         dataset hierarchy as an extension section.
@@ -3223,6 +3266,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             odps["customProperties"] = domain_export_adapter.merge_custom_properties(
                 rebuilt_props, odps.get("customProperties")
             )
+        # Compliance template values of the product (replaces a stored copy)
+        compliance_template_exchange.apply_product_export(
+            session, odps, product_id=product_id, access=compliance_read
+        )
 
         if product.authoritative_definitions:
             odps["authoritativeDefinitions"] = [

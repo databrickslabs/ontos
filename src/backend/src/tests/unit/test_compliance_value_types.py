@@ -44,6 +44,18 @@ class TestCoerceNumeric:
         with pytest.raises(ValueTypeError):
             coerce_value("numeric", raw)
 
+    @pytest.mark.parametrize("raw", [
+        float("nan"), float("inf"), float("-inf"), "NaN", "Infinity", "-inf", "1e999",
+        10 ** 400,
+    ])
+    def test_non_finite_and_overflow_rejected(self, raw):
+        with pytest.raises(ValueTypeError):
+            coerce_value("numeric", raw)
+
+    def test_non_finite_range_bound_rejected(self):
+        with pytest.raises(ValueTypeError):
+            coerce_value("range", {"low": 0, "high": "inf"})
+
     def test_boolean_rejected_as_numeric(self):
         # bool is a subclass of int; must not silently become 1/0.
         with pytest.raises(ValueTypeError):

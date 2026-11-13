@@ -14,6 +14,7 @@
     "roles": "Ruoli",
     "rdfSources": "Fonti RDF",
     "tags": "Tag",
+    "complianceTemplates": "Modelli di conformità",
     "search": "Ricerca",
     "mcpTokens": "Token MCP",
     "workflows": "Workflow",

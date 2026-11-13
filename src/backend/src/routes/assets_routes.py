@@ -21,6 +21,7 @@ from src.common.dependencies import (
 )
 from src.common.errors import NotFoundError, ConflictError, ValidationError
 from src.common.logging import get_logger
+from src.controller.compliance_template_assets import reconcile_asset
 
 logger = get_logger(__name__)
 
@@ -420,6 +421,12 @@ def update_asset(
     try:
         result = manager.update_asset(db=db, asset_id=asset_id, asset_in=asset_in, current_user_id=current_user.email)
         success = True
+        # Compliance templates: materialize template defaults on table and view
+        # assets, as on a data product edit. Never fails the edit.
+        reconcile_asset(
+            db, asset_id=str(asset_id), asset_type_name=result.asset_type_name,
+            user_email=current_user.email,
+        )
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}

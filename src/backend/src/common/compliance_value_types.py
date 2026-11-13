@@ -27,6 +27,7 @@ Coercion normalizes each accepted input to a canonical stored shape:
 """
 from __future__ import annotations
 
+import math
 from datetime import date, datetime
 from enum import Enum
 from typing import Any, Optional
@@ -56,18 +57,23 @@ def _coerce_numeric(value: Any) -> float | int:
     if isinstance(value, bool):
         # bool is a subclass of int; reject to avoid True -> 1 surprises.
         raise ValueTypeError("Expected a numeric value, got a boolean.")
-    if isinstance(value, (int, float)):
-        num: float = float(value)
-    elif isinstance(value, str):
-        s = value.strip()
-        if not s:
-            raise ValueTypeError("Expected a numeric value, got an empty string.")
-        try:
+    try:
+        if isinstance(value, (int, float)):
+            num: float = float(value)
+        elif isinstance(value, str):
+            s = value.strip()
+            if not s:
+                raise ValueTypeError("Expected a numeric value, got an empty string.")
             num = float(s)
-        except ValueError:
-            raise ValueTypeError(f"'{value}' is not a valid number.")
-    else:
-        raise ValueTypeError(f"Expected a numeric value, got {type(value).__name__}.")
+        else:
+            raise ValueTypeError(f"Expected a numeric value, got {type(value).__name__}.")
+    except (ValueError, OverflowError) as e:
+        if isinstance(e, ValueTypeError):
+            raise
+        raise ValueTypeError(f"'{value}' is not a valid number.")
+    # NaN, Infinity and values beyond the float range aren't numbers a field can hold.
+    if not math.isfinite(num):
+        raise ValueTypeError(f"'{value}' is not a finite number.")
     # Normalize integral floats to int (2.0 -> 2).
     if num.is_integer():
         return int(num)

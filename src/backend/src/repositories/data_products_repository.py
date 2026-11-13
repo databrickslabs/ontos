@@ -13,6 +13,7 @@ import json
 from src.common.repository import CRUDBase
 from src.db_models.domain_associations import EntityDomainAssociationDb
 from src.repositories.entity_domain_association_repository import entity_domain_repo
+from src.models.data_products import COMPLIANCE_UNMATCHED_PROPERTY
 from src.models.data_products import (
     DataProduct as DataProductApi,
     DataProductCreate,
@@ -318,7 +319,19 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
 
             # 4. Update Custom Properties (replace all)
             if 'customProperties' in update_data:
+                # The product API hides the compliance values an import couldn't
+                # write, so an edit doesn't send them back: keep the stored ones.
+                incoming = {p.get('property') for p in update_data['customProperties'] or []}
+                kept = [
+                    p for p in db_obj.custom_properties
+                    if p.property == COMPLIANCE_UNMATCHED_PROPERTY
+                    and COMPLIANCE_UNMATCHED_PROPERTY not in incoming
+                ]
                 db_obj.custom_properties.clear()
+                db_obj.custom_properties.extend(
+                    CustomPropertyDb(property=p.property, value=p.value, description=p.description)
+                    for p in kept
+                )
                 for prop_dict in update_data['customProperties'] or []:
                     value_str = json.dumps(prop_dict['value']) if not isinstance(prop_dict['value'], str) else prop_dict['value']
                     prop_obj = CustomPropertyDb(

@@ -44,6 +44,11 @@ from src.models.process_workflows import EntityType
 from src.models.notifications import NotificationType
 from src.common.dependencies import NotificationsManagerDep, CurrentUserDep, DBSessionDep
 from src.controller.compliance_templates_manager import compliance_templates_manager
+from src.controller import compliance_template_exchange
+from src.models.data_products import SHOW_COMPLIANCE_UNMATCHED
+from src.common.authorization import get_user_details_from_sdk
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -1395,13 +1400,19 @@ async def export_odps(
     background_tasks: BackgroundTasks,
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
     """Export a Data Product as ODPS v1.0.0 YAML, including entity relationship-based datasets."""
     from fastapi.responses import Response
     success = False
     details = {"product_id": product_id, "action": "export_odps"}
     try:
-        odps = manager.build_odps_export(product_id, db=db)
+        # The product's compliance template values only for a user who may read them
+        compliance_read = await compliance_template_exchange.read_access(
+            request, user, auth_manager, db
+        )
+        odps = manager.build_odps_export(product_id, db=db, compliance_read=compliance_read)
         yaml_content = yaml.dump(odps, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
         raw_name = (odps.get("name") or "product").lower().replace(" ", "_")
@@ -1611,7 +1622,9 @@ async def upload_data_products(
     current_user: AuditCurrentUserDep,
     file: UploadFile = File(...),
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
     # SECURITY: Sanitize filename for safe logging and validation
     raw_filename = file.filename or "upload.bin"
@@ -1669,7 +1682,13 @@ async def upload_data_products(
             raise exc
 
         # Delegate to manager
-        created_products, errors_list = manager.upload_products_batch(content, file.filename)
+        compliance_import = await compliance_template_exchange.import_access(
+            request, user, auth_manager
+        )
+        created_products, errors_list = manager.upload_products_batch(
+            content, file.filename, compliance_import=compliance_import,
+        )
+        details_for_audit["compliance_values_written"] = compliance_import.written
 
         # Extract created IDs for audit
         created_ids = [p.id for p in created_products if p and hasattr(p, 'id')]
@@ -2497,7 +2516,9 @@ async def get_data_product(
     db: DBSessionDep,
     current_user: CurrentUserDep,
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ) -> Any: # Return Any to allow returning a dict
     try:
         product = manager.get_product(product_id)
@@ -2514,7 +2535,15 @@ async def get_data_product(
         if not _caller_can_read_product(request, db, current_user, manager, product):
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        return product.model_dump(by_alias=False, exclude={'created_at', 'updated_at'}, exclude_none=True, exclude_unset=True)
+        # Compliance values an import couldn't write: only for a values reader
+        compliance_read = await compliance_template_exchange.read_access(
+            request, user, auth_manager, db
+        )
+        return product.model_dump(
+            by_alias=False, exclude={'created_at', 'updated_at'}, exclude_none=True,
+            exclude_unset=True,
+            context={SHOW_COMPLIANCE_UNMATCHED: compliance_read.may_read_product()},
+        )
     except ValueError as e:
         logger.error("Validation error fetching product %s: %s", product_id, e)
         raise HTTPException(status_code=404, detail="Data product not found")

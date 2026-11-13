@@ -109,3 +109,11 @@ def test_plain_names_keep_the_old_resolution(db_session, roles):
 def test_a_group_with_an_at_sign_is_that_group(db_session, roles):
     out = _resolve_role_to_users(db_session, 'group:team@corp', _context())
     assert out == [('group:team@corp', None)]
+
+
+def test_the_same_principal_in_other_case_is_one_target(db_session, roles):
+    out = _resolve_role_to_users(
+        db_session, 'Ana@Example.com,ana@example.com,user:Bob,user:bob', _context(),
+    )
+    assert out == [('Ana@Example.com', None), ('user:Bob', None)]
+

@@ -10,6 +10,11 @@ describe('toReferenceSlug', () => {
     ['Crème brûlée', 'creme-brulee'],
     ['  Owner (team)  ', 'owner-team'],
     ['already-a-slug_1', 'already-a-slug-1'],
+    ['Straße', 'strasse'],
+    ['Łódź', 'lodz'],
+    ['Søren Ærø', 'soren-aero'],
+    ['Đorđe', 'dorde'],
+    ['Œuvre', 'oeuvre'],
   ])('%s -> %s', (input, expected) => {
     expect(toReferenceSlug(input)).toBe(expected);
   });

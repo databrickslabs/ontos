@@ -1653,11 +1653,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     def _import_compliance_values(
         self, product_id: str, values, carried, compliance_import
     ) -> None:
-        """Store an imported product's template values (the product is already stored).
+        """Store an imported product's template values in the product's transaction.
 
-        The values are written in a savepoint; what isn't written is kept as the
-        product's ``ontosComplianceValuesUnmatched`` custom property when the
-        importer may write values. A failure here leaves the product as it is.
+        The values are written in a savepoint and committed with the product, as
+        the batch upload commits it (this doesn't commit). What isn't written is
+        kept as the product's ``ontosComplianceValuesUnmatched`` custom property
+        when the importer may write values. A failure here rolls back only the
+        savepoint and leaves the product as it is.
         """
         try:
             with self._db.begin_nested():
@@ -1669,8 +1671,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.warning(
                 "Compliance values of imported product %s not stored", product_id, exc_info=True
             )
-            return
-        self._db.commit()
 
     def create_new_version(self, original_product_id: str, request: NewVersionRequest) -> DataProductApi:
         """Creates a new version of an ODPS v1.0.0 data product."""

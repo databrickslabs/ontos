@@ -389,7 +389,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Ensure ODPS required fields have defaults
             product_data.setdefault('apiVersion', 'v1.0.0')
             product_data.setdefault('kind', 'DataProduct')
-            product_data.setdefault('status', DataProductStatus.DRAFT.value)
+            # No default status: a new product without one starts in its
+            # group's first stage (draft in the default lifecycle)
             # A new product starts in one of the lifecycle statuses; `certified`
             # is certification_level, set by the certify action.
             # It starts in a stage of its lifecycle stage group (the default one

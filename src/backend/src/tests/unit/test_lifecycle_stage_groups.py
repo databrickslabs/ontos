@@ -118,9 +118,8 @@ class TestLoopingGroup:
         group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
         pid = _product(db_session, 'active', group.id)
 
-        assert product_manager.transition_status(pid, 'needs_review', 'alice').status == 'needs_review'
-        assert product_manager.transition_status(pid, 'active', 'alice').status == 'active'
-        assert product_manager.transition_status(pid, 'needs_review', 'alice').status == 'needs_review'
+        walk = ['needs_review', 'active', 'needs_review']
+        assert [product_manager.transition_status(pid, s, 'alice').status for s in walk] == walk
 
     def test_a_move_outside_the_group_is_refused_with_its_allowed_stages(
         self, db_session, product_manager,
@@ -474,3 +473,171 @@ def test_a_contract_keeps_its_group_on_transitions(db_session):
                                  new_status='needs_review').status == 'needs_review'
     with pytest.raises(InvalidStatusTransitionError):
         mgr.transition_status(db=db_session, contract_id=cid, new_status='approved')
+
+
+def _intake_group(entity_type='data_product'):
+    """A group whose first stage isn't ``draft``, with one review step."""
+    return {
+        'name': 'Intake', 'description': None, 'entity_type': entity_type,
+        'is_default_for_type': False,
+        'stages': [
+            _stage('intake', 'draft', 0, initial=True),
+            _stage('needs_review', 'review', 1),
+            _stage('live', 'active', 2),
+        ],
+        'transitions': [
+            {'from_key': 'intake', 'to_key': 'needs_review'},
+            {'from_key': 'needs_review', 'to_key': 'live'},
+            {'from_key': 'needs_review', 'to_key': 'intake'},
+        ],
+    }
+
+
+class TestReviewFeedback:
+    def test_a_new_product_without_status_starts_in_its_groups_first_stage(
+        self, db_session, product_manager,
+    ):
+        group = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        created = product_manager.create_product({
+            'id': str(uuid.uuid4()), 'name': 'Intake product', 'version': '1.0.0',
+            'lifecycleStageGroupId': group.id,
+        }, db=db_session)
+        assert created.status == 'intake'
+
+    def test_new_versions_and_clones_keep_the_group_and_start_in_its_first_stage(
+        self, db_session, product_manager,
+    ):
+        from pathlib import Path
+
+        from src.controller.data_contracts_manager import DataContractsManager
+
+        group = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        pid = _product(db_session, 'live', group.id)
+        clone = product_manager.clone_product_for_new_version(
+            db_session, pid, '2.0.0', current_user='alice',
+        )
+        db_session.expire_all()
+        row = db_session.get(DataProductDb, clone.id)
+        assert (row.lifecycle_stage_group_id, row.status) == (group.id, 'intake')
+
+        contract_group = lifecycle_service.save_group(
+            db_session, _intake_group('data_contract'), 'admin',
+        )
+        cid = str(uuid.uuid4())
+        db_session.add(DataContractDb(id=cid, name='C', version='1.0.0', status='live',
+                                      lifecycle_stage_group_id=contract_group.id,
+                                      version_family_id=cid))
+        db_session.commit()
+        mgr = DataContractsManager(data_dir=Path('/tmp'))
+        mgr._update_search_index = lambda *a, **k: None
+        new_contract = mgr.clone_contract_for_new_version(db_session, cid, '2.0.0',
+                                                          current_user='alice')
+        assert (new_contract.lifecycle_stage_group_id, new_contract.status) == \
+            (contract_group.id, 'intake')
+
+    def test_a_review_request_in_a_group_without_a_start_step_stays_submitted(
+        self, db_session, product_manager, monkeypatch,
+    ):
+        from src.common import workflow_triggers
+
+        registry = MagicMock()
+        registry.before_status_change.return_value = (True, [])
+        registry.on_request_review.return_value = []
+        monkeypatch.setattr(workflow_triggers, 'get_trigger_registry', lambda db: registry)
+        group = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        pid = _product(db_session, 'intake', group.id)
+
+        product_manager.request_review(pid, None, 'owner@example.com', current_user='owner')
+
+        db_session.expire_all()
+        assert db_session.get(DataProductDb, pid).status == 'needs_review'
+        data = registry.on_request_review.call_args.kwargs['entity_data']
+        assert data['to_status'] == 'needs_review'
+
+    def test_a_paused_workflow_run_of_the_entity_blocks_a_group_change(self, db_session):
+        from src.db_models.process_workflows import WorkflowExecutionDb
+
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        pid = _product(db_session, 'draft')
+        other = _product(db_session, 'draft')
+        workflow = ProcessWorkflowDb(id=str(uuid.uuid4()), name='Approval',
+                                     trigger_config='{}')
+        db_session.add(workflow)
+        db_session.flush()
+        execution = WorkflowExecutionDb(
+            id=str(uuid.uuid4()), workflow_id=workflow.id, status='paused',
+            trigger_context=json.dumps({'entity_id': pid, 'entity_type': 'data_product'}),
+        )
+        db_session.add(execution)
+        db_session.commit()
+
+        with pytest.raises(LifecycleGroupConflictError) as err:
+            lifecycle_service.change_group(db_session, 'data_product', pid, group.id, 'bob')
+        assert err.value.params['requestId'] == execution.id
+        # Another entity's paused run doesn't block
+        assert lifecycle_service.change_group(
+            db_session, 'data_product', other, group.id, 'bob',
+        )['status'] == 'draft'
+
+    def test_a_group_change_unpublishes_an_entity_reset_to_an_unpublished_stage(
+        self, db_session,
+    ):
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        pid = _product(db_session, 'active', publication_scope='organization')
+        lifecycle_service.change_group(db_session, 'data_product', pid, group.id, 'bob')
+        db_session.expire_all()
+        assert db_session.get(DataProductDb, pid).publication_scope == 'none'
+
+    def test_the_approvals_queue_lists_custom_review_stages_but_not_approved(self, db_session):
+        from src.controller.approvals_manager import ApprovalsManager
+
+        group = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        waiting = _product(db_session, 'needs_review', group.id)
+        approved = _product(db_session, 'approved')
+        queue = ApprovalsManager().get_approvals_queue(
+            db_session, can_see_contract=lambda c: True, can_see_product=lambda p: True,
+        )
+        ids = {p['id'] for p in queue['products']}
+        assert waiting in ids and approved not in ids
+
+
+class TestAssetStatusChanges:
+    def _asset(self, db_session, status):
+        from src.db_models.assets import AssetTypeDb
+
+        asset_type = AssetTypeDb(id=uuid.uuid4(), name=f'Type {uuid.uuid4().hex[:6]}')
+        db_session.add(asset_type)
+        asset = AssetDb(id=uuid.uuid4(), name='Orders', asset_type_id=asset_type.id,
+                        status=status)
+        db_session.add(asset)
+        db_session.commit()
+        return asset
+
+    def test_an_allowed_move_is_stored_and_a_refused_one_is_coded(self, db_session):
+        from src.controller.assets_manager import AssetsManager
+        from src.models.assets import AssetUpdate
+
+        mgr = AssetsManager()
+        mgr._update_search_index = lambda *a, **k: None
+        asset = self._asset(db_session, 'active')
+        with pytest.raises(InvalidStatusTransitionError) as err:
+            mgr.update_asset(db_session, asset_id=asset.id,
+                             asset_in=AssetUpdate(status='draft'), current_user_id='u')
+        assert err.value.params['allowed'] == ['deprecated']
+        updated = mgr.update_asset(db_session, asset_id=asset.id,
+                                   asset_in=AssetUpdate(status='deprecated'),
+                                   current_user_id='u')
+        assert updated.status == 'deprecated'
+        # Repeating the stored status is no move
+        assert mgr.update_asset(db_session, asset_id=asset.id,
+                                asset_in=AssetUpdate(status='DEPRECATED', name='Orders 2'),
+                                current_user_id='u').status == 'deprecated'
+
+    def test_a_bulk_row_moves_through_the_lifecycle(self, db_session):
+        from src.controller.asset_bulk_manager import _bulk_status
+
+        asset = self._asset(db_session, 'active')
+        assert _bulk_status(db_session, asset, None) == 'active'
+        assert _bulk_status(db_session, asset, 'deprecated') == 'deprecated'
+        with pytest.raises(InvalidStatusTransitionError):
+            _bulk_status(db_session, asset, 'draft')

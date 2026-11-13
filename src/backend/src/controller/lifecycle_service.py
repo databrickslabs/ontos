@@ -283,7 +283,9 @@ class LifecycleService:
         current = _normalized(getattr(entity, 'status', None)) or 'draft'
         return self.group_for(db, entity_type, entity).targets(current)
 
-    def allowed_target_keys(self, db: Optional[Session], entity_type: str, entity: Any) -> List[str]:
+    def allowed_target_keys(
+        self, db: Optional[Session], entity_type: str, entity: Any,
+    ) -> List[str]:
         return [s.key for s in self.allowed_targets(db, entity_type, entity)]
 
     def check_transition(
@@ -343,14 +345,11 @@ class LifecycleService:
         )
 
     def awaits_review_decision(self, db: Optional[Session], entity_type: str, entity: Any) -> bool:
-        """In a review stage that can still be approved (proposed / under_review by default)."""
+        """In a review stage that awaits a decision: any review stage but the approve
+        action's own (proposed / under_review by default, not approved)."""
         if self.category_of(db, entity_type, entity) != 'review':
             return False
-        try:
-            self.resolve_action(db, entity_type, entity, 'approve')
-        except ValueError:
-            return False
-        return True
+        return _normalized(getattr(entity, 'status', None)) != NAMED_ACTIONS['approve'][0]
 
     # ---- categories
 
@@ -375,6 +374,14 @@ class LifecycleService:
             if group is not None:
                 return group.category(key)
         return DEFAULT_STAGE_CATEGORIES.get(key)
+
+    def initial_keys_anywhere(self) -> set:
+        """The first-stage keys of every known group (seeded or cached)."""
+        keys = {'draft'}
+        for group in list(self._groups.values()):
+            if group.initial is not None:
+                keys.add(group.initial.key)
+        return keys
 
     def keys_of_category_anywhere(self, category: str) -> set:
         """Stage keys in ``category`` in any known group (seeded or cached)."""
@@ -597,6 +604,16 @@ class LifecycleService:
         from_status = _normalized(entity.status)
         entity.lifecycle_stage_group_id = target.id
         entity.status = initial.key
+        # Not a transition: no gates or on_status_change (the new group's moves
+        # start from its first stage). A published entity leaves the Marketplace
+        # unless that stage is published too.
+        unpublished = False
+        if (getattr(entity, 'publication_scope', None) or 'none').lower() != 'none' and \
+                initial.category not in ('active', 'deprecated'):
+            entity.publication_scope = 'none'
+            entity.published_at = None
+            entity.published_by = None
+            unpublished = True
         if hasattr(entity, 'updated_by'):
             entity.updated_by = user
         db.add(entity)
@@ -608,6 +625,7 @@ class LifecycleService:
                 'from_group_id': current.id, 'from_group': current.name,
                 'to_group_id': target.id, 'to_group': target.name,
                 'from_status': from_status, 'to_status': initial.key,
+                'unpublished': unpublished,
                 'summary': (
                     f"Lifecycle changed from '{current.name}' to '{target.name}'; "
                     f"status reset from '{from_status}' to '{initial.key}'"
@@ -616,6 +634,7 @@ class LifecycleService:
         )
         db.commit()
         db.refresh(entity)
+        _refresh_search_index(entity_type, entity, db)
         return self.entity_lifecycle(db, entity_type, entity)
 
     # ---- group writes (Settings)
@@ -828,6 +847,18 @@ def _model_id(model: Any, entity_id: str) -> Any:
         except ValueError:
             return None
     return entity_id
+
+
+def _refresh_search_index(entity_type: str, entity: Any, db: Session) -> None:
+    """Best effort: the search index shows a contract's new status (products and
+    assets are re-indexed by their next write)."""
+    try:
+        if entity_type == 'data_contract':
+            from src.controller.data_contracts_manager import reindex_contract_in_search_index
+            reindex_contract_in_search_index(entity, db)
+    except Exception as e:
+        logger.warning("Search index not refreshed after a lifecycle change of %s %s: %s",
+                       entity_type, getattr(entity, 'id', None), e)
 
 
 def pop_lifecycle_properties(custom_props: Any) -> Dict[str, Any]:

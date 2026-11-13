@@ -71,7 +71,7 @@ def is_admin_only_status(row: Any) -> bool:
 def not_others_personal_draft(model: Any, user_email: Optional[str]) -> Any:
     """SQL filter: drop another user's personal draft, keep every other row.
 
-    A personal draft (tier 1) is a row in a draft-category stage with a
+    A personal draft (tier 1) is a row in a first stage (``draft``) with a
     ``draft_owner_id``; only its owner sees it. The owner stamp hides no row
     in any other stage: an active or deprecated version that still carries
     another user's ``draft_owner_id`` is published and visible to everyone.
@@ -81,7 +81,8 @@ def not_others_personal_draft(model: Any, user_email: Optional[str]) -> Any:
 
     from src.controller.lifecycle_service import lifecycle_service
 
-    draft_keys = sorted(lifecycle_service.keys_of_category_anywhere("draft"))
+    # Personal drafts start in a group's first stage (``draft`` by default)
+    draft_keys = sorted(lifecycle_service.initial_keys_anywhere())
     return or_(
         model.draft_owner_id.is_(None),
         model.draft_owner_id == user_email,

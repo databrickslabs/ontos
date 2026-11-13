@@ -1223,7 +1223,7 @@
     "title": "Maturity Levels",
     "description": "Define the maturity ladder for data products and contracts. Each level is gated by compliance policies.",
     "addLevel": "Add Level",
-    "allTypes": "All types",
+    "allTypes": "Products and contracts",
     "gateCount_one": "{{count}} gate",
     "gateCount_other": "{{count}} gates",
     "complianceGates": "Compliance Policy Gates",
@@ -1250,7 +1250,8 @@
       "levelNamePreview": "Level Name"
     },
     "entityTypes": {
-      "all": "All Entity Types",
+      "all": "Data products and contracts",
+      "Asset": "Assets (tables and views)",
       "DataProduct": "Data Products",
       "DataContract": "Data Contracts"
     },

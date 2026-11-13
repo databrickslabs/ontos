@@ -1,6 +1,65 @@
 {
   "title": "Benvenuto in {{appName}}",
   "tagline": "Gestisci glossario aziendale, contratti dati, prodotti dati, personas e altro ancora",
+  "essentials": {
+    "tagline": "Trova, comprendi e fidati dei tuoi dati, poi pubblica e mantieni ciò che possiedi.",
+    "consumer": {
+      "title": "Usare i dati",
+      "description": "Parti dalle tabelle che il tuo team ha già in Unity Catalog."
+    },
+    "producer": {
+      "title": "Condividere i dati",
+      "description": "Documenta gli asset di cui sei proprietario e falli revisionare."
+    },
+    "find": {
+      "title": "Trovare",
+      "description": "Cerca asset e concetti, o sfoglia il catalogo.",
+      "placeholder": "Cerca tabelle, asset e termini del glossario...",
+      "browseCatalog": "Sfoglia il Data Catalog"
+    },
+    "understand": {
+      "title": "Comprendere",
+      "description": "Scopri cos'è un asset e cosa significano i suoi termini.",
+      "assets": "Asset",
+      "assetsDescription": "Tabelle, viste e altri asset con i loro metadati."
+    },
+    "trust": {
+      "title": "Fidarsi",
+      "description": "Stato di revisione degli asset e dove si trovano oggi i dati.",
+      "empty": "Nessun asset è stato ancora revisionato.",
+      "openReviews": "Apri Revisioni degli asset"
+    },
+    "publish": {
+      "title": "Pubblicare",
+      "description": "I tuoi asset che non hanno ancora documentazione o revisione.",
+      "noAssets": "Non possiedi ancora alcun asset.",
+      "allDone": "Tutti i tuoi asset sono documentati e revisionati.",
+      "noGapsLoaded": "Nessuna lacuna negli asset caricati finora.",
+      "noDescription": "Nessuna descrizione",
+      "noReview": "Non revisionato",
+      "more": "Visualizzati {{shown}} dei tuoi {{total}} asset.",
+      "loadMore": "Carica altri",
+      "pageSize": "Per pagina",
+      "requestReview": "Richiedi una revisione"
+    },
+    "maturity": {
+      "title": "Tabelle sotto il primo livello",
+      "description": "Le tue tabelle e viste la cui ultima valutazione di maturità non ha raggiunto alcun livello.",
+      "empty": "Nessuna delle tue tabelle valutate è sotto il primo livello.",
+      "more": "Visualizzate {{shown}} di {{total}}.",
+      "error": "Impossibile caricare le tue tabelle sotto il primo livello."
+    },
+    "maintain": {
+      "title": "Mantenere",
+      "description": "Le tue richieste e revisioni aperte.",
+      "myRequests": "Le mie richieste in sospeso ({{count}})",
+      "noRequests": "Nessuna richiesta in sospeso.",
+      "openMyRequests": "Apri Le mie richieste",
+      "myReviews": "Le mie revisioni di asset aperte ({{count}})",
+      "noReviews": "Nessuna revisione di asset aperta.",
+      "nothing": "Niente da seguire."
+    }
+  },
   "search": {
     "placeholder": "Cerca prodotti dati, termini del glossario, contratti..."
   },

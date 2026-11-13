@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query, Request
 
 from src.models.assets import (
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
@@ -84,6 +84,22 @@ def _user_has_assets_feature(request: Request, current_user, level: FeatureAcces
     except Exception:
         logger.exception("Failed to check assets feature for user")
         return False
+
+
+def _schedule_maturity_evaluation(
+    db, background_tasks: BackgroundTasks, request: Request, asset_id, user_email,
+) -> None:
+    """Re-evaluate a table/view asset's maturity after the response is sent.
+
+    Commits the request's changes first: the background task opens its own session
+    and must see the asset as it is now, whatever the dependency teardown order.
+    """
+    from src.controller.maturity_evaluator import evaluate_asset_maturity_on_change
+    db.commit()
+    background_tasks.add_task(
+        evaluate_asset_maturity_on_change, str(asset_id), evaluated_by=user_email,
+        workspace_client=getattr(request.app.state, "workspace_client", None),
+    )
 
 
 def _ensure_asset_readable(request: Request, db, current_user, manager, asset_id: UUID) -> None:
@@ -296,6 +312,7 @@ def create_asset(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    background_tasks: BackgroundTasks,
     manager=Depends(get_assets_manager),
 ):
     """Creates a new asset."""
@@ -306,6 +323,7 @@ def create_asset(
         result = manager.create_asset(db=db, asset_in=asset_in, current_user_id=current_user.email)
         success = True
         created_id = str(result.id)
+        _schedule_maturity_evaluation(db, background_tasks, request, result.id, current_user.email)
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}
@@ -348,8 +366,18 @@ def get_all_assets(
     domain_ids: Optional[str] = Query(None, description="Filter by multiple domain IDs, comma-separated (any-of)"),
     asset_status: Optional[str] = Query(None, alias="status"),
     name: Optional[str] = Query(None),
+    owned_by_me: bool = Query(
+        False, description="Only assets the current user owns (active business owner)",
+    ),
+    below_first_maturity_level: bool = Query(
+        False,
+        description="Only tables and views whose latest maturity evaluation reached no level",
+    ),
 ):
     """Lists all assets with optional filters. Returns paginated results.
+
+    ``owned_by_me`` narrows any of the branches below to the caller's owned assets, and
+    ``below_first_maturity_level`` to the assets below the first maturity level.
 
     Authorization (issue #347):
     - Users with ``assets:READ_WRITE`` or higher (Producers, Admins): see
@@ -390,6 +418,8 @@ def get_all_assets(
         asset_type_id=asset_type_id, asset_type_names=type_names_list,
         platform=platform, domain_id=domain_id, domain_ids=domain_ids_list, status=asset_status, name=name,
         restrict_to_ids=restrict_ids,
+        owner_email=(current_user.email or "") if owned_by_me else None,
+        below_first_maturity_level=below_first_maturity_level,
     )
 
 
@@ -434,14 +464,16 @@ def update_asset(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    background_tasks: BackgroundTasks,
     manager=Depends(get_assets_manager),
 ):
-    """Updates an existing asset."""
+    """Updates an existing asset; a table or view is re-evaluated for maturity afterwards."""
     success = False
     details = {"params": {"asset_id": str(asset_id)}}
     try:
         result = manager.update_asset(db=db, asset_id=asset_id, asset_in=asset_in, current_user_id=current_user.email)
         success = True
+        _schedule_maturity_evaluation(db, background_tasks, request, asset_id, current_user.email)
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}

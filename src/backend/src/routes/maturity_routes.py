@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from src.common.dependencies import DBSessionDep
+from src.common.dependencies import CurrentUserDep, DBSessionDep
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.routes.data_contracts_routes import readable_contract
@@ -152,13 +152,15 @@ async def update_maturity_level(
     if not update_data:
         return _level_to_read(db_obj)
 
-    if "level_order" in update_data:
+    if "level_order" in update_data or "entity_type" in update_data:
+        # Moving a level to another entity type can collide with that type's order too
         et = update_data.get("entity_type", db_obj.entity_type)
-        existing = maturity_repo.get_by_order(db, update_data["level_order"], et)
+        order = update_data.get("level_order", db_obj.level_order)
+        existing = maturity_repo.get_by_order(db, order, et)
         if existing and existing.id != level_id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Order {update_data['level_order']} is already taken for entity_type '{et}'.",
+                detail=f"Order {order} is already taken for entity_type '{et}'.",
             )
 
     try:
@@ -183,7 +185,9 @@ async def delete_maturity_level(
     if not db_obj:
         raise HTTPException(status_code=404, detail="Maturity level not found")
 
-    ref_count = maturity_repo.count_snapshots_for_level(db, db_obj.level_order)
+    ref_count = maturity_repo.count_snapshots_for_level(
+        db, db_obj.level_order, db_obj.entity_type,
+    )
     if ref_count > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -273,7 +277,9 @@ def _get_evaluator(request: Request):
     from src.controller.maturity_evaluator import MaturityEvaluator
     evaluator = getattr(request.app.state, "maturity_evaluator", None)
     if not evaluator:
-        evaluator = MaturityEvaluator()
+        # The app's client reads the UC table behind an asset (snapshots are
+        # shared, so they don't depend on who looked); None = resolve lazily.
+        evaluator = MaturityEvaluator(getattr(request.app.state, "workspace_client", None))
     return evaluator
 
 
@@ -369,6 +375,62 @@ def evaluate_contract_maturity(contract_id: str, db: DBSessionDep, request: Requ
 def get_contract_maturity_history(contract_id: str, db: DBSessionDep, limit: int = 50):
     """Get maturity evaluation history for a data contract."""
     return maturity_repo.list_snapshots(db, entity_type="DataContract", entity_id=contract_id, limit=limit)
+
+
+def _evaluate_asset(request: Request, db: Session, asset_id: UUID, *,
+                    persist: bool, user_email=None):
+    from src.controller.entity_dict_builder import UnsupportedMaturityAssetTypeError
+
+    evaluator = _get_evaluator(request)
+    try:
+        report = evaluator.evaluate(
+            db, entity_type="Asset", entity_id=str(asset_id), persist=persist,
+            evaluated_by=user_email,
+        )
+    except UnsupportedMaturityAssetTypeError as e:
+        # The coded handler sends {code, message, params}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    if not report:
+        raise HTTPException(status_code=404, detail=f"Asset {asset_id} not found")
+    return report
+
+
+@router.get("/assets/{asset_id}/maturity", response_model=MaturityReport)
+def get_asset_maturity(
+    asset_id: UUID, db: DBSessionDep, request: Request, current_user: CurrentUserDep,
+):
+    """Get the current maturity assessment for a table or view asset.
+
+    Computed on the spot and not stored: a GET writes nothing and fires no trigger.
+    Readable by the users who may read the asset. 400
+    ``maturity_asset_type_unsupported`` for other asset types.
+    """
+    from src.routes.assets_routes import _ensure_asset_readable, assets_manager
+    _ensure_asset_readable(request, db, current_user, assets_manager, asset_id)
+    return _evaluate_asset(request, db, asset_id, persist=False, user_email=current_user.email)
+
+
+@router.post("/assets/{asset_id}/maturity/evaluate", response_model=MaturityReport)
+def evaluate_asset_maturity(
+    asset_id: UUID, db: DBSessionDep, request: Request, current_user: CurrentUserDep,
+):
+    """Force re-evaluate maturity for a table or view asset and store a snapshot."""
+    from src.routes.assets_routes import _ensure_asset_readable, assets_manager
+    _ensure_asset_readable(request, db, current_user, assets_manager, asset_id)
+    return _evaluate_asset(request, db, asset_id, persist=True, user_email=current_user.email)
+
+
+@router.get("/assets/{asset_id}/maturity/history", response_model=List[MaturitySnapshotRead])
+def get_asset_maturity_history(
+    asset_id: UUID, db: DBSessionDep, request: Request, current_user: CurrentUserDep,
+    limit: int = 50,
+):
+    """Get maturity evaluation history for an asset."""
+    from src.routes.assets_routes import _ensure_asset_readable, assets_manager
+    _ensure_asset_readable(request, db, current_user, assets_manager, asset_id)
+    return maturity_repo.list_snapshots(
+        db, entity_type="Asset", entity_id=str(asset_id), limit=limit,
+    )
 
 
 # ===================================================================

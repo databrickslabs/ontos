@@ -1,6 +1,6 @@
 """Pydantic models for maturity levels API."""
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -15,7 +15,13 @@ class MaturityLevelBase(BaseModel):
     description: Optional[str] = None
     icon: Optional[str] = Field(None, max_length=100)
     color: Optional[str] = Field(None, max_length=50)
-    entity_type: str = Field("all", description="DataProduct, DataContract, or all")
+    entity_type: str = Field(
+        "all",
+        description=(
+            "DataProduct, DataContract, Asset (table, view and metric view assets), or all "
+            "(data products and data contracts; not assets)"
+        ),
+    )
 
 
 class MaturityLevelCreate(MaturityLevelBase):
@@ -85,6 +91,17 @@ class GateResult(BaseModel):
     required: bool
     passed: bool
     message: Optional[str] = None
+    # Set when the gate failed for a known reason the UI translates
+    # (e.g. the asset's Unity Catalog table couldn't be read)
+    message_code: Optional[str] = None
+    message_params: Optional[Dict[str, Any]] = None
+
+
+class MaturityNotice(BaseModel):
+    """Something that limited the evaluation, as a code the UI translates."""
+    code: str
+    message: str
+    params: Dict[str, Any] = Field(default_factory=dict)
 
 
 class LevelResult(BaseModel):
@@ -110,6 +127,7 @@ class MaturityReport(BaseModel):
     levels: List[LevelResult] = Field(default_factory=list)
     evaluated_at: datetime = Field(default_factory=datetime.utcnow)
     evaluated_by: Optional[str] = None
+    notices: List[MaturityNotice] = Field(default_factory=list)
 
 
 class MaturitySnapshotRead(BaseModel):

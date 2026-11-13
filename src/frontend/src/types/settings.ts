@@ -56,6 +56,8 @@ export enum HomeSection {
     REQUIRED_ACTIONS = 'REQUIRED_ACTIONS',
     DATA_CURATION = 'DATA_CURATION',
     DISCOVERY = 'DISCOVERY',
+    // Journey home (#1347): replaces the Full overview for the roles that have it.
+    JOURNEY = 'JOURNEY',
 }
 
 // --- Approval Privileges ---

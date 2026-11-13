@@ -1,6 +1,65 @@
 {
   "title": "Bem-vindo ao {{appName}}",
   "tagline": "Gerencie glossário de negócios, contratos de dados, produtos de dados, personas e muito mais",
+  "essentials": {
+    "tagline": "Encontre, entenda e confie nos seus dados, e depois publique e mantenha o que é seu.",
+    "consumer": {
+      "title": "Usar dados",
+      "description": "Comece pelas tabelas que seu time já tem no Unity Catalog."
+    },
+    "producer": {
+      "title": "Compartilhar dados",
+      "description": "Documente os ativos que você possui e peça a revisão deles."
+    },
+    "find": {
+      "title": "Encontrar",
+      "description": "Pesquise ativos e conceitos ou navegue pelo catálogo.",
+      "placeholder": "Pesquise tabelas, ativos e termos do glossário...",
+      "browseCatalog": "Navegar no Data Catalog"
+    },
+    "understand": {
+      "title": "Entender",
+      "description": "Veja o que é um ativo e o que seus termos significam.",
+      "assets": "Ativos",
+      "assetsDescription": "Tabelas, views e outros ativos com seus metadados."
+    },
+    "trust": {
+      "title": "Confiar",
+      "description": "Status de revisão dos ativos e onde os dados estão hoje.",
+      "empty": "Nenhum ativo foi revisado ainda.",
+      "openReviews": "Abrir Revisões de Ativos"
+    },
+    "publish": {
+      "title": "Publicar",
+      "description": "Seus ativos que ainda não têm documentação ou revisão.",
+      "noAssets": "Você ainda não possui nenhum ativo.",
+      "allDone": "Todos os seus ativos estão documentados e revisados.",
+      "noGapsLoaded": "Nenhuma lacuna nos ativos carregados até agora.",
+      "noDescription": "Sem descrição",
+      "noReview": "Não revisado",
+      "more": "Mostrando {{shown}} de seus {{total}} ativos.",
+      "loadMore": "Carregar mais",
+      "pageSize": "Por página",
+      "requestReview": "Solicitar revisão"
+    },
+    "maturity": {
+      "title": "Tabelas abaixo do primeiro nível",
+      "description": "Suas tabelas e views cuja última avaliação de maturidade não alcançou nenhum nível.",
+      "empty": "Nenhuma das suas tabelas avaliadas está abaixo do primeiro nível.",
+      "more": "Mostrando {{shown}} de {{total}}.",
+      "error": "Não foi possível carregar suas tabelas abaixo do primeiro nível."
+    },
+    "maintain": {
+      "title": "Manter",
+      "description": "Suas solicitações e revisões em aberto.",
+      "myRequests": "Minhas solicitações pendentes ({{count}})",
+      "noRequests": "Nenhuma solicitação pendente.",
+      "openMyRequests": "Abrir Minhas Solicitações",
+      "myReviews": "Minhas revisões de ativos em aberto ({{count}})",
+      "noReviews": "Nenhuma revisão de ativo em aberto.",
+      "nothing": "Nada para acompanhar."
+    }
+  },
   "search": {
     "placeholder": "Pesquise produtos de dados, termos do glossário, contratos..."
   },

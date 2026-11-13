@@ -1,6 +1,65 @@
 {
   "title": "{{appName}}へようこそ",
   "tagline": "コンセプト、データ契約、データ製品、ペルソナなどを管理",
+  "essentials": {
+    "tagline": "データを見つけ、理解し、信頼してから、自分のデータを公開・維持しましょう。",
+    "consumer": {
+      "title": "データを使う",
+      "description": "チームが Unity Catalog にすでに持っているテーブルから始めましょう。"
+    },
+    "producer": {
+      "title": "データを共有する",
+      "description": "所有するアセットを文書化し、レビューを受けましょう。"
+    },
+    "find": {
+      "title": "見つける",
+      "description": "アセットや概念を検索するか、カタログを参照します。",
+      "placeholder": "テーブル、アセット、用語集の用語を検索...",
+      "browseCatalog": "Data Catalog を参照"
+    },
+    "understand": {
+      "title": "理解する",
+      "description": "アセットが何か、その用語が何を意味するかを確認します。",
+      "assets": "アセット",
+      "assetsDescription": "メタデータ付きのテーブル、ビュー、その他のアセット。"
+    },
+    "trust": {
+      "title": "信頼する",
+      "description": "アセットのレビュー状況と、データが現在どこにあるか。",
+      "empty": "まだレビューされたアセットはありません。",
+      "openReviews": "アセットレビューを開く"
+    },
+    "publish": {
+      "title": "公開する",
+      "description": "ドキュメントやレビューがまだないあなたのアセット。",
+      "noAssets": "まだ所有しているアセットはありません。",
+      "allDone": "すべてのアセットが文書化され、レビュー済みです。",
+      "noGapsLoaded": "これまでに読み込んだアセットに不足はありません。",
+      "noDescription": "説明なし",
+      "noReview": "未レビュー",
+      "more": "{{total}} 件中 {{shown}} 件のアセットを表示しています。",
+      "loadMore": "さらに読み込む",
+      "pageSize": "1 ページの件数",
+      "requestReview": "レビューを依頼"
+    },
+    "maturity": {
+      "title": "最初のレベル未満のテーブル",
+      "description": "最新の成熟度評価でどのレベルにも達していない、あなたのテーブルとビューです。",
+      "empty": "評価済みのテーブルで最初のレベル未満のものはありません。",
+      "more": "{{total}} 件中 {{shown}} 件を表示しています。",
+      "error": "最初のレベルに満たないテーブルを読み込めませんでした。"
+    },
+    "maintain": {
+      "title": "維持する",
+      "description": "未完了のリクエストとレビュー。",
+      "myRequests": "保留中のリクエスト ({{count}})",
+      "noRequests": "保留中のリクエストはありません。",
+      "openMyRequests": "マイリクエストを開く",
+      "myReviews": "未完了のアセットレビュー ({{count}})",
+      "noReviews": "未完了のアセットレビューはありません。",
+      "nothing": "フォローアップする項目はありません。"
+    }
+  },
   "search": {
     "placeholder": "データ製品、用語集の用語、契約を検索..."
   },

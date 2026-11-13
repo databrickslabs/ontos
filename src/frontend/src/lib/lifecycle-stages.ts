@@ -35,6 +35,11 @@ export function stageLabel(
   return stage.label;
 }
 
+/** A seeded stage whose label is unchanged: its app texts (descriptions, hints) apply. */
+export function isSeededStage(stage: Pick<LifecycleStage, 'key' | 'label'>): boolean {
+  return SEEDED_STAGE_LABELS[stage.key] === stage.label;
+}
+
 /** A Stage Category in the UI language. */
 export function categoryLabel(category: string, t: Translate): string {
   return t(`lifecycle:category.${category}`, { defaultValue: category });

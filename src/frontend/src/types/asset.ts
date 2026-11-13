@@ -47,7 +47,8 @@ export interface AssetTypeUpdate {
 }
 
 // --- Assets ---
-export type AssetStatus = 'draft' | 'active' | 'deprecated' | 'retired';
+/** A stage key of the asset's lifecycle stage group (the seeded default has these four). */
+export type AssetStatus = 'draft' | 'active' | 'deprecated' | 'retired' | (string & {});
 
 export interface AssetRelationship {
   id: string;
@@ -74,6 +75,8 @@ export interface AssetRead {
   properties?: Record<string, any> | null;
   tags?: string[] | null;
   status: AssetStatus;
+  /** Lifecycle Stage Group; null = the default asset group */
+  lifecycle_stage_group_id?: string | null;
   certification_level?: number | null;
   inherited_certification_level?: number | null;
   certified_at?: string | null;
@@ -99,6 +102,8 @@ export interface AssetCreate {
   properties?: Record<string, any> | null;
   tags?: string[] | null;
   status?: AssetStatus;
+  /** Lifecycle Stage Group; omitted = the default asset group */
+  lifecycle_stage_group_id?: string | null;
 }
 
 export interface AssetUpdate {

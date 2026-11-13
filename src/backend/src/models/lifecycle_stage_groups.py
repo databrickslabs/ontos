@@ -65,6 +65,9 @@ class EntityLifecycleRead(BaseModel):
         None, description="The current stage; None when the status is not a stage of the group",
     )
     allowed_transitions: List[LifecycleStage] = Field(default_factory=list)
+    can_change_group: bool = Field(
+        False, description="Whether the caller may change the entity's group (admin or owner)",
+    )
 
 
 class ChangeLifecycleGroupPayload(BaseModel):

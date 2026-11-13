@@ -25,7 +25,6 @@ from src.models.assets import (
     METRIC_VIEW_ASSET_TYPE,
     AssetCreate,
     AssetRelationshipCreate,
-    AssetStatus,
     UnifiedAssetType,
 )
 from src.models.schema_import import (
@@ -678,7 +677,9 @@ class SchemaImportManager:
                 platform=connector.connector_type,
                 location=connector.connector_type,
                 properties={"connector_type": connector.connector_type},
-                status=AssetStatus.ACTIVE,
+                # No status: the first active stage of the default asset
+                # lifecycle (the lifecycle service picks it)
+                status=None,
             ),
             current_user_id=current_user_id,
         )
@@ -967,7 +968,8 @@ class SchemaImportManager:
             platform=connector.connector_type,
             location=item.path,
             properties=properties or None,
-            status=AssetStatus.ACTIVE,
+            # No status: the first active stage of the default asset lifecycle
+            status=None,
         )
 
         return self._assets.create_asset(db, asset_in=asset_in, current_user_id=current_user_id)

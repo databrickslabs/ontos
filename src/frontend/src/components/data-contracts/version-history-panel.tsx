@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { GitBranch, ArrowUp, ArrowDown, Calendar, User } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { VersionLineageSkeleton } from '@/components/common/list-view-skeleton'
+import StageBadge from '@/components/lifecycle/stage-badge'
+import { useStageLookup } from '@/hooks/use-lifecycle-stage-groups'
 
 type ContractSummary = {
   id: string
@@ -66,18 +67,11 @@ export default function VersionHistoryPanel({
     }
   }
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'published':
-        return 'default'
-      case 'draft':
-        return 'secondary'
-      case 'deprecated':
-        return 'outline'
-      default:
-        return 'secondary'
-    }
-  }
+  // Status badges from the stage data (a version's own group when it says, else the default)
+  const stageOf = useStageLookup('data_contract')
+  const statusBadge = (row: { status: string; lifecycle_stage_group_id?: string | null }) => (
+    <StageBadge stage={stageOf(row.lifecycle_stage_group_id, row.status)} status={row.status} />
+  )
 
   const renderVersionCard = (version: ContractSummary, label: string, icon: React.ReactNode) => (
     <div className="border rounded-lg p-4 space-y-2">
@@ -86,7 +80,7 @@ export default function VersionHistoryPanel({
           {icon}
           <span className="text-sm font-medium text-muted-foreground">{label}</span>
         </div>
-        <Badge variant={getStatusBadgeVariant(version.status)}>{version.status}</Badge>
+        {statusBadge(version)}
       </div>
       <div className="space-y-1">
         <div className="font-semibold">
@@ -177,9 +171,7 @@ export default function VersionHistoryPanel({
               <GitBranch className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium text-primary">{t('data-contracts:versionHistory.currentVersion', 'Current Version')}</span>
             </div>
-            <Badge variant={getStatusBadgeVariant(history.current.status)}>
-              {history.current.status}
-            </Badge>
+            {statusBadge(history.current)}
           </div>
           <div className="space-y-1">
             <div className="font-semibold">

@@ -9,7 +9,7 @@ import type {
 
 /**
  * The Lifecycle Stage Groups of an entity type (default first), or of every
- * type without one. `reload` fetches them again (after a save).
+ * type when it is undefined; null fetches nothing. `reload` fetches them again.
  */
 export function useLifecycleStageGroups(entityType?: LifecycleEntityType | null) {
   const { get } = useApi();
@@ -18,6 +18,11 @@ export function useLifecycleStageGroups(entityType?: LifecycleEntityType | null)
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
+    if (entityType === null) {
+      setGroups([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const url = entityType
       ? `/api/lifecycle-stage-groups?entity_type=${entityType}`
@@ -80,6 +85,8 @@ export function useStageLookup(entityType: LifecycleEntityType): StageLookup {
 export function useEntityLifecycle(
   entityType: LifecycleEntityType,
   entityId: string | null | undefined,
+  /** Changing it fetches the lifecycle again (the entity's status changed). */
+  refreshKey?: unknown,
 ) {
   const { get } = useApi();
   const [lifecycle, setLifecycle] = useState<EntityLifecycle | null>(null);
@@ -97,11 +104,57 @@ export function useEntityLifecycle(
     );
     setLifecycle(response.error ? null : response.data);
     setLoading(false);
-  }, [get, entityType, entityId]);
+    // refreshKey: a reload when the caller's entity changed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [get, entityType, entityId, refreshKey]);
 
   useEffect(() => {
     reload();
   }, [reload]);
 
   return { lifecycle, loading, reload };
+}
+
+/**
+ * The statuses an entity's status picker offers, from the API.
+ *
+ * - A new entity (`entityId` empty): the stages of `groupId`'s group (the
+ *   type's default when empty), `initial` being where it starts.
+ * - An existing one: its current stage and the stages its group allows next.
+ */
+export function useStatusOptions(
+  entityType: LifecycleEntityType,
+  { entityId, groupId, enabled = true }: {
+    entityId?: string | null;
+    groupId?: string | null;
+    enabled?: boolean;
+  },
+) {
+  const { groups, loading: groupsLoading } = useLifecycleStageGroups(
+    enabled ? entityType : null,
+  );
+  const { lifecycle, loading: lifecycleLoading, reload } = useEntityLifecycle(
+    entityType, enabled ? entityId : null,
+  );
+  const group = useMemo(() => {
+    const wanted = groupId ?? lifecycle?.group.id ?? null;
+    return groups.find((g) => g.id && g.id === wanted)
+      ?? groups.find((g) => g.is_default_for_type) ?? groups[0] ?? null;
+  }, [groups, groupId, lifecycle]);
+  const options = useMemo<LifecycleStage[]>(() => {
+    if (entityId) {
+      if (!lifecycle) return [];
+      return lifecycle.stage
+        ? [lifecycle.stage, ...lifecycle.allowed_transitions]
+        : lifecycle.allowed_transitions;
+    }
+    return group ? [...group.stages].sort((a, b) => a.order - b.order) : [];
+  }, [entityId, lifecycle, group]);
+  const initial = group
+    ? ([...group.stages].sort((a, b) => a.order - b.order).find((s) => s.is_initial) ?? null)
+    : null;
+  return {
+    groups, group, options, initial, lifecycle, reload,
+    loading: groupsLoading || (Boolean(entityId) && lifecycleLoading),
+  };
 }

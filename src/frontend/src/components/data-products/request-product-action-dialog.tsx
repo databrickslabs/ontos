@@ -11,6 +11,8 @@ import { useApi } from '@/hooks/use-api';
 import { needsStatusChangeRequest, statusChangeErrorText } from '@/lib/status-change-error';
 import { useApprovalWizardTrigger, type AppActionTriggerType } from '@/hooks/use-approval-wizard-trigger';
 import { useNotificationsStore } from '@/stores/notifications-store';
+import { useEntityLifecycle } from '@/hooks/use-lifecycle-stage-groups';
+import { stageLabel } from '@/lib/lifecycle-stages';
 import { Loader2, AlertCircle, FileText, Eye, Rocket, RefreshCw, ShieldCheck, Info } from 'lucide-react';
 import AccessRequestFields from '@/components/access/access-request-fields';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
@@ -64,43 +66,6 @@ interface RequestProductActionDialogProps {
   defaultRequestType?: RequestType;
 }
 
-// ODPS lifecycle transitions — label values are i18n key suffixes under
-// data-products:requestAction.transitions.*; rendered via t() at the call site.
-const ALLOWED_TRANSITIONS: Record<string, { target: string; label: string }[]> = {
-  'draft': [
-    { target: 'sandbox', label: 'moveToSandbox' },
-    { target: 'proposed', label: 'submitForReview' },
-  ],
-  'sandbox': [
-    { target: 'draft', label: 'returnToDraft' },
-    { target: 'proposed', label: 'submitForReview' },
-  ],
-  'proposed': [
-    { target: 'draft', label: 'returnToDraft' },
-    { target: 'under_review', label: 'startReview' },
-  ],
-  'under_review': [
-    { target: 'approved', label: 'approve' },
-    { target: 'draft', label: 'rejectReturnToDraft' },
-  ],
-  'approved': [
-    { target: 'active', label: 'publishActivate' },
-    { target: 'draft', label: 'returnToDraft' },
-  ],
-  'active': [
-    { target: 'deprecated', label: 'deprecate' },
-  ],
-  'deprecated': [
-    { target: 'retired', label: 'retire' },
-    { target: 'active', label: 'reactivate' },
-  ],
-  'retired': [],
-};
-
-function getAllowedTransitions(status: string): { target: string; label: string }[] {
-  return ALLOWED_TRANSITIONS[status.toLowerCase()] || [];
-}
-
 export default function RequestProductActionDialog({
   isOpen,
   onOpenChange,
@@ -116,9 +81,21 @@ export default function RequestProductActionDialog({
   const { toast } = useToast();
   const { lookupWorkflowId } = useApprovalWizardTrigger();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
+  // The product's stage and the stages it may move to, from its lifecycle stage group
+  const { lifecycle } = useEntityLifecycle('data_product', isOpen ? productId : null);
+  const allowedTransitions = lifecycle?.allowed_transitions ?? [];
+  const currentCategory = lifecycle?.stage?.category;
   // A product status in the UI language (the API and the lifecycle use the raw value)
-  const statusLabel = (status?: string) =>
-    t(`data-products:status.${(status || '').toLowerCase()}`, { defaultValue: status || '' });
+  const statusLabel = (status?: string) => {
+    const key = (status || '').toLowerCase();
+    const stage = [lifecycle?.stage, ...allowedTransitions].find((st) => st?.key === key);
+    return stage
+      ? stageLabel(stage, t)
+      : t(`data-products:status.${key}`, { defaultValue: status || '' });
+  };
+  // Deprecation details go with a move into a deprecated-category stage
+  const isDeprecation = (key: string) =>
+    allowedTransitions.some((st) => st.key === key && st.category === 'deprecated');
 
   const [requestType, setRequestType] = useState<RequestType>(defaultRequestType);
   const [message, setMessage] = useState('');
@@ -224,7 +201,8 @@ export default function RequestProductActionDialog({
           icon: <FileText className="h-5 w-5" />,
           title: t('data-products:requestAction.types.review.title'),
           description: t('data-products:requestAction.types.review.description'),
-          enabled: productStatus?.toLowerCase() === 'draft' || productStatus?.toLowerCase() === 'sandbox',
+          // From a draft-category stage (draft or sandbox by default)
+          enabled: currentCategory === 'draft',
           endpoint: `/api/data-products/${productId}/request-review`,
         };
       case 'publish':
@@ -233,7 +211,7 @@ export default function RequestProductActionDialog({
           title: t('data-products:requestAction.types.publish.title'),
           description: t('data-products:requestAction.types.publish.description'),
           // Only active products can be published (same rule as the backend).
-          enabled: productStatus?.toLowerCase() === 'active',
+          enabled: currentCategory === 'active',
           endpoint: `/api/data-products/${productId}/request-publish`,
         };
       case 'certify':
@@ -245,7 +223,6 @@ export default function RequestProductActionDialog({
           endpoint: `/api/data-products/${productId}/request-certify`,
         };
       case 'status_change':
-        const allowedTransitions = productStatus ? getAllowedTransitions(productStatus) : [];
         return {
           icon: <RefreshCw className="h-5 w-5" />,
           title: canDirectStatusChange ? t('data-products:requestAction.types.statusChange.titleDirect') : t('data-products:requestAction.types.statusChange.titleRequest'),
@@ -281,7 +258,7 @@ export default function RequestProductActionDialog({
       }
       if (
         canDirectStatusChange &&
-        targetStatus === 'deprecated' &&
+        isDeprecation(targetStatus) &&
         !deprecation.deprecationReason.trim()
       ) {
         setError(t('common:deprecation.reasonRequired'));
@@ -345,14 +322,14 @@ export default function RequestProductActionDialog({
       if (canDirectStatusChange) {
         return {
           new_status: targetStatus,
-          ...(targetStatus === 'deprecated' ? deprecationPayload(deprecation) : {}),
+          ...(isDeprecation(targetStatus) ? deprecationPayload(deprecation) : {}),
         };
       }
       return {
         target_status: targetStatus,
         justification: justification.trim(),
         current_status: productStatus,
-        ...(targetStatus === 'deprecated' ? requestedDeprecationPayload(deprecation) : {}),
+        ...(isDeprecation(targetStatus) ? requestedDeprecationPayload(deprecation) : {}),
       };
     }
     return null;
@@ -607,7 +584,6 @@ export default function RequestProductActionDialog({
     }
   };
 
-  const allowedTransitions = productStatus ? getAllowedTransitions(productStatus) : [];
   const config = getRequestTypeConfig(requestType);
   // Direct status changes always render their form (admin path bypasses the wizard).
   const isDirectStatusChange = requestType === 'status_change' && canDirectStatusChange;
@@ -626,7 +602,9 @@ export default function RequestProductActionDialog({
           </DialogTitle>
           <DialogDescription>
             {productName && <span className="font-medium">{productName}</span>}
-            {productStatus && <span className="text-muted-foreground ml-2">({productStatus})</span>}
+            {productStatus && (
+              <span className="text-muted-foreground ml-2">({statusLabel(productStatus)})</span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -700,9 +678,9 @@ export default function RequestProductActionDialog({
                     <SelectValue placeholder={t('data-products:requestAction.placeholders.selectTargetStatus')} />
                   </SelectTrigger>
                   <SelectContent>
-                    {allowedTransitions.map((transition) => (
-                      <SelectItem key={transition.target} value={transition.target}>
-                        {t(`data-products:requestAction.transitions.${transition.label}`)}
+                    {allowedTransitions.map((stage) => (
+                      <SelectItem key={stage.key} value={stage.key}>
+                        {stageLabel(stage, t)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -714,7 +692,7 @@ export default function RequestProductActionDialog({
                 )}
               </div>
 
-              {targetStatus === 'deprecated' && (
+              {isDeprecation(targetStatus) && (
                 <DeprecationFields
                   entityType="data_product"
                   entityId={productId}
@@ -739,7 +717,7 @@ export default function RequestProductActionDialog({
                   />
                   <div className="text-xs text-muted-foreground">
                     {t('data-products:requestAction.hints.justificationMinChars')}
-                    {targetStatus === 'deprecated' && ` ${t('common:deprecation.requestHint')}`}
+                    {isDeprecation(targetStatus) && ` ${t('common:deprecation.requestHint')}`}
                   </div>
                 </div>
               )}
@@ -854,7 +832,7 @@ export default function RequestProductActionDialog({
                     className="mt-2 block"
                     onClick={() => {
                       // The reason given for the direct change is the request's justification
-                      if (targetStatus === 'deprecated' && !justification.trim()) {
+                      if (isDeprecation(targetStatus) && !justification.trim()) {
                         setJustification(deprecation.deprecationReason.trim());
                       }
                       setRequestInstead(true);

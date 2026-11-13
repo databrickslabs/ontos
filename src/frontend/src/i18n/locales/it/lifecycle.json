@@ -119,5 +119,26 @@
     "orange": "Arancione",
     "red": "Rosso",
     "pink": "Rosa"
+  },
+  "picker": {
+    "label": "Ciclo di vita",
+    "hint": "Le fasi che attraverserà. Amministratori e proprietari possono cambiarlo in seguito; lo stato torna alla prima fase."
+  },
+  "status": {
+    "groupTitle": "Gruppo di fasi del ciclo di vita"
+  },
+  "change": {
+    "action": "Cambia ciclo di vita",
+    "title": "Cambia ciclo di vita",
+    "description": "Ora segue «{{group}}». Scegli il gruppo di fasi che deve seguire invece.",
+    "newGroup": "Nuovo ciclo di vita",
+    "chooseGroup": "Scegli un ciclo di vita…",
+    "reset": "Lo stato torna alla prima fase del nuovo ciclo di vita:",
+    "resetHint": "Non viene eseguito alcun controllo di workflow. Un’entità pubblicata viene ritirata e la modifica è registrata nel registro modifiche. È rifiutato mentre è in sospeso una richiesta di workflow.",
+    "confirm": "Cambia ciclo di vita"
+  },
+  "graph": {
+    "title": "Ciclo di vita: {{name}}",
+    "hint": "La fase attuale è evidenziata; i ritorni sono tratteggiati."
   }
 }

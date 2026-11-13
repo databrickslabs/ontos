@@ -64,6 +64,7 @@ import type { QualitySummary } from '@/types/quality';
 import CertificationBadge from '@/components/common/certification-badge';
 import PublicationScopeBadge from '@/components/common/publication-scope-badge';
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs';
+import EntityLifecycleStatus from '@/components/lifecycle/entity-lifecycle-status';
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle';
 import { userHasApprovalPrivilege } from '@/lib/permissions';
 import { ApprovalEntity } from '@/types/settings';
@@ -147,20 +148,6 @@ export function formatDateString(dateString: string | undefined | null, fallback
 }
 
 /**
- * Map a Data Product status string to a Shadcn Badge variant.
- * Lower-cased internally so `Active`, `ACTIVE`, `active` all map identically.
- */
-export function getStatusBadgeVariant(
-  status: string | undefined | null,
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  const lowerStatus = status?.toLowerCase() || '';
-  if (lowerStatus === 'active') return 'default';
-  if (lowerStatus === 'draft' || lowerStatus === 'proposed') return 'secondary';
-  if (lowerStatus === 'retired' || lowerStatus === 'deprecated') return 'outline';
-  return 'default';
-}
-
-/**
  * Statuses where a Data Product can still be edited in-place. Anything with a
  * higher lifecycle status (`active`, `retired`, `deprecated`) must be cloned
  * for editing instead.
@@ -173,8 +160,13 @@ export const IN_PLACE_EDITABLE_STATUSES: ReadonlyArray<string> = [
   'approved',
 ];
 
-export function isStatusEditableInPlace(status: string | undefined | null): boolean {
+export function isStatusEditableInPlace(
+  status: string | undefined | null,
+  category?: string | null,
+): boolean {
   if (!status) return false;
+  // A custom lifecycle's stage: by its Stage Category (draft or review)
+  if (category) return category === 'draft' || category === 'review';
   return IN_PLACE_EDITABLE_STATUSES.includes(status.toLowerCase());
 }
 
@@ -544,7 +536,7 @@ export default function DataProductDetails() {
   // Versioned editing: determine if product can be edited in place based on status
   // Products with status 'draft', 'sandbox', 'proposed' can be edited directly
   // Products with status 'active' and above must be cloned for editing
-  const canEditInPlace = isStatusEditableInPlace(product?.status);
+  const canEditInPlace = isStatusEditableInPlace(product?.status, product?.statusCategory);
   const isPersonalDraft = isPersonalDraftProduct(product);
   const isReadOnly = isProductReadOnly({ canAdmin, canEditInPlace, isPersonalDraft });
 
@@ -595,8 +587,6 @@ export default function DataProductDetails() {
 
   const formatDate = (dateString: string | undefined, fallback: string = 'N/A'): string =>
     formatDateString(dateString, fallback);
-
-  const getStatusColor = getStatusBadgeVariant;
 
   const fetchProductDetails = async () => {
     if (!productId) {
@@ -1585,9 +1575,15 @@ export default function DataProductDetails() {
               </div>
               <div className="flex items-end gap-5 shrink-0">
                 <div className="flex flex-col items-center gap-1">
-                  <Badge variant={getStatusColor(product.status)}>
-                    {product.status || '—'}
-                  </Badge>
+                  {/* Status from the stage data, its lifecycle group and "Change lifecycle" */}
+                  <EntityLifecycleStatus
+                    entityType="data_product"
+                    entityId={product.id}
+                    status={product.status}
+                    refreshKey={`${product.status}|${product.lifecycleStageGroupId ?? ''}`}
+                    onChanged={() => { fetchProductDetails(); }}
+                    layout="badge"
+                  />
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('data-products:details.coreMetadata.status')}</span>
                 </div>
                 {qualitySummary && qualitySummary.items_count > 0 && (

@@ -119,5 +119,26 @@
     "orange": "Naranja",
     "red": "Rojo",
     "pink": "Rosa"
+  },
+  "picker": {
+    "label": "Ciclo de vida",
+    "hint": "Las etapas por las que pasará. Los administradores y propietarios pueden cambiarlo después; eso restablece el estado a la primera etapa."
+  },
+  "status": {
+    "groupTitle": "Grupo de etapas del ciclo de vida"
+  },
+  "change": {
+    "action": "Cambiar ciclo de vida",
+    "title": "Cambiar ciclo de vida",
+    "description": "Ahora sigue «{{group}}». Elija el grupo de etapas que debe seguir en su lugar.",
+    "newGroup": "Nuevo ciclo de vida",
+    "chooseGroup": "Elija un ciclo de vida…",
+    "reset": "El estado vuelve a la primera etapa del nuevo ciclo de vida:",
+    "resetHint": "No se ejecuta ninguna puerta de flujo de trabajo. Una entidad publicada deja de estarlo y el cambio queda en el registro de cambios. Se rechaza mientras haya una solicitud pendiente.",
+    "confirm": "Cambiar ciclo de vida"
+  },
+  "graph": {
+    "title": "Ciclo de vida: {{name}}",
+    "hint": "La etapa actual está resaltada; los retrocesos van en línea discontinua."
   }
 }

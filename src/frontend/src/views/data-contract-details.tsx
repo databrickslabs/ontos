@@ -69,6 +69,7 @@ import { contractDraftErrorText, contractVersionErrorText } from '@/lib/contract
 import CertificationBadge from '@/components/common/certification-badge'
 import PublicationScopeBadge from '@/components/common/publication-scope-badge'
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs'
+import EntityLifecycleStatus from '@/components/lifecycle/entity-lifecycle-status'
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
@@ -220,13 +221,17 @@ const formatDate = (dateString: string | undefined, fallback: string = 'N/A'): s
   }
 };
 
-const getStatusColor = (status: string | undefined): 'default' | 'secondary' | 'destructive' | 'outline' => {
-  const lowerStatus = status?.toLowerCase() || '';
-  if (lowerStatus === 'active' || lowerStatus === 'approved') return 'default';
-  if (lowerStatus === 'draft' || lowerStatus === 'proposed') return 'secondary';
-  if (lowerStatus === 'retired' || lowerStatus === 'deprecated' || lowerStatus === 'rejected') return 'outline';
-  return 'default';
-};
+/**
+ * In a review stage that awaits a steward's decision (Approve / Reject): any
+ * review-category stage but the approve action's own `approved`, as the
+ * backend's lifecycle service decides (proposed / under_review by default).
+ */
+function awaitsReviewDecision(contract: { status?: string; status_category?: string | null }) {
+  const status = (contract.status || '').toLowerCase();
+  const category = contract.status_category
+    ?? (['proposed', 'under_review'].includes(status) ? 'review' : null);
+  return category === 'review' && status !== 'approved';
+}
 
 export default function DataContractDetails() {
   const { t } = useTranslation(['data-contracts', 'common'])
@@ -1769,7 +1774,7 @@ export default function DataContractDetails() {
         </div>
         <div className="flex items-center gap-2">
           {/* Lifecycle actions */}
-          {contract && (['proposed','under_review'].includes((contract.status || '').toLowerCase())) && (
+          {contract && awaitsReviewDecision(contract) && (
             <>
               <Button size="sm" variant="outline" onClick={handleApprove}>{t('data-contracts:detailsView.header.approve', 'Approve')}</Button>
               <Button size="sm" variant="destructive" onClick={handleReject}>{t('data-contracts:detailsView.header.reject', 'Reject')}</Button>
@@ -1890,9 +1895,15 @@ export default function DataContractDetails() {
             </div>
             <div className="flex items-end gap-5 shrink-0">
               <div className="flex flex-col items-center gap-1">
-                <Badge variant={getStatusColor(contract.status)}>
-                  {contract.status || '—'}
-                </Badge>
+                {/* Status from the stage data, its lifecycle group and "Change lifecycle" */}
+                <EntityLifecycleStatus
+                  entityType="data_contract"
+                  entityId={contract.id}
+                  status={contract.status}
+                  refreshKey={`${contract.status}|${contract.lifecycle_stage_group_id ?? ''}`}
+                  onChanged={() => { fetchDetails(); }}
+                  layout="badge"
+                />
                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('data-contracts:detailsView.metadata.status', 'Status')}</span>
               </div>
               {contract.id && (
@@ -3199,6 +3210,7 @@ export default function DataContractDetails() {
           name: contract.name,
           version: contract.version,
           status: contract.status,
+          lifecycle_stage_group_id: contract.lifecycle_stage_group_id,
           owner_team_id: contract.owner_team_id,
           project_id: (contract as any).project_id,
           domain: contract.domainId,

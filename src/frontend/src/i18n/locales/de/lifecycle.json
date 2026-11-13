@@ -119,5 +119,26 @@
     "orange": "Orange",
     "red": "Rot",
     "pink": "Rosa"
+  },
+  "picker": {
+    "label": "Lebenszyklus",
+    "hint": "Die Phasen, die es durchläuft. Admins und Eigentümer können ihn später ändern; dabei wird der Status auf die erste Phase zurückgesetzt."
+  },
+  "status": {
+    "groupTitle": "Lebenszyklus-Phasengruppe"
+  },
+  "change": {
+    "action": "Lebenszyklus ändern",
+    "title": "Lebenszyklus ändern",
+    "description": "Es folgt jetzt „{{group}}“. Wählen Sie die Lebenszyklus-Phasengruppe, der es stattdessen folgen soll.",
+    "newGroup": "Neuer Lebenszyklus",
+    "chooseGroup": "Lebenszyklus wählen…",
+    "reset": "Der Status wird auf die erste Phase des neuen Lebenszyklus zurückgesetzt:",
+    "resetHint": "Es laufen keine Workflow-Gates. Eine veröffentlichte Entität wird zurückgezogen, und die Änderung wird im Änderungsprotokoll vermerkt. Solange eine Workflow-Anfrage offen ist, wird sie abgelehnt.",
+    "confirm": "Lebenszyklus ändern"
+  },
+  "graph": {
+    "title": "Lebenszyklus: {{name}}",
+    "hint": "Die aktuelle Phase ist umrandet; Rückwärtswechsel sind gestrichelt."
   }
 }

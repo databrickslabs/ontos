@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { ApiResponse } from '@/hooks/use-api';
+import { lifecycleErrorText } from '@/lib/lifecycle-stages';
 
 /** A workflow's reason, as `failed_execution_reasons` sends it. */
 interface BlockedReason {
@@ -66,6 +67,9 @@ export function statusChangeErrorText(
 ): string {
   const error = response.error || '';
   const params = response.errorParams;
+  // The lifecycle service's refusals (a group or stage the entity can't use,
+  // an ambiguous named action)
+  if (response.errorCode?.startsWith('lifecycle_')) return lifecycleErrorText(response, t);
   if (response.errorCode && DEPRECATION_ERROR_CODES.has(response.errorCode)) {
     return t(`common:deprecation.errors.${response.errorCode}`, {
       ...(params ?? {}),

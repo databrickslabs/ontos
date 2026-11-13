@@ -42,6 +42,8 @@ import PublicationBadge from '@/components/common/publication-badge';
 import VersionCountBadge from '@/components/common/version-count-badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import StageBadge from '@/components/lifecycle/stage-badge';
+import { useStageLookup } from '@/hooks/use-lifecycle-stage-groups';
 import type { CertificationLevel } from '@/types/lifecycle';
 
 // --- Helper Function Type Definition --- 
@@ -590,15 +592,8 @@ export default function DataProducts() {
        }
   };
 
-  // Keep Status Color Helper (used by table column)
-  const getStatusColor = (status: string | undefined): "default" | "secondary" | "destructive" | "outline" => {
-    const lowerStatus = status?.toLowerCase() || '';
-    if (lowerStatus.includes('active')) return 'default';
-    if (lowerStatus.includes('development')) return 'secondary';
-    if (lowerStatus.includes('retired') || lowerStatus.includes('deprecated')) return 'outline';
-    if (lowerStatus.includes('deleted') || lowerStatus.includes('archived')) return 'destructive';
-    return 'default';
-  };
+  // Status badges from the stage data of each product's lifecycle stage group
+  const stageOf = useStageLookup('data_product');
 
   // --- Column Definitions (Keep as they are for the DataTable) ---
   const columns = useMemo<ColumnDef<DataProduct>[]>(() => [
@@ -686,7 +681,10 @@ export default function DataProducts() {
       cell: ({ row }) => (
         row.original.status ? (
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge variant={getStatusColor(row.original.status)}>{row.original.status}</Badge>
+            <StageBadge
+              stage={stageOf(row.original.lifecycleStageGroupId, row.original.status)}
+              status={row.original.status}
+            />
             {row.original.draftOwnerId && (
               <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">{t('data-products:status.personalDraft')}</Badge>
             )}
@@ -783,7 +781,10 @@ export default function DataProducts() {
         );
       },
     },
-  ], [handleOpenCreateDialog, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading, navigate, certificationLevels, getDomainIdByName, t]);
+  ], [
+    handleOpenCreateDialog, handleDeleteProduct, stageOf, canWrite, canAdmin, permissionsLoading,
+    navigate, certificationLevels, getDomainIdByName, t,
+  ]);
 
   // --- Button Variant Logic (Moved outside) ---
   // --- Render Logic ---

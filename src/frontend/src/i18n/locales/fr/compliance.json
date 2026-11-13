@@ -183,7 +183,7 @@
   "runWarnings": {
     "rule_trailing_input": "Cette règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Il est ignoré à l'exécution, donc la règle peut vérifier moins que ce qu'elle indique. Modifiez la règle pour le corriger.",
     "notifications_failed": "Les notifications de la politique (NOTIFY) n'ont pas pu être envoyées pour cette exécution. Les résultats sont complets.",
-    "no_entities_matched": "Aucune entité ne correspond à cette règle, donc rien n'a été vérifié. Vérifiez le type MATCH et la condition WHERE."
+    "no_entities_matched": "Aucune entité ne correspond à cette règle, donc rien n'a été vérifié. Si vous en attendiez, vérifiez le type MATCH et la condition WHERE."
   },
   "actionOutcomes": {
     "status": {

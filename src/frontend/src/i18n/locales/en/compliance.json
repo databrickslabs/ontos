@@ -183,7 +183,7 @@
   "runWarnings": {
     "rule_trailing_input": "This rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). It is ignored when the rule runs, so the rule may check less than it says. Edit the rule to fix it.",
     "notifications_failed": "The policy's notifications (NOTIFY) could not be sent for this run. The results are complete.",
-    "no_entities_matched": "No entities matched this rule, so nothing was checked. Check its MATCH type and WHERE condition."
+    "no_entities_matched": "No entities matched this rule, so nothing was checked. If you expected some, check its MATCH type and WHERE condition."
   },
   "actionOutcomes": {
     "status": {

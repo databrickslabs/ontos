@@ -183,7 +183,7 @@
   "runWarnings": {
     "rule_trailing_input": "Questa regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Viene ignorata durante l'esecuzione, quindi la regola potrebbe verificare meno di quanto dichiara. Modifica la regola per correggerla.",
     "notifications_failed": "Non è stato possibile inviare le notifiche della policy (NOTIFY) per questa esecuzione. I risultati sono completi.",
-    "no_entities_matched": "Nessuna entità corrisponde a questa regola, quindi non è stato verificato nulla. Controlla il tipo MATCH e la condizione WHERE."
+    "no_entities_matched": "Nessuna entità corrisponde a questa regola, quindi non è stato verificato nulla. Se ne aspettavi qualcuna, controlla il tipo MATCH e la condizione WHERE."
   },
   "actionOutcomes": {
     "status": {

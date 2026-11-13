@@ -14,7 +14,7 @@ describe('complianceRunWarningText: a run that matched no entities', () => {
     expect(complianceRunWarningText(i18n.t, run))
       .toBe(
         'No entities matched this rule, so nothing was checked. '
-        + 'Check its MATCH type and WHERE condition.',
+        + 'If you expected some, check its MATCH type and WHERE condition.',
       );
   });
 

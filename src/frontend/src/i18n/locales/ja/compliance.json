@@ -183,7 +183,7 @@
   "runWarnings": {
     "rule_trailing_input": "このルールには無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。実行時には無視されるため、ルールは記述より少ない内容しか検査しない可能性があります。ルールを編集して修正してください。",
     "notifications_failed": "この実行ではポリシーの通知 (NOTIFY) を送信できませんでした。結果はすべて記録されています。",
-    "no_entities_matched": "このルールに一致するエンティティがないため、何も検査されませんでした。MATCH の型と WHERE 条件を確認してください。"
+    "no_entities_matched": "このルールに一致するエンティティがないため、何も検査されませんでした。一致するはずのエンティティがある場合は、MATCH の型と WHERE 条件を確認してください。"
   },
   "actionOutcomes": {
     "status": {

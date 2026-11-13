@@ -183,7 +183,7 @@
   "runWarnings": {
     "rule_trailing_input": "Esta regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Ele é ignorado quando a regra é executada, então a regra pode verificar menos do que diz. Edite a regra para corrigir.",
     "notifications_failed": "Não foi possível enviar as notificações da política (NOTIFY) nesta execução. Os resultados estão completos.",
-    "no_entities_matched": "Nenhuma entidade corresponde a esta regra, então nada foi verificado. Confira o tipo do MATCH e a condição WHERE."
+    "no_entities_matched": "Nenhuma entidade corresponde a esta regra, então nada foi verificado. Se você esperava alguma, confira o tipo do MATCH e a condição WHERE."
   },
   "actionOutcomes": {
     "status": {

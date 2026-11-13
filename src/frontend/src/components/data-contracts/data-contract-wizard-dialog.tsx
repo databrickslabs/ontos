@@ -14,7 +14,7 @@ import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
 import { DataContractStatus } from '@/lib/odcs-lifecycle'
-import { hasDateConstraints } from './logical-types'
+import { hasDateConstraints, takesTimezoneName } from './logical-types'
 
 type WizardProps = {
   isOpen: boolean
@@ -1080,6 +1080,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                           </SelectContent>
                                         </Select>
                                       </div>
+                                      {takesTimezoneName((col as any).logicalType) && (
                                       <div>
                                         <Label className="text-[10px]">{t('data-contracts:wizard.constraints.timezone', 'Timezone')}</Label>
                                         <Input
@@ -1089,6 +1090,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                           className="mt-0.5 h-7 text-xs"
                                         />
                                       </div>
+                                      )}
                                       <div>
                                         <Label className="text-[10px]">{t('data-contracts:wizard.constraints.customFormat', 'Custom Format')}</Label>
                                         <Input

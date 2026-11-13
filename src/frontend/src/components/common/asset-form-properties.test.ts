@@ -56,3 +56,12 @@ describe('newAssetProperties', () => {
     expect(newAssetProperties(values)).toEqual({ owner: 'x', isPrimaryKey: false })
   })
 })
+
+describe('mergeEditedProperties with stored nulls', () => {
+  it('drops a stored null the user left untouched', () => {
+    const stored = { data_type: 'DATE', classification: null, isPrimaryKey: null }
+    const defaults = { prop_classification: '', prop_isPrimaryKey: false }
+
+    expect(mergeEditedProperties(stored, { ...defaults }, defaults)).toEqual({ data_type: 'DATE' })
+  })
+})

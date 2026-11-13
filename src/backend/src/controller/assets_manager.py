@@ -28,6 +28,8 @@ from src.controller.metadata_manager import MetadataManager
 
 logger = get_logger(__name__)
 
+_UNSET = object()
+
 ONTOS_NS = "http://ontos.app/ontology#"
 
 
@@ -385,7 +387,11 @@ class AssetsManager(SearchableAsset):
 
         effective_type_id = asset_in.asset_type_id or db_asset.asset_type_id
         if asset_in.properties is not None:
-            self._validate_properties(db, effective_type_id, asset_in.properties)
+            # Only what the update changes: a stored legacy value that doesn't fit the
+            # schema doesn't block an edit of another field (the dialog sends them back)
+            stored = db_asset.properties or {}
+            changed = {k: v for k, v in asset_in.properties.items() if stored.get(k, _UNSET) != v}
+            self._validate_properties(db, effective_type_id, changed)
 
         update_data = asset_in.model_dump(exclude_unset=True)
         if update_data.get('properties') is not None:

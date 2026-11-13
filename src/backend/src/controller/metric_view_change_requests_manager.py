@@ -538,15 +538,18 @@ class MetricViewChangeRequestsManager:
         if execution is not None and execution.status == 'paused':
             execution.status = 'cancelled'
             execution.finished_at = _now()
+        # Read ones too: an approver who opened the notification still sees it
+        # in My actions until it is handled (same rule as the workflow routes)
         for notification in self._db.query(NotificationDb).filter(
-            NotificationDb.action_type == 'workflow_approval', NotificationDb.read.is_(False),
+            NotificationDb.action_type == 'workflow_approval',
+            NotificationDb.action_payload.contains(json.dumps(execution_id)),
         ).all():
             try:
                 payload = notification.action_payload
                 payload = json.loads(payload) if isinstance(payload, str) else (payload or {})
             except (TypeError, ValueError):
                 continue
-            if payload.get('execution_id') == execution_id:
+            if payload.get('execution_id') == execution_id and not payload.get('handled'):
                 payload.update({'handled': True, 'decision': 'cancelled',
                                 'handled_by': user_email})
                 notification.action_payload = json.dumps(payload)

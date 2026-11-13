@@ -190,6 +190,10 @@
     "messages": {
       "saveSuccess": "Impostazioni salvate con successo",
       "saveError": "Impossibile salvare le impostazioni"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "Non è stato possibile aggiornare il job Compliance Checks con le impostazioni LLM (l'app potrebbe non avere i permessi sul job). Le regole LLM_CHECK pianificate usano le impostazioni precedenti finché il job non viene reinstallato.",
+      "compliance_job_shape_unexpected": "Il job Compliance Checks è stato modificato in Databricks, quindi sono stati aggiornati solo i suoi parametri. Se le regole LLM_CHECK pianificate non riescono con \"funzioni LLM disattivate\", reinstalla il job."
     }
   },
   "databricks": {

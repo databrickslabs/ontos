@@ -197,6 +197,10 @@
     "messages": {
       "saveSuccess": "Configurações salvas com sucesso",
       "saveError": "Falha ao salvar as configurações"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "Não foi possível atualizar o job Compliance Checks com as configurações de LLM (o app pode não ter permissão no job). As regras LLM_CHECK agendadas usam as configurações antigas até o job ser reinstalado.",
+      "compliance_job_shape_unexpected": "O job Compliance Checks foi alterado no Databricks, então só os parâmetros dele foram atualizados. Se as regras LLM_CHECK agendadas falharem com \"recursos de LLM desativados\", reinstale o job."
     }
   },
   "databricks": {

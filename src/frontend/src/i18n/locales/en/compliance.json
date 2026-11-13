@@ -169,7 +169,8 @@
   },
   "ruleWarnings": {
     "unsupported_match_type": "MATCH type '{{type}}' is not supported, so the rule matches no entities. Supported types: {{supported}}, or Object for all of them.",
-    "missing_assert": "The rule has no ASSERT clause, so every entity passes."
+    "missing_assert": "The rule has no ASSERT clause, so every entity passes.",
+    "llm_check_in_where": "LLM_CHECK is only evaluated in ASSERT. In WHERE it fails, so the rule skips every entity. Move it to ASSERT."
   },
   "runErrors": {
     "entities_load_failed": "The {{entityType}} entities could not be loaded, so the rule could not be evaluated.",
@@ -178,11 +179,13 @@
     "tags_load_failed": "The tags of the {{entityType}} entities could not be loaded, so the rule could not be evaluated."
   },
   "saveErrors": {
-    "rule_trailing_input": "The rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). Everything from there on would be ignored, so the rule would check less than it says. Remove it or fix the syntax."
+    "rule_trailing_input": "The rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). Everything from there on would be ignored, so the rule would check less than it says. Remove it or fix the syntax.",
+    "llm_check_criterion_not_literal": "LLM_CHECK takes a text and a criterion written as a string literal, for example LLM_CHECK(t.comment, 'states the grain of the table')."
   },
   "runWarnings": {
     "rule_trailing_input": "This rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). It is ignored when the rule runs, so the rule may check less than it says. Edit the rule to fix it.",
-    "notifications_failed": "The policy's notifications (NOTIFY) could not be sent for this run. The results are complete."
+    "notifications_failed": "The policy's notifications (NOTIFY) could not be sent for this run. The results are complete.",
+    "llm_check_budget_exceeded": "{{count}} LLM checks were not run because the run reached its budget of {{budget}} model calls, so those entities failed. Run it again (cached verdicts don't count) or raise COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN."
   },
   "actionOutcomes": {
     "status": {
@@ -203,6 +206,42 @@
       "notification_manager_unavailable": "Notifications are not available in this run",
       "notify_no_recipients": "{{recipients}} resolved to no recipient",
       "action_failed": "The action failed"
+    }
+  },
+  "llmCheck": {
+    "pass": "PASS",
+    "fail": "FAIL",
+    "cached": "(cached)",
+    "failedReason": "LLM_CHECK '{{criterion}}': {{reason}}",
+    "test": {
+      "title": "Test on a sample entity",
+      "hint": "Runs the rule's ASSERT, LLM_CHECK criteria included, on one entity the rule matches. The rule is not saved.",
+      "entityPlaceholder": "Entity name or id (empty: the first match)",
+      "run": "Test",
+      "running": "Testing...",
+      "noRule": "Enter a rule first.",
+      "failed": "The rule could not be tested.",
+      "entity": "{{type}} {{name}}",
+      "noChecks": "No LLM_CHECK was evaluated for this entity."
+    },
+    "codes": {
+      "llm_check_not_available": "LLM_CHECK is only evaluated in compliance runs, in ASSERT.",
+      "llm_check_disabled": "The LLM features are turned off, so LLM_CHECK fails.",
+      "llm_check_no_endpoint": "No serving endpoint is configured, so LLM_CHECK fails.",
+      "llm_check_budget_exceeded": "Not checked: the run reached its budget of model calls.",
+      "llm_check_text_too_long": "Not checked: the text is too long.",
+      "llm_check_call_failed": "The serving endpoint could not be called.",
+      "llm_check_refused": "The model refused to judge the text.",
+      "llm_check_empty_reply": "The model returned no answer.",
+      "llm_check_truncated": "The model's reply did not finish.",
+      "llm_check_invalid_reply": "The model's reply was not a PASS or FAIL verdict.",
+      "llm_check_empty_text": "The text is empty.",
+      "rule_evaluation_failed": "The rule could not be evaluated on this entity.",
+      "llm_check_text_rejected": "Not checked: the safety check flagged the text (for example, instructions to the model)."
+    },
+    "errors": {
+      "sample_entity_not_found": "No entity the rule matches was found. Check the name, or leave it empty to use the first match.",
+      "llm_check_test_rate_limited": "Too many tests in a short time. Try again in {{retryAfter}} seconds."
     }
   }
 }

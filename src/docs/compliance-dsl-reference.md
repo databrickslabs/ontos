@@ -147,6 +147,50 @@ ASSERT LENGTH(obj.name) <= 64
 ASSERT LOWER(obj.name) = obj.name  # Enforce lowercase
 ```
 
+### LLM Check
+- `LLM_CHECK(text, 'criterion')` - Ask the configured serving endpoint (`LLM_ENDPOINT`)
+  whether the text meets the criterion; true or false, with a short reason
+
+```
+MATCH (t:table)
+ASSERT LLM_CHECK(t.comment, 'states the grain of the table')
+
+MATCH (d:domain)
+ASSERT LLM_CHECK(d.description, 'says who uses the data and for what')
+```
+
+The criterion must be a string literal: an expression such as `t.name` is
+rejected when the rule is saved (`llm_check_criterion_not_literal`), because it
+would put entity data into the model's instructions. The reason of a failed
+check is the model's text: it is capped at 300 characters and shown as plain
+text next to the result. Before saving, use **Test on a sample entity** in the
+rule editor to try a criterion on one entity (at most 10 tests a minute per user).
+
+- Two phases: the text is first scanned with the injection-check prompt
+  (`LLM_INJECTION_CHECK_PROMPT`). A text the scan doesn't call `SAFE` fails with
+  `llm_check_text_rejected`, and the criterion is never asked.
+
+- Only evaluated in compliance runs, in `ASSERT`. In `WHERE`, in maturity gates
+  and in workflow policy checks the check fails (`llm_check_not_available`).
+- Fails closed: with an empty text (no call), LLM features off
+  (`llm_check_disabled`), no endpoint (`llm_check_no_endpoint`), a refusal, an
+  empty or unfinished reply, or a reply whose first line is not `PASS: <reason>`
+  or `FAIL: <reason>`, the rule fails for that entity, also under `NOT`, and its
+  `ON_PASS` / `ON_FAIL` actions don't run for it. Each call times out after 60 s.
+- Cached: a verdict is stored per text, criterion, endpoint and prompts, so a run
+  over unchanged text makes no call. Verdicts older than
+  `COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS` (default 30) are asked again, and
+  deleted when a run starts.
+- Budget: `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN` model calls (default 200; a
+  check makes two, the scan and the verdict; cached verdicts make none). It
+  covers one policy run from the UI, and the whole run of the Compliance Checks
+  job, shared by its policies. The checks past it fail with
+  `llm_check_budget_exceeded`, and each policy run reports how many.
+- Scheduled runs (the Compliance Checks job) use the app's LLM settings: they
+  are written into the installed job when it is installed, and when the general
+  settings (which include the LLM settings) are saved. If the app can't update
+  the job, or the job was changed in Databricks, the save shows a warning.
+
 ## CASE Expressions
 
 Conditional logic for complex rules:

@@ -1,13 +1,23 @@
-from typing import Optional
+import threading
+import time
+from collections import defaultdict, deque
+from typing import Deque, Dict, Optional
 
 from fastapi import APIRouter, FastAPI, HTTPException, Depends, Body, Query, Request
+from starlette.concurrency import run_in_threadpool
 
+from src.common.api_errors import CodedValueError
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker, user_has_feature_level
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
-from src.controller.compliance_manager import ComplianceManager, rule_changes_tags, rule_sends_notifications
+from src.controller.compliance_manager import (
+    ComplianceManager,
+    SampleEntityNotFoundError,
+    rule_changes_tags,
+    rule_sends_notifications,
+)
 from src.models.compliance import (
     CompliancePolicy,
     CompliancePolicyCreate,
@@ -15,6 +25,8 @@ from src.models.compliance import (
     ComplianceResult,
     ComplianceRunRequest,
     ComplianceResultsResponse,
+    LlmCheckTestRequest,
+    LlmCheckTestResponse,
 )
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
@@ -270,12 +282,14 @@ async def run_policy(
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user)
 
-    # For now, implement inline only; async can be backed by Databricks job later
-    run = manager.run_policy_inline(
-        db, 
-        policy=policy, 
+    # For now, implement inline only; async can be backed by Databricks job later.
+    # Off the event loop: LLM_CHECK rules call the serving endpoint per entity.
+    run = await run_in_threadpool(
+        manager.run_policy_inline,
+        db,
+        policy=policy,
         limit=payload.limit,
-        current_user=current_user.username if current_user else None
+        current_user=current_user.username if current_user else None,
     )
     
     audit_manager.log_action(
@@ -368,6 +382,81 @@ async def get_run_results(
         'only_failed': bool(only_failed),
         'total': len(results),
     }
+
+
+# Rule tests per user and window (seconds): each test can call the serving endpoint
+RULE_TEST_MAX_CALLS = 10
+RULE_TEST_WINDOW_SECONDS = 60.0
+_rule_tests: Dict[str, Deque[float]] = defaultdict(deque)
+_rule_tests_lock = threading.Lock()
+
+
+class RuleTestRateLimitedError(CodedValueError):
+    """A user ran more rule tests than the limit in the window."""
+
+    code = 'llm_check_test_rate_limited'
+
+
+def _throttle_rule_test(user: str) -> None:
+    """Count a rule test of ``user``; RuleTestRateLimitedError past the limit.
+
+    In memory, so the limit holds per backend process.
+    """
+    now = time.monotonic()
+    with _rule_tests_lock:
+        # Users whose tests all expired: drop them, so the dict doesn't keep growing
+        for expired in [
+            u for u, q in _rule_tests.items() if not q or now - q[-1] >= RULE_TEST_WINDOW_SECONDS
+        ]:
+            del _rule_tests[expired]
+        calls = _rule_tests[user]
+        while calls and now - calls[0] >= RULE_TEST_WINDOW_SECONDS:
+            calls.popleft()
+        if len(calls) >= RULE_TEST_MAX_CALLS:
+            retry_after = max(1, int(RULE_TEST_WINDOW_SECONDS - (now - calls[0])) + 1)
+            raise RuleTestRateLimitedError(
+                f"Too many rule tests; try again in {retry_after} seconds",
+                retryAfter=retry_after,
+            )
+        calls.append(now)
+
+
+@router.post("/compliance/llm-check/test", response_model=LlmCheckTestResponse)
+async def test_llm_check(
+    db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    payload: LlmCheckTestRequest = Body(...),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Try a rule (and its LLM_CHECK criteria) on one entity before saving it.
+
+    READ_WRITE, as saving a rule: each LLM_CHECK calls the serving endpoint.
+    At most RULE_TEST_MAX_CALLS tests per user a minute (429). Nothing but
+    cached verdicts is written.
+    """
+    _check_rule(payload.rule)
+    try:
+        _throttle_rule_test(current_user.username if current_user else 'unknown')
+    except RuleTestRateLimitedError as e:
+        raise HTTPException(
+            status_code=429, detail=str(e),
+            headers={'Retry-After': str(e.params['retryAfter'])},
+        ) from e
+    try:
+        # The model calls block: run them off the event loop
+        return await run_in_threadpool(
+            manager.test_rule_on_sample, db, rule=payload.rule, entity=payload.entity,
+        )
+    except SampleEntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except RuntimeError as e:
+        if getattr(e, 'error_code', None) == 'workspace_client_unavailable':
+            raise HTTPException(
+                status_code=503, detail="Databricks workspace client unavailable",
+            ) from e
+        raise
 
 
 @router.get("/compliance/stats")

@@ -190,6 +190,10 @@
     "messages": {
       "saveSuccess": "Paramètres enregistrés avec succès",
       "saveError": "Échec de l'enregistrement des paramètres"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "Le job Compliance Checks n'a pas pu être mis à jour avec les paramètres LLM (l'app n'a peut-être pas les droits sur le job). Les règles LLM_CHECK planifiées utilisent les anciens paramètres jusqu'à la réinstallation du job.",
+      "compliance_job_shape_unexpected": "Le job Compliance Checks a été modifié dans Databricks, donc seuls ses paramètres ont été mis à jour. Si les règles LLM_CHECK planifiées échouent avec « fonctions LLM désactivées », réinstallez le job."
     }
   },
   "databricks": {

@@ -169,7 +169,8 @@
   },
   "ruleWarnings": {
     "unsupported_match_type": "MATCH の型 '{{type}}' はサポートされていないため、このルールはどのエンティティも評価しません。サポートされている型: {{supported}}、またはすべてを対象とする Object。",
-    "missing_assert": "ルールに ASSERT 句がないため、すべてのエンティティが合格します。"
+    "missing_assert": "ルールに ASSERT 句がないため、すべてのエンティティが合格します。",
+    "llm_check_in_where": "LLM_CHECK は ASSERT でのみ評価されます。WHERE では失敗するため、ルールはすべてのエンティティをスキップします。ASSERT に移動してください。"
   },
   "runErrors": {
     "entities_load_failed": "{{entityType}} エンティティを読み込めなかったため、ルールを評価できませんでした。",
@@ -178,11 +179,13 @@
     "tags_load_failed": "{{entityType}} エンティティのタグを読み込めなかったため、ルールを評価できませんでした。"
   },
   "saveErrors": {
-    "rule_trailing_input": "ルールに無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。それ以降は無視されるため、ルールは記述より少ない内容しか検査しません。削除するか、構文を修正してください。"
+    "rule_trailing_input": "ルールに無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。それ以降は無視されるため、ルールは記述より少ない内容しか検査しません。削除するか、構文を修正してください。",
+    "llm_check_criterion_not_literal": "LLM_CHECK にはテキストと、文字列リテラルで書いた基準を指定します。例: LLM_CHECK(t.comment, 'states the grain of the table')。"
   },
   "runWarnings": {
     "rule_trailing_input": "このルールには無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。実行時には無視されるため、ルールは記述より少ない内容しか検査しない可能性があります。ルールを編集して修正してください。",
-    "notifications_failed": "この実行ではポリシーの通知 (NOTIFY) を送信できませんでした。結果はすべて記録されています。"
+    "notifications_failed": "この実行ではポリシーの通知 (NOTIFY) を送信できませんでした。結果はすべて記録されています。",
+    "llm_check_budget_exceeded": "実行がモデル呼び出しの上限 ({{budget}} 回) に達したため、{{count}} 件の LLM チェックが実行されず、それらのエンティティは失敗になりました。もう一度実行する (キャッシュ済みの判定は数えられません) か、COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN を引き上げてください。"
   },
   "actionOutcomes": {
     "status": {
@@ -203,6 +206,42 @@
       "notification_manager_unavailable": "この実行では通知を利用できません",
       "notify_no_recipients": "{{recipients}} に該当する受信者がいません",
       "action_failed": "アクションに失敗しました"
+    }
+  },
+  "llmCheck": {
+    "pass": "PASS",
+    "fail": "FAIL",
+    "cached": "(キャッシュ)",
+    "failedReason": "LLM_CHECK '{{criterion}}': {{reason}}",
+    "test": {
+      "title": "サンプルエンティティでテスト",
+      "hint": "ルールの ASSERT を LLM_CHECK の基準も含めて、ルールに一致する 1 つのエンティティで実行します。ルールは保存されません。",
+      "entityPlaceholder": "エンティティの名前または ID (空欄: 最初の一致)",
+      "run": "テスト",
+      "running": "テスト中...",
+      "noRule": "先にルールを入力してください。",
+      "failed": "ルールをテストできませんでした。",
+      "entity": "{{type}} {{name}}",
+      "noChecks": "このエンティティでは LLM_CHECK は評価されませんでした。"
+    },
+    "codes": {
+      "llm_check_not_available": "LLM_CHECK はコンプライアンス実行の ASSERT でのみ評価されます。",
+      "llm_check_disabled": "LLM 機能がオフになっているため、LLM_CHECK は失敗します。",
+      "llm_check_no_endpoint": "サービングエンドポイントが設定されていないため、LLM_CHECK は失敗します。",
+      "llm_check_budget_exceeded": "未チェック: 実行がモデル呼び出しの上限に達しました。",
+      "llm_check_text_too_long": "未チェック: テキストが長すぎます。",
+      "llm_check_call_failed": "サービングエンドポイントを呼び出せませんでした。",
+      "llm_check_refused": "モデルがテキストの判定を拒否しました。",
+      "llm_check_empty_reply": "モデルから回答がありませんでした。",
+      "llm_check_truncated": "モデルの回答が完了しませんでした。",
+      "llm_check_invalid_reply": "モデルの回答が PASS または FAIL の判定ではありませんでした。",
+      "llm_check_empty_text": "テキストが空です。",
+      "rule_evaluation_failed": "このエンティティでルールを評価できませんでした。",
+      "llm_check_text_rejected": "未チェック: 安全性チェックがテキストを検出しました (モデルへの指示など)。"
+    },
+    "errors": {
+      "sample_entity_not_found": "ルールに一致するエンティティが見つかりませんでした。名前を確認するか、空欄にして最初の一致を使用してください。",
+      "llm_check_test_rate_limited": "短時間にテストが多すぎます。{{retryAfter}} 秒後にもう一度お試しください。"
     }
   }
 }

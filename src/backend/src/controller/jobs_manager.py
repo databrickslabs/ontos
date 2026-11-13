@@ -59,6 +59,36 @@ def add_missing_mapped_entries(
     return result
 
 
+
+# Task arguments of the LLM job parameters (a job installed before them lacks them)
+LLM_TASK_ARGUMENTS = ['--llm_enabled', '--llm_endpoint', '--llm_check_max_calls_per_run']
+# sync_installed_workflow: the installed job's tasks don't match its definition
+JOB_SHAPE_UNEXPECTED = 'job_shape_unexpected'
+
+
+def _task_arguments(wf_def: Dict[str, Any], flags: List[str]) -> Dict[str, List[tuple]]:
+    """Per task key, the (flag, value) pairs of ``flags`` in the definition's Python tasks."""
+    found: Dict[str, List[tuple]] = {}
+    for task in wf_def.get('tasks') or []:
+        args = ((task or {}).get('spark_python_task') or {}).get('parameters') or []
+        pairs = [
+            (args[i], args[i + 1]) for i in range(len(args) - 1) if args[i] in flags
+        ]
+        if pairs:
+            found[task.get('task_key')] = pairs
+    return found
+
+
+def _llm_job_parameters(settings: Any) -> Dict[str, str]:
+    """The LLM settings a job needs, as job parameters (the job sets them as env vars)."""
+    return {
+        'llm_enabled': 'true' if getattr(settings, 'LLM_ENABLED', False) else 'false',
+        'llm_endpoint': str(getattr(settings, 'LLM_ENDPOINT', None) or ''),
+        'llm_check_max_calls_per_run': str(
+            getattr(settings, 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN', 200)
+        ),
+    }
+
 class JobsManager:
     def __init__(self, db: Session, ws_client: WorkspaceClient, *, workflows_root: Optional[Path] = None, notifications_manager=None, settings=None, workspace_deployer=None):
         self._db = db
@@ -103,10 +133,8 @@ class JobsManager:
         # Sort by name alphabetically
         return sorted(items, key=lambda x: x["name"].lower())
 
-    def install_workflow(self, workflow_id: str, *, job_cluster_id: Optional[str] = None) -> int:
-        wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
-
-        # Deploy workflow code to workspace if deployer is configured
+    def _deploy_workflow_code(self, workflow_id: str, wf_def: Dict[str, Any]) -> None:
+        """Deploy the workflow's code to the workspace if a deployer is configured."""
         if self._workspace_deployer:
             workflow_dir = self._workflows_root / workflow_id
             if workflow_dir.exists():
@@ -127,6 +155,10 @@ class JobsManager:
                 f"but WorkspaceDeployer is not initialized. Workflow files will NOT be uploaded. "
                 f"The job will be created but will fail at runtime."
             )
+
+    def install_workflow(self, workflow_id: str, *, job_cluster_id: Optional[str] = None) -> int:
+        wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
+        self._deploy_workflow_code(workflow_id, wf_def)
 
         # Build job settings kwargs from workflow definition
         tasks = self._build_tasks_from_definition(wf_def)
@@ -483,28 +515,97 @@ class JobsManager:
         )
         self._db.commit()
 
-        # A Databricks schedule starts the job directly and therefore does not pass
-        # through run_job(), where Ontos normally injects saved configuration and
-        # app database parameters. Keep the installed job defaults in sync so
-        # scheduled runs receive the same effective parameters as manual runs.
-        installation = workflow_installation_repo.get_by_workflow_id(
-            self._db, workflow_id=workflow_id
-        )
-        if installation is not None:
-            wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=None)
-            if 'parameters' in wf_def:
-                self._client.jobs.update(
-                    job_id=int(installation.job_id),
-                    new_settings=jobs.JobSettings(
-                        parameters=self._build_persisted_job_parameters(
-                            workflow_id, wf_def
-                        )
-                    ),
-                )
+        self.refresh_installed_job_parameters(workflow_id)
         
         # Return as Pydantic model
         config_dict = workflow_configuration_repo.get_configuration_dict(self._db, workflow_id=workflow_id)
         return WorkflowConfiguration(workflow_id=workflow_id, configuration=config_dict or {})
+
+    def refresh_installed_job_parameters(self, workflow_id: str) -> bool:
+        """Write the effective parameters into the installed job's defaults.
+
+        A Databricks schedule starts the job directly and therefore does not pass
+        through run_job(), where Ontos normally injects saved configuration and
+        app parameters. Keeping the installed job defaults in sync gives scheduled
+        runs the same effective parameters as manual runs. Returns whether an
+        installed job was updated.
+        """
+        installation = workflow_installation_repo.get_by_workflow_id(
+            self._db, workflow_id=workflow_id
+        )
+        if installation is None:
+            return False
+        wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=None)
+        if 'parameters' not in wf_def:
+            return False
+        self._client.jobs.update(
+            job_id=int(installation.job_id),
+            new_settings=jobs.JobSettings(
+                parameters=self._build_persisted_job_parameters(workflow_id, wf_def)
+            ),
+        )
+        return True
+
+    def sync_installed_workflow(
+        self, workflow_id: str, *, required_arguments: List[str],
+    ) -> Optional[str]:
+        """Give the installed job the current parameters, and old tasks the new arguments.
+
+        A job installed by an older version lacks the task arguments the
+        definition added since (``required_arguments``, each followed by its
+        value in the definition). Then the workflow's code is redeployed and
+        those arguments are appended to the tasks copied from the job as it
+        is, so the user's changes (cluster, retries, timeouts, other tasks)
+        stay. A job whose tasks don't match the definition (a task missing, not
+        a Python script task, or a task list ``jobs.get`` cut off) is not
+        rewritten: only its parameters are, and
+        ``JOB_SHAPE_UNEXPECTED`` is returned. Returns None otherwise (also when
+        the workflow isn't installed). Databricks errors are raised.
+        """
+        installation = workflow_installation_repo.get_by_workflow_id(
+            self._db, workflow_id=workflow_id
+        )
+        if installation is None:
+            return None
+        job_id = int(installation.job_id)
+        wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=None)
+        wanted = _task_arguments(wf_def, required_arguments)
+        job = self._client.jobs.get(job_id=job_id)
+        tasks = list(getattr(job.settings, 'tasks', None) or [])
+        by_key = {getattr(t, 'task_key', None): t for t in tasks}
+        # has_more: over 100 tasks, the list is cut; an update must never write part of it
+        if getattr(job, 'has_more', False) or not wanted or any(
+            getattr(by_key.get(key), 'spark_python_task', None) is None for key in wanted
+        ):
+            logger.warning(
+                "Installed job %s of workflow '%s' doesn't have the tasks of its definition; "
+                "only its parameters are updated", job_id, workflow_id,
+            )
+            self.refresh_installed_job_parameters(workflow_id)
+            return JOB_SHAPE_UNEXPECTED
+
+        changed = False
+        for key, pairs in wanted.items():
+            python_task = by_key[key].spark_python_task
+            current = list(python_task.parameters or [])
+            missing = [p for p in pairs if p[0] not in current]
+            if missing:
+                python_task.parameters = current + [x for pair in missing for x in pair]
+                changed = True
+        if not changed:
+            self.refresh_installed_job_parameters(workflow_id)
+            return None
+
+        # The installed script predates the arguments: deploy the current one
+        self._deploy_workflow_code(workflow_id, wf_def)
+        self._client.jobs.update(
+            job_id=job_id,
+            new_settings=jobs.JobSettings(
+                tasks=tasks,
+                parameters=self._build_persisted_job_parameters(workflow_id, wf_def),
+            ),
+        )
+        return None
 
     def _build_persisted_job_parameters(
         self, workflow_id: str, wf_def: Dict[str, Any]
@@ -585,6 +686,9 @@ class JobsManager:
                 # Telemetry parameters for WorkspaceClient identification
                 'product_name': 'ontos',
                 'product_version': __version__,
+                # The app's effective LLM settings (Settings > LLM over the env), for
+                # the LLM_CHECK rules of compliance runs
+                **_llm_job_parameters(self._settings),
             }
             # Only inject if workflow YAML defines these parameters
             try:

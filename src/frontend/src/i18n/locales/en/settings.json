@@ -197,6 +197,10 @@
     "messages": {
       "saveSuccess": "Settings saved successfully",
       "saveError": "Failed to save settings"
+    },
+    "warnings": {
+      "compliance_job_not_updated": "The Compliance Checks job could not be updated with the LLM settings (the app may lack permission on the job). Scheduled LLM_CHECK rules use the old settings until the job is reinstalled.",
+      "compliance_job_shape_unexpected": "The Compliance Checks job was changed in Databricks, so only its parameters were updated. If scheduled LLM_CHECK rules fail with \"LLM features are turned off\", reinstall the job."
     }
   },
   "databricks": {

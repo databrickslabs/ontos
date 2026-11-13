@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +33,7 @@ import {
 } from '@/components/common/list-view-skeleton';
 import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
+import { LlmCheckTester } from '@/components/compliance/llm-check-tester';
 
 interface CompliancePolicy {
   id: string; // UUID
@@ -78,6 +79,7 @@ export default function Compliance() {
   const [selectedPolicy, setSelectedPolicy] = useState<CompliancePolicy | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [componentError, setComponentError] = useState<string | null>(null);
+  const ruleRef = useRef<HTMLTextAreaElement>(null);
 
   const loadPolicies = useCallback(async () => {
     setComponentError(null);
@@ -452,6 +454,7 @@ export default function Compliance() {
                   <Label htmlFor="rule">{t('compliance:form.ruleCode')}</Label>
                   <Textarea
                     id="rule"
+                    ref={ruleRef}
                     defaultValue={selectedPolicy?.rule}
                     className="font-mono text-sm"
                     rows={8}
@@ -459,6 +462,7 @@ export default function Compliance() {
                     placeholder={t('compliance:form.rulePlaceholder')}
                   />
                 </div>
+                <LlmCheckTester getRule={() => ruleRef.current?.value ?? ''} />
                 <div className="space-y-2">
                   <Label htmlFor="failure_message">{t('compliance:form.failureMessage')}</Label>
                   <Textarea

@@ -47,6 +47,12 @@ tasks:
         - "{{job.parameters.product_name}}"
         - "--product_version"
         - "{{job.parameters.product_version}}"
+        - "--llm_enabled"
+        - "{{job.parameters.llm_enabled}}"
+        - "--llm_endpoint"
+        - "{{job.parameters.llm_endpoint}}"
+        - "--llm_check_max_calls_per_run"
+        - "{{job.parameters.llm_check_max_calls_per_run}}"
     environment_key: "compliance-checks-env"
 
 schedule:
@@ -69,6 +75,11 @@ parameters:
   postgres_schema: "public"
   product_name: "ontos"
   product_version: "0.0.0"
+  # The app's effective LLM settings, for LLM_CHECK rules (set when the job is
+  # installed or updated, and when the LLM settings change)
+  llm_enabled: ""
+  llm_endpoint: ""
+  llm_check_max_calls_per_run: ""
 
 # Configurable parameters (managed via UI)
 configurable_parameters:

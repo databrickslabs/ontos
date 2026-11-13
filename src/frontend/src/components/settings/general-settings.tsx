@@ -145,8 +145,20 @@ export default function GeneralSettings() {
         }),
       });
       if (response.ok) {
+        // Saved; what didn't apply comes as coded warnings ({code, params, message})
+        const saved = await response.json().catch(() => null);
+        type SaveWarning = { code: string; params?: Record<string, unknown>; message?: string };
+        const warnings: SaveWarning[] = Array.isArray(saved?.warnings) ? saved.warnings : [];
         toast({
           title: t('settings:general.messages.saveSuccess', 'Settings saved successfully'),
+          ...(warnings.length > 0 && {
+            description: warnings
+              .map((w) => String(t(`settings:general.warnings.${w.code}`, {
+                ...(w.params ?? {}),
+                defaultValue: w.message ?? w.code,
+              })))
+              .join(' '),
+          }),
         });
       } else {
         // Structured error ({code, message, params}): show it translated when we know the code.

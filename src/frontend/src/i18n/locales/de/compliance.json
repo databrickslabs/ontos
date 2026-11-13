@@ -169,7 +169,8 @@
   },
   "ruleWarnings": {
     "unsupported_match_type": "Der MATCH-Typ '{{type}}' wird nicht unterstützt, daher prüft die Regel keine Entitäten. Unterstützte Typen: {{supported}} oder Object für alle.",
-    "missing_assert": "Die Regel hat keine ASSERT-Klausel, daher besteht jede Entität."
+    "missing_assert": "Die Regel hat keine ASSERT-Klausel, daher besteht jede Entität.",
+    "llm_check_in_where": "LLM_CHECK wird nur im ASSERT ausgewertet. Im WHERE schlägt es fehl, sodass die Regel jede Entität überspringt. Verschieben Sie es in das ASSERT."
   },
   "runErrors": {
     "entities_load_failed": "Die {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden.",
@@ -178,11 +179,13 @@
     "tags_load_failed": "Die Tags der {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden."
   },
   "saveErrors": {
-    "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax."
+    "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax.",
+    "llm_check_criterion_not_literal": "LLM_CHECK erwartet einen Text und ein Kriterium als String-Literal, zum Beispiel LLM_CHECK(t.comment, 'states the grain of the table')."
   },
   "runWarnings": {
     "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren.",
-    "notifications_failed": "Die Benachrichtigungen der Richtlinie (NOTIFY) konnten für diesen Lauf nicht gesendet werden. Die Ergebnisse sind vollständig."
+    "notifications_failed": "Die Benachrichtigungen der Richtlinie (NOTIFY) konnten für diesen Lauf nicht gesendet werden. Die Ergebnisse sind vollständig.",
+    "llm_check_budget_exceeded": "{{count}} LLM-Prüfungen wurden nicht ausgeführt, weil der Lauf sein Budget von {{budget}} Modellaufrufen erreicht hat; diese Entitäten sind daher fehlgeschlagen. Führen Sie ihn erneut aus (zwischengespeicherte Urteile zählen nicht) oder erhöhen Sie COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN."
   },
   "actionOutcomes": {
     "status": {
@@ -203,6 +206,42 @@
       "notification_manager_unavailable": "Benachrichtigungen sind in diesem Lauf nicht verfügbar",
       "notify_no_recipients": "{{recipients}} ergibt keinen Empfänger",
       "action_failed": "Die Aktion ist fehlgeschlagen"
+    }
+  },
+  "llmCheck": {
+    "pass": "PASS",
+    "fail": "FAIL",
+    "cached": "(zwischengespeichert)",
+    "failedReason": "LLM_CHECK '{{criterion}}': {{reason}}",
+    "test": {
+      "title": "An einer Beispiel-Entität testen",
+      "hint": "Führt das ASSERT der Regel, einschließlich der LLM_CHECK-Kriterien, für eine Entität aus, auf die die Regel zutrifft. Die Regel wird nicht gespeichert.",
+      "entityPlaceholder": "Name oder ID der Entität (leer: der erste Treffer)",
+      "run": "Testen",
+      "running": "Wird getestet...",
+      "noRule": "Geben Sie zuerst eine Regel ein.",
+      "failed": "Die Regel konnte nicht getestet werden.",
+      "entity": "{{type}} {{name}}",
+      "noChecks": "Für diese Entität wurde kein LLM_CHECK ausgewertet."
+    },
+    "codes": {
+      "llm_check_not_available": "LLM_CHECK wird nur in Compliance-Läufen ausgewertet, im ASSERT.",
+      "llm_check_disabled": "Die LLM-Funktionen sind ausgeschaltet, daher schlägt LLM_CHECK fehl.",
+      "llm_check_no_endpoint": "Es ist kein Serving-Endpunkt konfiguriert, daher schlägt LLM_CHECK fehl.",
+      "llm_check_budget_exceeded": "Nicht geprüft: Der Lauf hat sein Budget an Modellaufrufen erreicht.",
+      "llm_check_text_too_long": "Nicht geprüft: Der Text ist zu lang.",
+      "llm_check_call_failed": "Der Serving-Endpunkt konnte nicht aufgerufen werden.",
+      "llm_check_refused": "Das Modell hat es abgelehnt, den Text zu bewerten.",
+      "llm_check_empty_reply": "Das Modell hat keine Antwort geliefert.",
+      "llm_check_truncated": "Die Antwort des Modells wurde nicht abgeschlossen.",
+      "llm_check_invalid_reply": "Die Antwort des Modells war kein PASS- oder FAIL-Urteil.",
+      "llm_check_empty_text": "Der Text ist leer.",
+      "rule_evaluation_failed": "Die Regel konnte für diese Entität nicht ausgewertet werden.",
+      "llm_check_text_rejected": "Nicht geprüft: Die Sicherheitsprüfung hat den Text markiert (zum Beispiel Anweisungen an das Modell)."
+    },
+    "errors": {
+      "sample_entity_not_found": "Es wurde keine Entität gefunden, auf die die Regel zutrifft. Prüfen Sie den Namen oder lassen Sie ihn leer, um den ersten Treffer zu verwenden.",
+      "llm_check_test_rate_limited": "Zu viele Tests in kurzer Zeit. Versuchen Sie es in {{retryAfter}} Sekunden erneut."
     }
   }
 }

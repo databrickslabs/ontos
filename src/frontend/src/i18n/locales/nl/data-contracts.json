@@ -1216,7 +1216,8 @@
       "couldNotSubmit": "Kon beslissing niet indienen"
     },
     "errors": {
-      "deploy_request_not_an_approver": "U bent geen goedkeurder van dit implementatieverzoek en kunt het dus niet beslissen."
+      "deploy_request_not_an_approver": "U bent geen goedkeurder van dit implementatieverzoek en kunt het dus niet beslissen.",
+      "deploy_request_already_decided": "Over dit implementatieverzoek is al beslist."
     }
   },
   "publishRequest": {

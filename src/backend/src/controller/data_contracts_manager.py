@@ -6346,39 +6346,57 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         
         return {"message": f"Publish decision '{decision}' recorded successfully"}
     
-    def is_deploy_request_approver(
-        self, db, notifications_manager, contract_id: str, user_info,
-    ) -> bool:
-        """Whether the user may decide a deployment request of the contract: a
-        recipient of one of its ``handle_deploy_request`` notifications (today
-        the Admin role), by the strict recipient check of workflow approvals
-        (no broadcast; a group, role or ``user:`` / ``group:`` recipient as
-        delivered; admins). No request, no approver.
-        """
+    @staticmethod
+    def _deploy_request_notifications(db, contract_id: str) -> List[Any]:
+        """The contract's ``handle_deploy_request`` notifications (rows) and
+        their payloads, as ``(row, payload)``."""
         from src.db_models.notifications import NotificationDb
-        from src.models.notifications import Notification
 
-        if not user_info:
-            return False
-        rows = db.query(NotificationDb).filter(
+        out = []
+        for row in db.query(NotificationDb).filter(
             NotificationDb.action_type == 'handle_deploy_request',
             NotificationDb.action_payload.contains(json.dumps(contract_id)),
-        ).all()
-        for row in rows:
-            if not (row.recipient or row.recipient_role_id):
-                continue
+        ).all():
             try:
                 payload = json.loads(row.action_payload or '{}')
             except (TypeError, ValueError):
                 continue
-            if not isinstance(payload, dict) or payload.get('contract_id') != contract_id:
+            if isinstance(payload, dict) and payload.get('contract_id') == contract_id:
+                out.append((row, payload))
+        return out
+
+    def deploy_request_access(
+        self, db, notifications_manager, contract_id: str, user_info,
+    ) -> Optional[str]:
+        """Whether the user may decide a deployment request of the contract.
+
+        ``'pending'``: the user is a recipient of one of its undecided
+        ``handle_deploy_request`` notifications (today the Admin role), by the
+        strict recipient check of workflow approvals (no broadcast; a group,
+        role or ``user:`` / ``group:`` recipient as delivered; admins).
+        ``'decided'``: only of requests already decided (``handled`` in the
+        payload). None: of none, or the contract has no such request (one an
+        ``on_request_deploy`` workflow handles is decided by its approval step).
+        Reading a notification doesn't decide it: the bell marks it read on a
+        click.
+        """
+        from src.models.notifications import Notification
+
+        if not user_info:
+            return None
+        access = None
+        for row, payload in self._deploy_request_notifications(db, contract_id):
+            if not (row.recipient or row.recipient_role_id):
                 continue
-            notification = Notification.model_validate(row)
-            if notifications_manager.can_user_access_notification(
-                db=db, notification=notification, user_info=user_info, strict=True,
+            if not notifications_manager.can_user_access_notification(
+                db=db, notification=Notification.model_validate(row), user_info=user_info,
+                strict=True,
             ):
-                return True
-        return False
+                continue
+            if not payload.get('handled'):
+                return 'pending'
+            access = 'decided'
+        return access
 
     def handle_deploy_response(
         self,
@@ -6452,6 +6470,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if message:
             notification_desc += f"\n\nApprover message: {message}"
         
+        # The request is decided: its notifications no longer let anyone decide it
+        for row, payload in self._deploy_request_notifications(db, contract_id):
+            if payload.get('handled'):
+                continue
+            payload.update({
+                'handled': True, 'decision': decision, 'handled_by': approver_email,
+                'handled_at': now.isoformat(),
+            })
+            row.action_payload = json.dumps(payload)
+            row.read = True
+            db.add(row)
+
         # Mark actionable notification as handled
         try:
             notifications_manager.handle_actionable_notification(

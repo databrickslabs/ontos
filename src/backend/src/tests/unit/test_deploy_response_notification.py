@@ -81,9 +81,9 @@ def test_a_denial_with_execute_deployment_is_still_a_denial(caplog):
 
 
 class TestDeployRequestApprover:
-    """``is_deploy_request_approver``: a recipient of the contract's request."""
+    """``deploy_request_access``: a recipient of the contract's undecided request."""
 
-    def _notification(self, db, contract_id, recipient, role_id=None):
+    def _notification(self, db, contract_id, recipient, role_id=None, handled=False):
         import json as _json
         import uuid as _uuid
         from datetime import datetime as _dt
@@ -93,11 +93,13 @@ class TestDeployRequestApprover:
             id=str(_uuid.uuid4()), type='action_required', title='Contract Deployment Request',
             recipient=recipient, recipient_role_id=role_id, created_at=_dt.utcnow(),
             action_type='handle_deploy_request', can_delete=False, read=True,
-            action_payload=_json.dumps({'contract_id': contract_id}),
+            action_payload=_json.dumps(
+                {'contract_id': contract_id, **({'handled': True} if handled else {})},
+            ),
         ))
         db.flush()
 
-    def _check(self, db, contract_id, user, roles):
+    def _check(self, db, contract_id, user, roles, access='pending'):
         from types import SimpleNamespace
         from unittest.mock import Mock
         from src.controller.data_contracts_manager import DataContractsManager
@@ -112,9 +114,9 @@ class TestDeployRequestApprover:
             email=user[0], username=user[0], user=user[0], ip='127.0.0.1', groups=user[1],
         )
         manager = DataContractsManager.__new__(DataContractsManager)
-        return manager.is_deploy_request_approver(
+        return manager.deploy_request_access(
             db, NotificationsManager(settings_manager=settings), contract_id, info,
-        )
+        ) == access
 
     ROLES = [('Admin', ['admins']), ('Release', ['release'])]
 
@@ -139,6 +141,14 @@ class TestDeployRequestApprover:
     def test_no_request_no_approver_not_even_an_admin(self, db_session):
         assert self._check(db_session, 'c9', ('a@x.com', ['admins']), self.ROLES) is False
 
+    def test_a_decided_request_is_decided_not_pending(self, db_session):
+        """Read (the fixture's notifications are read) is not decided; handled is."""
+        self._notification(db_session, 'c1', 'Admin', handled=True)
+        admin = ('a@x.com', ['admins'])
+        assert self._check(db_session, 'c1', admin, self.ROLES, access='decided') is True
+        self._notification(db_session, 'c1', 'Admin')
+        assert self._check(db_session, 'c1', admin, self.ROLES) is True
+
     def test_a_broadcast_request_decides_nothing(self, db_session):
         self._notification(db_session, 'c1', None)
         assert self._check(db_session, 'c1', ('e@x.com', ['editors']), self.ROLES) is False
@@ -154,7 +164,7 @@ def test_a_refused_decision_records_and_audits_nothing():
     )
 
     manager = MagicMock()
-    manager.is_deploy_request_approver.return_value = False
+    manager.deploy_request_access.return_value = None
     audit = MagicMock()
     notifications = MagicMock()
 

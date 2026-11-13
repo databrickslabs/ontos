@@ -1216,7 +1216,8 @@
       "couldNotSubmit": "Impossibile inviare la decisione"
     },
     "errors": {
-      "deploy_request_not_an_approver": "Non sei un approvatore di questa richiesta di distribuzione, quindi non puoi deciderla."
+      "deploy_request_not_an_approver": "Non sei un approvatore di questa richiesta di distribuzione, quindi non puoi deciderla.",
+      "deploy_request_already_decided": "Questa richiesta di distribuzione è già stata decisa."
     }
   },
   "publishRequest": {

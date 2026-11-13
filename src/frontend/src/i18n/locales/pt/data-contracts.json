@@ -1216,7 +1216,8 @@
       "couldNotSubmit": "Não foi possível enviar a decisão"
     },
     "errors": {
-      "deploy_request_not_an_approver": "Você não é aprovador desta solicitação de implantação, então não pode decidi-la."
+      "deploy_request_not_an_approver": "Você não é aprovador desta solicitação de implantação, então não pode decidi-la.",
+      "deploy_request_already_decided": "Esta solicitação de implantação já foi decidida."
     }
   },
   "publishRequest": {

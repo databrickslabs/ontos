@@ -1216,7 +1216,8 @@
       "couldNotSubmit": "No se pudo enviar la decisión"
     },
     "errors": {
-      "deploy_request_not_an_approver": "No eres aprobador de esta solicitud de despliegue, así que no puedes decidirla."
+      "deploy_request_not_an_approver": "No eres aprobador de esta solicitud de despliegue, así que no puedes decidirla.",
+      "deploy_request_already_decided": "Esta solicitud de despliegue ya se ha decidido."
     }
   },
   "publishRequest": {

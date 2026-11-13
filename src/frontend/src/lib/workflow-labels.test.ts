@@ -20,6 +20,7 @@ import {
   getRequiredPermission,
   triggerSupportsConcepts,
   statusValuesForEntities,
+  stageKeysByEntityType,
 } from './workflow-labels';
 
 describe('isTriggerEntitySupported', () => {
@@ -301,6 +302,25 @@ describe('statusValuesForEntities', () => {
 
   it('ignores unknown entity types (no statuses mapped)', () => {
     expect(statusValuesForEntities(['not_an_entity'])).toEqual([]);
+  });
+
+  it('offers the stages of the lifecycle stage groups from the API', () => {
+    const stages = stageKeysByEntityType([
+      { entity_type: 'data_product', stages: [
+        { key: 'draft', order: 0 }, { key: 'active', order: 1 },
+      ] },
+      { entity_type: 'data_product', stages: [
+        { key: 'needs_review', order: 2 }, { key: 'draft', order: 0 },
+        { key: 'active', order: 1 },
+      ] },
+    ]);
+    expect(stages).toEqual({ data_product: ['draft', 'active', 'needs_review'] });
+    expect(statusValuesForEntities(['data_product'], stages))
+      .toEqual(['draft', 'active', 'needs_review']);
+    // An entity type without groups from the API keeps its seeded statuses
+    expect(statusValuesForEntities(['data_contract'], stages)).toEqual([
+      'draft', 'proposed', 'active', 'deprecated', 'retired',
+    ]);
   });
 
   it('unions and de-duplicates statuses across multiple entity types', () => {

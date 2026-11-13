@@ -36,6 +36,9 @@ import TagSelector from '@/components/ui/tag-selector';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 import { useProjectContext } from '@/stores/project-store';
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error';
+import { useStatusOptions } from '@/hooks/use-lifecycle-stage-groups';
+import LifecycleGroupPicker from '@/components/lifecycle/lifecycle-group-picker';
+import { stageLabel } from '@/lib/lifecycle-stages';
 
 /**
  * ODPS v1.0.0 Data Product Creation Dialog
@@ -93,6 +96,15 @@ export default function DataProductCreateDialog({
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   const dataProductCreateSchema = useMemo(() => buildDataProductCreateSchema(t), [t]);
+  // The lifecycle stage group of a new product; the status picker offers its
+  // stages (create) or the product's current stage and allowed next ones (edit)
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const isEditing = mode === 'edit' && Boolean(product);
+  const statusOptions = useStatusOptions('data_product', {
+    entityId: isEditing ? product?.id : null, groupId: isEditing ? null : groupId, enabled: open,
+    currentStatus: isEditing ? product?.status : null,
+  });
+  const initialKey = statusOptions.initial?.key;
 
   const form = useForm<FormData>({
     resolver: zodResolver(dataProductCreateSchema),
@@ -145,6 +157,7 @@ export default function DataProductCreateDialog({
         });
       } else {
         // Reset to defaults for create mode, default to current project
+        setGroupId(null);
         form.reset({
           name: '',
           version: '0.0.1',
@@ -164,6 +177,13 @@ export default function DataProductCreateDialog({
       }
     }
   }, [open, mode, product, form, currentProject]);
+
+  // A new product starts in its group's first stage
+  useEffect(() => {
+    if (open && !isEditing && initialKey) {
+      form.setValue('status', initialKey, { shouldDirty: false });
+    }
+  }, [open, isEditing, initialKey, groupId, form]);
 
   const handleCloseAttempt = () => {
     // Check if form has been modified
@@ -267,6 +287,7 @@ export default function DataProductCreateDialog({
           name: data.name,
           version: data.version,
           status: data.status,
+          ...(groupId ? { lifecycleStageGroupId: groupId } : {}),
           domain_ids: data.domain_ids || [],
           primary_domain_id: data.primary_domain_id ?? null,
           tenant: data.tenant || undefined,
@@ -374,6 +395,14 @@ export default function DataProductCreateDialog({
             )}
           </div>
 
+          {!isEditing && (
+            <LifecycleGroupPicker
+              groups={statusOptions.groups}
+              value={groupId}
+              onChange={setGroupId}
+              id="product-lifecycle-group"
+            />
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="version">
@@ -402,9 +431,9 @@ export default function DataProductCreateDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.values(DataProductStatus).map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {t(`data-products:status.${status}`, status.charAt(0).toUpperCase() + status.slice(1))}
+                  {statusOptions.options.map((stage) => (
+                    <SelectItem key={stage.key} value={stage.key}>
+                      {stageLabel(stage, t)}
                     </SelectItem>
                   ))}
                 </SelectContent>

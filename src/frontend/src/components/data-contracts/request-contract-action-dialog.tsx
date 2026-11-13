@@ -22,11 +22,15 @@ import DeprecationFields, {
   requestedDeprecationPayload,
 } from '@/components/common/deprecation-fields';
 import {
-  getAllowedTransitions,
-  getStatusConfig,
-  getStatusText,
-  getRecommendedActionText,
-} from '@/lib/odcs-lifecycle';
+  useEntityLifecycle,
+  useLifecycleStageGroups,
+} from '@/hooks/use-lifecycle-stage-groups';
+import {
+  categoryOf, groupName, isContractPublishable, isSeededStage, stageLabel,
+} from '@/lib/lifecycle-stages';
+import StageBadge from '@/components/lifecycle/stage-badge';
+import StageGraphPreview from '@/components/lifecycle/stage-graph-preview';
+import type { LifecycleStage } from '@/types/lifecycle-stage-groups';
 
 type RequestType = 'access' | 'review' | 'deploy' | 'publish' | 'certify' | 'status_change';
 
@@ -61,9 +65,38 @@ export default function RequestContractActionDialog({
   const { post, get } = useApi();
   const { toast } = useToast();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
+  // The contract's stage, the stages it may move to and its group, from the API
+  const { lifecycle, loading: lifecycleLoading } = useEntityLifecycle(
+    'data_contract', isOpen ? contractId : null,
+  );
+  const { groups } = useLifecycleStageGroups(isOpen ? 'data_contract' : null);
+  const lifecycleGroup = groups.find((g) => g.id && g.id === lifecycle?.group.id)
+    ?? groups.find((g) => g.is_default_for_type);
+  const allowedTransitions = lifecycle?.allowed_transitions ?? [];
+  const currentStage = lifecycle?.stage ?? null;
+  const stageOf = (key?: string) =>
+    [currentStage, ...allowedTransitions].find((st) => st?.key === (key || '').toLowerCase());
   // A contract status in the UI language (the API and the lifecycle use the raw value)
-  const statusLabel = (status?: string) =>
-    t(`data-contracts:status.${(status || '').toLowerCase()}`, { defaultValue: status || '' });
+  const statusLabel = (status?: string) => {
+    const stage = stageOf(status);
+    return stage
+      ? stageLabel(stage, t)
+      : t(`data-contracts:status.${(status || '').toLowerCase()}`, { defaultValue: status || '' });
+  };
+  // The app's description of a seeded stage; a custom one has none
+  const stageDescription = (stage?: LifecycleStage | null) =>
+    stage && isSeededStage(stage)
+      ? t(`data-contracts:statusDescriptions.${stage.key}`, { defaultValue: '' })
+      : '';
+  // The seeded hint for the next step, in the default lifecycle only
+  const recommended = currentStage && isSeededStage(currentStage)
+    && lifecycle?.group.is_default_for_type
+    ? t(`data-contracts:requests.statusChange.recommended.${currentStage.key}`, {
+      defaultValue: '',
+    })
+    : '';
+  // Deprecation details go with a move into a deprecated-category stage
+  const isDeprecation = (key: string) => stageOf(key)?.category === 'deprecated';
   
   const [requestType, setRequestType] = useState<RequestType>('deploy');
   const [message, setMessage] = useState('');
@@ -119,7 +152,11 @@ export default function RequestContractActionDialog({
           icon: <FileText className="h-5 w-5" />,
           title: t('data-contracts:requests.review.title', 'Request Data Steward Review'),
           description: t('data-contracts:requests.review.description', 'Submit this contract for review by a data steward (transitions to PROPOSED status).'),
-          enabled: contractStatus?.toLowerCase() === 'draft',
+          // From a draft-category stage (the stored status's seeded category
+          // until the lifecycle loads)
+          enabled: categoryOf({
+            status: contractStatus, status_category: currentStage?.category,
+          }) === 'draft',
           endpoint: `/api/data-contracts/${contractId}/request-review`,
         };
       case 'deploy':
@@ -135,9 +172,11 @@ export default function RequestContractActionDialog({
           icon: <Rocket className="h-5 w-5" />,
           title: t('data-contracts:requests.publish.title', 'Request Publish'),
           description: t('data-contracts:requests.publish.description', 'Request to publish this contract with a defined visibility scope.'),
-          enabled:
-            contractStatus?.toLowerCase() === 'approved' ||
-            contractStatus?.toLowerCase() === 'active',
+          // An active-category stage or the approve action's (approved), as the
+          // backend's contract_publishable decides
+          enabled: isContractPublishable({
+            status: contractStatus, status_category: currentStage?.category,
+          }),
           endpoint: `/api/data-contracts/${contractId}/request-publish`,
         };
       case 'certify':
@@ -149,7 +188,6 @@ export default function RequestContractActionDialog({
           endpoint: `/api/data-contracts/${contractId}/request-certify`,
         };
       case 'status_change':
-        const allowedTransitions = contractStatus ? getAllowedTransitions(contractStatus) : [];
         return {
           icon: <RefreshCw className="h-5 w-5" />,
           title: canDirectStatusChange
@@ -195,7 +233,7 @@ export default function RequestContractActionDialog({
       }
       if (
         canDirectStatusChange &&
-        targetStatus === 'deprecated' &&
+        isDeprecation(targetStatus) &&
         !deprecation.deprecationReason.trim()
       ) {
         setError(t('common:deprecation.reasonRequired'));
@@ -281,7 +319,7 @@ export default function RequestContractActionDialog({
           // Direct status change - different payload format
           payload = {
             new_status: targetStatus,
-            ...(targetStatus === 'deprecated' ? deprecationPayload(deprecation) : {}),
+            ...(isDeprecation(targetStatus) ? deprecationPayload(deprecation) : {}),
           };
         } else {
           // Request for approval
@@ -289,7 +327,7 @@ export default function RequestContractActionDialog({
             target_status: targetStatus,
             justification: justification.trim(),
             current_status: contractStatus,
-            ...(targetStatus === 'deprecated' ? requestedDeprecationPayload(deprecation) : {}),
+            ...(isDeprecation(targetStatus) ? requestedDeprecationPayload(deprecation) : {}),
           };
         }
       }
@@ -441,7 +479,8 @@ export default function RequestContractActionDialog({
             )}
             {contractStatus && (
               <div className="text-xs text-muted-foreground mt-1">
-                {t('data-contracts:requests.statusLabel', 'Status:')} <span className="uppercase">{getStatusText(contractStatus, t).label}</span>
+                {t('data-contracts:requests.statusLabel', 'Status:')}{' '}
+                <span className="uppercase">{statusLabel(contractStatus)}</span>
               </div>
             )}
           </div>
@@ -762,55 +801,69 @@ export default function RequestContractActionDialog({
                 <div className="rounded-lg border bg-muted/50 p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Label className="text-sm font-semibold">{t('data-contracts:requests.statusChange.currentStatusLabel', 'Current Status:')}</Label>
-                    <span className="text-lg">{getStatusConfig(contractStatus).icon}</span>
-                    <span className="font-medium">{getStatusText(contractStatus, t).label}</span>
+                    <StageBadge stage={currentStage} status={contractStatus} />
                   </div>
-                  <p className="text-xs text-muted-foreground">{getStatusText(contractStatus, t).description}</p>
+                  {stageDescription(currentStage) && (
+                    <p className="text-xs text-muted-foreground">
+                      {stageDescription(currentStage)}
+                    </p>
+                  )}
                 </div>
               )}
 
               {/* Recommended Action */}
-              {contractStatus && getRecommendedActionText(contractStatus, t) && (
+              {recommended && (
                 <Alert>
                   <Info className="h-4 w-4" />
                   <AlertDescription className="text-sm">
-                    <strong>{t('data-contracts:requests.statusChange.recommendedLabel', 'Recommended:')}</strong> {getRecommendedActionText(contractStatus, t)}
+                    <strong>
+                      {t('data-contracts:requests.statusChange.recommendedLabel', 'Recommended:')}
+                    </strong>{' '}
+                    {recommended}
                   </AlertDescription>
                 </Alert>
               )}
 
-              {/* Target Status Selection */}
-              {contractStatus && getAllowedTransitions(contractStatus).length > 0 ? (
+              {/* Target Status Selection: the stages the contract's lifecycle allows next */}
+              {lifecycleLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t('lifecycle:status.loading')}
+                </div>
+              ) : !lifecycle ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{t('lifecycle:status.loadFailed')}</AlertDescription>
+                </Alert>
+              ) : allowedTransitions.length > 0 ? (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">{t('data-contracts:requests.statusChange.selectTargetLabel', 'Select Target Status *')}</Label>
                   <Select value={targetStatus} onValueChange={setTargetStatus}>
-                    <SelectTrigger>
+                    <SelectTrigger
+                      aria-label={t(
+                        'data-contracts:requests.statusChange.chooseTargetPlaceholder',
+                        'Choose target status...',
+                      )}
+                    >
                       <SelectValue placeholder={t('data-contracts:requests.statusChange.chooseTargetPlaceholder', 'Choose target status...')}>
                         {targetStatus && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">{getStatusConfig(targetStatus).icon}</span>
-                            <span>{getStatusText(targetStatus, t).label}</span>
-                          </div>
+                          <StageBadge stage={stageOf(targetStatus)} status={targetStatus} />
                         )}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {getAllowedTransitions(contractStatus).map((status) => {
-                        const config = getStatusConfig(status);
-                        return (
-                          <SelectItem key={status} value={status}>
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">{config.icon}</span>
-                              <span>{getStatusText(status, t).label}</span>
-                            </div>
-                          </SelectItem>
-                        );
-                      })}
+                      {allowedTransitions.map((stage) => (
+                        <SelectItem key={stage.key} value={stage.key}>
+                          <StageBadge stage={stage} />
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                  {targetStatus && (
+                  {targetStatus && stageDescription(stageOf(targetStatus)) && (
                     <div className="p-3 bg-muted/50 rounded-lg border text-sm">
-                      <p className="text-muted-foreground">{getStatusText(targetStatus, t).description}</p>
+                      <p className="text-muted-foreground">
+                        {stageDescription(stageOf(targetStatus))}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -818,12 +871,22 @@ export default function RequestContractActionDialog({
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    <strong>{t('data-contracts:requests.statusChange.terminalStateLabel', 'Terminal State:')}</strong> {t('data-contracts:requests.statusChange.noTransitions', 'No transitions available from {{status}} status.', { status: contractStatus ? getStatusText(contractStatus, t).label : 'current' })}
+                    <strong>
+                      {t(
+                        'data-contracts:requests.statusChange.terminalStateLabel',
+                        'Terminal State:',
+                      )}
+                    </strong>{' '}
+                    {t(
+                      'data-contracts:requests.statusChange.noTransitions',
+                      'No transitions available from {{status}} status.',
+                      { status: contractStatus ? statusLabel(contractStatus) : 'current' },
+                    )}
                   </AlertDescription>
                 </Alert>
               )}
 
-              {targetStatus === 'deprecated' && (
+              {isDeprecation(targetStatus) && (
                 <DeprecationFields
                   entityType="data_contract"
                   entityId={contractId}
@@ -850,33 +913,25 @@ export default function RequestContractActionDialog({
                   />
                   <div className="text-xs text-muted-foreground">
                     {t('data-contracts:requests.statusChange.justificationHint', 'Minimum 20 characters required. This will be reviewed by an admin.')}
-                    {targetStatus === 'deprecated' && ` ${t('common:deprecation.requestHint')}`}
+                    {isDeprecation(targetStatus) && ` ${t('common:deprecation.requestHint')}`}
                   </div>
                 </div>
               )}
 
-              {/* Lifecycle Diagram */}
-              <div className="rounded-lg border p-3 bg-muted/20">
-                <Label className="text-xs font-semibold mb-2 block">{t('data-contracts:requests.statusChange.lifecycleFlowLabel', 'ODCS Lifecycle Flow:')}</Label>
-                <div className="flex items-center gap-1 text-xs font-mono flex-wrap">
-                  <span className={contractStatus?.toLowerCase() === 'draft' ? 'font-bold text-primary' : ''}>draft</span>
-                  <span>→</span>
-                  <span className={contractStatus?.toLowerCase() === 'proposed' ? 'font-bold text-primary' : ''}>proposed</span>
-                  <span>→</span>
-                  <span className={contractStatus?.toLowerCase() === 'under_review' ? 'font-bold text-primary' : ''}>under_review</span>
-                  <span>→</span>
-                  <span className={contractStatus?.toLowerCase() === 'approved' ? 'font-bold text-primary' : ''}>approved</span>
-                  <span>→</span>
-                  <span className={contractStatus?.toLowerCase() === 'active' ? 'font-bold text-primary' : ''}>active</span>
-                  <span>→</span>
-                  <span className={contractStatus?.toLowerCase() === 'deprecated' ? 'font-bold text-primary' : ''}>deprecated</span>
-                  <span>→</span>
-                  <span className={contractStatus?.toLowerCase() === 'retired' ? 'font-bold text-primary' : ''}>retired</span>
+              {/* Lifecycle: the contract's group, current stage outlined */}
+              {lifecycleGroup && (
+                <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
+                  <Label className="text-xs font-semibold block">
+                    {t('lifecycle:graph.title', { name: groupName(lifecycleGroup, t) })}
+                  </Label>
+                  <StageGraphPreview
+                    stages={[...lifecycleGroup.stages].sort((a, b) => a.order - b.order)}
+                    transitions={lifecycleGroup.transitions}
+                    currentKey={currentStage?.key ?? contractStatus?.toLowerCase()}
+                  />
+                  <p className="text-xs text-muted-foreground">{t('lifecycle:graph.hint')}</p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {t('data-contracts:requests.statusChange.lifecycleNote', 'Current status is highlighted. Emergency deprecation allowed from any status.')}
-                </p>
-              </div>
+              )}
             </div>
           )}
 
@@ -894,7 +949,7 @@ export default function RequestContractActionDialog({
                     className="mt-2 block"
                     onClick={() => {
                       // The reason given for the direct change is the request's justification
-                      if (targetStatus === 'deprecated' && !justification.trim()) {
+                      if (isDeprecation(targetStatus) && !justification.trim()) {
                         setJustification(deprecation.deprecationReason.trim());
                       }
                       setRequestInstead(true);

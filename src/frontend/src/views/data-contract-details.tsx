@@ -69,14 +69,16 @@ import { contractDraftErrorText, contractVersionErrorText } from '@/lib/contract
 import CertificationBadge from '@/components/common/certification-badge'
 import PublicationScopeBadge from '@/components/common/publication-scope-badge'
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs'
+import EntityLifecycleStatus from '@/components/lifecycle/entity-lifecycle-status'
+import {
+  awaitsReviewDecision, contractEditableInPlace, isActiveStage, isContractPublishable,
+} from '@/lib/lifecycle-stages'
+import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups'
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error'
 
-// Status-based editability constants
-// Only draft/proposed contracts can be edited in place
-const EDITABLE_STATUSES = ['draft', 'proposed']
 
 // View mode for filtering contract details sections
 type ViewMode = 'minimal' | 'medium' | 'large'
@@ -220,14 +222,6 @@ const formatDate = (dateString: string | undefined, fallback: string = 'N/A'): s
   }
 };
 
-const getStatusColor = (status: string | undefined): 'default' | 'secondary' | 'destructive' | 'outline' => {
-  const lowerStatus = status?.toLowerCase() || '';
-  if (lowerStatus === 'active' || lowerStatus === 'approved') return 'default';
-  if (lowerStatus === 'draft' || lowerStatus === 'proposed') return 'secondary';
-  if (lowerStatus === 'retired' || lowerStatus === 'deprecated' || lowerStatus === 'rejected') return 'outline';
-  return 'default';
-};
-
 export default function DataContractDetails() {
   const { t } = useTranslation(['data-contracts', 'common'])
   const { contractId } = useParams<{ contractId: string }>()
@@ -315,7 +309,11 @@ export default function DataContractDetails() {
 
   // Computed properties for status-based editability
   // Admins bypass status restrictions; others need draft/proposed
-  const canEditInPlace = isContractAdmin || !!(contract?.status && EDITABLE_STATUSES.includes(contract.status.toLowerCase()))
+  // Editable in place in a draft stage or the stage submit-review reaches (draft /
+  // proposed by default), the backend's editable_in_place
+  const { groups: contractGroups } = useLifecycleStageGroups('data_contract')
+  const canEditInPlace = isContractAdmin
+    || !!(contract?.status && contractEditableInPlace(contract, contractGroups))
   // Personal drafts are editable since they have draft status
   const isPersonalDraft = contract?.draftOwnerId != null
   // Contract is read-only if it's not editable and not a personal draft
@@ -1769,13 +1767,13 @@ export default function DataContractDetails() {
         </div>
         <div className="flex items-center gap-2">
           {/* Lifecycle actions */}
-          {contract && (['proposed','under_review'].includes((contract.status || '').toLowerCase())) && (
+          {contract && awaitsReviewDecision(contract) && (
             <>
               <Button size="sm" variant="outline" onClick={handleApprove}>{t('data-contracts:detailsView.header.approve', 'Approve')}</Button>
               <Button size="sm" variant="destructive" onClick={handleReject}>{t('data-contracts:detailsView.header.reject', 'Reject')}</Button>
             </>
           )}
-          {contract && contract.status?.toLowerCase() === 'active' && canApproveContractLifecycle && (
+          {contract && isActiveStage(contract) && canApproveContractLifecycle && (
             <Button
               variant="outline"
               size="sm"
@@ -1789,7 +1787,7 @@ export default function DataContractDetails() {
             </Button>
           )}
           {contract &&
-            ['active', 'approved'].includes((contract.status || '').toLowerCase()) &&
+            isContractPublishable(contract) &&
             canWriteContracts && (
               <Button
                 variant="outline"
@@ -1890,9 +1888,15 @@ export default function DataContractDetails() {
             </div>
             <div className="flex items-end gap-5 shrink-0">
               <div className="flex flex-col items-center gap-1">
-                <Badge variant={getStatusColor(contract.status)}>
-                  {contract.status || '—'}
-                </Badge>
+                {/* Status from the stage data, its lifecycle group and "Change lifecycle" */}
+                <EntityLifecycleStatus
+                  entityType="data_contract"
+                  entityId={contract.id}
+                  status={contract.status}
+                  refreshKey={`${contract.status}|${contract.lifecycle_stage_group_id ?? ''}`}
+                  onChanged={() => { fetchDetails(); }}
+                  layout="badge"
+                />
                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('data-contracts:detailsView.metadata.status', 'Status')}</span>
               </div>
               {contract.id && (
@@ -2669,7 +2673,7 @@ export default function DataContractDetails() {
                 size="sm"
                 variant="outline"
                 onClick={() => setIsLinkProductDialogOpen(true)}
-                disabled={!contract || !['active', 'approved'].includes((contract.status || '').toLowerCase())}
+                disabled={!contract || !isContractPublishable(contract)}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
                 {t('data-contracts:detailsView.linkedProducts.linkExisting', 'Link to Existing Product')}
@@ -2677,7 +2681,7 @@ export default function DataContractDetails() {
               <Button
                 size="sm"
                 onClick={() => setIsCreateProductDialogOpen(true)}
-                disabled={!contract || !['active', 'approved'].includes((contract.status || '').toLowerCase())}
+                disabled={!contract || !isContractPublishable(contract)}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
                 {t('data-contracts:detailsView.linkedProducts.createProduct', 'Create Data Product')}
@@ -2697,7 +2701,7 @@ export default function DataContractDetails() {
               <div className="text-sm text-muted-foreground mb-4">
                 {t('data-contracts:detailsView.linkedProducts.emptyHint', 'Create a data product that uses this contract to govern a deliverable')}
               </div>
-              {contract && ['active', 'approved'].includes((contract.status || '').toLowerCase()) ? (
+              {contract && isContractPublishable(contract) ? (
                 <Button onClick={() => setIsCreateProductDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   {t('data-contracts:detailsView.linkedProducts.createProduct', 'Create Data Product')}
@@ -3199,6 +3203,7 @@ export default function DataContractDetails() {
           name: contract.name,
           version: contract.version,
           status: contract.status,
+          lifecycle_stage_group_id: contract.lifecycle_stage_group_id,
           owner_team_id: contract.owner_team_id,
           project_id: (contract as any).project_id,
           domain: contract.domainId,

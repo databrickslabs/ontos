@@ -17,6 +17,7 @@ import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
 import { EntityTypeDefinition } from '@/types/ontology-schema';
+import EntityLifecycleStatus from '@/components/lifecycle/entity-lifecycle-status';
 import { AssetFormDialog } from '@/components/common/asset-form-dialog';
 import { BusinessLineageGraph } from '@/components/common/business-lineage-graph';
 import { ImpactAnalysisPanel } from '@/components/common/impact-analysis-panel';
@@ -40,13 +41,6 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
-
-const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-  draft: 'outline',
-  active: 'default',
-  deprecated: 'secondary',
-  archived: 'destructive',
-};
 
 function PropertyValue({ value }: { value: any }) {
   const { t } = useTranslation(['assets', 'common']);
@@ -296,9 +290,14 @@ export default function AssetDetailView() {
       <div>
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold">{asset.name}</h1>
-          <Badge variant={STATUS_VARIANT[asset.status] ?? 'outline'}>
-            {asset.status}
-          </Badge>
+          {/* Status from the stage data, its lifecycle group and "Change lifecycle" */}
+          <EntityLifecycleStatus
+            entityType="asset"
+            entityId={asset.id}
+            status={asset.status}
+            refreshKey={`${asset.status}|${asset.lifecycle_stage_group_id ?? ''}`}
+            onChanged={() => { fetchAsset(); }}
+          />
         </div>
         <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
           <Badge variant="outline" className="text-xs">{entityType}</Badge>

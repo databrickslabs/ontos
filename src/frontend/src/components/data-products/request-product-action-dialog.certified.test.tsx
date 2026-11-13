@@ -44,6 +44,20 @@ vi.mock('@/components/ui/select', () => ({
   SelectItem: ({ value }: any) => <option value={value}>{value}</option>,
 }));
 
+// The entity's lifecycle, as GET /api/lifecycle/{type}/{id} answers it
+const stage = (key: string, category: string, order: number) => ({
+  key, label: key.charAt(0).toUpperCase() + key.slice(1), category, color: null, order,
+  is_initial: order === 0,
+});
+const lifecycleOf = (entityType: string, status: string, category: string, next: any[]) => ({
+  entity_type: entityType, entity_id: 'x', status,
+  group: { id: 'g', name: 'Default', entity_type: entityType, is_default_for_type: true },
+  stage: stage(status, category, 1), allowed_transitions: next,
+});
+const LIFECYCLE = lifecycleOf(
+  'data_product', 'active', 'active', [stage('deprecated', 'deprecated', 2)],
+);
+
 const REASON = 'Replaced by Orders v2; every consumer has moved.';
 
 const REFUSED = {
@@ -70,7 +84,11 @@ function render() {
   );
 }
 
-function chooseDeprecate() {
+async function chooseDeprecate() {
+  // The allowed moves come from the product's lifecycle (the API)
+  await waitFor(() => expect(screen.getAllByRole('combobox').some(
+    (select) => select.querySelector('option[value="deprecated"]'),
+  )).toBe(true));
   const target = screen.getAllByRole('combobox').find(
     (select) => select.querySelector('option[value="deprecated"]'),
   ) as HTMLSelectElement;
@@ -85,7 +103,8 @@ describe('RequestProductActionDialog certified deprecation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPost.mockReset();  // drop answers a failed test left queued
-    mockGet.mockResolvedValue({ data: [] });
+    mockGet.mockImplementation(async (url: string) => (
+      url.startsWith('/api/lifecycle/') ? { data: LIFECYCLE } : { data: [] }));
     mockLookupWorkflowId.mockResolvedValue(null);
   });
 
@@ -98,7 +117,7 @@ describe('RequestProductActionDialog certified deprecation', () => {
     mockPost.mockResolvedValueOnce(REFUSED).mockResolvedValueOnce({ data: { request_id: 'r-1' } });
     render();
 
-    chooseDeprecate();
+    await chooseDeprecate();
     fireEvent.click(screen.getByRole('button', {
       name: i18n.t('data-products:requestAction.types.statusChange.titleDirect'),
     }));
@@ -132,7 +151,7 @@ describe('RequestProductActionDialog certified deprecation', () => {
     });
     render();
 
-    chooseDeprecate();
+    await chooseDeprecate();
     fireEvent.click(screen.getByRole('button', {
       name: i18n.t('data-products:requestAction.types.statusChange.titleDirect'),
     }));

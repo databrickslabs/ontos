@@ -64,6 +64,8 @@ import type { QualitySummary } from '@/types/quality';
 import CertificationBadge from '@/components/common/certification-badge';
 import PublicationScopeBadge from '@/components/common/publication-scope-badge';
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs';
+import EntityLifecycleStatus from '@/components/lifecycle/entity-lifecycle-status';
+import { isActiveStage } from '@/lib/lifecycle-stages';
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle';
 import { userHasApprovalPrivilege } from '@/lib/permissions';
 import { ApprovalEntity } from '@/types/settings';
@@ -147,23 +149,10 @@ export function formatDateString(dateString: string | undefined | null, fallback
 }
 
 /**
- * Map a Data Product status string to a Shadcn Badge variant.
- * Lower-cased internally so `Active`, `ACTIVE`, `active` all map identically.
- */
-export function getStatusBadgeVariant(
-  status: string | undefined | null,
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  const lowerStatus = status?.toLowerCase() || '';
-  if (lowerStatus === 'active') return 'default';
-  if (lowerStatus === 'draft' || lowerStatus === 'proposed') return 'secondary';
-  if (lowerStatus === 'retired' || lowerStatus === 'deprecated') return 'outline';
-  return 'default';
-}
-
-/**
- * Statuses where a Data Product can still be edited in-place. Anything with a
- * higher lifecycle status (`active`, `retired`, `deprecated`) must be cloned
- * for editing instead.
+ * Statuses where a Data Product can still be edited in-place (the seeded
+ * draft and review stages). Anything with a higher lifecycle status
+ * (`active`, `retired`, `deprecated`) must be cloned for editing instead; the
+ * update route asks to confirm a breaking change from `under_review` on.
  */
 export const IN_PLACE_EDITABLE_STATUSES: ReadonlyArray<string> = [
   'draft',
@@ -173,8 +162,17 @@ export const IN_PLACE_EDITABLE_STATUSES: ReadonlyArray<string> = [
   'approved',
 ];
 
-export function isStatusEditableInPlace(status: string | undefined | null): boolean {
+/**
+ * Whether a Data Product is edited in place: a draft- or review-category
+ * stage (`category` is the product's `statusCategory`); without it, the
+ * seeded statuses above.
+ */
+export function isStatusEditableInPlace(
+  status: string | undefined | null,
+  category?: string | null,
+): boolean {
   if (!status) return false;
+  if (category) return category === 'draft' || category === 'review';
   return IN_PLACE_EDITABLE_STATUSES.includes(status.toLowerCase());
 }
 
@@ -230,12 +228,15 @@ export function resolveDomainLabel(args: {
 }
 
 /**
- * Whether the product is in the "active" lifecycle state. Centralised so the
- * "active" magic string lives in one place — used by the lifecycle approve /
+ * Whether the product is in an active-category stage (its Stage Category from
+ * the API, else the seeded `active`) — used by the lifecycle approve /
  * deprecate gates.
  */
-export function isProductActive(status: string | undefined | null): boolean {
-  return (status?.toLowerCase() || '') === 'active';
+export function isProductActive(
+  status: string | undefined | null,
+  statusCategory?: string | null,
+): boolean {
+  return isActiveStage({ status, statusCategory });
 }
 
 /**
@@ -544,7 +545,7 @@ export default function DataProductDetails() {
   // Versioned editing: determine if product can be edited in place based on status
   // Products with status 'draft', 'sandbox', 'proposed' can be edited directly
   // Products with status 'active' and above must be cloned for editing
-  const canEditInPlace = isStatusEditableInPlace(product?.status);
+  const canEditInPlace = isStatusEditableInPlace(product?.status, product?.statusCategory);
   const isPersonalDraft = isPersonalDraftProduct(product);
   const isReadOnly = isProductReadOnly({ canAdmin, canEditInPlace, isPersonalDraft });
 
@@ -595,8 +596,6 @@ export default function DataProductDetails() {
 
   const formatDate = (dateString: string | undefined, fallback: string = 'N/A'): string =>
     formatDateString(dateString, fallback);
-
-  const getStatusColor = getStatusBadgeVariant;
 
   const fetchProductDetails = async () => {
     if (!productId) {
@@ -884,8 +883,8 @@ export default function DataProductDetails() {
     }
   };
 
-  // Check if product is subscribable (active or certified)
-  const isSubscribable = product?.status && product.status.toLowerCase() === 'active';
+  // Subscribable in an active-category stage (the backend's rule)
+  const isSubscribable = Boolean(product?.status) && isActiveStage(product);
 
   // Helper function to update product with 409 handling
   const updateProduct = async (updatedProduct: DataProduct, forceUpdate: boolean = false) => {
@@ -1431,7 +1430,8 @@ export default function DataProductDetails() {
           <Button variant="outline" onClick={() => setIsRequestDialogOpen(true)} size="sm">
             <KeyRound className="mr-2 h-4 w-4" /> {t('data-products:details.actions.requestAccess')}
           </Button>
-          {isProductActive(product.status) && canApproveProductLifecycle && (
+          {isProductActive(product.status, product.statusCategory)
+            && canApproveProductLifecycle && (
             <Button
               variant="outline"
               size="sm"
@@ -1444,7 +1444,7 @@ export default function DataProductDetails() {
               <ShieldCheck className="mr-2 h-4 w-4" /> {t('data-products:details.actions.certify')}
             </Button>
           )}
-          {isProductActive(product.status) && canWrite && (
+          {isProductActive(product.status, product.statusCategory) && canWrite && (
             <Button
               variant="outline"
               size="sm"
@@ -1585,9 +1585,15 @@ export default function DataProductDetails() {
               </div>
               <div className="flex items-end gap-5 shrink-0">
                 <div className="flex flex-col items-center gap-1">
-                  <Badge variant={getStatusColor(product.status)}>
-                    {product.status || '—'}
-                  </Badge>
+                  {/* Status from the stage data, its lifecycle group and "Change lifecycle" */}
+                  <EntityLifecycleStatus
+                    entityType="data_product"
+                    entityId={product.id}
+                    status={product.status}
+                    refreshKey={`${product.status}|${product.lifecycleStageGroupId ?? ''}`}
+                    onChanged={() => { fetchProductDetails(); }}
+                    layout="badge"
+                  />
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('data-products:details.coreMetadata.status')}</span>
                 </div>
                 {qualitySummary && qualitySummary.items_count > 0 && (

@@ -13,7 +13,9 @@ import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
-import { DataContractStatus } from '@/lib/odcs-lifecycle'
+import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups'
+import { initialStage, selectedGroup } from '@/components/lifecycle/lifecycle-group-picker'
+import { orderedStages } from '@/lib/lifecycle-stages'
 
 type WizardProps = {
   isOpen: boolean
@@ -22,8 +24,6 @@ type WizardProps = {
   initial?: any
 }
 
-// The contract lifecycle statuses (archived is not one: it was renamed retired)
-const statuses = Object.values(DataContractStatus)
 
 interface SemanticConcept {
   iri: string
@@ -64,6 +64,21 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const { t } = useTranslation(['data-contracts', 'common'])
   const { refetch: refetchDomains } = useDomains()
   const { toast } = useToast()
+  // The stages of the contract's lifecycle (the default one for a new
+  // contract), from the API; an edited contract's status is always offered
+  const { groups: lifecycleGroups } = useLifecycleStageGroups('data_contract')
+  const contractLifecycle = selectedGroup(
+    lifecycleGroups, initial?.lifecycle_stage_group_id ?? null,
+  )
+  const lifecycleKeys = contractLifecycle
+    ? orderedStages(contractLifecycle).map((st) => st.key)
+    : ['draft']
+  // Where a new contract (and a partial save) starts: its lifecycle's first stage
+  const initialKey = initialStage(contractLifecycle)?.key ?? 'draft'
+  const currentStatus = typeof initial?.status === 'string' ? initial.status.toLowerCase() : ''
+  const statuses = currentStatus && !lifecycleKeys.includes(currentStatus)
+    ? [currentStatus, ...lifecycleKeys]
+    : lifecycleKeys
 
   // Helper function to handle domain-related errors
   const handleDomainError = async (error: any) => {
@@ -237,7 +252,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         setStep(1)
         setName('')
         setVersion('1.0.0')
-        setStatus('draft')
+        setStatus(initialKey)
         setOwner('')
         setDomainIds([])
         setPrimaryDomainId(null)
@@ -487,7 +502,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       const payload = {
         name,
         version,
-        status: 'draft', // Draft status for partial saves
+        status: initialKey, // The first stage for partial saves
         owner,
         domainIds: domainIds, // Multi-domain assignment (primary included)
         primaryDomainId: primaryDomainId,

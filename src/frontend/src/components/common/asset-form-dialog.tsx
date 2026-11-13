@@ -24,6 +24,9 @@ import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useFormatLabel } from '@/lib/format-label';
+import { useStatusOptions } from '@/hooks/use-lifecycle-stage-groups';
+import LifecycleGroupPicker from '@/components/lifecycle/lifecycle-group-picker';
+import { lifecycleErrorText, stageLabel } from '@/lib/lifecycle-stages';
 
 interface AssetFormDialogProps {
   isOpen: boolean;
@@ -90,6 +93,22 @@ export function AssetFormDialog({
   const form = useForm<Record<string, any>>({
     defaultValues: {},
   });
+  // The lifecycle stage group of a new asset; the status picker offers its
+  // stages (new asset) or the asset's current stage and allowed next ones
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const statusOptions = useStatusOptions('asset', {
+    entityId: isEdit ? asset?.id : null, groupId: isEdit ? null : groupId, enabled: isOpen,
+    currentStatus: isEdit ? asset?.status : null,
+  });
+  const initialKey = statusOptions.initial?.key;
+  // A new asset starts in the default group; only when the dialog opens, so a
+  // group picked before the type's schema loads is kept
+  useEffect(() => {
+    if (isOpen && !isEdit) setGroupId(null);
+  }, [isOpen, isEdit]);
+  useEffect(() => {
+    if (isOpen && !isEdit && initialKey) form.setValue('status', initialKey);
+  }, [isOpen, isEdit, initialKey, groupId, form]);
 
   const fetchSchema = useCallback(async () => {
     if (!assetTypeIri) return;
@@ -138,7 +157,7 @@ export function AssetFormDialog({
     } else {
       defaults.name = '';
       defaults.description = '';
-      defaults.status = 'draft';
+      defaults.status = initialKey || 'draft';
       defaults.platform = '';
       defaults.location = '';
       defaults.domain_ids = [];
@@ -186,7 +205,7 @@ export function AssetFormDialog({
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
         const response = await apiPut<AssetRead>(`/api/assets/${asset.id}`, payload);
-        if (response.error) throw new Error(response.error);
+        if (response.error) throw new Error(lifecycleErrorText(response, t));
         toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });
         onSuccess(response.data!);
       } else {
@@ -195,6 +214,7 @@ export function AssetFormDialog({
           description: values.description || null,
           asset_type_id: assetTypeId,
           status: values.status || 'draft',
+          ...(groupId ? { lifecycle_stage_group_id: groupId } : {}),
           platform: values.platform || null,
           location: values.location || null,
           domain_ids: values.domain_ids || [],
@@ -202,7 +222,7 @@ export function AssetFormDialog({
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
         const response = await apiPost<AssetRead>('/api/assets', payload);
-        if (response.error) throw new Error(response.error);
+        if (response.error) throw new Error(lifecycleErrorText(response, t));
         toast({ title: t('common:assetForm.createdToast', { name: assetTypeName }) });
         onSuccess(response.data!);
       }
@@ -267,6 +287,14 @@ export function AssetFormDialog({
                     </FormItem>
                   )}
                 />
+                {!isEdit && (
+                  <LifecycleGroupPicker
+                    groups={statusOptions.groups}
+                    value={groupId}
+                    onChange={setGroupId}
+                    id="asset-lifecycle-group"
+                  />
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -282,10 +310,11 @@ export function AssetFormDialog({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="draft">{t('common:assetForm.status.draft')}</SelectItem>
-                            <SelectItem value="active">{t('common:assetForm.status.active')}</SelectItem>
-                            <SelectItem value="deprecated">{t('common:assetForm.status.deprecated')}</SelectItem>
-                            <SelectItem value="retired">{t('common:assetForm.status.retired')}</SelectItem>
+                            {statusOptions.options.map((stage) => (
+                              <SelectItem key={stage.key} value={stage.key}>
+                                {stageLabel(stage, t)}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />

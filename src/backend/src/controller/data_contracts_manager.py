@@ -173,12 +173,19 @@ class InvalidVersionFormatError(CodedValueError):
         super().__init__(message, version=version)
 
 
-def relationship_stable_id(rel_data: Dict[str, Any]) -> Optional[str]:
-    """The ODCS id of an incoming relationship: `stableId` in an API payload
-    (where `id` is the row id), else the ODCS `id` of a document."""
-    if 'stableId' in rel_data:
-        return rel_data.get('stableId')
-    return rel_data.get('id')
+def relationship_stable_id(rel_data: Dict[str, Any], from_document: bool) -> Optional[str]:
+    """The ODCS id of an incoming relationship: its `id` in an ODCS document,
+    `stableId` in an API payload (where `id` is the row id)."""
+    return rel_data.get('id') if from_document else rel_data.get('stableId')
+
+
+def _writes_relationship_ids(api_version: Optional[str]) -> bool:
+    """A relationship `id` is ODCS v3.2.0+ (v3.1.0 relationships don't allow it)."""
+    parts = (api_version or 'v3.1.0').lstrip('vV').split('.')
+    try:
+        return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0) >= (3, 2)
+    except ValueError:
+        return False
 
 
 def _relationship_read(rel) -> Dict[str, Any]:
@@ -1102,6 +1109,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
         # Build schema array from relationships
         if hasattr(db_obj, 'schema_objects') and db_obj.schema_objects:
+            relationship_ids = _writes_relationship_ids(db_obj.api_version)
             schema = []
             for schema_obj in db_obj.schema_objects:
                 schema_dict = {
@@ -1243,7 +1251,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_rels = []
                             for rel in prop.relationships:
                                 rel_dict = {'type': rel.relationship_type}
-                                if rel.stable_id:
+                                if rel.stable_id and relationship_ids:
                                     rel_dict['id'] = rel.stable_id
                                 try:
                                     rel_dict['to'] = json.loads(rel.to_value)
@@ -1307,7 +1315,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     rels = []
                     for rel in schema_obj.relationships:
                         rel_dict = {'type': rel.relationship_type}
-                        if rel.stable_id:
+                        if rel.stable_id and relationship_ids:
                             rel_dict['id'] = rel.stable_id
                         try:
                             rel_dict['from'] = json.loads(rel.from_value)
@@ -1728,6 +1736,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None,
         custom_property_ids: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None,
         include_object_quality: bool = False,
+        from_document: bool = False,
     ):
         """
         Create schema objects and properties for a contract using bulk inserts.
@@ -1735,6 +1744,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Assigns UUIDs in Python to avoid per-row db.flush() round-trips.
         ``custom_property_ids``: per schema and property name, the ODCS ids of
         the property-level custom properties before an update recreated them.
+        ``from_document``: the objects come from an ODCS document (upload), so a
+        relationship's ``id`` is its ODCS id (in API payloads it's the row id).
         ``include_object_quality``: also store the objects' own ``quality``
         rules (ODCS files). The create and update routes send object-level
         rules separately as ``qualityRules``, so they leave it off.
@@ -1882,7 +1893,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         all_prop_relationships.append(SchemaPropertyRelationshipDb(
                             id=str(uuid4()),
                             property_id=prop_id,
-                            stable_id=relationship_stable_id(rel_data),
+                            stable_id=relationship_stable_id(rel_data, from_document),
                             relationship_type=rel_data.get('type', 'foreignKey'),
                             to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
                             custom_properties_json=json.dumps(rel_data['customProperties']) if rel_data.get('customProperties') else None,
@@ -1905,7 +1916,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     all_obj_relationships.append(SchemaObjectRelationshipDb(
                         id=str(uuid4()),
                         schema_object_id=schema_obj_id,
-                        stable_id=relationship_stable_id(rel_data),
+                        stable_id=relationship_stable_id(rel_data, from_document),
                         relationship_type=rel_data.get('type', 'foreignKey'),
                         from_value=json.dumps(from_val) if isinstance(from_val, list) else str(from_val),
                         to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
@@ -3197,6 +3208,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if isinstance(schema_data, list) and schema_data:
                 self._create_schema_objects(
                     db, created.id, schema_data, current_user, include_object_quality=True,
+                    from_document=True,
                 )
             
             # Create team members and metadata if present (v3.1.0: team can be object or deprecated array)

@@ -36,6 +36,13 @@ def _definitions(sent: Optional[List[Dict[str, Any]]], stored: Optional[List[Dic
     return merged or None
 
 
+def _api_relationship(relationship: Dict[str, Any]) -> Dict[str, Any]:
+    """A relationship as the export writes it, in the API form (`stableId`)."""
+    out = {k: v for k, v in relationship.items() if k != 'id'}
+    out['stableId'] = relationship.get('id')
+    return out
+
+
 def keep_unsent_fields(payload: Dict[str, Any], stored: Dict[str, Any]) -> Dict[str, Any]:
     """The schema object of an editor save, completed with the stored values of
     the fields it doesn't send. `stored` is the object as the ODCS export
@@ -57,6 +64,8 @@ def keep_unsent_fields(payload: Dict[str, Any], stored: Dict[str, Any]) -> Dict[
             for key in _PROPERTY_FIELDS:
                 if not _sent(column, key) and previous.get(key) is not None:
                     column[key] = previous[key]
+                    if key == 'relationships':  # export form: `id` is the ODCS id
+                        column[key] = [_api_relationship(r) for r in previous[key]]
             definitions = _definitions(column.get('authoritativeDefinitions'), previous.get('authoritativeDefinitions'))
             if definitions is not None:
                 column['authoritativeDefinitions'] = definitions

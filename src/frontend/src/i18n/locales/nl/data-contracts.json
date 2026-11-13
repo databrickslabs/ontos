@@ -1214,6 +1214,9 @@
       "deniedDescription": "Deploymentverzoek is afgewezen.",
       "failedTitle": "Mislukt",
       "couldNotSubmit": "Kon beslissing niet indienen"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "U bent geen goedkeurder van dit implementatieverzoek en kunt het dus niet beslissen."
     }
   },
   "publishRequest": {

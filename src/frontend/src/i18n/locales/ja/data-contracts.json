@@ -1214,6 +1214,9 @@
       "deniedDescription": "デプロイリクエストが却下されました。",
       "failedTitle": "失敗",
       "couldNotSubmit": "判断を送信できませんでした"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "このデプロイ要求の承認者ではないため、決定できません。"
     }
   },
   "publishRequest": {

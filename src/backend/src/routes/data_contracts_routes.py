@@ -1239,9 +1239,20 @@ async def handle_deploy_request_response(
 ):
     """Record a deployment request decision (approve/deny).
 
-    Nothing is deployed. ``execute_deployment`` is accepted and ignored with a
-    warning in the response.
+    Only an approver of the contract's deployment request (a recipient of its
+    notification, e.g. the Admin role) decides it; others get 403. Nothing is
+    deployed. ``execute_deployment`` is accepted and ignored with a warning in
+    the response.
     """
+    if not manager.is_deploy_request_approver(db, notifications, contract_id, current_user):
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (data-contracts:deployRequest.errors.*)
+            detail={
+                'code': 'deploy_request_not_an_approver',
+                'message': "Only the approvers of this deployment request can decide it.",
+            },
+        )
     try:
         result = manager.handle_deploy_response(
             db=db,

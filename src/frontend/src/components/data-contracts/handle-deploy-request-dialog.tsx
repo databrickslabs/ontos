@@ -41,7 +41,12 @@ export default function HandleDeployRequestDialog({
       // Approving records the decision; it doesn't deploy anything
       const body = { decision, message: message || undefined };
       const res = await post(`/api/data-contracts/${contractId}/handle-deploy`, body);
-      if (res.error) throw new Error(res.error);
+      if (res.error) {
+        // A coded refusal (e.g. not an approver of this request) in the user's language
+        throw new Error(res.errorCode
+          ? t(`data-contracts:deployRequest.errors.${res.errorCode}`, res.error)
+          : res.error);
+      }
 
       const description = decision === 'approve'
         ? t('data-contracts:deployRequest.toast.approvedDescription', 'Deployment request has been approved.')

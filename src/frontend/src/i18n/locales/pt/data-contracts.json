@@ -1214,6 +1214,9 @@
       "deniedDescription": "A solicitação de implantação foi negada.",
       "failedTitle": "Falha",
       "couldNotSubmit": "Não foi possível enviar a decisão"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "Você não é aprovador desta solicitação de implantação, então não pode decidi-la."
     }
   },
   "publishRequest": {

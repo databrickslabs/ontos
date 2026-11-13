@@ -1214,6 +1214,9 @@
       "deniedDescription": "La demande de déploiement a été refusée.",
       "failedTitle": "Échec",
       "couldNotSubmit": "Impossible de soumettre la décision"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "Vous n'êtes pas approbateur de cette demande de déploiement : vous ne pouvez pas la décider."
     }
   },
   "publishRequest": {

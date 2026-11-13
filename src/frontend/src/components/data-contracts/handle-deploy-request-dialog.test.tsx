@@ -53,4 +53,20 @@ describe('HandleDeployRequestDialog', () => {
     expect(api.post.mock.calls[0][1]).toEqual({ decision: 'deny', message: undefined });
     expect(api.toast.mock.calls[0][0].description).toBe('Deployment request has been denied.');
   });
+
+  it('says in the user language that a non-approver cannot decide', async () => {
+    api.post.mockResolvedValue({
+      data: null, error: 'Only the approvers of this deployment request can decide it.',
+      errorCode: 'deploy_request_not_an_approver',
+    });
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+
+    await waitFor(() => expect(api.toast).toHaveBeenCalledTimes(1));
+    expect(api.toast.mock.calls[0][0].variant).toBe('destructive');
+    expect(api.toast.mock.calls[0][0].description).toBe(
+      "You aren't an approver of this deployment request, so you can't decide it.",
+    );
+  });
 });

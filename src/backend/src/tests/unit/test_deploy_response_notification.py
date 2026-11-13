@@ -78,3 +78,67 @@ def test_a_denial_with_execute_deployment_is_still_a_denial(caplog):
     details = changes.log_change_with_details.call_args.kwargs['details']
     assert details['decision'] == 'deny'
     assert details['execute_deployment'] is True
+
+
+class TestDeployRequestApprover:
+    """``is_deploy_request_approver``: a recipient of the contract's request."""
+
+    def _notification(self, db, contract_id, recipient, role_id=None):
+        import json as _json
+        import uuid as _uuid
+        from datetime import datetime as _dt
+        from src.db_models.notifications import NotificationDb
+
+        db.add(NotificationDb(
+            id=str(_uuid.uuid4()), type='action_required', title='Contract Deployment Request',
+            recipient=recipient, recipient_role_id=role_id, created_at=_dt.utcnow(),
+            action_type='handle_deploy_request', can_delete=False, read=True,
+            action_payload=_json.dumps({'contract_id': contract_id}),
+        ))
+        db.flush()
+
+    def _check(self, db, contract_id, user, roles):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from src.controller.data_contracts_manager import DataContractsManager
+        from src.controller.notifications_manager import NotificationsManager
+        from src.models.users import UserInfo
+
+        settings = Mock()
+        settings.list_app_roles.return_value = [
+            SimpleNamespace(id=f'role-{n}', name=n, assigned_groups=g) for n, g in roles
+        ]
+        info = UserInfo(
+            email=user[0], username=user[0], user=user[0], ip='127.0.0.1', groups=user[1],
+        )
+        manager = DataContractsManager.__new__(DataContractsManager)
+        return manager.is_deploy_request_approver(
+            db, NotificationsManager(settings_manager=settings), contract_id, info,
+        )
+
+    ROLES = [('Admin', ['admins']), ('Release', ['release'])]
+
+    def test_admins_decide_the_request_to_the_admin_role(self, db_session):
+        self._notification(db_session, 'c1', 'Admin')
+        assert self._check(db_session, 'c1', ('a@x.com', ['admins']), self.ROLES) is True
+
+    def test_an_editor_outside_the_recipients_does_not(self, db_session):
+        self._notification(db_session, 'c1', 'Admin')
+        assert self._check(db_session, 'c1', ('e@x.com', ['editors']), self.ROLES) is False
+
+    def test_group_role_and_user_recipients(self, db_session):
+        self._notification(db_session, 'c1', 'group:Ops')
+        self._notification(db_session, 'c2', 'Release', role_id='role-Release')
+        self._notification(db_session, 'c3', 'user:pat')
+        assert self._check(db_session, 'c1', ('o@x.com', ['ops']), self.ROLES) is True
+        assert self._check(db_session, 'c2', ('r@x.com', ['release']), self.ROLES) is True
+        assert self._check(db_session, 'c3', ('pat', []), self.ROLES) is True
+        # Another contract's request decides nothing here
+        assert self._check(db_session, 'c2', ('o@x.com', ['ops']), self.ROLES) is False
+
+    def test_no_request_no_approver_not_even_an_admin(self, db_session):
+        assert self._check(db_session, 'c9', ('a@x.com', ['admins']), self.ROLES) is False
+
+    def test_a_broadcast_request_decides_nothing(self, db_session):
+        self._notification(db_session, 'c1', None)
+        assert self._check(db_session, 'c1', ('e@x.com', ['editors']), self.ROLES) is False

@@ -1214,6 +1214,9 @@
       "deniedDescription": "La richiesta di deployment è stata rifiutata.",
       "failedTitle": "Non Riuscito",
       "couldNotSubmit": "Impossibile inviare la decisione"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "Non sei un approvatore di questa richiesta di distribuzione, quindi non puoi deciderla."
     }
   },
   "publishRequest": {

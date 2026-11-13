@@ -306,8 +306,9 @@ class AppEntityLoader(EntityLoader):
     ) -> Iterator[Dict[str, Any]]:
         """Load app entities from database.
 
-        NOTE: repositories expose get_multi() (CRUDBase), not list(); the Db
-        models carry owner_team_id rather than owner, and their domains and
+        NOTE: repositories expose get_multi() (CRUDBase), not list(); the
+        product and contract Db models carry owner_team_id rather than owner, a
+        domain's owners are its Business Owners, and the domains and
         tags are in association tables. Only the types a rule matches are loaded; a type that
         can't be loaded raises EntityLoadError (see _load). With ``entity_id``
         only that entity is read (a workflow policy check, see load_entity).
@@ -386,8 +387,30 @@ class AppEntityLoader(EntityLoader):
 
         # Domains
         if 'domain' in entity_types:
+            from src.db_models.business_owners import BusinessOwnerDb
             from src.repositories.data_domain_repository import data_domain_repo
-            domains = self._load('domain', lambda: self._rows(data_domain_repo, entity_id))
+
+            def domains_and_owners():
+                domains = self._rows(data_domain_repo, entity_id)
+                # A domain has no owner team (its owner_team_id column was dropped):
+                # its owners are its active Business Owners, whatever their role, as
+                # the domain page lists them under "Owners"
+                rows = self.db.query(
+                    BusinessOwnerDb.object_id, BusinessOwnerDb.user_email
+                ).filter(
+                    BusinessOwnerDb.object_type == 'data_domain',
+                    BusinessOwnerDb.object_id.in_([str(d.id) for d in domains]),
+                    BusinessOwnerDb.is_active.is_(True),
+                ).order_by(
+                    BusinessOwnerDb.assigned_at, BusinessOwnerDb.user_email
+                ).all() if domains else []
+                owners: Dict[str, List[str]] = {}
+                for object_id, email in rows:
+                    if email and email not in owners.setdefault(object_id, []):
+                        owners[object_id].append(email)
+                return domains, owners
+
+            domains, owners_map = self._load('domain', domains_and_owners)
             tags_map = self._tags_by_entity('data_domain', [str(d.id) for d in domains])
             for domain in domains:
                 yield {
@@ -395,7 +418,8 @@ class AppEntityLoader(EntityLoader):
                     'id': domain.id,
                     'name': domain.name,
                     'description': getattr(domain, 'description', None),
-                    'owner': getattr(domain, 'owner_team_id', None),
+                    # Emails of its owners, in assignment order; [] when it has none
+                    'owner': owners_map.get(str(domain.id), []),
                     'tags': tags_map.get(str(domain.id), {}),
                     'created_at': getattr(domain, 'created_at', None),
                     'updated_at': getattr(domain, 'updated_at', None),

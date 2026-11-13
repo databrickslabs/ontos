@@ -743,7 +743,8 @@ class AssetBulkManager:
                             db.flush()
                             db.refresh(db_asset)
                             self._set_asset_domains(
-                                db, db_asset.id, domain_ids_val, primary_domain_val, current_user_id)
+                                db, db_asset.id, domain_ids_val, primary_domain_val,
+                                current_user_id)
                             item.action = ImportAction.CREATE
                             item.asset_id = str(db_asset.id)
                             result.created += 1
@@ -760,8 +761,8 @@ class AssetBulkManager:
                 try:
                     after_save(UUID(item.asset_id), previous_description, has_description_column)
                 except Exception:
-                    logger.warning("Post-save step failed for import row %s", item.row,
-                                   exc_info=True)
+                    logger.warning(
+                        "Post-save step failed for import row %s", item.row, exc_info=True)
             result.items.append(item)
 
         # Wire parent relationships (skip if cycles detected)

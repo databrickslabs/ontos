@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 from src.common.payload_spellings import CamelCaseSpellingWins
+from src.common.odcs_versions import normalize_odcs_api_version
 
 if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed
@@ -477,6 +478,8 @@ class DataContractBase(CamelCaseSpellingWins):
         # The create dialog sends the field names (domainIds, primaryDomainId, ...)
         populate_by_name = True
 
+    _api_version = field_validator('apiVersion', mode='before')(normalize_odcs_api_version)
+
 
 class DataContractCreate(DataContractBase):
     # Additional ODCS fields for wizard
@@ -611,6 +614,8 @@ class DataContractUpdate(CamelCaseSpellingWins):
 
     class Config:
         populate_by_name = True
+
+    _api_version = field_validator('apiVersion', mode='before')(normalize_odcs_api_version)
 
 
 class DataContractRead(BaseModel):

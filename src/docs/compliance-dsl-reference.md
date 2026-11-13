@@ -215,20 +215,23 @@ ON_FAIL NOTIFY 'entity_owner'
 ```
 
 - **Recipients** resolve as in workflow notification steps:
-  - user emails and group names;
+  - user emails, and groups as `group:<name>`;
   - app role names or ids;
-  - `entity_owner` (or `owner`), `domain_owners`, `business:<role id>`, resolved for each entity;
+  - `entity_owner` (or `owner`), `domain_owners`, `business:<role id>`, resolved for each entity; on Unity Catalog objects `owner` is the object's UC owner;
+    `domain_owners` (or `DomainOwner`) and `ContractApprover` and `AssetOwner` are the owners of the entity's domain / of the entity, the user who started the run included; unlike workflow approvals, nobody else is notified when there are none;
   - a comma-separated list of these.
+
+  Keywords such as `owner`, `entity_owner` or `requester` match without case, spaces and underscores (`Owner`, `Entity Owner`). Any other name that is not an app role fails the action (*not a known recipient*); it doesn't become a recipient that no user matches.
 
   `requester` / `trigger_user` is the user who started the run, so scheduled runs of the compliance-checks job have none. A recipient list that resolves to nobody for an entity fails the action for that entity.
 - **One notification per recipient per run.** A run can match many entities, so NOTIFY doesn't send one notification each. When the run ends, each recipient gets one notification:
   - it gives the run's totals of failed and passed entities;
-  - it names up to 10 of the entities its NOTIFY actions ran for (each once), and counts the rest;
+  - it names up to 10 of the entities its NOTIFY actions ran for (each once), and counts the rest. It only names entities the recipient can read: a user is told the names of the data products and contracts they could open (the same checks as the product page and the contract list), a role or group only those every reader sees (published ones), and the names of Unity Catalog objects go only to their owner. The others are only counted;
   - it links to the run's results.
 
   The notification is created even if the run is a scheduled job, and also for the entities evaluated before a run that stops with an error.
 - **Done** on a NOTIFY action means the recipient was queued for the run's notification. If the notifications can't be created when the run ends, the run reports the warning *notifications could not be sent*.
-- **Permission.** NOTIFY can reach any user, group or role, so saving or running a policy that uses it needs **admin** access to compliance (Data Governance Officers and Admins by default). Scheduled runs use the rules as saved.
+- **Permission.** NOTIFY can reach any user, group or role, so saving, renaming (the name is the notifications' title) or running a policy that uses it needs **admin** access to compliance (Data Governance Officers and Admins by default). Scheduled runs use the rules as saved.
 - Notifications use the in-app channel.
 
 ### Action outcomes in run results

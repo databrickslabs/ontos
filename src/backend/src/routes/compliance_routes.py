@@ -162,6 +162,8 @@ async def update_policy(
     warnings = _check_rule(policy.rule) if rule_changed else []
     if rule_changed:
         require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
+    # The name is the title of the notifications NOTIFY sends: renaming is gated too
+    if rule_changed or existing.name != policy.name:
         require_compliance_admin_for_notify(policy.rule, auth_manager, current_user)
     updated = manager.update_policy(
         db, 

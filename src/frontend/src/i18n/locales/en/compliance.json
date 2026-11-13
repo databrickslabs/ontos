@@ -202,6 +202,7 @@
       "tag_entity_without_id": "The entity has no id",
       "notification_manager_unavailable": "Notifications are not available in this run",
       "notify_no_recipients": "{{recipients}} resolved to no recipient",
+      "notify_unknown_recipient": "{{recipient}} is not a known recipient: use an email, group:<name>, an app role or a recipient keyword",
       "action_failed": "The action failed"
     }
   }

@@ -1284,9 +1284,14 @@ DELIVERY_OBJECT_TYPES = ("TABLE", "COLUMN", "SCHEMA", "CATALOG")
 class CorruptDeliveryState(dict):
     """An empty state read from a stored value that did not parse.
 
-    A full run replaces the record, but there is no delivery history behind it, so the
-    legacy cleanup treats it like an unreadable state.
+    ``raw`` is the stored value. A full run backs it up (see backup_delivery_state) and
+    then replaces the record, but there is no delivery history behind it, so the legacy
+    cleanup treats it like an unreadable state.
     """
+
+    def __init__(self, raw: str = ""):
+        super().__init__()
+        self.raw = raw
 
 
 def read_delivery_state(engine: Engine) -> Optional[DeliveryState]:
@@ -1314,8 +1319,44 @@ def read_delivery_state(engine: Engine) -> Optional[DeliveryState]:
     except Exception as e:
         # A stored value that doesn't parse can't be read again: read it as nothing
         # delivered, so a full run overwrites it and repairs the record.
-        print(f"[WARN] UC tag delivery state is not valid, it will be replaced: {e}")
-        return CorruptDeliveryState()
+        print(
+            "[WARN] UC tag delivery state is not valid: a full run backs it up and "
+            "replaces it. Tags it recorded on objects that lost their link can't be "
+            f"found any more and may stay on those objects (orphaned): {e}"
+        )
+        return CorruptDeliveryState(row[0])
+
+
+DELIVERY_STATE_KEY = "uc_tag_sync_delivery_state"
+
+
+def backup_delivery_state(engine: Engine, raw: str) -> Optional[str]:
+    """Copy a stored state that doesn't parse to ``<key>.corrupt-<UTC timestamp>``.
+
+    It is the only delivery history, so it is kept for a manual look before a full run
+    replaces it. Returns an error message on failure (the state must not be replaced).
+    """
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    backup_key = f"{DELIVERY_STATE_KEY}.corrupt-{stamp}"
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO app_settings (key, value, updated_at) "
+                    "VALUES (:key, :value, CURRENT_TIMESTAMP) "
+                    "ON CONFLICT (key) DO UPDATE "
+                    "SET value = EXCLUDED.value, "
+                    "updated_at = CURRENT_TIMESTAMP"
+                ),
+                {"key": backup_key, "value": raw},
+            )
+    except Exception as e:
+        msg = f"Failed to back up the invalid UC tag delivery state, not replaced: {e}"
+        print(f"[WARN] {msg}")
+        return msg
+    print(f"[WARN] The invalid UC tag delivery state was copied to app_settings key "
+          f"{backup_key}")
+    return None
 
 
 def save_delivery_state(
@@ -2151,9 +2192,14 @@ def save_run_delivery_state(
     """Store what the run delivered. Returns an error message on failure.
 
     A full run that read the previous state replaces the record; otherwise the run's
-    objects are merged into it.
+    objects are merged into it. A stored state that didn't parse is backed up first, and
+    kept as it is when the backup fails.
     """
     replace = previous is not None and not is_partial_read
+    if replace and isinstance(previous, CorruptDeliveryState):
+        backup_error = backup_delivery_state(engine, previous.raw)
+        if backup_error:
+            return backup_error
     return save_delivery_state(engine, result.delivered, ownership.describe(),
                                replace=replace)
 

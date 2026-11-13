@@ -94,6 +94,7 @@ def job(tag_sync, monkeypatch):
         return None
 
     env.real_read = tag_sync.read_delivery_state
+    env.real_save = tag_sync.save_delivery_state
     monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags", existing)
     monkeypatch.setattr(tag_sync, "assign_tag", assign)
     monkeypatch.setattr(tag_sync, "unassign_tag", unassign)
@@ -719,3 +720,52 @@ def test_a_dry_run_splits_recorded_from_customer_owned_tags(tag_sync, job, capsy
     assert f"kept (customer-owned)=['{DOMAIN_KEY}']" in out
     assert job.unassigned == [] and job.assigned == []
 
+
+
+# A stored state that doesn't parse -------------------------------------------------
+
+CORRUPT_WITH_RECORDS = '{"version": 1, "objects": {"TABLE": {"main.sales.other": {"ontos_'
+
+
+def _app_settings(engine):
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        return dict(conn.execute(text("SELECT key, value FROM app_settings")).all())
+
+
+def test_a_corrupt_state_with_records_is_backed_up_before_it_is_replaced(
+    tag_sync, job, monkeypatch, capsys
+):
+    import sqlalchemy
+
+    engine = _sqlite_engine(sqlalchemy, CORRUPT_WITH_RECORDS)
+    monkeypatch.setattr(tag_sync, "create_engine_from_params", lambda *_a, **_k: engine)
+    monkeypatch.setattr(tag_sync, "read_delivery_state", job.real_read)
+    monkeypatch.setattr(tag_sync, "save_delivery_state", job.real_save)
+
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
+
+    settings = _app_settings(engine)
+    backups = {k: v for k, v in settings.items()
+               if k.startswith("uc_tag_sync_delivery_state.corrupt-")}
+    assert list(backups.values()) == [CORRUPT_WITH_RECORDS]
+    assert _stored_objects(engine)["TABLE"] == {ORDERS: {DOMAIN_KEY: "Finance"}}
+    out = capsys.readouterr().out
+    assert "orphaned" in out
+    assert "copied to app_settings key uc_tag_sync_delivery_state.corrupt-" in out
+
+
+def test_a_corrupt_state_is_not_replaced_when_the_backup_fails(tag_sync, job, monkeypatch):
+    import sqlalchemy
+
+    engine = _sqlite_engine(sqlalchemy, CORRUPT_WITH_RECORDS)
+    monkeypatch.setattr(tag_sync, "create_engine_from_params", lambda *_a, **_k: engine)
+    monkeypatch.setattr(tag_sync, "read_delivery_state", job.real_read)
+    monkeypatch.setattr(tag_sync, "save_delivery_state", job.real_save)
+    monkeypatch.setattr(tag_sync, "backup_delivery_state", lambda *_a: "backup failed")
+
+    with pytest.raises(SystemExit):
+        job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
+
+    assert _app_settings(engine) == {"uc_tag_sync_delivery_state": CORRUPT_WITH_RECORDS}

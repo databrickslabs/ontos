@@ -59,21 +59,6 @@ DATA_CONTRACT_TRANSITIONS: dict[str, list[str]] = {
     "retired": [],
 }
 
-DATASET_TRANSITIONS: dict[str, list[str]] = {
-    "draft": ["active", "deprecated"],
-    "active": ["deprecated"],
-    "deprecated": ["retired", "active"],
-    "retired": [],
-}
-
-ASSET_TRANSITIONS: dict[str, list[str]] = {
-    "draft": ["active", "deprecated"],
-    "active": ["deprecated"],
-    "deprecated": ["retired", "active"],
-    "retired": [],
-}
-
-
 class CertificationInfo(BaseModel):
     """Certification metadata embedded in entity responses."""
     certification_level: Optional[int] = Field(None, description="Ordinal of the certification level")

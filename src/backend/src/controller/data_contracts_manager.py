@@ -4391,13 +4391,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         
         # Certification is now a separate dimension — removed from status transitions
         from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
-        valid_transitions = DATA_CONTRACT_TRANSITIONS
-        
-        current_status = contract.status or 'draft'
-        if new_status not in valid_transitions.get(current_status, []):
-            # Allow any transition if current status not in map (backward compatibility)
-            if current_status in valid_transitions:
-                raise ValueError(f"Invalid status transition from {current_status} to {new_status}")
+        from src.common.api_errors import InvalidStatusTransitionError
+
+        # Lowercase and strict, as for products: a status outside the lifecycle
+        # (stored before the lifecycle cleanup) allows no transition
+        current_status = (contract.status or 'draft').lower()
+        new_status = (new_status or '').lower()
+        allowed = DATA_CONTRACT_TRANSITIONS.get(current_status, [])
+        if new_status not in allowed:
+            raise InvalidStatusTransitionError(
+                f"Invalid status transition from '{current_status}' to '{new_status}'. "
+                f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}",
+                fromStatus=current_status, toStatus=new_status, allowed=list(allowed),
+            )
 
         # Run before_status_change workflows (gating)
         # (a gate that errors refuses the transition when it is fail_closed, #1103);

@@ -12,16 +12,81 @@ on:
 permissions:
   contents: read
 
+# The suite runs in shards balanced by the per-file durations measured on
+# previous runs (src/scripts/integration_shards.py). The durations live in the
+# Actions cache under integ-durations-<run_id>-<attempt>; a run restores the
+# latest entry of its own ref, else of its base / the default branch. They only
+# change the balance and the shard count, never which tests run.
 jobs:
-  backend-integration-tests:
-    name: Backend Integration Tests
+  # One plan for all shards: if each shard restored the durations itself, a
+  # save landing between two shard starts could run a file twice or not at all.
+  plan:
+    name: Plan Integration Test Shards
     runs-on:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC (setup-python bootstrap)
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      # Names this plan's artifacts. "Re-run failed jobs" reuses this job and
+      # its outputs, so the re-run shards join the passed ones' results; a
+      # full re-run plans again (N may change) and ignores the old artifacts.
+      attempt: ${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Standard library only: no dependencies installed, no pip cache
+      - uses: ./.github/actions/setup-python-jfrog
+        with:
+          python-version: '3.11'
+          installer: none
+          cache: ''
+
+      - name: Restore test durations
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: integ-durations.json
+          key: integ-durations-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: integ-durations-
+
+      # Missing or invalid durations fall back to weights by test count and
+      # 4 shards (with a warning); only an unsafe test file name fails here.
+      - name: Plan shards
+        id: plan
+        run: |
+          matrix=$(python src/scripts/integration_shards.py plan \
+            --durations integ-durations.json \
+            --tests-dir src/backend/src/tests/integration \
+            --default-shards 4 --max-shards 6 --target-seconds 300 --workers 3 \
+            --plan-out plan.json)
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload plan
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: integ-plan-${{ github.run_attempt }}
+          path: plan.json
+          retention-days: 3
+          overwrite: true
+
+  shards:
+    name: Backend Integration Tests (shard ${{ matrix.shard }}/${{ matrix.of }})
+    needs: plan
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write # JFrog OIDC
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
 
     steps:
       - name: Checkout code
@@ -51,12 +116,118 @@ jobs:
           DATABRICKS_SCHEMA: test_schema
           DATABRICKS_VOLUME: test_volume
           APP_AUDIT_LOG_DIR: /tmp/audit_logs
-        # 3 workers, not 4: with 4 the runner was shut down near the end of
-        # the run (exit 143, no failing test), likely from memory pressure;
-        # locally each worker peaks at ~1.8 GB.
+          # Passed as data, not interpolated into the script
+          SHARD_FILES: ${{ matrix.files }}
+          SHARD_INDEX: ${{ matrix.shard }}
+        # 3 workers per shard, not 4: with 4 the runner was shut down near the
+        # end of the run (exit 143, no failing test), likely from memory
+        # pressure; locally each worker peaks at ~1.8 GB. More throughput
+        # comes from more shards instead.
         run: |
-          hatch -e dev run pytest backend/src/tests/integration \
+          read -ra files <<< "$SHARD_FILES"
+          if [ "${#files[@]}" -eq 0 ]; then
+            # pytest without paths would run the unit testpaths instead
+            echo "::error::Shard ${SHARD_INDEX} has no test files"
+            exit 1
+          fi
+          hatch -e dev run pytest "${files[@]}" \
             -o addopts="--import-mode=importlib" \
             -o faulthandler_timeout=300 \
             -n 3 \
-            -q -rs
+            -q -rs \
+            --junitxml="junit-${SHARD_INDEX}.xml"
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: integ-junit-${{ needs.plan.outputs.attempt }}-${{ matrix.shard }}
+          path: src/junit-${{ matrix.shard }}.xml
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: ignore
+
+  # The required check. Its name doesn't depend on the shard count, so a change
+  # of N doesn't touch branch protection or the merge queue.
+  backend-integration-tests:
+    name: Backend Integration Tests
+    needs: [plan, shards]
+    if: always()
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC (setup-python bootstrap)
+
+    steps:
+      - name: Check the plan
+        if: needs.plan.result != 'success'
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+        run: |
+          echo "::error::Shard planning did not succeed (${PLAN_RESULT})"
+          exit 1
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-python-jfrog
+        with:
+          python-version: '3.11'
+          installer: none
+          cache: ''
+
+      - name: Download plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: integ-plan-${{ needs.plan.outputs.attempt }}
+          path: .
+
+      # A shard that died before writing its XML leaves no artifact; the merge
+      # step reports its files as missing, so a failed download isn't fatal here.
+      - name: Download JUnit results
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: integ-junit-${{ needs.plan.outputs.attempt }}-*
+          path: junit
+          merge-multiple: true
+
+      - name: Restore test durations
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: integ-durations.json
+          key: integ-durations-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: integ-durations-
+
+      # Averages the new per-file times with the previous ones and fails if a
+      # planned file with tests has no result (a shard failed or didn't run).
+      - name: Merge test durations
+        id: merge
+        run: |
+          python src/scripts/integration_shards.py merge \
+            --plan plan.json \
+            --junit-dir junit \
+            --previous integ-durations.json \
+            --out integ-durations.json
+
+      # Saved even when a shard failed, so the next runs get the times of what
+      # ran. Not on merge_group: nothing restores the queue branches' entries.
+      - name: Save test durations
+        if: >-
+          always() && steps.merge.outcome != 'skipped' &&
+          github.event_name != 'merge_group' && hashFiles('integ-durations.json') != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: integ-durations.json
+          key: integ-durations-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Check the shards
+        if: always() && needs.shards.result != 'success'
+        env:
+          SHARDS_RESULT: ${{ needs.shards.result }}
+        run: |
+          echo "::error::Not every integration test shard succeeded (${SHARDS_RESULT})"
+          exit 1

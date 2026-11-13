@@ -14,11 +14,11 @@
     "roles": "ロール",
     "rdfSources": "RDFソース",
     "tags": "タグ",
+    "complianceTemplates": "コンプライアンステンプレート",
     "search": "検索",
     "mcpTokens": "MCPトークン",
     "workflows": "ワークフロー",
-    "uiCustomization": "UIカスタマイズ",
-    "complianceTemplates": "コンプライアンステンプレート"
+    "uiCustomization": "UIカスタマイズ"
   },
   "accessDenied": {
     "title": "アクセス拒否",

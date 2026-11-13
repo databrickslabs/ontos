@@ -14,11 +14,11 @@
     "roles": "Rollen",
     "rdfSources": "RDF-Quellen",
     "tags": "Tags",
+    "complianceTemplates": "Compliance-Vorlagen",
     "search": "Suche",
     "mcpTokens": "MCP-Token",
     "workflows": "Workflows",
-    "uiCustomization": "UI-Anpassung",
-    "complianceTemplates": "Compliance-Vorlagen"
+    "uiCustomization": "UI-Anpassung"
   },
   "accessDenied": {
     "title": "Zugriff verweigert",

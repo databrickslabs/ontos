@@ -14,11 +14,11 @@
     "roles": "Ruoli",
     "rdfSources": "Fonti RDF",
     "tags": "Tag",
+    "complianceTemplates": "Modelli di conformità",
     "search": "Ricerca",
     "mcpTokens": "Token MCP",
     "workflows": "Workflow",
-    "uiCustomization": "Personalizzazione UI",
-    "complianceTemplates": "Modelli di conformità"
+    "uiCustomization": "Personalizzazione UI"
   },
   "accessDenied": {
     "title": "Accesso negato",

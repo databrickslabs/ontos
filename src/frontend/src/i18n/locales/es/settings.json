@@ -14,11 +14,11 @@
     "roles": "Roles",
     "rdfSources": "Fuentes RDF",
     "tags": "Etiquetas",
+    "complianceTemplates": "Plantillas de cumplimiento",
     "search": "Búsqueda",
     "mcpTokens": "Tokens MCP",
     "workflows": "Flujos de trabajo",
-    "uiCustomization": "Personalización UI",
-    "complianceTemplates": "Plantillas de cumplimiento"
+    "uiCustomization": "Personalización UI"
   },
   "accessDenied": {
     "title": "Acceso denegado",

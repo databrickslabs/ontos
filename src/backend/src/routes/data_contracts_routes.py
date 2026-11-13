@@ -88,6 +88,16 @@ def get_jobs_manager(request: Request):
     """Retrieves the JobsManager instance from app.state."""
     return getattr(request.app.state, 'jobs_manager', None)
 
+
+async def _compliance_values_user(
+    request: Request, user: UserInfo, auth_manager: AuthorizationManager
+) -> Optional[str]:
+    """Who fills imported table and view template values; ``None``: the user may not."""
+    allowed = await compliance_template_exchange.can_import_values(
+        request, user, auth_manager, entity_type="asset"
+    )
+    return (user.email or user.username) if allowed else None
+
  
 
 @router.get('/data-contracts', response_model=list[DataContractSummary])
@@ -1523,16 +1533,6 @@ async def delete_contract(
             success=success,
             details=details_for_audit,
         )
-
-
-async def _compliance_values_user(
-    request: Request, user: UserInfo, auth_manager: AuthorizationManager
-) -> Optional[str]:
-    """Who fills imported table and view template values; ``None``: the user may not."""
-    allowed = await compliance_template_exchange.can_import_values(
-        request, user, auth_manager, entity_type="asset"
-    )
-    return (user.email or user.username) if allowed else None
 
 
 @router.post('/data-contracts/upload')

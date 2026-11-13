@@ -439,4 +439,40 @@ describe('DataContractWizardDialog Schema Inference', () => {
     // but not the free-text timezone, a boolean for timestamps in ODCS v3.1
     expect(screen.queryByText('Timezone')).not.toBeInTheDocument()
   })
+
+  it('offers no free-text timezone on a date column (ODCS v3.1 has none)', async () => {
+    currentMockSchemas = [
+      {
+        name: 'orders',
+        physicalName: '',
+        description: '',
+        physicalType: 'table',
+        properties: [
+          {
+            name: 'order_day', physicalType: 'DATE', logicalType: 'date',
+            required: false, description: '', partitioned: false,
+          },
+        ]
+      }
+    ]
+
+    renderWithProviders(
+      <DataContractWizardDialog
+        isOpen={true}
+        onOpenChange={mockOnOpenChange}
+        onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    fireEvent.click(screen.getByText(/Infer from Asset/i))
+    fireEvent.click(screen.getByTestId('select-dataset'))
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('order_day')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Date Constraints')).toBeInTheDocument()
+    expect(screen.queryByText('Timezone')).not.toBeInTheDocument()
+  })
 })

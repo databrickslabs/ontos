@@ -13,7 +13,7 @@ import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
-import { hasDateConstraints, takesTimezoneName } from './logical-types'
+import { hasDateConstraints } from './logical-types'
 
 type WizardProps = {
   isOpen: boolean
@@ -1078,17 +1078,6 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                           </SelectContent>
                                         </Select>
                                       </div>
-                                      {takesTimezoneName((col as any).logicalType) && (
-                                      <div>
-                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.timezone', 'Timezone')}</Label>
-                                        <Input
-                                          placeholder={t('data-contracts:wizard.constraints.timezonePlaceholder', 'UTC, America/New_York')}
-                                          value={(col as any).timezone || ''}
-                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, timezone: e.target.value || undefined } : y) } : x))}
-                                          className="mt-0.5 h-7 text-xs"
-                                        />
-                                      </div>
-                                      )}
                                       <div>
                                         <Label className="text-[10px]">{t('data-contracts:wizard.constraints.customFormat', 'Custom Format')}</Label>
                                         <Input

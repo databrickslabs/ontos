@@ -1164,6 +1164,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         if prop.logical_type_options_json:
                             try:
                                 logical_type_options = json.loads(prop.logical_type_options_json)
+                                if prop.logical_type == 'date':
+                                    # ODCS v3.1 has no timezone on a date; kept stored, not exported
+                                    logical_type_options.pop('timezone', None)
                                 prop_dict.update(logical_type_options)  # Merge constraints into property
                             except (json.JSONDecodeError, TypeError):
                                 pass

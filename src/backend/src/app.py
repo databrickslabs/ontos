@@ -210,11 +210,13 @@ async def startup_event():
     try:
         from src.repositories.certification_levels_repository import certification_levels_repo
         from src.repositories.maturity_repository import maturity_repo
+        from src.repositories.tags_repository import seed_default_tags
         from src.common.database import get_session_factory
         _sf = get_session_factory()
         with _sf() as _db:
             certification_levels_repo.seed_defaults(_db)
             maturity_repo.seed_defaults(_db)
+            seed_default_tags(_db)
             _db.commit()
         logger.info("Reference data seed step complete.")
     except Exception as e:

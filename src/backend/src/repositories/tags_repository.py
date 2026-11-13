@@ -502,3 +502,42 @@ tag_namespace_repo = TagNamespaceRepository(TagNamespaceDb)
 tag_repo = TagRepository(TagDb)
 tag_namespace_permission_repo = TagNamespacePermissionRepository(TagNamespacePermissionDb)
 entity_tag_repo = EntityTagAssociationRepository(EntityTagAssociationDb) 
+
+
+# Tags the shipped default workflows assign (data/default_workflows.yaml)
+DEFAULT_WORKFLOW_TAGS = (
+    {
+        'name': 'owner',
+        'description': 'Accountable owner of the asset; the default naming and contract '
+                       'workflows assign it',
+    },
+    {
+        'name': 'contains_pii',
+        'description': 'Contains personally identifiable information; set by the PII '
+                       'detection workflow',
+    },
+)
+
+
+def seed_default_tags(
+    db: Session, *, user_email: Optional[str] = 'system@startup.ucapp',
+) -> List[TagDb]:
+    """Create the default workflow tags in the default namespace if they are missing.
+
+    Idempotent: a tag that exists is left as it is, whatever its values, so a user's
+    edits survive every startup. Only creates rows; the caller commits.
+    """
+    namespace = tag_namespace_repo.get_or_create_default_namespace(db, user_email=user_email)
+    created = []
+    for spec in DEFAULT_WORKFLOW_TAGS:
+        exists = db.query(TagDb).filter_by(namespace_id=namespace.id, name=spec['name']).first()
+        if exists:
+            continue
+        tag = TagDb(
+            name=spec['name'], description=spec['description'], status='active',
+            namespace_id=namespace.id, created_by=user_email,
+        )
+        db.add(tag)
+        created.append(tag)
+    db.flush()
+    return created

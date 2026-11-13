@@ -2319,7 +2319,7 @@ Steps are the building blocks of workflows:
 | Step Type | Description | Configuration |
 |-----------|-------------|---------------|
 | **Validation** | Evaluate a compliance rule | Rule DSL expression |
-| **Approval** | Request human approval | Approvers; require all (every approver decides: a user for themselves, any one member for a group or role, one person for one approver); timeout in days, `0` = no timeout, accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
+| **Approval** | Request human approval | Approvers; require all (every approver decides: a user for themselves, any one member for a group or role; one person decides once, for every approver entry naming them or else for one group or role); timeout in days, `0` = no timeout, accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
 | **Notification** | Send a notification | Recipients, template, message |
 | **Assign Tag** | Add or update a tag | Key, and a fixed value, a value from the run, or no value |
 | **Remove Tag** | Remove a tag | Key to remove |

@@ -1204,20 +1204,20 @@
     "responseMessageLabel": "Mensaje de respuesta (opcional)",
     "responseMessagePlaceholder": "Añade notas sobre tu decisión...",
     "messageHint": "Este mensaje se enviará al solicitante junto con tu decisión.",
-    "executeLabel": "Ejecutar el despliegue inmediatamente al aprobar",
-    "executeHint": "Si está marcado, el despliegue se activará automáticamente cuando apruebes esta solicitud.",
     "warningLabel": "Advertencia:",
     "warningText": "El despliegue creará activos físicos en Unity Catalog. Asegúrate de haber revisado el esquema y la configuración del contrato.",
     "deny": "Rechazar",
-    "approveAndDeploy": "Aprobar y desplegar",
     "toast": {
       "approvedTitle": "Despliegue aprobado",
       "deniedTitle": "Despliegue rechazado",
       "approvedDescription": "La solicitud de despliegue se ha aprobado.",
       "deniedDescription": "La solicitud de despliegue se ha rechazado.",
-      "deploymentInitiated": "El despliegue se ha iniciado.",
       "failedTitle": "Error",
       "couldNotSubmit": "No se pudo enviar la decisión"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "No eres aprobador de esta solicitud de despliegue, así que no puedes decidirla.",
+      "deploy_request_already_decided": "Esta solicitud de despliegue ya se ha decidido."
     }
   },
   "publishRequest": {

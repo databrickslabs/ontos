@@ -1204,20 +1204,20 @@
     "responseMessageLabel": "Reactiebericht (optioneel)",
     "responseMessagePlaceholder": "Voeg notities over uw beslissing toe...",
     "messageHint": "Dit bericht wordt samen met uw beslissing naar de aanvrager verzonden.",
-    "executeLabel": "Deployment onmiddellijk uitvoeren bij goedkeuring",
-    "executeHint": "Indien aangevinkt, wordt de deployment automatisch geactiveerd wanneer u dit verzoek goedkeurt.",
     "warningLabel": "Waarschuwing:",
     "warningText": "Deployment creëert fysieke assets in Unity Catalog. Zorg ervoor dat u het contractschema en de configuratie hebt beoordeeld.",
     "deny": "Afwijzen",
-    "approveAndDeploy": "Goedkeuren en deployen",
     "toast": {
       "approvedTitle": "Deployment goedgekeurd",
       "deniedTitle": "Deployment afgewezen",
       "approvedDescription": "Deploymentverzoek is goedgekeurd.",
       "deniedDescription": "Deploymentverzoek is afgewezen.",
-      "deploymentInitiated": "Deployment is gestart.",
       "failedTitle": "Mislukt",
       "couldNotSubmit": "Kon beslissing niet indienen"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "U bent geen goedkeurder van dit implementatieverzoek en kunt het dus niet beslissen.",
+      "deploy_request_already_decided": "Over dit implementatieverzoek is al beslist."
     }
   },
   "publishRequest": {

@@ -1204,20 +1204,20 @@
     "responseMessageLabel": "Antwortnachricht (optional)",
     "responseMessagePlaceholder": "Fügen Sie Anmerkungen zu Ihrer Entscheidung hinzu...",
     "messageHint": "Diese Nachricht wird zusammen mit Ihrer Entscheidung an den Antragsteller gesendet.",
-    "executeLabel": "Bereitstellung bei Genehmigung sofort ausführen",
-    "executeHint": "Wenn aktiviert, wird die Bereitstellung automatisch ausgelöst, sobald Sie diese Anfrage genehmigen.",
     "warningLabel": "Warnung:",
     "warningText": "Bei der Bereitstellung werden physische Assets in Unity Catalog erstellt. Stellen Sie sicher, dass Sie das Vertragsschema und die Konfiguration geprüft haben.",
     "deny": "Ablehnen",
-    "approveAndDeploy": "Genehmigen & Bereitstellen",
     "toast": {
       "approvedTitle": "Bereitstellung genehmigt",
       "deniedTitle": "Bereitstellung abgelehnt",
       "approvedDescription": "Die Bereitstellungsanfrage wurde genehmigt.",
       "deniedDescription": "Die Bereitstellungsanfrage wurde abgelehnt.",
-      "deploymentInitiated": "Die Bereitstellung wurde eingeleitet.",
       "failedTitle": "Fehlgeschlagen",
       "couldNotSubmit": "Entscheidung konnte nicht eingereicht werden"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "Sie sind kein Genehmiger dieser Bereitstellungsanfrage und können sie daher nicht entscheiden.",
+      "deploy_request_already_decided": "Über diese Bereitstellungsanfrage wurde bereits entschieden."
     }
   },
   "publishRequest": {

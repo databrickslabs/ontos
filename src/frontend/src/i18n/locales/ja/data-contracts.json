@@ -1204,20 +1204,20 @@
     "responseMessageLabel": "返信メッセージ（任意）",
     "responseMessagePlaceholder": "判断に関するメモを追加...",
     "messageHint": "このメッセージは判断結果とともにリクエスト元に送信されます。",
-    "executeLabel": "承認後すぐにデプロイを実行",
-    "executeHint": "チェックすると、このリクエストを承認した際にデプロイが自動的にトリガーされます。",
     "warningLabel": "警告:",
     "warningText": "デプロイにより Unity Catalog に物理アセットが作成されます。コントラクトのスキーマと構成を確認済みであることを確認してください。",
     "deny": "却下",
-    "approveAndDeploy": "承認してデプロイ",
     "toast": {
       "approvedTitle": "デプロイを承認しました",
       "deniedTitle": "デプロイを却下しました",
       "approvedDescription": "デプロイリクエストが承認されました。",
       "deniedDescription": "デプロイリクエストが却下されました。",
-      "deploymentInitiated": "デプロイが開始されました。",
       "failedTitle": "失敗",
       "couldNotSubmit": "判断を送信できませんでした"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "このデプロイ要求の承認者ではないため、決定できません。",
+      "deploy_request_already_decided": "このデプロイ要求はすでに決定されています。"
     }
   },
   "publishRequest": {

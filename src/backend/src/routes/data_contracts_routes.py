@@ -753,7 +753,14 @@ class HandlePublishPayload(BaseModel):
 class HandleDeployPayload(BaseModel):
     decision: str  # 'approve', 'deny'
     message: Optional[str] = None
-    execute_deployment: bool = False  # If true, actually trigger deployment
+    execute_deployment: bool = Field(
+        False,
+        description=(
+            "Ignored. Approving a deployment request records the decision and doesn't "
+            "deploy anything; when true, the response has a 'deployment_not_available' "
+            "warning."
+        ),
+    )
 
 
 @router.post('/data-contracts/{contract_id}/handle-review')
@@ -1230,21 +1237,39 @@ async def handle_deploy_request_response(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Handle a deployment request decision (approve/deny). Optionally executes deployment."""
+    """Record a deployment request decision (approve/deny).
+
+    Only an approver of the contract's deployment request (a recipient of its
+    notification, e.g. the Admin role) decides it, once; others get 403, a
+    second decision 409. A request an ``on_request_deploy`` workflow handles
+    has no such notification: its approval step decides it
+    (``POST /api/workflows/handle-approval``), so it is refused here for
+    everyone. Nothing is deployed. ``execute_deployment`` is accepted and
+    ignored with a warning in the response.
+    """
+    access = manager.deploy_request_access(db, notifications, contract_id, current_user)
+    if access == 'decided':
+        raise HTTPException(
+            status_code=409,
+            # code: translated by the UI (data-contracts:deployRequest.errors.*)
+            detail={
+                'code': 'deploy_request_already_decided',
+                'message': "This deployment request has already been decided.",
+            },
+        )
+    if access != 'pending':
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (data-contracts:deployRequest.errors.*)
+            detail={
+                'code': 'deploy_request_not_an_approver',
+                'message': "Only the approvers of this deployment request can decide it.",
+            },
+        )
     try:
-        # Get jobs manager for deployment execution
-        jobs_manager = None
-        try:
-            from src.common.dependencies import get_jobs_manager
-            jobs_manager = request.app.state.jobs_manager
-        except Exception:
-            logger.warning("Jobs manager not available")
-        
-        # Business logic now in manager
         result = manager.handle_deploy_response(
             db=db,
             notifications_manager=notifications,
-            jobs_manager=jobs_manager,
             contract_id=contract_id,
             approver_email=current_user.email,
             decision=payload.decision,
@@ -1261,7 +1286,10 @@ async def handle_deploy_request_response(
             feature='data-contracts',
             action=f'DEPLOY_{payload.decision.upper()}',
             success=True,
-            details={'contract_id': contract_id, 'decision': payload.decision, 'deployed': payload.execute_deployment}
+            details={
+                'contract_id': contract_id, 'decision': payload.decision, 'deployed': False,
+                'execute_deployment_ignored': payload.execute_deployment,
+            }
         )
         
         return result

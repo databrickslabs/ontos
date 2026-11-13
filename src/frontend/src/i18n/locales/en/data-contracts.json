@@ -1204,20 +1204,20 @@
     "responseMessageLabel": "Response Message (optional)",
     "responseMessagePlaceholder": "Add notes about your decision...",
     "messageHint": "This message will be sent to the requester along with your decision.",
-    "executeLabel": "Execute deployment immediately upon approval",
-    "executeHint": "If checked, the deployment will be triggered automatically when you approve this request.",
     "warningLabel": "Warning:",
     "warningText": "Deployment will create physical assets in Unity Catalog. Ensure you have reviewed the contract schema and configuration.",
     "deny": "Deny",
-    "approveAndDeploy": "Approve & Deploy",
     "toast": {
       "approvedTitle": "Deploy Approved",
       "deniedTitle": "Deploy Denied",
       "approvedDescription": "Deployment request has been approved.",
       "deniedDescription": "Deployment request has been denied.",
-      "deploymentInitiated": "Deployment has been initiated.",
       "failedTitle": "Failed",
       "couldNotSubmit": "Could not submit decision"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "You aren't an approver of this deployment request, so you can't decide it.",
+      "deploy_request_already_decided": "This deployment request has already been decided."
     }
   },
   "publishRequest": {

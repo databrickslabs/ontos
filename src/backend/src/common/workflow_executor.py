@@ -11,6 +11,7 @@ Handles step-by-step execution with branching, including:
 """
 
 import json
+import re
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -41,6 +42,7 @@ from src.repositories.process_workflows_repository import workflow_execution_rep
 if TYPE_CHECKING:
     from src.controller.lifecycle_fields import DeprecationDetails
 from src.common.logging import get_logger
+from src.controller.notifications_manager import principal_identity
 from src.common.workflow_notification_texts import (
     DEFAULT_TEMPLATE_MESSAGE,
     DEFAULT_TEMPLATE_TITLE,
@@ -689,6 +691,32 @@ def _owner_approvers(
     )
 
 
+# Explicit principal forms in an approvers / recipients spec (see
+# ``_resolve_role_to_users``)
+_USER_PREFIX = 'user:'
+_GROUP_PREFIX = 'group:'
+
+
+# A comma separates principals, so the designer writes a group name's ``,`` as
+# ``%2C`` (and ``%`` as ``%25``) after ``group:``
+_GROUP_NAME_ESCAPE_RE = re.compile(r'%(2[cC]|25)')
+
+
+def _decode_group_name(name: str) -> str:
+    """A ``group:`` name as the designer escaped it, with its commas back."""
+    return _GROUP_NAME_ESCAPE_RE.sub(lambda m: '%' if m.group(1) == '25' else ',', name)
+
+
+def _strip_user_prefix(identifier: str) -> str:
+    """``identifier`` without a ``user:`` marker (``group:`` ones are kept)."""
+    return identifier[len(_USER_PREFIX):] if identifier.startswith(_USER_PREFIX) else identifier
+
+
+_UUID_RE = re.compile(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+)
+
+
 def _resolve_role_to_users(
     db: Session,
     role_spec: str,
@@ -696,16 +724,25 @@ def _resolve_role_to_users(
 ) -> List[tuple]:
     """Resolve a role specification to a list of (identifier, role_id_or_None) tuples.
 
-    Handles:
+    Explicit forms are resolved first, so a principal named like a token or a
+    role (a group called 'reviewer' or 'admins') is never read as one:
+    - 'user:<x>' → the user ``x``: 'user:<x>' (an email: bare)
+    - 'group:<name>' → the group ``name``: 'group:<name>' (what the Workflow
+      Designer's PrincipalPicker emits for a group; a ``,`` in the name is
+      written ``%2C``, a ``%`` ``%25``)
+    - 'user@email.com' → direct email
+    - '<uuid>' of an app role → that role
+
+    Then:
     - 'requester' / 'trigger_user' → original user email
     - 'entity_owner' → owners of the trigger entity (``resolve_owner_emails``)
     - 'owner' → ``owner`` field of the trigger entity, else as 'entity_owner'
     - 'reviewer' → entity reviewer_email (falls back to the Admin role)
     - 'domain_owners' / 'DomainOwner' / 'ContractApprover' → see ``_owner_approvers``
     - 'business:<uuid>' → business role → look up entity owners from business_owners table
-    - '<uuid>' → app role UUID
-    - 'user@email.com' → direct email
     - Legacy aliases like 'data_stewards', 'admins', etc.
+    - Any other name: an app role id or name, else the name as written (a bare
+      group name, as stored before the picker sent the prefix)
     - **Comma-separated list of any of the above** → recurse on each
       segment, flatten results. This is what the Workflow Designer's
       "Custom principals" toggle emits: a role/literal token from the
@@ -728,11 +765,34 @@ def _resolve_role_to_users(
             for identifier, role_uuid in _resolve_role_to_users(db, seg, context):
                 if not identifier:
                     continue
-                key = (identifier, role_uuid)
+                # Emails and names ignore case, as on delivery
+                key = (identifier.strip().lower() if not role_uuid else identifier, role_uuid)
                 if key not in seen:
                     seen.add(key)
                     out.append((identifier, role_uuid))
         return out
+
+    # The explicit forms keep their prefix in what is stored, so the delivery
+    # (NotificationsManager) never reads them as a role name; an email can't
+    # be one and stays bare.
+    if role_spec.startswith(_USER_PREFIX):
+        user = role_spec[len(_USER_PREFIX):].strip()
+        if not user:
+            return []
+        return [(user if '@' in user else _USER_PREFIX + user, None)]
+
+    if role_spec.startswith(_GROUP_PREFIX):
+        group = _decode_group_name(role_spec[len(_GROUP_PREFIX):]).strip()
+        return [(_GROUP_PREFIX + group, None)] if group else []
+
+    if '@' in role_spec:
+        # Pre-comma-split single email -- treat as a direct recipient.
+        return [(role_spec, None)]
+
+    if _UUID_RE.match(role_spec):
+        role_by_id = db.query(AppRoleDb).filter(AppRoleDb.id == role_spec).first()
+        if role_by_id:
+            return [(role_by_id.name, role_by_id.id)]
 
     # Map shorthand names to role names (legacy support)
     role_aliases = {
@@ -781,14 +841,6 @@ def _resolve_role_to_users(
                 if r.name.lower().replace(' ', '') == normalized:
                     return [(r.name, r.id)]
         return [(role_name, role.id if role else None)]
-
-    # Strip "user:" prefix emitted by the PrincipalPicker (e.g. "user:foo@bar.com").
-    if role_spec.startswith('user:'):
-        role_spec = role_spec[len('user:'):]
-
-    if '@' in role_spec:
-        # Pre-comma-split single email -- treat as a direct recipient.
-        return [(role_spec, None)]
 
     # Business role: prefixed with "business:"
     if role_spec.startswith('business:'):
@@ -1285,7 +1337,10 @@ class NotificationStepHandler(StepHandler):
                     from src.common.email_service import EmailService
                     email_svc = EmailService.from_settings(self._db)
                     if email_svc:
-                        email_addrs = [r[0] for r in resolved_recipients if '@' in r[0]]
+                        email_addrs = [
+                            a for a in (_strip_user_prefix(r[0]) for r in resolved_recipients)
+                            if '@' in a
+                        ]
                         if email_addrs:
                             sent = email_svc.send(
                                 to=email_addrs,
@@ -3463,8 +3518,9 @@ class WorkflowExecutor:
         Every notification target resolved when the step paused must decide:
         a user target needs that user's decision, a group or role target one
         decision from any member. ``decides_for(target, role_id)`` tells which
-        targets the caller can fill. One person fills at most one target per
-        step: their own user target if it is pending, else the first pending
+        targets the caller can fill. One person decides once per step: the
+        decision fills every pending user target naming them (their email,
+        username or ``user:<x>``: the same person), else the first pending
         group or role target in the order the step resolved them. Only the
         targets decide: a caller who is none of them (an admin, who may act on
         any approval without ``require_all``) is refused. The decisions are
@@ -3514,18 +3570,23 @@ class WorkflowExecutor:
             if not open_targets:
                 outcome = 'no_longer_pending'
             else:
-                # Their own user target first, else the first pending group/role
-                own = [(k, t) for k, t in open_targets if not t[1] and t[0].lower() in caller]
-                key, (target, role_id) = (own or open_targets)[0]
-                decisions.append({
-                    'target': target,
-                    'role_id': role_id,
-                    'decided_by': user_email or username,
-                    'decision': 'approved' if approved else 'rejected',
-                    'at': datetime.utcnow().isoformat(),
-                    'reason': reason,
-                })
-                pending.remove(key)
+                # Every user target naming them (``user:alice``, ``alice`` and
+                # ``alice@x.com`` are one person), else the first group/role
+                own = [
+                    (k, t) for k, t in open_targets
+                    if not t[1] and principal_identity(t[0]) in caller
+                ]
+                at = datetime.utcnow().isoformat()
+                for key, (target, role_id) in own or open_targets[:1]:
+                    decisions.append({
+                        'target': target,
+                        'role_id': role_id,
+                        'decided_by': user_email or username,
+                        'decision': 'approved' if approved else 'rejected',
+                        'at': at,
+                        'reason': reason,
+                    })
+                    pending.remove(key)
                 record.result_data = json.dumps({**data, 'decisions': decisions})
                 self._db.add(record)
                 self._db.flush()

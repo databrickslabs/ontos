@@ -318,6 +318,63 @@ class TestReviewFollowUps:
         assert decision['reason'] == 'No'
 
 
+def _decide_by_username(client, as_user, mock_test_user, identity, username, execution_id):
+    as_user(identity)
+    mock_test_user.username = username
+    return client.post(
+        '/api/workflows/handle-approval', json={'execution_id': execution_id, 'approved': True},
+    )
+
+
+class TestExplicitPrincipals:
+    """The #1309 review: ``group:`` / ``user:`` targets (#1151) under require_all."""
+
+    def test_group_and_user_targets_decide(self, client, as_user, mock_test_user, db_session):
+        execution_id = _paused_execution(client, as_user, 'group:team-x,user:ben')
+
+        first = _decide(client, as_user, CARL, execution_id)
+
+        assert first.status_code == 200, first.text
+        assert first.json()['pending_approvers'] == 1
+        assert _unread_recipients(db_session, execution_id) == {'user:ben'}
+
+        second = _decide_by_username(client, as_user, mock_test_user, BEN, 'ben', execution_id)
+
+        assert second.status_code == 200, second.text
+        assert second.json()['status'] == 'succeeded'
+        decisions = _approval_records(db_session, execution_id)[-1]['decisions']
+        assert [(d['target'], d['decided_by']) for d in decisions] == [
+            ('group:team-x', 'carl@example.com'), ('user:ben', 'ben@example.com'),
+        ]
+
+    def test_group_names_ignore_case(self, client, as_user, db_session):
+        execution_id = _paused_execution(client, as_user, 'group:Team-X')
+
+        response = _decide(client, as_user, DORA, execution_id)
+
+        assert response.status_code == 200, response.text
+        assert response.json()['status'] == 'succeeded'
+
+    def test_one_person_listed_twice_decides_once(
+        self, client, as_user, mock_test_user, db_session,
+    ):
+        """``user:ana`` and ``Ana@Example.com``: one decision fills both."""
+        execution_id = _paused_execution(
+            client, as_user, 'user:ana,Ana@Example.com,ana@example.com,ben@example.com',
+        )
+        records = _approval_records(db_session, execution_id)
+        assert [t['target'] for t in records[0]['resolved_targets']] == [
+            'user:ana', 'Ana@Example.com', 'ben@example.com',
+        ]
+
+        first = _decide_by_username(client, as_user, mock_test_user, ANA, 'ana', execution_id)
+
+        assert first.status_code == 200, first.text
+        assert first.json()['pending_approvers'] == 1
+        assert _unread_recipients(db_session, execution_id) == {'ben@example.com'}
+        assert _decide(client, as_user, BEN, execution_id).json()['status'] == 'succeeded'
+
+
 class TestLateApprover:
     """A decision on a step that has ended: 409, not 404."""
 

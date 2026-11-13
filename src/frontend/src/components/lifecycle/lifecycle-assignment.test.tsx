@@ -11,8 +11,10 @@ import LifecycleGroupPicker from './lifecycle-group-picker';
 import EntityLifecycleStatus from './entity-lifecycle-status';
 import { buildStageLookup } from '@/hooks/use-lifecycle-stage-groups';
 import {
-  awaitsReviewDecision, categoryOf, isContractPublishable, lifecycleErrorText, stageColorClass,
-  stageLabel, transitionLabel,
+  awaitsReviewDecision, categoryOf, contractEditableInPlace, isApprovedOrActive,
+  isContractEditableInPlace,
+  isContractPublishable, lifecycleErrorText, stageColorClass, stageLabel, submitReviewStageOf,
+  transitionLabel,
 } from '@/lib/lifecycle-stages';
 import type { LifecycleStageGroup } from '@/types/lifecycle-stage-groups';
 
@@ -90,6 +92,62 @@ describe('stage helpers', () => {
     expect(isContractPublishable({ status: 'proposed', status_category: 'review' })).toBe(false);
     expect(isContractPublishable({ status: 'vetting', status_category: 'review' })).toBe(false);
     expect(isContractPublishable({ status: 'active', status_category: 'deprecated' })).toBe(false);
+  });
+
+  it('edits a contract in place in a draft stage or where submit-review lands', () => {
+    // Default lifecycle: draft and proposed, as before; from under_review on, versioned
+    expect(submitReviewStageOf(null)).toBe('proposed');
+    expect(isContractEditableInPlace({ status: 'draft' })).toBe(true);
+    expect(isContractEditableInPlace({ status: 'proposed' })).toBe(true);
+    expect(isContractEditableInPlace({ status: 'under_review' })).toBe(false);
+    // A custom group: its only review stage after a draft one; none in the loop group
+    expect(submitReviewStageOf(LOOP)).toBeNull();
+    const stage = submitReviewStageOf({
+      ...LOOP, stages: [...LOOP.stages, st('vetting', 'Vetting', 'review', 3, 'blue')],
+      transitions: [...LOOP.transitions, { from_key: 'ideation', to_key: 'vetting' }],
+    });
+    expect(stage).toBe('vetting');
+    expect(isContractEditableInPlace({ status: 'vetting', status_category: 'review' }, stage))
+      .toBe(true);
+    expect(isContractEditableInPlace({ status: 'needs_review', status_category: 'review' },
+      stage)).toBe(false);
+    expect(isContractEditableInPlace({ status: 'active', status_category: 'active' }, stage))
+      .toBe(false);
+  });
+
+  it('decides a contract’s in-place editing from its own group', () => {
+    const contractGroup = (id: string, isDefault: boolean, keys: [string, string][]) => ({
+      id, name: id, entity_type: 'data_contract' as const, is_default_for_type: isDefault,
+      stages: keys.map(([key, category], order) => st(key, key, category, order, 'gray')),
+      transitions: keys.slice(1).map(([key]) => ({ from_key: keys[0][0], to_key: key })),
+    });
+    const seeded = contractGroup('g-default', true, [['draft', 'draft'], ['proposed', 'review'],
+      ['under_review', 'review']]);
+    const custom = contractGroup('g-vet', false, [['intake', 'draft'], ['vetting', 'review']]);
+    const twoWays = contractGroup('g-two', false, [['intake', 'draft'], ['fast', 'review'],
+      ['slow', 'review']]);
+    // The loaded default group: proposed, as before
+    expect(submitReviewStageOf(seeded)).toBe('proposed');
+    expect(contractEditableInPlace({ status: 'proposed' }, [seeded, custom])).toBe(true);
+    expect(contractEditableInPlace({ status: 'under_review' }, [seeded, custom])).toBe(false);
+    // A custom group's single submit-review stage; several leave none
+    expect(contractEditableInPlace(
+      { status: 'vetting', status_category: 'review', lifecycle_stage_group_id: 'g-vet' },
+      [seeded, custom],
+    )).toBe(true);
+    expect(submitReviewStageOf(twoWays)).toBeNull();
+    expect(contractEditableInPlace(
+      { status: 'fast', status_category: 'review', lifecycle_stage_group_id: 'g-two' },
+      [seeded, twoWays],
+    )).toBe(false);
+    // Before the groups load: the seeded rule
+    expect(contractEditableInPlace({ status: 'proposed' }, [])).toBe(true);
+  });
+
+  it('lists products live for consumers by category', () => {
+    expect(isApprovedOrActive({ status: 'live', statusCategory: 'active' })).toBe(true);
+    expect(isApprovedOrActive({ status: 'approved' })).toBe(true);
+    expect(isApprovedOrActive({ status: 'under_review' })).toBe(false);
   });
 
   it('names a move between seeded stages by its action, any other by its stage', () => {

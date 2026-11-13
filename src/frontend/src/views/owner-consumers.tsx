@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { RelativeDate } from '@/components/common/relative-date';
 import type { DataProduct, SubscriberInfo } from '@/types/data-product';
+import { isApprovedOrActive } from '@/lib/lifecycle-stages';
 
 interface ProductWithSubscribers {
   product: DataProduct;
@@ -118,7 +119,8 @@ export default function OwnerConsumersView() {
     );
   }, [selectedData, searchQuery]);
 
-  const activeProducts = products.filter((p) => p.status === 'active' || p.status === 'approved');
+  // Live for consumers: an active-category stage or approved (by Stage Category)
+  const activeProducts = products.filter((p) => isApprovedOrActive(p));
 
   return (
     <div className="space-y-6">

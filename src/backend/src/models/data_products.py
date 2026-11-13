@@ -19,6 +19,13 @@ from .tags import AssignedTag, AssignedTagCreate
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
+# Custom property holding the compliance template values an import couldn't
+# write (see controller/compliance_template_exchange.py). Readers of a product
+# don't see it unless they may read compliance values: the product's API
+# serialization leaves it out unless the dump context sets this key.
+COMPLIANCE_UNMATCHED_PROPERTY = "ontosComplianceValuesUnmatched"
+SHOW_COMPLIANCE_UNMATCHED = "show_compliance_unmatched"
+
 
 # ============================================================================
 # ODPS v1.0.0 Enums
@@ -370,6 +377,14 @@ class DataProduct(BaseModel):
     # publish form and exposed to webhook bodies via
     # ``${entity.consumer_principals}``.
     consumer_principals: Optional[List[ConsumerPrincipal]] = Field(default_factory=list, description="Typed principals (groups by default) representing expected consumers")
+
+    @field_serializer('customProperties')
+    def _hide_compliance_unmatched(self, props, info):
+        # Compliance values an import couldn't write follow the values read
+        # rule, not the product's: shown only when the caller asked for them.
+        if not props or (info.context or {}).get(SHOW_COMPLIANCE_UNMATCHED):
+            return props
+        return [p for p in props if p.property != COMPLIANCE_UNMATCHED_PROPERTY]
 
     # Audit fields (not in ODPS, but useful)
     created_at: Optional[datetime] = Field(None, description="Record creation timestamp")

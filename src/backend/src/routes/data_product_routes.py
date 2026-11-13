@@ -45,6 +45,7 @@ from src.models.notifications import NotificationType
 from src.common.dependencies import NotificationsManagerDep, CurrentUserDep, DBSessionDep
 from src.controller.compliance_templates_manager import compliance_templates_manager
 from src.controller import compliance_template_exchange
+from src.models.data_products import SHOW_COMPLIANCE_UNMATCHED
 from src.common.authorization import get_user_details_from_sdk
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
@@ -2515,7 +2516,9 @@ async def get_data_product(
     db: DBSessionDep,
     current_user: CurrentUserDep,
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ) -> Any: # Return Any to allow returning a dict
     try:
         product = manager.get_product(product_id)
@@ -2532,7 +2535,15 @@ async def get_data_product(
         if not _caller_can_read_product(request, db, current_user, manager, product):
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        return product.model_dump(by_alias=False, exclude={'created_at', 'updated_at'}, exclude_none=True, exclude_unset=True)
+        # Compliance values an import couldn't write: only for a values reader
+        compliance_read = await compliance_template_exchange.read_access(
+            request, user, auth_manager, db
+        )
+        return product.model_dump(
+            by_alias=False, exclude={'created_at', 'updated_at'}, exclude_none=True,
+            exclude_unset=True,
+            context={SHOW_COMPLIANCE_UNMATCHED: compliance_read.may_read_product()},
+        )
     except ValueError as e:
         logger.error("Validation error fetching product %s: %s", product_id, e)
         raise HTTPException(status_code=404, detail="Data product not found")

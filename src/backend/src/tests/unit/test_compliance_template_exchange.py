@@ -644,17 +644,25 @@ class TestAccess:
         dpm = object()
         calls = []
 
-        def _accessible(db, *, asset_id, data_products_manager, is_admin):
-            calls.append((db, asset_id, data_products_manager, is_admin))
-            return True
+        def _resolve(db, *, data_products_manager, is_admin):
+            calls.append((db, data_products_manager, is_admin))
+            return [asset.id]
 
         access = _read(SimpleNamespace(data_products_manager=dpm))
         with patch(
-            "src.controller.assets_manager.assets_manager.is_asset_accessible",
-            side_effect=_accessible,
+            "src.controller.assets_manager.assets_manager.resolve_accessible_asset_ids",
+            side_effect=_resolve,
         ):
             assert access.may_read_asset(asset) is True
-        assert calls == [("db", asset.id, dpm, False)]
+            assert access.may_read_asset(SimpleNamespace(id=uuid.uuid4())) is False
+        assert calls == [("db", dpm, False)]
+
+        with patch(
+            "src.controller.assets_manager.assets_manager.resolve_accessible_asset_ids",
+            return_value=None,
+        ):
+            everything = _read(SimpleNamespace(data_products_manager=dpm))
+            assert everything.may_read_asset(asset) is True
 
     def test_read_without_the_values_feature_reads_nothing(self):
         log: list = []
@@ -733,3 +741,96 @@ class TestRoutes:
         assert logged["details"]["compliance_values_written"] == [
             {"entityType": "asset", "entityId": "a-1", "referenceIds": ["limitacoes"]},
         ]
+
+
+class TestUnmatchedOnProductReads:
+    """The product's unmatched values are not shown by the product API to everyone."""
+
+    def _product(self, **extra):
+        from src.models.data_products import DataProduct
+
+        return DataProduct(
+            id="p-1", status="draft", name="Orders",
+            customProperties=[
+                {"property": "tier", "value": "gold"},
+                {"property": UNMATCHED, "value": '{"limitacoes": "x"}'},
+            ],
+            **extra,
+        )
+
+    def test_the_api_model_hides_them_unless_asked(self):
+        from src.models.data_products import SHOW_COMPLIANCE_UNMATCHED
+
+        product = self._product()
+        for dumped in (product.model_dump(), product.model_dump(mode="json", by_alias=True)):
+            props = dumped.get("customProperties") or dumped.get("custom_properties")
+            assert [p["property"] for p in props] == ["tier"]
+        shown = product.model_dump(context={SHOW_COMPLIANCE_UNMATCHED: True})
+        assert [p["property"] for p in shown["customProperties"]] == ["tier", UNMATCHED]
+        # Internal code still sees them (the gated ODPS export reads them).
+        assert [p.property for p in product.customProperties] == ["tier", UNMATCHED]
+
+    @pytest.mark.parametrize("allowed", [True, False])
+    def test_get_product_shows_them_only_to_a_values_reader(self, allowed):
+        from src.routes import data_product_routes as routes
+
+        product = self._product()
+        manager = SimpleNamespace(get_product=lambda product_id: product)
+
+        async def _read(request, user, auth_manager, db):
+            return cte.ValuesReadAccess(values=allowed)
+
+        with patch.object(cte, "read_access", side_effect=_read), \
+                patch.object(routes, "_caller_can_read_product", return_value=True):
+            body = asyncio.run(routes.get_data_product(
+                "p-1", request=None, db=None, current_user=_USER, manager=manager, _=True,
+                user=_USER, auth_manager=None,
+            ))
+        names = [p["property"] for p in body["customProperties"]]
+        assert (UNMATCHED in names) is allowed
+
+    def test_an_edit_keeps_them_and_a_new_version_copies_them(self, db_session):
+        _template(db_session, "data_product")
+        manager, product_id = _upload(
+            db_session, _product_doc({"unknown": 1}), _importer(),
+        )
+        product = manager.get_product(product_id)
+        # What the UI sends back: the product as the API shows it.
+        update = product.model_dump(by_alias=False, exclude_none=True)
+        update["customProperties"] = [{"property": "tier", "value": "platinum"}]
+        manager.update_product(product_id, update)
+        props = _product_props(db_session, product_id)
+        assert props["tier"] == "platinum"
+        assert json.loads(props[UNMATCHED]) == {"unknown": 1}
+
+        from src.models.data_products import NewVersionRequest
+
+        new = manager.create_new_version(product_id, NewVersionRequest(new_version="2.0.0"))
+        assert json.loads(_product_props(db_session, new.id)[UNMATCHED]) == {"unknown": 1}
+
+
+class TestReadAccessMemo:
+
+    def test_accessible_assets_are_resolved_once_per_export(self):
+        assets = [SimpleNamespace(id=uuid.uuid4()) for _ in range(3)]
+        calls = []
+
+        def _resolve(db, *, data_products_manager, is_admin):
+            calls.append((db, data_products_manager, is_admin))
+            return [assets[0].id, assets[2].id]
+
+        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+            data_products_manager="dpm",
+        )))
+        with patch(
+            "src.common.authorization.PermissionChecker",
+            side_effect=_checker([], {"assets": 403}),
+        ):
+            access = asyncio.run(cte.read_access(request, _USER, None, "db"))
+        with patch(
+            "src.controller.assets_manager.assets_manager.resolve_accessible_asset_ids",
+            side_effect=_resolve,
+        ):
+            seen = [access.may_read_asset(a) for a in assets + assets]
+        assert seen == [True, False, True] * 2
+        assert calls == [("db", "dpm", False)]

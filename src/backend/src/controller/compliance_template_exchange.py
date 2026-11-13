@@ -40,6 +40,7 @@ from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.compliance_templates import ComplianceTemplateValueDb
 from src.db_models.data_products import CustomPropertyDb
 from src.db_models.entity_relationships import EntityRelationshipDb
+from src.models.data_products import COMPLIANCE_UNMATCHED_PROPERTY
 from src.models.users import UserInfo
 from src.repositories.compliance_templates_repository import compliance_templates_repo
 
@@ -49,7 +50,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 COMPLIANCE_VALUES_PROPERTY = "ontosComplianceValues"
-UNMATCHED_VALUES_PROPERTY = "ontosComplianceValuesUnmatched"
+UNMATCHED_VALUES_PROPERTY = COMPLIANCE_UNMATCHED_PROPERTY
 _ENTRY_PROPERTIES = (COMPLIANCE_VALUES_PROPERTY, UNMATCHED_VALUES_PROPERTY)
 DATA_PRODUCT_ENTITY_TYPE = "data_product"
 VALUES_FEATURE_ID = "compliance-template-values"
@@ -499,13 +500,21 @@ async def read_access(
         request, user, auth_manager, ASSETS_FEATURE_ID, FeatureAccessLevel.READ_WRITE
     )
     dpm = getattr(request.app.state, "data_products_manager", None)
+    # The assets linked to a product the user can access, resolved once per export
+    # (``None`` from the resolver: all assets).
+    memo: Dict[str, Any] = {}
 
     def _accessible(asset: AssetDb) -> bool:
-        from src.controller.assets_manager import assets_manager
+        if dpm is None:
+            return False
+        if "ids" not in memo:
+            from src.controller.assets_manager import assets_manager
 
-        return dpm is not None and assets_manager.is_asset_accessible(
-            db, asset_id=asset.id, data_products_manager=dpm, is_admin=False
-        )
+            ids = assets_manager.resolve_accessible_asset_ids(
+                db, data_products_manager=dpm, is_admin=False,
+            )
+            memo["ids"] = None if ids is None else {str(i) for i in ids}
+        return memo["ids"] is None or str(asset.id) in memo["ids"]
 
     return ValuesReadAccess(values=True, assets_rw=assets_rw, asset_accessible=_accessible)
 

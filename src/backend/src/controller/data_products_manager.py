@@ -74,6 +74,7 @@ from src.repositories.entity_relationships_repository import entity_relationship
 from src.repositories.assets_repository import asset_repo
 from src.controller.compliance_templates_manager import compliance_templates_manager
 from src.controller import compliance_template_exchange
+from src.models.data_products import SHOW_COMPLIANCE_UNMATCHED
 
 logger = get_logger(__name__)
 
@@ -1682,7 +1683,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         # Create new product data (exclude id, created_at, updated_at)
         new_product_data = original_product.model_dump(
-            exclude={'id', 'created_at', 'updated_at'}
+            exclude={'id', 'created_at', 'updated_at'},
+            # A new version keeps the compliance values an import couldn't write
+            context={SHOW_COMPLIANCE_UNMATCHED: True},
         )
 
         # Generate new ID and set new version

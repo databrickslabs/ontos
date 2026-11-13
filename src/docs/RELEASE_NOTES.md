@@ -132,6 +132,7 @@
 ## 🐛 Bug Fixes
 
 - **assets**: creating, renaming or deleting an asset through `/api/assets` updates the global search index again. The routes used an AssetsManager without the search manager, so the index was not updated until a rebuild. Bulk import now indexes the assets it wrote, in one batch after the import commits, and a failed import leaves no index entries.
+- **workflows**: decided workflow approvals leave My actions on the home page, also when the approver had opened the notification or the approval was resumed or cancelled elsewhere. A reviewer's read access to the entity through an approval ends once that approval is decided (on a require-all step, only the targets still pending keep it)
 - **settings**: redact secret-shaped keys in update_settings log line (#557)
 - **data-products**: surface proposed products in the steward review queue (#556)
 - **data-products**: actually gate consumer reads of unpublished products (#554)

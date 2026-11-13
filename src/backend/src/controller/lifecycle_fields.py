@@ -181,6 +181,51 @@ def requested_deprecation_data(
 LIFECYCLE_AUDIT_ACTIONS = {'deprecated': 'DEPRECATE', 'retired': 'RETIRE'}
 
 
+def contract_status_audit(
+    contract: Any, contract_id: str, from_status: str, to_status: str
+) -> tuple[str, Dict[str, Any]]:
+    """Audit action and details of a contract status change, as change-status writes them.
+
+    ``contract`` is the contract after the transition. ``DEPRECATE`` / ``RETIRE`` for
+    those targets (``CHANGE_STATUS`` otherwise); a deprecation adds its details.
+    """
+    to_status = (to_status or '').lower()
+    details: Dict[str, Any] = {
+        'contract_id': contract_id, 'from': from_status, 'to': contract.status,
+    }
+    if to_status == 'deprecated':
+        details.update({
+            'deprecation_reason': contract.deprecation_reason,
+            'sunset_date': contract.sunset_date.isoformat() if contract.sunset_date else None,
+            'replacement_contract_id': contract.replacement_contract_id,
+        })
+    return LIFECYCLE_AUDIT_ACTIONS.get(to_status, 'CHANGE_STATUS'), details
+
+
+def deprecation_audit_details(deprecation: DeprecationDetails) -> Dict[str, Any]:
+    """Deprecation details for the audit log, as the product routes write them."""
+    return {
+        'deprecation_reason': deprecation.reason,
+        'sunset_date': deprecation.sunset_date.isoformat() if deprecation.sunset_date else None,
+        'replacement_id': deprecation.replacement_id,
+    }
+
+
+def product_status_audit(
+    product_id: str, new_status: str, deprecation: Optional[DeprecationDetails] = None,
+) -> tuple[str, Dict[str, Any]]:
+    """Audit action and details of a product status change, as change-status writes them.
+
+    ``DEPRECATE`` / ``RETIRE`` for those targets (``CHANGE_STATUS`` otherwise); a
+    deprecation adds its reason, sunset date and replacement.
+    """
+    target = (new_status or '').lower()
+    details: Dict[str, Any] = {'product_id': product_id, 'new_status': new_status}
+    if target == 'deprecated':
+        details.update(deprecation_audit_details(deprecation or DeprecationDetails()))
+    return LIFECYCLE_AUDIT_ACTIONS.get(target, 'CHANGE_STATUS'), details
+
+
 def audit_approved_lifecycle_change(
     db: Session,
     entity_type: str,

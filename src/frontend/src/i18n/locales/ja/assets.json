@@ -40,12 +40,16 @@
     "warningTitle": "Ontos に保存されましたが、Unity Catalog には保存されていません",
     "warnings": {
       "uc_description_permission_denied": "Unity Catalog は {{object}} の説明の変更を拒否しました (MODIFY 権限または所有権が必要です)。",
-      "uc_description_object_not_found": "{{object}} が Unity Catalog に見つかりませんでした。",
+      "uc_description_object_not_found": "{{object}} は Unity Catalog に見つからないか、アクセス権がないため、説明はそこに書き込まれませんでした。",
       "uc_description_user_token_required": "リクエストに Databricks のユーザートークンがなかったため、{{object}} の説明は Unity Catalog に書き込まれませんでした。",
       "uc_description_no_warehouse": "SQL ウェアハウスが設定されていないため、{{object}} の説明は Unity Catalog に書き込まれませんでした。",
       "uc_description_write_failed": "{{object}} の説明を Unity Catalog に書き込めませんでした。",
       "uc_description_import_write_limit": "このインポートは Unity Catalog に書き込む説明の上限 {{limit}} 件に達したため、{{object}} の説明は書き込まれませんでした。",
-      "uc_description_import_writes_failed": "アセットはインポートされましたが、説明を Unity Catalog に書き込めませんでした。"
+      "uc_description_import_writes_failed": "アセットはインポートされましたが、説明を Unity Catalog に書き込めませんでした。",
+      "uc_description_existing_comment": "{{object}} には Unity Catalog に別のコメントが既にあるため、説明はそこに書き込まれませんでした。説明をそのコメントに合わせるか、Unity Catalog でコメントを変更してから、もう一度保存してください。",
+      "uc_description_unsupported_text": "{{object}} の説明に Unity Catalog が保存できない文字が含まれているため、そこには書き込まれませんでした。",
+      "uc_description_import_time_budget": "このインポートは Unity Catalog への書き込みに割り当てられた時間を使い切ったため、{{object}} の説明はそこに書き込まれませんでした。",
+      "uc_description_import_writes_uc": "{{object}} の説明は Unity Catalog に書き込まれます。そこに別のコメントが既にある場合、そのコメントは保持され、その行に警告が表示されます。"
     }
   },
   "deleteDialog": {

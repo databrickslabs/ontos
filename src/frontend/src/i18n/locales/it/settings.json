@@ -142,6 +142,7 @@
     },
     "ucDescriptionWriteback": {
       "title": "Descrizioni degli asset",
+      "adminOnly": "Solo un amministratore può attivarlo.",
       "label": "Scrivi le descrizioni degli asset in Unity Catalog",
       "help": "Il salvataggio della descrizione di una tabella, vista o colonna Databricks imposta anche il suo commento in Unity Catalog, come l'utente che la salva. Senza il permesso MODIFY la descrizione viene salvata solo in Ontos e l'asset indica che non è sincronizzato.",
       "importLimit": {

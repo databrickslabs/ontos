@@ -40,12 +40,16 @@
     "warningTitle": "Enregistré dans Ontos, pas dans Unity Catalog",
     "warnings": {
       "uc_description_permission_denied": "Unity Catalog a refusé de modifier la description de {{object}} (permission MODIFY ou propriété requise).",
-      "uc_description_object_not_found": "{{object}} est introuvable dans Unity Catalog.",
+      "uc_description_object_not_found": "{{object}} est introuvable dans Unity Catalog, ou vous n'y avez pas accès ; sa description n'y a donc pas été écrite.",
       "uc_description_user_token_required": "La requête n'avait pas de jeton utilisateur Databricks, la description de {{object}} n'a donc pas été écrite dans Unity Catalog.",
       "uc_description_no_warehouse": "Aucun SQL warehouse n'est configuré, la description de {{object}} n'a donc pas été écrite dans Unity Catalog.",
       "uc_description_write_failed": "L'écriture de la description de {{object}} dans Unity Catalog a échoué.",
       "uc_description_import_write_limit": "Cet import a atteint sa limite de {{limit}} descriptions écrites dans Unity Catalog, la description de {{object}} n'y a donc pas été écrite.",
-      "uc_description_import_writes_failed": "Les actifs ont été importés, mais leurs descriptions n'ont pas pu être écrites dans Unity Catalog."
+      "uc_description_import_writes_failed": "Les actifs ont été importés, mais leurs descriptions n'ont pas pu être écrites dans Unity Catalog.",
+      "uc_description_existing_comment": "Unity Catalog a déjà un autre commentaire sur {{object}}, la description n'y a donc pas été écrite. Définissez la description sur ce commentaire ou modifiez le commentaire dans Unity Catalog, puis enregistrez à nouveau.",
+      "uc_description_unsupported_text": "La description de {{object}} contient un caractère qu'Unity Catalog ne peut pas stocker, elle n'y a donc pas été écrite.",
+      "uc_description_import_time_budget": "Cet import a épuisé son temps pour les écritures dans Unity Catalog, la description de {{object}} n'y a donc pas été écrite.",
+      "uc_description_import_writes_uc": "La description de {{object}} sera écrite dans Unity Catalog. Si un autre commentaire s'y trouve déjà, il est conservé et la ligne reçoit un avertissement."
     }
   },
   "deleteDialog": {

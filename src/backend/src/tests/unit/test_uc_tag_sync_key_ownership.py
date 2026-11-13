@@ -721,6 +721,12 @@ def test_a_dry_run_splits_recorded_from_customer_owned_tags(tag_sync, job, capsy
     assert job.unassigned == [] and job.assigned == []
 
 
+def test_two_configs_producing_the_same_key_are_reported(tag_sync, job, capsys):
+    job.run([DOMAIN_CFG, dict(STATUS_CFG, tag_key_format=DOMAIN_KEY)])
+
+    out = capsys.readouterr().out
+    assert f"[WARN] Tag key {DOMAIN_KEY} is produced by several configs" in out
+
 
 # A stored state that doesn't parse -------------------------------------------------
 

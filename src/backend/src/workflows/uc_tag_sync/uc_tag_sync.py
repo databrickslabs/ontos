@@ -945,6 +945,23 @@ class TagOwnership:
         return cls(frozenset(exact), frozenset(numbered))
 
 
+def duplicate_tag_keys(tag_sync_configs: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+    """Exact tag keys produced by more than one enabled config: key -> entity types.
+
+    On an object that two such configs tag, only one value can be stored: the config
+    listed last wins. Keys with a placeholder are only known per object, so they aren't
+    checked here.
+    """
+    producers: Dict[str, List[str]] = {}
+    for config in tag_sync_configs:
+        key_format = config.get("tag_key_format", "") or ""
+        if not config.get("enabled", True) or "{" in key_format:
+            continue
+        key = sanitize_tag_key(key_format)
+        if key:
+            producers.setdefault(key, []).append(str(config.get("entity_type")))
+    return {key: types for key, types in producers.items() if len(types) > 1}
+
 
 def legacy_cleanup_gate_prefix(tag_sync_configs: List[Dict[str, Any]], default: str) -> str:
     """The prefix handle_legacy_tag_cleanup has always been gated on.
@@ -2230,6 +2247,10 @@ def main() -> None:
     # The tags this job manages: the keys its enabled configs produce. Each config owns
     # its own key, so keys with different spellings (ontos_domain, agent_readable) work.
     ownership = TagOwnership.from_configs(tag_sync_configs)
+    for key, entity_types in sorted(duplicate_tag_keys(tag_sync_configs).items()):
+        print(f"[WARN] Tag key {key} is produced by several configs "
+              f"({', '.join(entity_types)}): on an object they both tag, the last one "
+              f"listed wins. Give each config its own key.")
 
     dry_run: bool = args.dry_run.lower() in ("true", "1", "yes")
     default_catalog = args.default_catalog if args.default_catalog else None

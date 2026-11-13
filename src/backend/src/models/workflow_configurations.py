@@ -90,15 +90,21 @@ class WorkflowConfiguration(BaseModel):
 
 class TagSyncConfig(BaseModel):
     """Configuration for a single tag sync entity type (used in tag_sync_configs parameter type)"""
-    entity_type: str = Field(..., description="Entity type: semantic_assignment, data_domain, data_contract, data_product")
+    entity_type: str = Field(
+        ...,
+        description=(
+            "Entity type: semantic_assignment, data_domain, data_contract, data_product, asset"
+        ),
+    )
     enabled: bool = Field(True, description="Whether syncing is enabled for this entity type")
     tag_key_format: str = Field(..., description="Format string for tag key with {VARIABLE} placeholders")
     tag_value_format: str = Field(..., description="Format string for tag value with {VARIABLE} placeholders")
     mapping: Optional[str] = Field(
         None,
         description=(
-            "Id of a named mapping, e.g. 'lifecycle_status'. A YAML default entry with an id"
-            " is added to saved configurations without an entry of that entity type and id."
+            "Id of a named mapping, e.g. 'lifecycle_status' or 'maturity'. A YAML default"
+            " entry with an id is added to saved configurations without an entry of that"
+            " entity type and id."
         ),
     )
 

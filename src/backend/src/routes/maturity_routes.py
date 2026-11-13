@@ -11,6 +11,7 @@ from src.common.features import FeatureAccessLevel
 from src.routes.data_contracts_routes import readable_contract
 from src.routes.data_product_routes import readable_product
 from src.models.maturity import (
+    AssetDefaultsLoadResult,
     MaturityLevelCreate,
     MaturityLevelRead,
     MaturityLevelUpdate,
@@ -116,6 +117,29 @@ async def create_maturity_level(
         db.rollback()
         logger.error(f"Error creating maturity level: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create maturity level")
+
+
+@router.post("/maturity-levels/asset-defaults", response_model=AssetDefaultsLoadResult)
+async def load_asset_default_levels(
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker(SETTINGS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Load the default maturity ladder for table and view assets. Admin only.
+
+    Optional: nothing is loaded at startup. ``created`` is 0 and nothing changes
+    when a level with entity type ``Asset`` exists already.
+    """
+    try:
+        created = maturity_repo.seed_asset_defaults(db)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error("Error loading the default asset maturity levels: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load the default asset levels")
+    levels = maturity_repo.get_all_ordered(db, entity_type="Asset")
+    return AssetDefaultsLoadResult(
+        created=len(created), levels=[_level_to_read(l) for l in levels],
+    )
 
 
 @router.put("/maturity-levels/reorder", response_model=List[MaturityLevelRead])

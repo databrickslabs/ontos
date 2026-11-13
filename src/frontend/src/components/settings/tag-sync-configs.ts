@@ -29,6 +29,27 @@ export function findEntryIndex(
   );
 }
 
+/** Asset entry with `mapping: 'maturity'`: the maturity level of a table or view asset. */
+export const MATURITY_MAPPING = 'maturity';
+
+/** The variables of the maturity entry; the job reads them only when an entry uses one. */
+export const MATURITY_VARIABLES = ['{ASSET.MATURITY}', '{ASSET.MATURITY_ORDER}'];
+
+export function supportsMaturityMapping(entityType: string): boolean {
+  return entityType === 'asset';
+}
+
+/** Same as the YAML default: disabled until an admin turns it on. */
+export function defaultMaturityEntry(): TagSyncConfig {
+  return {
+    entity_type: 'asset',
+    mapping: MATURITY_MAPPING,
+    enabled: false,
+    tag_key_format: 'ontos_maturity',
+    tag_value_format: '{ASSET.MATURITY}',
+  };
+}
+
 /** Same as the YAML default: the product entry is enabled, the contract entry isn't. */
 export function defaultLifecycleEntry(entityType: string): TagSyncConfig {
   return {

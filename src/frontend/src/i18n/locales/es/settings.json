@@ -984,6 +984,20 @@
         "descriptionContract": "Etiqueta cada tabla con el estado del ciclo de vida del contrato de datos que la usa. En una tabla usada por varios contratos, gana el mejor estado (active primero, retired al final).",
         "valueLabel": "Valor de la etiqueta:",
         "sharedKeyHint": "Cuando las etiquetas de estado del producto y del contrato están activadas con la misma clave, se escribe el estado del producto."
+      },
+      "assetVariables": {
+        "assetId": "UUID del activo",
+        "assetType": "Nombre del tipo de activo (Table, View, ...)",
+        "assetFqn": "Nombre de la tabla en Unity Catalog (catalog.schema.table)",
+        "assetMaturity": "Nombre del nivel de madurez de un activo tabla o vista (última evaluación)",
+        "assetMaturityOrder": "Número del nivel de madurez de un activo tabla o vista (1 = primer nivel)"
+      },
+      "maturity": {
+        "title": "Etiqueta de nivel de madurez",
+        "description": "Etiqueta cada activo tabla o vista con su nivel de madurez (última evaluación). Las tablas sin nivel no reciben etiqueta.",
+        "valueNeedsVariable": "Use {ASSET.MATURITY} o {ASSET.MATURITY_ORDER} en la clave o en el valor.",
+        "tablesOnlyHint": "Solo se etiquetan tablas y vistas con nombre en Unity Catalog; los esquemas y catálogos no. La salida de la ejecución cuenta los activos omitidos y el motivo.",
+        "prefixHint": "Empiece la clave con el mismo prefijo que las otras claves activas (ontos_ por defecto), para que el job pueda quitar la etiqueta cuando una tabla pierde su nivel."
       }
     },
     "entityPatterns": {
@@ -1246,6 +1260,15 @@
       "created": "Nivel de madurez \"{{name}}\" creado.",
       "deleted": "Nivel de madurez \"{{name}}\" eliminado.",
       "cannotDeleteTitle": "No se puede eliminar"
+    },
+    "assetDefaults": {
+      "load": "Cargar niveles predeterminados de activos",
+      "hint": "Añade una escala predeterminada para activos tabla y vista (Prerequisite, 1 star, 2 stars, 3 stars) con políticas de gate de ejemplo",
+      "loadedTitle": "Niveles de activos cargados",
+      "loaded_one": "{{count}} nivel de activo creado",
+      "loaded_other": "{{count}} niveles de activo creados",
+      "alreadyLoaded": "Ya existen niveles de activos: no se cambió nada",
+      "loadFailed": "No se pudieron cargar los niveles predeterminados de activos"
     }
   },
   "directory": {

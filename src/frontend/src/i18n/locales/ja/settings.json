@@ -984,6 +984,20 @@
         "descriptionContract": "各テーブルに、そのテーブルを使用するデータコントラクトのライフサイクルステータスをタグ付けします。複数のコントラクトが使用するテーブルでは、最も良いステータスが優先されます(active が最優先、retired が最後)。",
         "valueLabel": "タグの値:",
         "sharedKeyHint": "プロダクトとコントラクトのステータスタグが同じキーで両方とも有効な場合は、プロダクトのステータスが書き込まれます。"
+      },
+      "assetVariables": {
+        "assetId": "アセット UUID",
+        "assetType": "アセットタイプ名 (Table、View など)",
+        "assetFqn": "テーブルの Unity Catalog 名 (catalog.schema.table)",
+        "assetMaturity": "テーブルまたはビューのアセットの成熟度レベル名 (最新の評価)",
+        "assetMaturityOrder": "テーブルまたはビューのアセットの成熟度レベル番号 (1 = 最初のレベル)"
+      },
+      "maturity": {
+        "title": "成熟度レベルタグ",
+        "description": "テーブルまたはビューの各アセットに成熟度レベル (最新の評価) をタグ付けします。レベルのないテーブルにはタグが付きません。",
+        "valueNeedsVariable": "キーまたは値に {ASSET.MATURITY} か {ASSET.MATURITY_ORDER} を使用してください。",
+        "tablesOnlyHint": "タグが付くのは Unity Catalog 名を持つテーブルとビューだけで、スキーマやカタログには付きません。実行の出力に、スキップしたアセットの数と理由が表示されます。",
+        "prefixHint": "テーブルがレベルを失ったときにジョブがタグを削除できるよう、キーは他の有効なキーと同じプレフィックス (既定は ontos_) で始めてください。"
       }
     },
     "entityPatterns": {
@@ -1246,6 +1260,15 @@
       "created": "成熟度レベル「{{name}}」を作成しました。",
       "deleted": "成熟度レベル「{{name}}」を削除しました。",
       "cannotDeleteTitle": "削除できません"
+    },
+    "assetDefaults": {
+      "load": "アセットの既定レベルを読み込む",
+      "hint": "テーブルとビューのアセット用の既定のラダー (Prerequisite、1 star、2 stars、3 stars) とゲートポリシーの例を追加します",
+      "loadedTitle": "アセットのレベルを読み込みました",
+      "loaded_one": "{{count}} 件のアセットレベルを作成しました",
+      "loaded_other": "{{count}} 件のアセットレベルを作成しました",
+      "alreadyLoaded": "アセットのレベルは既に存在します。何も変更されていません",
+      "loadFailed": "アセットの既定レベルを読み込めませんでした"
     }
   },
   "directory": {

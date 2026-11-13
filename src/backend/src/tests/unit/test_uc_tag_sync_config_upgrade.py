@@ -46,6 +46,11 @@ PRODUCT_LIFECYCLE = {
     "entity_type": "data_product", "mapping": LIFECYCLE, "enabled": True,
     "tag_key_format": STATUS_KEY, "tag_value_format": "{PRODUCT.STATUS}",
 }
+# The asset maturity entry (#1316), added the same way and disabled by default
+ASSET_MATURITY = {
+    "entity_type": "asset", "mapping": "maturity", "enabled": False,
+    "tag_key_format": "ontos_maturity", "tag_value_format": "{ASSET.MATURITY}",
+}
 
 
 @pytest.fixture
@@ -68,7 +73,7 @@ def test_the_yaml_default_marks_the_lifecycle_entries(definitions):
     param = next(d for d in definitions if d.name == "tag_sync_configs")
     marked = [e for e in param.default if e.get("mapping")]
 
-    assert marked == [CONTRACT_LIFECYCLE, PRODUCT_LIFECYCLE]
+    assert marked == [CONTRACT_LIFECYCLE, PRODUCT_LIFECYCLE, ASSET_MATURITY]
 
 
 def test_an_old_saved_list_gets_the_lifecycle_entries_appended(definitions):
@@ -79,7 +84,9 @@ def test_an_old_saved_list_gets_the_lifecycle_entries_appended(definitions):
     # The saved entries stay first and unchanged (the dialog's main card edits the
     # first unmarked entry per type); the product entry comes last, so it wins the
     # shared key when both are enabled.
-    assert result["tag_sync_configs"] == OLD_SAVED + [CONTRACT_LIFECYCLE, PRODUCT_LIFECYCLE]
+    assert result["tag_sync_configs"] == OLD_SAVED + [
+        CONTRACT_LIFECYCLE, PRODUCT_LIFECYCLE, ASSET_MATURITY,
+    ]
     assert result["prefix"] == "x_"
     assert configuration["tag_sync_configs"] == OLD_SAVED
 
@@ -91,11 +98,11 @@ def test_a_kept_but_disabled_lifecycle_entry_stays_disabled(definitions):
     result = add_missing_mapped_entries({"tag_sync_configs": saved}, definitions)
 
     # Only the missing contract entry is added; the product one is the admin's.
-    assert result["tag_sync_configs"] == saved + [CONTRACT_LIFECYCLE]
+    assert result["tag_sync_configs"] == saved + [CONTRACT_LIFECYCLE, ASSET_MATURITY]
 
 
 def test_a_list_with_both_lifecycle_entries_is_unchanged(definitions):
-    saved = OLD_SAVED + [CONTRACT_LIFECYCLE, PRODUCT_LIFECYCLE]
+    saved = OLD_SAVED + [CONTRACT_LIFECYCLE, PRODUCT_LIFECYCLE, ASSET_MATURITY]
 
     result = add_missing_mapped_entries({"tag_sync_configs": saved}, definitions)
 
@@ -118,7 +125,9 @@ def test_reading_an_old_saved_configuration_adds_the_mapping(db_session, jobs_ma
 
     configuration = jobs_manager.get_workflow_configuration(WORKFLOW)
 
-    assert configuration["tag_sync_configs"][-2:] == [CONTRACT_LIFECYCLE, PRODUCT_LIFECYCLE]
+    assert configuration["tag_sync_configs"][-3:] == [
+        CONTRACT_LIFECYCLE, PRODUCT_LIFECYCLE, ASSET_MATURITY,
+    ]
     # Read only: the stored row isn't rewritten.
     stored = workflow_configuration_repo.get_configuration_dict(db_session,
                                                                 workflow_id=WORKFLOW)

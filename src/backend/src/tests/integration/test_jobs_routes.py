@@ -112,4 +112,7 @@ class TestTagSyncConfigurationUpgrade:
         response = client.get(self.URL)
 
         assert put.status_code == 200
-        assert response.json()["configuration"]["tag_sync_configs"] == configs
+        # The asset maturity default (#1316) the list lacks is added, disabled
+        returned = response.json()["configuration"]["tag_sync_configs"]
+        assert returned[:3] == configs
+        assert [(c["mapping"], c["enabled"]) for c in returned[3:]] == [("maturity", False)]

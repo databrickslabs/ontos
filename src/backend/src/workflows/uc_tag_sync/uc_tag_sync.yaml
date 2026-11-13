@@ -109,6 +109,13 @@ configurable_parameters:
         enabled: true
         tag_key_format: "ontos_lifecycle_status"
         tag_value_format: "{PRODUCT.STATUS}"
+      # Maturity level of a table or view asset (its latest evaluation), on the table
+      # only. {ASSET.MATURITY_ORDER} gives the level number instead of its name.
+      - entity_type: "asset"
+        mapping: "maturity"
+        enabled: false
+        tag_key_format: "ontos_maturity"
+        tag_value_format: "{ASSET.MATURITY}"
 
   - name: "prefix"
     type: "string"

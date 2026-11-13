@@ -25,6 +25,7 @@ import { LineageEditor } from '@/components/common/lineage-editor';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { RelativeDate } from '@/components/common/relative-date';
+import { MaturityInline } from '@/components/common/maturity-inline';
 import { EntityTreePanel } from '@/components/common/entity-tree-panel';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { CommentSidebar } from '@/components/comments';
@@ -147,6 +148,8 @@ export default function AssetDetailView() {
 
   const isBusinessTerm = ontologyTypeName === 'BusinessTerm';
   const isPolicy = ontologyTypeName === 'Policy';
+  // Maturity levels apply to table and view assets (MATURITY_ASSET_TYPES in the backend)
+  const hasMaturity = entityType === 'Table' || entityType === 'View';
   const isLogicalEntity = ontologyTypeName === 'LogicalEntity';
 
   const fetchAsset = useCallback(async () => {
@@ -352,6 +355,16 @@ export default function AssetDetailView() {
                       <Globe className="h-3 w-3" /> {t('assets:table.platform')}
                     </Label>
                     <p className="text-sm mt-1">{asset.platform}</p>
+                  </div>
+                )}
+                {hasMaturity && (
+                  <div data-testid="asset-maturity">
+                    <Label className="text-xs text-muted-foreground">
+                      {t('common:maturity.label')}
+                    </Label>
+                    <div className="mt-1">
+                      <MaturityInline entityType="Asset" entityId={asset.id} />
+                    </div>
                   </div>
                 )}
                 {((asset.domains && asset.domains.length > 0) || asset.domain_id) && (

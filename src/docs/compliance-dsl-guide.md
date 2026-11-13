@@ -220,6 +220,31 @@ ON_FAIL FAIL 'Comment at least 80% of the columns and every partition column'
 
 ---
 
+### Example 8: Maturity Gates for Table and View Assets
+
+**Scenario**: A maturity level for table assets requires a real description and documented
+columns. Like the default gates, it is a bare `ASSERT`: the maturity evaluator runs it
+against one asset at a time, as `obj`.
+
+```
+ASSERT LENGTH(obj.description) >= 50 AND obj.column_comment_ratio >= 0.5
+```
+
+**What it checks**:
+- The asset's own fields: `has_owner`, `owner_count`, `has_domain`, `description`,
+  `has_description`, `business_term_count`, `tag_count`, `HAS_TAG('x')`,
+  `effective_certification`, `is_certification_expired`, `quality_check_count`, and one
+  `prop_<key>` per custom property
+- The column fields of the Unity Catalog table it points to (`column_count`,
+  `columns_without_comment_count`, `column_comment_ratio`, the partition fields); they
+  are missing when the table can't be read, so the gate fails
+- **Load default asset levels** (Settings → Maturity Levels) adds a ladder built from these
+  fields; the *Unity Catalog Tag Sync* job can publish the level reached as a table tag
+  (`{ASSET.MATURITY}`, `{ASSET.MATURITY_ORDER}`). See the User Guide, *Maturity Levels for
+  Tables and Views*
+
+---
+
 ## Entity Types
 
 You can write rules for these entity types:

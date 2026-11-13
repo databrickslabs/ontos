@@ -984,6 +984,20 @@
         "descriptionContract": "Assegna a ogni tabella lo stato del ciclo di vita del contratto dati che la usa. Su una tabella usata da più contratti vince lo stato migliore (active per primo, retired per ultimo).",
         "valueLabel": "Valore del tag:",
         "sharedKeyHint": "Quando i tag di stato del prodotto e del contratto sono entrambi attivi con la stessa chiave, viene scritto lo stato del prodotto."
+      },
+      "assetVariables": {
+        "assetId": "UUID dell'asset",
+        "assetType": "Nome del tipo di asset (Table, View, ...)",
+        "assetFqn": "Nome della tabella in Unity Catalog (catalog.schema.table)",
+        "assetMaturity": "Nome del livello di maturità di un asset tabella o vista (ultima valutazione)",
+        "assetMaturityOrder": "Numero del livello di maturità di un asset tabella o vista (1 = primo livello)"
+      },
+      "maturity": {
+        "title": "Tag del livello di maturità",
+        "description": "Aggiunge a ogni asset tabella o vista il suo livello di maturità (ultima valutazione). Le tabelle senza livello non ricevono il tag.",
+        "valueNeedsVariable": "Usa {ASSET.MATURITY} o {ASSET.MATURITY_ORDER} nella chiave o nel valore.",
+        "tablesOnlyHint": "Ricevono il tag solo tabelle e viste con un nome in Unity Catalog, non schemi né cataloghi. L'output dell'esecuzione conta gli asset saltati e il motivo.",
+        "prefixHint": "Inizia la chiave con lo stesso prefisso delle altre chiavi attive (ontos_ per impostazione predefinita), così il job può rimuovere il tag quando una tabella perde il livello."
       }
     },
     "entityPatterns": {
@@ -1246,6 +1260,15 @@
       "created": "Livello di maturità \"{{name}}\" creato.",
       "deleted": "Livello di maturità \"{{name}}\" eliminato.",
       "cannotDeleteTitle": "Impossibile eliminare"
+    },
+    "assetDefaults": {
+      "load": "Carica i livelli predefiniti degli asset",
+      "hint": "Aggiunge una scala predefinita per asset tabella e vista (Prerequisite, 1 star, 2 stars, 3 stars) con policy di gate di esempio",
+      "loadedTitle": "Livelli degli asset caricati",
+      "loaded_one": "{{count}} livello di asset creato",
+      "loaded_other": "{{count}} livelli di asset creati",
+      "alreadyLoaded": "Esistono già livelli di asset: non è stato modificato nulla",
+      "loadFailed": "Impossibile caricare i livelli predefiniti degli asset"
     }
   },
   "directory": {

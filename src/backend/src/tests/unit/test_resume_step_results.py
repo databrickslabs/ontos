@@ -24,7 +24,10 @@ from src.models.process_workflows import (
     WorkflowStepCreate,
     WorkflowTrigger,
 )
-from src.repositories.process_workflows_repository import process_workflow_repo, workflow_execution_repo
+from src.repositories.process_workflows_repository import (
+    process_workflow_repo,
+    workflow_execution_repo,
+)
 
 RULE = 'MATCH (obj:Object) ASSERT 1 = 1'
 FAILING_RULE = 'MATCH (obj:Object) ASSERT 1 = 2'

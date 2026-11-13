@@ -7,7 +7,10 @@ references. Relationship types are validated against the ontology at write time.
 import uuid
 from sqlalchemy import Column, String, Index, TIMESTAMP, JSON, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import validates
 from sqlalchemy.sql import func
+
+from src.common.ontology_type_names import canonical_type_name
 
 from src.common.database import Base
 
@@ -36,6 +39,11 @@ class EntityRelationshipDb(Base):
         Index("ix_entity_rel_target", "target_type", "target_id"),
         Index("ix_entity_rel_type", "relationship_type"),
     )
+
+    @validates("source_type", "target_type")
+    def _canonical_type(self, _key, value):
+        # Every writer gets the same spelling, so exact lookups find the row.
+        return canonical_type_name(value)
 
     def __repr__(self):
         return (

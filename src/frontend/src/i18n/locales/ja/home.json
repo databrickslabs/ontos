@@ -123,6 +123,10 @@
     "unknownProduct": "不明な製品",
     "viewAllSubscribed": "購読済みをすべて表示"
   },
+  "discoveryDomainGraph": {
+    "unavailable": "このロールではドメイン階層を表示できません。",
+    "error": "ドメイン階層を読み込めませんでした"
+  },
   "dataCurationSection": {
     "title": "データキュレーション",
     "createDataProduct": {

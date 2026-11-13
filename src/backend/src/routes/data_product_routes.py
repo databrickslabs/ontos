@@ -34,7 +34,9 @@ from src.common.authorization import effective_permissions_for_request, has_feat
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
-from src.controller.lifecycle_fields import LIFECYCLE_AUDIT_ACTIONS, LifecycleFieldError
+from src.controller.lifecycle_fields import (
+    LifecycleFieldError, deprecation_audit_details, product_status_audit,
+)
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 
@@ -59,11 +61,7 @@ router = APIRouter(prefix="/api", tags=["Data Products"])
 
 def _deprecation_audit(payload: DeprecationPayload) -> dict:
     """Deprecation details for the audit log."""
-    return {
-        'deprecation_reason': payload.deprecation_reason,
-        'sunset_date': payload.sunset_date.isoformat() if payload.sunset_date else None,
-        'replacement_id': payload.replacement_id,
-    }
+    return deprecation_audit_details(payload.deprecation_details())
 
 DATA_PRODUCTS_FEATURE_ID = "data-products"
 
@@ -2762,16 +2760,17 @@ async def change_product_status(
             deprecation=payload.deprecation_details(),
         )
         
-        new_status = payload.new_status.lower()
+        audit_action, audit_details = product_status_audit(
+            product_id, payload.new_status, payload.deprecation_details()
+        )
         audit_manager.log_action(
             db=db,
             username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=DATA_PRODUCTS_FEATURE_ID,
-            action=LIFECYCLE_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
+            action=audit_action,
             success=True,
-            details={'product_id': product_id, 'new_status': payload.new_status,
-                     **(_deprecation_audit(payload) if new_status == 'deprecated' else {})},
+            details=audit_details,
         )
         return {"message": f"Status changed to {payload.new_status}", "product": updated_product}
         

@@ -7,7 +7,7 @@ from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker, user_has_feature_level
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
-from src.controller.compliance_manager import ComplianceManager, rule_changes_tags
+from src.controller.compliance_manager import ComplianceManager, rule_changes_tags, rule_sends_notifications
 from src.models.compliance import (
     CompliancePolicy,
     CompliancePolicyCreate,
@@ -81,6 +81,24 @@ def require_tag_write_for_tag_actions(rule: Optional[str], auth_manager, current
         )
 
 
+def require_compliance_admin_for_notify(rule: Optional[str], auth_manager, current_user, request: Request) -> None:
+    """NOTIFY creates in-app notifications for any user, group or role, so saving or
+    running a rule that uses it needs admin access to compliance (Data Governance
+    Officers and Admins by default), not just write access.
+
+    Scheduled runs have no acting user; they run rules saved by users who had
+    that access.
+    """
+    if rule_sends_notifications(rule) and not user_has_feature_level(
+        auth_manager, current_user, FEATURE_ID, FeatureAccessLevel.ADMIN, request
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="This policy sends notifications (NOTIFY); saving or running it "
+                   "requires admin access to compliance",
+        )
+
+
 @router.post("/compliance/policies")
 async def create_policy(
     request: Request,
@@ -93,6 +111,7 @@ async def create_policy(
 ):
     warnings = _check_rule(policy.rule)
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
+    require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
     created = manager.create_policy(
         db, 
         policy, 
@@ -143,6 +162,9 @@ async def update_policy(
     warnings = _check_rule(policy.rule) if rule_changed else []
     if rule_changed:
         require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
+    # The name is the title of the notifications NOTIFY sends: renaming is gated too
+    if rule_changed or existing.name != policy.name:
+        require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
     updated = manager.update_policy(
         db, 
         policy_id, 
@@ -248,6 +270,7 @@ async def run_policy(
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
+    require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
 
     # For now, implement inline only; async can be backed by Databricks job later
     run = manager.run_policy_inline(

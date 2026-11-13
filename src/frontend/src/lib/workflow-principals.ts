@@ -44,10 +44,14 @@ export const GROUP_PRINCIPAL_PREFIX = 'group:';
 /**
  * Value the Workflow Designer's PrincipalPicker stores for a pick: users by
  * their id (email / UPN), groups with ``group:`` so a group named like a
- * role token (``reviewer``, ``admins``) stays that group.
+ * role token (``reviewer``, ``admins``) stays that group. Principals are
+ * separated by commas, so a group name's ``,`` is written ``%2C`` (and ``%``
+ * ``%25``); the backend reads them back.
  */
 export function workflowPrincipalValue(p: Principal): string {
-  return p.type === 'group' ? `${GROUP_PRINCIPAL_PREFIX}${p.id}` : p.id;
+  if (p.type !== 'group') return p.id;
+  const name = p.id.replace(/%/g, '%25').replace(/,/g, '%2C');
+  return `${GROUP_PRINCIPAL_PREFIX}${name}`;
 }
 
 export interface NamedRole {

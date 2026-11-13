@@ -117,3 +117,10 @@ def test_the_same_principal_in_other_case_is_one_target(db_session, roles):
     )
     assert out == [('Ana@Example.com', None), ('user:Bob', None)]
 
+
+def test_a_group_name_with_a_comma_is_one_group(db_session, roles):
+    """The designer writes the comma as %2C (and % as %25)."""
+    out = _resolve_role_to_users(
+        db_session, 'group:Sales%2C EMEA,group:100%25 Ops', _context(),
+    )
+    assert out == [('group:Sales, EMEA', None), ('group:100% Ops', None)]

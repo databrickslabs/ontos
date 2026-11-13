@@ -210,4 +210,13 @@ describe('group principals (#1151 item 5)', () => {
     });
     expect(GROUP_PRINCIPAL_PREFIX).toBe('group:');
   });
+
+  it('escapes a comma in a group name so it stays one principal', () => {
+    const value = workflowPrincipalValue({
+      type: 'group', id: 'Sales, 100% EMEA', display_name: 'Sales',
+    });
+    expect(value).toBe('group:Sales%2C 100%25 EMEA');
+    const wire = joinRoleAndPrincipals('requester', [value]);
+    expect(splitRoleAndPrincipals(wire).principals).toEqual([value]);
+  });
 });

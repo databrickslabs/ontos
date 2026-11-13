@@ -697,6 +697,16 @@ _USER_PREFIX = 'user:'
 _GROUP_PREFIX = 'group:'
 
 
+# A comma separates principals, so the designer writes a group name's ``,`` as
+# ``%2C`` (and ``%`` as ``%25``) after ``group:``
+_GROUP_NAME_ESCAPE_RE = re.compile(r'%(2[cC]|25)')
+
+
+def _decode_group_name(name: str) -> str:
+    """A ``group:`` name as the designer escaped it, with its commas back."""
+    return _GROUP_NAME_ESCAPE_RE.sub(lambda m: '%' if m.group(1) == '25' else ',', name)
+
+
 def _strip_user_prefix(identifier: str) -> str:
     """``identifier`` without a ``user:`` marker (``group:`` ones are kept)."""
     return identifier[len(_USER_PREFIX):] if identifier.startswith(_USER_PREFIX) else identifier
@@ -718,7 +728,8 @@ def _resolve_role_to_users(
     role (a group called 'reviewer' or 'admins') is never read as one:
     - 'user:<x>' → the user ``x``: 'user:<x>' (an email: bare)
     - 'group:<name>' → the group ``name``: 'group:<name>' (what the Workflow
-      Designer's PrincipalPicker emits for a group)
+      Designer's PrincipalPicker emits for a group; a ``,`` in the name is
+      written ``%2C``, a ``%`` ``%25``)
     - 'user@email.com' → direct email
     - '<uuid>' of an app role → that role
 
@@ -771,7 +782,7 @@ def _resolve_role_to_users(
         return [(user if '@' in user else _USER_PREFIX + user, None)]
 
     if role_spec.startswith(_GROUP_PREFIX):
-        group = role_spec[len(_GROUP_PREFIX):].strip()
+        group = _decode_group_name(role_spec[len(_GROUP_PREFIX):]).strip()
         return [(_GROUP_PREFIX + group, None)] if group else []
 
     if '@' in role_spec:

@@ -4,6 +4,7 @@
 ## ✨ Features
 
 - **compliance-templates**: compliance templates can be bound to table and view assets (entity type `asset`). Table and view pages get the Compliance button and modal with the advisory count of missing mandatory fields; filling the values needs the right to edit the asset, reading them the right to read it. Assets have no publish gate. Editing a table or view fills the defaults of a new template, as on data products.
+- **compliance-templates**: the compliance templates settings page, the template editor, the Compliance modal and the data product Compliance button are translated (all locales).
 - **maturity**: add configurable multi-level maturity assessment for data products and contracts
 - **term-mapping**: ontology term suggestion, AR-based review, inline suggester
 - **semantic-models**: humanize RDF source labels across UI

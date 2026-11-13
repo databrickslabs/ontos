@@ -17,7 +17,8 @@
     "search": "検索",
     "mcpTokens": "MCPトークン",
     "workflows": "ワークフロー",
-    "uiCustomization": "UIカスタマイズ"
+    "uiCustomization": "UIカスタマイズ",
+    "complianceTemplates": "コンプライアンステンプレート"
   },
   "accessDenied": {
     "title": "アクセス拒否",

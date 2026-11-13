@@ -17,7 +17,8 @@
     "search": "Suche",
     "mcpTokens": "MCP-Token",
     "workflows": "Workflows",
-    "uiCustomization": "UI-Anpassung"
+    "uiCustomization": "UI-Anpassung",
+    "complianceTemplates": "Compliance-Vorlagen"
   },
   "accessDenied": {
     "title": "Zugriff verweigert",

@@ -80,15 +80,8 @@ interface DraftField {
   is_mandatory: boolean;
 }
 
-const VALUE_TYPE_OPTIONS = [
-  { value: 'string', label: 'Text' },
-  { value: 'numeric', label: 'Number' },
-  { value: 'boolean', label: 'Yes/No' },
-  { value: 'date', label: 'Date' },
-  { value: 'enum', label: 'Single choice' },
-  { value: 'multi_enum', label: 'Multiple choice' },
-  { value: 'range', label: 'Range (low–high)' },
-];
+// Field value types; labels are i18n keys under ``complianceTemplates.valueTypes``.
+const VALUE_TYPE_OPTIONS = ['string', 'numeric', 'boolean', 'date', 'enum', 'multi_enum', 'range'];
 
 const VOCAB_TYPES = new Set(['enum', 'multi_enum']);
 
@@ -219,7 +212,10 @@ export default function ComplianceTemplatesSettings() {
     group_order: 0,
     key: toSlug(f.label) || `field-${idx + 1}`,
     label: f.label.trim(),
-    reference_id: (f.reference_id.trim() && toSlug(f.reference_id)) || toSlug(f.label) || `field-${idx + 1}`,
+    reference_id:
+      (f.reference_id.trim() && toSlug(f.reference_id)) ||
+      toSlug(f.label) ||
+      `field-${idx + 1}`,
     value_type: f.value_type,
     possible_values: VOCAB_TYPES.has(f.value_type)
       ? f.possible_values.split(',').map((s) => s.trim()).filter(Boolean)
@@ -245,12 +241,19 @@ export default function ComplianceTemplatesSettings() {
           fields,
         });
         if (error) throw new Error(error);
-        toast({ title: 'Created', description: `Template "${formData.name}" created.` });
+        toast({
+          title: t('complianceTemplates.toast.created'),
+          description: t('complianceTemplates.toast.createdDescription', { name: formData.name }),
+        });
       }
       setDialogOpen(false);
       fetchTemplates();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Failed to save', variant: 'destructive' });
+      toast({
+        title: t('complianceTemplates.toast.error'),
+        description: err?.message || t('complianceTemplates.toast.saveFailed'),
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }
@@ -278,7 +281,11 @@ export default function ComplianceTemplatesSettings() {
     for (const orig of originalFields) {
       if (orig.id && !keptIds.has(orig.id)) {
         const { error } = await apiDelete(`${base}/fields/${orig.id}`);
-        if (error) throw new Error(`Cannot remove "${orig.label}": ${error}`);
+        if (error) {
+          throw new Error(
+            t('complianceTemplates.toast.removeFieldFailed', { label: orig.label, error }),
+          );
+        }
       }
     }
 
@@ -288,10 +295,16 @@ export default function ComplianceTemplatesSettings() {
       const payload = draftToPayload(f, idx);
       if (!f.id) {
         const { error } = await post(`${base}/fields`, payload);
-        if (error) throw new Error(`Cannot add "${f.label}": ${error}`);
+        if (error) {
+          throw new Error(t('complianceTemplates.toast.addFieldFailed', { label: f.label, error }));
+        }
       } else {
         const { error } = await put(`${base}/fields/${f.id}`, payload);
-        if (error) throw new Error(`Cannot update "${f.label}": ${error}`);
+        if (error) {
+          throw new Error(
+            t('complianceTemplates.toast.updateFieldFailed', { label: f.label, error }),
+          );
+        }
       }
     }
 
@@ -303,7 +316,10 @@ export default function ComplianceTemplatesSettings() {
       await put(`${base}/fields/reorder`, { fields: reorder });
     }
 
-    toast({ title: 'Saved', description: `Template "${formData.name}" updated.` });
+    toast({
+      title: t('complianceTemplates.toast.saved'),
+      description: t('complianceTemplates.toast.savedDescription', { name: formData.name }),
+    });
   };
 
   const handleToggleActive = async (template: ComplianceTemplate) => {
@@ -313,11 +329,16 @@ export default function ComplianceTemplatesSettings() {
       {},
     );
     if (error) {
-      toast({ title: 'Error', description: error, variant: 'destructive' });
-    } else {
       toast({
-        title: template.is_active ? 'Deactivated' : 'Activated',
-        description: `Template "${template.name}" ${template.is_active ? 'deactivated' : 'is now active'}.`,
+        title: t('complianceTemplates.toast.error'),
+        description: error,
+        variant: 'destructive',
+      });
+    } else {
+      const done = template.is_active ? 'deactivated' : 'activated';
+      toast({
+        title: t(`complianceTemplates.toast.${done}`),
+        description: t(`complianceTemplates.toast.${done}Description`, { name: template.name }),
       });
       fetchTemplates();
     }
@@ -327,9 +348,18 @@ export default function ComplianceTemplatesSettings() {
     if (!deletingTemplate) return;
     const { error } = await apiDelete(`/api/compliance-templates/${deletingTemplate.id}`);
     if (error) {
-      toast({ title: 'Cannot delete', description: error, variant: 'destructive' });
+      toast({
+        title: t('complianceTemplates.toast.deleteFailed'),
+        description: error,
+        variant: 'destructive',
+      });
     } else {
-      toast({ title: 'Deleted', description: `Template "${deletingTemplate.name}" deleted.` });
+      toast({
+        title: t('complianceTemplates.toast.deleted'),
+        description: t('complianceTemplates.toast.deletedDescription', {
+          name: deletingTemplate.name,
+        }),
+      });
       setDeletingTemplate(null);
       fetchTemplates();
     }
@@ -349,25 +379,26 @@ export default function ComplianceTemplatesSettings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Compliance Templates</h2>
+          <h2 className="text-lg font-semibold">{t('complianceTemplates.settings.title')}</h2>
           <p className="text-sm text-muted-foreground">
-            Define typed, grouped governance fields bound to an entity type. Exactly one template
-            can be active per entity type.
+            {t('complianceTemplates.settings.description')}
           </p>
         </div>
         <Button onClick={handleOpenCreate} size="sm">
-          <Plus className="mr-1 h-4 w-4" /> Add Template
+          <Plus className="mr-1 h-4 w-4" /> {t('complianceTemplates.settings.addTemplate')}
         </Button>
       </div>
 
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Entity Type</TableHead>
-            <TableHead>Fields</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="w-32">Actions</TableHead>
+            <TableHead>{t('complianceTemplates.settings.columns.name')}</TableHead>
+            <TableHead>{t('complianceTemplates.settings.columns.entityType')}</TableHead>
+            <TableHead>{t('complianceTemplates.settings.columns.fields')}</TableHead>
+            <TableHead>{t('complianceTemplates.settings.columns.status')}</TableHead>
+            <TableHead className="w-32">
+              {t('complianceTemplates.settings.columns.actions')}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -383,9 +414,15 @@ export default function ComplianceTemplatesSettings() {
               <TableCell className="text-sm text-muted-foreground">{template.fields?.length ?? 0}</TableCell>
               <TableCell>
                 {template.is_active ? (
-                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Active</Badge>
+                  <Badge
+                    className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                  >
+                    {t('complianceTemplates.settings.statusActive')}
+                  </Badge>
                 ) : (
-                  <Badge variant="outline">Inactive</Badge>
+                  <Badge variant="outline">
+                    {t('complianceTemplates.settings.statusInactive')}
+                  </Badge>
                 )}
               </TableCell>
               <TableCell>
@@ -394,7 +431,7 @@ export default function ComplianceTemplatesSettings() {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    title="Edit"
+                    title={t('complianceTemplates.settings.edit')}
                     onClick={() => handleOpenEdit(template)}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -403,7 +440,11 @@ export default function ComplianceTemplatesSettings() {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    title={template.is_active ? 'Deactivate' : 'Activate'}
+                    title={
+                      template.is_active
+                        ? t('complianceTemplates.settings.deactivate')
+                        : t('complianceTemplates.settings.activate')
+                    }
                     onClick={() => handleToggleActive(template)}
                   >
                     {template.is_active ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
@@ -412,6 +453,7 @@ export default function ComplianceTemplatesSettings() {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 text-destructive"
+                    title={t('complianceTemplates.settings.delete')}
                     onClick={() => { setDeletingTemplate(template); setDeleteDialogOpen(true); }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -423,7 +465,7 @@ export default function ComplianceTemplatesSettings() {
           {templates.length === 0 && (
             <TableRow>
               <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                No compliance templates configured. Click "Add Template" to create one.
+                {t('complianceTemplates.settings.empty')}
               </TableCell>
             </TableRow>
           )}
@@ -434,35 +476,39 @@ export default function ComplianceTemplatesSettings() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>{editingTemplate ? 'Edit Compliance Template' : 'Add Compliance Template'}</DialogTitle>
+            <DialogTitle>
+              {editingTemplate
+                ? t('complianceTemplates.dialog.editTitle')
+                : t('complianceTemplates.dialog.createTitle')}
+            </DialogTitle>
             <DialogDescription>
               {editingTemplate
-                ? 'Edit fields, defaults, hints and mandatory flags. Changing a field’s type or removing a field/enum value is blocked when products have already stored values.'
-                : 'Create a template and optionally add fields. Activate it to make it available on the bound entity type.'}
+                ? t('complianceTemplates.dialog.editDescription')
+                : t('complianceTemplates.dialog.createDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 space-y-4 overflow-y-auto py-2 pr-1">
             <div className="space-y-2">
-              <Label htmlFor="ct-name">Name</Label>
+              <Label htmlFor="ct-name">{t('complianceTemplates.dialog.name')}</Label>
               <Input
                 id="ct-name"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g., Terms of Use"
+                placeholder={t('complianceTemplates.dialog.namePlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ct-desc">Description</Label>
+              <Label htmlFor="ct-desc">{t('complianceTemplates.dialog.description')}</Label>
               <Textarea
                 id="ct-desc"
                 value={formData.description}
                 onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="What this template captures..."
+                placeholder={t('complianceTemplates.dialog.descriptionPlaceholder')}
                 rows={2}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ct-entity">Entity Type</Label>
+              <Label htmlFor="ct-entity">{t('complianceTemplates.dialog.entityType')}</Label>
               <select
                 id="ct-entity"
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
@@ -478,14 +524,14 @@ export default function ComplianceTemplatesSettings() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Fields</Label>
+                <Label>{t('complianceTemplates.dialog.fields')}</Label>
                 <Button variant="outline" size="sm" onClick={handleAddDraftField}>
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Add Field
+                  <Plus className="mr-1 h-3.5 w-3.5" /> {t('complianceTemplates.dialog.addField')}
                 </Button>
               </div>
               {draftFields.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  No fields yet. Click "Add Field" to define one.
+                  {t('complianceTemplates.dialog.noFields')}
                 </p>
               )}
               {draftFields.map((field, idx) => (
@@ -496,19 +542,21 @@ export default function ComplianceTemplatesSettings() {
                       onChange={(e) =>
                         setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, label: e.target.value } : f)))
                       }
-                      placeholder="Field label"
+                      placeholder={t('complianceTemplates.dialog.fieldLabelPlaceholder')}
                     />
                     <Input
                       value={field.group_title}
                       onChange={(e) =>
                         setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, group_title: e.target.value } : f)))
                       }
-                      placeholder="Group (optional)"
+                      placeholder={t('complianceTemplates.dialog.groupPlaceholder')}
                     />
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 shrink-0"
+                      title={t('complianceTemplates.dialog.removeField')}
+                      aria-label={t('complianceTemplates.dialog.removeField')}
                       onClick={() => setDraftFields((prev) => prev.filter((_, i) => i !== idx))}
                     >
                       <X className="h-3.5 w-3.5" />
@@ -522,8 +570,10 @@ export default function ComplianceTemplatesSettings() {
                         setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, value_type: e.target.value } : f)))
                       }
                     >
-                      {VALUE_TYPE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
+                      {VALUE_TYPE_OPTIONS.map((type) => (
+                        <option key={type} value={type}>
+                          {t(`complianceTemplates.valueTypes.${type}`)}
+                        </option>
                       ))}
                     </select>
                     {VOCAB_TYPES.has(field.value_type) && (
@@ -532,7 +582,7 @@ export default function ComplianceTemplatesSettings() {
                         onChange={(e) =>
                           setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, possible_values: e.target.value } : f)))
                         }
-                        placeholder="Options (comma-separated)"
+                        placeholder={t('complianceTemplates.dialog.optionsPlaceholder')}
                       />
                     )}
                   </div>
@@ -542,21 +592,21 @@ export default function ComplianceTemplatesSettings() {
                       onChange={(e) =>
                         setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, hint_text: e.target.value } : f)))
                       }
-                      placeholder="Hint text (optional)"
+                      placeholder={t('complianceTemplates.dialog.hintPlaceholder')}
                     />
                     <Input
                       value={field.default_value}
                       onChange={(e) =>
                         setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, default_value: e.target.value } : f)))
                       }
-                      placeholder="Default (optional)"
+                      placeholder={t('complianceTemplates.dialog.defaultPlaceholder')}
                     />
                     <Input
                       value={field.reference_id}
                       onChange={(e) =>
                         setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, reference_id: e.target.value } : f)))
                       }
-                      placeholder="Reference id (auto)"
+                      placeholder={t('complianceTemplates.dialog.referenceIdPlaceholder')}
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -567,12 +617,13 @@ export default function ComplianceTemplatesSettings() {
                         setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, is_mandatory: checked === true } : f)))
                       }
                     />
-                    <label htmlFor={`mandatory-${idx}`} className="text-sm">Mandatory</label>
+                    <label htmlFor={`mandatory-${idx}`} className="text-sm">
+                      {t('complianceTemplates.dialog.mandatory')}
+                    </label>
                   </div>
                   {field.is_mandatory && field.default_value.trim() && (
                     <p className="text-xs text-amber-600 dark:text-amber-500">
-                      This field is mandatory but has a default — the default will satisfy the
-                      requirement, so owners can publish without changing it.
+                      {t('complianceTemplates.dialog.mandatoryWithDefault')}
                     </p>
                   )}
                 </div>
@@ -580,10 +631,14 @@ export default function ComplianceTemplatesSettings() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              {t('complianceTemplates.dialog.cancel')}
+            </Button>
             <Button onClick={handleSave} disabled={saving || !formData.name.trim()}>
               {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-              {editingTemplate ? 'Save changes' : 'Create'}
+              {editingTemplate
+                ? t('complianceTemplates.dialog.saveChanges')
+                : t('complianceTemplates.dialog.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -593,16 +648,17 @@ export default function ComplianceTemplatesSettings() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete compliance template?</AlertDialogTitle>
+            <AlertDialogTitle>{t('complianceTemplates.deleteDialog.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingTemplate?.name}"? Its fields and any stored
-              values will be removed. This cannot be undone.
+              {t('complianceTemplates.deleteDialog.description', {
+                name: deletingTemplate?.name ?? '',
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('complianceTemplates.deleteDialog.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-              Delete
+              {t('complianceTemplates.deleteDialog.confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

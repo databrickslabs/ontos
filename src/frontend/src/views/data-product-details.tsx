@@ -1526,7 +1526,8 @@ export default function DataProductDetails() {
           {/* Compliance - only when a template is active for data products */}
           {hasActiveComplianceTemplate && (
             <Button variant="outline" onClick={() => setComplianceModalOpen(true)} size="sm">
-              <ClipboardCheck className="mr-2 h-4 w-4" /> Compliance
+              <ClipboardCheck className="mr-2 h-4 w-4" />
+              {t('compliance:complianceTemplates.button')}
               {complianceMissingCount > 0 && (
                 <Badge variant="destructive" className="ml-2 px-1.5 py-0 text-[10px]">
                   {complianceMissingCount}

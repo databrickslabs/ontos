@@ -17,7 +17,8 @@
     "search": "Ricerca",
     "mcpTokens": "Token MCP",
     "workflows": "Workflow",
-    "uiCustomization": "Personalizzazione UI"
+    "uiCustomization": "Personalizzazione UI",
+    "complianceTemplates": "Modelli di conformità"
   },
   "accessDenied": {
     "title": "Accesso negato",

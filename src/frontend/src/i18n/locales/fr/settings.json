@@ -17,7 +17,8 @@
     "search": "Recherche",
     "mcpTokens": "Jetons MCP",
     "workflows": "Workflows",
-    "uiCustomization": "Personnalisation UI"
+    "uiCustomization": "Personnalisation UI",
+    "complianceTemplates": "Modèles de conformité"
   },
   "accessDenied": {
     "title": "Accès refusé",

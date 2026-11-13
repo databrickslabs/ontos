@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,6 +111,7 @@ function FieldInput({
   disabled: boolean;
   onChange: (value: unknown) => void;
 }) {
+  const { t } = useTranslation('compliance');
   const id = `cf-${field.id}`;
 
   switch (field.value_type) {
@@ -135,7 +137,9 @@ function FieldInput({
             onCheckedChange={(checked) => onChange(checked === true)}
           />
           <label htmlFor={id} className="text-sm text-muted-foreground">
-            {value === true ? 'Yes' : 'No'}
+            {value === true
+              ? t('complianceTemplates.modal.yes')
+              : t('complianceTemplates.modal.no')}
           </label>
         </div>
       );
@@ -159,7 +163,9 @@ function FieldInput({
           onValueChange={(v) => onChange(v)}
         >
           <SelectTrigger id={id}>
-            <SelectValue placeholder={field.hint_text || 'Select…'} />
+            <SelectValue
+              placeholder={field.hint_text || t('complianceTemplates.modal.selectPlaceholder')}
+            />
           </SelectTrigger>
           <SelectContent>
             {(field.possible_values || []).map((opt) => (
@@ -193,7 +199,9 @@ function FieldInput({
             </div>
           ))}
           {(field.possible_values || []).length === 0 && (
-            <p className="text-xs text-muted-foreground">No options defined.</p>
+            <p className="text-xs text-muted-foreground">
+              {t('complianceTemplates.modal.noOptions')}
+            </p>
           )}
         </div>
       );
@@ -211,21 +219,21 @@ function FieldInput({
           <Input
             id={`${id}-low`}
             type="number"
-            aria-label={`${field.label} low`}
+            aria-label={t('complianceTemplates.modal.lowLabel', { label: field.label })}
             value={range.low == null ? '' : String(range.low)}
             disabled={disabled}
             onChange={(e) => update('low', e.target.value)}
-            placeholder="Low"
+            placeholder={t('complianceTemplates.modal.low')}
           />
           <span className="text-muted-foreground">–</span>
           <Input
             id={`${id}-high`}
             type="number"
-            aria-label={`${field.label} high`}
+            aria-label={t('complianceTemplates.modal.highLabel', { label: field.label })}
             value={range.high == null ? '' : String(range.high)}
             disabled={disabled}
             onChange={(e) => update('high', e.target.value)}
-            placeholder="High"
+            placeholder={t('complianceTemplates.modal.high')}
           />
         </div>
       );
@@ -255,6 +263,7 @@ export default function ComplianceModal({
   onSaved,
 }: ComplianceModalProps) {
   const { toast } = useToast();
+  const { t } = useTranslation('compliance');
   const { get, put } = useApi();
 
   const [loading, setLoading] = useState(true);
@@ -280,11 +289,15 @@ export default function ComplianceModal({
       }
       setDraft(seeded);
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Failed to load compliance data', variant: 'destructive' });
+      toast({
+        title: t('complianceTemplates.modal.errorTitle'),
+        description: err?.message || t('complianceTemplates.modal.loadFailed'),
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
-  }, [get, entityType, entityId, toast]);
+  }, [get, entityType, entityId, toast, t]);
 
   useEffect(() => {
     if (open) fetchData();
@@ -307,11 +320,18 @@ export default function ComplianceModal({
         { values },
       );
       if (error) throw new Error(error);
-      toast({ title: 'Saved', description: 'Compliance information updated.' });
+      toast({
+        title: t('complianceTemplates.modal.savedTitle'),
+        description: t('complianceTemplates.modal.savedDescription'),
+      });
       onOpenChange(false);
       onSaved?.();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Failed to save', variant: 'destructive' });
+      toast({
+        title: t('complianceTemplates.modal.errorTitle'),
+        description: err?.message || t('complianceTemplates.modal.saveFailed'),
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }
@@ -323,11 +343,11 @@ export default function ComplianceModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{data?.template?.name || 'Compliance'}</DialogTitle>
+          <DialogTitle>{data?.template?.name || t('complianceTemplates.modal.title')}</DialogTitle>
           <DialogDescription>
             {canWrite
-              ? 'Complete the compliance information for this item.'
-              : 'Compliance information for this item (read-only).'}
+              ? t('complianceTemplates.modal.editDescription')
+              : t('complianceTemplates.modal.readOnlyDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -337,7 +357,7 @@ export default function ComplianceModal({
           </div>
         ) : !data?.template ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No active compliance template for this item.
+            {t('complianceTemplates.modal.noTemplate')}
           </p>
         ) : (
           <div className="space-y-6 py-2">
@@ -370,12 +390,14 @@ export default function ComplianceModal({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {canWrite ? 'Cancel' : 'Close'}
+            {canWrite
+              ? t('complianceTemplates.modal.cancel')
+              : t('complianceTemplates.modal.close')}
           </Button>
           {canWrite && data?.template && (
             <Button onClick={handleSave} disabled={saving || loading}>
               {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-              Save
+              {t('complianceTemplates.modal.save')}
             </Button>
           )}
         </DialogFooter>

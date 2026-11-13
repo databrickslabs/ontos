@@ -393,6 +393,17 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
             # no ON DELETE CASCADE), across the domain and its cascade-deleted descendants.
             for did in affected_domain_ids:
                 entity_domain_repo.remove_all_for_domain(db, domain_id=did)
+            # Their notes, links and documents go with them (as for assets);
+            # uploaded files are deleted from the volume once the delete commits.
+            from src.controller.metadata_manager import MetadataManager
+            metadata_manager = MetadataManager()
+            document_paths: List[str] = []
+            for did in affected_domain_ids:
+                _, paths = metadata_manager.remove_all_for_entity(
+                    db, entity_type='data_domain', entity_id=str(did),
+                )
+                document_paths.extend(paths)
+            metadata_manager.delete_document_files_after_commit(db, document_paths)
             # The repository.remove(db, id) should work.
             # The actual object `db_domain_to_delete` will become stale after deletion from session.
             self.repository.remove(db=db, id=domain_id)
@@ -480,7 +491,7 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
             feature_id="data-domains",
             title=db_domain.name,
             description=getattr(db_domain, 'description', '') or "",
-            link=f"/data-domains/{db_domain.id}",
+            link=f"/settings/data-domains/{db_domain.id}",  # the detail route (app.tsx)
             tags=[],
             extra_data=extra_data,
         )

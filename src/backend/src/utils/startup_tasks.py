@@ -589,15 +589,11 @@ def initialize_managers(app: FastAPI):
             logger.error(f"Error initializing TagsManager: {e}", exc_info=True)
             # Decide if this is a fatal error
 
-        # --- Instantiate MetadataManager (if it exists and needs to be in app.state) --- 
-        # This was removed in previous steps as tag CRUD moved to TagsManager
-        # If MetadataManager still has other responsibilities, initialize it here.
-        # For now, assuming it's not strictly needed for basic app startup if its main role was tags.
-        # if hasattr(app.state, 'ws_client'): # Example: if it needs ws_client
-        #     metadata_manager = MetadataManager(ws_client=app.state.ws_client)
-        #     app.state.metadata_manager = metadata_manager
-        #     SEARCHABLE_ASSET_MANAGERS.append(metadata_manager) # If it's searchable
-        #     logger.info("MetadataManager initialized.")
+        # --- MetadataManager (notes, links, documents) ---
+        # On app.state before the SearchManager is built: imported Markdown
+        # documents are searchable.
+        from src.controller.metadata_manager import MetadataManager
+        app.state.metadata_manager = MetadataManager()
 
         # --- OntologySchemaManager ---
         try:
@@ -809,6 +805,10 @@ async def startup_event_handler(app: FastAPI):
                     continue
 
             app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
+            # As app.py does: code without app.state (e.g. a MetadataManager
+            # owned by another manager) finds the index here.
+            from src.common.app_state import set_app_state_manager
+            set_app_state_manager('search_manager', app.state.search_manager)
             app.state.search_manager.build_index()
             for mgr in searchable_managers_instances:
                 mgr.set_search_manager(app.state.search_manager)

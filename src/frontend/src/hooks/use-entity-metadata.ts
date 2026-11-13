@@ -41,6 +41,8 @@ export interface DocumentItem {
   content_type?: string | null; 
   size_bytes?: number | null; 
   storage_path: string; 
+  /** The volume file an imported Markdown document came from (none for uploads). */
+  source_path?: string | null;
   is_shared?: boolean;
   level?: number;
   inheritable?: boolean;

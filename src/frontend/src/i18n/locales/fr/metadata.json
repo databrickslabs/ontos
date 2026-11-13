@@ -107,7 +107,8 @@
     "messages": {
       "deleteFailed": "Échec de la suppression",
       "uploadFailed": "Échec du téléchargement"
-    }
+    },
+    "importedFrom": "Importé de {{path}}"
   },
   "sharedAssets": {
     "selectDescription": "Sélectionnez un asset partagé à joindre à cette entité",
@@ -251,5 +252,63 @@
     "goToDetails": "Aller aux détails",
     "alreadySubscribed": "Déjà abonné",
     "subscribe": "S'abonner"
+  },
+  "markdownImport": {
+    "open": "Importer du Markdown",
+    "title": "Importer du Markdown depuis un volume",
+    "description": "Importe les fichiers .md d’un dossier de volume Unity Catalog (et de ses sous-dossiers) comme documents des domaines, actifs et concepts que nomme leur front matter. Une nouvelle exécution ne met à jour que les fichiers modifiés.",
+    "pathLabel": "Dossier ou fichier du volume",
+    "frontMatterHint": "Chaque fichier est lié par son front matter : domain:, assets: et concepts:, par nom, id ou FQN. Les fichiers sans cible connue sont listés comme non liés ; les termes de glossaire restent du texte de document.",
+    "submit": "Importer",
+    "importing": "Importation…",
+    "close": "Fermer",
+    "summary": {
+      "added": "Ajoutés : {{count}}",
+      "updated": "Mis à jour : {{count}}",
+      "unchanged": "Inchangés : {{count}}",
+      "unlinked": "Non liés : {{count}}",
+      "failed": "En échec : {{count}}",
+      "removed": "Retirés : {{count}}"
+    },
+    "status": {
+      "added": "Ajouté",
+      "updated": "Mis à jour",
+      "unchanged": "Inchangé",
+      "unlinked": "Non lié",
+      "failed": "En échec",
+      "removed": "Retiré"
+    },
+    "linkedTo": "Lié à : {{targets}}",
+    "removed": "Retiré des entités qu’il ne nomme plus : {{count}}",
+    "noTargets": "Le front matter ne nomme aucun domaine, actif ou concept.",
+    "noFiles": "Aucun fichier Markdown trouvé à ce chemin.",
+    "kinds": {
+      "domain": "Domaine",
+      "asset": "Actif",
+      "concept": "Concept"
+    },
+    "unresolved": {
+      "notFound": "{{kind}} « {{value}} » introuvable",
+      "ambiguous": "{{kind}} « {{value}} » correspond à plusieurs entités",
+      "forbidden": "{{kind}} « {{value}} » : vous ne pouvez pas modifier ce type d’entité"
+    },
+    "reasons": {
+      "too_large": "Le fichier dépasse 1 Mo.",
+      "not_utf8": "Le fichier n’est pas du texte UTF-8.",
+      "front_matter_invalid": "Le front matter n’est pas un mappage YAML valide.",
+      "read_failed": "Le fichier n’a pas pu être lu.",
+      "gone": "Le fichier n’est plus dans le dossier : ses documents ont été retirés de {{count}} entités.",
+      "not_text": "Le fichier contient des caractères NUL ; ce n’est pas du texte."
+    },
+    "errors": {
+      "markdown_import_path_invalid": "« {{path}} » n’est pas un chemin dans un volume Unity Catalog. Utilisez /Volumes/<catalog>/<schema>/<volume>/<folder>.",
+      "markdown_import_path_not_found": "Rien n’a été trouvé à « {{path}} ».",
+      "markdown_import_access_denied": "Vous ne pouvez pas lire « {{path}} ». Demandez READ VOLUME sur le volume.",
+      "markdown_import_too_many_files": "« {{path}} » contient plus de {{max}} fichiers Markdown. Importez un dossier plus petit.",
+      "failed": "L’importation a échoué."
+    },
+    "warnings": {
+      "empty_folder": "Aucun fichier Markdown trouvé ici : les documents importés auparavant depuis ce dossier ont été conservés."
+    }
   }
 }

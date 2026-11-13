@@ -107,7 +107,8 @@
     "messages": {
       "deleteFailed": "Verwijderen mislukt",
       "uploadFailed": "Uploaden mislukt"
-    }
+    },
+    "importedFrom": "Geïmporteerd uit {{path}}"
   },
   "sharedAssets": {
     "selectDescription": "Selecteer een gedeelde asset om bij te voegen aan deze entiteit",
@@ -251,5 +252,63 @@
     "goToDetails": "Ga naar details",
     "alreadySubscribed": "Al geabonneerd",
     "subscribe": "Abonneren"
+  },
+  "markdownImport": {
+    "open": "Markdown importeren",
+    "title": "Markdown importeren uit volume",
+    "description": "Importeert de .md-bestanden van een map in een Unity Catalog-volume (met submappen) als documenten bij de domeinen, assets en concepten die hun front matter noemt. Opnieuw uitvoeren werkt alleen de gewijzigde bestanden bij.",
+    "pathLabel": "Volumemap of -bestand",
+    "frontMatterHint": "Elk bestand wordt gekoppeld via zijn front matter: domain:, assets: en concepts:, op naam, id of FQN. Bestanden zonder bekend doel worden als niet gekoppeld getoond; woordenlijsttermen blijven documenttekst.",
+    "submit": "Importeren",
+    "importing": "Bezig met importeren…",
+    "close": "Sluiten",
+    "summary": {
+      "added": "Toegevoegd: {{count}}",
+      "updated": "Bijgewerkt: {{count}}",
+      "unchanged": "Ongewijzigd: {{count}}",
+      "unlinked": "Niet gekoppeld: {{count}}",
+      "failed": "Mislukt: {{count}}",
+      "removed": "Verwijderd: {{count}}"
+    },
+    "status": {
+      "added": "Toegevoegd",
+      "updated": "Bijgewerkt",
+      "unchanged": "Ongewijzigd",
+      "unlinked": "Niet gekoppeld",
+      "failed": "Mislukt",
+      "removed": "Verwijderd"
+    },
+    "linkedTo": "Gekoppeld aan: {{targets}}",
+    "removed": "Verwijderd bij entiteiten die het niet meer noemt: {{count}}",
+    "noTargets": "De front matter noemt geen domein, asset of concept.",
+    "noFiles": "Geen Markdown-bestanden gevonden op dit pad.",
+    "kinds": {
+      "domain": "Domein",
+      "asset": "Asset",
+      "concept": "Concept"
+    },
+    "unresolved": {
+      "notFound": "{{kind}} \"{{value}}\" niet gevonden",
+      "ambiguous": "{{kind}} \"{{value}}\" komt overeen met meerdere entiteiten",
+      "forbidden": "{{kind}} \"{{value}}\": u mag dit soort entiteit niet bewerken"
+    },
+    "reasons": {
+      "too_large": "Het bestand is groter dan 1 MB.",
+      "not_utf8": "Het bestand is geen UTF-8-tekst.",
+      "front_matter_invalid": "De front matter is geen geldige YAML-mapping.",
+      "read_failed": "Het bestand kon niet worden gelezen.",
+      "gone": "Het bestand staat niet meer in de map: de documenten zijn bij {{count}} entiteiten verwijderd.",
+      "not_text": "Het bestand bevat NUL-tekens; het is geen tekst."
+    },
+    "errors": {
+      "markdown_import_path_invalid": "\"{{path}}\" is geen pad in een Unity Catalog-volume. Gebruik /Volumes/<catalog>/<schema>/<volume>/<folder>.",
+      "markdown_import_path_not_found": "Er is niets gevonden op \"{{path}}\".",
+      "markdown_import_access_denied": "U kunt \"{{path}}\" niet lezen. Vraag READ VOLUME aan op het volume.",
+      "markdown_import_too_many_files": "\"{{path}}\" bevat meer dan {{max}} Markdown-bestanden. Importeer een kleinere map.",
+      "failed": "Het importeren is mislukt."
+    },
+    "warnings": {
+      "empty_folder": "Hier zijn geen Markdown-bestanden gevonden, dus de eerder uit deze map geïmporteerde documenten zijn behouden."
+    }
   }
 }

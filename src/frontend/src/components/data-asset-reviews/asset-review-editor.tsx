@@ -54,6 +54,14 @@ interface AssetReviewEditorProps {
     totalCount?: number; // Total assets in review
 }
 
+// Notices the backend sends as `notice_code`: the i18n key under
+// `editor.aiNotices`, and whether the notice replaces the summary text.
+const AI_NOTICES: Record<string, { key: string; replacesSummary: boolean }> = {
+    llm_analysis_refused: { key: 'analysisRefused', replacesSummary: false },
+    // The refusal itself is never shown: it can quote the security-check prompt
+    llm_safety_check_refused: { key: 'safetyCheckRefused', replacesSummary: true },
+};
+
 // Helper function to check API response
 const checkApiResponse = <T,>(
     response: { data?: T | { detail?: string }, error?: string | null, errorCode?: string | null },
@@ -231,6 +239,14 @@ export default function AssetReviewEditor({
             setIsAnalyzing(false);
         }
     };
+
+    const analysisNotice = analysisResult?.notice_code
+        ? AI_NOTICES[analysisResult.notice_code]
+        : undefined;
+    const analysisNoticeText = analysisNotice
+        ? t(`data-asset-reviews:editor.aiNotices.${analysisNotice.key}`)
+        : null;
+    const showSummary = !analysisNotice?.replacesSummary;
 
     // --- Render Content --- //
     const renderAssetContent = () => {
@@ -457,8 +473,13 @@ export default function AssetReviewEditor({
                                 </p>
                             </CardHeader>
                             <CardContent>
+                                {analysisNoticeText && (
+                                    <p className="mb-2 text-sm text-muted-foreground">
+                                        {analysisNoticeText}
+                                    </p>
+                                )}
                                 {/* Render as plain text if security check failed */}
-                                {!analysisResult.render_as_markdown ? (
+                                {!showSummary ? null : !analysisResult.render_as_markdown ? (
                                     <div className="p-3 bg-muted rounded-md font-mono text-xs whitespace-pre-wrap">
                                         {analysisResult.analysis_summary}
                                     </div>

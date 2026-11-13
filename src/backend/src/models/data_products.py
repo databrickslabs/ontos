@@ -828,7 +828,10 @@ class HandleStatusChangePayload(BaseModel):
     """Payload for handling a status change request (approve/deny)."""
     decision: str = Field(..., description="Decision: 'approve', 'deny', or 'clarify'")
     target_status: str = Field(..., description="The target status that was requested")
-    requester_email: str = Field(..., description="Email of the original requester")
+    requester_email: Optional[str] = Field(
+        None,
+        description="Deprecated; the original requester is resolved from the stored request",
+    )
     message: Optional[str] = Field(None, description="Optional message from approver")
 
 

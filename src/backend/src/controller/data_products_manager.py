@@ -1906,8 +1906,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         decision: str,
         target_status: str,
         message: Optional[str] = None,
-        current_user: Optional[str] = None,
-        requester_email_fallback: Optional[str] = None,
+        current_user: Optional[str] = None
     ) -> Dict[str, str]:
         """Handle a status change request decision (approve/deny/clarify).
         
@@ -1920,8 +1919,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             target_status: The target status that was requested
             message: Optional message from approver
             current_user: Username of approver
-            requester_email_fallback: Request payload identity, used only when
-                the persisted request cannot provide one
             
         Returns:
             Dict with result message
@@ -1946,8 +1943,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         notification_title = ""
         notification_desc = ""
         
-        # The persisted request is authoritative. The payload identity is only
-        # a compatibility fallback for legacy or unreadable request records.
+        # The persisted request is the only authoritative recipient source.
         requester_email = None
         try:
             recent_changes = change_log_manager.get_changes_for_entity(db, "data_product", product_id, action="status_change_requested", limit=1)
@@ -1960,8 +1956,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 "Failed to read requester for product status change %s",
                 product_id,
             )
-        if not requester_email:
-            requester_email = requester_email_fallback
         if not requester_email:
             logger.warning(
                 "No requester found for product status change %s; decision notification skipped",

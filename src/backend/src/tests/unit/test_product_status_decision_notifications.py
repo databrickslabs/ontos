@@ -28,13 +28,12 @@ def _request(db, product, requester='stored@example.com'):
     )
 
 
-def _decide(db, product, decision, fallback='payload@example.com'):
+def _decide(db, product, decision):
     notifications = MagicMock()
     DataProductsManager(db=db).handle_status_change_response(
         db=db, notifications_manager=notifications, product_id=product.id,
         approver_email='steward@example.com', decision=decision,
         target_status='proposed', current_user='steward@example.com',
-        requester_email_fallback=fallback,
     )
     return notifications.create_notification.call_args.kwargs['notification']
 
@@ -55,16 +54,9 @@ def test_decisions_notify_the_persisted_requester(db_session, decision):
     assert notification.title == expected_title[decision]
 
 
-def test_payload_cannot_override_the_persisted_requester(db_session):
-    product = _product(db_session)
-    _request(db_session, product, requester='authoritative@example.com')
-
-    notification = _decide(db_session, product, 'deny', fallback='other@example.com')
-
-    assert notification.recipient == 'authoritative@example.com'
-
-
-def test_payload_is_used_when_requester_lookup_fails(db_session, monkeypatch, caplog):
+def test_lookup_failure_is_logged_and_notification_is_skipped(
+    db_session, monkeypatch, caplog,
+):
     product = _product(db_session)
 
     def fail_lookup(*_args, **_kwargs):
@@ -72,9 +64,14 @@ def test_payload_is_used_when_requester_lookup_fails(db_session, monkeypatch, ca
 
     monkeypatch.setattr(change_log_manager, 'get_changes_for_entity', fail_lookup)
 
-    notification = _decide(db_session, product, 'clarify', fallback='fallback@example.com')
+    notifications = MagicMock()
+    DataProductsManager(db=db_session).handle_status_change_response(
+        db=db_session, notifications_manager=notifications, product_id=product.id,
+        approver_email='steward@example.com', decision='clarify',
+        target_status='proposed', current_user='steward@example.com',
+    )
 
-    assert notification.recipient == 'fallback@example.com'
+    notifications.create_notification.assert_not_called()
     assert 'Failed to read requester' in caplog.text
 
 

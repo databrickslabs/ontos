@@ -2867,18 +2867,53 @@ async def handle_status_change_response(
     a certified product this way needs Admin on data products (certified guard).
     """
     from src.controller.certified_deprecation_guard import (
-        approved_status_change, handle_decision_refusal, pending_request_id, record_decision,
+        approved_status_change,
+        handle_decision_refusal,
+        pending_request,
+        record_decision,
     )
     by_admin = await has_feature_permission(
         DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN, current_user, request,
     )
+    if not by_admin:
+        raise HTTPException(status_code=403, detail="Admin permission required")
+    try:
+        status_request = pending_request(db, 'data_product', product_id)
+    except Exception as e:
+        logger.exception(
+            "Failed to read pending status change request for product %s",
+            product_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to read pending status change request",
+        ) from e
+    if status_request is None:
+        raise HTTPException(status_code=409, detail="No pending status change request")
+    requested_target = str(status_request.get('target_status') or '').lower()
+    if requested_target != payload.target_status.lower():
+        raise HTTPException(
+            status_code=409,
+            detail="Target status does not match the pending request",
+        )
+    requester = str(status_request.get('requester_email') or '').strip().lower()
+    approver_identities = {
+        str(value).strip().lower()
+        for value in (current_user.email, current_user.username)
+        if value
+    }
+    if requester and requester in approver_identities:
+        raise HTTPException(
+            status_code=403,
+            detail="Requesters cannot decide their own status change request",
+        )
     # Counts for the certified guard only as an admin's approval of a pending
     # request made by someone else
     refusal = handle_decision_refusal(
         db, 'data_product', product_id, payload.target_status, by_admin,
         current_user.email, current_user.username,
     )
-    request_id = pending_request_id(db, 'data_product', product_id)
+    request_id = status_request.get('request_id')
     try:
         with approved_status_change('data_product', product_id, refusal):
             result = manager.handle_status_change_response(
@@ -2890,7 +2925,6 @@ async def handle_status_change_response(
                 target_status=payload.target_status,
                 message=payload.message,
                 current_user=current_user.username,
-                requester_email_fallback=payload.requester_email,
             )
         # The decision ends the request it was about
         record_decision(

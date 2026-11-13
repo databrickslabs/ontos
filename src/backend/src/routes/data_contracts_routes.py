@@ -1663,6 +1663,23 @@ async def delete_contract(
             details=details_for_audit,
         )
 
+def _owner_restorer(request, audit_manager, auth_manager, current_user):
+    """Business owners an Ontos export wrote (ontosOwners) are assigned on import
+    only with the permission and the audit of POST /api/business-owners."""
+    from src.utils.contract_owners import OwnerRestorer
+
+    def audit(details):
+        audit_manager.log_action(
+            db=None, username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="business-owners", action="ASSIGN_OWNER", success=True, details=details,
+        )
+
+    allowed = user_has_feature_level(
+        auth_manager, current_user, 'business-owners', FeatureAccessLevel.READ_WRITE)
+    return OwnerRestorer(allowed=allowed, audit=audit)
+
+
 @router.post('/data-contracts/upload', response_model=BatchImportResult)
 async def upload_contract(
     request: Request,
@@ -1748,6 +1765,7 @@ async def upload_contract(
             adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
             reveal_dup_detail=reveal_dup_detail,
+            owner_restorer=_owner_restorer(request, audit_manager, auth_manager, current_user),
         )
         for safe_filename in decode_failures:
             result.add(ImportItemResult(
@@ -1848,6 +1866,7 @@ async def import_odcs_json(
             adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
             reveal_dup_detail=reveal_dup_detail,
+            owner_restorer=_owner_restorer(request, audit_manager, auth_manager, current_user),
         )
 
         success = result.created > 0
@@ -2032,7 +2051,7 @@ async def get_schema_properties(
     if limit > 0:
         query = query.offset(skip).limit(limit)
     props = query.all()
-    from src.utils.property_custom_properties import custom_properties_by_property
+    from src.utils.property_custom_properties import custom_properties_by_property, decode_value
     custom_props = custom_properties_by_property(db, [p.id for p in props])
 
     items = []
@@ -2055,13 +2074,15 @@ async def get_schema_properties(
             "partitioned": p.partitioned,
             "partitionKeyPosition": p.partition_key_position,
             "classification": p.classification,
-            "description": p.transform_description,
+            "description": p.description,
+            "physicalName": p.physical_name,
             "businessName": p.business_name,
             "criticalDataElement": p.critical_data_element,
             "examples": p.examples,
             "transformLogic": p.transform_logic,
             "transformSourceObjects": p.transform_source_objects,
             "transformDescription": p.transform_description,
+            "tags": decode_value(p.tags) if p.tags else None,
             "encryptedName": p.encrypted_name,
             "customProperties": custom_props.get(p.id, {}),
         }
@@ -4385,6 +4406,7 @@ def _relationship_db_to_dict(rel) -> dict:
         pass
     result = {
         'id': rel.id,
+        'stableId': rel.stable_id,  # the ODCS id (v3.2.0); `id` is the row id
         'type': rel.relationship_type,
         'to': to_val,
     }

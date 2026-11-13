@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 class SchemaRelationship(BaseModel):
     """ODCS v3.1.0 relationship (foreign key) at schema or property level."""
     id: Optional[str] = None  # internal DB id (populated on read)
+    stableId: Optional[str] = None  # ODCS id (v3.2.0)
     type: str = "foreignKey"
     # from is a reserved word in Python; use Field alias
     from_value: Optional[Union[str, List[str]]] = Field(None, alias='from')
@@ -149,13 +150,15 @@ class QualityRule(BaseModel):
     schedule: Optional[str] = None
     scheduler: Optional[str] = None
     unit: Optional[str] = None
-    tags: Optional[str] = None
+    # Text from the quality rule form, or the ODCS list (stored as JSON); read back as stored
+    tags: Optional[Union[str, List[str]]] = None
 
     # Type-specific fields
     rule: Optional[str] = None  # for library type
     query: Optional[str] = None  # for sql type
     engine: Optional[str] = None  # for custom type
-    implementation: Optional[str] = None  # for custom type (JSON string)
+    # for custom type: a string or, as ODCS allows, an object (stored as JSON)
+    implementation: Optional[Union[str, Dict[str, Any], List[Any]]] = None
 
     # Comparators for all types
     must_be: Optional[str] = None
@@ -257,9 +260,10 @@ class AuthoritativeDefinition(BaseModel):
 
 class SLAProperty(BaseModel):
     """ODCS SLA Property"""
+    id: Optional[str] = None  # ODCS v3.1.0 StableId
     property: str
-    value: Union[str, int, float]
-    valueExt: Optional[Union[str, int, float]] = None
+    value: Any  # any JSON value (ODCS AnyNonCollectionType; kept with its type)
+    valueExt: Optional[Any] = None
     unit: Optional[str] = None
     element: Optional[str] = None
     driver: Optional[str] = None  # regulatory, analytics, operational
@@ -305,6 +309,9 @@ class ServerConfig(BaseModel):
 
     # Additional properties for specific server types
     properties: Dict[str, Any] = Field(default_factory=dict)
+    # ODCS roles and customProperties of the server (lists, as in ODCS)
+    roles: Optional[List[Dict[str, Any]]] = None
+    customProperties: Optional[List[Dict[str, Any]]] = None
 
     @model_validator(mode='before')
     @classmethod
@@ -314,6 +321,9 @@ class ServerConfig(BaseModel):
             return data
         values = {name: getattr(data, name, None) for name in cls.model_fields if name != 'id'}
         values['id'] = getattr(data, 'stable_id', None)
+        from src.utils.contract_servers import json_list
+        values['roles'] = json_list(getattr(data, 'roles_json', None))
+        values['customProperties'] = json_list(getattr(data, 'custom_properties_json', None))
         return values
 
     @field_validator('properties', mode='before')

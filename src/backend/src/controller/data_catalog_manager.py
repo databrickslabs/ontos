@@ -116,7 +116,7 @@ class DataCatalogManager:
                         col_name = getattr(prop, 'name', 'unknown')
                         logical_type = getattr(prop, 'logical_type', 'unknown')
                         physical_type = getattr(prop, 'physical_type', None)
-                        description = getattr(prop, 'transform_description', None) or getattr(prop, 'description', None)
+                        description = getattr(prop, 'description', None)
                         required = getattr(prop, 'required', False)
                         pk_position = getattr(prop, 'primary_key_position', -1)
                         is_pk = pk_position is not None and pk_position >= 0

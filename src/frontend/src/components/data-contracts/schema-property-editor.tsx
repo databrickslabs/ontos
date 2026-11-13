@@ -348,7 +348,8 @@ function SchemaPropertyEditorInner(
     // @ts-ignore
     quality: qualityChecks.length > 0 ? qualityChecks : undefined,
     // @ts-ignore
-    tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
+    // [] (not undefined) when empty, so a save clears the stored tags
+    tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
     // @ts-ignore
     customProperties: Object.keys(customProps).length > 0 ? customProps : undefined,
     relationships: propRelationships.length > 0 ? propRelationships : undefined,

@@ -5,8 +5,10 @@ from the payload. The editor only loads and sends some fields (names, types,
 descriptions, granularity, relationships, semantic concepts, the columns and
 their custom properties); the others are kept from the stored object when the
 payload leaves them out: the ODCS ids, tags, custom properties and quality
-checks of the object, the ids, quality checks, relationships and tags of its
-columns, and authoritative definitions other than semantic concepts.
+checks of the object, the ids, quality checks and relationships of its
+columns, and authoritative definitions other than semantic concepts. A
+column's tags are kept when the payload has no `tags` key (the editor sends
+`[]` to clear them).
 """
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +19,8 @@ _PROPERTY_FIELDS = ('id', 'quality', 'relationships', 'tags', 'itemType')
 
 
 def _sent(payload: Dict[str, Any], key: str) -> bool:
+    # A column's `tags: []` is sent (the editor clears them that way); a missing
+    # key or null is not
     return payload.get(key) is not None
 
 
@@ -33,6 +37,13 @@ def _definitions(sent: Optional[List[Dict[str, Any]]], stored: Optional[List[Dic
         if (d.get('url'), d.get('type')) not in seen:
             merged.append(dict(d))
     return merged or None
+
+
+def _api_relationship(relationship: Dict[str, Any]) -> Dict[str, Any]:
+    """A relationship as the export writes it, in the API form (`stableId`)."""
+    out = {k: v for k, v in relationship.items() if k != 'id'}
+    out['stableId'] = relationship.get('id')
+    return out
 
 
 def keep_unsent_fields(payload: Dict[str, Any], stored: Dict[str, Any]) -> Dict[str, Any]:
@@ -56,6 +67,8 @@ def keep_unsent_fields(payload: Dict[str, Any], stored: Dict[str, Any]) -> Dict[
             for key in _PROPERTY_FIELDS:
                 if not _sent(column, key) and previous.get(key) is not None:
                     column[key] = previous[key]
+                    if key == 'relationships':  # export form: `id` is the ODCS id
+                        column[key] = [_api_relationship(r) for r in previous[key]]
             definitions = _definitions(column.get('authoritativeDefinitions'), previous.get('authoritativeDefinitions'))
             if definitions is not None:
                 column['authoritativeDefinitions'] = definitions

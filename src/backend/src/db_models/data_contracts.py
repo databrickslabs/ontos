@@ -143,6 +143,8 @@ class DataContractServerDb(Base):
     type = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     environment = Column(String, nullable=True)
+    roles_json = Column(Text, nullable=True)  # ODCS server roles (JSON array)
+    custom_properties_json = Column(Text, nullable=True)  # ODCS customProperties (JSON array)
     contract = relationship("DataContractDb", back_populates="servers")
     properties = relationship("DataContractServerPropertyDb", back_populates="server_row", cascade="all, delete-orphan")
 
@@ -177,6 +179,7 @@ class DataContractRolePropertyDb(Base):
     __tablename__ = "data_contract_role_properties"
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     role_id = Column(String, ForeignKey("data_contract_roles.id", ondelete="CASCADE"), nullable=False, index=True)
+    stable_id = Column(String, nullable=True)  # ODCS v3.1.0 StableId
     property = Column(String, nullable=False)
     value = Column(Text, nullable=True)
     role_row = relationship("DataContractRoleDb", back_populates="custom_properties")
@@ -218,6 +221,7 @@ class DataContractPricingDb(Base):
     __tablename__ = "data_contract_pricing"
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     contract_id = Column(String, ForeignKey("data_contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    stable_id = Column(String, nullable=True)  # ODCS v3.1.0 StableId
     price_amount = Column(String, nullable=True)
     price_currency = Column(String, nullable=True)
     price_unit = Column(String, nullable=True)
@@ -301,6 +305,8 @@ class SchemaPropertyDb(Base):
     stable_id = Column(String, nullable=True)  # ODCS v3.1.0 StableId
     parent_property_id = Column(String, ForeignKey("data_contract_schema_properties.id", ondelete="CASCADE"), nullable=True, index=True)
     name = Column(String, nullable=False)
+    physical_name = Column(String, nullable=True)  # ODCS physicalName
+    description = Column(Text, nullable=True)  # ODCS description
     logical_type = Column(String, nullable=True)
     physical_type = Column(String, nullable=True)
     required = Column(Boolean, nullable=False, default=False)
@@ -313,12 +319,13 @@ class SchemaPropertyDb(Base):
     encrypted_name = Column(String, nullable=True)
     transform_source_objects = Column(Text, nullable=True)  # comma-separated
     transform_logic = Column(Text, nullable=True)
-    transform_description = Column(Text, nullable=True)
+    transform_description = Column(Text, nullable=True)  # ODCS transformDescription
     examples = Column(Text, nullable=True)  # comma-separated or JSON-like string
     critical_data_element = Column(Boolean, nullable=False, default=False)
     logical_type_options_json = Column(Text, nullable=True)  # JSON string of ODCS type-specific options
     items_logical_type = Column(String, nullable=True)  # for arrays
     business_name = Column(String, nullable=True)  # ODCS businessName field at property level
+    tags = Column(Text, nullable=True)  # ODCS tags (JSON array)
     position = Column(Integer, nullable=True)  # order within the schema object
     schema_object = relationship("SchemaObjectDb", back_populates="properties")
     parent_property = relationship("SchemaPropertyDb", remote_side=[id])
@@ -509,6 +516,7 @@ class SchemaObjectRelationshipDb(Base):
     __tablename__ = "data_contract_schema_object_relationships"
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     schema_object_id = Column(String, ForeignKey("data_contract_schema_objects.id", ondelete="CASCADE"), nullable=False, index=True)
+    stable_id = Column(String, nullable=True)  # ODCS id (v3.2.0)
     relationship_type = Column(String, nullable=False, default="foreignKey")
     from_value = Column(Text, nullable=False)  # JSON-serialized: string or array
     to_value = Column(Text, nullable=False)    # JSON-serialized: string or array
@@ -521,6 +529,7 @@ class SchemaPropertyRelationshipDb(Base):
     __tablename__ = "data_contract_schema_property_relationships"
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     property_id = Column(String, ForeignKey("data_contract_schema_properties.id", ondelete="CASCADE"), nullable=False, index=True)
+    stable_id = Column(String, nullable=True)  # ODCS id (v3.2.0)
     relationship_type = Column(String, nullable=False, default="foreignKey")
     to_value = Column(Text, nullable=False)  # JSON-serialized: string or array
     custom_properties_json = Column(Text, nullable=True)

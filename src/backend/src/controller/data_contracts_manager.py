@@ -116,7 +116,22 @@ from src.db_models.data_contracts import (
     SchemaPropertyRelationshipDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
-from src.utils.odcs_quality_operators import odcs_quality_check, operator_columns
+from src.utils.contract_servers import (
+    json_list, json_list_text, keep_unsent_server_fields,
+    odcs_property_value as odcs_server_value, property_values as server_property_values,
+)
+from src.utils.contract_owners import (
+    ONTOS_OWNERS_PROPERTY, OWNER_MEMBER_MARKER, OwnerRestorer, audit_restored,
+    is_owner_member, owners_value, restore_owners, take_owners, unrestored_owners,
+)
+from src.utils.contract_owner_team import (
+    ONTOS_OWNER_TEAM_PROPERTY, owner_team_value, pop_owner_team,
+)
+from src.utils.odcs_values import page_text, typed_text, typed_value
+from src.utils.odcs_quality_operators import (
+    implementation_page_text, implementation_text, odcs_quality_check, operator_columns,
+    tags_text,
+)
 from src.utils.schema_editor_fields import keep_unsent_fields
 from src.utils.property_custom_properties import SCHEMA_PROPERTY_ORDER
 from src.utils.property_custom_properties import (
@@ -166,6 +181,26 @@ class InvalidVersionFormatError(CodedValueError):
         super().__init__(message, version=version)
 
 
+def relationship_stable_id(rel_data: Dict[str, Any], from_document: bool) -> Optional[str]:
+    """The ODCS id of an incoming relationship: its `id` in an ODCS document,
+    `stableId` in an API payload (where `id` is the row id)."""
+    return rel_data.get('id') if from_document else rel_data.get('stableId')
+
+
+def _odcs_at_least(api_version: Optional[str], minimum: tuple) -> bool:
+    """Whether the contract's ODCS version is ``minimum`` (major, minor) or later."""
+    parts = (api_version or 'v3.1.0').lstrip('vV').split('.')
+    try:
+        return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0) >= minimum
+    except ValueError:
+        return False
+
+
+def _writes_relationship_ids(api_version: Optional[str]) -> bool:
+    """A relationship `id` is ODCS v3.2.0+ (v3.1.0 relationships don't allow it)."""
+    return _odcs_at_least(api_version, (3, 2))
+
+
 def _relationship_read(rel) -> Dict[str, Any]:
     """A stored schema-level relationship in its API (ODCS) form."""
     def _decode(raw):
@@ -173,7 +208,9 @@ def _relationship_read(rel) -> Dict[str, Any]:
             return json.loads(raw)
         except (json.JSONDecodeError, TypeError):
             return raw
-    out: Dict[str, Any] = {'id': rel.id, 'type': rel.relationship_type,
+    # `id` is the row id; the ODCS id (v3.2.0) is `stableId`, as for columns
+    out: Dict[str, Any] = {'id': rel.id, 'stableId': rel.stable_id,
+                           'type': rel.relationship_type,
                            'from': _decode(rel.from_value), 'to': _decode(rel.to_value)}
     if rel.custom_properties_json:
         out['customProperties'] = _decode(rel.custom_properties_json)
@@ -962,8 +999,25 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         "business sponsor": "business steward",
     }
 
+    def _without_restored_owners(self, members: list, owners) -> list:
+        """The team members, without those the export added for the business
+        owners being restored: marked by ``_merge_business_owners_into_team``
+        and matching a restored owner. An unmarked member (a real one, or an
+        ODCS v3.0.x export, which has no marker) is kept."""
+        added = {
+            (owner['email'].lower(),
+             self.BUSINESS_ROLE_TO_TEAM_ROLE.get(role.name.lower(), role.name.lower()))
+            for owner, role in owners
+        }
+        return [
+            m for m in members
+            if not (is_owner_member(m) and (str(m.get('username') or '').lower(),
+                                            str(m.get('role') or '').lower()) in added)
+        ]
+
     def _merge_business_owners_into_team(
-        self, members_list: list, db_session, object_type: str, object_id: str
+        self, members_list: list, db_session, object_type: str, object_id: str,
+        mark: bool = False,
     ) -> list:
         """Merge active Business Owners into the team members list for YAML export.
         Deduplicates by (username/email, role). Owners take precedence over existing members."""
@@ -994,12 +1048,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 member_dict = {'role': team_role, 'username': username}
                 if owner.user_name:
                     member_dict['name'] = owner.user_name
+                if mark:  # so an import can leave it out when it restores the owner
+                    member_dict['customProperties'] = [
+                        {'property': OWNER_MEMBER_MARKER, 'value': True}]
                 members_list.append(member_dict)
                 existing_keys.add(key)
 
         return members_list
 
-    def build_odcs_from_db(self, db_obj: DataContractDb, db_session=None) -> Dict[str, Any]:
+    def build_odcs_from_db(self, db_obj: DataContractDb, db_session=None, *,
+                           all_relationship_ids: bool = False) -> Dict[str, Any]:
+        """The contract as an ODCS document. ``all_relationship_ids``: write a
+        relationship's ``id`` whatever the ODCS version (for an editor save,
+        which completes its payload from this document)."""
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
@@ -1085,6 +1146,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
         # Build schema array from relationships
         if hasattr(db_obj, 'schema_objects') and db_obj.schema_objects:
+            relationship_ids = all_relationship_ids or _writes_relationship_ids(db_obj.api_version)
             schema = []
             for schema_obj in db_obj.schema_objects:
                 schema_dict = {
@@ -1093,6 +1155,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 }
                 if getattr(schema_obj, 'stable_id', None):
                     schema_dict['id'] = schema_obj.stable_id
+                if schema_obj.logical_type:
+                    schema_dict['logicalType'] = schema_obj.logical_type
                 if schema_obj.physical_name:
                     schema_dict['physicalName'] = schema_obj.physical_name
                 if schema_obj.data_granularity_description:
@@ -1151,8 +1215,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                 prop_dict['transformSourceObjects'] = json.loads(prop.transform_source_objects)
                             except (json.JSONDecodeError, TypeError):
                                 prop_dict['transformSourceObjects'] = prop.transform_source_objects
-                        if prop.transform_description:
-                            prop_dict['description'] = prop.transform_description
+                        if prop.description:
+                            prop_dict['description'] = prop.description
                         if prop.examples:
                             try:
                                 prop_dict['examples'] = json.loads(prop.examples)
@@ -1171,12 +1235,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
                         # Add missing ODCS property-level fields
 
-                        # Add physicalName field - use convention or check for separate field
-                        if hasattr(prop, 'physical_name') and prop.physical_name:
+                        if prop.physical_name:
                             prop_dict['physicalName'] = prop.physical_name
-                        else:
-                            # Naming convention: the logical name with underscores
-                            prop_dict['physicalName'] = prop.name.replace(' ', '_').lower()
 
                         if getattr(prop, 'business_name', None):
                             prop_dict['businessName'] = prop.business_name
@@ -1188,12 +1248,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         if getattr(prop, 'transform_description', None):
                             prop_dict['transformDescription'] = prop.transform_description
 
-                        # Property-level tags - always include, even if empty for ODCS compliance
-                        # Tags are now rich objects managed by TagsManager
-                        if hasattr(prop, 'tags') and prop.tags:
-                            prop_dict['tags'] = prop.tags
-                        else:
-                            prop_dict['tags'] = []
+                        # Stored as a JSON list (see _create_schema_objects)
+                        if prop.tags:
+                            prop_dict['tags'] = _json_list(prop.tags)
 
                         # Property-level authoritative definitions (if relationship exists)
                         if hasattr(prop, 'authoritative_definitions') and prop.authoritative_definitions:
@@ -1231,6 +1288,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_rels = []
                             for rel in prop.relationships:
                                 rel_dict = {'type': rel.relationship_type}
+                                if rel.stable_id and relationship_ids:
+                                    rel_dict['id'] = rel.stable_id
                                 try:
                                     rel_dict['to'] = json.loads(rel.to_value)
                                 except (json.JSONDecodeError, TypeError):
@@ -1293,6 +1352,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     rels = []
                     for rel in schema_obj.relationships:
                         rel_dict = {'type': rel.relationship_type}
+                        if rel.stable_id and relationship_ids:
+                            rel_dict['id'] = rel.stable_id
                         try:
                             rel_dict['from'] = json.loads(rel.from_value)
                         except (json.JSONDecodeError, TypeError):
@@ -1336,8 +1397,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 members_list.append(member_dict)
 
         if db_session:
+            # Marked (v3.1.0+ team members have customProperties) so an import
+            # that restores the owners from ontosOwners leaves them out
             members_list = self._merge_business_owners_into_team(
-                members_list, db_session, 'data_contract', str(db_obj.id)
+                members_list, db_session, 'data_contract', str(db_obj.id),
+                mark=_odcs_at_least(db_obj.api_version, (3, 1)),
             )
 
         if members_list:
@@ -1410,25 +1474,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 }
                 if getattr(prop, 'stable_id', None):
                     sla_item['id'] = prop.stable_id
-                # Add value, trying to preserve types
-                if prop.value:
-                    try:
-                        if '.' in prop.value:
-                            sla_item['value'] = float(prop.value)
-                        else:
-                            sla_item['value'] = int(prop.value)
-                    except (ValueError, TypeError):
-                        sla_item['value'] = prop.value
-
-                # Add additional ODCS SLA fields
-                if prop.value_ext:
-                    try:
-                        if '.' in prop.value_ext:
-                            sla_item['valueExt'] = float(prop.value_ext)
-                        else:
-                            sla_item['valueExt'] = int(prop.value_ext)
-                    except (ValueError, TypeError):
-                        sla_item['valueExt'] = prop.value_ext
+                # With their JSON type (see _create_sla_properties)
+                if prop.value not in (None, ''):
+                    sla_item['value'] = typed_value(prop.value)
+                if prop.value_ext not in (None, ''):
+                    sla_item['valueExt'] = typed_value(prop.value_ext)
 
                 if prop.unit:
                     sla_item['unit'] = prop.unit
@@ -1443,6 +1493,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # Build pricing information
         if hasattr(db_obj, 'pricing') and db_obj.pricing:
             price = {}
+            if db_obj.pricing.stable_id:
+                price['id'] = db_obj.pricing.stable_id
             if db_obj.pricing.price_amount:
                 try:
                     # Try to convert to numeric if possible
@@ -1463,16 +1515,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if hasattr(db_obj, 'custom_properties') and db_obj.custom_properties:
             custom_props_list = []
             for prop in db_obj.custom_properties:
-                prop_value: Any = prop.value
-                if isinstance(prop_value, str):
-                    try:
-                        parsed = json.loads(prop_value)
-                        prop_value = parsed
-                    except (json.JSONDecodeError, TypeError):
-                        pass
                 cp_item: Dict[str, Any] = {
                     'property': prop.property,
-                    'value': prop_value
+                    'value': typed_value(prop.value),
                 }
                 if getattr(prop, 'stable_id', None):
                     cp_item['id'] = prop.stable_id
@@ -1486,6 +1531,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
         # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
         _upsert_custom_property(odcs, ONTOS_ENTITY_ID_PROPERTY, db_obj.id)
+        # The owner team, which ODCS has no field for (read back by create_from_upload)
+        owner_team = owner_team_value(db_session, db_obj.owner_team_id)
+        if owner_team:
+            _upsert_custom_property(odcs, ONTOS_OWNER_TEAM_PROPERTY, owner_team)
+        # The business owners, also merged into the team above (read back on import)
+        owners = owners_value(db_session, 'data_contract', str(db_obj.id))
+        if owners:
+            # Entries an import couldn't restore (kept as stored) go out too
+            _upsert_custom_property(odcs, ONTOS_OWNERS_PROPERTY, owners + unrestored_owners(
+                odcs.get('customProperties'), owners))
         for prop, value in lifecycle_custom_properties(db_obj, 'data_contract').items():
             _upsert_custom_property(odcs, prop, value)
 
@@ -1523,12 +1578,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if r.second_level_approvers:
                     role_dict['secondLevelApprovers'] = r.second_level_approvers
 
-                # Add role custom properties
-                if hasattr(r, 'custom_properties') and r.custom_properties:
-                    custom_props = {}
-                    for prop in r.custom_properties:
-                        custom_props[prop.property] = prop.value
-                    role_dict['customProperties'] = custom_props
+                # Role custom properties, as the ODCS list
+                if r.custom_properties:
+                    role_dict['customProperties'] = [
+                        {'property': prop.property, 'value': typed_value(prop.value),
+                         **({'id': prop.stable_id} if prop.stable_id else {})}
+                        for prop in r.custom_properties
+                    ]
 
                 roles.append(role_dict)
             odcs['roles'] = roles
@@ -1550,17 +1606,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if server.environment:
                     server_dict['environment'] = server.environment
 
-                # Build server properties (host, port, database, etc.)
-                if hasattr(server, 'properties') and server.properties:
-                    for prop in server.properties:
-                        # Handle numeric port field
-                        if prop.key == 'port' and prop.value:
-                            try:
-                                server_dict[prop.key] = int(prop.value)
-                            except ValueError:
-                                server_dict[prop.key] = prop.value
-                        else:
-                            server_dict[prop.key] = prop.value
+                # The fields of the server's type (host, port, format, ...)
+                for prop in server.properties or []:
+                    server_dict[prop.key] = odcs_server_value(prop.key, prop.value)
+                roles = json_list(server.roles_json)
+                if roles:
+                    server_dict['roles'] = roles
+                server_custom_props = json_list(server.custom_properties_json)
+                if server_custom_props:
+                    server_dict['customProperties'] = server_custom_props
 
                 servers.append(server_dict)
             odcs['servers'] = servers
@@ -1732,6 +1786,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None,
         custom_property_ids: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None,
         include_object_quality: bool = False,
+        from_document: bool = False,
     ):
         """
         Create schema objects and properties for a contract using bulk inserts.
@@ -1739,6 +1794,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Assigns UUIDs in Python to avoid per-row db.flush() round-trips.
         ``custom_property_ids``: per schema and property name, the ODCS ids of
         the property-level custom properties before an update recreated them.
+        ``from_document``: the objects come from an ODCS document (upload), so a
+        relationship's ``id`` is its ODCS id (in API payloads it's the row id).
         ``include_object_quality``: also store the objects' own ``quality``
         rules (ODCS files). The create and update routes send object-level
         rules separately as ``qualityRules``, so they leave it off.
@@ -1846,7 +1903,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     encrypted_name=prop_dict.get('encryptedName'),
                     transform_logic=prop_dict.get('transformLogic'),
                     transform_source_objects=transform_source_objects_json,
-                    transform_description=prop_dict.get('description'),
+                    physical_name=prop_dict.get('physicalName') or prop_dict.get('physical_name'),
+                    description=prop_dict.get('description'),
+                    transform_description=prop_dict.get('transformDescription'),
+                    tags=json.dumps(prop_dict['tags']) if prop_dict.get('tags') else None,
                     examples=examples_json,
                     critical_data_element=prop_dict.get('criticalDataElement', False),
                     logical_type_options_json=json.dumps(logical_type_options) if logical_type_options else None,
@@ -1883,6 +1943,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         all_prop_relationships.append(SchemaPropertyRelationshipDb(
                             id=str(uuid4()),
                             property_id=prop_id,
+                            stable_id=relationship_stable_id(rel_data, from_document),
                             relationship_type=rel_data.get('type', 'foreignKey'),
                             to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
                             custom_properties_json=json.dumps(rel_data['customProperties']) if rel_data.get('customProperties') else None,
@@ -1905,6 +1966,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     all_obj_relationships.append(SchemaObjectRelationshipDb(
                         id=str(uuid4()),
                         schema_object_id=schema_obj_id,
+                        stable_id=relationship_stable_id(rel_data, from_document),
                         relationship_type=rel_data.get('type', 'foreignKey'),
                         from_value=json.dumps(from_val) if isinstance(from_val, list) else str(from_val),
                         to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
@@ -2000,16 +2062,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             severity=rule_dict.get('severity'),
             type=rule_dict.get('type', 'library'),
             unit=rule_dict.get('unit'),
-            tags=rule_dict.get('tags'),
+            tags=tags_text(rule_dict.get('tags')),
             # ODCS v3.1.0 library rules name it `metric` (`rule` is the older name)
             rule=rule_dict.get('rule') or rule_dict.get('metric'),
             query=rule_dict.get('query'),
             engine=rule_dict.get('engine'),
-            implementation=rule_dict.get('implementation'),
+            implementation=implementation_text(rule_dict.get('implementation')),
             **operator_columns(rule_dict),
         )
 
-    def _create_quality_checks(self, db, contract_id: str, quality_rules: List):
+    def _create_quality_checks(self, db, contract_id: str, quality_rules: List,
+                               previous: Optional[Dict[str, str]] = None):
         """
         Create object-level quality checks for a contract.
 
@@ -2017,6 +2080,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db: Database session
             contract_id: Contract UUID
             quality_rules: List of quality rule data (can be Pydantic models or dicts)
+            previous: name -> stored implementation of the checks being replaced;
+                a rule sending back the implementation the API showed keeps it
         """
         # Get the first schema object to attach quality checks to
         schema_obj = db.query(SchemaObjectDb).filter(SchemaObjectDb.contract_id == contract_id).first()
@@ -2025,7 +2090,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             return
 
         for rule_data in quality_rules:
-            db.add(self._build_quality_check_db(rule_data, object_id=schema_obj.id))
+            check = self._build_quality_check_db(rule_data, object_id=schema_obj.id)
+            stored = (previous or {}).get(check.name)
+            sent = rule_data.get('implementation') if isinstance(rule_data, dict) else getattr(
+                rule_data, 'implementation', None)
+            if stored is not None and sent == implementation_page_text(stored):
+                check.implementation = stored
+            db.add(check)
     
     def _process_semantic_links(self, db, contract_id: str, contract_data, current_user: Optional[str] = None):
         """
@@ -2134,6 +2205,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         
         pricing_db = DataContractPricingDb(
             contract_id=contract_id,
+            stable_id=price_data.get('id'),
             price_amount=price_data.get('priceAmount'),
             price_currency=price_data.get('priceCurrency'),
             price_unit=price_data.get('priceUnit')
@@ -2143,7 +2215,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     def _create_custom_properties(self, db, contract_id: str, custom_props,
                                   apply_lifecycle: bool = False,
                                   import_links: Optional[ImportLinks] = None,
-                                  source_id: Optional[str] = None) -> Dict[str, Any]:
+                                  source_id: Optional[str] = None,
+                                  previous: Optional[Dict[str, tuple]] = None,
+                                  ) -> Dict[str, Any]:
         """Create custom properties from ODCS customProperties (handles both array and dict formats).
         
         ODCS uses array format: [{"property": "key", "value": "val"}, ...]
@@ -2171,31 +2245,33 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 prop_name = prop_data.get('property')
                 prop_value = prop_data.get('value')
                 if prop_name and prop_value is not None:
-                    # Serialize complex values (dicts/lists) to JSON
-                    if isinstance(prop_value, (dict, list)):
-                        value_str = json.dumps(prop_value)
-                    else:
-                        value_str = str(prop_value)
+                    # As JSON when not plain text, so every value keeps its type
                     custom_prop_db = DataContractCustomPropertyDb(
                         contract_id=contract_id,
                         stable_id=prop_data.get('id'),
                         property=prop_name,
-                        value=value_str
+                        value=typed_text(prop_value)
                     )
                     db.add(custom_prop_db)
         elif isinstance(custom_props, dict):
             # Legacy dict format
             for key, value in custom_props.items():
                 if value is not None:
-                    # Serialize complex values (dicts/lists) to JSON
-                    if isinstance(value, (dict, list)):
-                        value_str = json.dumps(value)
+                    # The map the contract page sends back holds the values as
+                    # the contract API shows them (page_text); one that wasn't
+                    # edited keeps its stored text, other text is stored as is.
+                    # The map has no ids: a property keeps the one it had.
+                    stable_id, stored = (previous or {}).get(key, (None, None))
+                    if isinstance(value, str):
+                        unedited = stored is not None and value == page_text(stored)
+                        text = stored if unedited else value
                     else:
-                        value_str = str(value)
+                        text = typed_text(value)
                     custom_prop_db = DataContractCustomPropertyDb(
                         contract_id=contract_id,
+                        stable_id=stable_id,
                         property=key,
-                        value=value_str
+                        value=text,
                     )
                     db.add(custom_prop_db)
         return columns
@@ -2211,8 +2287,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 contract_id=contract_id,
                 stable_id=sla_prop_data.get('id'),
                 property=sla_prop_data.get('property'),
-                value=str(sla_prop_data.get('value')) if sla_prop_data.get('value') is not None else None,
-                value_ext=json.dumps(sla_prop_data.get('valueExt')) if sla_prop_data.get('valueExt') else None,
+                # As JSON when not plain text, so `true` and `"42"` keep their type
+                value=typed_text(sla_prop_data.get('value')),
+                value_ext=typed_text(sla_prop_data.get('valueExt')),
                 unit=sla_prop_data.get('unit'),
                 element=sla_prop_data.get('element'),
                 driver=sla_prop_data.get('driver')
@@ -2261,32 +2338,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 server=server_data.get('server'),
                 type=server_data.get('type', ''),
                 description=server_data.get('description'),
-                environment=server_data.get('environment')
+                environment=server_data.get('environment'),
+                roles_json=json_list_text(server_data.get('roles')),
+                custom_properties_json=json_list_text(server_data.get('customProperties')),
             )
             db.add(server_db)
             db.flush()  # Get server ID for properties
-            
-            # Parse direct server properties
-            for prop_key in ['host', 'port', 'database', 'schema', 'catalog', 'project', 'account', 'region', 'location']:
-                if prop_key in server_data and server_data[prop_key] is not None:
-                    prop_db = DataContractServerPropertyDb(
-                        server_id=server_db.id,
-                        key=prop_key,
-                        value=str(server_data[prop_key])
-                    )
-                    db.add(prop_db)
-            
-            # Parse additional nested properties
-            properties_data = server_data.get('properties', {})
-            if isinstance(properties_data, dict):
-                for prop_key, prop_value in properties_data.items():
-                    if prop_value is not None:
-                        prop_db = DataContractServerPropertyDb(
-                            server_id=server_db.id,
-                            key=prop_key,
-                            value=str(prop_value)
-                        )
-                        db.add(prop_db)
+
+            # Every other field of the server's type, and the `properties` map
+            for prop_key, prop_value in server_property_values(server_data).items():
+                db.add(DataContractServerPropertyDb(
+                    server_id=server_db.id, key=prop_key, value=prop_value,
+                ))
     
     def _create_tags(self, db, contract_id: str, tags: List[str]):
         """Create tags from ODCS tags array."""
@@ -2315,17 +2378,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add(role_db)
             db.flush()
 
-            role_custom_props = role_data.get('customProperties', [])
+            # The ODCS list; also the {property: value} map older exports wrote
+            role_custom_props = role_data.get('customProperties') or []
+            if isinstance(role_custom_props, dict):
+                role_custom_props = [
+                    {'property': k, 'value': v} for k, v in role_custom_props.items()]
             if isinstance(role_custom_props, list):
+                from src.db_models.data_contracts import DataContractRolePropertyDb
                 for cp in role_custom_props:
                     if isinstance(cp, dict) and cp.get('property'):
-                        from src.db_models.data_contracts import DataContractRolePropertyDb
-                        prop_db = DataContractRolePropertyDb(
+                        db.add(DataContractRolePropertyDb(
                             role_id=role_db.id,
+                            stable_id=cp.get('id'),
                             property=cp['property'],
-                            value=str(cp['value']) if cp.get('value') is not None else None,
-                        )
-                        db.add(prop_db)
+                            value=typed_text(cp.get('value')),
+                        ))
     
     def _create_legacy_quality_rules(self, db, contract_id: str, quality_rules_data: List[dict]):
         """Create top-level quality rules (legacy ODCS format)."""
@@ -2356,11 +2423,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 schedule=rule_data.get('schedule'),
                 scheduler=rule_data.get('scheduler'),
                 unit=rule_data.get('unit'),
-                tags=rule_data.get('tags'),
+                tags=tags_text(rule_data.get('tags')),
                 rule=rule_data.get('rule') or rule_data.get('metric'),
                 query=rule_data.get('query'),
                 engine=rule_data.get('engine'),
-                implementation=rule_data.get('implementation'),
+                implementation=implementation_text(rule_data.get('implementation')),
                 **operator_columns(rule_data),
             )
             db.add(quality_rule_db)
@@ -2691,7 +2758,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 # The stored objects as the export writes them: what an editor
                 # save leaves out is taken from here (utils/schema_editor_fields)
                 stored_objects = {
-                    o['name']: o for o in self.build_odcs_from_db(db_obj, db).get('schema', [])
+                    o['name']: o for o in self.build_odcs_from_db(
+                        db_obj, db, all_relationship_ids=True).get('schema', [])
                 } if existing_schemas else {}
 
                 for s in schema_data:
@@ -2753,15 +2821,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     # Property-level (column) checks are owned by the schema
                     # recreation path above; deleting them here would drop the
                     # column rules that were just persisted from the same save.
+                    previous: Dict[str, str] = {}
                     for schema_obj in schema_objects:
-                        db.query(DataQualityCheckDb).filter(
+                        replaced = db.query(DataQualityCheckDb).filter(
                             DataQualityCheckDb.object_id == schema_obj.id,
                             DataQualityCheckDb.property_id.is_(None),
-                        ).delete()
+                        )
+                        for check in replaced:
+                            if check.name and check.implementation is not None:
+                                previous.setdefault(check.name, check.implementation)
+                        replaced.delete()
 
                     # Add new object-level quality rules
                     if data_dict['qualityRules']:
-                        self._create_quality_checks(db, contract_id, data_dict['qualityRules'])
+                        self._create_quality_checks(
+                            db, contract_id, data_dict['qualityRules'], previous=previous)
             
             # Handle team members if provided (v3.1.0: team can be object with members or deprecated array)
             if data_dict.get('team') is not None:
@@ -2807,15 +2881,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     # Don't fail the entire update if tags fail
             
             # Servers (the contract page sends the whole list): replace them,
-            # keeping the ODCS id of a server the payload names without one
+            # keeping the ODCS id, roles and custom properties of a server the
+            # payload names without them (the server form doesn't edit those)
             servers_data = self._servers_payload(contract_data, data_dict)
             if servers_data is not None:
-                stable_ids = {s.server: s.stable_id for s in updated.servers if s.server and s.stable_id}
+                keep_unsent_server_fields(servers_data, list(updated.servers))
                 updated.servers.clear()
                 db.flush()
-                for server in servers_data:
-                    if not server.get('id') and server.get('server') in stable_ids:
-                        server['id'] = stable_ids[server['server']]
                 self._create_servers(db, contract_id, servers_data)
 
             # SLA: ODCS slaProperties replace all of them; the SLA form's four
@@ -2835,14 +2907,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Handle custom properties if provided
             if data_dict.get('customProperties') is not None:
                 from src.db_models.data_contracts import DataContractCustomPropertyDb
-                # Remove existing custom properties
-                db.query(DataContractCustomPropertyDb).filter(
+                existing = db.query(DataContractCustomPropertyDb).filter(
                     DataContractCustomPropertyDb.contract_id == contract_id
-                ).delete()
-                
+                )
+                previous = {cp.property: (cp.stable_id, cp.value) for cp in existing}
+                # Remove existing custom properties
+                existing.delete()
+
                 # Add new custom properties (handles both ODCS array and legacy dict formats)
                 if data_dict['customProperties']:
-                    self._create_custom_properties(db, contract_id, data_dict['customProperties'])
+                    self._create_custom_properties(
+                        db, contract_id, data_dict['customProperties'],
+                        previous=previous)
             
             # Handle contract-level semantic links if provided
             if data_dict.get('authoritativeDefinitions') is not None:
@@ -3058,6 +3134,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
         import_links: Optional[ImportLinks] = None,
+        owner_restorer: Optional[OwnerRestorer] = None,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
@@ -3068,6 +3145,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             current_user: Username of current user
             create_missing_domains: When True, auto-create by name any domain that
                 doesn't resolve (the opt-in "Create missing domains" import toggle, #851).
+            owner_restorer: whether the importer may assign the business owners
+                an Ontos export wrote (``ontosOwners``), and their audit; without
+                it they stay a custom property.
             import_links: Replacement links of the batch import
                 (``create_contracts_from_files``, which links a replacement
                 imported later and notes one that isn't in the target).
@@ -3121,8 +3201,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     cprops.append({"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": original_domains})
                     parsed_odcs['customProperties'] = cprops
 
-            # Try to resolve owner as team name
-            owner_team_id = self._resolve_team_name_to_id(db, owner_val)
+            # The owner team an Ontos export wrote (ontosOwnerTeam), else the
+            # owner as a team name
+            owner_team_id = (
+                pop_owner_team(db, parsed_odcs) or self._resolve_team_name_to_id(db, owner_val)
+            )
+            # The business owners an Ontos export wrote (ontosOwners) whose role exists
+            restored_owners = take_owners(db, parsed_odcs, owner_restorer)
 
             # Mirror the create() path (see there for the full rationale): a
             # draft contract with no owning team would otherwise be invisible to
@@ -3198,14 +3283,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if isinstance(schema_data, list) and schema_data:
                 self._create_schema_objects(
                     db, created.id, schema_data, current_user, include_object_quality=True,
+                    from_document=True,
                 )
             
             # Create team members and metadata if present (v3.1.0: team can be object or deprecated array)
             team_raw = parsed_odcs.get('team')
-            team_data = self._normalize_team_data(team_raw)
+            team_data = self._without_restored_owners(
+                self._normalize_team_data(team_raw), restored_owners)
             if team_data:
                 self._create_team_members(db, created.id, team_data)
             self._create_team_metadata(db, created.id, team_raw)
+            restore_owners(db, 'data_contract', created.id, restored_owners, owner_restorer,
+                           current_user)
             
             # Create support channels if present
             support_data = parsed_odcs.get('support', [])
@@ -3273,6 +3362,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             db.commit()
             db.refresh(created)
+            audit_restored(owner_restorer)
             if import_links is not None:
                 import_links.record(original_id, created.id)
 
@@ -3382,6 +3472,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         adopt_ids: bool = True,
         on_duplicate: str = "skip",
         reveal_dup_detail: bool = False,
+        owner_restorer: Optional[OwnerRestorer] = None,
     ) -> BatchImportResult:
         """Import ODCS contracts from one or more uploaded files.
 
@@ -3503,6 +3594,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
                         import_links=links,
+                        owner_restorer=owner_restorer,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
@@ -4987,7 +5079,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from src.db_models.data_contracts import (
             DataContractTagDb, DataContractServerDb, DataContractServerPropertyDb,
             DataContractRoleDb, DataContractRolePropertyDb, DataContractTeamDb,
-            DataContractSupportDb, DataContractPricingDb,
+            DataContractSupportDb, DataContractPricingDb, DataContractTeamMetadataDb,
             DataContractCustomPropertyDb, DataContractSlaPropertyDb,
             DataContractAuthoritativeDefinitionDb,
             SchemaObjectDb, SchemaPropertyDb,
@@ -5077,11 +5169,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     for prop_data in properties:
                         db.add(DataContractRolePropertyDb(**prop_data))
             
-            # Team members
+            # Team members and the ODCS team object
             if source_contract.team:
                 cloned_team = cloner.clone_team_members(source_contract.team, new_contract.id)
                 for member_data in cloned_team:
                     db.add(DataContractTeamDb(**member_data))
+            cloned_metadata = cloner.clone_team_metadata(
+                source_contract.team_metadata, new_contract.id)
+            if cloned_metadata:
+                db.add(DataContractTeamMetadataDb(**cloned_metadata))
             
             # Support channels
             if source_contract.support:
@@ -7277,13 +7373,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     "partitioned": p.partitioned,
                     "partitionKeyPosition": p.partition_key_position,
                     "classification": p.classification,
-                    "description": p.transform_description,
+                    "description": p.description,
+                    "physicalName": p.physical_name,
                     "businessName": p.business_name,
                     "criticalDataElement": p.critical_data_element,
                     "examples": p.examples,
                     "transformLogic": p.transform_logic,
                     "transformSourceObjects": p.transform_source_objects,
                     "transformDescription": p.transform_description,
+                    "tags": _json_list(p.tags) if p.tags else None,
                     "encryptedName": p.encrypted_name,
                     "customProperties": prop_custom_props.get(p.id, {}),
                 }
@@ -7337,14 +7435,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         custom_properties = {}
         if getattr(db_contract, 'custom_properties', None):
             for cp in db_contract.custom_properties:
-                custom_properties[cp.property] = cp.value
+                # Text without its JSON quoting; other values as JSON text
+                custom_properties[cp.property] = page_text(cp.value)
         
         # The SLA form's four values, kept as SLA properties
         from src.utils.contract_sla import legacy_sla_from_rows
         sla = legacy_sla_from_rows(getattr(db_contract, 'sla_properties', None))
         sla_properties = [
             {k: v for k, v in {
-                'property': sp.property, 'value': sp.value, 'unit': sp.unit,
+                # Typed, as stored, with the ODCS id (a read-modify-write stores the same)
+                'id': sp.stable_id, 'property': sp.property, 'value': typed_value(sp.value),
+                'valueExt': typed_value(sp.value_ext), 'unit': sp.unit,
                 'element': sp.element, 'driver': sp.driver,
             }.items() if v is not None}
             for sp in (getattr(db_contract, 'sla_properties', None) or [])
@@ -7364,6 +7465,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 # Create ServerConfig object
                 server_config = ServerConfig(
                     id=getattr(s, 'stable_id', None),
+                    roles=json_list(s.roles_json),
+                    customProperties=json_list(s.custom_properties_json),
                     server=s.server,
                     type=s.type,
                     description=s.description,
@@ -7418,7 +7521,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 rule=check.rule,
                 query=check.query,
                 engine=check.engine,
-                implementation=check.implementation,
+                # The string, or an object's JSON text, as the forms edit it
+                implementation=implementation_page_text(check.implementation),
                 must_be=check.must_be,
                 must_not_be=check.must_not_be,
                 must_be_gt=check.must_be_gt,

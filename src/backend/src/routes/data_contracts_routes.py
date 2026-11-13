@@ -50,7 +50,7 @@ from src.models.data_contracts_api import (
     DataContractCommentCreate,
     DataContractCommentRead,
 )
-from src.common.api_errors import CodedValueError
+from src.common.api_errors import CodedValueError, InvalidStatusTransitionError
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
 from src.common.authorization import has_feature_permission
@@ -344,14 +344,23 @@ async def approve_contract(
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
-        if from_status not in ('proposed', 'under_review'):
+        # A review decision: from a review-category stage, to the stage the
+        # named action resolves in the contract's lifecycle (409 when none)
+        from src.controller.lifecycle_service import lifecycle_service
+        if not lifecycle_service.awaits_review_decision(db, 'data_contract', contract):
+            raise InvalidReviewDecisionError(contract.status, 'approved')
+        try:
+            target_status = lifecycle_service.resolve_action(
+                db, 'data_contract', contract, 'approve'
+            )
+        except InvalidStatusTransitionError:
             raise InvalidReviewDecisionError(contract.status, 'approved')
         
         # Business logic now in manager
         updated = manager.transition_status(
             db=db,
             contract_id=contract_id,
-            new_status='approved',
+            new_status=target_status,
             current_user=current_user.username if current_user else None
         )
         _decide_waiting_review_workflows(
@@ -398,14 +407,23 @@ async def reject_contract(
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
-        if from_status not in ('proposed', 'under_review'):
+        # A review decision: from a review-category stage, to the stage the
+        # named action resolves in the contract's lifecycle (409 when none)
+        from src.controller.lifecycle_service import lifecycle_service
+        if not lifecycle_service.awaits_review_decision(db, 'data_contract', contract):
+            raise InvalidReviewDecisionError(contract.status, 'draft')
+        try:
+            target_status = lifecycle_service.resolve_action(
+                db, 'data_contract', contract, 'reject'
+            )
+        except InvalidStatusTransitionError:
             raise InvalidReviewDecisionError(contract.status, 'draft')
         
         # Business logic now in manager (ODCS: rejected contracts return to draft)
         updated = manager.transition_status(
             db=db,
             contract_id=contract_id,
-            new_status='draft',
+            new_status=target_status,
             current_user=current_user.username if current_user else None
         )
         _decide_waiting_review_workflows(
@@ -452,7 +470,7 @@ async def change_contract_status(
     """
     Change contract status. Validates transition is allowed per ODCS lifecycle.
     
-    Valid transitions: ``DATA_CONTRACT_TRANSITIONS`` (src.models.lifecycle).
+    Valid transitions: the contract's lifecycle stage group (``lifecycle_service``).
     Certification is a separate field (``/certify``), not a status.
     """
     try:

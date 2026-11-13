@@ -27,6 +27,12 @@ class DataContractDb(Base):
     api_version = Column(String, nullable=False, default="v3.1.0")
     version = Column(String, nullable=False, index=True)
     status = Column(String, nullable=False, default="draft", index=True)
+    # Lifecycle Stage Group (#1213); ``status`` holds a stage key of it. NULL = the
+    # entity type's default group.
+    lifecycle_stage_group_id = Column(
+        String, ForeignKey('lifecycle_stage_groups.id', ondelete='RESTRICT'),
+        nullable=True, index=True,
+    )
     # Deprecated: legacy marketplace flag; use publication_scope. Column retained for DB compatibility.
     published = Column(Boolean, nullable=False, default=False, index=True)
     owner_team_id = Column(String, ForeignKey('teams.id'), nullable=True, index=True)  # Team UUID reference

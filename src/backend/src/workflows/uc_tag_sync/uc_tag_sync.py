@@ -1917,9 +1917,12 @@ def sync_tags(
     ) -> Tuple[int, int]:
         recorded = (previous or {}).get(object_type, {}).get(fqn, {})
         # A partial read may miss a table's contract or domain rows: its desired tags
-        # are then incomplete, so nothing is removed (no record is passed).
+        # are then incomplete, so nothing is removed (no record is passed). A state that
+        # couldn't be read, or didn't parse, is unknown (None): nothing is removed, and a
+        # tag that already has the desired value stays recorded as the job's.
+        unknown = previous is None or isinstance(previous, CorruptDeliveryState)
         delivered_before: Optional[Dict[str, Optional[str]]] = (
-            None if previous is None else {} if partial else recorded
+            None if unknown else {} if partial else recorded
         )
         ours: Dict[str, Optional[str]] = {}
         try:

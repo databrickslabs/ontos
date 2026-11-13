@@ -728,6 +728,21 @@ def test_two_configs_producing_the_same_key_are_reported(tag_sync, job, capsys):
     assert f"[WARN] Tag key {DOMAIN_KEY} is produced by several configs" in out
 
 
+def test_an_unreadable_state_keeps_matching_tags_recorded(tag_sync, job, monkeypatch):
+    """The state can't be read: nothing is removed, a tag that already has the desired
+    value stays recorded (merged into the stored state), other records are kept."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "Finance", "ontos_semantic_old": "stale"})
+    job.state = {"TABLE": {OTHER: {DOMAIN_KEY: "Sales"}}}
+    monkeypatch.setattr(tag_sync, "read_delivery_state", lambda _engine: None)
+
+    job.run([DOMAIN_CFG, SEMANTIC_CFG], [_table(tag_sync, domain="Finance")])
+
+    # The schema and catalog get the aggregated tag; the table is already right.
+    assert [a for a in job.assigned if a[0] == "TABLE"] == [] and job.unassigned == []
+    assert job.state["TABLE"] == {ORDERS: {DOMAIN_KEY: "Finance"},
+                                  OTHER: {DOMAIN_KEY: "Sales"}}
+
+
 # A stored state that doesn't parse -------------------------------------------------
 
 CORRUPT_WITH_RECORDS = '{"version": 1, "objects": {"TABLE": {"main.sales.other": {"ontos_'
@@ -775,3 +790,24 @@ def test_a_corrupt_state_is_not_replaced_when_the_backup_fails(tag_sync, job, mo
         job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
 
     assert _app_settings(engine) == {"uc_tag_sync_delivery_state": CORRUPT_WITH_RECORDS}
+
+
+def test_a_corrupt_state_keeps_tags_that_already_match_recorded(tag_sync, job, monkeypatch):
+    """With a corrupt state, a tag already right on a linked table is recorded in the
+    repaired state, so a later unlink still removes it."""
+    import sqlalchemy
+
+    engine = _sqlite_engine(sqlalchemy, CORRUPT_WITH_RECORDS)
+    monkeypatch.setattr(tag_sync, "create_engine_from_params", lambda *_a, **_k: engine)
+    monkeypatch.setattr(tag_sync, "read_delivery_state", job.real_read)
+    monkeypatch.setattr(tag_sync, "save_delivery_state", job.real_save)
+    _seed(job, ORDERS, {DOMAIN_KEY: "Finance"})
+
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
+
+    assert [a for a in job.assigned if a[0] == "TABLE"] == []
+    assert _stored_objects(engine)["TABLE"] == {ORDERS: {DOMAIN_KEY: "Finance"}}
+
+    job.run([DOMAIN_CFG], [])
+
+    assert job.store[("TABLE", ORDERS)] == {}

@@ -1943,7 +1943,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         notification_title = ""
         notification_desc = ""
         
-        # Find requester from change log
+        # The persisted request is the only authoritative recipient source.
         requester_email = None
         try:
             recent_changes = change_log_manager.get_changes_for_entity(db, "data_product", product_id, action="status_change_requested", limit=1)
@@ -1952,7 +1952,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     requester_email = change.details.get("requester_email")
                     break
         except Exception:
-            pass
+            logger.exception(
+                "Failed to read requester for product status change %s",
+                product_id,
+            )
+        if not requester_email:
+            logger.warning(
+                "No requester found for product status change %s; decision notification skipped",
+                product_id,
+            )
         
         if decision == 'approve':
             # Apply the status change directly; a requested deprecation uses

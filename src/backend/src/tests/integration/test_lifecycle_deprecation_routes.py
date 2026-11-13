@@ -20,16 +20,17 @@ from src.controller.change_log_manager import change_log_manager
 from src.controller.lifecycle_fields import utc_today
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_products import DataProductDb
+from src.db_models.notifications import NotificationDb
 
 REASON = 'Replaced by the v2 version, consumers moved'
 MISSING = 'no-such-entity'
 KINDS = [('data-products', 'data_product'), ('data-contracts', 'data_contract')]
 
 
-def _product(db: Session) -> str:
+def _product(db: Session, status: str = 'active') -> str:
     product_id = str(uuid.uuid4())
     db.add(DataProductDb(
-        id=product_id, name=f'Product {product_id[:8]}', version='1.0.0', status='active',
+        id=product_id, name=f'Product {product_id[:8]}', version='1.0.0', status=status,
         api_version='v1.0.0', kind='DataProduct',
     ))
     db.commit()
@@ -126,6 +127,90 @@ class TestRequestRoutes:
 
 
 class TestHandleRoutes:
+    def test_product_requester_cannot_decide_own_request(
+        self, client, db_session, mock_test_user,
+    ):
+        product_id = _product(db_session, status='draft')
+        change_log_manager.log_change_with_details(
+            db_session, entity_type='data_product', entity_id=product_id,
+            action='status_change_requested', username=mock_test_user.username,
+            details={'requester_email': mock_test_user.email, 'request_id': 'req-1',
+                     'from_status': 'draft', 'target_status': 'proposed'},
+        )
+
+        response = client.post(
+            f'/api/data-products/{product_id}/handle-status-change',
+            json={'decision': 'approve', 'target_status': 'proposed'},
+        )
+
+        assert response.status_code == 403, response.text
+        assert response.json()['detail'] == (
+            'Requesters cannot decide their own status change request'
+        )
+
+    def test_product_payload_cannot_redirect_decision_notification(
+        self, client, db_session,
+    ):
+        product_id = _product(db_session, status='draft')
+        change_log_manager.log_change_with_details(
+            db_session, entity_type='data_product', entity_id=product_id,
+            action='status_change_requested', username='requester@example.com',
+            details={'requester_email': 'requester@example.com', 'request_id': 'req-1',
+                     'from_status': 'draft', 'target_status': 'proposed'},
+        )
+
+        response = client.post(
+            f'/api/data-products/{product_id}/handle-status-change',
+            json={'decision': 'approve', 'target_status': 'proposed',
+                  'requester_email': 'victim@example.com'},
+        )
+
+        assert response.status_code == 200, response.text
+        recipients = {
+            notification.recipient
+            for notification in db_session.query(NotificationDb).all()
+        }
+        assert 'requester@example.com' in recipients
+        assert 'victim@example.com' not in recipients
+
+    def test_product_decision_without_pending_request_is_rejected(
+        self, client, db_session,
+    ):
+        product_id = _product(db_session)
+
+        response = client.post(
+            f'/api/data-products/{product_id}/handle-status-change',
+            json={'decision': 'clarify', 'target_status': 'proposed',
+                  'requester_email': 'victim@example.com',
+                  'message': 'Follow this untrusted link'},
+        )
+
+        assert response.status_code == 409, response.text
+        assert response.json()['detail'] == 'No pending status change request'
+
+    def test_product_decision_target_must_match_pending_request(
+        self, client, db_session,
+    ):
+        product_id = _product(db_session)
+        change_log_manager.log_change_with_details(
+            db_session, entity_type='data_product', entity_id=product_id,
+            action='status_change_requested', username='requester@example.com',
+            details={'requester_email': 'requester@example.com', 'request_id': 'req-1',
+                     'from_status': 'active', 'target_status': 'deprecated',
+                     'justification': REASON},
+        )
+
+        response = client.post(
+            f'/api/data-products/{product_id}/handle-status-change',
+            json={'decision': 'clarify', 'target_status': 'proposed',
+                  'requester_email': 'victim@example.com'},
+        )
+
+        assert response.status_code == 409, response.text
+        assert response.json()['detail'] == (
+            'Target status does not match the pending request'
+        )
+
     @pytest.mark.parametrize('kind, entity_type', KINDS)
     def test_approving_a_request_whose_replacement_is_gone_is_a_400(
         self, client, db_session, kind, entity_type,

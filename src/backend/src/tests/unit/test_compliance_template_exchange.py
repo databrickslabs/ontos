@@ -495,6 +495,13 @@ class TestOdps:
         assert imp.written == []
         assert json.loads(_product_props(db_session, product_id)[UNMATCHED]) == {"limitacoes": "x"}
 
+    def test_a_failure_after_the_product_is_stored_keeps_the_product(self, db_session):
+        template = _template(db_session, "data_product")
+        with patch.object(cte, "import_product_values", side_effect=RuntimeError("boom")):
+            _, product_id = _upload(db_session, _product_doc({"limitacoes": "x"}), _importer())
+        assert list(_product_props(db_session, product_id)) == ["tier"]
+        assert _stored(db_session, template, "data_product", product_id) == {}
+
     def test_without_values_rw_nothing_is_written_or_kept(self, db_session):
         template = _template(db_session, "data_product")
         _, product_id = _upload(
@@ -620,6 +627,34 @@ class TestAccess:
             access = asyncio.run(cte.read_access(request, _USER, None, None))
         assert log == [("compliance-template-values", "Read-only"), ("assets", "Read/Write")]
         assert access.values and access.assets_rw and access.may_read_product()
+
+    def test_read_of_a_table_without_asset_edit_follows_the_product_links(self):
+        asset = SimpleNamespace(id=uuid.uuid4())
+        denied = {"assets": 403}
+
+        def _read(state):
+            request = SimpleNamespace(app=SimpleNamespace(state=state))
+            with patch(
+                "src.common.authorization.PermissionChecker", side_effect=_checker([], denied),
+            ):
+                return asyncio.run(cte.read_access(request, _USER, None, "db"))
+
+        assert _read(SimpleNamespace()).may_read_asset(asset) is False
+
+        dpm = object()
+        calls = []
+
+        def _accessible(db, *, asset_id, data_products_manager, is_admin):
+            calls.append((db, asset_id, data_products_manager, is_admin))
+            return True
+
+        access = _read(SimpleNamespace(data_products_manager=dpm))
+        with patch(
+            "src.controller.assets_manager.assets_manager.is_asset_accessible",
+            side_effect=_accessible,
+        ):
+            assert access.may_read_asset(asset) is True
+        assert calls == [("db", asset.id, dpm, False)]
 
     def test_read_without_the_values_feature_reads_nothing(self):
         log: list = []

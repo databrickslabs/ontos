@@ -1660,16 +1660,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         importer may write values. A failure here leaves the product as it is.
         """
         try:
-            compliance_template_exchange.import_product_values(
-                self._db, product_id=str(product_id), values=values, carried=carried,
-                imp=compliance_import,
-            )
-            self._db.commit()
+            with self._db.begin_nested():
+                compliance_template_exchange.import_product_values(
+                    self._db, product_id=str(product_id), values=values, carried=carried,
+                    imp=compliance_import,
+                )
         except Exception:
-            self._db.rollback()
             logger.warning(
                 "Compliance values of imported product %s not stored", product_id, exc_info=True
             )
+            return
+        self._db.commit()
 
     def create_new_version(self, original_product_id: str, request: NewVersionRequest) -> DataProductApi:
         """Creates a new version of an ODPS v1.0.0 data product."""

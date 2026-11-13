@@ -88,3 +88,31 @@ def test_an_edit_that_clears_every_property(db_session, osm):
     # The keys Ontos keeps for itself (never sent to clients) survive
     db_session.expire_all()
     assert db_session.get(AssetDb, column.id).properties == {METRIC_VIEW_PROPERTY: {"source": "x"}}
+
+
+def test_a_stored_value_the_schema_refuses_does_not_block_other_edits(db_session, osm):
+    """Only the properties an update changes are validated: a legacy value that
+    doesn't fit the schema doesn't block an edit of another field."""
+    from src.common.errors import ValidationError
+
+    column = AssetDb(
+        name="legacy", asset_type_id=_column_type(db_session).id,
+        properties={"isPrimaryKey": "yes"},
+    )
+    db_session.add(column)
+    db_session.flush()
+    manager = AssetsManager(ontology_schema_manager=osm)
+
+    updated = manager.update_asset(
+        db_session, asset_id=column.id,
+        asset_in=AssetUpdate(properties={"isPrimaryKey": "yes", "isNullable": True}),
+        current_user_id="alice@example.com",
+    )
+    assert updated.properties == {"isPrimaryKey": "yes", "isNullable": True}
+
+    with pytest.raises(ValidationError):
+        manager.update_asset(
+            db_session, asset_id=column.id,
+            asset_in=AssetUpdate(properties={"isPrimaryKey": "yes", "isNullable": "no"}),
+            current_user_id="alice@example.com",
+        )

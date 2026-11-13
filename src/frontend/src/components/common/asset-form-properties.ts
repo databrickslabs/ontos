@@ -9,15 +9,18 @@ const isEmpty = (val: unknown) => val === '' || val === null || val === undefine
  * asset can store more (an imported column keeps `data_type`, `nullable`, ...).
  * Start from the stored properties and apply only the fields the user changed
  * from the value the form opened with: a changed field is set, a cleared one is
- * removed. `values` and `defaults` are the form values, properties prefixed with
- * `prop_`.
+ * removed, stored nulls are dropped. `values` and `defaults` are the form values,
+ * properties prefixed with `prop_`.
  */
 export function mergeEditedProperties(
   existing: Record<string, any> | null | undefined,
   values: Record<string, any>,
   defaults: Record<string, any>,
 ): Record<string, any> {
-  const merged: Record<string, any> = { ...(existing || {}) }
+  // A stored null/undefined is an empty value: the old dialog didn't send it either
+  const merged: Record<string, any> = Object.fromEntries(
+    Object.entries(existing || {}).filter(([, val]) => val !== null && val !== undefined),
+  )
   for (const [key, val] of Object.entries(values)) {
     if (!key.startsWith(PROP_PREFIX) || val === defaults[key]) continue
     const name = key.slice(PROP_PREFIX.length)

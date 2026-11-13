@@ -2527,9 +2527,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if not original_product:
             raise ValueError(f"Original data product with ID {original_product_id} not found.")
 
-        # Create new product data (exclude id, created_at, updated_at)
+        # Create new product data (exclude id, created_at, updated_at; the new version
+        # gets its own creation timestamp)
         new_product_data = original_product.model_dump(
-            exclude={'id', 'created_at', 'updated_at'}
+            exclude={'id', 'created_at', 'updated_at', 'productCreatedTs'}
         )
 
         # Generate new ID and set new version

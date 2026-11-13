@@ -192,8 +192,9 @@ def test_builder_without_owner_domain_or_certification(db_session):
 
     d = build_asset_dict(db_session, str(asset.id), get_workspace_client=lambda: _ws())
 
-    assert d['has_owner'] is False and d['owner'] is None and d['owners'] == []
-    assert d['has_domain'] is False and d['domain_id'] is None
+    assert d['has_owner'] is False and d['owner'] == '' and d['owners'] == []
+    assert d['has_domain'] is False and d['domain_id'] == '' and d['domain_name'] == ''
+    assert d['platform'] == '' and d['location'] == ''
     assert d['certification_level'] == 0 and d['is_certified'] is False
     assert d['is_certification_expired'] is True
     assert d['has_description'] is False and d['property_count'] == 0
@@ -216,8 +217,8 @@ def test_builder_merges_the_uc_table_column_fields(db_session):
 
 
 @pytest.mark.parametrize('error,status', [
-    (NotFound('Table does not exist: main.sales.orders'), 'not_found'),
-    (PermissionDenied('User does not have SELECT on secret_catalog'), 'permission_denied'),
+    (NotFound('Table does not exist: main.sales.orders'), 'unreadable'),
+    (PermissionDenied('User does not have SELECT on secret_catalog'), 'unreadable'),
     (RuntimeError('connection reset by 10.0.0.12'), 'read_failed'),
 ])
 def test_unreadable_table_leaves_uc_fields_absent(db_session, error, status):
@@ -316,14 +317,10 @@ def test_gate_on_uc_fields_says_the_table_could_not_be_read(db_session):
         db_session, entity_type='Asset', entity_id=str(asset.id), persist=False,
     )
 
-    uc_gate, owner_gate = report.levels[1].gates
-    assert uc_gate.passed is False
-    assert uc_gate.message_code == 'maturity_uc_table_permission_denied'
-    assert uc_gate.message_params == {'tableName': FQN}
-    assert str(error) not in (uc_gate.message or '')
-    # A failed gate that doesn't use UC fields keeps its own message
-    assert owner_gate.passed is False and owner_gate.message_code is None
-    assert [n.code for n in report.notices] == ['maturity_uc_table_permission_denied']
+    # The levels were computed from missing fields, so none are reported; the notice says why
+    assert report.levels == [] and report.achieved_level_order is None
+    assert [n.code for n in report.notices] == ['maturity_uc_table_unreadable']
+    assert report.notices[0].params == {'tableName': FQN}
     assert str(error) not in report.model_dump_json()
     # Nothing is stored from a read that failed (see the tests below)
     assert db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).count() == 0
@@ -449,7 +446,7 @@ def test_optional_uc_gate_does_not_hold_the_level(db_session):
 
     # An optional gate doesn't decide the level, so the read failure changes nothing
     assert report.achieved_level_order == 1
-    assert report.levels[0].gates[1].message_code == 'maturity_uc_table_not_found'
+    assert report.levels[0].gates[1].message_code == 'maturity_uc_table_unreadable'
     snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).all()
     assert [s.achieved_level_order for s in snapshots] == [1]
 
@@ -655,3 +652,46 @@ def test_on_change_never_raises(same_session):
     with patch('src.controller.maturity_evaluator.maturity_repo.get_all_ordered',
                side_effect=RuntimeError('db down')):
         assert evaluate_asset_maturity_on_change(str(uuid.uuid4())) is None
+
+
+# --- review fixes (#1352 review) ----------------------------------------------
+
+def test_asset_without_owner_fails_an_owner_not_empty_gate(db_session):
+    # A missing owner must read as '' so ``!= ''`` fails (None != '' is true in the DSL)
+    asset = _asset(db_session)
+    d = build_asset_dict(db_session, str(asset.id), get_workspace_client=lambda: _ws())
+
+    assert evaluate_rule_on_object("ASSERT obj.owner != ''", d)[0] is False
+    assert evaluate_rule_on_object("ASSERT obj.domain_name != ''", d)[0] is False
+    assert evaluate_rule_on_object("ASSERT obj.location != ''", d)[0] is True
+
+
+def test_custom_property_presence_is_has_prop(db_session):
+    asset = _asset(db_session, properties={'tier': 'gold', 'empty': ''})
+    d = build_asset_dict(db_session, str(asset.id), get_workspace_client=lambda: _ws())
+
+    assert d['has_prop_tier'] is True and d['prop_tier'] == 'gold'
+    assert d['has_prop_empty'] is False
+    assert evaluate_rule_on_object("ASSERT obj.has_prop_tier = True", d)[0] is True
+    assert evaluate_rule_on_object("ASSERT obj.has_prop_missing = True", d)[0] is False
+
+
+def test_metric_view_assets_are_evaluated_like_tables(db_session):
+    asset = _asset(db_session, 'Metric View')
+    d = build_asset_dict(db_session, str(asset.id), get_workspace_client=lambda: _ws())
+
+    assert d['entity_type'] == 'Asset' and d['asset_type'] == 'Metric View'
+
+
+def test_unreadable_table_stores_no_level_and_reports_no_levels(db_session):
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
+    _level(db_session, 2, 'Documented', ['ASSERT obj.column_count > 0'])
+
+    report = MaturityEvaluator(_ws(error=NotFound('gone'))).evaluate(
+        db_session, entity_type='Asset', entity_id=str(asset.id), persist=False,
+    )
+
+    assert report.levels == [] and report.achieved_level_order is None
+    assert report.gates_total == 0 and report.gates_passed == 0
+    assert [n.code for n in report.notices] == ['maturity_uc_table_unreadable']

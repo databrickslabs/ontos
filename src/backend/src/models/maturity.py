@@ -18,7 +18,7 @@ class MaturityLevelBase(BaseModel):
     entity_type: str = Field(
         "all",
         description=(
-            "DataProduct, DataContract, Asset (table and view assets), or all "
+            "DataProduct, DataContract, Asset (table, view and metric view assets), or all "
             "(data products and data contracts; not assets)"
         ),
     )

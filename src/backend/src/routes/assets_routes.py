@@ -73,10 +73,15 @@ _ensure_asset_readable = ensure_asset_readable
 
 
 def _schedule_maturity_evaluation(
-    background_tasks: BackgroundTasks, request: Request, asset_id, user_email,
+    db, background_tasks: BackgroundTasks, request: Request, asset_id, user_email,
 ) -> None:
-    """Re-evaluate a table/view asset's maturity after the response is sent."""
+    """Re-evaluate a table/view asset's maturity after the response is sent.
+
+    Commits the request's changes first: the background task opens its own session
+    and must see the asset as it is now, whatever the dependency teardown order.
+    """
     from src.controller.maturity_evaluator import evaluate_asset_maturity_on_change
+    db.commit()
     background_tasks.add_task(
         evaluate_asset_maturity_on_change, str(asset_id), evaluated_by=user_email,
         workspace_client=getattr(request.app.state, "workspace_client", None),
@@ -296,7 +301,7 @@ def create_asset(
         result.description_sync = outcome.state
         if outcome.audit:
             details["uc_comment"] = outcome.audit
-        _schedule_maturity_evaluation(background_tasks, request, result.id, current_user.email)
+        _schedule_maturity_evaluation(db, background_tasks, request, result.id, current_user.email)
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}
@@ -481,7 +486,7 @@ def update_asset(
         if outcome.audit:
             details["uc_comment"] = outcome.audit
         success = True
-        _schedule_maturity_evaluation(background_tasks, request, asset_id, current_user.email)
+        _schedule_maturity_evaluation(db, background_tasks, request, asset_id, current_user.email)
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}

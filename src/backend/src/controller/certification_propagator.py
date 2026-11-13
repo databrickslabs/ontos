@@ -12,6 +12,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from src.common.ontology_type_names import canonical_type_name
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -66,7 +67,7 @@ def _get_downstream_entities(db: Session, source_type: str, source_id: str) -> l
     rels = (
         db.query(EntityRelationshipDb)
         .filter(
-            EntityRelationshipDb.source_type == source_type,
+            EntityRelationshipDb.source_type == canonical_type_name(source_type),
             EntityRelationshipDb.source_id == source_id,
             EntityRelationshipDb.relationship_type.in_(INHERITANCE_RELATIONSHIPS),
         )

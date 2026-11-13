@@ -54,9 +54,9 @@ has a tag of that name on the entity (see the
 |--------|--------|-------------|
 | `PASS` | `PASS` | Mark as successful (default) |
 | `FAIL` | `FAIL 'message'` | Mark as failed with custom message |
-| `ASSIGN_TAG` | `ASSIGN_TAG key: 'value'` | Add or update a tag on the entity |
-| `REMOVE_TAG` | `REMOVE_TAG key` | Remove a tag from the entity |
-| `NOTIFY` | `NOTIFY 'email@example.com'` | Send notification to recipients |
+| `ASSIGN_TAG` | `ASSIGN_TAG key: 'value'`, `ASSIGN_TAG 'namespace/name': 'value'`, `ASSIGN_TAG 'namespace/name'` | Add or update a tag on the entity. Quote the key for a tag outside the default namespace. Without a value only the tag is assigned and an existing value is kept; `''` clears the value |
+| `REMOVE_TAG` | `REMOVE_TAG key`, `REMOVE_TAG 'namespace/name'` | Remove a tag from the entity |
+| `NOTIFY` | `NOTIFY 'email@example.com'` | Send an in-app notification. Each recipient gets one notification per run that summarizes the entities |
 
 ## Practical Examples
 

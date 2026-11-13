@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
+from src.common.ontology_type_names import canonical_type_name
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -135,9 +136,9 @@ def _add_relationship_counts(db: Session, d: Dict[str, Any],
         db.query(EntityRelationshipDb)
         .filter(
             or_(
-                and_(EntityRelationshipDb.source_type == entity_type,
+                and_(EntityRelationshipDb.source_type == canonical_type_name(entity_type),
                      EntityRelationshipDb.source_id == entity_id),
-                and_(EntityRelationshipDb.target_type == entity_type,
+                and_(EntityRelationshipDb.target_type == canonical_type_name(entity_type),
                      EntityRelationshipDb.target_id == entity_id),
             )
         )

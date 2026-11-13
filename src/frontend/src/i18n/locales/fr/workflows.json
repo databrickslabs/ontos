@@ -347,6 +347,22 @@
       "fail": "Échec",
       "true": "Vrai",
       "false": "Faux"
+    },
+    "checks": {
+      "button": "Vérifier",
+      "buttonHint": "Vérifie le workflow et signale les problèmes. Les avertissements n'empêchent pas l'enregistrement.",
+      "clean": "Aucun problème trouvé.",
+      "errorsCount_one": "{{count}} erreur",
+      "errorsCount_other": "{{count}} erreurs",
+      "warningsCount_one": "{{count}} avertissement",
+      "warningsCount_other": "{{count}} avertissements"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "L'étape \"{{step}}\" termine le workflow : son lien vers \"{{target}}\" est ignoré et supprimé à l'enregistrement.",
+      "conditionalBranchMissing": "La condition \"{{step}}\" n'a aucune étape sur sa branche {{branch}}. Si la condition est {{branch}}, le workflow se termine avec succès.",
+      "unreachableSteps": "Ces étapes ne sont pas accessibles depuis la première étape : {{steps}}.",
+      "storedEntityTypeUnknown": "Le déclencheur liste \"{{entityType}}\", un type d'entité qui n'existe plus. Il ne se déclenche jamais pour lui.",
+      "storedEntityTypeUnsupported": "Le déclencheur {{trigger}} ne se déclenche jamais pour {{entity}}."
     }
   },
   "approvalResponse": {
@@ -713,7 +729,9 @@
     "badges": {
       "default": "Par défaut",
       "approval": "Approbation",
-      "process": "Processus"
+      "process": "Processus",
+      "triggerWarnings": "Alerte de déclencheur",
+      "triggerWarningsHint": "Le déclencheur liste des types d'entité qui ne correspondent à aucun événement. Ouvrez le workflow pour les voir."
     },
     "columns": {
       "steps": "Étapes",

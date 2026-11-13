@@ -229,3 +229,72 @@ async def test_normal_answer_is_unchanged(chat_manager):
     )
     assert response.message.content == "Real answer."
     assert response.message.error_code is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "content",
+    [
+        [{"type": "refusal", "refusal": "I can't help with that."}],
+        [{"type": "reasoning"}, {"type": "refusal", "refusal": "I can't help with that."}],
+    ],
+    ids=["refusal-block", "reasoning-then-refusal"],
+)
+async def test_refusal_block_is_the_reply(chat_manager, content):
+    response = await _chat(chat_manager, content)
+    assert response.message.content == "I can't help with that."
+    assert response.message.error_code is None
+
+
+@pytest.mark.asyncio
+async def test_message_level_refusal_is_the_reply(chat_manager):
+    from types import SimpleNamespace as NS
+    from unittest.mock import MagicMock, patch
+
+    client = MagicMock()
+    client.chat.completions.create.return_value = NS(
+        choices=[
+            NS(
+                message=NS(content=None, refusal="I can't help with that.", tool_calls=None),
+                finish_reason="stop",
+            )
+        ],
+        usage=None,
+    )
+    with patch.object(chat_manager, "_get_openai_client", return_value=client), patch(
+        "src.tools.app_state.get_adoption_snapshot", return_value={}
+    ):
+        response = await chat_manager.chat("hi", user_id="u@example.com")
+    assert response.message.content == "I can't help with that."
+    assert response.message.error_code is None
+
+
+def test_refusal_text_reads_field_and_blocks_only():
+    from types import SimpleNamespace as NS
+
+    from src.common.llm_content import refusal_text
+
+    refusal = {"type": "refusal", "refusal": " No. "}
+    assert refusal_text(NS(content=[{"type": "text", "text": "answer"}])) == ""
+    assert refusal_text(NS(content="plain answer")) == ""
+    assert refusal_text(NS(content=None)) == ""
+    assert refusal_text(NS(content=[{"type": "text", "refusal": "not a refusal"}])) == ""
+    assert refusal_text(NS(content=[refusal])) == "No."
+    assert refusal_text(NS(content=[refusal], refusal="No.")) == "No."
+    assert refusal_text(NS(content=[_Block(type="refusal", refusal="Nope")])) == "Nope"
+    assert coerce_message_text([refusal]) == ""
+
+
+@pytest.mark.asyncio
+async def test_long_refusal_is_capped(chat_manager):
+    response = await _chat(chat_manager, [{"type": "refusal", "refusal": "No. " * 2000}])
+    assert response.message.error_code is None
+    assert 0 < len(response.message.content) <= 1000
+
+
+@pytest.mark.asyncio
+async def test_refusal_goes_through_the_citation_stripper(chat_manager):
+    refusal = "I can't share that. <!-- ref: mcp_tokens --> [Inferred] ****"
+    response = await _chat(chat_manager, [{"type": "refusal", "refusal": refusal}])
+    assert response.message.error_code is None
+    assert response.message.content == "I can't share that."

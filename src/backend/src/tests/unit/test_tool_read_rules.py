@@ -6,6 +6,7 @@ team, a feature admin, a context without a caller, and the MCP API-key policy
 search drops it before pagination, counts and facets.
 """
 import asyncio
+import dataclasses
 import uuid
 from datetime import date
 from pathlib import Path
@@ -17,6 +18,7 @@ import pytest
 import src.tools.caller as tool_caller
 from src.common.features import FeatureAccessLevel
 from src.common.search_interfaces import SearchIndexItem
+from src.controller import audit_manager
 from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.controller.search_manager import SearchManager
@@ -36,11 +38,14 @@ IRI = 'http://example.com/onto#Customer'
 # Read-only on both features, as the default Data Consumer role.
 READ = {'data-products': FeatureAccessLevel.READ_ONLY,
         'data-contracts': FeatureAccessLevel.READ_ONLY}
-CONSUMER = ToolCaller(email='carl@example.com', auth_path='test', permissions=READ)
-OWNER = ToolCaller(email='sue@example.com', auth_path='test', permissions=READ)
+# Users have groups (/api/search and global_search return nothing to a user without).
+CONSUMER = ToolCaller(email='carl@example.com', auth_path='test', permissions=READ,
+                      groups=['users'])
+OWNER = ToolCaller(email='sue@example.com', auth_path='test', permissions=READ,
+                   groups=['users'])
 MEMBER = ToolCaller(email='tom@example.com', auth_path='test', team_ids={TEAM},
-                    permissions=READ)
-ADMIN = ToolCaller(email='ann@example.com', auth_path='test',
+                    permissions=READ, groups=['users'])
+ADMIN = ToolCaller(email='ann@example.com', auth_path='test', groups=['users'],
                    products_admin=True, contracts_admin=True)
 # No level on either feature, as the default Security Officer role or no role:
 # owning a draft doesn't help.
@@ -69,8 +74,11 @@ class _Index:
 
 
 @pytest.fixture
-def world(db_session):
+def world(db_session, monkeypatch):
     """Two products and three contracts per readable class, indexed for search."""
+    # A write tool's audit entry is written in its own session, whose commit
+    # would commit this test's rows on the shared in-memory connection.
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
     def _product(name, status, **kw):
         row = DataProductDb(id=str(uuid.uuid4()), api_version='v1.0.0', kind='DataProduct',
                             name=name, version='1.0.0', status=status, **kw)
@@ -231,9 +239,15 @@ class TestByPersona:
         for row in world.c.values():
             tags.add_tag_to_entity(world.db, entity_id=row.id, entity_type='data_contract',
                                    tag_id=tag.id, assigned_value=None, user_email='x')
+        # GET /api/entities/{type}/{id}/tags needs Read-only on tags too.
+        caller = PERSONAS[persona]
+        if caller is not None:
+            caller = dataclasses.replace(
+                caller, permissions={**caller.permissions, 'tags': FeatureAccessLevel.READ_ONLY})
         for key, row in world.c.items():
-            res = _call(world, persona, 'list_entity_tags',
-                        entity_type='data_contract', entity_id=row.id)
+            res = _run(create_default_registry().execute(
+                'list_entity_tags', _ctx(world, caller),
+                {'entity_type': 'data_contract', 'entity_id': row.id}))
             assert res.data['total_count'] == (1 if key in READABLE[persona] else 0), key
 
     def test_costs(self, world, persona):
@@ -707,7 +721,7 @@ class TestReadLevel:
         res = _call(world, 'consumer', 'global_search', query='*', limit=100)
         assert 'glossary-term' not in res.data['facets'].get('type', {})
         assert res.data['total_count'] == 2  # the published product and contract
-        reader = ToolCaller(email='carl@example.com', auth_path='test',
+        reader = ToolCaller(email='carl@example.com', auth_path='test', groups=['users'],
                             permissions={**READ, 'semantic-models': FeatureAccessLevel.READ_ONLY})
         res = _run(create_default_registry().execute(
             'global_search', _ctx(world, reader), {'query': '*', 'limit': 100}))
@@ -790,6 +804,33 @@ class TestReadLevelThroughMcp:
         assert {p['id'] for p in data['products']} == {pub}
         assert self._call(consumer, 'get_data_product', product_id=pub)[0] is False
 
+    def _tool_call_audit(self, handler):
+        calls = [c.kwargs for c in handler._audit_manager.log_action.call_args_list
+                 if c.kwargs.get('action') == 'TOOL_CALL']
+        assert len(calls) == 1
+        return calls[0]
+
+    def test_the_audit_entry_records_a_read_rule_denial(self, world, monkeypatch):
+        """A tool call the read rule limited is audited as not a success, with the
+        reason; a fully readable one has neither."""
+        draft = world.p['other_draft'].id
+        pub = world.p['published'].id
+        cases = [
+            ('get_data_product', {'product_id': draft}, True),
+            ('get_data_products', {'product_ids': [pub, draft]}, True),
+            ('get_data_product', {'product_id': pub}, False),
+        ]
+        for tool, args, limited in cases:
+            handler = self._handler(world, monkeypatch, READ)
+            self._call(handler, tool, **args)
+            entry = self._tool_call_audit(handler)
+            if limited:
+                assert entry['success'] is False, tool
+                assert entry['details']['denied_reason'] == NOT_READABLE, tool
+            else:
+                assert entry['success'] is True
+                assert 'denied_reason' not in entry['details']
+
 
 class TestPublishedContractWithADraftOwner:
     """An owner stamp hides only a personal draft; a published row stays readable."""
@@ -820,3 +861,74 @@ class TestPublishedContractWithADraftOwner:
                               else None))
         readable = read_access.readable_contract_rows(ctx, rows.values())
         assert [r.id for r in readable] == [rows['active'].id, rows['deprecated'].id]
+
+    def test_a_failing_rule_lookup_leaves_the_session_usable(self, db_session):
+        """The contract rule's lookups run in a savepoint: a failed one denies the
+        read without aborting the transaction (Postgres) the tool uses after it."""
+        from sqlalchemy import text
+
+        from src.tests.helpers import postgres_aborts
+        from src.tools import read_access
+
+        class _FailingManager:
+            def readable_contracts(self, db, rows, **kwargs):
+                db.execute(text('SELECT * FROM no_such_table'))
+
+        row = self._rows(db_session)['personal_draft']
+        ctx = ToolContext(db=db_session, settings=MagicMock(), caller=CONSUMER,
+                          data_contracts_manager=_FailingManager())
+        with postgres_aborts(db_session):
+            assert read_access.can_read_contract(ctx, row) is False
+            assert db_session.execute(text('SELECT 1')).scalar() == 1
+
+
+class TestAdminGroupsReadEveryProject:
+    """Configured admin groups are members of every project (``ALL_PROJECTS``)."""
+
+    def test_the_lookup_returns_all_projects_for_admin_groups(self, monkeypatch, db_session):
+        import src.common.authorization as authorization
+        from src.common.product_read_rule import ALL_PROJECTS, lookup_member_project_ids
+
+        monkeypatch.setattr(authorization, 'is_user_admin', lambda groups, settings: True)
+        assert lookup_member_project_ids(db_session, 'ann@example.com', ['admins']) \
+            is ALL_PROJECTS
+        monkeypatch.setattr(authorization, 'is_user_admin', lambda groups, settings: False)
+        assert lookup_member_project_ids(db_session, 'ann@example.com', ['admins']) == set()
+
+    def test_all_projects_reads_and_edits_in_any_project(self, db_session):
+        from src.common.product_read_rule import ALL_PROJECTS, caller_owns_product
+        from src.tools.read_access import PROJECT_MEMBERSHIP_CODE, project_refusal
+
+        draft = SimpleNamespace(draft_owner_id=None, owner_team_id=None, project_id='p1')
+        owns = [
+            caller_owns_product(db_session, draft, caller_email='ann@example.com',
+                                caller_groups=[], caller_team_ids=set(),
+                                caller_project_ids=ids)
+            for ids in (ALL_PROJECTS, set(), {'p1'})
+        ]
+        assert owns == [True, False, True]
+
+        def _refusal(project_ids):
+            caller = ToolCaller(email='ann@example.com', auth_path='test', permissions=READ,
+                                project_ids=project_ids)
+            ctx = ToolContext(db=db_session, settings=MagicMock(), caller=caller)
+            return project_refusal(ctx, 'p1', 'data contract')
+
+        assert _refusal(ALL_PROJECTS) is None
+        assert _refusal({'p1'}) is None
+        assert _refusal(set()).error_code == PROJECT_MEMBERSHIP_CODE
+
+
+def test_a_failing_product_rule_denies_the_read(world, monkeypatch):
+    """The product rule fails closed: the product is answered as not found."""
+    from src.tools import read_access
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError('rule failed')
+
+    monkeypatch.setattr(read_access, '_can_read_product_rule', _boom)
+    draft = world.p['own_draft']
+    assert read_access.can_read_product(_ctx(world, OWNER), draft) is False
+    res = _call(world, 'owner', 'get_data_product', product_id=draft.id)
+    assert res.success is False and res.error.endswith('not found')
+    assert res.denied_reason == NOT_READABLE

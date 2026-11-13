@@ -123,6 +123,10 @@
     "unknownProduct": "Unbekanntes Produkt",
     "viewAllSubscribed": "Alle Abonnements anzeigen"
   },
+  "discoveryDomainGraph": {
+    "unavailable": "Die Domänenhierarchie ist für Ihre Rolle nicht verfügbar.",
+    "error": "Die Domänenhierarchie konnte nicht geladen werden"
+  },
   "dataCurationSection": {
     "title": "Datenkuration",
     "createDataProduct": {

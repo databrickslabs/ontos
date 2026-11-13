@@ -347,6 +347,22 @@
       "fail": "Fallido",
       "true": "Verdadero",
       "false": "Falso"
+    },
+    "checks": {
+      "button": "Revisar",
+      "buttonHint": "Revisa el flujo de trabajo en busca de problemas. Las advertencias no impiden guardar.",
+      "clean": "No se encontraron problemas.",
+      "errorsCount_one": "{{count}} error",
+      "errorsCount_other": "{{count}} errores",
+      "warningsCount_one": "{{count}} advertencia",
+      "warningsCount_other": "{{count}} advertencias"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "El paso \"{{step}}\" finaliza el flujo, así que su enlace a \"{{target}}\" se ignora y se elimina al guardar.",
+      "conditionalBranchMissing": "La condición \"{{step}}\" no tiene ningún paso en su rama {{branch}}. Si la condición es {{branch}}, el flujo termina como correcto.",
+      "unreachableSteps": "Estos pasos no se pueden alcanzar desde el primer paso: {{steps}}.",
+      "storedEntityTypeUnknown": "El disparador incluye \"{{entityType}}\", un tipo de entidad que ya no existe. Nunca se activa para él.",
+      "storedEntityTypeUnsupported": "El disparador {{trigger}} nunca se activa para {{entity}}."
     }
   },
   "approvalResponse": {
@@ -713,7 +729,9 @@
     "badges": {
       "default": "Predeterminado",
       "approval": "Aprobación",
-      "process": "Proceso"
+      "process": "Proceso",
+      "triggerWarnings": "Aviso de disparador",
+      "triggerWarningsHint": "El disparador incluye tipos de entidad que no coinciden con ningún evento. Abra el flujo de trabajo para verlos."
     },
     "columns": {
       "steps": "Pasos",

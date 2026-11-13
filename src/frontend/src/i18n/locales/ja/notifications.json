@@ -257,6 +257,13 @@
       "replacementVersion": "後継: {{replacementName}} (バージョン {{replacementVersion}})"
     }
   },
+  "complianceRun": {
+    "title": "コンプライアンス: {{policyName}}",
+    "summary": "ポリシー {{policyName}}: 失敗 {{failedCount}} 件、合格 {{passedCount}} 件。",
+    "failedEntities": "失敗: {{names}}",
+    "passedEntities": "合格: {{names}}",
+    "namesWithMore": "{{names}} ほか {{count}} 件"
+  },
   "metricViewChangeManual": {
     "title": "メトリックビューの変更を適用してください",
     "description": "メトリックビュー {{fqn}} の変更リクエストが承認されました。適用するには次のステートメントを実行してください:\n\n{{ddl}}"
@@ -264,5 +271,8 @@
   "metricViewChangeFailed": {
     "title": "メトリックビューの変更を配信できませんでした",
     "description": "メトリックビュー {{fqn}} の承認済み変更リクエストを配信できませんでした。"
+  },
+  "complianceRunVisibility": {
+    "notShown": "閲覧できないもの {{count}} 件"
   }
 }

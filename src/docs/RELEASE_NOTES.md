@@ -3,6 +3,8 @@
 
 ## ✨ Features
 
+- **compliance-templates**: compliance rules on tables and views see the same template keys (`template_complete`, `template_field_<reference id>`, ...) for the template bound to table and view assets, when the Unity Catalog table is registered as an Ontos table or view asset with its full name as location.
+- **compliance-templates**: compliance rules and maturity gates on data products see the active compliance template: `template_applicable`, `template_mandatory_missing_count`, `template_complete` and one `template_field_<reference id>` per field. A maturity level can require a filled template with a policy such as `MATCH (p:data_product) ASSERT p.template_applicable AND p.template_complete`.
 - **compliance-templates**: compliance templates can be bound to table and view assets (entity type `asset`). Table and view pages get the Compliance button and modal with the advisory count of missing mandatory fields; filling the values needs the right to edit the asset, reading them the right to read it. Assets have no publish gate. Editing a table or view fills the defaults of a new template, as on data products.
 - **compliance-templates**: the compliance templates settings page, the template editor, the Compliance modal and the data product Compliance button are translated (all locales).
 - **compliance-templates**: field keys and reference ids derived from a label keep accented letters (`Limitações conhecidas` gives `limitacoes-conhecidas`, not `limita-es-conhecidas`; `ß`, `ł`, `ø`, `æ`, `đ` and similar letters are spelled out). Existing fields keep their ids.

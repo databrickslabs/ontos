@@ -253,6 +253,22 @@ class ComplianceTemplatesRepository:
             .all()
         )
 
+    def list_values_for_entities(
+        self, db: Session, *, entity_type: str, entity_ids: list[str], field_ids: list[UUID]
+    ) -> list[ComplianceTemplateValueDb]:
+        """Value rows of several entities in one query (rule evaluation over many entities)."""
+        if not field_ids or not entity_ids:
+            return []
+        return (
+            db.query(ComplianceTemplateValueDb)
+            .filter(
+                ComplianceTemplateValueDb.entity_type == entity_type,
+                ComplianceTemplateValueDb.entity_id.in_(entity_ids),
+                ComplianceTemplateValueDb.field_id.in_(field_ids),
+            )
+            .all()
+        )
+
     def replace_values(
         self,
         db: Session,

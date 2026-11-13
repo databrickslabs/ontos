@@ -51,8 +51,35 @@ class EntityLoader(ABC):
 class UnityCatalogLoader(EntityLoader):
     """Load entities from Unity Catalog."""
 
-    def __init__(self, workspace_client):
+    def __init__(self, workspace_client, db: Optional[Session] = None):
         self.ws = workspace_client
+        # Optional: the app database, for the compliance template keys of tables and views
+        self.db = db
+
+    def _table_template_fields(self) -> Dict[str, Dict[str, Any]]:
+        """Compliance template keys (``template_complete``, ...) by table full name key.
+
+        A table or view gets the keys of the Ontos table or view asset whose location
+        is its full name. Empty without a database or when they can't be read (rules on
+        the keys then see ``None``); read in a savepoint, as for the app entities.
+        """
+        if self.db is None:
+            return {}
+        try:
+            from src.controller.compliance_template_assets import (
+                ASSET_ENTITY_TYPE,
+                template_asset_ids_by_location,
+            )
+            from src.controller.compliance_templates_manager import compliance_templates_manager
+            with self.db.begin_nested():
+                asset_ids = template_asset_ids_by_location(self.db)
+                fields = compliance_templates_manager.rule_fields_for_entities(
+                    self.db, entity_type=ASSET_ENTITY_TYPE, entity_ids=asset_ids.values()
+                ) if asset_ids else {}
+        except Exception:
+            logger.exception("Failed to load compliance template fields for tables")
+            return {}
+        return {name: fields[i] for name, i in asset_ids.items() if i in fields}
 
     def get_supported_types(self) -> List[str]:
         return ['catalog', 'schema', 'table', 'view', 'function', 'volume']
@@ -99,6 +126,8 @@ class UnityCatalogLoader(EntityLoader):
 
             # Load tables and views
             if 'table' in entity_types or 'view' in entity_types:
+                template_fields = self._table_template_fields()
+                from src.controller.compliance_template_assets import location_key
                 for catalog in self.ws.catalogs.list():
                     try:
                         for schema in self.ws.schemas.list(catalog_name=catalog.name):
@@ -126,6 +155,9 @@ class UnityCatalogLoader(EntityLoader):
                                         'created_at': getattr(table, 'created_at', None),
                                         'updated_at': getattr(table, 'updated_at', None),
                                         'storage_location': getattr(table, 'storage_location', None),
+                                        **template_fields.get(
+                                            location_key(getattr(table, 'full_name', '')), {}
+                                        ),
                                     }
                             except Exception:
                                 logger.exception(f"Failed to list tables for schema {catalog.name}.{schema.name}")
@@ -206,6 +238,25 @@ class AppEntityLoader(EntityLoader):
             'review',
         ]
 
+    def _template_fields(self, entity_type: str, entities: List[Any]) -> Dict[str, Dict[str, Any]]:
+        """Compliance template keys (``template_complete``, ...) by entity id.
+
+        Empty when they can't be read, so the entities still load (rules on the
+        keys then see ``None``). Read in a savepoint, so a failed query doesn't
+        abort the transaction the rest of the run uses.
+        """
+        if not entities:
+            return {}
+        try:
+            from src.controller.compliance_templates_manager import compliance_templates_manager
+            with self.db.begin_nested():
+                return compliance_templates_manager.rule_fields_for_entities(
+                    self.db, entity_type=entity_type, entity_ids=[e.id for e in entities]
+                )
+        except Exception:
+            logger.exception("Failed to load compliance template fields for %s", entity_type)
+            return {}
+
     def load_entities(
         self,
         entity_types: List[str],
@@ -232,6 +283,7 @@ class AppEntityLoader(EntityLoader):
                 domains_map = entity_domain_repo.get_domains_for_entities(
                     self.db, entity_type="data_product", entity_ids=[str(p.id) for p in products]
                 ) if products else {}
+                template_fields = self._template_fields("data_product", products)
                 for product in products:
                     assigned = domains_map.get(str(product.id), [])
                     primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
@@ -248,6 +300,7 @@ class AppEntityLoader(EntityLoader):
                         'tags': {},
                         'created_at': getattr(product, 'created_at', None),
                         'updated_at': getattr(product, 'updated_at', None),
+                        **template_fields.get(str(product.id), {}),
                     }
             except Exception:
                 logger.exception("Failed to load data products for compliance")
@@ -385,7 +438,7 @@ def create_entity_iterator(
     loaders = []
 
     if workspace_client:
-        loaders.append(UnityCatalogLoader(workspace_client))
+        loaders.append(UnityCatalogLoader(workspace_client, db=db))
 
     if db:
         loaders.append(AppEntityLoader(db))

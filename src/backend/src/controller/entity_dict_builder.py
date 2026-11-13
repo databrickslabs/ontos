@@ -58,6 +58,9 @@ def build_data_product_dict(db: Session, product_id: str) -> Optional[Dict[str, 
     base["publication_scope"] = pub_scope
     base["is_published"] = pub_scope != "none"
 
+    # Compliance template (template_complete, template_field_<ref>, ...)
+    _add_compliance_template_fields(db, base, "data_product", product_id)
+
     # Relationship counts
     _add_relationship_counts(db, base, "DataProduct", product_id)
     _add_tag_count(db, base, product_id, "DataProduct")
@@ -204,6 +207,26 @@ def _add_tag_count(db: Session, d: Dict[str, Any],
     ) or 0
     d["tag_count"] = count
     d["has_tags"] = count > 0
+
+
+def _add_compliance_template_fields(db: Session, d: Dict[str, Any],
+                                    entity_type: str, entity_id: str) -> None:
+    """Add the compliance template keys (``template_complete``, ...) for the entity.
+
+    Read in a savepoint: if it fails, the keys stay absent (rules on them see
+    ``None``) and the rest of the evaluation keeps a usable session.
+    """
+    from src.controller.compliance_templates_manager import compliance_templates_manager
+    try:
+        with db.begin_nested():
+            fields = compliance_templates_manager.rule_fields_for_entities(
+                db, entity_type=entity_type, entity_ids=[entity_id]
+            )
+    except Exception:
+        logger.exception("Failed to read compliance template keys for %s %s",
+                         entity_type, entity_id)
+        return
+    d.update(fields.get(str(entity_id), {}))
 
 
 def _add_quality_check_count(db: Session, d: Dict[str, Any],

@@ -26,7 +26,7 @@ import {
   useLifecycleStageGroups,
 } from '@/hooks/use-lifecycle-stage-groups';
 import {
-  groupName, isContractPublishable, isSeededStage, stageLabel,
+  categoryOf, groupName, isContractPublishable, isSeededStage, stageLabel,
 } from '@/lib/lifecycle-stages';
 import StageBadge from '@/components/lifecycle/stage-badge';
 import StageGraphPreview from '@/components/lifecycle/stage-graph-preview';
@@ -152,8 +152,11 @@ export default function RequestContractActionDialog({
           icon: <FileText className="h-5 w-5" />,
           title: t('data-contracts:requests.review.title', 'Request Data Steward Review'),
           description: t('data-contracts:requests.review.description', 'Submit this contract for review by a data steward (transitions to PROPOSED status).'),
-          // From a draft-category stage
-          enabled: currentStage?.category === 'draft',
+          // From a draft-category stage (the stored status's seeded category
+          // until the lifecycle loads)
+          enabled: categoryOf({
+            status: contractStatus, status_category: currentStage?.category,
+          }) === 'draft',
           endpoint: `/api/data-contracts/${contractId}/request-review`,
         };
       case 'deploy':

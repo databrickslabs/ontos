@@ -12,7 +12,7 @@ import { needsStatusChangeRequest, statusChangeErrorText } from '@/lib/status-ch
 import { useApprovalWizardTrigger, type AppActionTriggerType } from '@/hooks/use-approval-wizard-trigger';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { useEntityLifecycle } from '@/hooks/use-lifecycle-stage-groups';
-import { stageLabel, transitionLabel } from '@/lib/lifecycle-stages';
+import { categoryOf, stageLabel, transitionLabel } from '@/lib/lifecycle-stages';
 import { Loader2, AlertCircle, FileText, Eye, Rocket, RefreshCw, ShieldCheck, Info } from 'lucide-react';
 import AccessRequestFields from '@/components/access/access-request-fields';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
@@ -84,7 +84,10 @@ export default function RequestProductActionDialog({
   // The product's stage and the stages it may move to, from its lifecycle stage group
   const { lifecycle } = useEntityLifecycle('data_product', isOpen ? productId : null);
   const allowedTransitions = lifecycle?.allowed_transitions ?? [];
-  const currentCategory = lifecycle?.stage?.category;
+  // From the lifecycle, or the stored status's seeded category until it loads
+  const currentCategory = categoryOf({
+    status: productStatus, status_category: lifecycle?.stage?.category,
+  });
   // A product status in the UI language (the API and the lifecycle use the raw value)
   const statusLabel = (status?: string) => {
     const key = (status || '').toLowerCase();

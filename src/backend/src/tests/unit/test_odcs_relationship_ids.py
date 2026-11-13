@@ -102,3 +102,18 @@ def test_an_editor_save_keeps_the_column_relationship_ids_it_does_not_send():
     merged = keep_unsent_fields({'name': 'orders', 'properties': [{'name': 'a'}]}, stored)
 
     assert merged['properties'][0]['relationships'][0]['stableId'] == 'rel-2'
+
+
+def test_an_editor_save_of_a_v3_1_0_contract_keeps_the_stored_relationship_ids(db_session):
+    manager = _manager()
+    cid = _upload(manager, db_session, _relationships('v3.1.0'))
+    # The editor sends the column without its relationships (they are kept)
+    form = {'name': 'orders', 'properties': [{'name': 'customer_id', 'logicalType': 'string'}]}
+
+    manager.update_contract_with_relations(
+        db_session, cid, DataContractUpdate.model_validate({'schema': [form]}),
+        current_user='alice')
+
+    db_session.expire_all()
+    obj = db_session.query(SchemaObjectDb).filter_by(contract_id=cid, name='orders').one()
+    assert [r.stable_id for r in obj.properties[0].relationships] == ['rel-2']

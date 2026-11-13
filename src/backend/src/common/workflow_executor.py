@@ -381,11 +381,6 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     return merged
 
 
-# Workflow entity types under the name compliance rules (MATCH) and
-# AppEntityLoader give them, where the two differ.
-_COMPLIANCE_TYPES = {'data_asset_review': 'review'}
-
-
 def _proposed_tags(db: Session, tags: Any) -> Dict[str, Any]:
     """Proposed tag assignments (``AssignedTagCreate`` dicts) as AppEntityLoader's tags.
 
@@ -487,10 +482,10 @@ def _compliance_entity(db: Session, context: 'StepContext') -> Optional[Dict[str
     a missing entity ``RuleEntityNotFoundError`` (the step fails): the
     payload alone could let the rule pass.
     """
-    from src.common.compliance_entities import AppEntityLoader
+    from src.common.compliance_entities import AppEntityLoader, normalize_match_type
 
-    entity_type = (context.entity_type or '').lower()
-    entity_type = _COMPLIANCE_TYPES.get(entity_type, entity_type)
+    # The workflow name of a type as AppEntityLoader names it (data_asset_review: review)
+    entity_type = normalize_match_type(context.entity_type or '')
     if entity_type not in AppEntityLoader.SUPPORTED_TYPES or not context.entity_id:
         return None
     try:
@@ -1883,11 +1878,13 @@ class PolicyCheckStepHandler(StepHandler):
 
     @staticmethod
     def _match_selects(parsed: Optional[Dict[str, Any]], context: StepContext) -> bool:
-        # Both names of a type select it (MATCH (r:data_asset_review) or (r:review))
-        match_type = ((parsed or {}).get('match_type') or '').lower()
-        match_type = _COMPLIANCE_TYPES.get(match_type, match_type)
-        entity_type = (context.entity_type or '').lower()
-        return match_type in ('', 'object', _COMPLIANCE_TYPES.get(entity_type, entity_type))
+        # Both sides resolve as a compliance run does: any case and underscores, and
+        # both names of a type (MATCH (p:DataProduct), (r:data_asset_review) or (r:review))
+        from src.common.compliance_entities import normalize_match_type
+
+        match_type = normalize_match_type((parsed or {}).get('match_type') or '')
+        entity_type = normalize_match_type(context.entity_type or '')
+        return match_type in ('', 'object', entity_type)
 
     @staticmethod
     def _where_selects(

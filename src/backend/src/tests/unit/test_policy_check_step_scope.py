@@ -183,6 +183,35 @@ def test_the_step_agrees_with_a_compliance_run(db_session, rule, kind, purpose, 
     assert 'not_applicable' not in result.data
 
 
+# Spellings of a type that a compliance run resolves with normalize_match_type (#1150 B).
+# The step must select with the same resolution, or a gate lets through what a run fails.
+@pytest.mark.parametrize('match_type, kind', [
+    ('DataProduct', 'data_product'),
+    ('DATA_PRODUCT', 'data_product'),
+    ('dataProduct', 'data_product'),
+    ('Object', 'data_product'),
+    ('DataContract', 'data_contract'),
+])
+def test_the_step_agrees_with_a_run_on_any_spelling_of_the_type(db_session, match_type, kind):
+    policy = _policy(db_session, f"MATCH (x:{match_type}) ASSERT x.status = 'active'")
+    if kind == 'data_contract':
+        entity = _contract(db_session, 'draft-contract', 'draft', LONG)
+        payload = _on_create_payload(entity)
+    else:
+        entity = _product(db_session, 'draft-product', 'draft')
+        payload = {'product_id': entity.id, 'name': entity.name, 'status': 'draft'}
+
+    run = _run(db_session, policy)
+    result = _step(
+        db_session, policy, kind, entity.id, payload,
+        trigger_type=TriggerType.BEFORE_STATUS_CHANGE,
+    )
+
+    assert run[entity.id] is False
+    assert result.passed is False
+    assert 'not_applicable' not in result.data
+
+
 def test_before_create_evaluates_the_payload(db_session):
     policy = _policy(db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('confidential')")
     # A stored entity with the id must not be read: before_create has none yet

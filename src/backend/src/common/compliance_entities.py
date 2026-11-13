@@ -516,18 +516,30 @@ def _type_key(name: str) -> str:
     return name.replace('_', '').lower()
 
 
-def normalize_match_type(match_type: str) -> str:
-    """The entity type a MATCH type names, ignoring case and underscores.
+# The loaded types by their key. A test checks that no two of them share a key.
+_LOADED_TYPES_BY_KEY = {
+    _type_key(t): t for t in UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
+}
+# Other names of a loaded type: workflows call reviews ``data_asset_review``
+_TYPE_ALIASES = {'data_asset_review': 'review'}
+_TYPES_BY_KEY = {
+    **_LOADED_TYPES_BY_KEY, **{_type_key(a): t for a, t in _TYPE_ALIASES.items()},
+}
 
-    ``DataProduct``, ``dataProduct``, ``DATA_PRODUCT`` and ``data_product`` all
-    name ``data_product``; ``OBJECT`` names ``object``. The DSL's identifiers
-    have no other separator (``data-product`` doesn't parse). A type that names
-    no loaded type is only lowercased, as before, so it still matches nothing
-    and ``validate_rule`` still flags it.
+
+def normalize_match_type(match_type: str) -> str:
+    """The entity type a MATCH type (or a workflow entity type) names.
+
+    Case and underscores are ignored: ``DataProduct``, ``dataProduct``,
+    ``DATA_PRODUCT`` and ``data_product`` all name ``data_product``; ``OBJECT``
+    names ``object``. ``data_asset_review``, the workflow name, names
+    ``review``. The DSL's identifiers have no other separator (``data-product``
+    doesn't parse). A type that names no loaded type is only lowercased, as
+    before, so it still matches nothing and ``validate_rule`` still flags it.
+    Compliance runs, ``validate_rule`` and workflow ``policy_check`` steps all
+    resolve types here.
     """
-    known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
-    by_key = {_type_key(t): t for t in known}
-    return by_key.get(_type_key(match_type), match_type.lower())
+    return _TYPES_BY_KEY.get(_type_key(match_type), match_type.lower())
 
 
 def parse_entity_filter(rule: str, parsed: Optional[Dict[str, Any]] = None) -> EntityFilter:

@@ -1240,14 +1240,24 @@ async def handle_deploy_request_response(
     """Record a deployment request decision (approve/deny).
 
     Only an approver of the contract's deployment request (a recipient of its
-    notification, e.g. the Admin role) decides it; others get 403. A request
-    an ``on_request_deploy`` workflow handles has no such notification: its
-    approval step decides it (``POST /api/workflows/handle-approval``), so it
-    is refused here for everyone. Nothing is
-    deployed. ``execute_deployment`` is accepted and ignored with a warning in
-    the response.
+    notification, e.g. the Admin role) decides it, once; others get 403, a
+    second decision 409. A request an ``on_request_deploy`` workflow handles
+    has no such notification: its approval step decides it
+    (``POST /api/workflows/handle-approval``), so it is refused here for
+    everyone. Nothing is deployed. ``execute_deployment`` is accepted and
+    ignored with a warning in the response.
     """
-    if not manager.is_deploy_request_approver(db, notifications, contract_id, current_user):
+    access = manager.deploy_request_access(db, notifications, contract_id, current_user)
+    if access == 'decided':
+        raise HTTPException(
+            status_code=409,
+            # code: translated by the UI (data-contracts:deployRequest.errors.*)
+            detail={
+                'code': 'deploy_request_already_decided',
+                'message': "This deployment request has already been decided.",
+            },
+        )
+    if access != 'pending':
         raise HTTPException(
             status_code=403,
             # code: translated by the UI (data-contracts:deployRequest.errors.*)

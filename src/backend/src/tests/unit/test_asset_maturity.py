@@ -728,3 +728,32 @@ def test_unreadable_table_still_stores_a_certain_rise(db_session):
     assert [lv.level_order for lv in report.levels] == [1, 2]
     snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).all()
     assert sorted(s.achieved_level_order for s in snapshots) == [1, 2]
+
+
+def test_uc_read_failure_stores_a_certain_drop_to_no_level(db_session):
+    asset = _asset(db_session, description='Orders')
+    _level(db_session, 1, 'Described', [
+        'ASSERT obj.has_description = True',
+        'ASSERT obj.column_count > 0',
+    ])
+    _level(db_session, 2, 'Trusted', ['ASSERT obj.column_count > 0'])
+    eid = str(asset.id)
+    MaturityEvaluator(_ws(_table([('id', 'Order id')]))).evaluate(
+        db_session, entity_type='Asset', entity_id=eid, persist=True,
+    )
+    asset.description = None
+    db_session.flush()
+
+    with patch('src.common.workflow_triggers.TriggerRegistry') as registry:
+        report = MaturityEvaluator(_ws(error=NotFound('gone'))).evaluate(
+            db_session, entity_type='Asset', entity_id=eid, persist=True,
+        )
+
+    # Level 1 certainly fails on has_description, so the level is none, whatever the table holds
+    assert report.achieved_level_order is None
+    assert len(report.levels) == 1
+    snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=eid).order_by(
+        MaturitySnapshotDb.evaluated_at).all()
+    assert [s.achieved_level_order for s in snapshots] == [2, None]
+    kwargs = registry.return_value.on_maturity_change.call_args.kwargs
+    assert kwargs['from_level'] == 2 and kwargs['to_level'] is None

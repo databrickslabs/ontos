@@ -267,6 +267,14 @@ class MaturityEvaluator:
                     "Maturity of %s %s not updated: its UC table could not be read (%s)",
                     entity_type, entity_id, uc_notice.code,
                 )
+                # The levels reported are the certain ones, and only when they include the
+                # stored level (the level the report says is achieved); otherwise none are
+                # reported, so the counts and the achieved level always agree.
+                kept = level_results[:prefix_len]
+                if prev_order is None or any(lr.level_order == prev_order for lr in kept):
+                    kept_levels = kept
+                else:
+                    kept_levels = []
                 return MaturityReport(
                     entity_type=entity_type,
                     entity_id=entity_id,
@@ -275,12 +283,12 @@ class MaturityEvaluator:
                     achieved_level_name=previous.achieved_level_name if previous else None,
                     total_levels=len(levels),
                     gates_passed=sum(
-                        1 for lr in level_results[:prefix_len] for gr in lr.gates if gr.passed
+                        1 for lr in kept_levels for gr in lr.gates if gr.passed
                     ),
-                    gates_total=sum(len(lr.gates) for lr in level_results[:prefix_len]),
+                    gates_total=sum(len(lr.gates) for lr in kept_levels),
                     evaluated_at=datetime.now(timezone.utc),
                     evaluated_by=evaluated_by,
-                    levels=level_results[:prefix_len],
+                    levels=kept_levels,
                     notices=[uc_notice],
                 )
 

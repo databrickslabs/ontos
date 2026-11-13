@@ -1240,7 +1240,10 @@ async def handle_deploy_request_response(
     """Record a deployment request decision (approve/deny).
 
     Only an approver of the contract's deployment request (a recipient of its
-    notification, e.g. the Admin role) decides it; others get 403. Nothing is
+    notification, e.g. the Admin role) decides it; others get 403. A request
+    an ``on_request_deploy`` workflow handles has no such notification: its
+    approval step decides it (``POST /api/workflows/handle-approval``), so it
+    is refused here for everyone. Nothing is
     deployed. ``execute_deployment`` is accepted and ignored with a warning in
     the response.
     """

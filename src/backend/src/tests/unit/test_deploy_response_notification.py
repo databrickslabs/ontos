@@ -142,3 +142,33 @@ class TestDeployRequestApprover:
     def test_a_broadcast_request_decides_nothing(self, db_session):
         self._notification(db_session, 'c1', None)
         assert self._check(db_session, 'c1', ('e@x.com', ['editors']), self.ROLES) is False
+
+
+def test_a_refused_decision_records_and_audits_nothing():
+    """The approver check runs before anything is written."""
+    import asyncio
+    import pytest
+    from fastapi import HTTPException
+    from src.routes.data_contracts_routes import (
+        HandleDeployPayload, handle_deploy_request_response,
+    )
+
+    manager = MagicMock()
+    manager.is_deploy_request_approver.return_value = False
+    audit = MagicMock()
+    notifications = MagicMock()
+
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(handle_deploy_request_response(
+            contract_id='c1', request=MagicMock(), db=MagicMock(), audit_manager=audit,
+            current_user=SimpleNamespace(email='e@x.com', username='e'),
+            notifications=notifications,
+            payload=HandleDeployPayload(decision='approve'), manager=manager, _=True,
+        ))
+
+    assert refused.value.status_code == 403
+    assert refused.value.detail['code'] == 'deploy_request_not_an_approver'
+    manager.handle_deploy_response.assert_not_called()
+    audit.log_action.assert_not_called()
+    notifications.handle_actionable_notification.assert_not_called()
+    notifications.create_notification.assert_not_called()

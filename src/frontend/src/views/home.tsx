@@ -18,6 +18,7 @@ import ConnectedOverviewTile from '@/components/home/connected-overview-tile';
 import { tileRegistry, tileOrder } from '@/tiles';
 import { Card, CardContent } from '@/components/ui/card';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
+import EssentialsHome from '@/components/home/essentials/essentials-home';
 
 export default function Home() {
   const { t } = useTranslation(['home', 'common']);
@@ -52,7 +53,12 @@ export default function Home() {
       const matched = availableRoles.filter(r => Array.isArray(r.assigned_groups) && r.assigned_groups.some(g => groupSet.has(g)));
       const union = new Set<HomeSection>();
       matched.forEach(r => (r.home_sections || []).forEach(s => union.add(s as HomeSection)));
-      const order: HomeSection[] = [HomeSection.REQUIRED_ACTIONS, HomeSection.DATA_CURATION, HomeSection.DISCOVERY];
+      const order: HomeSection[] = [
+        HomeSection.JOURNEY,
+        HomeSection.REQUIRED_ACTIONS,
+        HomeSection.DATA_CURATION,
+        HomeSection.DISCOVERY,
+      ];
       const result = order.filter(s => union.has(s));
       return result.length > 0 ? result : [HomeSection.DISCOVERY];
     }
@@ -61,10 +67,14 @@ export default function Home() {
 
   const defaultSections: HomeSection[] = [HomeSection.DISCOVERY];
   const orderedSections = configuredSections.length > 0 ? configuredSections : defaultSections;
+  // The journey home (#1347) replaces the Full overview for the roles that have it.
+  const journeyHome = orderedSections.includes(HomeSection.JOURNEY);
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {hasAnyAccess && (
+      {hasAnyAccess && journeyHome && <EssentialsHome />}
+
+      {hasAnyAccess && !journeyHome && (
         <>
           <div className="max-w-2xl mx-auto text-center mb-8">
             <div className="flex items-center justify-center mb-4">

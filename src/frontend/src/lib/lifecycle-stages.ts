@@ -75,13 +75,50 @@ export function awaitsReviewDecision(entity: LifecycleRow): boolean {
 }
 
 /**
- * A contract that may be published, linked to an output port or certified
- * from: an active-category stage, or the approve action's review stage
- * (`approved`), as the backend's `contract_publishable` decides.
+ * In an active-category stage or the approve action's review stage (`approved`):
+ * a contract that may be published, linked to an output port or a product
+ * created from (the backend's `contract_publishable`), or a product listed as
+ * live for its consumers.
  */
-export function isContractPublishable(contract: LifecycleRow): boolean {
-  const category = categoryOf(contract);
-  return category === 'active' || (category === 'review' && !awaitsReviewDecision(contract));
+export function isApprovedOrActive(row: LifecycleRow): boolean {
+  const category = categoryOf(row);
+  return category === 'active' || (category === 'review' && !awaitsReviewDecision(row));
+}
+
+/** A contract that may be published: see `isApprovedOrActive`. */
+export const isContractPublishable = isApprovedOrActive;
+
+/**
+ * The stage submit-review moves a group's entities to, as the backend's
+ * `submit_review_stage` decides: `proposed` when the group has it, else the
+ * only review stage a draft-category stage moves to (null when there are
+ * several). Without the group (not loaded yet), the seeded `proposed`.
+ */
+export function submitReviewStageOf(group: LifecycleStageGroup | null | undefined): string | null {
+  if (!group) return 'proposed';
+  const keys = new Set(group.stages.map((s) => s.key));
+  if (keys.has('proposed')) return 'proposed';
+  const byKey = new Map(group.stages.map((s) => [s.key, s]));
+  const candidates = new Set(
+    group.transitions
+      .filter((t) => byKey.get(t.from_key)?.category === 'draft'
+        && byKey.get(t.to_key)?.category === 'review')
+      .map((t) => t.to_key),
+  );
+  return candidates.size === 1 ? [...candidates][0] : null;
+}
+
+/**
+ * A contract edited in place rather than versioned, the backend's
+ * `editable_in_place`: a draft-category stage, or the stage submit-review
+ * reaches (`proposed` by default); from the review on, changes are versioned.
+ */
+export function isContractEditableInPlace(
+  contract: LifecycleRow,
+  submitReviewStage: string | null = 'proposed',
+): boolean {
+  return categoryOf(contract) === 'draft'
+    || (Boolean(submitReviewStage) && (contract.status || '').toLowerCase() === submitReviewStage);
 }
 
 /** In an active-category stage (published, subscribable, certifiable). */
@@ -235,4 +272,19 @@ export function lifecycleErrorText(
     params.allowed = t('lifecycle:errors.none', { defaultValue: 'none' });
   }
   return t(`lifecycle:errors.${code}`, { ...params, defaultValue: error });
+}
+
+/**
+ * Whether a contract is edited in place, from the groups of the contract type
+ * as the API lists them: the contract's own group (the default one when it
+ * names none or an unknown one) decides its submit-review stage. Before the
+ * groups load, the seeded rule (draft, proposed).
+ */
+export function contractEditableInPlace(
+  contract: LifecycleRow & { lifecycle_stage_group_id?: string | null },
+  groups: LifecycleStageGroup[],
+): boolean {
+  const group = groups.find((g) => g.id && g.id === contract.lifecycle_stage_group_id)
+    ?? groups.find((g) => g.is_default_for_type) ?? groups[0] ?? null;
+  return isContractEditableInPlace(contract, submitReviewStageOf(group));
 }

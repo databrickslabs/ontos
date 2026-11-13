@@ -771,11 +771,37 @@
       "testError": "Error al probar la conexión",
       "deleteSuccess": "Conexión eliminada",
       "testSuccessProject": "Proyecto: {{project}}",
-      "deleteFailed": "No se pudo eliminar"
+      "deleteFailed": "No se pudo eliminar",
+      "testSuccessWithWarnings": "Conectado, con advertencias"
     },
     "badges": {
       "system": "Sistema",
       "default": "Predeterminado"
+    },
+    "tableau": {
+      "configTitle": "Configuración de Tableau",
+      "serverUrl": "URL del servidor",
+      "serverUrlHelp": "URL del pod de Tableau Cloud (como en el navegador) o URL de Tableau Server.",
+      "site": "Sitio",
+      "siteHelp": "URL de contenido del sitio de la barra de direcciones (…/site/<sitio>/…). Vacío para el sitio predeterminado de Tableau Server.",
+      "authSectionTitle": "Autenticación",
+      "authSectionHelp": "Guarde el valor secreto de la Connected App (o el secreto del PAT) como secreto de Unity Catalog e introduzca su nombre abajo. Use una cuenta de administrador del sitio; de lo contrario, Tableau oculta los nombres de tablas y columnas del contenido que no pertenece a la cuenta.",
+      "authMode": "Método de autenticación",
+      "authConnectedApp": "Connected App (recomendado)",
+      "authConnectedAppHelp": "Connected App con confianza directa. Ontos firma un token de corta duración para el usuario indicado abajo; las sesiones pueden ser simultáneas.",
+      "authPat": "Token de acceso personal",
+      "authPatHelp": "Para desarrollo. Iniciar sesión de nuevo con el mismo token cierra su sesión anterior, así que use un token dedicado.",
+      "patName": "Nombre del token",
+      "clientId": "ID de cliente",
+      "secretId": "ID del secreto",
+      "username": "Usuario",
+      "usernameHelp": "Usuario de Tableau con el que inicia sesión la Connected App (correo electrónico en Tableau Cloud).",
+      "secretName": "Secreto de Unity Catalog",
+      "secretNameHelp": "catalog.schema.secret. Quien explore o importe necesita READ_SECRET sobre él, y también la entidad de servicio de la aplicación para las sincronizaciones programadas.",
+      "caBundlePath": "Ruta del paquete CA",
+      "caBundlePathHelp": "Opcional. Paquete PEM para Tableau Server con una autoridad de certificación privada.",
+      "defaultCatalog": "Catálogo predeterminado",
+      "defaultCatalogHelp": "Opcional. Catálogo de Unity Catalog para las tablas de Databricks que Tableau nombra solo como esquema.tabla."
     }
   },
   "schemaImporter": {

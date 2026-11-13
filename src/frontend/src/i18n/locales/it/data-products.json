@@ -777,7 +777,8 @@
       "contractAssignment": "Assegnazione del contratto",
       "accessAndPrivacy": "Accesso e privacy",
       "containsPii": "Contiene PII",
-      "autoApprove": "Approvazione automatica"
+      "autoApprove": "Approvazione automatica",
+      "dashboard": "Dashboard"
     },
     "placeholders": {
       "name": "ad es. Daily Churn Rate",
@@ -785,7 +786,8 @@
       "description": "Descrivi cosa fornisce questo deliverable",
       "type": "ad es. table, api, stream",
       "status": "ad es. active, draft",
-      "chooseContract": "Scegli un contratto..."
+      "chooseContract": "Scegli un contratto...",
+      "noDashboard": "Nessuna dashboard selezionata"
     },
     "contractOptions": {
       "noContract": "Nessun contratto",
@@ -815,10 +817,15 @@
       "failedToSaveDeliverable": "Impossibile salvare il deliverable"
     },
     "actions": {
-      "addDeliverable": "Aggiungi deliverable"
+      "addDeliverable": "Aggiungi deliverable",
+      "chooseDashboard": "Scegli dashboard"
     },
     "warnings": {
       "couldNotLoadDeliveryMethods": "Impossibile caricare i metodi di distribuzione"
+    },
+    "dashboardPicker": {
+      "title": "Scegli una dashboard",
+      "description": "Scegli la dashboard fornita da questo deliverable."
     }
   },
   "inputPortForm": {
@@ -1079,7 +1086,9 @@
     "messages": {
       "productCreated": "Prodotto creato",
       "productCreatedDesc": "Prodotto dati \"{{productName}}\" creato con successo dal contratto."
-    }
+    },
+    "includeDashboardsLabel": "Aggiungi come deliverable le dashboard basate su questo contratto",
+    "includeDashboardsHint": "Leggono il modello semantico del contratto. La descrizione del prodotto viene precompilata da esse."
   },
   "createVersion": {
     "title": "Crea nuova versione",

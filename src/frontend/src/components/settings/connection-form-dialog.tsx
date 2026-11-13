@@ -22,6 +22,7 @@ import {
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Connection, ConnectorTypeInfo } from '@/types/connections';
+import { TableauConnectionFields, TABLEAU_CONFIG_FIELDS } from './tableau-connection-fields';
 
 interface ConnectionFormDialogProps {
   isOpen: boolean;
@@ -56,6 +57,17 @@ const formSchema = z.object({
   database: z.string().optional(),
   default_schema: z.string().optional(),
   role: z.string().optional(),
+  // Tableau config fields
+  server_url: z.string().optional(),
+  site_content_url: z.string().optional(),
+  auth_mode: z.string().optional(),
+  client_id: z.string().optional(),
+  secret_id: z.string().optional(),
+  username: z.string().optional(),
+  pat_name: z.string().optional(),
+  secret_name: z.string().optional(),
+  ca_bundle_path: z.string().optional(),
+  default_catalog: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -74,6 +86,7 @@ const SNOWFLAKE_CONFIG_FIELDS = [
 export const CONNECTOR_CONFIG_FIELDS: Record<string, readonly string[]> = {
   bigquery: BQ_CONFIG_FIELDS,
   snowflake: SNOWFLAKE_CONFIG_FIELDS,
+  tableau: TABLEAU_CONFIG_FIELDS,
 };
 
 /**
@@ -177,6 +190,16 @@ export function ConnectionFormDialog({
         database: cfg.database || '',
         default_schema: cfg.default_schema || '',
         role: cfg.role || '',
+        server_url: cfg.server_url || '',
+        site_content_url: cfg.site_content_url || '',
+        auth_mode: cfg.auth_mode || 'connected_app',
+        client_id: cfg.client_id || '',
+        secret_id: cfg.secret_id || '',
+        username: cfg.username || '',
+        pat_name: cfg.pat_name || '',
+        secret_name: cfg.secret_name || '',
+        ca_bundle_path: cfg.ca_bundle_path || '',
+        default_catalog: cfg.default_catalog || '',
       });
     }
   }, [isOpen, initialConnection]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -226,9 +249,14 @@ export function ConnectionFormDialog({
       const response = await fetch(`/api/connections/${initialConnection.id}/test`, { method: 'POST' });
       const result = await response.json();
       if (result.healthy) {
+        const warnings: string[] = Array.isArray(result.warnings) ? result.warnings : [];
         toast({
-          title: t('settings:connectors.messages.testSuccess', 'Connection successful'),
-          description: result.project ? t('settings:connectors.messages.testSuccessProject', { project: result.project }) : undefined,
+          title: warnings.length
+            ? t('settings:connectors.messages.testSuccessWithWarnings')
+            : t('settings:connectors.messages.testSuccess', 'Connection successful'),
+          description: warnings.length
+            ? warnings.join(' ')
+            : result.project ? t('settings:connectors.messages.testSuccessProject', { project: result.project }) : undefined,
         });
       } else {
         toast({
@@ -509,6 +537,9 @@ export function ConnectionFormDialog({
                 />
               </>
             )}
+
+            {/* Tableau-specific config */}
+            {selectedType === 'tableau' && <TableauConnectionFields control={form.control} />}
 
             {/* Snowflake-specific config */}
             {selectedType === 'snowflake' && (

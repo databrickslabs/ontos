@@ -226,5 +226,30 @@
       "system": "Systèmes",
       "custom": "Personnalisé"
     }
+  },
+  "snapshot": {
+    "title": "Aperçu visuel",
+    "rlsNotice": "Un instantané du tableau de bord tel que le voit le compte de service d'Ontos. Pas en direct ; les personnes soumises à la sécurité au niveau des lignes peuvent voir d'autres chiffres.",
+    "imageAlt": "Instantané du tableau de bord",
+    "none": "Pas encore d'instantané.",
+    "thumbnailNotice": "Miniature : le dernier rendu a échoué, l'image peut être obsolète.",
+    "risksTitle": "Non capturé automatiquement : ces calculs filtrent selon l'utilisateur connecté",
+    "capturedAt": "Capturé",
+    "openLive": "Ouvrir le tableau de bord en direct",
+    "refresh": "Actualiser l'instantané",
+    "refreshFailed": "Impossible de capturer un instantané",
+    "optOut": "Ne jamais capturer d'instantanés",
+    "status": {
+      "ok": "À jour",
+      "auth_expired": "Identifiants expirés",
+      "not_connected": "Source de données non connectée",
+      "forbidden": "Aucune autorisation",
+      "empty": "Image vide",
+      "error": "Échec du rendu",
+      "opted_out": "Instantanés désactivés",
+      "skipped_user_filters": "Filtres utilisateur",
+      "unsupported": "Non pris en charge",
+      "none": "Aucun instantané"
+    }
   }
 }

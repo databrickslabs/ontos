@@ -16,6 +16,11 @@ export interface InferredSchemaObject {
     required: boolean;
     description: string;
     partitioned: boolean;
+    // Semantic models: field caption, the source column, formula and UC source columns
+    businessName?: string;
+    physicalName?: string;
+    transformLogic?: string;
+    transformSourceObjects?: string[];
   }>;
 }
 
@@ -26,7 +31,7 @@ interface InferFromAssetDialogProps {
 }
 
 const TARGET_ASSET_TYPES = [
-  'Dataset', 'Table', 'View', 'Metric View', 'Schema', 'Function', 'Metric',
+  'Dataset', 'Table', 'View', 'Metric View', 'Schema', 'Function', 'Metric', 'Semantic Model',
 ];
 
 export default function InferFromAssetDialog({

@@ -9,16 +9,18 @@ import threading
 from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from src.common.logging import get_logger
-from src.connectors.base import AssetConnector, ListAssetsOptions
+from src.connectors.base import AssetConnector, LineageLink, ListAssetsOptions
 from src.controller.connections_manager import ConnectionsManager
 from src.controller.assets_manager import AssetsManager
 from src.controller.metric_view_consistency_manager import (
     STORE_KEY as METRIC_VIEW_PROPERTY, build_stored_metric_view, store_metric_view,
 )
-from src.db_models.assets import AssetDb
+from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.connections import ConnectionDb
 from src.models.assets import (
     METRIC_VIEW_ASSET_TYPE,
@@ -97,6 +99,12 @@ _TYPE_MAP: Dict[str, tuple] = {
     UnifiedAssetType.POWERBI_DATASET.value: ("Dataset", "hasDataset"),
     UnifiedAssetType.POWERBI_DASHBOARD.value: ("Dashboard", "hasPart"),
     UnifiedAssetType.POWERBI_REPORT.value: ("Dashboard", "hasPart"),
+    # Tableau
+    UnifiedAssetType.TABLEAU_PROJECT.value: ("Folder", "hasPart"),
+    UnifiedAssetType.TABLEAU_WORKBOOK.value: ("Report", "hasPart"),
+    UnifiedAssetType.TABLEAU_DASHBOARD.value: ("Dashboard", "hasPart"),
+    UnifiedAssetType.TABLEAU_SHEET.value: ("Dashboard", "hasPart"),
+    UnifiedAssetType.TABLEAU_DATASOURCE.value: ("Semantic Model", "hasPart"),
 }
 
 # Container node types used for recursive browsing (list_containers returns
@@ -124,6 +132,9 @@ _LEAF_ASSET_TYPES = {
     UnifiedAssetType.UC_MODEL.value,
     UnifiedAssetType.SNOWFLAKE_FUNCTION.value,
     UnifiedAssetType.SNOWFLAKE_PROCEDURE.value,
+    UnifiedAssetType.TABLEAU_DASHBOARD.value,
+    UnifiedAssetType.TABLEAU_SHEET.value,
+    UnifiedAssetType.TABLEAU_DATASOURCE.value,
 }
 
 
@@ -134,9 +145,18 @@ class SchemaImportManager:
         self,
         connections_manager: ConnectionsManager,
         assets_manager: AssetsManager,
+        snapshot_manager: Optional[Any] = None,
     ):
         self._connections = connections_manager
         self._assets = assets_manager
+        self._snapshot_manager = snapshot_manager
+
+    @property
+    def _snapshots(self):
+        if self._snapshot_manager is None:
+            from src.controller.dashboard_snapshot_manager import DashboardSnapshotManager
+            self._snapshot_manager = DashboardSnapshotManager()
+        return self._snapshot_manager
 
     def _child_limit(self, db: Session) -> int:
         """Resolve the per-path child fetch limit.
@@ -457,6 +477,7 @@ class SchemaImportManager:
                     current_user_id=current_user_id,
                     _type_cache=type_cache,
                     _metadata_cache=metadata_cache,
+                    connection_id=request.connection_id,
                 )
                 created_assets[item.path] = asset_read.id
                 result.created += 1
@@ -490,87 +511,221 @@ class SchemaImportManager:
 
         for item in preview_items:
             if item.parent_path and item.parent_path in created_assets and item.path in created_assets:
-                rel_type = self._relationship_type_for(item.asset_type)
-                source_id = created_assets[item.parent_path]
-                target_id = created_assets[item.path]
-                try:
-                    self._assets.add_relationship(
-                        db,
-                        rel_in=AssetRelationshipCreate(
-                            source_asset_id=source_id,
-                            target_asset_id=target_id,
-                            relationship_type=rel_type,
-                        ),
-                        current_user_id=current_user_id,
-                    )
-                except Exception as exc:
-                    logger.debug(f"Relationship {item.parent_path} -> {item.path}: {exc}")
-
-                # Also write to entity_relationships so the detail page shows them
-                source_type = path_to_type.get(item.parent_path, "Asset")
-                target_type = path_to_type.get(item.path, "Asset")
-                try:
-                    existing = db.query(EntityRelationshipDb).filter(
-                        EntityRelationshipDb.source_type == source_type,
-                        EntityRelationshipDb.source_id == str(source_id),
-                        EntityRelationshipDb.target_type == target_type,
-                        EntityRelationshipDb.target_id == str(target_id),
-                        EntityRelationshipDb.relationship_type == rel_type,
-                    ).first()
-                    if not existing:
-                        db.add(EntityRelationshipDb(
-                            source_type=source_type,
-                            source_id=str(source_id),
-                            target_type=target_type,
-                            target_id=str(target_id),
-                            relationship_type=rel_type,
-                            created_by=current_user_id,
-                        ))
-                        db.flush()
-                except Exception as exc:
-                    logger.debug(f"Entity relationship {item.parent_path} -> {item.path}: {exc}")
+                self._write_relationship(
+                    db,
+                    source_id=created_assets[item.parent_path],
+                    source_type=path_to_type.get(item.parent_path, "Asset"),
+                    target_id=created_assets[item.path],
+                    target_type=path_to_type.get(item.path, "Asset"),
+                    rel_type=self._relationship_type_for(item.asset_type),
+                    current_user_id=current_user_id,
+                )
 
         # 4. Wire System -> top-level Catalog/Schema assets
         if system_asset_id:
             for item in preview_items:
                 if item.parent_path is None and item.path in created_assets:
-                    rel_type = self._relationship_type_for(item.asset_type)
-                    target_id = created_assets[item.path]
-                    try:
-                        self._assets.add_relationship(
-                            db,
-                            rel_in=AssetRelationshipCreate(
-                                source_asset_id=system_asset_id,
-                                target_asset_id=target_id,
-                                relationship_type=rel_type,
-                            ),
-                            current_user_id=current_user_id,
-                        )
-                    except Exception as exc:
-                        logger.debug(f"System -> {item.path} relationship: {exc}")
+                    self._write_relationship(
+                        db,
+                        source_id=system_asset_id,
+                        source_type="System",
+                        target_id=created_assets[item.path],
+                        target_type=item.asset_type,
+                        rel_type=self._relationship_type_for(item.asset_type),
+                        current_user_id=current_user_id,
+                    )
 
-                    try:
-                        existing = db.query(EntityRelationshipDb).filter(
-                            EntityRelationshipDb.source_type == "System",
-                            EntityRelationshipDb.source_id == str(system_asset_id),
-                            EntityRelationshipDb.target_type == item.asset_type,
-                            EntityRelationshipDb.target_id == str(target_id),
-                            EntityRelationshipDb.relationship_type == rel_type,
-                        ).first()
-                        if not existing:
-                            db.add(EntityRelationshipDb(
-                                source_type="System",
-                                source_id=str(system_asset_id),
-                                target_type=item.asset_type,
-                                target_id=str(target_id),
-                                relationship_type=rel_type,
-                                created_by=current_user_id,
-                            ))
-                            db.flush()
-                    except Exception as exc:
-                        logger.debug(f"Entity relationship System -> {item.path}: {exc}")
+        # 5. Lineage the connector declares (e.g. BI data source -> warehouse table)
+        self._wire_lineage(
+            db, connector, preview_items, created_assets, path_to_type, metadata_cache, result, current_user_id,
+        )
+
+        # 6. Snapshots of the dashboards the connector renders
+        self._capture_snapshots(
+            db, connector, preview_items, created_assets, metadata_cache, result, current_user_id,
+            connection_id=request.connection_id,
+        )
 
         return result
+
+    def _write_relationship(
+        self,
+        db: Session,
+        *,
+        source_id: UUID,
+        source_type: str,
+        target_id: UUID,
+        target_type: str,
+        rel_type: str,
+        current_user_id: str,
+    ) -> None:
+        """Write an asset relationship and its entity-relationship mirror (shown on detail pages)."""
+        try:
+            self._assets.add_relationship(
+                db,
+                rel_in=AssetRelationshipCreate(
+                    source_asset_id=source_id,
+                    target_asset_id=target_id,
+                    relationship_type=rel_type,
+                ),
+                current_user_id=current_user_id,
+            )
+        except Exception as exc:
+            logger.debug(f"Relationship {source_id} -{rel_type}-> {target_id}: {exc}")
+
+        try:
+            existing = db.query(EntityRelationshipDb).filter(
+                EntityRelationshipDb.source_type == source_type,
+                EntityRelationshipDb.source_id == str(source_id),
+                EntityRelationshipDb.target_type == target_type,
+                EntityRelationshipDb.target_id == str(target_id),
+                EntityRelationshipDb.relationship_type == rel_type,
+            ).first()
+            if not existing:
+                db.add(EntityRelationshipDb(
+                    source_type=source_type,
+                    source_id=str(source_id),
+                    target_type=target_type,
+                    target_id=str(target_id),
+                    relationship_type=rel_type,
+                    created_by=current_user_id,
+                ))
+                db.flush()
+        except Exception as exc:
+            logger.debug(f"Entity relationship {source_id} -{rel_type}-> {target_id}: {exc}")
+
+    def _wire_lineage(
+        self,
+        db: Session,
+        connector: AssetConnector,
+        preview_items: List[ImportPreviewItem],
+        created_assets: Dict[str, UUID],
+        path_to_type: Dict[str, str],
+        metadata_cache: Dict[str, Any],
+        result: ImportResult,
+        current_user_id: str,
+    ) -> None:
+        """Resolve the connector's lineage links to Ontos assets and write them.
+
+        Targets that are not in Ontos (e.g. a warehouse table that was never
+        imported) are reported as import warnings, not errors.
+        """
+        for item in preview_items:
+            if item.asset_type == "Column" or item.path not in created_assets:
+                continue
+            meta = metadata_cache.get(item.path)
+            if meta is None:
+                try:
+                    meta = connector.get_asset_metadata(item.path)
+                except Exception as exc:
+                    logger.debug(f"No metadata for lineage of '{item.path}': {exc}")
+                    continue
+            if meta is None:
+                continue
+            try:
+                links = _connector_hook(connector, "lineage_links", item.path, meta, default=[])
+            except Exception as exc:
+                logger.warning(f"Lineage for '{item.path}' failed: {exc}")
+                continue
+
+            for link in links:
+                source_id = created_assets.get(link.source_path)
+                if source_id is None:
+                    continue
+                target = self._resolve_lineage_target(db, connector, link, created_assets)
+                if target is None:
+                    reference = link.target_location or link.target_path
+                    result.warnings.append(
+                        f"{link.source_path}: {link.relationship_type} target '{reference}' is not in Ontos"
+                    )
+                    continue
+                target_id, target_type = target
+                self._write_relationship(
+                    db,
+                    source_id=source_id,
+                    source_type=path_to_type.get(link.source_path, "Asset"),
+                    target_id=target_id,
+                    target_type=target_type,
+                    rel_type=link.relationship_type,
+                    current_user_id=current_user_id,
+                )
+
+    def _capture_snapshots(
+        self,
+        db: Session,
+        connector: AssetConnector,
+        preview_items: List[ImportPreviewItem],
+        created_assets: Dict[str, UUID],
+        metadata_cache: Dict[str, Any],
+        result: ImportResult,
+        current_user_id: str,
+        connection_id: Optional[UUID] = None,
+    ) -> None:
+        """Capture snapshots of imported dashboards; failures are warnings and never stop the import."""
+        for item in preview_items:
+            if item.asset_type == "Column" or item.path not in created_assets:
+                continue
+            meta = metadata_cache.get(item.path)
+            if meta is None and item.asset_type == "Dashboard":
+                # Already imported earlier: its snapshot may still need a refresh
+                try:
+                    meta = connector.get_asset_metadata(item.path)
+                except Exception as exc:
+                    logger.debug(f"No metadata for snapshot of '{item.path}': {exc}")
+            if meta is None or not _connector_hook(connector, "wants_snapshot", meta, default=False):
+                continue
+            asset = asset_repo.get(db, id=created_assets[item.path])
+            if asset is None:
+                continue
+            # Assets imported earlier: current source timestamp (so changed dashboards
+            # are re-rendered) and the connection (so they can be refreshed later)
+            fresh = _connector_hook(connector, "import_properties", meta, default={}).get("source_updated_at")
+            props = dict(asset.properties or {})
+            if (fresh and props.get("source_updated_at") != fresh) or (connection_id and not props.get("connection_id")):
+                props["source_updated_at"] = fresh or props.get("source_updated_at")
+                props.setdefault("connection_id", str(connection_id) if connection_id else None)
+                asset.properties = props
+                flag_modified(asset, "properties")
+                db.flush()
+            try:
+                with db.begin_nested():
+                    state = self._snapshots.capture(db, asset=asset, connector=connector, current_user=current_user_id)
+            except Exception as exc:
+                logger.warning(f"Snapshot of '{item.path}' failed: {exc}", exc_info=True)
+                result.warnings.append(f"{item.path}: snapshot failed ({exc})")
+                continue
+            status = state.get("status")
+            if status not in ("ok", "opted_out"):
+                detail = "; ".join(state.get("risks") or []) or state.get("error") or ""
+                result.warnings.append(f"{item.path}: snapshot {status}" + (f" ({detail})" if detail else ""))
+
+    @staticmethod
+    def _resolve_lineage_target(
+        db: Session,
+        connector: AssetConnector,
+        link: LineageLink,
+        created_assets: Dict[str, UUID],
+    ) -> Optional[tuple]:
+        """(asset id, asset type name) of a link target, or None when it is not in Ontos."""
+        query = db.query(AssetDb.id, AssetTypeDb.name).join(AssetTypeDb, AssetDb.asset_type_id == AssetTypeDb.id)
+        if link.target_path:
+            if link.target_path in created_assets:
+                row = query.filter(AssetDb.id == created_assets[link.target_path]).first()
+            else:
+                row = query.filter(
+                    AssetDb.platform == connector.connector_type, AssetDb.location == link.target_path,
+                ).first()
+        elif link.target_location:
+            query = query.filter(
+                func.lower(AssetDb.location) == link.target_location.lower(),
+                AssetDb.platform != connector.connector_type,
+            )
+            if link.target_asset_types:
+                query = query.filter(AssetTypeDb.name.in_(link.target_asset_types))
+            row = query.first()
+        else:
+            row = None
+        return (row[0], row[1]) if row else None
 
     def _refresh_metric_view(
         self, db: Session, connector: AssetConnector, item: ImportPreviewItem,
@@ -887,6 +1042,7 @@ class SchemaImportManager:
         current_user_id: str,
         _type_cache: Optional[Dict[str, Any]] = None,
         _metadata_cache: Optional[Dict[str, Any]] = None,
+        connection_id: Optional[UUID] = None,
     ):
         """Create a single Ontos asset from a preview item."""
         if _type_cache is not None and item.asset_type in _type_cache:
@@ -909,6 +1065,7 @@ class SchemaImportManager:
             if col_info:
                 description = col_info.description
                 properties = {
+                    **_connector_hook(connector, "import_column_properties", col_info, default={}),
                     "data_type": col_info.data_type,
                     "logical_type": col_info.logical_type,
                     "nullable": col_info.nullable,
@@ -927,6 +1084,7 @@ class SchemaImportManager:
                     if _metadata_cache is not None:
                         _metadata_cache[item.path] = meta
                     description = meta.description
+                    properties.update(_connector_hook(connector, "import_properties", meta, default={}))
                     if meta.schema_info:
                         properties["schema"] = {
                             "column_count": meta.schema_info.column_count,
@@ -950,6 +1108,9 @@ class SchemaImportManager:
                         properties["source_tags"] = meta.tags
                     properties["source_path"] = item.path
                     properties["connector_type"] = connector.connector_type
+                    if connection_id:
+                        # Lets later actions (e.g. snapshot refresh) reach the source again
+                        properties["connection_id"] = str(connection_id)
                     if item.asset_type == METRIC_VIEW_ASSET_TYPE:
                         # The parsed spec and its measure fingerprints (#1263)
                         stored = build_stored_metric_view(
@@ -1052,7 +1213,19 @@ _DISPLAY_TYPE_MAP: Dict[str, str] = {
     UnifiedAssetType.SNOWFLAKE_MATERIALIZED_VIEW.value: "view",
     UnifiedAssetType.SNOWFLAKE_FUNCTION.value: "function",
     UnifiedAssetType.SNOWFLAKE_PROCEDURE.value: "procedure",
+    # Tableau
+    UnifiedAssetType.TABLEAU_PROJECT.value: "project",
+    UnifiedAssetType.TABLEAU_WORKBOOK.value: "workbook",
+    UnifiedAssetType.TABLEAU_DASHBOARD.value: "dashboard",
+    UnifiedAssetType.TABLEAU_SHEET.value: "sheet",
+    UnifiedAssetType.TABLEAU_DATASOURCE.value: "datasource",
 }
+
+
+def _connector_hook(connector: Any, name: str, *args: Any, default: Any) -> Any:
+    """Call an optional AssetConnector import hook; connectors without it get ``default``."""
+    hook = getattr(connector, name, None)
+    return hook(*args) if callable(hook) else default
 
 
 def _display_type(asset_type: Optional[UnifiedAssetType]) -> str:
@@ -1111,4 +1284,7 @@ def _has_children(asset_type: Optional[UnifiedAssetType]) -> bool:
         UnifiedAssetType.SNOWFLAKE_MATERIALIZED_VIEW.value,
         UnifiedAssetType.SNOWFLAKE_FUNCTION.value,
         UnifiedAssetType.SNOWFLAKE_PROCEDURE.value,
+        # Tableau: workbooks hold views, published data sources hold fields
+        UnifiedAssetType.TABLEAU_WORKBOOK.value,
+        UnifiedAssetType.TABLEAU_DATASOURCE.value,
     }

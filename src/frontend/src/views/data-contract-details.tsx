@@ -49,6 +49,7 @@ import SLAFormDialog from '@/components/data-contracts/sla-form-dialog'
 import InferFromCatalogDialog from '@/components/data-contracts/infer-from-catalog-dialog'
 import type { CatalogSchemaResult } from '@/components/data-contracts/infer-from-catalog-dialog'
 import InferFromAssetDialog from '@/components/data-contracts/infer-from-asset-dialog'
+import { inferredPropertyFields } from '@/components/data-contracts/inferred-schema'
 import type { InferredSchemaObject } from '@/components/data-contracts/infer-from-asset-dialog'
 import CreateFromContractDialog from '@/components/data-products/create-from-contract-dialog'
 import DqxSchemaSelectDialog from '@/components/data-contracts/dqx-schema-select-dialog'
@@ -1456,14 +1457,7 @@ export default function DataContractDetails() {
           physicalName: schema.physicalName,
           description: schema.description || undefined,
           physicalType: schema.physicalType || 'table',
-          properties: schema.properties.map(p => ({
-            name: p.name,
-            physicalType: p.physicalType,
-            logicalType: p.logicalType || 'string',
-            required: p.required,
-            description: p.description,
-            partitioned: p.partitioned,
-          })),
+          properties: schema.properties.map(inferredPropertyFields),
         }
         await handleAddSchema(newSchema)
       }
@@ -1495,14 +1489,7 @@ export default function DataContractDetails() {
           physicalName: schema.physicalName,
           description: schema.description || undefined,
           physicalType: schema.physicalType || 'table',
-          properties: schema.properties.map(p => ({
-            name: p.name,
-            physicalType: p.physicalType,
-            logicalType: p.logicalType || 'string',
-            required: p.required,
-            description: p.description,
-            partitioned: p.partitioned,
-          })),
+          properties: schema.properties.map(inferredPropertyFields),
         }
         await handleAddSchema(newSchema)
       }

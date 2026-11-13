@@ -83,6 +83,8 @@
         "failed": "Mislukt",
         "cancelled": "Geannuleerd"
       }
-    }
+    },
+    "warningsTitle": "Waarschuwingen ({{count}})",
+    "moreWarnings": "+{{count}} meer"
   }
 }

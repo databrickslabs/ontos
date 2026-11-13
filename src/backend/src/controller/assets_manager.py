@@ -733,6 +733,12 @@ class AssetsManager(SearchableAsset):
 
     _TABLE_LIKE_TYPES = {*PHYSICAL_TABLE_ASSET_TYPES, "Dataset"}
     _CONTAINER_TYPES = {"Schema", "Catalog"}
+    _SEMANTIC_MODEL_TYPES = {"Semantic Model"}
+    # BI field data types (Tableau Metadata API) -> ODCS logicalType
+    _BI_LOGICAL_TYPES = {
+        "STRING": "string", "INTEGER": "integer", "REAL": "number", "BOOLEAN": "boolean",
+        "DATE": "date", "DATETIME": "timestamp", "SPATIAL": "object", "TABLE": "object",
+    }
 
     def infer_schema_from_asset(
         self, db: Session, asset_id: UUID
@@ -743,6 +749,8 @@ class AssetsManager(SearchableAsset):
         - Table/View/Dataset: returns one schema object with child Column assets as properties.
         - Schema: returns one schema object per child Table/View with their columns.
         - Catalog: returns schema objects for all Table/View descendants.
+        - Semantic Model: returns one schema object with its fields as properties,
+          including formulas and the UC columns each field is derived from.
 
         Each returned dict has: name, physicalName, description, physicalType, properties.
         """
@@ -759,7 +767,61 @@ class AssetsManager(SearchableAsset):
         if type_name in self._CONTAINER_TYPES:
             return self._collect_schemas_from_container(db, db_asset, depth=2 if type_name == "Catalog" else 1)
 
+        if type_name in self._SEMANTIC_MODEL_TYPES:
+            return [self._build_semantic_model_object(db, db_asset)]
+
         return []
+
+    def _build_semantic_model_object(self, db: Session, db_asset: AssetDb) -> Dict[str, Any]:
+        """One ODCS schema object from a semantic model and its fields.
+
+        Calculated fields carry their formula as transformLogic; transformSourceObjects
+        lists the UC columns a field reads, followed through the fields its formula
+        references (which may themselves be calculated).
+        """
+        fields = self._child_column_assets(db, db_asset)
+        by_name = {f.name: f for f in fields}
+
+        def source_columns(name: str, seen: set) -> List[str]:
+            if name in seen or name not in by_name:
+                return []
+            seen.add(name)
+            props = by_name[name].properties or {}
+            refs = list(props.get("upstream_column_refs") or [])
+            for referenced in props.get("referenced_fields") or []:
+                refs.extend(source_columns(referenced, seen))
+            return refs
+
+        properties: List[Dict[str, Any]] = []
+        for field in fields:
+            props = field.properties or {}
+            data_type = props.get("tableau_data_type") or props.get("data_type") or ""
+            prop: Dict[str, Any] = {
+                "name": field.name,
+                "businessName": field.name,
+                "physicalType": data_type,
+                "logicalType": self._BI_LOGICAL_TYPES.get(str(data_type).upper()) or props.get("logical_type") or "string",
+                "required": False,
+                "description": field.description or "",
+                "partitioned": False,
+            }
+            upstream = props.get("upstream_columns") or []
+            if not props.get("is_calculated") and len(upstream) == 1:
+                prop["physicalName"] = upstream[0]
+            if props.get("formula"):
+                prop["transformLogic"] = props["formula"]
+            sources = list(dict.fromkeys(source_columns(field.name, set())))
+            if sources:
+                prop["transformSourceObjects"] = sources
+            properties.append(prop)
+
+        return {
+            "name": db_asset.name,
+            "physicalName": db_asset.location or db_asset.name,
+            "description": db_asset.description or "",
+            "physicalType": "semantic model",
+            "properties": properties,
+        }
 
     def _build_schema_object(self, db: Session, db_asset: AssetDb) -> Optional[Dict[str, Any]]:
         """Build a single ODCS schema object from a Table/View/Dataset asset."""
@@ -789,18 +851,21 @@ class AssetsManager(SearchableAsset):
             "properties": columns,
         }
 
-    def _get_child_columns(self, db: Session, db_asset: AssetDb) -> List[Dict[str, Any]]:
-        """Get Column children of a table-like asset."""
-        columns: List[Dict[str, Any]] = []
-        if not db_asset.source_relationships:
-            return columns
-
-        for rel in db_asset.source_relationships:
+    def _child_column_assets(self, db: Session, db_asset: AssetDb) -> List[AssetDb]:
+        """Column children of an asset, in relationship order."""
+        children: List[AssetDb] = []
+        for rel in db_asset.source_relationships or []:
             if rel.relationship_type != "hasColumn":
                 continue
             child = self._asset_repo.get_with_relationships(db, rel.target_asset_id)
-            if not child:
-                continue
+            if child:
+                children.append(child)
+        return children
+
+    def _get_child_columns(self, db: Session, db_asset: AssetDb) -> List[Dict[str, Any]]:
+        """Get Column children of a table-like asset."""
+        columns: List[Dict[str, Any]] = []
+        for child in self._child_column_assets(db, db_asset):
             props = child.properties or {}
             columns.append({
                 "name": child.name,

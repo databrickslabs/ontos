@@ -771,11 +771,37 @@
       "testError": "Erreur du test de connexion",
       "deleteSuccess": "Connexion supprimée",
       "testSuccessProject": "Projet : {{project}}",
-      "deleteFailed": "Échec de la suppression"
+      "deleteFailed": "Échec de la suppression",
+      "testSuccessWithWarnings": "Connecté, avec des avertissements"
     },
     "badges": {
       "system": "Système",
       "default": "Par défaut"
+    },
+    "tableau": {
+      "configTitle": "Configuration Tableau",
+      "serverUrl": "URL du serveur",
+      "serverUrlHelp": "URL du pod Tableau Cloud (comme dans le navigateur) ou URL de Tableau Server.",
+      "site": "Site",
+      "siteHelp": "URL de contenu du site, dans la barre d'adresse (…/site/<site>/…). Vide pour le site par défaut de Tableau Server.",
+      "authSectionTitle": "Authentification",
+      "authSectionHelp": "Enregistrez la valeur secrète de la Connected App (ou le secret du PAT) comme secret Unity Catalog et saisissez son nom ci-dessous. Utilisez un compte administrateur de site, sinon Tableau masque les noms de tables et de colonnes du contenu que le compte ne possède pas.",
+      "authMode": "Méthode d'authentification",
+      "authConnectedApp": "Connected App (recommandé)",
+      "authConnectedAppHelp": "Connected App en confiance directe. Ontos signe un jeton de courte durée pour l'utilisateur ci-dessous ; les sessions peuvent être simultanées.",
+      "authPat": "Jeton d'accès personnel",
+      "authPatHelp": "Pour le développement. Une nouvelle connexion avec le même jeton met fin à sa session précédente : utilisez un jeton dédié.",
+      "patName": "Nom du jeton",
+      "clientId": "ID client",
+      "secretId": "ID du secret",
+      "username": "Nom d'utilisateur",
+      "usernameHelp": "Utilisateur Tableau sous lequel la Connected App se connecte (e-mail sur Tableau Cloud).",
+      "secretName": "Secret Unity Catalog",
+      "secretNameHelp": "catalog.schema.secret. Toute personne qui parcourt ou importe a besoin de READ_SECRET dessus, de même que le principal de service de l'application pour les synchronisations planifiées.",
+      "caBundlePath": "Chemin du bundle CA",
+      "caBundlePathHelp": "Facultatif. Bundle PEM pour Tableau Server avec une autorité de certification privée.",
+      "defaultCatalog": "Catalogue par défaut",
+      "defaultCatalogHelp": "Facultatif. Catalogue Unity Catalog des tables Databricks que Tableau nomme seulement schéma.table."
     }
   },
   "schemaImporter": {

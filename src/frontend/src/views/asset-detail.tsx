@@ -35,6 +35,7 @@ import EntityQualityPanel from '@/components/quality/entity-quality-panel';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
 import AssetMetricViewCard, { mayBeMetricView } from '@/components/assets/asset-metric-view-card';
+import DashboardSnapshotCard from '@/components/assets/dashboard-snapshot-card';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
@@ -520,6 +521,14 @@ export default function AssetDetailView() {
           {mayBeMetricView(asset) && (
             <AssetMetricViewCard assetId={asset.id} assetTypeName={asset.asset_type_name} />
           )}
+
+          {/* A BI dashboard: its stored snapshot */}
+          <DashboardSnapshotCard
+            assetId={asset.id}
+            assetTypeName={asset.asset_type_name}
+            dashboardUrl={(asset.properties?.dashboardUrl as string | undefined) ?? null}
+            canWrite={canWrite}
+          />
 
           {/* Properties (non-type-specific fields) */}
           {!isBusinessTerm && <PropertiesCard properties={asset.properties} />}

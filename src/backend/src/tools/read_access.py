@@ -19,6 +19,7 @@ Teams and projects follow their REST list routes: Read-only on the feature,
 and for projects the list's visibility (``visible_project_ids``).
 """
 
+from contextlib import nullcontext
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from src.common.features import FeatureAccessLevel
@@ -141,7 +142,10 @@ def readable_contract_rows(ctx: ToolContext, rows: Iterable[Any]) -> List[Any]:
 
 def can_read_contract(ctx: ToolContext, row: Any) -> bool:
     try:
-        return bool(readable_contract_rows(ctx, [row]))
+        # The rule's lookups run in a savepoint: a failed one only denies the read,
+        # without aborting the transaction (Postgres) the tool and its audit entry use.
+        with ctx.db.begin_nested() if ctx.db is not None else nullcontext():
+            return bool(readable_contract_rows(ctx, [row]))
     except Exception:
         logger.exception("Contract read rule failed for %s; denying", getattr(row, "id", None))
         return False

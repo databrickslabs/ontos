@@ -307,6 +307,9 @@ class ServerConfig(BaseModel):
 
     # Additional properties for specific server types
     properties: Dict[str, Any] = Field(default_factory=dict)
+    # ODCS roles and customProperties of the server (lists, as in ODCS)
+    roles: Optional[List[Dict[str, Any]]] = None
+    customProperties: Optional[List[Dict[str, Any]]] = None
 
     @model_validator(mode='before')
     @classmethod
@@ -316,6 +319,9 @@ class ServerConfig(BaseModel):
             return data
         values = {name: getattr(data, name, None) for name in cls.model_fields if name != 'id'}
         values['id'] = getattr(data, 'stable_id', None)
+        from src.utils.contract_servers import json_list
+        values['roles'] = json_list(getattr(data, 'roles_json', None))
+        values['customProperties'] = json_list(getattr(data, 'custom_properties_json', None))
         return values
 
     @field_validator('properties', mode='before')

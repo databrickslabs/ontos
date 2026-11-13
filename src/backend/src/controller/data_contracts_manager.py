@@ -116,6 +116,10 @@ from src.db_models.data_contracts import (
     SchemaPropertyRelationshipDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
+from src.utils.contract_servers import (
+    json_list, json_list_text, keep_unsent_server_fields,
+    odcs_property_value as odcs_server_value, property_values as server_property_values,
+)
 from src.utils.odcs_quality_operators import (
     implementation_text, odcs_quality_check, operator_columns, tags_text,
 )
@@ -1545,17 +1549,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if server.environment:
                     server_dict['environment'] = server.environment
 
-                # Build server properties (host, port, database, etc.)
-                if hasattr(server, 'properties') and server.properties:
-                    for prop in server.properties:
-                        # Handle numeric port field
-                        if prop.key == 'port' and prop.value:
-                            try:
-                                server_dict[prop.key] = int(prop.value)
-                            except ValueError:
-                                server_dict[prop.key] = prop.value
-                        else:
-                            server_dict[prop.key] = prop.value
+                # The fields of the server's type (host, port, format, ...)
+                for prop in server.properties or []:
+                    server_dict[prop.key] = odcs_server_value(prop.key, prop.value)
+                roles = json_list(server.roles_json)
+                if roles:
+                    server_dict['roles'] = roles
+                server_custom_props = json_list(server.custom_properties_json)
+                if server_custom_props:
+                    server_dict['customProperties'] = server_custom_props
 
                 servers.append(server_dict)
             odcs['servers'] = servers
@@ -2259,32 +2261,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 server=server_data.get('server'),
                 type=server_data.get('type', ''),
                 description=server_data.get('description'),
-                environment=server_data.get('environment')
+                environment=server_data.get('environment'),
+                roles_json=json_list_text(server_data.get('roles')),
+                custom_properties_json=json_list_text(server_data.get('customProperties')),
             )
             db.add(server_db)
             db.flush()  # Get server ID for properties
-            
-            # Parse direct server properties
-            for prop_key in ['host', 'port', 'database', 'schema', 'catalog', 'project', 'account', 'region', 'location']:
-                if prop_key in server_data and server_data[prop_key] is not None:
-                    prop_db = DataContractServerPropertyDb(
-                        server_id=server_db.id,
-                        key=prop_key,
-                        value=str(server_data[prop_key])
-                    )
-                    db.add(prop_db)
-            
-            # Parse additional nested properties
-            properties_data = server_data.get('properties', {})
-            if isinstance(properties_data, dict):
-                for prop_key, prop_value in properties_data.items():
-                    if prop_value is not None:
-                        prop_db = DataContractServerPropertyDb(
-                            server_id=server_db.id,
-                            key=prop_key,
-                            value=str(prop_value)
-                        )
-                        db.add(prop_db)
+
+            # Every other field of the server's type, and the `properties` map
+            for prop_key, prop_value in server_property_values(server_data).items():
+                db.add(DataContractServerPropertyDb(
+                    server_id=server_db.id, key=prop_key, value=prop_value,
+                ))
     
     def _create_tags(self, db, contract_id: str, tags: List[str]):
         """Create tags from ODCS tags array."""
@@ -2805,15 +2793,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     # Don't fail the entire update if tags fail
             
             # Servers (the contract page sends the whole list): replace them,
-            # keeping the ODCS id of a server the payload names without one
+            # keeping the ODCS id, roles and custom properties of a server the
+            # payload names without them (the server form doesn't edit those)
             servers_data = self._servers_payload(contract_data, data_dict)
             if servers_data is not None:
-                stable_ids = {s.server: s.stable_id for s in updated.servers if s.server and s.stable_id}
+                keep_unsent_server_fields(servers_data, list(updated.servers))
                 updated.servers.clear()
                 db.flush()
-                for server in servers_data:
-                    if not server.get('id') and server.get('server') in stable_ids:
-                        server['id'] = stable_ids[server['server']]
                 self._create_servers(db, contract_id, servers_data)
 
             # SLA: ODCS slaProperties replace all of them; the SLA form's four
@@ -7289,6 +7275,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 # Create ServerConfig object
                 server_config = ServerConfig(
                     id=getattr(s, 'stable_id', None),
+                    roles=json_list(s.roles_json),
+                    customProperties=json_list(s.custom_properties_json),
                     server=s.server,
                     type=s.type,
                     description=s.description,

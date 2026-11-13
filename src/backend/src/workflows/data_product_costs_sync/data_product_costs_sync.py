@@ -1,6 +1,6 @@
 import os
 import argparse
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from pyspark.sql import SparkSession, functions as F
@@ -20,7 +20,10 @@ def month_bounds(yyyymm: str) -> tuple[date, date]:
 def main() -> None:
     print("Data Product Costs Sync workflow started")
     parser = argparse.ArgumentParser(description="Aggregate Databricks system table usage into monthly cost items")
-    parser.add_argument("--month", type=str, default=datetime.utcnow().strftime("%Y-%m"), help="Month in YYYY-MM")
+    parser.add_argument(
+        "--month", type=str, default=datetime.now(timezone.utc).strftime("%Y-%m"),
+        help="Month in YYYY-MM",
+    )
     parser.add_argument("--product_tag_key", type=str, default=os.environ.get("COSTS_PRODUCT_TAG", "data_product_id"))
     parser.add_argument("--catalog", type=str, default=os.environ.get("DATABRICKS_CATALOG"))
     parser.add_argument("--schema", type=str, default=os.environ.get("DATABRICKS_SCHEMA"))

@@ -12,7 +12,7 @@ import os
 import json
 import argparse
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from pyspark.sql import SparkSession
@@ -144,7 +144,7 @@ def create_validation_run(engine: Engine, contract_id: str) -> str:
             "id": run_id,
             "contract_id": contract_id,
             "status": "running",
-            "started_at": datetime.utcnow(),
+            "started_at": datetime.now(timezone.utc),
             "checks_passed": 0,
             "checks_failed": 0,
             "score": 0.0
@@ -182,7 +182,7 @@ def store_validation_result(
             "passed": passed,
             "message": message,
             "details_json": details_json,
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         })
         conn.commit()
 
@@ -212,7 +212,7 @@ def complete_validation_run(
         conn.execute(sql, {
             "id": run_id,
             "status": status,
-            "finished_at": datetime.utcnow(),
+            "finished_at": datetime.now(timezone.utc),
             "checks_passed": checks_passed,
             "checks_failed": checks_failed,
             "score": score,

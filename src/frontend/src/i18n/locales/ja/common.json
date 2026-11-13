@@ -475,7 +475,10 @@
     "selectRelTypePrompt": "関係の種類を選択してターゲットエンティティを検索してください",
     "createRelationship": "関係を作成",
     "relationshipCreated": "関係を作成しました",
-    "assetFallback": "アセット"
+    "assetFallback": "アセット",
+    "conceptRelationshipHint": "「{{relationship}}」は、この項目をリレーションとしてコンセプトに関連付けます。リレーションとリネージに表示されます。この項目の詳細とコンセプトページの「{{conceptSection}}」にコンセプトを表示するには、代わりに {{section}} を使用してください。",
+    "targetNotPickable": "{{type}} はここでは選択できません。専用のページで管理されます。",
+    "noAccessToTarget": "{{type}} へのアクセス権がありません。リンクするには管理者に読み取りアクセスを依頼してください。"
   },
   "assetForm": {
     "groups": {

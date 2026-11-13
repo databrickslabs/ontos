@@ -36,6 +36,7 @@ from src.models.process_workflows import (
     WorkflowExecution,
     WorkflowListResponse,
     WorkflowExecutionListResponse,
+    WorkflowValidationIssue,
     WorkflowValidationResult,
     StepTypeSchema,
     TemplateVarsResponse,
@@ -791,7 +792,27 @@ def _with_policy_errors(
     added = WorkflowValidationResult(valid=False, errors=errors)
     return WorkflowValidationResult(
         valid=False, errors=[*validation.errors, *added.errors], warnings=validation.warnings,
-        issues=[*validation.issues, *added.issues],
+        issues=[*validation.issues, *added.issues], warning_issues=validation.warning_issues,
+    )
+
+
+def _with_policy_warnings(
+    manager: WorkflowsManager, validation: WorkflowValidationResult, steps,
+) -> WorkflowValidationResult:
+    """The validation plus a warning for each policy_check step with no existing policy.
+
+    For an inactive workflow: it saves, but can't be activated until a policy is selected.
+    """
+    missing = manager.policy_reference_errors(steps)
+    if not missing:
+        return validation
+    return WorkflowValidationResult(
+        valid=validation.valid, errors=validation.errors, issues=validation.issues,
+        warnings=[*validation.warnings, *(str(m) for m in missing)],
+        warning_issues=[
+            *validation.warning_issues,
+            *(WorkflowValidationIssue(code=m.code, message=str(m), params=dict(m.params)) for m in missing),
+        ],
     )
 
 
@@ -1180,15 +1201,11 @@ async def validate_workflow(
         validation = WorkflowValidationResult(
             valid=False, errors=[*validation.errors, *added.errors],
             warnings=validation.warnings, issues=[*validation.issues, *added.issues],
+            warning_issues=validation.warning_issues,
         )
     if workflow.is_active:
         return _with_policy_errors(manager, validation, workflow.steps, True)
-    missing = manager.policy_reference_errors(workflow.steps)
-    if not missing:
-        return validation
-    return validation.model_copy(
-        update={'warnings': [*validation.warnings, *(str(m) for m in missing)]},
-    )
+    return _with_policy_warnings(manager, validation, workflow.steps)
 
 
 @router.post("/check-condition")
@@ -1218,6 +1235,7 @@ async def load_default_workflows(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     update_existing: bool = False,
+    include_edited: bool = False,
     manager: WorkflowsManager = Depends(get_workflows_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.ADMIN)),
 ) -> dict:
@@ -1225,8 +1243,10 @@ async def load_default_workflows(
     
     Query params:
         update_existing: If true, updates existing default workflows to match YAML definitions.
+            Defaults a user edited are kept and listed in ``kept_edited_names``.
+        include_edited: With update_existing, also reset the defaults a user edited.
     """
-    result = manager.load_from_yaml(update_existing=update_existing)
+    result = manager.load_from_yaml(update_existing=update_existing, include_edited=include_edited)
     
     parts = []
     if result['created'] > 0:
@@ -1235,6 +1255,8 @@ async def load_default_workflows(
         parts.append(f"updated {result['updated']}")
     if result['skipped'] > 0:
         parts.append(f"skipped {result['skipped']} (already exist)")
+    if result['kept_edited'] > 0:
+        parts.append(f"kept {result['kept_edited']} edited")
     
     message = "Workflows: " + ", ".join(parts) if parts else "No workflows to load"
     
@@ -1245,7 +1267,10 @@ async def load_default_workflows(
         feature='process-workflows',
         action='LOAD_DEFAULTS',
         success=True,
-        details={'created': result['created'], 'updated': result['updated'], 'skipped': result['skipped']}
+        details={
+            'created': result['created'], 'updated': result['updated'], 'skipped': result['skipped'],
+            'kept_edited': result['kept_edited'], 'include_edited': include_edited,
+        }
     )
     
     return {"message": message, **result}

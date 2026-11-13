@@ -257,6 +257,13 @@
       "replacementVersion": "Sostituto: {{replacementName}} (versione {{replacementVersion}})"
     }
   },
+  "complianceRun": {
+    "title": "Conformità: {{policyName}}",
+    "summary": "Policy {{policyName}}: {{failedCount}} non superati, {{passedCount}} superati.",
+    "failedEntities": "Non superati: {{names}}",
+    "passedEntities": "Superati: {{names}}",
+    "namesWithMore": "{{names}} e altri {{count}}"
+  },
   "metricViewChangeManual": {
     "title": "Applica la modifica della metric view",
     "description": "La richiesta di modifica della metric view {{fqn}} è stata approvata. Esegui questa istruzione per applicarla:\n\n{{ddl}}"
@@ -264,5 +271,8 @@
   "metricViewChangeFailed": {
     "title": "Modifica della metric view non consegnata",
     "description": "Impossibile consegnare la richiesta di modifica approvata della metric view {{fqn}}."
+  },
+  "complianceRunVisibility": {
+    "notShown": "{{count}} che non può vedere"
   }
 }

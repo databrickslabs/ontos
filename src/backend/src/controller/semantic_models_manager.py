@@ -207,6 +207,20 @@ class ReferenceCountError(Exception):
         self.count = count
 
 
+# Case-insensitive "contains" on the IRI or label. The search text is bound to
+# ?text_filter (see _text_filter_bindings), never written into the query, so
+# quotes, braces, backslashes or newlines in it can't change the query.
+_TEXT_FILTER = (
+    'FILTER(CONTAINS(LCASE(STR({subject})), LCASE(STR(?text_filter))) '
+    '|| CONTAINS(LCASE(STR(?label)), LCASE(STR(?text_filter))))'
+)
+
+
+def _text_filter_bindings(text_filter: str) -> Dict[str, Any]:
+    """The ``bindings`` for a query using ``_TEXT_FILTER`` (none for an empty text)."""
+    return {'text_filter': Literal(text_filter)} if text_filter.strip() else {}
+
+
 @searchable_asset
 class SemanticModelsManager(SearchableAsset):
     def __init__(self, db: Session, data_dir: Optional[Path] = None):
@@ -2295,13 +2309,18 @@ class SemanticModelsManager(SearchableAsset):
         self._cache[key] = CachedResult(value, ttl_seconds)
         logger.debug(f"Cached value for key: {key} (TTL: {ttl_seconds}s)")
 
-    def query(self, sparql: str, max_results: int = 1000, timeout_seconds: int = 30) -> List[dict]:
+    def query(
+        self, sparql: str, max_results: int = 1000, timeout_seconds: int = 30,
+        bindings: Optional[Dict[str, Any]] = None,
+    ) -> List[dict]:
         """Execute a SPARQL query with security and safety constraints.
         
         Args:
             sparql: The SPARQL query string
             max_results: Maximum number of results to return (default: 1000)
             timeout_seconds: Query execution timeout in seconds (default: 30)
+            bindings: Values for query variables (rdflib ``initBindings``), so
+                user input is passed as data and never spliced into the query
             
         Returns:
             List of result dictionaries
@@ -2323,7 +2342,7 @@ class SemanticModelsManager(SearchableAsset):
         try:
             # Execute with timeout (Unix-like systems only)
             with timeout(timeout_seconds):
-                qres = self._graph.query(sparql)
+                qres = self._graph.query(sparql, initBindings=bindings or {})
                 
                 # Limit results to prevent memory exhaustion
                 for idx, row in enumerate(qres):
@@ -2392,14 +2411,14 @@ class SemanticModelsManager(SearchableAsset):
             }}
             OPTIONAL {{ ?class_iri rdfs:label ?label }}
             OPTIONAL {{ ?class_iri skos:prefLabel ?label }}
-            {f'FILTER(CONTAINS(LCASE(STR(?class_iri)), LCASE("{text_filter}")) || CONTAINS(LCASE(STR(?label)), LCASE("{text_filter}")))' if text_filter.strip() else ''}
+            {_TEXT_FILTER.format(subject='?class_iri') if text_filter.strip() else ''}
         }}
         ORDER BY ?class_iri
-        LIMIT {limit}
+        LIMIT {int(limit)}
         """
         
         try:
-            raw_results = self.query(sparql_query)
+            raw_results = self.query(sparql_query, bindings=_text_filter_bindings(text_filter))
             results = []
             for row in raw_results:
                 class_iri = row.get('class_iri', '')
@@ -2511,14 +2530,14 @@ class SemanticModelsManager(SearchableAsset):
                 ?property_iri a rdfs:Property .
             }}
             OPTIONAL {{ ?property_iri rdfs:label ?label }}
-            {f'FILTER(CONTAINS(LCASE(STR(?property_iri)), LCASE("{text_filter}")) || CONTAINS(LCASE(STR(?label)), LCASE("{text_filter}")))' if text_filter.strip() else ''}
+            {_TEXT_FILTER.format(subject='?property_iri') if text_filter.strip() else ''}
         }}
         ORDER BY ?property_iri
-        LIMIT {limit}
+        LIMIT {int(limit)}
         """
 
         try:
-            raw_results = self.query(sparql_query)
+            raw_results = self.query(sparql_query, bindings=_text_filter_bindings(text_filter))
             results = []
             for row in raw_results:
                 property_iri = row.get('property_iri', '')

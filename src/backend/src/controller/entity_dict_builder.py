@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
+from src.common.ontology_type_names import canonical_type_name
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -42,9 +43,10 @@ def build_data_product_dict(db: Session, product_id: str) -> Optional[Dict[str, 
         for op in output_ports
     )
     base["contract_count"] = contract_count
-    base["has_contract"] = contract_count > 0
-    # Output ports linked to a data contract (OutputPortDb.contract_id)
+    # Output ports linked to a data contract (OutputPortDb.contract_id): the output contracts.
+    # ``contract_count`` above counts the input contracts the ports are built from.
     base["output_port_contract_count"] = sum(1 for op in output_ports if op.contract_id)
+    base["has_contract"] = base["output_port_contract_count"] > 0
 
     # Certification
     base["certification_level"] = product.certification_level or 0
@@ -134,9 +136,9 @@ def _add_relationship_counts(db: Session, d: Dict[str, Any],
         db.query(EntityRelationshipDb)
         .filter(
             or_(
-                and_(EntityRelationshipDb.source_type == entity_type,
+                and_(EntityRelationshipDb.source_type == canonical_type_name(entity_type),
                      EntityRelationshipDb.source_id == entity_id),
-                and_(EntityRelationshipDb.target_type == entity_type,
+                and_(EntityRelationshipDb.target_type == canonical_type_name(entity_type),
                      EntityRelationshipDb.target_id == entity_id),
             )
         )

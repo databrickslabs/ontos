@@ -347,6 +347,22 @@
       "fail": "Fail",
       "true": "True",
       "false": "False"
+    },
+    "checks": {
+      "button": "Check",
+      "buttonHint": "Check the workflow for problems. Warnings don't block saving.",
+      "clean": "No problems found.",
+      "errorsCount_one": "{{count}} error",
+      "errorsCount_other": "{{count}} errors",
+      "warningsCount_one": "{{count}} warning",
+      "warningsCount_other": "{{count}} warnings"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "Step \"{{step}}\" ends the workflow, so its link to \"{{target}}\" is ignored and removed on save.",
+      "conditionalBranchMissing": "Conditional \"{{step}}\" has no step on its {{branch}} branch. When the condition is {{branch}}, the workflow ends as succeeded.",
+      "unreachableSteps": "These steps can't be reached from the first step: {{steps}}.",
+      "storedEntityTypeUnknown": "The trigger lists \"{{entityType}}\", an entity type that no longer exists. It never fires for it.",
+      "storedEntityTypeUnsupported": "The {{trigger}} trigger never fires for {{entity}}."
     }
   },
   "approvalResponse": {
@@ -702,12 +718,20 @@
     "loadDefaults": {
       "menuLabel": "Default Workflows",
       "newOnly": "Load New Only",
-      "reloadAll": "Reload All Defaults"
+      "reloadAll": "Reload All Defaults",
+      "confirmTitle": "Reload all default workflows?",
+      "confirmDescription": "Each default workflow is reset to its shipped definition: description, trigger, scope, steps and their layout. Whether a workflow is active doesn't change. Defaults that you or another admin edited are kept unless you also reset them below.",
+      "includeEdited": "Also reset default workflows that were edited (their changes are lost)",
+      "confirmAction": "Reload",
+      "keptEdited": "Kept edited: {{names}}.",
+      "result": "Created {{created}}, updated {{updated}}, skipped {{skipped}}."
     },
     "badges": {
       "default": "Default",
       "approval": "Approval",
-      "process": "Process"
+      "process": "Process",
+      "triggerWarnings": "Trigger warning",
+      "triggerWarningsHint": "The trigger lists entity types that match no event. Open the workflow to see them."
     },
     "columns": {
       "steps": "Steps",

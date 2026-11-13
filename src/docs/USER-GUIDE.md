@@ -1271,6 +1271,18 @@ Link individual columns to business properties.
 - Supports data lineage and impact analysis
 - Facilitates cross-domain data discovery
 
+#### Linked Business Concepts vs. the "Has Concepts" relationship
+
+There are two ways to connect an item to a concept, stored in different places:
+
+| | Linked Business Concepts | "Has Concepts" relationship |
+|---|---|---|
+| Where you add it | The *Linked Business Concepts* field in an item's details (assets, products, contracts, domains) and on schema objects and properties | **Add Relationship** on the item's *Relationships* tab |
+| What it stores | A semantic link (item → concept IRI) | A relationship record `hasSemanticConcept` (item → concept) |
+| Where it shows | The item's details, the concept's *Linked Entities* panel, concept mapping status, search and business lineage | The item's *Relationships* tab and its lineage |
+
+Use **Linked Business Concepts** to say what an item *means*. That's the link the concept's page, search and the glossary coverage read. The "Has Concepts" relationship shows only on the item's side: the concept's page doesn't list it.
+
 ### Contract Lifecycle
 
 #### 1. Draft
@@ -2408,7 +2420,7 @@ To change the recipients, edit the **Notify Owners** step. To write your own tex
 
 #### After an Upgrade
 
-The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
+The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. Defaults that someone edited are kept unless you tick **Also reset default workflows that were edited** in the confirmation, and the active state of a workflow is never changed. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
 
 Reloading replaces changes made to the default workflows themselves; duplicate a default before editing it to keep your version.
 
@@ -3021,6 +3033,41 @@ POST /mcp
 > user**, scoped to that user's grants. External agents calling with only an
 > `X-API-Key` (no forwarded user identity) run as the app service principal, as
 > before.
+>
+> **Who the tools act for.** With a forwarded user token
+> (`x-forwarded-access-token`), the caller is the user, or service principal,
+> that `current_user.me()` returns for that token; the `X-Forwarded-Email`
+> header never names the caller. The tools then apply the caller's Ontos roles
+> like the REST API: a tool that changes data needs the feature level of the
+> matching route (and `update_data_product` changes a product's fields only for
+> its owners or a data-products admin, as `PUT /api/data-products/{id}`; each
+> product change is audited under `data-products` and fires the workflow
+> triggers of its route; each contract change is audited under
+> `data-contracts` and fires the workflow triggers of its route, and a failing
+> `before_update` workflow refuses `update_data_contract` as it refuses
+> `PUT /api/data-contracts/{id}`), and data products and
+> contracts are returned only when the
+> caller has the feature's Read-only level (data-products, data-contracts) and
+> may read them (published ones, or drafts the caller owns or administers;
+> anything else is answered as not found). `global_search` also keeps only rows
+> of the features the caller reads, like `/api/search`. The token's scopes still
+> limit which tools can be called. A request with only an `X-API-Key` has no
+> user: it gets Read-only on the features its token's scopes name
+> (`data-products:*`, `contracts:*`, `domains:*`, `teams:*`, `projects:*`,
+> `semantic:*`, `tags:*`; `*` names them all), reads published products and
+> contracts only, and its tools that change data are refused.
+> `execute_sparql_query` is for semantic-models admins only.
+>
+> **Visibility.** The search and list tools (`search_*`, `list_*`, `global_search`,
+> `find_entities_by_concept`, `list_semantic_links`) take `visibility`:
+> `published` (active and published to the marketplace, the MCP default) or
+> `readable` (everything the caller may read, the Ask Ontos default). Searches
+> also take `min_certification_level` and `include_history` (default: the newest
+> version of each product or contract). Get-by-id tools are not affected.
+>
+> **Keyless MCP** (no `X-API-Key`, keyless default token enabled) is accepted only
+> with a forwarded user token; a request that carries only `X-Forwarded-Email` or
+> `X-Forwarded-User` is refused (`-32001`) and audited as `IDENTITY_REJECTED`.
 
 #### Authentication
 

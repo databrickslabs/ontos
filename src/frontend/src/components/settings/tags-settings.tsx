@@ -167,7 +167,7 @@ export default function TagsSettings() {
   const fetchTags = useCallback(async () => {
     if (!selectedNamespace) return;
     try {
-      const response = await get<Tag[]>(`/api/tags?namespace_id=${selectedNamespace}&limit=1000`);
+      const response = await get<Tag[]>(`/api/tags?namespace_id=${selectedNamespace}`);
       if (response.data) {
         setTags(response.data);
       }
@@ -622,7 +622,7 @@ export default function TagsSettings() {
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable columns={tagColumns} data={tags} />
+              <DataTable columns={tagColumns} data={tags} storageKey="tags-settings-sort" />
             </CardContent>
           </Card>
 
@@ -646,7 +646,7 @@ export default function TagsSettings() {
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable columns={permissionColumns} data={permissions} />
+              <DataTable columns={permissionColumns} data={permissions} storageKey="permissions-settings-sort" />
             </CardContent>
           </Card>
         </>

@@ -382,6 +382,38 @@ class TestProductReadGateUsesIt:
             self._request(), db_session, _user('owner@example.com'), None, product,
         ) is False
 
+    @pytest.mark.parametrize('lookup', ['team', 'project'])
+    def test_a_failing_ownership_lookup_still_lets_the_reviewer_read(
+        self, db_session, monkeypatch, lookup,
+    ):
+        """The ownership lookups of the shared read rule (``product_read_rule``)
+        run in savepoints: a failed one denies ownership without aborting the
+        transaction (Postgres) for the reviewer check after it."""
+        from sqlalchemy import text
+
+        from src.common import product_read_rule
+        from src.controller.projects_manager import projects_manager
+        from src.routes.data_product_routes import _caller_can_read_product
+
+        def _failing_lookup(*args, **kwargs):
+            db_session.execute(text('SELECT * FROM no_such_table'))
+
+        if lookup == 'team':
+            monkeypatch.setattr(product_read_rule, 'lookup_team_ids', _failing_lookup)
+        else:
+            monkeypatch.setattr(projects_manager, 'is_user_project_member', _failing_lookup)
+        _asset_review(db_session, 'data_product')
+        db_session.flush()
+        product = SimpleNamespace(
+            id=ENTITY_ID, status='under_review', draft_owner_id='owner@example.com',
+            owner_team_id='team-1', project_id='project-1',
+        )
+
+        with postgres_aborts(db_session):
+            assert _caller_can_read_product(
+                self._request(), db_session, _user('rev@example.com'), None, product,
+            ) is True
+
     def test_a_failing_check_does_not_hide_later_rows(self, db_session, monkeypatch):
         """On Postgres a failed statement aborts the transaction: without a
         savepoint per check, every later row of the queue would fail and be hidden."""

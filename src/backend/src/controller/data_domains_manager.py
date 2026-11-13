@@ -197,7 +197,7 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
             return None
         return self._convert_db_to_read_model(db_domain, db)
 
-    def get_all_domains(self, db: Session, skip: int = 0, limit: int = 100) -> List[DataDomainRead]:
+    def get_all_domains(self, db: Session, skip: int = 0, limit: Optional[int] = None) -> List[DataDomainRead]:
         """Gets a list of all data domains, including parent name and children count."""
         logger.debug(f"Fetching all data domains with skip={skip}, limit={limit}")
         # Same as get_domain_by_id, ensure repository loads necessary data efficiently.

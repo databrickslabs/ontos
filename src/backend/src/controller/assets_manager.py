@@ -163,14 +163,14 @@ class AssetsManager(SearchableAsset):
         return self._type_to_read(db, db_type)
 
     def get_all_asset_types(
-        self, db: Session, *, skip: int = 0, limit: int = 100,
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None,
         category: Optional[str] = None, status: Optional[str] = None
     ) -> List[AssetTypeRead]:
         db_types = self._type_repo.get_multi_filtered(db, skip=skip, limit=limit, category=category, status=status)
         return [self._type_to_read(db, t) for t in db_types]
 
     def get_asset_types_summary(self, db: Session) -> List[AssetTypeSummary]:
-        db_types = self._type_repo.get_multi_filtered(db, limit=1000)
+        db_types = self._type_repo.get_multi_filtered(db)
         return [self._type_to_summary(t) for t in db_types]
 
     def update_asset_type(self, db: Session, *, type_id: UUID, type_in: AssetTypeUpdate, current_user_id: str) -> AssetTypeRead:
@@ -293,9 +293,7 @@ class AssetsManager(SearchableAsset):
         if is_admin:
             return None
         try:
-            products = data_products_manager.list_products(
-                skip=0, limit=10_000, is_admin=True,
-            )
+            products = data_products_manager.list_products(is_admin=True)
             products = [p for p in products if is_visible_consumer(p)]
         except Exception:
             logger.exception("Failed to list accessible data products for scoping")

@@ -265,14 +265,26 @@ class TestMcpUpdateTools:
     def _ctx(db_session, product_manager=None, contract_manager=None):
         from src.tools.base import ToolContext
 
+        from src.tools.base import ToolCaller
+
+        # These tests change drafts: act for an admin of both features.
+        admin = ToolCaller(email='a@b.com', auth_path='test',
+                           products_admin=True, contracts_admin=True)
         return ToolContext(
-            db=db_session, settings=MagicMock(),
+            db=db_session, settings=MagicMock(), caller=admin,
             data_products_manager=product_manager, data_contracts_manager=contract_manager,
         )
 
-    def test_a_product_status_change_is_a_transition(self, product_manager, db_session):
+    def test_a_product_status_change_is_a_transition(
+        self, product_manager, db_session, monkeypatch
+    ):
         import asyncio
+        from src.controller import audit_manager
         from src.tools.data_products import UpdateDataProductTool
+
+        # The tool's audit entry is written in its own session, whose commit
+        # would commit this test's rows on the shared in-memory connection.
+        monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
 
         pid = _product(db_session, status='draft')
         result = asyncio.run(UpdateDataProductTool().execute(
@@ -313,7 +325,12 @@ class TestMcpUpdateTools:
     def test_a_blocking_gate_stops_a_contract_status_change(self, contract_manager, db_session, monkeypatch):
         import asyncio
         from src.common import workflow_triggers
+        from src.controller import audit_manager
         from src.tools.data_contracts import UpdateDataContractTool
+
+        # The tool's audit entry is written in its own session, whose commit
+        # would commit this test's rows on the shared in-memory connection.
+        monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
 
         cid = _contract(db_session, status='draft')
         registry = MagicMock()

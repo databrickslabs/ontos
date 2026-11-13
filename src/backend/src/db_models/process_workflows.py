@@ -6,7 +6,7 @@ These are different from Databricks job workflows - these are internal process a
 """
 
 import uuid
-from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, func, TIMESTAMP, Float
+from sqlalchemy import text, Column, String, Text, Boolean, Integer, ForeignKey, func, TIMESTAMP, Float
 from sqlalchemy.orm import relationship
 
 from src.common.database import Base
@@ -38,6 +38,9 @@ class ProcessWorkflowDb(Base):
     # Status
     is_active = Column(Boolean, nullable=False, default=True)
     is_default = Column(Boolean, nullable=False, default=False)
+    # A user changed this default's definition (PUT /api/workflows/{id}); "Reload All
+    # Defaults" keeps it. Set by user updates, cleared by the default loader's reset.
+    is_customized = Column(Boolean, nullable=False, default=False, server_default=text('false'))
     
     # Version for optimistic locking
     version = Column(Integer, nullable=False, default=1)

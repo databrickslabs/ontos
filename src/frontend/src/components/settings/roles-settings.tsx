@@ -289,6 +289,7 @@ export default function RolesSettings() {
                 columns={columns}
                 data={roles}
                 searchColumn="name"
+                storageKey="roles-settings-sort"
                 toolbarActions={
                     <Button onClick={() => handleOpenDialog()} disabled={!canWrite} className="h-9">
                         <Plus className="mr-2 h-4 w-4" />

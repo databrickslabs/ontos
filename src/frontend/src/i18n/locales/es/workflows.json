@@ -347,6 +347,22 @@
       "fail": "Fallido",
       "true": "Verdadero",
       "false": "Falso"
+    },
+    "checks": {
+      "button": "Revisar",
+      "buttonHint": "Revisa el flujo de trabajo en busca de problemas. Las advertencias no impiden guardar.",
+      "clean": "No se encontraron problemas.",
+      "errorsCount_one": "{{count}} error",
+      "errorsCount_other": "{{count}} errores",
+      "warningsCount_one": "{{count}} advertencia",
+      "warningsCount_other": "{{count}} advertencias"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "El paso \"{{step}}\" finaliza el flujo, así que su enlace a \"{{target}}\" se ignora y se elimina al guardar.",
+      "conditionalBranchMissing": "La condición \"{{step}}\" no tiene ningún paso en su rama {{branch}}. Si la condición es {{branch}}, el flujo termina como correcto.",
+      "unreachableSteps": "Estos pasos no se pueden alcanzar desde el primer paso: {{steps}}.",
+      "storedEntityTypeUnknown": "El disparador incluye \"{{entityType}}\", un tipo de entidad que ya no existe. Nunca se activa para él.",
+      "storedEntityTypeUnsupported": "El disparador {{trigger}} nunca se activa para {{entity}}."
     }
   },
   "approvalResponse": {
@@ -702,12 +718,20 @@
     "loadDefaults": {
       "menuLabel": "Flujos de trabajo predeterminados",
       "newOnly": "Cargar solo los nuevos",
-      "reloadAll": "Recargar todos los predeterminados"
+      "reloadAll": "Recargar todos los predeterminados",
+      "confirmTitle": "¿Recargar todos los flujos de trabajo predeterminados?",
+      "confirmDescription": "Cada flujo de trabajo predeterminado se restablece a su definición original: descripción, disparador, ámbito, pasos y su disposición. El estado activo no cambia. Los predeterminados que usted u otro administrador editaron se conservan, salvo que también los restablezca abajo.",
+      "includeEdited": "Restablecer también los flujos predeterminados editados (se pierden sus cambios)",
+      "confirmAction": "Recargar",
+      "keptEdited": "Editados conservados: {{names}}.",
+      "result": "Creados: {{created}}, actualizados: {{updated}}, omitidos: {{skipped}}."
     },
     "badges": {
       "default": "Predeterminado",
       "approval": "Aprobación",
-      "process": "Proceso"
+      "process": "Proceso",
+      "triggerWarnings": "Aviso de disparador",
+      "triggerWarningsHint": "El disparador incluye tipos de entidad que no coinciden con ningún evento. Abra el flujo de trabajo para verlos."
     },
     "columns": {
       "steps": "Pasos",

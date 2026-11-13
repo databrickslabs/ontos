@@ -150,12 +150,16 @@ class WorkflowsManager:
         yaml_path: Optional[str] = None,
         update_existing: bool = False,
         requests_only_active: bool = False,
+        include_edited: bool = False,
     ) -> dict:
         """Load default workflows from YAML file.
         
         Args:
             yaml_path: Path to YAML file, or None to use default
-            update_existing: If True, updates existing default workflows instead of skipping
+            update_existing: If True, updates existing default workflows instead of skipping.
+                Defaults a user edited are kept (counted in ``kept_edited``) unless
+                ``include_edited`` is also True.
+            include_edited: With ``update_existing``, also reset defaults a user edited.
             requests_only_active: If True, workflows created now keep the YAML's
                 ``is_active`` only when a request starts them (``on_request_*``);
                 all others (event-driven automation, ``for_*`` UI wizards) are
@@ -163,11 +167,12 @@ class WorkflowsManager:
                 on new automatic behavior. Existing workflows are not changed.
             
         Returns:
-            Dict with counts: {'created': int, 'updated': int, 'skipped': int}
+            Dict with counts: {'created', 'updated', 'skipped', 'kept_edited'} and the
+            names of the kept edited defaults in ``kept_edited_names``.
         """
         path = Path(yaml_path) if yaml_path else self._default_workflows_path
         
-        result = {'created': 0, 'updated': 0, 'skipped': 0}
+        result = {'created': 0, 'updated': 0, 'skipped': 0, 'kept_edited': 0, 'kept_edited_names': []}
         
         if not path.exists():
             logger.warning(f"Workflows YAML not found: {path}")
@@ -187,7 +192,7 @@ class WorkflowsManager:
         # rows another process created.
         with self._defaults_lock():
             return self._load_workflows(
-                workflows_data, result, update_existing, requests_only_active
+                workflows_data, result, update_existing, requests_only_active, include_edited
             )
 
     def add_default_entity_types(self) -> int:
@@ -245,6 +250,7 @@ class WorkflowsManager:
         result: dict,
         update_existing: bool,
         requests_only_active: bool,
+        include_edited: bool = False,
     ) -> dict:
         for wf_data in workflows_data:
             try:
@@ -293,18 +299,27 @@ class WorkflowsManager:
                 existing = process_workflow_repo.get_by_name(self._db, name)
                 
                 if existing:
-                    if update_existing and existing.is_default:
-                        # Update existing default workflow
+                    if update_existing and existing.is_default and not include_edited \
+                            and existing.is_customized:
+                        # A user changed this default's definition; a reset would
+                        # silently undo that, so keep it unless asked.
+                        result['kept_edited'] += 1
+                        result['kept_edited_names'].append(name)
+                        logger.info("Kept default workflow edited by a user: %s", name)
+                    elif update_existing and existing.is_default:
+                        # Reset the definition to the YAML. Activation is the admin's
+                        # choice (startup seeds automation inactive), so it's kept.
                         wf_type = wf_data.get('workflow_type', 'process')
                         update_data = ProcessWorkflowUpdate(
                             description=wf_data.get('description'),
                             trigger=trigger,
                             scope=scope,
                             workflow_type=WorkflowType(wf_type) if isinstance(wf_type, str) else wf_type,
-                            is_active=wf_data.get('is_active', True),
                             steps=steps,
                         )
-                        process_workflow_repo.update(self._db, existing.id, update_data)
+                        process_workflow_repo.update(
+                            self._db, existing.id, update_data, updated_by='system', customized=False,
+                        )
                         result['updated'] += 1
                         logger.info(f"Updated default workflow: {name}")
                     else:
@@ -398,12 +413,13 @@ class WorkflowsManager:
         *,
         updated_by: Optional[str] = None,
     ) -> Optional[ProcessWorkflow]:
-        """Update an existing workflow."""
+        """Update an existing workflow (a user's change: marks a default as customized)."""
         db_workflow = process_workflow_repo.update(
             self._db,
             workflow_id,
             workflow,
             updated_by=updated_by,
+            customized=True,
         )
         if not db_workflow:
             return None

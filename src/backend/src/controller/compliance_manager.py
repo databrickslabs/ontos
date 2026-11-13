@@ -16,7 +16,10 @@ from src.repositories.compliance_repository import (
 )
 from ..models.compliance import CompliancePolicy, CompliancePolicyCreate, ComplianceRun, ComplianceResult
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl, parse_rule, Evaluator
-from src.common.compliance_actions import ActionExecutor, ActionContext, get_action_registry
+from src.common.compliance_actions import (
+    APP_ENTITY_TYPES, ActionContext, ActionError, ActionExecutor, get_action_registry,
+)
+from src.common.compliance_notifications import ComplianceRunNotifier
 from src.common.compliance_entities import (
     create_entity_iterator,
     parse_entity_filter,
@@ -28,6 +31,21 @@ logger = get_logger(__name__)
 
 
 TAG_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
+
+
+def _rule_actions(rule: Optional[str]) -> List[dict]:
+    if not rule:
+        return []
+    try:
+        parsed = parse_rule(rule)
+    except Exception:
+        return []
+    return (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
+
+
+def rule_sends_notifications(rule: Optional[str]) -> bool:
+    """Whether a rule has NOTIFY actions (False if it doesn't parse)."""
+    return any(action.get('type') == 'NOTIFY' for action in _rule_actions(rule))
 
 
 def rule_changes_tags(rule: Optional[str]) -> bool:
@@ -50,10 +68,15 @@ class TagsManagerTagAdapter:
     the end), and each write runs in a savepoint so a failing action is rolled
     back on its own without breaking the session for the rest of the run.
 
-    Keys are tag names in the default namespace: the DSL grammar only accepts
-    identifiers (``[A-Za-z0-9_]``), so ``namespace/name`` keys cannot be written
-    in a rule. Tags must already exist. Only Ontos entities whose tags the app
-    displays are supported; Unity Catalog objects are rejected explicitly.
+    Keys are fully qualified tag names (``namespace/name``); a bare name is a tag
+    in the default namespace. Tags must already exist. Only Ontos entities whose
+    tags the app displays are supported; Unity Catalog objects are rejected
+    explicitly.
+
+    Values: ``None`` (``ASSIGN_TAG 'k'``) assigns the key and keeps a value the
+    entity already has; ``''`` clears it; any other string sets it, and must be
+    one of the tag's ``possible_values`` when the tag defines them. Failures
+    raise ``ActionError`` with a code the run results show translated.
 
     No permission check happens here: the compliance routes require write
     access to tags (``require_tag_write_for_tag_actions``) before a policy with
@@ -61,11 +84,7 @@ class TagsManagerTagAdapter:
     """
 
     # Compliance entity type -> entity_type used by tag associations in the app
-    ENTITY_TYPES = {
-        'data_product': 'data_product',
-        'data_contract': 'data_contract',
-        'domain': 'data_domain',
-    }
+    ENTITY_TYPES = APP_ENTITY_TYPES
 
     def __init__(self, db: Session, user_email: Optional[str] = None):
         self._db = db
@@ -75,16 +94,18 @@ class TagsManagerTagAdapter:
     def _tag_entity_type(self, entity_type: str) -> str:
         mapped = self.ENTITY_TYPES.get(entity_type)
         if not mapped:
-            raise ValueError(
-                f"Tag actions are not supported for '{entity_type}' entities "
-                f"(supported: {', '.join(sorted(self.ENTITY_TYPES))})"
+            supported = ', '.join(sorted(self.ENTITY_TYPES))
+            raise ActionError(
+                'tag_entity_type_unsupported',
+                f"Tag actions are not supported for '{entity_type}' entities (supported: {supported})",
+                entityType=entity_type, supported=supported,
             )
         return mapped
 
     @staticmethod
     def _check_entity_id(entity_id: str) -> None:
         if not entity_id or entity_id == 'unknown':
-            raise ValueError("Entity has no id; tag actions need a stable entity id")
+            raise ActionError('tag_entity_without_id', "Entity has no id; tag actions need a stable entity id")
 
     def _resolve(self, key: str):
         if key not in self._tags:
@@ -93,8 +114,22 @@ class TagsManagerTagAdapter:
             self._tags[key] = tag_repo.get_by_fully_qualified_name(self._db, fqn=key)
         tag = self._tags[key]
         if not tag:
-            raise ValueError(f"Tag '{key}' not found; create it in the default tag namespace first")
+            raise ActionError(
+                'tag_not_found',
+                f"Tag '{key}' not found; create it first (a bare name is looked up in the default namespace)",
+                tag=key,
+            )
         return tag
+
+    @staticmethod
+    def _check_value(tag, key: str, value: Optional[str]) -> None:
+        allowed = [str(v) for v in (tag.possible_values or [])]
+        if value and allowed and value not in allowed:
+            raise ActionError(
+                'tag_value_not_allowed',
+                f"Value '{value}' is not allowed for tag '{key}' (allowed: {', '.join(allowed)})",
+                tag=key, value=value, allowed=', '.join(allowed),
+            )
 
     def _log_change(self, entity_type: str, entity_id: str, action: str, details: dict) -> None:
         # Same entry change_log_manager writes, without its commit.
@@ -108,12 +143,21 @@ class TagsManagerTagAdapter:
             details_json=json.dumps(details),
         ))
 
-    def assign_tag(self, entity_type: str, entity_id: str, key: str, value: str) -> None:
+    def assign_tag(self, entity_type: str, entity_id: str, key: str, value: Optional[str]) -> None:
+        from src.db_models.tags import EntityTagAssociationDb
         from src.repositories.tags_repository import entity_tag_repo
 
         tag_entity_type = self._tag_entity_type(entity_type)
         self._check_entity_id(entity_id)
         tag = self._resolve(key)
+        self._check_value(tag, key, value)
+        if value is None:
+            existing = self._db.query(EntityTagAssociationDb).filter_by(
+                entity_id=str(entity_id), entity_type=tag_entity_type, tag_id=tag.id,
+            ).first()
+            if existing:
+                # Key-only: the tag is already assigned; keep its value and assigner.
+                return
         with self._db.begin_nested():
             entity_tag_repo.add_tag_to_entity(
                 self._db,
@@ -126,7 +170,10 @@ class TagsManagerTagAdapter:
             self._log_change(tag_entity_type, entity_id, "TAG_ASSIGN", {
                 "tag": key,
                 "assigned_value": value,
-                "summary": f"Tag '{key}' assigned with value '{value}' by compliance policy",
+                "summary": (
+                    f"Tag '{key}' assigned by compliance policy" if value is None
+                    else f"Tag '{key}' assigned with value '{value}' by compliance policy"
+                ),
             })
 
     def remove_tag(self, entity_type: str, entity_id: str, key: str) -> None:
@@ -146,6 +193,26 @@ class TagsManagerTagAdapter:
                 })
         if not removed:
             logger.info(f"REMOVE_TAG {key}: tag was not assigned to {tag_entity_type} {entity_id}")
+
+
+def _action_outcomes(action_results) -> List[Dict[str, object]]:
+    """What each action did, stored on the result so the run details can show it.
+
+    Side-effect actions only (PASS / FAIL decide the result itself). A failure
+    carries its code and params, never raw exception text.
+    """
+    outcomes: List[Dict[str, object]] = []
+    for result in action_results:
+        if result.action_type in ('PASS', 'FAIL'):
+            continue
+        outcome: Dict[str, object] = {'type': result.action_type, 'success': bool(result.success)}
+        if result.target is not None:
+            outcome['target'] = result.target
+        if not result.success:
+            outcome['code'] = result.code or 'action_failed'
+            outcome['params'] = result.params or {}
+        outcomes.append(outcome)
+    return outcomes
 
 
 class ComplianceManager:
@@ -653,6 +720,22 @@ class ComplianceManager:
             raise error
         return ws
 
+    @staticmethod
+    def _flush_notifications(
+        db: Session, notifier: 'ComplianceRunNotifier', policy, *, failed: int, passed: int,
+    ) -> bool:
+        """Send the run's NOTIFY notifications. A failure is logged, doesn't fail the run,
+        and returns False so the run carries the ``notifications_failed`` warning."""
+        try:
+            with db.begin_nested():
+                notifier.flush(failed=failed, passed=passed)
+            return True
+        except Exception:
+            logger.exception(
+                "Could not create the NOTIFY notifications of policy '%s' (%s)", policy.name, policy.id,
+            )
+            return False
+
     def run_policy_inline(
         self, 
         db: Session, 
@@ -669,8 +752,12 @@ class ComplianceManager:
         run = self.create_run(db, policy_id=policy.id)
         success = 0
         failure = 0
-        # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context
+        # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context;
+        # NOTIFY collects per recipient and sends one notification when the run ends
         tag_manager = TagsManagerTagAdapter(db, user_email=current_user)
+        notifier = ComplianceRunNotifier(
+            db, policy_id=policy.id, policy_name=policy.name, run_id=run.id, run_user=current_user,
+        )
 
         try:
             # Parse the rule using enhanced DSL
@@ -704,6 +791,7 @@ class ComplianceManager:
 
                 # Execute actions
                 actions = parsed_rule.get('on_pass_actions' if ok else 'on_fail_actions', [])
+                action_outcomes = None
                 if actions:
                     action_context = ActionContext(
                         entity=obj,
@@ -714,8 +802,10 @@ class ComplianceManager:
                         passed=ok,
                         message=msg,
                         tag_manager=tag_manager,
+                        notification_manager=notifier,
                     )
                     action_results = self.action_executor.execute_actions(actions, action_context)
+                    action_outcomes = _action_outcomes(action_results)
 
                     # Use the FAIL action messages, in order, if present
                     fail_messages = [
@@ -734,7 +824,7 @@ class ComplianceManager:
                     object_name=obj.get('name'),
                     passed=bool(ok),
                     message=msg,
-                    details_json=None,
+                    details_json=json.dumps({'actions': action_outcomes}) if action_outcomes else None,
                 )
                 db.add(res)
 
@@ -743,15 +833,22 @@ class ComplianceManager:
                 else:
                     failure += 1
 
+            notified = self._flush_notifications(db, notifier, policy, failed=failure, passed=success)
+
             total = max(1, success + failure)
             score = round(100.0 * (success / total), 2)
             # A stored rule with trailing input keeps running with its tail ignored;
-            # the run says so, so the policies that need a fix can be found
+            # the run says so, so the policies that need a fix can be found. A failed
+            # notification flush is the other warning (the tail is what to fix first).
             trailing = parsed_rule.get('trailing_input')
+            warning_code, warning_params = None, None
+            if trailing:
+                warning_code, warning_params = 'rule_trailing_input', trailing
+            elif not notified:
+                warning_code, warning_params = 'notifications_failed', {}
             self.complete_run(
                 db, run, success_count=success, failure_count=failure, score=score,
-                warning_code='rule_trailing_input' if trailing else None,
-                warning_params=trailing,
+                warning_code=warning_code, warning_params=warning_params,
             )
             
             # Log to change log for timeline
@@ -772,6 +869,8 @@ class ComplianceManager:
 
         except Exception as e:
             logger.exception("Compliance inline run failed")
+            # The entities evaluated before the error stored NOTIFY as done; send those.
+            self._flush_notifications(db, notifier, policy, failed=failure, passed=success)
             from src.common.compliance_errors import run_error_code
             error_code, error_params = run_error_code(e)
             self.complete_run(

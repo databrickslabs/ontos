@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Plus, 
@@ -27,6 +28,7 @@ import {
   Play,
   Pause,
   AlertCircle,
+  AlertTriangle,
   ChevronDown,
   XCircle,
   RotateCcw,
@@ -176,6 +178,8 @@ export default function Workflows() {
   
   // Execution action states
   const [deleteExecutionDialogOpen, setDeleteExecutionDialogOpen] = useState(false);
+  const [reloadDefaultsDialogOpen, setReloadDefaultsDialogOpen] = useState(false);
+  const [reloadIncludeEdited, setReloadIncludeEdited] = useState(false);
   const [executionToDelete, setExecutionToDelete] = useState<WorkflowExecution | null>(null);
   const [isActionInProgress, setIsActionInProgress] = useState(false);
   // Preview wizard (issue #405): launched from the row-action menu on any
@@ -429,7 +433,7 @@ export default function Workflows() {
     navigate(`${pathname}/${workflow.id}`);
   };
 
-  const handleLoadDefaultWorkflows = async (updateExisting: boolean = false) => {
+  const handleLoadDefaultWorkflows = async (updateExisting: boolean = false, includeEdited: boolean = false) => {
     if (!canEdit) {
       toast({
         title: t('workflows:view.permission.denied'),
@@ -440,17 +444,31 @@ export default function Workflows() {
     }
     
     try {
-      const response = await apiPost<{ message: string; created: number; updated: number; skipped: number }>(
-        `/api/workflows/load-defaults?update_existing=${updateExisting}`,
+      const response = await apiPost<{
+        message: string; created: number; updated: number; skipped: number;
+        kept_edited?: number; kept_edited_names?: string[];
+      }>(
+        `/api/workflows/load-defaults?update_existing=${updateExisting}&include_edited=${includeEdited}`,
         {}
       );
-      if (response.data) {
+      if (response.error || !response.data) {
         toast({
-          title: t('common:toast.success'),
-          description: response.data.message,
+          title: t('common:toast.error'),
+          description: t('workflows:view.messages.loadDefaultsFailed'),
+          variant: 'destructive',
         });
-        loadWorkflows();
+        return;
       }
+      const { created, updated, skipped } = response.data;
+      const kept = response.data.kept_edited_names ?? [];
+      const summary = t('workflows:view.loadDefaults.result', { created, updated, skipped });
+      toast({
+        title: t('common:toast.success'),
+        description: kept.length > 0
+          ? `${summary} ${t('workflows:view.loadDefaults.keptEdited', { names: kept.join(', ') })}`
+          : summary,
+      });
+      loadWorkflows();
     } catch (error) {
       toast({
         title: t('common:toast.error'),
@@ -965,6 +983,16 @@ export default function Workflows() {
           {row.original.is_default && (
             <Badge variant="secondary" className="text-xs">{t('workflows:view.badges.default')}</Badge>
           )}
+          {(row.original.trigger_warnings?.length ?? 0) > 0 && (
+            <Badge
+              variant="outline"
+              className="text-xs gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30 dark:text-amber-400"
+              title={t('workflows:view.badges.triggerWarningsHint')}
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {t('workflows:view.badges.triggerWarnings')}
+            </Badge>
+          )}
           {row.original.workflow_type === 'approval' ? (
             <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">{t('workflows:view.badges.approval')}</Badge>
           ) : (
@@ -1419,7 +1447,7 @@ export default function Workflows() {
                     <Plus className="h-4 w-4 mr-2" />
                     {t('workflows:view.loadDefaults.newOnly')}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleLoadDefaultWorkflows(true)}>
+                  <DropdownMenuItem onClick={() => { setReloadIncludeEdited(false); setReloadDefaultsDialogOpen(true); }}>
                     <RotateCcw className="h-4 w-4 mr-2" />
                     {t('workflows:view.loadDefaults.reloadAll')}
                   </DropdownMenuItem>
@@ -1780,6 +1808,42 @@ export default function Workflows() {
           previewMode
         />
       )}
+
+      {/* Reload Defaults Confirmation Dialog */}
+      <Dialog open={reloadDefaultsDialogOpen} onOpenChange={setReloadDefaultsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('workflows:view.loadDefaults.confirmTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('workflows:view.loadDefaults.confirmDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-2 py-2">
+            <Checkbox
+              id="reload-include-edited"
+              checked={reloadIncludeEdited}
+              onCheckedChange={(checked) => setReloadIncludeEdited(checked === true)}
+            />
+            <label htmlFor="reload-include-edited" className="text-sm leading-snug">
+              {t('workflows:view.loadDefaults.includeEdited')}
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReloadDefaultsDialogOpen(false)}>
+              {t('common:actions.cancel')}
+            </Button>
+            <Button
+              variant={reloadIncludeEdited ? 'destructive' : 'default'}
+              onClick={() => {
+                setReloadDefaultsDialogOpen(false);
+                handleLoadDefaultWorkflows(true, reloadIncludeEdited);
+              }}
+            >
+              {t('workflows:view.loadDefaults.confirmAction')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Execution Confirmation Dialog */}
       <Dialog open={deleteExecutionDialogOpen} onOpenChange={setDeleteExecutionDialogOpen}>

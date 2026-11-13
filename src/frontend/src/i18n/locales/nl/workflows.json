@@ -347,6 +347,22 @@
       "fail": "Mislukt",
       "true": "Waar",
       "false": "Onwaar"
+    },
+    "checks": {
+      "button": "Controleren",
+      "buttonHint": "Controleert de workflow op problemen. Waarschuwingen blokkeren het opslaan niet.",
+      "clean": "Geen problemen gevonden.",
+      "errorsCount_one": "{{count}} fout",
+      "errorsCount_other": "{{count}} fouten",
+      "warningsCount_one": "{{count}} waarschuwing",
+      "warningsCount_other": "{{count}} waarschuwingen"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "Stap \"{{step}}\" beëindigt de workflow, dus de koppeling naar \"{{target}}\" wordt genegeerd en bij opslaan verwijderd.",
+      "conditionalBranchMissing": "Voorwaarde \"{{step}}\" heeft geen stap op de {{branch}}-tak. Als de voorwaarde {{branch}} is, eindigt de workflow als geslaagd.",
+      "unreachableSteps": "Deze stappen zijn niet bereikbaar vanaf de eerste stap: {{steps}}.",
+      "storedEntityTypeUnknown": "De trigger bevat \"{{entityType}}\", een entiteitstype dat niet meer bestaat. Hij wordt daarvoor nooit geactiveerd.",
+      "storedEntityTypeUnsupported": "De trigger {{trigger}} wordt nooit geactiveerd voor {{entity}}."
     }
   },
   "approvalResponse": {
@@ -702,12 +718,20 @@
     "loadDefaults": {
       "menuLabel": "Standaardworkflows",
       "newOnly": "Alleen Nieuwe Laden",
-      "reloadAll": "Alle Standaardwaarden Herladen"
+      "reloadAll": "Alle Standaardwaarden Herladen",
+      "confirmTitle": "Alle standaardworkflows opnieuw laden?",
+      "confirmDescription": "Elke standaardworkflow wordt teruggezet naar de meegeleverde definitie: beschrijving, trigger, bereik, stappen en hun indeling. Of een workflow actief is, verandert niet. Standaardworkflows die u of een andere beheerder heeft bewerkt, blijven behouden, tenzij u ze hieronder ook terugzet.",
+      "includeEdited": "Ook bewerkte standaardworkflows terugzetten (hun wijzigingen gaan verloren)",
+      "confirmAction": "Opnieuw laden",
+      "keptEdited": "Bewerkte behouden: {{names}}.",
+      "result": "Aangemaakt: {{created}}, bijgewerkt: {{updated}}, overgeslagen: {{skipped}}."
     },
     "badges": {
       "default": "Standaard",
       "approval": "Goedkeuring",
-      "process": "Proces"
+      "process": "Proces",
+      "triggerWarnings": "Triggerwaarschuwing",
+      "triggerWarningsHint": "De trigger bevat entiteitstypen die op geen enkele gebeurtenis van toepassing zijn. Open de workflow om ze te zien."
     },
     "columns": {
       "steps": "Stappen",

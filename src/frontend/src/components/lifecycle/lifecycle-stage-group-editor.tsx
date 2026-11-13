@@ -602,7 +602,7 @@ export default function LifecycleStageGroupEditor({
               {write.stages.map((s) => (
                 <span key={s.key || s.order}
                   className={cn('rounded border px-1.5 text-xs', stageColorClass(s))}>
-                  {s.label || s.key} · {categoryLabel(s.category, t)}
+                  {s.label ? stageLabel(s, t) : s.key} · {categoryLabel(s.category, t)}
                 </span>
               ))}
             </div>

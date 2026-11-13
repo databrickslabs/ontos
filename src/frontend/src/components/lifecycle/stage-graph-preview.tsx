@@ -50,7 +50,11 @@ export default function StageGraphPreview(
     s.label ? stageLabel(s, t) : s.key;
 
   return (
-    <div className="overflow-x-auto rounded-md border bg-muted/20 p-2">
+    // inline-size containment: a wide graph scrolls instead of widening its dialog
+    <div
+      className={'w-full max-w-full overflow-x-auto rounded-md border bg-muted/20 p-2 '
+        + '[contain:inline-size]'}
+    >
       <svg
         role="img"
         aria-label={t('lifecycle:editor.graphLabel')}

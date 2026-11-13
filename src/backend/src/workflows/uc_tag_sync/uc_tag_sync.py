@@ -1383,9 +1383,9 @@ def save_delivery_state(
 
     replace=True stores ``state`` as the whole record (a full run that read the previous
     state: the objects it no longer tags were cleaned up). replace=False (a partial run,
-    or a state that couldn't be read) merges ``state`` into the stored objects: the
-    objects of this run get their new record, every other object keeps its stored one.
-    If the stored state can't be read, nothing is written.
+    or a state that couldn't be read) merges ``state`` into the stored objects key by
+    key: such a run removed nothing, so every stored key stays and this run's keys are
+    added or updated. If the stored state can't be read, nothing is written.
 
     Returns an error message on failure.
 
@@ -1404,7 +1404,9 @@ def save_delivery_state(
                 stored = json.loads(row[0]).get("objects", {}) if row and row[0] else {}
                 objects = {object_type: dict(entries) for object_type, entries in stored.items()}
                 for object_type, entries in state.items():
-                    objects.setdefault(object_type, {}).update(entries)
+                    stored_objects = objects.setdefault(object_type, {})
+                    for fqn, tags in entries.items():
+                        stored_objects[fqn] = {**stored_objects.get(fqn, {}), **tags}
             payload = {"version": 1, "prefix": prefix, "objects": objects}
             # Use CURRENT_TIMESTAMP for better database compatibility
             conn.execute(

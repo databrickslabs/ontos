@@ -88,9 +88,11 @@ def job(tag_sync, monkeypatch):
         if replace:
             env.state = copied
         else:
-            # Like the real save: the objects of this run replace theirs, the rest stay.
+            # Like the real save: merged key by key, every stored key stays.
             for object_type, objects in copied.items():
-                env.state.setdefault(object_type, {}).update(objects)
+                stored = env.state.setdefault(object_type, {})
+                for fqn, tags in objects.items():
+                    stored[fqn] = {**stored.get(fqn, {}), **tags}
         return None
 
     env.real_read = tag_sync.read_delivery_state
@@ -468,7 +470,8 @@ def _stored_objects(engine):
 
 
 def test_a_save_that_does_not_replace_keeps_the_stored_objects(tag_sync):
-    """save_delivery_state(replace=False) merges this run's objects into the stored state."""
+    """save_delivery_state(replace=False) merges this run's objects into the stored state,
+    key by key: a stored key of an object this run tagged stays."""
     import sqlalchemy
 
     stored = {"version": 1, "prefix": "p", "objects": {
@@ -481,7 +484,8 @@ def test_a_save_that_does_not_replace_keeps_the_stored_objects(tag_sync):
 
     assert error is None
     assert _stored_objects(engine)["TABLE"] == {
-        OTHER: {"ontos_semantic_keep": "x"}, ORDERS: {DOMAIN_KEY: "Finance"},
+        OTHER: {"ontos_semantic_keep": "x"},
+        ORDERS: {"ontos_semantic_old": "s", DOMAIN_KEY: "Finance"},
     }
 
 
@@ -730,17 +734,21 @@ def test_two_configs_producing_the_same_key_are_reported(tag_sync, job, capsys):
 
 def test_an_unreadable_state_keeps_matching_tags_recorded(tag_sync, job, monkeypatch):
     """The state can't be read: nothing is removed, a tag that already has the desired
-    value stays recorded (merged into the stored state), other records are kept."""
+    value stays recorded (merged into the stored state), and the stored records stay,
+    also the ones of the tagged table (ontos_semantic_old, removed by a later run)."""
     _seed(job, ORDERS, {DOMAIN_KEY: "Finance", "ontos_semantic_old": "stale"})
-    job.state = {"TABLE": {OTHER: {DOMAIN_KEY: "Sales"}}}
+    job.state = {"TABLE": {OTHER: {DOMAIN_KEY: "Sales"},
+                           ORDERS: {"ontos_semantic_old": "stale"}}}
     monkeypatch.setattr(tag_sync, "read_delivery_state", lambda _engine: None)
 
     job.run([DOMAIN_CFG, SEMANTIC_CFG], [_table(tag_sync, domain="Finance")])
 
     # The schema and catalog get the aggregated tag; the table is already right.
     assert [a for a in job.assigned if a[0] == "TABLE"] == [] and job.unassigned == []
-    assert job.state["TABLE"] == {ORDERS: {DOMAIN_KEY: "Finance"},
-                                  OTHER: {DOMAIN_KEY: "Sales"}}
+    assert job.state["TABLE"] == {
+        ORDERS: {DOMAIN_KEY: "Finance", "ontos_semantic_old": "stale"},
+        OTHER: {DOMAIN_KEY: "Sales"},
+    }
 
 
 # A stored state that doesn't parse -------------------------------------------------

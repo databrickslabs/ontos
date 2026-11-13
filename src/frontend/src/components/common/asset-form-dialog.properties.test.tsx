@@ -92,4 +92,38 @@ describe('AssetFormDialog edit', () => {
       data_type: 'DATE', nullable: true, comment: 'Order day', isPrimaryKey: true,
     });
   });
+
+  it('sends an empty object when the last property is cleared', async () => {
+    const note = {
+      ...column, id: 'col-2', properties: { classification: 'internal' },
+    } as unknown as AssetRead;
+    mockGet.mockResolvedValue({
+      data: {
+        ...COLUMN_SCHEMA,
+        fields: [{
+          ...field('classification', 'classification', 13), range_type: 'string',
+          field_type: 'text',
+        }],
+      },
+    });
+    render(
+      <AssetFormDialog
+        isOpen
+        onOpenChange={vi.fn()}
+        onSuccess={vi.fn()}
+        assetTypeId="type-column"
+        assetTypeName="Column"
+        assetTypeIri="http://ontos.app/ontology#Column"
+        asset={note}
+      />,
+    );
+
+    const input = await screen.findByDisplayValue('internal');
+    await userEvent.clear(input);
+    await userEvent.click(screen.getByRole('button', { name: 'common:actions.saveChanges' }));
+
+    await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(1));
+    // null would drop the keys Ontos keeps for itself; {} clears only the public ones
+    expect(mockPut.mock.calls[0][1].properties).toEqual({});
+  });
 });

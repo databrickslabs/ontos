@@ -68,3 +68,20 @@ def test_the_column_schema_is_applied(db_session, osm):
             asset_in=AssetUpdate(properties={"data_type": "BIGINT", "isPrimaryKey": "yes"}),
             current_user_id="alice@example.com",
         )
+
+
+def test_an_edit_that_clears_every_property(db_session, osm):
+    """The dialog sends {} when the user clears the last property: it is cleared."""
+    column = AssetDb(
+        name="note", asset_type_id=_column_type(db_session).id,
+        properties={"classification": "internal"},
+    )
+    db_session.add(column)
+    db_session.flush()
+
+    updated = AssetsManager(ontology_schema_manager=osm).update_asset(
+        db_session, asset_id=column.id, asset_in=AssetUpdate(properties={}),
+        current_user_id="alice@example.com",
+    )
+
+    assert not updated.properties

@@ -164,3 +164,145 @@ class TestContractReaders:
     def test_someone_elses_personal_draft_reads_as_missing(self, client, db_session, not_admin):
         cid = _contract(db_session, 'draft', draft_owner_id='someone@example.com')
         assert client.get(f'/api/lifecycle/data_contract/{cid}').status_code == 404
+
+
+@pytest.mark.parametrize('route', ['certify', 'handle-certify'])
+def test_product_certification_needs_an_active_category_stage(client, db_session, route):
+    from src.db_models.certification_levels import CertificationLevelDb
+
+    db_session.add(CertificationLevelDb(id=uuid.uuid4(), level_order=92, name='Gold 92'))
+    db_session.commit()
+    group_id = _live_group(client, 'data_product')
+    body = {'certification_level': 92, 'approved': True}
+    live = _product(db_session, 'live', group_id)
+    assert client.post(f'/api/data-products/{live}/{route}', json=body).status_code != 409
+    intake = _product(db_session, 'intake', group_id)
+    res = client.post(f'/api/data-products/{intake}/{route}', json=body)
+    assert res.status_code == 409, res.text
+    assert 'must be active to certify' in res.text
+
+
+class TestVersioning:
+    """Edited in place in a draft stage or a review awaiting its decision;
+    versioned (the impact check runs) past them, whatever the stage keys."""
+
+    @pytest.fixture
+    def impact(self, monkeypatch):
+        from src.controller.data_contracts_manager import DataContractsManager
+        from src.controller.data_products_manager import DataProductsManager
+
+        calls = []
+
+        def analyze(self, *args, **kwargs):
+            calls.append(kwargs.get('product_id') or kwargs.get('contract_id'))
+            return {'requires_versioning': False, 'change_analysis': {}}
+
+        monkeypatch.setattr(DataProductsManager, 'analyze_update_impact', analyze)
+        monkeypatch.setattr(DataContractsManager, 'analyze_update_impact', analyze)
+        return calls
+
+    def test_a_product_update(self, client, db_session, impact):
+        group_id = _live_group(client, 'data_product')
+        for status, group, versioned in (('sandbox', None, False), ('under_review', None, False),
+                                         ('approved', None, True), ('live', group_id, True)):
+            pid = _product(db_session, status, group)
+            client.put(f'/api/data-products/{pid}', json={
+                'id': pid, 'name': 'Renamed', 'version': '1.0.0', 'status': status,
+                'apiVersion': 'v1.0.0', 'kind': 'DataProduct',
+            })
+            assert (pid in impact) is versioned, status
+
+    def test_a_contract_update(self, client, db_session, impact):
+        group_id = _live_group(client, 'data_contract')
+        for status, group, versioned in (('draft', None, False), ('proposed', None, False),
+                                         ('live', group_id, True)):
+            cid = _contract(db_session, status, group)
+            client.put(f'/api/data-contracts/{cid}', json={
+                'name': 'Renamed', 'version': '1.0.0', 'status': status,
+            })
+            assert (cid in impact) is versioned, status
+
+
+def test_cloning_for_editing_follows_the_same_rule(client, db_session):
+    from unittest.mock import MagicMock
+
+    from src.controller.data_products_manager import DataProductsManager
+
+    mgr = DataProductsManager(db=db_session, ws_client=MagicMock(),
+                              notifications_manager=MagicMock(), tags_manager=MagicMock())
+    group_id = _live_group(client, 'data_product')
+    for status, group in (('sandbox', None), ('under_review', None), ('intake', group_id)):
+        pid = _product(db_session, status, group)
+        with pytest.raises(ValueError, match='editable state'):
+            mgr.clone_product_for_editing(db_session, pid, 'u')
+
+
+def test_a_review_request_doesnt_skip_ahead_without_a_start_review_step(client, db_session):
+    # draft -> vetting (review) -> legal (review) -> active: no under_review step
+    res = client.post('/api/lifecycle-stage-groups', json={
+        'name': 'Two reviews', 'entity_type': 'data_product',
+        'stages': [_stage('draft', 'draft', 0, True), _stage('vetting', 'review', 1),
+                   _stage('legal', 'review', 2), _stage('active', 'active', 3)],
+        'transitions': [{'from_key': 'draft', 'to_key': 'vetting'},
+                        {'from_key': 'vetting', 'to_key': 'legal'},
+                        {'from_key': 'legal', 'to_key': 'active'}],
+    })
+    assert res.status_code == 201, res.text
+    pid = _product(db_session, 'draft', res.json()['id'])
+    res = client.post(f'/api/data-products/{pid}/request-review', json={})
+    assert res.status_code < 400, res.text
+    db_session.expire_all()
+    assert db_session.get(DataProductDb, pid).status == 'vetting'
+
+
+def test_the_asset_index_drops_custom_retired_stages(client, db_session, monkeypatch):
+    from contextlib import contextmanager
+
+    from src.controller import assets_manager as am
+    from src.db_models.assets import AssetDb, AssetTypeDb
+
+    group_id = _live_group(client, 'asset')
+    asset_type = AssetTypeDb(id=uuid.uuid4(), name=f'Type {uuid.uuid4().hex[:6]}')
+    db_session.add(asset_type)
+    names = {'kept_active': ('active', None), 'gone_retired': ('retired', None),
+             'kept_live': ('live', group_id), 'gone_sunset': ('sunset', group_id)}
+    for name, (status, group) in names.items():
+        db_session.add(AssetDb(id=uuid.uuid4(), name=name, asset_type_id=asset_type.id,
+                               status=status, lifecycle_stage_group_id=group))
+    db_session.commit()
+
+    @contextmanager
+    def session():
+        yield db_session
+
+    monkeypatch.setattr(am, 'get_session_factory', lambda: session)
+    indexed = {item.title for item in am.AssetsManager().get_search_index_items()}
+    assert {'kept_active', 'kept_live'} <= indexed
+    assert not indexed & {'gone_retired', 'gone_sunset'}
+
+
+def test_a_contract_on_an_output_port_may_be_in_a_custom_active_stage(client, db_session):
+    from types import SimpleNamespace
+
+    from src.common.output_port_contracts import validate_output_port_contracts
+
+    cid = _contract(db_session, 'live', _live_group(client, 'data_contract'))
+    product = SimpleNamespace(output_ports=[SimpleNamespace(name='out', contract_id=cid)])
+    validate_output_port_contracts(product, db_session)  # no error
+
+
+def test_another_users_draft_in_a_custom_first_stage_stays_hidden_on_a_cold_cache(
+    client, db_session,
+):
+    from src.common.version_visibility import not_others_personal_draft
+
+    pid = _product(db_session, 'intake', _live_group(client, 'data_product'))
+    row = db_session.get(DataProductDb, pid)
+    row.draft_owner_id = 'someone@example.com'
+    db_session.commit()
+    lifecycle_service.invalidate()  # another worker created the group
+    visible = db_session.query(DataProductDb.id).filter(
+        DataProductDb.id == pid,
+        not_others_personal_draft(DataProductDb, 'me@example.com', db_session),
+    ).all()
+    assert visible == []

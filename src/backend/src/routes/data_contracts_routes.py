@@ -1515,9 +1515,11 @@ async def update_contract(
                 )
 
         # Check if versioning is required for non-draft contracts
-        # A contract past its draft-category stages is versioned
+        # A contract that isn't edited in place (past draft and the review awaiting
+        # its decision) is versioned
         from src.controller.lifecycle_service import lifecycle_service
-        if db_obj.status and lifecycle_service.category_of(db, 'data_contract', db_obj) != 'draft':
+        if db_obj.status and \
+                not lifecycle_service.editable_in_place(db, 'data_contract', db_obj):
             # Check if caller explicitly forced the update
             force_update = request.headers.get('X-Force-Update') == 'true'
             

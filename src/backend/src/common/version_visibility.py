@@ -68,14 +68,15 @@ def is_admin_only_status(row: Any) -> bool:
     return _category(row) in _ADMIN_ONLY_CATEGORIES
 
 
-def not_others_personal_draft(model: Any, user_email: Optional[str]) -> Any:
+def not_others_personal_draft(model: Any, user_email: Optional[str], db: Any = None) -> Any:
     """SQL filter: drop another user's personal draft, keep every other row.
 
     A personal draft (tier 1) is a row in its group's first stage (``draft``) with a
     ``draft_owner_id``; only its owner sees it. The owner stamp hides no row
     in any other stage: an active or deprecated version that still carries
     another user's ``draft_owner_id`` is published and visible to everyone.
-    ``model`` is a mapped class with ``status`` and ``draft_owner_id``.
+    ``model`` is a mapped class with ``status`` and ``draft_owner_id``; ``db``
+    loads the lifecycle stage groups first (their first stages).
     """
     from sqlalchemy import not_, or_
 
@@ -86,7 +87,7 @@ def not_others_personal_draft(model: Any, user_email: Optional[str]) -> Any:
     return or_(
         model.draft_owner_id.is_(None),
         model.draft_owner_id == user_email,
-        not_(lifecycle_service.first_stage_filter(model, entity_type)),
+        not_(lifecycle_service.first_stage_filter(model, entity_type, db)),
     )
 
 

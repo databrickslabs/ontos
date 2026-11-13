@@ -795,7 +795,7 @@
     },
     "hints": {
       "deliveryMethodHint": "How this deliverable serves data to consumers (e.g., Table Access, Serving Endpoint)",
-      "onlyActiveContracts": "Only showing active/approved/certified contracts",
+      "onlyActiveContracts": "Only showing active/approved contracts",
       "containsPiiHint": "Does this deliverable contain personally identifiable information?",
       "autoApproveHint": "Automatically approve access requests for this deliverable?",
       "afterCreation": "After creating this deliverable, you can link assets (tables, views, datasets, etc.) to it from the detail page."

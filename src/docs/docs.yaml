@@ -11,6 +11,8 @@
 #   title: Display title for the document
 #   description: Brief description of what the document covers
 #   category: Optional category for grouping (user-guide, reference, tutorial, etc.)
+#   release_note_fragments: Optional folder (relative to src/docs/) of release-note
+#     fragments; they are merged into the document's Unreleased block when it is served
 
 documents:
   user-guide:
@@ -48,6 +50,7 @@ documents:
     title: Release Notes
     description: Version history and changelog for Ontos
     category: reference
+    release_note_fragments: release-notes/unreleased
 
 # Future document examples (uncomment and modify as needed):
 #

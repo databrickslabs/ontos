@@ -7,7 +7,9 @@ import pytest
 from fastapi import FastAPI, Request
 
 from src.common.errors import ValidationError
-from src.controller.asset_bulk_manager import AssetBulkManager, ImportAction, ImportResult, ImportResultItem
+from src.controller.asset_bulk_manager import (
+    AssetBulkManager, ImportAction, ImportResult, ImportResultItem,
+)
 from src.controller.assets_manager import AssetsManager, assets_manager as singleton
 from src.routes import asset_bulk_routes
 
@@ -31,6 +33,13 @@ def test_bulk_manager_gets_the_startup_assets_manager():
 
 def test_bulk_manager_without_request_falls_back_to_singleton():
     assert asset_bulk_routes.get_bulk_manager()._assets_manager is singleton
+
+
+BAD_PROPERTIES_CSV = b'name,asset_type,properties\nfoo,table,"{""owner"": 5}"\n'
+
+
+def _created_item():
+    return ImportResultItem(row=1, action=ImportAction.CREATE, asset_id=ASSET_ID)
 
 
 def _create_manager():
@@ -92,7 +101,7 @@ def test_index_committed_import_does_not_raise_when_indexing_fails():
     wired = MagicMock(spec=AssetsManager)
     wired.upsert_search_index_for.side_effect = RuntimeError("index down")
     manager = AssetBulkManager(assets_manager=wired)
-    result = ImportResult(items=[ImportResultItem(row=1, action=ImportAction.CREATE, asset_id=ASSET_ID)])
+    result = ImportResult(items=[_created_item()])
 
     manager.index_committed_import(MagicMock(), result)
 
@@ -101,7 +110,7 @@ def test_index_committed_import_does_not_raise_when_indexing_fails():
 
 def test_bulk_manager_without_assets_manager_skips_indexing():
     AssetBulkManager().index_committed_import(
-        MagicMock(), ImportResult(items=[ImportResultItem(row=1, action=ImportAction.CREATE, asset_id=ASSET_ID)]),
+        MagicMock(), ImportResult(items=[_created_item()]),
     )
 
 
@@ -140,7 +149,7 @@ def test_bulk_import_row_that_violates_the_type_schema_is_an_error():
         "Asset properties validation failed for type 'table': 5 is not of type 'string'",
     )
 
-    result = _run_create(wired, manager, created, csv_bytes=b'name,asset_type,properties\nfoo,table,"{""owner"": 5}"\n')
+    result = _run_create(wired, manager, created, csv_bytes=BAD_PROPERTIES_CSV)
 
     assert (result.created, result.errors) == (0, 1), result.items
     assert "validation failed" in result.items[0].message
@@ -156,7 +165,7 @@ def test_bulk_preview_flags_row_that_violates_the_type_schema():
     with patch.object(manager, "_resolve_asset_types", return_value={"table": ASSET_ID}), \
          patch.object(manager._asset_repo, "get_by_identity", return_value=None):
         preview = manager.preview_import(
-            db, file_bytes=b'name,asset_type,properties\nfoo,table,"{""owner"": 5}"\n', filename="a.csv",
+            db, file_bytes=BAD_PROPERTIES_CSV, filename="a.csv",
         )
 
     assert preview.errors == 1 and preview.will_create == 0, preview.items

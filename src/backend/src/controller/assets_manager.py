@@ -755,7 +755,9 @@ class AssetsManager(SearchableAsset):
         )
         items = []
         for a in assets:
-            item = self._build_search_index_item(a, preloaded_domains=domains_map.get(str(a.id), []))
+            item = self._build_search_index_item(
+                a, preloaded_domains=domains_map.get(str(a.id), []),
+            )
             if item is not None:
                 items.append(item)
         self._notify_index_upsert_many(items)

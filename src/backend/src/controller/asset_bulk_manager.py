@@ -155,10 +155,13 @@ class AssetBulkManager:
         self._rel_repo = asset_relationship_repo
         logger.debug("AssetBulkManager initialized.")
 
-    def _validate_row_properties(self, db: Session, type_id: UUID, properties: Optional[Dict[str, Any]]) -> None:
+    def _validate_row_properties(
+        self, db: Session, type_id: UUID, properties: Optional[Dict[str, Any]],
+    ) -> None:
         """Check a row's properties against the type's JSON schema, as POST/PUT /api/assets do.
 
-        Needs the wired AssetsManager (it carries the ontology); without one there is nothing to check.
+        Needs the wired AssetsManager (it carries the ontology); without one
+        there is nothing to check.
         Raises ValidationError (422) on a violation.
         """
         if self._assets_manager is None or not properties:
@@ -184,7 +187,9 @@ class AssetBulkManager:
         try:
             self._assets_manager.upsert_search_index_for(db, asset_ids)
         except Exception:
-            logger.warning("Failed to index %d assets after bulk import", len(asset_ids), exc_info=True)
+            logger.warning(
+                "Failed to index %d assets after bulk import", len(asset_ids), exc_info=True,
+            )
 
     def _set_asset_domains(self, db, asset_id, domain_ids, primary_domain_id, user):
         """Replace an asset's domain assignments from a bulk-import row (no-op if empty)."""

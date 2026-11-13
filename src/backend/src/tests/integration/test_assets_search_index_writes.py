@@ -18,7 +18,9 @@ from src.db_models.assets import AssetDb, AssetTypeDb
 from src.models.assets import AssetCreate
 from src.models.users import UserInfo
 
-USER = UserInfo(username="tester", email="tester@example.com", user="tester", ip=None, groups=["users"])
+USER = UserInfo(
+    username="tester", email="tester@example.com", user="tester", ip=None, groups=["users"],
+)
 
 
 @pytest.fixture
@@ -62,7 +64,9 @@ def _create(wired, db, asset_type, name, properties=None):
     )
 
 
-def test_created_asset_is_searchable_without_rebuild(db_session, asset_type, wired, search_manager, auth):
+def test_created_asset_is_searchable_without_rebuild(
+    db_session, asset_type, wired, search_manager, auth,
+):
     name = f"orders-{uuid.uuid4().hex[:8]}"
 
     created = _create(wired, db_session, asset_type, name)
@@ -80,9 +84,12 @@ def test_deleted_asset_has_no_search_hit(db_session, asset_type, wired, search_m
     assert f"asset::{created.id}" not in _hits(search_manager, auth, name)
 
 
-def test_bulk_import_batch_index_reaches_search_after_commit(db_session, asset_type, wired, search_manager, auth):
+def test_bulk_import_batch_index_reaches_search_after_commit(
+    db_session, asset_type, wired, search_manager, auth,
+):
     names = [f"bulk-{uuid.uuid4().hex[:8]}" for _ in range(2)]
-    csv_bytes = ("name,asset_type\n" + "\n".join(f"{n},{asset_type.name}" for n in names) + "\n").encode()
+    rows = "\n".join(f"{n},{asset_type.name}" for n in names)
+    csv_bytes = f"name,asset_type\n{rows}\n".encode()
     bulk = AssetBulkManager(assets_manager=wired)
 
     result = bulk.execute_import(db_session, file_bytes=csv_bytes, filename="a.csv",
@@ -95,7 +102,9 @@ def test_bulk_import_batch_index_reaches_search_after_commit(db_session, asset_t
         assert any(hit.startswith("asset::") for hit in _hits(search_manager, auth, name))
 
 
-def test_import_that_does_not_commit_leaves_no_index_entries(db_session, asset_type, wired, search_manager, auth):
+def test_import_that_does_not_commit_leaves_no_index_entries(
+    db_session, asset_type, wired, search_manager, auth,
+):
     name = f"ghost-{uuid.uuid4().hex[:8]}"
     csv_bytes = f"name,asset_type\n{name},{asset_type.name}\n".encode()
     bulk = AssetBulkManager(assets_manager=wired)
@@ -109,7 +118,9 @@ def test_import_that_does_not_commit_leaves_no_index_entries(db_session, asset_t
     assert _hits(search_manager, auth, name) == []
 
 
-def test_schema_violation_is_422_on_single_write_and_row_error_in_bulk(db_session, asset_type, wired):
+def test_schema_violation_is_422_on_single_write_and_row_error_in_bulk(
+    db_session, asset_type, wired,
+):
     schema_def = MagicMock()
     schema_def.json_schema = {"type": "object", "properties": {"owner": {"type": "string"}}}
     wired._ontology = MagicMock()

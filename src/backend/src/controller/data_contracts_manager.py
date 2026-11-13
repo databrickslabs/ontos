@@ -6912,11 +6912,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         doesn't hide a row in any other status: an active or deprecated contract
         that still carries it is published, and readable by everyone.
         """
-        status = (contract.status or "").strip().lower()
-        # The first stage of a lifecycle (``draft`` by default), as the SQL
+        # The first stage of its lifecycle (``draft`` by default), as the SQL
         # filter ``not_others_personal_draft`` judges it
         return (
-            status in lifecycle_service.initial_keys_anywhere()
+            lifecycle_service.first_stage_of_row(contract, 'data_contract')
             and bool(contract.draft_owner_id)
             and contract.draft_owner_id != caller_email
         )

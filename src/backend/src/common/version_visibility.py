@@ -71,23 +71,30 @@ def is_admin_only_status(row: Any) -> bool:
 def not_others_personal_draft(model: Any, user_email: Optional[str]) -> Any:
     """SQL filter: drop another user's personal draft, keep every other row.
 
-    A personal draft (tier 1) is a row in a first stage (``draft``) with a
+    A personal draft (tier 1) is a row in its group's first stage (``draft``) with a
     ``draft_owner_id``; only its owner sees it. The owner stamp hides no row
     in any other stage: an active or deprecated version that still carries
     another user's ``draft_owner_id`` is published and visible to everyone.
     ``model`` is a mapped class with ``status`` and ``draft_owner_id``.
     """
-    from sqlalchemy import func, or_
+    from sqlalchemy import not_, or_
 
     from src.controller.lifecycle_service import lifecycle_service
 
-    # Personal drafts start in a group's first stage (``draft`` by default)
-    draft_keys = sorted(lifecycle_service.initial_keys_anywhere())
+    # Personal drafts are in their own group's first stage (``draft`` by default)
+    entity_type = _ENTITY_TYPES_BY_TABLE.get(getattr(model, "__tablename__", ""), "data_product")
     return or_(
         model.draft_owner_id.is_(None),
         model.draft_owner_id == user_email,
-        func.lower(func.trim(func.coalesce(model.status, ""))).notin_(draft_keys),
+        not_(lifecycle_service.first_stage_filter(model, entity_type)),
     )
+
+
+_ENTITY_TYPES_BY_TABLE = {
+    "data_products": "data_product",
+    "data_contracts": "data_contract",
+    "assets": "asset",
+}
 
 
 def compute_rank(row: Any, *, has_elevated_access: bool) -> tuple:
@@ -106,9 +113,12 @@ def compute_rank(row: Any, *, has_elevated_access: bool) -> tuple:
     # have been filtered out already; this just guarantees deterministic
     # ordering rather than a KeyError. Within a category, stage order
     # (proposed before under_review before approved).
-    status_rank = (
-        table.get(_category(row) or "", 999), lifecycle_service.stage_order_of_row(row),
-    )
+    category_rank = table.get(_category(row) or "", 999)
+    if has_elevated_access and lifecycle_service.is_side_draft_stage(row):
+        # A draft-category side stage (``sandbox``) ranks below every other
+        # stage, as before stage groups: the family shows its main line
+        category_rank = 999
+    status_rank = (category_rank, lifecycle_service.stage_order_of_row(row))
 
     created_at = getattr(row, "created_at", None)
     # Negate the epoch so DESC sort falls out of a plain ascending key.

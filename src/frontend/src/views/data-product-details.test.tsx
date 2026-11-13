@@ -9,6 +9,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  IN_PLACE_EDITABLE_STATUSES,
   PORT_TO_ASSET_PREDICATE,
   selectPortAssetPredicate,
   buildLinkAssetRequestBody,
@@ -272,8 +273,20 @@ describe('formatDateString', () => {
   });
 });
 
+describe('IN_PLACE_EDITABLE_STATUSES', () => {
+  it('contains exactly the lifecycle statuses where in-place editing is allowed', () => {
+    expect(IN_PLACE_EDITABLE_STATUSES).toEqual([
+      'draft',
+      'sandbox',
+      'proposed',
+      'under_review',
+      'approved',
+    ]);
+  });
+});
+
 describe('isStatusEditableInPlace', () => {
-  it.each(['draft', 'sandbox', 'proposed', 'under_review'])(
+  it.each(['draft', 'sandbox', 'proposed', 'under_review', 'approved'])(
     "%s is editable in place",
     (status) => {
       expect(isStatusEditableInPlace(status)).toBe(true);
@@ -291,11 +304,11 @@ describe('isStatusEditableInPlace', () => {
     expect(isStatusEditableInPlace('ideation', 'draft')).toBe(true);
     expect(isStatusEditableInPlace('live', 'active')).toBe(false);
     expect(isStatusEditableInPlace('needs_review')).toBe(false);
-    // The approve action's review stage is past the decision, as in the backend
-    expect(isStatusEditableInPlace('approved', 'review')).toBe(false);
+    // Today's rule: any review stage, approved included
+    expect(isStatusEditableInPlace('approved', 'review')).toBe(true);
   });
 
-  it.each(['approved', 'active', 'retired', 'deprecated'])(
+  it.each(['active', 'retired', 'deprecated'])(
     "'%s' is NOT editable in place (must be cloned)",
     (status) => {
       expect(isStatusEditableInPlace(status)).toBe(false);

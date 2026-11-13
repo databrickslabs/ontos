@@ -65,7 +65,7 @@ import CertificationBadge from '@/components/common/certification-badge';
 import PublicationScopeBadge from '@/components/common/publication-scope-badge';
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs';
 import EntityLifecycleStatus from '@/components/lifecycle/entity-lifecycle-status';
-import { awaitsReviewDecision, categoryOf, isActiveStage } from '@/lib/lifecycle-stages';
+import { isActiveStage } from '@/lib/lifecycle-stages';
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle';
 import { userHasApprovalPrivilege } from '@/lib/permissions';
 import { ApprovalEntity } from '@/types/settings';
@@ -149,19 +149,31 @@ export function formatDateString(dateString: string | undefined | null, fallback
 }
 
 /**
- * Whether a Data Product is edited in place: a draft-category stage, or a review
- * stage that still awaits its decision (draft, sandbox, proposed, under_review
- * by default), the backend's `editable_in_place`. Any later stage is cloned
- * for editing. `category` is the product's `statusCategory`; without it the
- * seeded keys decide.
+ * Statuses where a Data Product can still be edited in-place (the seeded
+ * draft and review stages). Anything with a higher lifecycle status
+ * (`active`, `retired`, `deprecated`) must be cloned for editing instead; the
+ * update route asks to confirm a breaking change from `under_review` on.
+ */
+export const IN_PLACE_EDITABLE_STATUSES: ReadonlyArray<string> = [
+  'draft',
+  'sandbox',
+  'proposed',
+  'under_review',
+  'approved',
+];
+
+/**
+ * Whether a Data Product is edited in place: a draft- or review-category
+ * stage (`category` is the product's `statusCategory`); without it, the
+ * seeded statuses above.
  */
 export function isStatusEditableInPlace(
   status: string | undefined | null,
   category?: string | null,
 ): boolean {
   if (!status) return false;
-  const row = { status, statusCategory: category };
-  return categoryOf(row) === 'draft' || awaitsReviewDecision(row);
+  if (category) return category === 'draft' || category === 'review';
+  return IN_PLACE_EDITABLE_STATUSES.includes(status.toLowerCase());
 }
 
 /**

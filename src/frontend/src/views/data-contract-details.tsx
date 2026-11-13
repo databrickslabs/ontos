@@ -71,18 +71,14 @@ import PublicationScopeBadge from '@/components/common/publication-scope-badge'
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs'
 import EntityLifecycleStatus from '@/components/lifecycle/entity-lifecycle-status'
 import {
-  awaitsReviewDecision, categoryOf, isActiveStage, isContractPublishable, type LifecycleRow,
+  awaitsReviewDecision, contractEditableInPlace, isActiveStage, isContractPublishable,
 } from '@/lib/lifecycle-stages'
+import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups'
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error'
 
-// Editable in place: a draft-category stage, or a review stage that still
-// awaits its decision (draft / proposed / under_review by default); later
-// stages are versioned (src.controller.lifecycle_service categories)
-const isEditableInPlace = (contract: LifecycleRow) =>
-  categoryOf(contract) === 'draft' || awaitsReviewDecision(contract)
 
 // View mode for filtering contract details sections
 type ViewMode = 'minimal' | 'medium' | 'large'
@@ -313,7 +309,11 @@ export default function DataContractDetails() {
 
   // Computed properties for status-based editability
   // Admins bypass status restrictions; others need draft/proposed
-  const canEditInPlace = isContractAdmin || !!(contract?.status && isEditableInPlace(contract))
+  // Editable in place in a draft stage or the stage submit-review reaches (draft /
+  // proposed by default), the backend's editable_in_place
+  const { groups: contractGroups } = useLifecycleStageGroups('data_contract')
+  const canEditInPlace = isContractAdmin
+    || !!(contract?.status && contractEditableInPlace(contract, contractGroups))
   // Personal drafts are editable since they have draft status
   const isPersonalDraft = contract?.draftOwnerId != null
   // Contract is read-only if it's not editable and not a personal draft

@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Download, Upload, CheckCircle, AlertCircle, FileJson } from 'lucide-react';
-import type { DataProduct } from '@/types/data-product';
+import { DataProductStatus, type DataProduct } from '@/types/data-product';
 
 interface ImportExportDialogProps {
   isOpen: boolean;
@@ -51,8 +51,8 @@ export default function ImportExportDialog({
       errors.push(`Invalid kind: ${data.kind}. Must be 'DataProduct'`);
     }
 
-    // Validate status enum
-    const validStatuses = ['proposed', 'draft', 'active', 'deprecated', 'retired'];
+    // Validate status enum: every status an Ontos export carries
+    const validStatuses: string[] = Object.values(DataProductStatus);
     if (data.status && !validStatuses.includes(data.status.toLowerCase())) {
       errors.push(`Invalid status: ${data.status}. Must be one of: ${validStatuses.join(', ')}`);
     }

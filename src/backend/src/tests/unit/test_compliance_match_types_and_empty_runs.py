@@ -22,6 +22,7 @@ from unittest.mock import patch
 import pytest
 
 import src.workflows.compliance_checks.compliance_checks as job
+from src.common import compliance_entities
 from src.common.compliance_entities import (
     AppEntityLoader,
     UnityCatalogLoader,
@@ -31,6 +32,7 @@ from src.common.compliance_entities import (
 )
 from src.controller.compliance_manager import ComplianceManager
 from src.db_models.compliance import CompliancePolicyDb, ComplianceResultDb
+from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
 from src.db_models.data_products import DataProductDb
 from src.routes import compliance_routes
 
@@ -64,7 +66,7 @@ def test_known_types_are_matched_ignoring_case_and_underscores(written, canonica
 
 @pytest.mark.parametrize('written', ['Dataset', 'Product', 'GlossaryTerm', 'glossary_term'])
 def test_unknown_types_stay_unknown(written):
-    # No aliases: only the spelling of a loaded type is normalized
+    # Only the spelling of a loaded type is normalized (and data_asset_review, below)
     entity_types = parse_entity_filter(f"MATCH (x:{written}) ASSERT x.name != ''").entity_types
     known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
     assert entity_types == [written.lower()]
@@ -85,6 +87,23 @@ def test_the_validator_still_flags_an_unknown_type_as_written():
     [warning] = validate_rule("MATCH (d:Dataset) ASSERT d.name != ''")
     assert warning['code'] == 'unsupported_match_type'
     assert warning['params']['type'] == 'Dataset'
+
+
+def test_no_two_known_types_share_a_key():
+    # Types are looked up ignoring case and underscores: two loaded types with the same
+    # key would make one of them unreachable
+    known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
+    assert len(compliance_entities._LOADED_TYPES_BY_KEY) == len(known)
+    # and an alias doesn't hide a loaded type
+    aliases = {compliance_entities._type_key(a) for a in compliance_entities._TYPE_ALIASES}
+    assert not aliases & set(compliance_entities._LOADED_TYPES_BY_KEY)
+
+
+@pytest.mark.parametrize('written', ['data_asset_review', 'DataAssetReview'])
+def test_the_workflow_name_of_reviews_names_reviews(written):
+    # Workflows call the type data_asset_review; runs and gates resolve it the same way
+    assert normalize_match_type(written) == 'review'
+    assert validate_rule(f"MATCH (r:{written}) ASSERT r.status = 'approved'") == []
 
 
 @pytest.fixture
@@ -123,6 +142,19 @@ def test_a_camel_case_rule_evaluates_and_fires_its_on_fail(db_session, product):
     assert (run.success_count, run.failure_count) == (0, 1)
     assert results[product.id].passed is False
     assert results[product.id].message == 'Product is not active'
+    assert compliance_routes._run_codes(run)['warning_code'] is None
+
+
+def test_a_run_on_the_workflow_name_of_reviews_evaluates_reviews(db_session):
+    review = DataAssetReviewRequestDb(
+        requester_email='r@example.com', reviewer_email='s@example.com', status='queued',
+    )
+    db_session.add(review)
+    db_session.flush()
+
+    run, results = _run(db_session, "MATCH (r:data_asset_review) ASSERT r.status = 'approved'")
+
+    assert results[review.id].passed is False
     assert compliance_routes._run_codes(run)['warning_code'] is None
 
 

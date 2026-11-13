@@ -111,4 +111,18 @@ describe('AssetFormDialog lifecycle', () => {
     // No group picker on an existing asset: its group changes with "Change lifecycle"
     expect(selectWith('g-certified')).toBeUndefined();
   });
+
+  it('keeps an edited asset’s status on offer when its lifecycle can’t be read', async () => {
+    mockGet.mockImplementation(async (url: string) => url.startsWith('/api/lifecycle/')
+      ? { data: null, error: 'Not found' } : { data: GROUPS });
+    renderWithProviders(
+      <AssetFormDialog isOpen onOpenChange={vi.fn()} onSuccess={vi.fn()}
+        assetTypeId="t1" assetTypeName="Table"
+        asset={{ id: 'a1', name: 'orders', status: 'legacy', asset_type_id: 't1',
+          relationships: [], created_at: '', updated_at: '' } as any} />,
+    );
+
+    await waitFor(() => expect(selectWith('legacy')).toBeDefined());
+    expect(selectWith('legacy')!.value).toBe('legacy');
+  });
 });

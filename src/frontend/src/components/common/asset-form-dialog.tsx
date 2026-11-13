@@ -98,6 +98,7 @@ export function AssetFormDialog({
   const [groupId, setGroupId] = useState<string | null>(null);
   const statusOptions = useStatusOptions('asset', {
     entityId: isEdit ? asset?.id : null, groupId: isEdit ? null : groupId, enabled: isOpen,
+    currentStatus: isEdit ? asset?.status : null,
   });
   const initialKey = statusOptions.initial?.key;
   // A new asset starts in the default group; only when the dialog opens, so a

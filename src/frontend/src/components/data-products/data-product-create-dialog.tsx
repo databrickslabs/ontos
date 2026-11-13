@@ -102,6 +102,7 @@ export default function DataProductCreateDialog({
   const isEditing = mode === 'edit' && Boolean(product);
   const statusOptions = useStatusOptions('data_product', {
     entityId: isEditing ? product?.id : null, groupId: isEditing ? null : groupId, enabled: open,
+    currentStatus: isEditing ? product?.status : null,
   });
   const initialKey = statusOptions.initial?.key;
 

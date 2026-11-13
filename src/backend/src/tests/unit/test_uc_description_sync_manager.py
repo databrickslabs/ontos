@@ -335,3 +335,29 @@ def test_a_retry_after_a_save_without_a_token_writes_over_the_agreed_comment(db_
 
     assert (warning, state) == (None, None)
     assert _statements(ws) == ["COMMENT ON TABLE `main`.`sales`.`orders` IS 'New text'"]
+
+
+def test_a_failure_before_the_read_keeps_the_agreed_comment_it_stored(db_session):
+    asset = _asset(db_session, description='New text')
+    # A write that failed earlier stored 'Old text' as the comment Ontos agreed to
+    _sync(db_session, asset,
+          _ws(StatementState.FAILED, 'PERMISSION_DENIED', comment='Old text'),
+          previous='Old text')
+    db_session.refresh(asset)
+    assert asset.properties[DESCRIPTION_SYNC_PROPERTY]['agreed'] == 'Old text'
+
+    def no_token():
+        raise UserTokenRequiredError('no token')
+
+    UcDescriptionSyncManager(_settings()).sync_after_update(
+        db_session, asset.id, description_sent=True, previous_description='Newer text',
+        user_client=no_token,
+    )
+    db_session.refresh(asset)
+    assert asset.properties[DESCRIPTION_SYNC_PROPERTY]['agreed'] == 'Old text'
+
+    ws = _ws(comment='Old text')
+    warning, state = _sync(db_session, asset, ws, previous='New text')
+
+    assert (warning, state) == (None, None)
+    assert _statements(ws) == ["COMMENT ON TABLE `main`.`sales`.`orders` IS 'New text'"]

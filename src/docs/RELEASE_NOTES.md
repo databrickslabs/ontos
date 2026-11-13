@@ -125,6 +125,7 @@
 
 ## 🐛 Bug Fixes
 
+- **ui**: lists and pickers that open from a popover inside a dialog can be clicked again, such as the contract list of a deliverable's **Link contract** dialog. Before, the list showed over the dialog but clicks went to the dialog under it (two copies of a Radix UI package; the frontend now pins one with an npm override). The Link contract dialog's buttons are now translated
 - **assets**: editing an asset in its Edit dialog keeps the properties the dialog doesn't show. Before, saving replaced them with the dialog's fields, so editing a column (for example ticking *is primary key*) dropped its `data_type`, `nullable` and comment. The dialog now sends the stored properties with only the fields you changed
 - **data-contracts**: **Infer from Asset** sets each column's ODCS logical type from its physical type (`DATE` to `date`, `TIMESTAMP` to `timestamp`, `INT`/`BIGINT` to `integer`, `DOUBLE`/`DECIMAL` to `number`, `BOOLEAN` to `boolean`, `ARRAY` to `array`, `STRUCT`/`MAP` to `object`). Before, every column was `string`. The logical type lists of the contract editors now include the ODCS v3.1 types `timestamp` and `time`
 - **data-contracts**: the domains picked when creating a contract are saved. Before, the create request dropped them (`domainIds` / `primaryDomainId` were read only under their snake_case names)

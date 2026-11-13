@@ -35,6 +35,23 @@
     "deletedSuccess": "L'asset è stato eliminato con successo.",
     "errorLoadingData": "Errore nel caricamento dei dati"
   },
+  "descriptionSync": {
+    "notInSync": "Non sincronizzato con Unity Catalog.",
+    "warningTitle": "Salvato in Ontos, non in Unity Catalog",
+    "warnings": {
+      "uc_description_permission_denied": "Unity Catalog ha rifiutato di modificare la descrizione di {{object}} (serve il permesso MODIFY o la proprietà).",
+      "uc_description_object_not_found": "{{object}} non è stato trovato in Unity Catalog, oppure non hai accesso; quindi la descrizione non è stata scritta lì.",
+      "uc_description_user_token_required": "La richiesta non aveva un token utente Databricks, quindi la descrizione di {{object}} non è stata scritta in Unity Catalog.",
+      "uc_description_no_warehouse": "Nessun SQL warehouse configurato, quindi la descrizione di {{object}} non è stata scritta in Unity Catalog.",
+      "uc_description_write_failed": "La scrittura della descrizione di {{object}} in Unity Catalog non è riuscita.",
+      "uc_description_import_write_limit": "Questa importazione ha raggiunto il limite di {{limit}} descrizioni scritte in Unity Catalog, quindi la descrizione di {{object}} non è stata scritta.",
+      "uc_description_import_writes_failed": "Gli asset sono stati importati, ma le loro descrizioni non sono state scritte in Unity Catalog.",
+      "uc_description_existing_comment": "Unity Catalog ha già un altro commento su {{object}}, quindi la descrizione non è stata scritta lì. Imposta la descrizione su quel commento, oppure cambia il commento in Unity Catalog e salva di nuovo.",
+      "uc_description_unsupported_text": "La descrizione di {{object}} contiene un carattere che Unity Catalog non può memorizzare, quindi non è stata scritta lì.",
+      "uc_description_import_time_budget": "Questo import ha esaurito il tempo per le scritture in Unity Catalog, quindi la descrizione di {{object}} non è stata scritta lì.",
+      "uc_description_import_writes_uc": "La descrizione di {{object}} verrà scritta in Unity Catalog. Se c'è già un altro commento, viene mantenuto e la riga riceve un avviso."
+    }
+  },
   "deleteDialog": {
     "title": "Eliminare l'asset?",
     "description": "Questa azione non può essere annullata. Eliminerà permanentemente l'asset e tutte le sue relazioni.",

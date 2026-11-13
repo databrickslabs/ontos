@@ -35,6 +35,23 @@
     "deletedSuccess": "De asset is succesvol verwijderd.",
     "errorLoadingData": "Fout bij Laden Data"
   },
+  "descriptionSync": {
+    "notInSync": "Niet gesynchroniseerd met Unity Catalog.",
+    "warningTitle": "Opgeslagen in Ontos, niet in Unity Catalog",
+    "warnings": {
+      "uc_description_permission_denied": "Unity Catalog weigerde de beschrijving van {{object}} te wijzigen (MODIFY-machtiging of eigendom nodig).",
+      "uc_description_object_not_found": "{{object}} is niet gevonden in Unity Catalog, of je hebt er geen toegang toe; de beschrijving is daar dus niet geschreven.",
+      "uc_description_user_token_required": "Het verzoek had geen Databricks-gebruikerstoken, dus de beschrijving van {{object}} is niet naar Unity Catalog geschreven.",
+      "uc_description_no_warehouse": "Er is geen SQL warehouse geconfigureerd, dus de beschrijving van {{object}} is niet naar Unity Catalog geschreven.",
+      "uc_description_write_failed": "Het schrijven van de beschrijving van {{object}} naar Unity Catalog is mislukt.",
+      "uc_description_import_write_limit": "Deze import heeft zijn limiet van {{limit}} naar Unity Catalog geschreven beschrijvingen bereikt, dus de beschrijving van {{object}} is daar niet geschreven.",
+      "uc_description_import_writes_failed": "De assets zijn geïmporteerd, maar hun beschrijvingen konden niet naar Unity Catalog worden geschreven.",
+      "uc_description_existing_comment": "Unity Catalog heeft al een andere opmerking bij {{object}}, dus de beschrijving is daar niet geschreven. Zet de beschrijving op die opmerking, of wijzig de opmerking in Unity Catalog, en sla opnieuw op.",
+      "uc_description_unsupported_text": "De beschrijving van {{object}} bevat een teken dat Unity Catalog niet kan opslaan, dus is die daar niet geschreven.",
+      "uc_description_import_time_budget": "Deze import heeft zijn tijd voor schrijfacties naar Unity Catalog opgebruikt, dus de beschrijving van {{object}} is daar niet geschreven.",
+      "uc_description_import_writes_uc": "De beschrijving van {{object}} wordt naar Unity Catalog geschreven. Staat er al een andere opmerking, dan blijft die behouden en krijgt de rij een waarschuwing."
+    }
+  },
   "deleteDialog": {
     "title": "Asset verwijderen?",
     "description": "Deze actie kan niet ongedaan worden gemaakt. Dit zal de asset en al zijn relaties permanent verwijderen.",

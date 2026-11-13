@@ -140,6 +140,16 @@
         "placeholder": "app_files"
       }
     },
+    "ucDescriptionWriteback": {
+      "title": "Asset-Beschreibungen",
+      "adminOnly": "Nur ein Admin kann dies aktivieren.",
+      "label": "Asset-Beschreibungen in Unity Catalog schreiben",
+      "help": "Beim Speichern der Beschreibung einer Databricks-Tabelle, -View oder -Spalte wird auch ihr Unity-Catalog-Kommentar gesetzt, als der speichernde Benutzer. Ohne die Berechtigung MODIFY wird die Beschreibung nur in Ontos gespeichert, und das Asset zeigt an, dass es nicht synchron ist.",
+      "importLimit": {
+        "label": "Max. geschriebene Beschreibungen pro Massenimport",
+        "help": "Ein CSV/XLSX-Import schreibt höchstens so viele Beschreibungen in Unity Catalog (1–10000); die Zeilen über dem Limit werden mit einer Warnung in Ontos gespeichert."
+      }
+    },
     "instanceIdentity": {
       "title": "Instanzidentität",
       "id": {

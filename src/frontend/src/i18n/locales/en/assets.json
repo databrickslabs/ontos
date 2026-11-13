@@ -35,6 +35,23 @@
     "deletedSuccess": "The asset was successfully deleted.",
     "errorLoadingData": "Error Loading Data"
   },
+  "descriptionSync": {
+    "notInSync": "Not in sync with Unity Catalog.",
+    "warningTitle": "Saved in Ontos, not in Unity Catalog",
+    "warnings": {
+      "uc_description_permission_denied": "Unity Catalog refused to change the description of {{object}} (MODIFY permission or ownership needed).",
+      "uc_description_object_not_found": "{{object}} was not found in Unity Catalog, or you don't have access to it, so its description was not written there.",
+      "uc_description_user_token_required": "The request had no Databricks user token, so the description of {{object}} was not written to Unity Catalog.",
+      "uc_description_no_warehouse": "No SQL warehouse is configured, so the description of {{object}} was not written to Unity Catalog.",
+      "uc_description_write_failed": "Writing the description of {{object}} to Unity Catalog failed.",
+      "uc_description_import_write_limit": "This import reached its limit of {{limit}} descriptions written to Unity Catalog, so the description of {{object}} was not written there.",
+      "uc_description_import_writes_failed": "The assets were imported, but their descriptions could not be written to Unity Catalog.",
+      "uc_description_existing_comment": "Unity Catalog already has another comment on {{object}}, so the description was not written there. Set the description to that comment, or change the comment in Unity Catalog, and save again.",
+      "uc_description_unsupported_text": "The description of {{object}} has a character Unity Catalog can't store, so it was not written there.",
+      "uc_description_import_time_budget": "This import ran out of time for Unity Catalog writes, so the description of {{object}} was not written there.",
+      "uc_description_import_writes_uc": "The description of {{object}} will be written to Unity Catalog. If it already has a different comment there, that comment is kept and the row gets a warning."
+    }
+  },
   "deleteDialog": {
     "title": "Delete Asset?",
     "description": "This action cannot be undone. This will permanently delete the asset and all its relationships.",

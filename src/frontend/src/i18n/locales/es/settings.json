@@ -140,6 +140,16 @@
         "placeholder": "app_files"
       }
     },
+    "ucDescriptionWriteback": {
+      "title": "Descripciones de activos",
+      "adminOnly": "Solo un administrador puede activar esto.",
+      "label": "Escribir las descripciones de activos en Unity Catalog",
+      "help": "Al guardar la descripción de una tabla, vista o columna de Databricks también se establece su comentario en Unity Catalog, como el usuario que la guarda. Sin el permiso MODIFY, la descripción se guarda solo en Ontos y el activo indica que no está sincronizado.",
+      "importLimit": {
+        "label": "Máximo de descripciones escritas por importación masiva",
+        "help": "Una importación CSV/XLSX escribe como máximo este número de descripciones en Unity Catalog (1–10000); las filas por encima del límite se guardan en Ontos con una advertencia."
+      }
+    },
     "instanceIdentity": {
       "title": "Identidad de la instancia",
       "id": {

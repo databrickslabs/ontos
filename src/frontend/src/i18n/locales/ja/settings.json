@@ -140,6 +140,16 @@
         "placeholder": "app_files"
       }
     },
+    "ucDescriptionWriteback": {
+      "title": "アセットの説明",
+      "adminOnly": "管理者のみがこれを有効にできます。",
+      "label": "アセットの説明を Unity Catalog に書き込む",
+      "help": "Databricks のテーブル、ビュー、列の説明を保存すると、保存したユーザーとして Unity Catalog のコメントも設定されます。MODIFY 権限がない場合、説明は Ontos にのみ保存され、アセットには同期されていないことが表示されます。",
+      "importLimit": {
+        "label": "一括インポートごとに書き込む説明の上限",
+        "help": "CSV/XLSX インポートで Unity Catalog に書き込む説明はこの数まで (1–10000) です。上限を超えた行は警告付きで Ontos に保存されます。"
+      }
+    },
     "instanceIdentity": {
       "title": "インスタンスの識別情報",
       "id": {

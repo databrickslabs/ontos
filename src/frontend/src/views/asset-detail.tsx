@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { TabsDetailSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AssetDeleteDialog } from '@/components/assets/asset-delete-dialog';
+import { DescriptionSyncNotice } from '@/components/assets/description-sync-notice';
 import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
@@ -312,6 +313,7 @@ export default function AssetDetailView() {
         {asset.description && (
           <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{asset.description}</p>
         )}
+        <DescriptionSyncNotice sync={asset.description_sync} />
       </div>
 
       {/* Tabs */}

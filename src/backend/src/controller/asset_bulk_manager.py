@@ -11,7 +11,7 @@ import json
 import os
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from openpyxl import Workbook
@@ -21,8 +21,12 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.controller.assets_manager import AssetsManager
+from src.controller.uc_description_sync_manager import (
+    import_writes_uc_warning, uc_comment_target_for,
+)
 from src.db_models.assets import AssetDb, AssetRelationshipDb
 from src.models.assets import (
+    CodedWarning, without_internal_properties,
     AssetCreate,
     AssetStatus,
     AssetUpdate,
@@ -88,6 +92,8 @@ class ImportPreviewItem(BaseModel):
     action: ImportAction = Field(..., description="What will happen with this row")
     message: Optional[str] = Field(None, description="Error or info message")
     existing_asset_id: Optional[str] = Field(None, description="ID of existing asset if updating")
+    # What the row will do beyond its action, e.g. write its description to Unity Catalog
+    warnings: List[CodedWarning] = Field(default_factory=list)
 
 
 class ImportPreviewResult(BaseModel):
@@ -107,6 +113,9 @@ class ImportResultItem(BaseModel):
     action: ImportAction
     asset_id: Optional[str] = None
     message: Optional[str] = None
+    # What the row's save could not do (it still succeeded), e.g. a description
+    # that was not written to Unity Catalog
+    warnings: List[CodedWarning] = Field(default_factory=list)
 
 
 class ImportResult(BaseModel):
@@ -114,6 +123,9 @@ class ImportResult(BaseModel):
     updated: int = 0
     skipped: int = 0
     errors: int = 0
+    warnings: int = 0
+    # What the import as a whole could not do (it still succeeded); per-row ones are on the items
+    warning_messages: List[CodedWarning] = Field(default_factory=list)
     items: List[ImportResultItem] = Field(default_factory=list)
     error_messages: List[str] = Field(default_factory=list)
 
@@ -411,9 +423,14 @@ class AssetBulkManager:
         return cycles
 
     def preview_import(
-        self, db: Session, *, file_bytes: bytes, filename: str
+        self, db: Session, *, file_bytes: bytes, filename: str, write_to_uc: bool = False,
     ) -> ImportPreviewResult:
-        """Parse and validate file, return preview of what would happen."""
+        """Parse and validate file, return preview of what would happen.
+
+        With ``write_to_uc`` (the Unity Catalog description setting), a row whose
+        description would be written to Unity Catalog gets a warning. The preview
+        doesn't read Unity Catalog: the import keeps a different existing comment.
+        """
         result = ImportPreviewResult()
 
         rows = self._parse_file(file_bytes, filename)
@@ -537,6 +554,9 @@ class AssetBulkManager:
                     item.action = ImportAction.CREATE
                     result.will_create += 1
 
+            if write_to_uc and item.action != ImportAction.ERROR:
+                self._preview_uc_write(item, row, asset_type_raw, existing)
+
             result.items.append(item)
 
         return result
@@ -546,9 +566,17 @@ class AssetBulkManager:
     # ------------------------------------------------------------------
 
     def execute_import(
-        self, db: Session, *, file_bytes: bytes, filename: str, current_user_id: str
+        self, db: Session, *, file_bytes: bytes, filename: str, current_user_id: str,
+        after_save: Optional[Callable[[UUID, Optional[str], bool], None]] = None,
     ) -> ImportResult:
-        """Parse, validate, and execute the import in a single transaction."""
+        """Parse, validate, and execute the import in one transaction (not committed).
+
+        Each row runs in a savepoint: a row that fails rolls back on its own. The
+        ``after_save(asset_id, previous_description, described)`` records each saved row;
+        ``described`` is False when the file has no description column (the description is
+        then left alone, not cleared),
+        for the caller to write its description to Unity Catalog after the commit.
+        """
         result = ImportResult()
 
         rows = self._parse_file(file_bytes, filename)
@@ -569,6 +597,8 @@ class AssetBulkManager:
 
         # Track created assets for parent wiring
         created_assets: Dict[str, UUID] = {}  # name -> asset id
+        # A file without a description column leaves every description alone
+        has_description_column = "description" in rows[0]
 
         for idx, row in enumerate(rows):
             row_num = idx + 1
@@ -617,9 +647,12 @@ class AssetBulkManager:
                 result.errors += 1
                 result.items.append(item)
                 continue
+            # The internal keys (e.g. the Unity Catalog sync mark) are never imported
+            properties = without_internal_properties(properties)
 
             tags = _parse_tags(row.get("tags", ""))
             description = row.get("description", "").strip() or None
+            description_field = {"description": description} if has_description_column else {}
             platform_val = row.get("platform", "").strip() or None
             location_val = row.get("location", "").strip() or None
             # domain_ids: semicolon-separated; the first entry is treated as primary.
@@ -633,45 +666,27 @@ class AssetBulkManager:
             # Determine create vs update
             row_id = row.get("id", "").strip()
             try:
-                if row_id:
-                    try:
-                        existing = self._asset_repo.get(db, UUID(row_id))
-                    except (ValueError, Exception):
-                        existing = None
-                    if not existing:
-                        item.message = f"Asset with ID '{row_id}' not found"
-                        result.errors += 1
-                        result.items.append(item)
-                        continue
+                # A row is all or nothing: a failed row rolls back to its savepoint
+                with db.begin_nested():
+                    if row_id:
+                        try:
+                            existing = self._asset_repo.get(db, UUID(row_id))
+                        except (ValueError, Exception):
+                            existing = None
+                        if not existing:
+                            item.message = f"Asset with ID '{row_id}' not found"
+                            result.errors += 1
+                            result.items.append(item)
+                            continue
 
-                    update_data = AssetUpdate(
-                        name=name,
-                        description=description,
-                        asset_type_id=type_id,
-                        platform=platform_val,
-                        location=location_val,
-                        # The internal keys aren't exported, so the file can't carry them
-                        properties=with_internal_properties(properties, existing.properties),
-                        tags=tags,
-                        status=status_val,
-                    )
-                    updated = self._asset_repo.update(
-                        db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
-                    )
-                    db.flush()
-                    self._set_asset_domains(db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
-                    item.action = ImportAction.UPDATE
-                    item.asset_id = str(updated.id)
-                    result.updated += 1
-                    created_assets[name.lower()] = updated.id
-                else:
-                    existing = self._asset_repo.get_by_identity(
-                        db, name=name, asset_type_id=type_id,
-                        platform=platform_val or "", location=location_val or "",
-                    )
-                    if existing:
+                        previous_description = existing.description
                         update_data = AssetUpdate(
-                            description=description,
+                            name=name,
+                            **description_field,
+                            asset_type_id=type_id,
+                            platform=platform_val,
+                            location=location_val,
+                            # The internal keys aren't exported, so the file can't carry them
                             properties=with_internal_properties(properties, existing.properties),
                             tags=tags,
                             status=status_val,
@@ -686,26 +701,55 @@ class AssetBulkManager:
                         result.updated += 1
                         created_assets[name.lower()] = updated.id
                     else:
-                        create_data = {
-                            "name": name,
-                            "description": description,
-                            "asset_type_id": type_id,
-                            "platform": platform_val,
-                            "location": location_val,
-                            "properties": properties,
-                            "tags": tags,
-                            "status": status_val.value,
-                            "created_by": current_user_id,
-                        }
-                        db_asset = AssetDb(**create_data)
-                        db.add(db_asset)
-                        db.flush()
-                        db.refresh(db_asset)
-                        self._set_asset_domains(db, db_asset.id, domain_ids_val, primary_domain_val, current_user_id)
-                        item.action = ImportAction.CREATE
-                        item.asset_id = str(db_asset.id)
-                        result.created += 1
-                        created_assets[name.lower()] = db_asset.id
+                        existing = self._asset_repo.get_by_identity(
+                            db, name=name, asset_type_id=type_id,
+                            platform=platform_val or "", location=location_val or "",
+                        )
+                        if existing:
+                            previous_description = existing.description
+                            update_data = AssetUpdate(
+                                **description_field,
+                                properties=with_internal_properties(
+                                    properties, existing.properties),
+                                tags=tags,
+                                status=status_val,
+                            )
+                            updated = self._asset_repo.update(
+                                db=db, db_obj=existing,
+                                obj_in=update_data.model_dump(exclude_unset=True)
+                            )
+                            db.flush()
+                            self._set_asset_domains(
+                                db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
+                            item.action = ImportAction.UPDATE
+                            item.asset_id = str(updated.id)
+                            result.updated += 1
+                            created_assets[name.lower()] = updated.id
+                        else:
+                            previous_description = None
+                            create_data = {
+                                "name": name,
+                                "description": description,
+                                "asset_type_id": type_id,
+                                "platform": platform_val,
+                                "location": location_val,
+                                "properties": without_internal_properties(properties),
+                                "tags": tags,
+                                "status": status_val.value,
+                                "created_by": current_user_id,
+                            }
+                            db_asset = AssetDb(**create_data)
+                            db.add(db_asset)
+                            db.flush()
+                            db.refresh(db_asset)
+                            self._set_asset_domains(
+                                db, db_asset.id, domain_ids_val, primary_domain_val,
+                                current_user_id)
+                            item.action = ImportAction.CREATE
+                            item.asset_id = str(db_asset.id)
+                            result.created += 1
+                            created_assets[name.lower()] = db_asset.id
+
 
             except Exception as e:
                 item.message = f"Error: {str(e)[:200]}"
@@ -713,6 +757,12 @@ class AssetBulkManager:
                 result.items.append(item)
                 continue
 
+            if after_save is not None:
+                try:
+                    after_save(UUID(item.asset_id), previous_description, has_description_column)
+                except Exception:
+                    logger.warning(
+                        "Post-save step failed for import row %s", item.row, exc_info=True)
             result.items.append(item)
 
         # Wire parent relationships (skip if cycles detected)
@@ -720,6 +770,18 @@ class AssetBulkManager:
             self._wire_parent_relationships(db, rows, type_map, created_assets, result)
 
         return result
+
+    @staticmethod
+    def _preview_uc_write(item: ImportPreviewItem, row: Dict[str, str], asset_type_raw: str,
+                          existing: Optional[AssetDb]) -> None:
+        target = uc_comment_target_for(
+            row.get("platform", ""), asset_type_raw, row.get("location", ""))
+        if target is None:
+            return
+        description = row.get("description", "").strip() or None
+        if description != ((existing.description if existing else None) or None):
+            item.warnings.append(import_writes_uc_warning(
+                f"{target[0]}.{target[1]}" if target[1] else target[0]))
 
     def _wire_parent_relationships(
         self,

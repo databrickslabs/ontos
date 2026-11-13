@@ -35,6 +35,23 @@
     "deletedSuccess": "Das Asset wurde erfolgreich gelöscht.",
     "errorLoadingData": "Fehler beim Laden der Daten"
   },
+  "descriptionSync": {
+    "notInSync": "Nicht synchron mit Unity Catalog.",
+    "warningTitle": "In Ontos gespeichert, nicht in Unity Catalog",
+    "warnings": {
+      "uc_description_permission_denied": "Unity Catalog hat die Änderung der Beschreibung von {{object}} abgelehnt (Berechtigung MODIFY oder Eigentümerschaft erforderlich).",
+      "uc_description_object_not_found": "{{object}} wurde in Unity Catalog nicht gefunden, oder Sie haben keinen Zugriff darauf; daher wurde die Beschreibung dort nicht geschrieben.",
+      "uc_description_user_token_required": "Die Anfrage hatte kein Databricks-Benutzertoken, daher wurde die Beschreibung von {{object}} nicht in Unity Catalog geschrieben.",
+      "uc_description_no_warehouse": "Es ist kein SQL Warehouse konfiguriert, daher wurde die Beschreibung von {{object}} nicht in Unity Catalog geschrieben.",
+      "uc_description_write_failed": "Das Schreiben der Beschreibung von {{object}} in Unity Catalog ist fehlgeschlagen.",
+      "uc_description_import_write_limit": "Dieser Import hat sein Limit von {{limit}} in Unity Catalog geschriebenen Beschreibungen erreicht, daher wurde die Beschreibung von {{object}} dort nicht geschrieben.",
+      "uc_description_import_writes_failed": "Die Assets wurden importiert, aber ihre Beschreibungen konnten nicht in Unity Catalog geschrieben werden.",
+      "uc_description_existing_comment": "Unity Catalog hat bereits einen anderen Kommentar zu {{object}}, daher wurde die Beschreibung dort nicht geschrieben. Setzen Sie die Beschreibung auf diesen Kommentar oder ändern Sie den Kommentar in Unity Catalog und speichern Sie erneut.",
+      "uc_description_unsupported_text": "Die Beschreibung von {{object}} enthält ein Zeichen, das Unity Catalog nicht speichern kann, daher wurde sie dort nicht geschrieben.",
+      "uc_description_import_time_budget": "Dieser Import hat seine Zeit für Schreibvorgänge in Unity Catalog aufgebraucht, daher wurde die Beschreibung von {{object}} dort nicht geschrieben.",
+      "uc_description_import_writes_uc": "Die Beschreibung von {{object}} wird in Unity Catalog geschrieben. Gibt es dort bereits einen anderen Kommentar, bleibt er erhalten und die Zeile erhält eine Warnung."
+    }
+  },
   "deleteDialog": {
     "title": "Asset löschen?",
     "description": "Diese Aktion kann nicht rückgängig gemacht werden. Dies löscht das Asset und alle seine Beziehungen dauerhaft.",

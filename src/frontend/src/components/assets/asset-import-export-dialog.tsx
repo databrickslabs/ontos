@@ -22,6 +22,8 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
+import type { AssetCodedWarning } from '@/types/asset';
+import { descriptionSyncText } from '@/components/assets/description-sync-notice';
 import {
   Download,
   Upload,
@@ -30,6 +32,7 @@ import {
   XCircle,
   RefreshCw,
   AlertCircle,
+  AlertTriangle,
   Loader2,
   FileDown,
 } from 'lucide-react';
@@ -43,6 +46,8 @@ interface ImportPreviewItem {
   action: 'create' | 'update' | 'skip' | 'error';
   message?: string;
   existing_asset_id?: string;
+  /** What the row will do beyond its action, e.g. write its description to Unity Catalog */
+  warnings?: AssetCodedWarning[];
 }
 
 interface ImportPreviewResult {
@@ -62,6 +67,8 @@ interface ImportResultItem {
   action: 'create' | 'update' | 'skip' | 'error';
   asset_id?: string;
   message?: string;
+  /** What the row's save could not do, e.g. write its description to Unity Catalog */
+  warnings?: AssetCodedWarning[];
 }
 
 interface ImportResult {
@@ -69,8 +76,30 @@ interface ImportResult {
   updated: number;
   skipped: number;
   errors: number;
+  warnings?: number;
+  /** What the import as a whole could not do (it still succeeded) */
+  warning_messages?: AssetCodedWarning[];
   items: ImportResultItem[];
   error_messages: string[];
+}
+
+/** Warnings of a saved row or of the whole import (e.g. Unity Catalog writes), translated. */
+export function ImportRowWarnings({ warnings }: { warnings?: AssetCodedWarning[] }) {
+  const { t } = useTranslation(['assets']);
+  if (!warnings || warnings.length === 0) return null;
+  return (
+    <>
+      {warnings.map((w) => (
+        <span
+          key={w.code}
+          className="flex items-start gap-1 whitespace-normal text-amber-700 dark:text-amber-400"
+        >
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+          {descriptionSyncText(t, w)}
+        </span>
+      ))}
+    </>
+  );
 }
 
 // -- Props --
@@ -464,6 +493,7 @@ export default function AssetImportExportDialog({
                           </td>
                           <td className="px-3 py-1.5 text-xs text-muted-foreground truncate max-w-[250px]">
                             {item.message || ('asset_id' in item && item.asset_id ? `ID: ${item.asset_id}` : '')}
+                            {'warnings' in item && <ImportRowWarnings warnings={item.warnings} />}
                           </td>
                         </tr>
                       );
@@ -489,6 +519,7 @@ export default function AssetImportExportDialog({
                 </AlertDescription>
               </Alert>
             )}
+            {importResult && <ImportRowWarnings warnings={importResult.warning_messages} />}
           </TabsContent>}
         </Tabs>
 

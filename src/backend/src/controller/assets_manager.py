@@ -8,7 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from src.repositories.assets_repository import asset_type_repo, asset_repo, asset_relationship_repo
 from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
+from src.common.uc_comments import split_column_location
 from src.models.assets import (
+    description_sync_state,
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
     AssetCreate, AssetUpdate, AssetRead, AssetSummary,
     AssetRelationshipCreate, AssetRelationshipRead,
@@ -62,6 +64,7 @@ class AssetsManager(SearchableAsset):
         if db_asset.target_relationships:
             rels.extend([AssetRelationshipRead.model_validate(r) for r in db_asset.target_relationships])
         read.relationships = rels
+        read.description_sync = description_sync_state(db_asset.properties)
         # Attach polymorphic domain assignments from the junction table.
         session = object_session(db_asset)
         if session is not None:
@@ -425,6 +428,43 @@ class AssetsManager(SearchableAsset):
             if "unique constraint" in str(e).lower():
                 raise ConflictError("Asset identity conflict.")
             raise
+
+    @staticmethod
+    def update_table_column_snapshot(db: Session, column: AssetDb) -> None:
+        """Copy a Column asset's new description into its table's ``properties.schema``.
+
+        An imported table or view keeps a snapshot of its columns; the table is
+        the asset on the same platform located at the column's location minus
+        the column name. Called once the column's description is in Unity Catalog.
+        """
+        if getattr(column.asset_type, 'name', None) != 'Column':
+            return
+        split = split_column_location(column.location or '')
+        if split is None:
+            return
+        table_location, column_name = split
+        tables = db.query(AssetDb).filter(
+            AssetDb.location == table_location, AssetDb.platform == column.platform,
+            AssetDb.id != column.id,
+        ).all()
+        for table in tables:
+            schema = (table.properties or {}).get('schema')
+            columns = schema.get('columns') if isinstance(schema, dict) else None
+            if not isinstance(columns, list):
+                continue
+            changed = False
+            new_columns = []
+            for entry in columns:
+                if isinstance(entry, dict) and entry.get('name') == column_name \
+                        and entry.get('description') != column.description:
+                    entry = {**entry, 'description': column.description}
+                    changed = True
+                new_columns.append(entry)
+            if changed:
+                # New dicts, so the JSON column is seen as changed
+                new_schema = {**schema, 'columns': new_columns}
+                table.properties = {**table.properties, 'schema': new_schema}
+        db.flush()
 
     def retype_asset(
         self, db: Session, *, asset_id: UUID, from_type: str, to_type: str,

@@ -22,6 +22,8 @@ interface AppSettings {
   llmSystemPrompt: string;
   llmDisclaimerText: string;
   allowJobEnablementRequests: boolean;
+  ucDescriptionWritebackEnabled: boolean;
+  ucDescriptionImportWriteLimit: number;
   schemaImportChildLimit: number;
   instanceId: string;
   instanceName: string;
@@ -41,12 +43,21 @@ const SERVER_ERROR_KEYS: Record<string, string> = {
   instance_name_invalid: 'settings:general.instanceIdentity.name.invalid',
 };
 
+/** A blank or out-of-range import limit falls back to the default: it never fails the save. */
+function clampWriteLimit(value: number): number {
+  if (!Number.isFinite(value) || value < 1) return 100;
+  return Math.min(Math.round(value), 10000);
+}
+
 export default function GeneralSettings() {
   const { t } = useTranslation(['settings', 'common']);
   const { hasPermission } = usePermissions();
   const { toast } = useToast();
 
   const hasWriteAccess = hasPermission('settings-general', FeatureAccessLevel.READ_WRITE);
+  // Turning the Unity Catalog write-back on writes org-wide: only an admin may.
+  // Turning it off stays open to writers.
+  const hasAdminAccess = hasPermission('settings-general', FeatureAccessLevel.ADMIN);
 
   const [settings, setSettings] = useState<AppSettings>({
     databricksCatalog: '',
@@ -58,6 +69,8 @@ export default function GeneralSettings() {
     llmSystemPrompt: '',
     llmDisclaimerText: '',
     allowJobEnablementRequests: false,
+    ucDescriptionWritebackEnabled: false,
+    ucDescriptionImportWriteLimit: 100,
     schemaImportChildLimit: 500,
     instanceId: '',
     instanceName: '',
@@ -84,6 +97,8 @@ export default function GeneralSettings() {
             llmSystemPrompt: data.llm_system_prompt || '',
             llmDisclaimerText: data.llm_disclaimer_text || '',
             allowJobEnablementRequests: data.allow_job_enablement_requests || false,
+            ucDescriptionWritebackEnabled: data.uc_description_writeback_enabled || false,
+            ucDescriptionImportWriteLimit: data.uc_description_import_write_limit ?? 100,
             schemaImportChildLimit: data.schema_import_child_limit ?? 500,
             instanceId: data.ontos_instance_id || '',
             instanceName: data.ontos_instance_name || '',
@@ -137,6 +152,9 @@ export default function GeneralSettings() {
           llm_system_prompt: settings.llmSystemPrompt,
           llm_disclaimer_text: settings.llmDisclaimerText,
           allow_job_enablement_requests: settings.allowJobEnablementRequests,
+          uc_description_writeback_enabled: settings.ucDescriptionWritebackEnabled,
+          uc_description_import_write_limit: clampWriteLimit(
+            settings.ucDescriptionImportWriteLimit),
           schema_import_child_limit: settings.schemaImportChildLimit,
           // A value equal to the default (or blank) clears the override, so an untouched
           // field never pins the derived default.
@@ -253,6 +271,84 @@ export default function GeneralSettings() {
           <p className="text-sm text-muted-foreground mt-2">
             {t('settings:general.unityCatalog.help', 'Unity Catalog location for storing application data.')}
           </p>
+        </div>
+
+        <Separator />
+
+        {/* Write asset descriptions to Unity Catalog */}
+        <div>
+          <h3 className="text-lg font-medium mb-3">
+            {t('settings:general.ucDescriptionWriteback.title', 'Asset Descriptions')}
+          </h3>
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="ucDescriptionWritebackEnabled"
+                checked={settings.ucDescriptionWritebackEnabled}
+                onCheckedChange={(checked) =>
+                  setSettings(prev => ({ ...prev, ucDescriptionWritebackEnabled: checked }))
+                }
+                disabled={
+                  !hasWriteAccess || isLoading ||
+                  (!hasAdminAccess && !settings.ucDescriptionWritebackEnabled)
+                }
+              />
+              <Label htmlFor="ucDescriptionWritebackEnabled">
+                {t(
+                  'settings:general.ucDescriptionWriteback.label',
+                  'Write asset descriptions to Unity Catalog'
+                )}
+              </Label>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {t(
+                'settings:general.ucDescriptionWriteback.help',
+                'Saving the description of a Databricks table, view or column also sets its ' +
+                  'Unity Catalog comment, as the user who saves it. Without the MODIFY ' +
+                  'permission the description is saved in Ontos only, and the asset shows ' +
+                  'that it is not in sync.'
+              )}
+            </p>
+            {!hasAdminAccess && (
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'settings:general.ucDescriptionWriteback.adminOnly',
+                  'Only an admin can turn this on.'
+                )}
+              </p>
+            )}
+          </div>
+          <div className="space-y-2 max-w-xs mt-4">
+            <Label htmlFor="ucDescriptionImportWriteLimit">
+              {t(
+                'settings:general.ucDescriptionWriteback.importLimit.label',
+                'Max descriptions written per bulk import'
+              )}
+            </Label>
+            <Input
+              id="ucDescriptionImportWriteLimit"
+              name="ucDescriptionImportWriteLimit"
+              type="number"
+              min={1}
+              max={10000}
+              value={settings.ucDescriptionImportWriteLimit}
+              onChange={(e) =>
+                setSettings(prev => ({
+                  ...prev,
+                  ucDescriptionImportWriteLimit:
+                    e.target.value === '' ? 0 : parseInt(e.target.value, 10),
+                }))
+              }
+              disabled={!hasWriteAccess || isLoading || !settings.ucDescriptionWritebackEnabled}
+            />
+            <p className="text-sm text-muted-foreground">
+              {t(
+                'settings:general.ucDescriptionWriteback.importLimit.help',
+                'A CSV/XLSX import writes at most this many descriptions to Unity Catalog ' +
+                  '(1–10000); the rows over the limit are saved in Ontos with a warning.'
+              )}
+            </p>
+          </div>
         </div>
 
         <Separator />

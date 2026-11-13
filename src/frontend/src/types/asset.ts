@@ -86,6 +86,26 @@ export interface AssetRead {
   created_by?: string | null;
   created_at: string;
   updated_at: string;
+  /** Set when the description could not be written to Unity Catalog */
+  description_sync?: AssetDescriptionSync | null;
+}
+
+/** A warning the UI translates by its code; `message` is the English fallback. */
+export interface AssetCodedWarning {
+  code: string;
+  message: string;
+  params?: Record<string, unknown>;
+}
+
+/** The asset's description is not in Unity Catalog: why, and since when. */
+export interface AssetDescriptionSync extends AssetCodedWarning {
+  status: 'out_of_sync';
+  at?: string | null;
+}
+
+/** PUT /api/assets/{id}: the saved asset, with what the save could not do. */
+export interface AssetUpdateResult extends AssetRead {
+  warnings?: AssetCodedWarning[];
 }
 
 export interface AssetCreate {

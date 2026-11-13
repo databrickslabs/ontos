@@ -4,10 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { FeatureAccessLevel } from '@/types/settings';
 
 let canWrite = true;
+let canAdmin = true;
 vi.mock('@/stores/permissions-store', () => ({
   usePermissions: () => ({
     hasPermission: (_feature: string, level: FeatureAccessLevel) =>
-      level === FeatureAccessLevel.READ_ONLY || canWrite,
+      level === FeatureAccessLevel.ADMIN
+        ? canAdmin
+        : level === FeatureAccessLevel.READ_ONLY || canWrite,
   }),
 }));
 
@@ -151,5 +154,64 @@ describe('GeneralSettings - instance identity', () => {
     expect(await screen.findByLabelText('Instance ID')).toBeDisabled();
     expect(screen.getByLabelText('Instance Name')).toBeDisabled();
     expect(screen.queryByRole('button', { name: /save settings/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('GeneralSettings - write asset descriptions to Unity Catalog', () => {
+  beforeEach(() => {
+    canWrite = true;
+    canAdmin = true;
+    toastMock.mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('lets only an admin turn the switch on', async () => {
+    canAdmin = false;
+    mockFetch();
+    render(<GeneralSettings />);
+    const toggle = await screen.findByLabelText('Write asset descriptions to Unity Catalog');
+    expect(toggle).toBeDisabled();
+    expect(screen.getByText('Only an admin can turn this on.')).toBeInTheDocument();
+  });
+
+  it('lets a non-admin turn an enabled switch off', async () => {
+    canAdmin = false;
+    mockFetch({ ...baseResponse, uc_description_writeback_enabled: true });
+    render(<GeneralSettings />);
+    const toggle = await screen.findByLabelText('Write asset descriptions to Unity Catalog');
+    expect(toggle).toBeEnabled();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(lastPutBody().uc_description_writeback_enabled).toBe(false));
+  });
+
+  it('is off by default and saves the switch', async () => {
+    mockFetch();
+    render(<GeneralSettings />);
+    const toggle = await screen.findByLabelText('Write asset descriptions to Unity Catalog');
+    expect(toggle).not.toBeChecked();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(lastPutBody().uc_description_writeback_enabled).toBe(true));
+  });
+
+  it('saves the bulk import write limit', async () => {
+    mockFetch({ ...baseResponse, uc_description_writeback_enabled: true,
+      uc_description_import_write_limit: 100 });
+    render(<GeneralSettings />);
+    const limit = await screen.findByLabelText('Max descriptions written per bulk import');
+    expect(limit).toHaveValue(100);
+    await userEvent.clear(limit);
+    await userEvent.type(limit, '25');
+    await userEvent.click(screen.getByRole('button', { name: /save settings/i }));
+    await waitFor(() => expect(lastPutBody().uc_description_import_write_limit).toBe(25));
+  });
+
+  it('shows the stored value', async () => {
+    mockFetch({ ...baseResponse, uc_description_writeback_enabled: true });
+    render(<GeneralSettings />);
+    expect(
+      await screen.findByLabelText('Write asset descriptions to Unity Catalog')
+    ).toBeChecked();
   });
 });

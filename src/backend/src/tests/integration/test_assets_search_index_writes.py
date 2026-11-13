@@ -102,6 +102,22 @@ def test_bulk_import_batch_index_reaches_search_after_commit(
         assert any(hit.startswith("asset::") for hit in _hits(search_manager, auth, name))
 
 
+def test_asset_retired_by_bulk_import_has_no_search_hit(db_session, asset_type, wired, search_manager, auth):
+    name = f"retire-{uuid.uuid4().hex[:8]}"
+    created = _create(wired, db_session, asset_type, name)
+    assert f"asset::{created.id}" in _hits(search_manager, auth, name)
+    csv_bytes = (f"id,name,asset_type,status\n{created.id},{name},{asset_type.name},retired\n").encode()
+    bulk = AssetBulkManager(assets_manager=wired)
+
+    result = bulk.execute_import(db_session, file_bytes=csv_bytes, filename="a.csv",
+                                 current_user_id="tester@example.com")
+    assert result.updated == 1, result.items
+    db_session.commit()
+    bulk.index_committed_import(db_session, result)
+
+    assert f"asset::{created.id}" not in _hits(search_manager, auth, name)
+
+
 def test_import_that_does_not_commit_leaves_no_index_entries(
     db_session, asset_type, wired, search_manager, auth,
 ):

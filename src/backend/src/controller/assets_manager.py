@@ -738,6 +738,9 @@ class AssetsManager(SearchableAsset):
         item = self._build_search_index_item(asset_db_obj)
         if item is not None:
             self._notify_index_upsert(item)
+        else:
+            # Retired assets have no item: drop any entry an earlier version indexed.
+            self._notify_index_remove(f"asset::{asset_db_obj.id}")
 
     def upsert_search_index_for(self, db: Session, asset_ids: List[UUID]) -> None:
         """Upsert the given assets in the search index with one batch call.
@@ -760,6 +763,9 @@ class AssetsManager(SearchableAsset):
             )
             if item is not None:
                 items.append(item)
+            else:
+                # Retired: drop an entry indexed while the asset was active.
+                self._notify_index_remove(f"asset::{a.id}")
         self._notify_index_upsert_many(items)
 
     def get_search_index_items(self) -> List[SearchIndexItem]:

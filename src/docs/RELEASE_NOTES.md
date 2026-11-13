@@ -125,6 +125,7 @@
 
 ## 🐛 Bug Fixes
 
+- **data-contracts**: **Infer from Asset** no longer copies a connector's stored `logical_type` into the contract when it isn't an ODCS logical type. Columns imported with the Databricks connector stored the Unity Catalog type name (`LONG`, `DECIMAL`, `TIMESTAMP`) and BigQuery columns the field mode (`NULLABLE`, `REQUIRED`); they are now mapped from the column's type (`integer`, `number`, `timestamp`, ...). BigQuery types `INT64`, `FLOAT64`, `BIGNUMERIC`, `RECORD` and `JSON` are mapped too
 - **data-contracts**: a contract's `apiVersion` must be an ODCS version. `POST /api/data-contracts` and `PUT /api/data-contracts/{id}` store a version sent without its `v` as `v<version>` (`3.0.2` becomes `v3.0.2`) and refuse any other value with a 422 whose error type is `odcs_api_version_unsupported` (param `api_version`). Contracts created from **Link contract > Create New Contract** now get `v3.1.0`
 - **catalog-commander**: the column schema of a table uses the same ODCS logical types as **Infer from Asset**: `TIMESTAMP` / `TIMESTAMP_NTZ` columns are `timestamp` (before: `date`) `TIME` is `time` and `INTERVAL` columns are `string` (before: `date` and `integer`)
 - **ui**: the contract and product picker (Link contract, product and contract versions) names the kind in the user's language: *Pesquisar contratos…* instead of *Pesquisar contract…*. The keys `common:entityVersionPicker.selectPlaceholder`, `searchPlaceholder` and `noMatching` are replaced by `common:entityVersionPickerKinds.<contract|product>.select`, `search` and `noMatching`

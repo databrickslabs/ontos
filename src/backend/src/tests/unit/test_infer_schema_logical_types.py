@@ -109,3 +109,25 @@ def test_infer_schema_maps_the_stored_schema_columns(db_session):
     assert [(p["name"], p["logicalType"]) for p in schema["properties"]] == [
         ("ts", "timestamp"), ("ok", "boolean"),
     ]
+
+
+def test_connector_logical_types_are_not_taken_as_odcs(db_session):
+    """The Databricks connector stores the UC type name (LONG, DECIMAL ...) as
+    ``logical_type`` and BigQuery the field mode (NULLABLE / REQUIRED): only an
+    ODCS logical type is kept as is, the rest is mapped."""
+    table = _table_with_columns(db_session, [
+        ("order_id", {"data_type": "bigint", "logical_type": "LONG"}),
+        ("amount", {"data_type": "decimal(12,2)", "logical_type": "DECIMAL"}),
+        ("ts", {"data_type": "timestamp", "logical_type": "TIMESTAMP"}),
+        ("city", {"data_type": "STRING", "logical_type": "NULLABLE"}),
+        ("qty", {"data_type": "INT64", "logical_type": "REQUIRED"}),
+        ("n", {"data_type": "unknown", "logical_type": "LONG"}),
+        ("code", {"data_type": "INT", "logical_type": "String"}),
+    ])
+
+    [schema] = AssetsManager().infer_schema_from_asset(db_session, table.id)
+
+    assert {p["name"]: p["logicalType"] for p in schema["properties"]} == {
+        "order_id": "integer", "amount": "number", "ts": "timestamp", "city": "string",
+        "qty": "integer", "n": "integer", "code": "string",
+    }

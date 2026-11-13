@@ -19,7 +19,7 @@ from src.models.assets import (
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
 from src.common.errors import ConflictError, NotFoundError, ValidationError
 from src.common.logging import get_logger
-from src.common.odcs_logical_types import odcs_logical_type
+from src.common.odcs_logical_types import column_logical_type
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.database import get_session_factory
 from src.controller.change_log_manager import change_log_manager
@@ -813,8 +813,8 @@ class AssetsManager(SearchableAsset):
                     {
                         "name": c.get("name", ""),
                         "physicalType": c.get("data_type", ""),
-                        "logicalType": (
-                            c.get("logical_type") or odcs_logical_type(c.get("data_type"))
+                        "logicalType": column_logical_type(
+                            c.get("logical_type"), c.get("data_type")
                         ),
                         "required": not c.get("nullable", True),
                         "description": c.get("description", ""),
@@ -847,8 +847,8 @@ class AssetsManager(SearchableAsset):
             columns.append({
                 "name": child.name,
                 "physicalType": props.get("data_type", ""),
-                "logicalType": (
-                    props.get("logical_type") or odcs_logical_type(props.get("data_type"))
+                "logicalType": column_logical_type(
+                    props.get("logical_type"), props.get("data_type")
                 ),
                 "required": not props.get("nullable", True),
                 "description": child.description or "",

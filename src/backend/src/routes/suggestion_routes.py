@@ -154,7 +154,9 @@ def _search_assets(
     if not type_names:
         return [], 0
 
-    q = db.query(AssetDb).filter(AssetDb.asset_type_id.in_(list(type_names)), AssetDb.status != 'retired')
+    from src.controller.lifecycle_service import lifecycle_service
+    retired = lifecycle_service.category_filter(db, AssetDb, 'asset', ['retired'])
+    q = db.query(AssetDb).filter(AssetDb.asset_type_id.in_(list(type_names)), ~retired)
     if search_term:
         conditions = []
         for part in search_term.lower().replace('.', ' ').split():

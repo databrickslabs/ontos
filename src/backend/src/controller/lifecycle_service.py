@@ -351,6 +351,17 @@ class LifecycleService:
             return False
         return _normalized(getattr(entity, 'status', None)) != NAMED_ACTIONS['approve'][0]
 
+    def contract_publishable(self, db: Optional[Session], entity: Any) -> bool:
+        """A contract may be published (or its publication requested): it is in an
+        active-category stage, or in the approve action's review stage (``approved``,
+        a review stage that no longer awaits a decision)."""
+        category = self.category_of(db, 'data_contract', entity)
+        if category == ACTIVE:
+            return True
+        return category == 'review' and not self.awaits_review_decision(
+            db, 'data_contract', entity,
+        )
+
     # ---- categories
 
     def category_of(self, db: Optional[Session], entity_type: str, entity: Any) -> Optional[str]:
@@ -705,6 +716,11 @@ class LifecycleService:
                 )
             keys.append(key)
         for t in data.get('transitions') or []:
+            if t['from_key'] == t['to_key']:
+                raise LifecycleGroupInvalidError(
+                    'lifecycle_transition_self',
+                    f"A stage can't move to itself ({t['from_key']})", key=t['from_key'],
+                )
             for k in (t['from_key'], t['to_key']):
                 if k not in keys:
                     raise LifecycleGroupInvalidError(

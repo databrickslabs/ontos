@@ -2108,10 +2108,11 @@ async def update_data_product(
 
         # Check if versioning is required for non-draft products
         current_product_db = manager.get_product(product_id)
-        # A product past its draft-category stages is versioned
+        # A product that isn't edited in place (past draft and the review awaiting
+        # its decision) is versioned; the clone guard uses the same rule
         from src.controller.lifecycle_service import lifecycle_service
         if current_product_db and current_product_db.status and \
-                lifecycle_service.category_of_row(current_product_db, db) != 'draft':
+                not lifecycle_service.editable_in_place(db, 'data_product', current_product_db):
             # Check if caller explicitly forced the update
             force_update = request.headers.get('X-Force-Update') == 'true'
             

@@ -129,7 +129,7 @@ from src.common.api_errors import CodedValueError
 from src.common.lifecycle_status import (
     check_status_unchanged,
 )
-from src.controller.lifecycle_service import lifecycle_service
+from src.controller.lifecycle_service import NAMED_ACTIONS, lifecycle_service
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.common.uc_tag_sync_trigger import request_uc_tag_sync_after_transition
@@ -2083,12 +2083,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # Submit it (PROPOSED in the default lifecycle), then start the review
         # (UNDER_REVIEW) when its lifecycle has that step
         self._apply_action(product_id, 'submit_review', current_user)
-        try:
-            self._apply_action(product_id, 'start_review', current_user)
-        except CodedValueError as e:
-            if getattr(e, 'code', None) != 'invalid_status_transition':
-                raise
         product_db = self._repo.get(db=self._db, id=product_id)
+        # Only the start-review step itself (under_review): a group without it
+        # stays in the stage submit-review reached, rather than skipping ahead
+        # to another review stage by category
+        start_key = NAMED_ACTIONS['start_review'][0]
+        if start_key in lifecycle_service.allowed_target_keys(
+                self._db, 'data_product', product_db):
+            self._apply_action(product_id, 'start_review', current_user)
+            product_db = self._repo.get(db=self._db, id=product_id)
         
         request_id = str(uuid4())
 
@@ -2943,9 +2946,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Product not found")
         
         # Check if source is in an editable state - if so, don't clone
-        # A draft- or review-category stage is edited in place (as the UI does)
-        if source_product.status and lifecycle_service.category_of(
-                db, 'data_product', source_product) in ('draft', 'review'):
+        # Edited in place, not cloned: the update route's rule (editable_in_place)
+        if source_product.status and lifecycle_service.editable_in_place(
+                db, 'data_product', source_product):
             raise ValueError("Product is already in an editable state. Edit directly instead of cloning.")
         
         # Use current version with -draft suffix

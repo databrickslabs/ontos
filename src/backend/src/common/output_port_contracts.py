@@ -65,7 +65,6 @@ def validate_output_port_contracts(product_db, db) -> None:
 
     from src.repositories.data_contracts_repository import data_contract_repo
 
-    valid_contract_statuses = ['approved', 'active']
     contracts_not_approved = []
 
     for port in product_db.output_ports:
@@ -76,12 +75,9 @@ def validate_output_port_contracts(product_db, db) -> None:
                     f"{port.name} -> {port.contract_id} (contract not found)"
                 )
                 continue
-            contract_status = (contract.status or '').lower()
             # Approved, or a stage of the active category in the contract's group
             from src.controller.lifecycle_service import lifecycle_service
-            if contract_status not in valid_contract_statuses and lifecycle_service.category_of(
-                db, 'data_contract', contract,
-            ) != 'active':
+            if not lifecycle_service.contract_publishable(db, contract):
                 contracts_not_approved.append(
                     f"{port.name} -> {contract.name} (status: {contract.status})"
                 )

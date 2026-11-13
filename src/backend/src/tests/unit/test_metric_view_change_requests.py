@@ -602,6 +602,24 @@ class TestDecisionAndDelivery:
         assert db_session.get(MetricViewChangeRequestDb, request.id).status == 'cancelled'
         assert _notifications(db_session, module.MANUAL_TITLE_KEY) == []
 
+    def test_cancelling_closes_the_approvals_an_approver_already_opened(
+        self, db_session, manager, asset, ws, review, delivery
+    ):
+        request = _in_review(db_session, manager, asset, ws)
+        opened = NotificationDb(
+            id=str(uuid.uuid4()), type='action_required', title='Approval Required',
+            recipient='approver@example.com', read=True, action_type='workflow_approval',
+            action_payload=json.dumps({'execution_id': 'exec-1', 'step_id': 'approve'}),
+        )
+        db_session.add(opened)
+        db_session.flush()
+
+        manager.cancel(asset.id, request.id, REQUESTER)
+
+        db_session.refresh(opened)
+        payload = json.loads(opened.action_payload)
+        assert payload['handled'] is True and payload['decision'] == 'cancelled'
+
 
 class TestBaselineOnReadBack:
     def test_the_delivered_definition_becomes_the_baseline_when_read_back(

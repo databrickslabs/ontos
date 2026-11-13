@@ -1369,6 +1369,9 @@ async def resume_workflow_execution(
                 },
             )
 
+        # The step the resume decides, read before the resume moves on
+        decided_step = _pending_step_id(db, execution_id)
+
         # Resume the workflow
         result = executor.resume_workflow(
             execution_id=execution_id,
@@ -1380,13 +1383,18 @@ async def resume_workflow_execution(
             },
             user_email=user_email,
         )
-        
+
         if not result:
             raise HTTPException(
-                status_code=404, 
+                status_code=404,
                 detail="Execution not found or not in paused state"
             )
-        
+
+        # An approval resumed here (e.g. by an external system) is decided:
+        # close its notifications so My actions stops offering it
+        _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
+        db.commit()
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',
@@ -1672,6 +1680,19 @@ def _assert_caller_authorized_for_execution(
     )
 
 
+def _open_execution_approvals(db: Session, execution_id: str) -> List[NotificationDb]:
+    """The approval notifications of ``execution_id`` not handled yet, read or not.
+
+    The text filter (the quoted id) narrows the rows in SQL; callers check
+    the payload's ``execution_id`` exactly.
+    """
+    rows = db.query(NotificationDb).filter(
+        NotificationDb.action_type == 'workflow_approval',
+        NotificationDb.action_payload.contains(json.dumps(execution_id)),
+    ).all()
+    return [n for n in rows if not _is_handled(n)]
+
+
 def _mark_step_notifications_handled(
     db: Session,
     execution_id: str,
@@ -1680,18 +1701,15 @@ def _mark_step_notifications_handled(
     user_email: Optional[str],
     decision: Optional[str] = None,
 ) -> None:
-    """Mark the unread approval notifications of ``step_id`` as handled.
+    """Mark the approval notifications of ``step_id`` not yet handled as handled.
 
-    Notifications of later steps, created while the workflow resumed, stay
-    open for their approvers. ``decision`` overrides approved / rejected
-    (``cancelled`` when an admin cancels the step).
+    Read ones too: an approver who opened the notification in the bell still
+    sees it in My actions until it is handled. Notifications of later steps,
+    created while the workflow resumed, stay open for their approvers.
+    ``decision`` overrides approved / rejected (``cancelled`` when an admin
+    cancels the step).
     """
-    notifications = db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'workflow_approval',
-        NotificationDb.read == False
-    ).all()
-
-    for notif in notifications:
+    for notif in _open_execution_approvals(db, execution_id):
         try:
             payload = notif.action_payload
             if isinstance(payload, str):
@@ -1728,10 +1746,7 @@ def _mark_decided_approver_notifications(
     from src.common.workflow_executor import approver_key
 
     by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
-    for notif in db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'workflow_approval',
-        NotificationDb.read == False,  # noqa: E712
-    ).all():
+    for notif in _open_execution_approvals(db, execution_id):
         try:
             payload = json.loads(notif.action_payload or '{}')
         except (TypeError, ValueError):

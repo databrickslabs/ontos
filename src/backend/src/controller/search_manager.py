@@ -1,6 +1,6 @@
 from __future__ import annotations # Ensure forward references work
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Iterable, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Iterable, Sequence, TYPE_CHECKING
 import re
 
 # Import Search Interfaces

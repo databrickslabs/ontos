@@ -208,7 +208,7 @@ Notification `recipients` and approval `approvers` take one of these values, or 
 | An app role name or id | Everyone in that role's groups (case, spaces and underscores are ignored in names) |
 | `business:<role id>` | The users holding that business role for the entity |
 | An email, or `user:<email>` | That user |
-| `group:<name>` | The members of that directory group (the designer saves picked groups this way) |
+| `group:<name>` | The members of that directory group, ignoring case (the designer saves picked groups this way, with a `,` in the name written `%2C` and a `%` `%25`) |
 | `reviewer` | The reviewer chosen by the requester (`reviewer_email`), else the Admin role |
 
 A bare group name (saved before the designer added the prefix) still reaches the group's members, unless it matches a token or an app role name.
@@ -232,7 +232,7 @@ Without `require_all` (the default), the first decision resumes the execution.
 With `require_all: true`, every notification target the step resolved when it paused must decide:
 
 - a user target needs that user's decision; a group or role target needs one decision from any member. A role's members are the members of its assigned groups and the users assigned to it individually; a role nobody is assigned to falls back to the admins. The owners of a business role are one target (one decision for the role). To require N named people, list them as users;
-- one person fills at most one target per step: their own user target if it is still pending, else the first still-pending group or role target in the order the step resolved them. So someone listed by email who is also in an approver group fills their own target, and the group needs another member;
+- one person decides once per step: the decision fills every still-pending user target naming them (`user:alice`, `alice` and `alice@example.com` are one person), else the first still-pending group or role target in the order the step resolved them. So someone listed by email who is also in an approver group fills their own target, and the group needs another member. `group:<name>` and `user:<x>` targets are matched as on delivery (group names ignoring case);
 - the execution stays paused until every target has approved, then follows `on_pass`;
 - any rejection follows `on_fail` at once: the outcome follows every stored decision, so a rejection stored earlier fails the step even if a later decision approves;
 - a second decision by someone who has filled a target of the step is refused with `409`, code `approval_already_decided`; the first one stands. Someone whose targets have all been filled by others (e.g. another member of a group that has decided) gets `409`, code `approval_no_longer_pending`;

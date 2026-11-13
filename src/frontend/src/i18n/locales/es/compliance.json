@@ -182,7 +182,8 @@
   },
   "runWarnings": {
     "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo.",
-    "notifications_failed": "No se pudieron enviar las notificaciones de la política (NOTIFY) en esta ejecución. Los resultados están completos."
+    "notifications_failed": "No se pudieron enviar las notificaciones de la política (NOTIFY) en esta ejecución. Los resultados están completos.",
+    "no_entities_matched": "Ninguna entidad coincide con esta regla, así que no se comprobó nada. Si esperaba alguna, revise el tipo de MATCH y la condición WHERE."
   },
   "actionOutcomes": {
     "status": {

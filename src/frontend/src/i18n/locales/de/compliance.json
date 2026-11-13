@@ -182,7 +182,8 @@
   },
   "runWarnings": {
     "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren.",
-    "notifications_failed": "Die Benachrichtigungen der Richtlinie (NOTIFY) konnten für diesen Lauf nicht gesendet werden. Die Ergebnisse sind vollständig."
+    "notifications_failed": "Die Benachrichtigungen der Richtlinie (NOTIFY) konnten für diesen Lauf nicht gesendet werden. Die Ergebnisse sind vollständig.",
+    "no_entities_matched": "Keine Entität entspricht dieser Regel, daher wurde nichts geprüft. Falls Sie Treffer erwartet haben, prüfen Sie den MATCH-Typ und die WHERE-Bedingung."
   },
   "actionOutcomes": {
     "status": {

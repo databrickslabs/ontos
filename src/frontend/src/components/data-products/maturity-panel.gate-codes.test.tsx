@@ -9,7 +9,7 @@ import { renderWithProviders } from '@/test/utils';
 import { MaturityPanel } from './maturity-panel';
 import type { MaturityReport } from '@/types/maturity';
 
-const ENGLISH = 'Table main.sales.orders was not found in Unity Catalog, '
+const ENGLISH = "Table main.sales.orders can't be read from Unity Catalog, "
   + 'so its fields are missing.';
 
 const REPORT: MaturityReport = {
@@ -31,7 +31,7 @@ const REPORT: MaturityReport = {
       {
         gate_id: 'g-1', policy_id: 'p-1', policy_name: 'Columns documented', required: true,
         passed: false, message: ENGLISH,
-        message_code: 'maturity_uc_table_not_found',
+        message_code: 'maturity_uc_table_unreadable',
         message_params: { tableName: 'main.sales.orders' },
       },
       {
@@ -65,8 +65,8 @@ describe('MaturityPanel gate codes', () => {
     await renderPanel('pt');
 
     expect(await screen.findByText(
-      'A tabela main.sales.orders não foi encontrada no Unity Catalog, '
-      + 'então faltam os campos dela.',
+      'A tabela main.sales.orders não pode ser lida do Unity Catalog, '
+      + 'por isso os campos dela estão ausentes.',
     )).toBeInTheDocument();
     expect(screen.queryByText(ENGLISH)).not.toBeInTheDocument();
     // A gate without a code keeps its own message

@@ -1014,8 +1014,7 @@
   },
   "maturityGateCodes": {
     "maturity_uc_table_client_unavailable": "Unity Catalog est injoignable, les champs de la table {{tableName}} sont donc absents.",
-    "maturity_uc_table_not_found": "La table {{tableName}} est introuvable dans Unity Catalog, ses champs sont donc absents.",
-    "maturity_uc_table_permission_denied": "L'application n'a pas le droit de lire la table {{tableName}} dans Unity Catalog, ses champs sont donc absents.",
+    "maturity_uc_table_unreadable": "La table {{tableName}} ne peut pas être lue depuis Unity Catalog, ses champs sont donc manquants.",
     "maturity_uc_table_read_failed": "La table {{tableName}} n'a pas pu être lue depuis Unity Catalog, ses champs sont donc absents.",
     "maturity_gate_error": "Le gate {{gateName}} n'a pas pu être évalué. Les détails figurent dans le journal du serveur."
   },

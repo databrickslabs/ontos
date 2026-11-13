@@ -1014,8 +1014,7 @@
   },
   "maturityGateCodes": {
     "maturity_uc_table_client_unavailable": "Unity Catalog ist nicht erreichbar, daher fehlen die Felder der Tabelle {{tableName}}.",
-    "maturity_uc_table_not_found": "Die Tabelle {{tableName}} wurde in Unity Catalog nicht gefunden, daher fehlen ihre Felder.",
-    "maturity_uc_table_permission_denied": "Die App darf die Tabelle {{tableName}} in Unity Catalog nicht lesen, daher fehlen ihre Felder.",
+    "maturity_uc_table_unreadable": "Tabelle {{tableName}} kann nicht aus Unity Catalog gelesen werden, daher fehlen ihre Felder.",
     "maturity_uc_table_read_failed": "Die Tabelle {{tableName}} konnte nicht aus Unity Catalog gelesen werden, daher fehlen ihre Felder.",
     "maturity_gate_error": "Das Gate {{gateName}} konnte nicht ausgewertet werden. Die Details stehen im Serverprotokoll."
   },

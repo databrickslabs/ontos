@@ -6,6 +6,8 @@ ambiguous named action.
 """
 import uuid
 
+import pytest
+
 from src.common.lifecycle_defaults import DEFAULT_GROUP_IDS
 from src.controller.change_log_manager import change_log_manager
 from src.db_models.data_products import DataProductDb
@@ -176,3 +178,60 @@ class TestNamedActions:
                           json={'new_status': 'needs_review'})
         assert res.status_code == 200, res.text
         assert res.json()['product']['statusCategory'] == 'review'
+
+
+class TestNotAnAdmin:
+    """Read/Write on the entity's feature but not Admin: owners only."""
+
+    @pytest.fixture
+    def not_admin(self, monkeypatch):
+        from src.common.features import FeatureAccessLevel
+        from src.routes import lifecycle_stage_groups_routes as routes
+
+        async def has_level(feature_id, level, user, request):
+            return level != FeatureAccessLevel.ADMIN
+
+        monkeypatch.setattr(routes, 'has_feature_permission', has_level)
+
+    def _owned(self, db, status, owner):
+        pid = _product(db, status)
+        row = db.get(DataProductDb, pid)
+        row.draft_owner_id = owner
+        db.commit()
+        return pid
+
+    def test_the_owner_changes_the_group(self, client, db_session, mock_test_user, not_admin):
+        created = _create(client, _group())
+        pid = self._owned(db_session, 'draft', mock_test_user.email)
+        res = client.post(f'/api/lifecycle/data_product/{pid}/change-group',
+                          json={'group_id': created['id']})
+        assert res.status_code == 200, res.text
+
+    def test_someone_else_cant_change_the_group(self, client, db_session, not_admin):
+        created = _create(client, _group())
+        pid = self._owned(db_session, 'approved', 'someone@example.com')
+        res = client.post(f'/api/lifecycle/data_product/{pid}/change-group',
+                          json={'group_id': created['id']})
+        # Refused before any write (the refused request's rollback ends the test data)
+        assert res.status_code == 403
+
+    def test_someone_elses_unpublished_product_reads_as_missing(
+        self, client, db_session, not_admin,
+    ):
+        pid = self._owned(db_session, 'draft', 'someone@example.com')
+        assert client.get(f'/api/lifecycle/data_product/{pid}').status_code == 404
+
+    def test_a_published_product_reads_for_everyone(self, client, db_session, not_admin):
+        pid = self._owned(db_session, 'active', 'someone@example.com')
+        res = client.get(f'/api/lifecycle/data_product/{pid}')
+        assert res.status_code == 200
+        assert res.json()['stage']['category'] == 'active'
+
+
+def test_a_stored_group_reads_with_its_stages_and_transitions(client):
+    created = _create(client, _group())
+    res = client.get(f"/api/lifecycle-stage-groups/{created['id']}")
+    assert res.status_code == 200
+    body = res.json()
+    assert [s['key'] for s in body['stages']] == ['draft', 'active', 'needs_review', 'retired']
+    assert {'from_key': 'needs_review', 'to_key': 'active'} in body['transitions']

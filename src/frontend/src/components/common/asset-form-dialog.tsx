@@ -185,6 +185,8 @@ export function AssetFormDialog({
           primary_domain_id: values.primary_domain_id ?? null,
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
+        // On edit {} clears the properties; null would also drop the ones Ontos keeps itself
+        payload.properties = properties;
         const response = await apiPut<AssetUpdateResult>(`/api/assets/${asset.id}`, payload);
         if (response.error) throw new Error(response.error);
         // Saved, but e.g. the description could not be written to Unity Catalog

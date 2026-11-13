@@ -1,0 +1,64 @@
+{
+  "stage": {
+    "draft": "Draft",
+    "sandbox": "Sandbox",
+    "proposed": "Proposed",
+    "under_review": "Under Review",
+    "approved": "Approved",
+    "active": "Active",
+    "deprecated": "Deprecated",
+    "retired": "Retired"
+  },
+  "category": {
+    "draft": "Draft",
+    "review": "Review",
+    "active": "Active",
+    "deprecated": "Deprecated",
+    "retired": "Retired"
+  },
+  "entityType": {
+    "data_product": "Data Products",
+    "data_contract": "Data Contracts",
+    "asset": "Assets"
+  },
+  "defaultGroupName": {
+    "data_product": "Default data product lifecycle",
+    "data_contract": "Default data contract lifecycle",
+    "asset": "Default asset lifecycle"
+  },
+  "settings": {
+    "tab": "Lifecycle Stage Groups",
+    "title": "Lifecycle Stage Groups",
+    "description": "The stages each entity type moves through and the moves allowed between them. Every stage belongs to a category, which drives publishing, the Marketplace and the ODCS / ODPS export.",
+    "empty": "No lifecycle stage groups yet.",
+    "groupList": "Lifecycle stage groups",
+    "default": "Default"
+  },
+  "errors": {
+    "none": "none",
+    "invalid_status_transition": "Can’t move from {{fromStatus}} to {{toStatus}}. Allowed: {{allowed}}.",
+    "lifecycle_action_ambiguous": "Several stages of the {{category}} category can follow {{fromStatus}} ({{candidates}}). Change the status to one of them instead.",
+    "lifecycle_group_not_found": "The lifecycle stage group doesn’t exist.",
+    "lifecycle_group_wrong_entity_type": "This lifecycle stage group is for another entity type.",
+    "lifecycle_change_same_group": "It already follows this lifecycle; change its status instead.",
+    "lifecycle_change_pending_request": "The lifecycle can’t change while a workflow request is pending for it.",
+    "lifecycle_stage_invalid_key": "Stage key “{{key}}” must use lowercase letters, digits and underscores only.",
+    "lifecycle_stage_duplicate_key": "Stage key “{{key}}” is used twice.",
+    "lifecycle_stage_invalid_category": "“{{category}}” is not a stage category.",
+    "lifecycle_transition_unknown_stage": "The move {{fromKey}} → {{toKey}} names a stage the group doesn’t have.",
+    "lifecycle_group_initial_stage_one": "A group needs exactly one first stage; it has {{count}}.",
+    "lifecycle_group_initial_stage_other": "A group needs exactly one first stage; it has {{count}}.",
+    "lifecycle_group_initial_not_draft": "The first stage “{{key}}” must be in the Draft category, so a lifecycle change can’t skip review.",
+    "lifecycle_group_unreachable_stages": "These stages can’t be reached from the first stage: {{stages}}.",
+    "lifecycle_group_no_active_stage": "A group needs at least one stage in the Active category.",
+    "lifecycle_stage_in_use_one": "Stage “{{key}}” can’t be removed: {{count}} entity is in it.",
+    "lifecycle_stage_in_use_other": "Stage “{{key}}” can’t be removed: {{count}} entities are in it.",
+    "lifecycle_stage_in_workflow": "Stage “{{key}}” can’t be removed: workflows use it ({{workflows}}).",
+    "lifecycle_group_name_taken": "A lifecycle named “{{name}}” already exists for this entity type.",
+    "lifecycle_group_entity_type_immutable": "A group’s entity type can’t change.",
+    "lifecycle_group_default_required": "Every entity type needs a default lifecycle: make another group the default instead.",
+    "lifecycle_group_is_default": "The default lifecycle of an entity type can’t be deleted.",
+    "lifecycle_group_in_use_one": "This lifecycle is used by {{count}} entity and can’t be deleted.",
+    "lifecycle_group_in_use_other": "This lifecycle is used by {{count}} entities and can’t be deleted."
+  }
+}

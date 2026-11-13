@@ -1,0 +1,64 @@
+{
+  "stage": {
+    "draft": "下書き",
+    "sandbox": "サンドボックス",
+    "proposed": "提案中",
+    "under_review": "レビュー中",
+    "approved": "承認済み",
+    "active": "アクティブ",
+    "deprecated": "非推奨",
+    "retired": "廃止"
+  },
+  "category": {
+    "draft": "下書き",
+    "review": "レビュー",
+    "active": "アクティブ",
+    "deprecated": "非推奨",
+    "retired": "廃止"
+  },
+  "entityType": {
+    "data_product": "データプロダクト",
+    "data_contract": "データコントラクト",
+    "asset": "アセット"
+  },
+  "defaultGroupName": {
+    "data_product": "データプロダクトの既定のライフサイクル",
+    "data_contract": "データコントラクトの既定のライフサイクル",
+    "asset": "アセットの既定のライフサイクル"
+  },
+  "settings": {
+    "tab": "ライフサイクルステージグループ",
+    "title": "ライフサイクルステージグループ",
+    "description": "各エンティティタイプが進むステージと、その間で許可される移行です。各ステージはカテゴリに属し、公開、Marketplace、ODCS / ODPS エクスポートの動作を決めます。",
+    "empty": "ライフサイクルステージグループはまだありません。",
+    "groupList": "ライフサイクルステージグループ",
+    "default": "既定"
+  },
+  "errors": {
+    "none": "なし",
+    "invalid_status_transition": "{{fromStatus}} から {{toStatus}} へは移行できません。許可: {{allowed}}。",
+    "lifecycle_action_ambiguous": "{{fromStatus}} の次になり得る {{category}} カテゴリのステージが複数あります（{{candidates}}）。そのいずれかにステータスを変更してください。",
+    "lifecycle_group_not_found": "ライフサイクルステージグループが存在しません。",
+    "lifecycle_group_wrong_entity_type": "このライフサイクルステージグループは別のエンティティタイプ用です。",
+    "lifecycle_change_same_group": "すでにこのライフサイクルに従っています。代わりにステータスを変更してください。",
+    "lifecycle_change_pending_request": "ワークフローリクエストが保留中の間はライフサイクルを変更できません。",
+    "lifecycle_stage_invalid_key": "ステージキー「{{key}}」には小文字、数字、アンダースコアのみ使用できます。",
+    "lifecycle_stage_duplicate_key": "ステージキー「{{key}}」が重複しています。",
+    "lifecycle_stage_invalid_category": "「{{category}}」はステージカテゴリではありません。",
+    "lifecycle_transition_unknown_stage": "移行 {{fromKey}} → {{toKey}} に、グループにないステージが含まれています。",
+    "lifecycle_group_initial_stage_one": "グループには最初のステージがちょうど 1 つ必要です（現在 {{count}} 個）。",
+    "lifecycle_group_initial_stage_other": "グループには最初のステージがちょうど 1 つ必要です（現在 {{count}} 個）。",
+    "lifecycle_group_initial_not_draft": "最初のステージ「{{key}}」は下書きカテゴリである必要があります（ライフサイクル変更でレビューを飛ばさないため）。",
+    "lifecycle_group_unreachable_stages": "次のステージには最初のステージから到達できません: {{stages}}。",
+    "lifecycle_group_no_active_stage": "グループにはアクティブカテゴリのステージが少なくとも 1 つ必要です。",
+    "lifecycle_stage_in_use_one": "ステージ「{{key}}」は削除できません: {{count}} 件のエンティティがあります。",
+    "lifecycle_stage_in_use_other": "ステージ「{{key}}」は削除できません: {{count}} 件のエンティティがあります。",
+    "lifecycle_stage_in_workflow": "ステージ「{{key}}」は削除できません: ワークフローが使用しています（{{workflows}}）。",
+    "lifecycle_group_name_taken": "このエンティティタイプには「{{name}}」という名前のライフサイクルがすでにあります。",
+    "lifecycle_group_entity_type_immutable": "グループのエンティティタイプは変更できません。",
+    "lifecycle_group_default_required": "各エンティティタイプには既定のライフサイクルが必要です。代わりに別のグループを既定にしてください。",
+    "lifecycle_group_is_default": "エンティティタイプの既定のライフサイクルは削除できません。",
+    "lifecycle_group_in_use_one": "このライフサイクルは {{count}} 件のエンティティが使用しているため削除できません。",
+    "lifecycle_group_in_use_other": "このライフサイクルは {{count}} 件のエンティティが使用しているため削除できません。"
+  }
+}

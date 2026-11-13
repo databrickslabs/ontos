@@ -28,6 +28,18 @@ describe('workflowWarningText', () => {
     expect(text).toContain('"other"');
   });
 
+  it('translates the missing policy of a policy check', () => {
+    const issue = {
+      code: 'policy_check_policy_missing',
+      message: 'backend text',
+      params: { step: 'gate', policyId: 'p1' },
+    };
+    const text = workflowWarningText(issue, en);
+    expect(text).toContain('"gate"');
+    expect(text).not.toBe('backend text');
+    expect(workflowWarningText(issue, i18n.getFixedT('pt'))).not.toBe(text);
+  });
+
   it('lists the unreachable steps', () => {
     const text = workflowWarningText(
       { code: 'unreachable_steps', message: 'backend text', params: { steps: ['a', 'b'] } },

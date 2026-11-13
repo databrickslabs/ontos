@@ -1656,12 +1656,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         text: workflowValidationIssueText(issue, t),
         nodeIds: workflowIssueNodeIds(issue, stepIds),
       })),
-      ...[...(workflow?.trigger_warnings ?? []), ...(activeCheck?.warnings ?? [])].map((issue, i) => ({
-        key: `warning-${i}`,
-        tone: 'warning' as const,
-        text: workflowWarningText(issue, t),
-        nodeIds: workflowIssueNodeIds(issue, stepIds),
-      })),
+      // An unknown stored entity type is shown, with a remove button, by the notice in the
+      // trigger settings; the trigger node still gets its amber ring below
+      ...[...(workflow?.trigger_warnings ?? []), ...(activeCheck?.warnings ?? [])]
+        .filter(issue => issue.code !== 'stored_entity_type_unknown')
+        .map((issue, i) => ({
+          key: `warning-${i}`,
+          tone: 'warning' as const,
+          text: workflowWarningText(issue, t),
+          nodeIds: workflowIssueNodeIds(issue, stepIds),
+        })),
     ];
   })();
 

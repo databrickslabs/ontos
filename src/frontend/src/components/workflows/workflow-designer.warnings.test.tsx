@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-import i18n from '@/i18n/config';
 import WorkflowDesigner from './workflow-designer';
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), toast: vi.fn() }));
@@ -88,16 +87,37 @@ describe('WorkflowDesigner warnings', () => {
     api.toast.mockReset();
   });
 
-  it('shows the stored trigger warnings on the trigger node and in the summary', async () => {
+  it('shows a stored trigger warning on the trigger node and in the summary', async () => {
     const { container } = renderDesigner(storedWorkflow([
-      { code: 'stored_entity_type_unknown', message: 'x', params: { triggerType: 'on_create', entityType: 'dataset' } },
+      {
+        code: 'stored_entity_type_unsupported',
+        message: 'x',
+        params: { triggerType: 'before_update', entityType: 'data_product' },
+      },
     ]));
 
     const summary = await screen.findByTestId('workflow-warnings');
-    expect(summary.textContent).toContain(i18n.getFixedT('en')('workflows:designer.validationWarnings.stored_entity_type_unknown', { triggerType: 'on_create', entityType: 'dataset', defaultValue: 'x' }));
+    expect(summary.textContent).not.toBe('x');
     await waitFor(() => {
-      expect(container.querySelector('.react-flow__node-trigger')?.className).toContain('ring-amber-500');
+      expect(container.querySelector('.react-flow__node-trigger')?.className)
+        .toContain('ring-amber-500');
     });
+  });
+
+  it('keeps an unknown stored type out of the summary but rings the trigger', async () => {
+    const { container } = renderDesigner(storedWorkflow([
+      {
+        code: 'stored_entity_type_unknown',
+        message: 'x',
+        params: { triggerType: 'on_create', entityType: 'dataset' },
+      },
+    ]));
+
+    await waitFor(() => {
+      expect(container.querySelector('.react-flow__node-trigger')?.className)
+        .toContain('ring-amber-500');
+    });
+    expect(screen.queryByTestId('workflow-warnings')).toBeNull();
   });
 
   it('Check shows the validation warnings on the node and in the summary, and saving still goes through', async () => {

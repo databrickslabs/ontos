@@ -865,10 +865,14 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const { t } = useTranslation(['workflows', 'common']);
   const { get, post, put } = useApi();
   const { toast } = useToast();
-  // The stage keys of every Lifecycle Stage Group, for the status trigger pickers
-  const { groups: lifecycleGroups } = useLifecycleStageGroups();
+  // The stage keys of the Lifecycle Stage Groups, for the status trigger pickers;
+  // per entity type, as each needs only read access to that entity's feature
+  const { groups: productGroups } = useLifecycleStageGroups('data_product');
+  const { groups: contractGroups } = useLifecycleStageGroups('data_contract');
+  const { groups: assetGroups } = useLifecycleStageGroups('asset');
   const lifecycleStages = useMemo(
-    () => stageKeysByEntityType(lifecycleGroups), [lifecycleGroups],
+    () => stageKeysByEntityType([...productGroups, ...contractGroups, ...assetGroups]),
+    [productGroups, contractGroups, assetGroups],
   );
 
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);

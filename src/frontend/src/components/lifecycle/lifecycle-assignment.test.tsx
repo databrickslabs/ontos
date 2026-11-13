@@ -10,7 +10,9 @@ import i18n from '@/i18n/config';
 import LifecycleGroupPicker from './lifecycle-group-picker';
 import EntityLifecycleStatus from './entity-lifecycle-status';
 import { buildStageLookup } from '@/hooks/use-lifecycle-stage-groups';
-import { lifecycleErrorText, stageColorClass, stageLabel } from '@/lib/lifecycle-stages';
+import {
+  awaitsReviewDecision, lifecycleErrorText, stageColorClass, stageLabel,
+} from '@/lib/lifecycle-stages';
 import type { LifecycleStageGroup } from '@/types/lifecycle-stage-groups';
 
 const st = (key: string, label: string, category: string, order: number, color: string) => ({
@@ -65,6 +67,13 @@ describe('stage helpers', () => {
     expect(lookup(null, 'active')?.color).toBe('green');
     expect(lookup('g-loop', 'draft')).toBeNull();
     expect(lookup('unknown', 'draft')?.key).toBe('draft');
+  });
+
+  it('awaits a review decision in a review stage but approved', () => {
+    expect(awaitsReviewDecision({ status: 'needs_review', status_category: 'review' })).toBe(true);
+    expect(awaitsReviewDecision({ status: 'approved', status_category: 'review' })).toBe(false);
+    expect(awaitsReviewDecision({ status: 'proposed' })).toBe(true);
+    expect(awaitsReviewDecision({ status: 'live', status_category: 'active' })).toBe(false);
   });
 
   it('translates coded lifecycle errors with their parameters', () => {

@@ -685,6 +685,8 @@ class AssetBulkManager:
                 result.errors += 1
                 result.items.append(item)
                 continue
+            # The internal keys (e.g. the Unity Catalog sync mark) are never imported
+            properties = without_internal_properties(properties)
             try:
                 self._validate_row_properties(db, type_id, properties)
             except ValidationError as e:

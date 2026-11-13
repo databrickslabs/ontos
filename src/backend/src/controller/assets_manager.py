@@ -10,7 +10,7 @@ from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.common.uc_comments import split_column_location
 from src.models.assets import (
-    description_sync_state, without_internal_properties,
+    description_sync_state,
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
     AssetCreate, AssetUpdate, AssetRead, AssetSummary,
     AssetRelationshipCreate, AssetRelationshipRead,
@@ -226,8 +226,6 @@ class AssetsManager(SearchableAsset):
         data = asset_in.model_dump()
         domain_ids = data.pop("domain_ids", None) or []
         primary_domain_id = data.pop("primary_domain_id", None)
-        # Clients never set the internal keys (e.g. the Unity Catalog sync mark)
-        data["properties"] = without_internal_properties(data.get("properties"))
         data["created_by"] = current_user_id
         db_asset = AssetDb(**data)
 

@@ -396,6 +396,31 @@ class TestWithoutRequireAll:
         assert response.status_code == 200, response.text
         assert response.json()['status'] == 'succeeded'
 
+    def test_resuming_the_step_closes_the_notification_already_opened(
+        self, client, as_user, db_session,
+    ):
+        """An approval resumed on the execution view (no approver decides) is
+        decided: its notification opened in the bell leaves My actions too."""
+        from src.db_models.notifications import NotificationDb
+
+        execution_id = _paused_execution(client, as_user, 'ana@example.com', require_all=False)
+        db_session.expire_all()
+        for notification in db_session.query(NotificationDb).filter_by(
+            action_type='workflow_approval',
+        ).all():
+            if json.loads(notification.action_payload or '{}').get('execution_id') == execution_id:
+                notification.read = True
+        db_session.flush()
+        as_user(ADMIN)
+
+        response = client.post(
+            f'/api/workflows/executions/{execution_id}/resume', json={'approved': True},
+        )
+
+        assert response.status_code == 200, response.text
+        ((_, payload),) = _approval_notifications(db_session, execution_id).values()
+        assert payload['handled'] is True and payload['decision'] == 'approved'
+
     def test_a_late_approver_gets_409(self, client, as_user, db_session):
         execution_id = _paused_execution(
             client, as_user, 'ana@example.com,ben@example.com', require_all=False,

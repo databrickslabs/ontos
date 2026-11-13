@@ -1214,6 +1214,9 @@
       "deniedDescription": "La solicitud de despliegue se ha rechazado.",
       "failedTitle": "Error",
       "couldNotSubmit": "No se pudo enviar la decisión"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "No eres aprobador de esta solicitud de despliegue, así que no puedes decidirla."
     }
   },
   "publishRequest": {

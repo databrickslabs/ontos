@@ -1214,6 +1214,9 @@
       "deniedDescription": "Die Bereitstellungsanfrage wurde abgelehnt.",
       "failedTitle": "Fehlgeschlagen",
       "couldNotSubmit": "Entscheidung konnte nicht eingereicht werden"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "Sie sind kein Genehmiger dieser Bereitstellungsanfrage und können sie daher nicht entscheiden."
     }
   },
   "publishRequest": {

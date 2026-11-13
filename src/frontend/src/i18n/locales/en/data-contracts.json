@@ -1214,6 +1214,9 @@
       "deniedDescription": "Deployment request has been denied.",
       "failedTitle": "Failed",
       "couldNotSubmit": "Could not submit decision"
+    },
+    "errors": {
+      "deploy_request_not_an_approver": "You aren't an approver of this deployment request, so you can't decide it."
     }
   },
   "publishRequest": {

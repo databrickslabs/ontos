@@ -826,7 +826,7 @@ POST /api/data-contracts/{contract_id}/handle-deploy
 
 Records the decision on a deployment request and notifies the requester. Nothing is deployed: there is no deployment trigger yet.
 
-**Authorization:** `data-contracts` — `Read/Write`
+**Authorization:** `data-contracts` — `Read/Write`, and the caller must be an approver of the contract's deployment request: a recipient of its notification (the Admin role, as the request route sends it; a group, role or user recipient matches as in the notification bell). Others, and everyone when the contract has no deployment request, get `403` with `detail.code` `deploy_request_not_an_approver`.
 
 #### Request body
 

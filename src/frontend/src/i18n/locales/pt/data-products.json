@@ -795,7 +795,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Como este entregável fornece dados aos consumidores (ex.: acesso a tabelas, endpoint de serving)",
-      "onlyActiveContracts": "Mostrando apenas contratos ativos/aprovados/certificados",
+      "onlyActiveContracts": "Mostrando apenas contratos ativos/aprovados",
       "containsPiiHint": "Este entregável contém informações de identificação pessoal?",
       "autoApproveHint": "Aprovar automaticamente as solicitações de acesso para este entregável?",
       "afterCreation": "Após criar este entregável, você pode vincular ativos (tabelas, views, conjuntos de dados etc.) a ele na página de detalhes."

@@ -795,7 +795,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Cómo este entregable sirve datos a los consumidores (p. ej., Acceso a tablas, Endpoint de servicio)",
-      "onlyActiveContracts": "Mostrando solo contratos activos/aprobados/certificados",
+      "onlyActiveContracts": "Mostrando solo contratos activos/aprobados",
       "containsPiiHint": "¿Este entregable contiene información de identificación personal?",
       "autoApproveHint": "¿Aprobar automáticamente las solicitudes de acceso para este entregable?",
       "afterCreation": "Después de crear este entregable, puede vincularle activos (tablas, vistas, conjuntos de datos, etc.) desde la página de detalles."

@@ -314,7 +314,16 @@ def _transition_status(
 
     ``kwargs`` go to ``transition_status``; its ``deprecation`` fills the audit details.
     """
-    action, details = product_status_audit(product_id, status, kwargs.get("deprecation"))
+    from src.controller.lifecycle_service import lifecycle_service
+
+    product = ctx.data_products_manager.get_product(product_id)
+    category = (
+        lifecycle_service.group_for(ctx.db, 'data_product', product).category(status)
+        if product is not None else None
+    )
+    action, details = product_status_audit(
+        product_id, status, kwargs.get("deprecation"), category,
+    )
     with _audited(ctx, tool_name, action, details) as outcome:
         ctx.data_products_manager.transition_status(
             product_id, status, current_user=_caller_email(ctx), **kwargs

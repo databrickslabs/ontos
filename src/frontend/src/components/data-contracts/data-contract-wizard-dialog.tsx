@@ -13,6 +13,7 @@ import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
+import { DataContractStatus } from '@/lib/odcs-lifecycle'
 
 type WizardProps = {
   isOpen: boolean
@@ -21,7 +22,8 @@ type WizardProps = {
   initial?: any
 }
 
-const statuses = ['draft', 'active', 'deprecated', 'archived']
+// The contract lifecycle statuses (archived is not one: it was renamed retired)
+const statuses = Object.values(DataContractStatus)
 
 interface SemanticConcept {
   iri: string

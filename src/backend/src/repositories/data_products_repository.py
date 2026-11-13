@@ -105,6 +105,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 api_version=obj_in.apiVersion,
                 kind=obj_in.kind,
                 status=obj_in.status,
+                lifecycle_stage_group_id=getattr(obj_in, 'lifecycle_stage_group_id', None),
                 name=obj_in.name,
                 version=obj_in.version,
                 tenant=obj_in.tenant,
@@ -1003,7 +1004,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             query = db.query(self.model).filter(self.model.version_family_id == family_id)
             if not is_admin:
                 # Hide other users' personal drafts.
-                query = query.filter(not_others_personal_draft(self.model, user_email))
+                query = query.filter(not_others_personal_draft(self.model, user_email, db))
             return query.order_by(self.model.created_at.desc()).all()
         except Exception as e:
             logger.error(f"Error fetching family versions for {family_id}: {e}", exc_info=True)

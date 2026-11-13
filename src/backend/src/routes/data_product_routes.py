@@ -345,7 +345,11 @@ async def publish_product(
         return {'status': updated_product.status}
     except ValueError as e:
         logger.error("Validation error publishing product %s: %s", product_id, e)
-        error_status = 409 if "Invalid transition" in str(e) else 400
+        # 409: the lifecycle has no (or no single) publish move from this stage
+        from src.common.api_errors import InvalidStatusTransitionError
+        from src.controller.lifecycle_service import LifecycleActionUnresolvedError
+        refused_move = isinstance(e, (InvalidStatusTransitionError, LifecycleActionUnresolvedError))
+        error_status = 409 if refused_move or "Invalid transition" in str(e) else 400
         raise HTTPException(status_code=error_status, detail=str(e))
     except HTTPException:
         raise
@@ -565,7 +569,8 @@ async def handle_certify_product(
         if certification_level is None:
             raise HTTPException(status_code=422, detail="certification_level is required when approved is true")
 
-        if product_db.status not in ("active",):
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of(db, 'data_product', product_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Product must be active to certify. Current status: {product_db.status}",
@@ -716,9 +721,11 @@ async def request_publish_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        # Same rule as set-publication-scope: only active products are published.
+        # Same rule as set-publication-scope: only active-category products are published.
+        from src.controller.lifecycle_service import lifecycle_service
         current_status = (product_db.status or "").lower()
-        if scope != "none" and current_status != "active":
+        if scope != "none" and \
+                lifecycle_service.category_of(db, 'data_product', product_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Product must be active to publish. Current status: {product_db.status}"
@@ -794,7 +801,8 @@ async def certify_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        if product_db.status not in ("active",):
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of(db, 'data_product', product_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Product must be active to certify. Current status: {product_db.status}"
@@ -2100,7 +2108,11 @@ async def update_data_product(
 
         # Check if versioning is required for non-draft products
         current_product_db = manager.get_product(product_id)
-        if current_product_db and current_product_db.status and current_product_db.status.lower() != 'draft':
+        # A product that isn't edited in place (past draft and the review awaiting
+        # its decision) is versioned; the clone guard uses the same rule
+        from src.controller.lifecycle_service import lifecycle_service
+        if current_product_db and current_product_db.status and \
+                not lifecycle_service.editable_in_place(db, 'data_product', current_product_db):
             # Check if caller explicitly forced the update
             force_update = request.headers.get('X-Force-Update') == 'true'
             
@@ -2774,7 +2786,8 @@ async def change_product_status(
         )
         
         audit_action, audit_details = product_status_audit(
-            product_id, payload.new_status, payload.deprecation_details()
+            product_id, payload.new_status, payload.deprecation_details(),
+            updated_product.status_category,
         )
         audit_manager.log_action(
             db=db,

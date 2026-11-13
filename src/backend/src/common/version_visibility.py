@@ -7,15 +7,16 @@ Two ranking tables, picked per (caller × family):
   in-flight versions surface first so producers/subscribers preview
   upcoming changes:
 
-      DRAFT > PROPOSED > UNDER_REVIEW > APPROVED > ACTIVE > DEPRECATED
+      draft > review (in stage order) > active > deprecated   (Stage Categories)
 
 * **Consumer** — caller has no elevated relationship with the family.
   Only published lifecycle stages are visible; the active version wins:
 
-      ACTIVE > DEPRECATED   (all other statuses filtered out entirely)
+      active > deprecated   (all other categories filtered out entirely)
 
-``RETIRED`` and unknown statuses sit below both rankings and are only
-visible to admins (the manager applies that final guard).
+The ``retired`` category and unknown statuses sit below both rankings and are
+only visible to admins (the manager applies that final guard). A row's
+category is its stage's in its lifecycle stage group (``lifecycle_service``).
 
 The functions in this module take plain ORM rows (or row-like objects
 that expose ``status``, ``draft_owner_id``, ``owner_team_id``,
@@ -28,58 +29,73 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Optional, Set
 
 
-# Lower rank wins (think: "preferred"). Statuses absent from the dict
-# never rank — the consumer filter drops them before ranking starts.
-_STATUS_RANK_ELEVATED: dict[str, int] = {
+# Ranks by Stage Category (the row's stage in its lifecycle stage group, #1213);
+# lower rank wins (think: "preferred"). Rows whose category is absent from a
+# table never rank: the consumer filter drops them before ranking starts.
+_CATEGORY_RANK_ELEVATED: dict[str, int] = {
     "draft": 0,
-    "proposed": 1,
-    "under_review": 2,
-    "approved": 3,
-    "active": 4,
-    "deprecated": 5,
+    "review": 1,
+    "active": 2,
+    "deprecated": 3,
 }
 
-_STATUS_RANK_CONSUMER: dict[str, int] = {
+_CATEGORY_RANK_CONSUMER: dict[str, int] = {
     "active": 0,
     "deprecated": 1,
 }
 
-# The published lifecycle statuses: what every reader sees.
-CONSUMER_VISIBLE_STATUSES: frozenset[str] = frozenset(_STATUS_RANK_CONSUMER)
+# The published Stage Categories: what every reader sees.
+CONSUMER_VISIBLE_CATEGORIES: frozenset[str] = frozenset(_CATEGORY_RANK_CONSUMER)
+# The stage keys of those categories in the seeded lifecycles.
+CONSUMER_VISIBLE_STATUSES: frozenset[str] = frozenset({"active", "deprecated"})
 
-# Statuses visible to admins only (filtered out for everyone else).
-_ADMIN_ONLY_STATUSES: frozenset[str] = frozenset({"retired"})
+# Categories visible to admins only (filtered out for everyone else).
+_ADMIN_ONLY_CATEGORIES: frozenset[str] = frozenset({"retired"})
 
 
-def _normalize_status(row: Any) -> str:
-    return (getattr(row, "status", "") or "").strip().lower()
+def _category(row: Any) -> Optional[str]:
+    from src.controller.lifecycle_service import lifecycle_service
+
+    return lifecycle_service.category_of_row(row)
 
 
 def is_visible_consumer(row: Any) -> bool:
-    """A consumer sees only published lifecycle stages."""
-    return _normalize_status(row) in _STATUS_RANK_CONSUMER
+    """A consumer sees only published stages (active / deprecated categories)."""
+    return _category(row) in _CATEGORY_RANK_CONSUMER
 
 
 def is_admin_only_status(row: Any) -> bool:
-    return _normalize_status(row) in _ADMIN_ONLY_STATUSES
+    return _category(row) in _ADMIN_ONLY_CATEGORIES
 
 
-def not_others_personal_draft(model: Any, user_email: Optional[str]) -> Any:
+def not_others_personal_draft(model: Any, user_email: Optional[str], db: Any = None) -> Any:
     """SQL filter: drop another user's personal draft, keep every other row.
 
-    A personal draft (tier 1) is a row in ``draft`` status with a
+    A personal draft (tier 1) is a row in its group's first stage (``draft``) with a
     ``draft_owner_id``; only its owner sees it. The owner stamp hides no row
-    in any other status: an active or deprecated version that still carries
+    in any other stage: an active or deprecated version that still carries
     another user's ``draft_owner_id`` is published and visible to everyone.
-    ``model`` is a mapped class with ``status`` and ``draft_owner_id``.
+    ``model`` is a mapped class with ``status`` and ``draft_owner_id``; ``db``
+    loads the lifecycle stage groups first (their first stages).
     """
-    from sqlalchemy import func, or_
+    from sqlalchemy import not_, or_
 
+    from src.controller.lifecycle_service import lifecycle_service
+
+    # Personal drafts are in their own group's first stage (``draft`` by default)
+    entity_type = _ENTITY_TYPES_BY_TABLE.get(getattr(model, "__tablename__", ""), "data_product")
     return or_(
         model.draft_owner_id.is_(None),
         model.draft_owner_id == user_email,
-        func.lower(func.trim(func.coalesce(model.status, ""))) != "draft",
+        not_(lifecycle_service.first_stage_filter(model, entity_type, db)),
     )
+
+
+_ENTITY_TYPES_BY_TABLE = {
+    "data_products": "data_product",
+    "data_contracts": "data_contract",
+    "assets": "asset",
+}
 
 
 def compute_rank(row: Any, *, has_elevated_access: bool) -> tuple:
@@ -91,12 +107,19 @@ def compute_rank(row: Any, *, has_elevated_access: bool) -> tuple:
     (consumer rows with non-published statuses, retired rows for
     non-admins, etc.).
     """
-    status = _normalize_status(row)
-    table = _STATUS_RANK_ELEVATED if has_elevated_access else _STATUS_RANK_CONSUMER
+    from src.controller.lifecycle_service import lifecycle_service
+
+    table = _CATEGORY_RANK_ELEVATED if has_elevated_access else _CATEGORY_RANK_CONSUMER
     # Unknown statuses sit below every known one. They should normally
     # have been filtered out already; this just guarantees deterministic
-    # ordering rather than a KeyError.
-    status_rank = table.get(status, 999)
+    # ordering rather than a KeyError. Within a category, stage order
+    # (proposed before under_review before approved).
+    category_rank = table.get(_category(row) or "", 999)
+    if has_elevated_access and lifecycle_service.is_side_draft_stage(row):
+        # A draft-category side stage (``sandbox``) ranks below every other
+        # stage, as before stage groups: the family shows its main line
+        category_rank = 999
+    status_rank = (category_rank, lifecycle_service.stage_order_of_row(row))
 
     created_at = getattr(row, "created_at", None)
     # Negate the epoch so DESC sort falls out of a plain ascending key.

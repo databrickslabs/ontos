@@ -795,7 +795,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Wie dieses Deliverable Daten an Verbraucher bereitstellt (z. B. Tabellenzugriff, Serving-Endpunkt)",
-      "onlyActiveContracts": "Es werden nur aktive/genehmigte/zertifizierte Verträge angezeigt",
+      "onlyActiveContracts": "Es werden nur aktive/genehmigte Verträge angezeigt",
       "containsPiiHint": "Enthält dieses Deliverable personenbezogene Daten?",
       "autoApproveHint": "Zugriffsanfragen für dieses Deliverable automatisch genehmigen?",
       "afterCreation": "Nach dem Erstellen dieses Deliverables können Sie Assets (Tabellen, Views, Datensätze usw.) über die Detailseite damit verknüpfen."

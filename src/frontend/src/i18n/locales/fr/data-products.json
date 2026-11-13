@@ -795,7 +795,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Comment ce livrable fournit les données aux consommateurs (par ex. accès aux tables, point de terminaison de service)",
-      "onlyActiveContracts": "Affichage des contrats actifs/approuvés/certifiés uniquement",
+      "onlyActiveContracts": "Affichage des contrats actifs/approuvés uniquement",
       "containsPiiHint": "Ce livrable contient-il des informations personnelles identifiables ?",
       "autoApproveHint": "Approuver automatiquement les demandes d'accès pour ce livrable ?",
       "afterCreation": "Après avoir créé ce livrable, vous pourrez y lier des actifs (tables, vues, jeux de données, etc.) depuis la page de détail."

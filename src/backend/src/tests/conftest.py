@@ -116,6 +116,17 @@ def setup_test_database(temp_audit_log_dir): # Add temp_audit_log_dir dependency
     Base.metadata.drop_all(bind=test_engine) # Clean up after tests
 
 
+@pytest.fixture(autouse=True)
+def _fresh_lifecycle_cache():
+    """The lifecycle service caches the stage groups per process: a group another
+    test stored (and rolled back) must not leak into the next test."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    lifecycle_service.invalidate()
+    yield
+    lifecycle_service.invalidate()
+
+
 @pytest.fixture(scope="function", autouse=True)
 def db_session(setup_test_database): # Depends on the session-scoped setup
     """

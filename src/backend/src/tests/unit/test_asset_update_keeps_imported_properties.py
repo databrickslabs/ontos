@@ -14,7 +14,7 @@ from rdflib import ConjunctiveGraph, URIRef
 from src.controller.assets_manager import AssetsManager
 from src.controller.ontology_schema_manager import OntologySchemaManager
 from src.db_models.assets import AssetDb, AssetTypeDb
-from src.models.assets import AssetUpdate
+from src.models.assets import METRIC_VIEW_PROPERTY, AssetUpdate
 
 TTL = Path(__file__).resolve().parents[2] / "data" / "taxonomies" / "ontos-ontology.ttl"
 
@@ -74,7 +74,7 @@ def test_an_edit_that_clears_every_property(db_session, osm):
     """The dialog sends {} when the user clears the last property: it is cleared."""
     column = AssetDb(
         name="note", asset_type_id=_column_type(db_session).id,
-        properties={"classification": "internal"},
+        properties={"classification": "internal", METRIC_VIEW_PROPERTY: {"source": "x"}},
     )
     db_session.add(column)
     db_session.flush()
@@ -85,3 +85,6 @@ def test_an_edit_that_clears_every_property(db_session, osm):
     )
 
     assert not updated.properties
+    # The keys Ontos keeps for itself (never sent to clients) survive
+    db_session.expire_all()
+    assert db_session.get(AssetDb, column.id).properties == {METRIC_VIEW_PROPERTY: {"source": "x"}}

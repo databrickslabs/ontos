@@ -182,10 +182,9 @@ export function AssetFormDialog({
           location: values.location || null,
           domain_ids: values.domain_ids || [],
           primary_domain_id: values.primary_domain_id ?? null,
-          properties: Object.keys(properties).length > 0 ? properties : null,
+          // {} clears the properties; null would also drop the ones Ontos keeps itself
+          properties,
         };
-        // On edit {} clears the properties; null would also drop the ones Ontos keeps itself
-        payload.properties = properties;
         const response = await apiPut<AssetRead>(`/api/assets/${asset.id}`, payload);
         if (response.error) throw new Error(response.error);
         toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });

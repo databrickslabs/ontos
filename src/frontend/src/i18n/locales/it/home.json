@@ -123,6 +123,10 @@
     "unknownProduct": "Prodotto sconosciuto",
     "viewAllSubscribed": "Visualizza tutti i sottoscritti"
   },
+  "discoveryDomainGraph": {
+    "unavailable": "La gerarchia dei domini non è disponibile per il tuo ruolo.",
+    "error": "Impossibile caricare la gerarchia dei domini"
+  },
   "dataCurationSection": {
     "title": "Cura dati",
     "createDataProduct": {

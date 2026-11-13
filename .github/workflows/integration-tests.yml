@@ -51,9 +51,12 @@ jobs:
           DATABRICKS_SCHEMA: test_schema
           DATABRICKS_VOLUME: test_volume
           APP_AUDIT_LOG_DIR: /tmp/audit_logs
+        # 3 workers, not 4: with 4 the runner was shut down near the end of
+        # the run (exit 143, no failing test), likely from memory pressure;
+        # locally each worker peaks at ~1.8 GB.
         run: |
           hatch -e dev run pytest backend/src/tests/integration \
             -o addopts="--import-mode=importlib" \
             -o faulthandler_timeout=300 \
-            -n 4 \
+            -n 3 \
             -q -rs

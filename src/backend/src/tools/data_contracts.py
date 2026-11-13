@@ -7,12 +7,15 @@ Tools for searching, creating, updating, and deleting data contracts.
 import json
 from typing import Any, Dict, List, Optional
 from src.common.features import FeatureAccessLevel
+from src.tools.write_audit import audit_change, audited, caller_email
 from src.tools import read_access
 from src.tools import visibility as vis
 
 from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
-from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.controller.lifecycle_fields import (
+    LIFECYCLE_AUDIT_ACTIONS, contract_status_audit, deprecation_details_from_strings,
+)
 from src.tools.base import (
     BaseTool, ToolContext, ToolResult, invalid_transition, tool_failure,
 )
@@ -85,6 +88,57 @@ def _serialize_contract(contract) -> Dict[str, Any]:
         "published_at": getattr(contract, 'published_at', None),
         "url": f"/data-contracts/{contract.id}",
     }
+
+
+DATA_CONTRACTS_FEATURE_ID = "data-contracts"
+# A before_update workflow failed: PUT /data-contracts/{id} answers 400 and
+# nothing is written.
+UPDATE_BLOCKED_CODE = "update_blocked"
+
+
+def _transition_status(
+    ctx: ToolContext, tool_name: str, contract_id: str, from_status: str, status: str,
+    **kwargs: Any,
+) -> Any:
+    """The change-status route's call (the caller for the gates), audited as the route does
+    (``DEPRECATE`` / ``RETIRE`` for those targets, ``CHANGE_STATUS`` otherwise).
+
+    ``kwargs`` go to ``transition_status``.
+    """
+    details = {"contract_id": contract_id, "from": from_status}
+    action = LIFECYCLE_AUDIT_ACTIONS.get(status.lower(), "CHANGE_STATUS")
+    with audited(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, action, details) as outcome:
+        updated = ctx.data_contracts_manager.transition_status(
+            db=ctx.db, contract_id=contract_id, new_status=status,
+            current_user=caller_email(ctx), **kwargs,
+        )
+        details.update(contract_status_audit(updated, contract_id, from_status, status)[1])
+        outcome["success"] = True
+    return updated
+
+
+def _update_refusal(
+    ctx: ToolContext, tool_name: str, contract: Any, changes: Dict[str, Any]
+) -> Optional[ToolResult]:
+    """The PUT route's before_update gates (``run_update_gates``); None = may update."""
+    passed, executions = ctx.data_contracts_manager.run_update_gates(
+        ctx.db, contract, changes, caller_email(ctx)
+    )
+    if passed:
+        return None
+    from src.common.workflow_triggers import (
+        describe_failed_executions, failed_execution_reasons,
+    )
+    contract_id = str(contract.id)
+    audit_change(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, "UPDATE", False, {
+        "params": {"contract_id": contract_id}, "error_code": UPDATE_BLOCKED_CODE,
+    })
+    return ToolResult(
+        success=False,
+        error=f"Update blocked by workflow: {describe_failed_executions(executions)}",
+        error_code=UPDATE_BLOCKED_CODE,
+        data={"contract_id": contract_id, "reasons": failed_execution_reasons(executions)},
+    )
 
 
 class CreateDraftDataContractTool(BaseTool):
@@ -187,12 +241,21 @@ class CreateDraftDataContractTool(BaseTool):
                 "schema": schema_objects
             }
             
-            # Create the contract
-            created = ctx.data_contracts_manager.create_contract_with_relations(
-                db=ctx.db,
-                contract_data=contract_data,
-                current_user=None  # Will use system default
-            )
+            # Create the contract. The caller is its draft owner, as with POST
+            # /data-contracts, so they can read and edit it afterwards.
+            audit_details: Dict[str, Any] = {"params": {"contract_name": name}}
+            with audited(
+                ctx, DATA_CONTRACTS_FEATURE_ID, self.name, "CREATE", audit_details
+            ) as outcome:
+                created = ctx.data_contracts_manager.create_contract_with_relations(
+                    db=ctx.db,
+                    contract_data=contract_data,
+                    current_user=caller_email(ctx),
+                )
+                audit_details["created_resource_id"] = str(created.id)
+                outcome["success"] = True
+            # The on_create workflows of POST /data-contracts.
+            ctx.data_contracts_manager.fire_create_trigger(ctx.db, created, caller_email(ctx))
             
             logger.info(f"[create_draft_data_contract] SUCCESS: Created contract id={created.id}, name={created.name}")
             return ToolResult(
@@ -234,10 +297,11 @@ class UpdateDataContractTool(BaseTool):
         "status": {
             "type": "string",
             "description": (
-                "New status (draft, active, deprecated). Applied as a lifecycle transition: "
-                "only an allowed transition, and status change workflows can block it."
+                "New status (draft, active, deprecated, retired). Applied as a lifecycle "
+                "transition: only an allowed transition, and status change workflows can "
+                "block it."
             ),
-            "enum": ["draft", "active", "deprecated"]
+            "enum": ["draft", "active", "deprecated", "retired"]
         },
         "deprecation_reason": {
             "type": "string",
@@ -307,6 +371,20 @@ class UpdateDataContractTool(BaseTool):
                     error="No fields to update. Provide at least one of: domain, description, status"
                 )
 
+            # A field change runs the before_update gates of PUT
+            # /data-contracts/{id}, before the status change, so a refused call
+            # writes nothing. A status change alone runs only the
+            # before_status_change gates, as the change-status route.
+            if update_data:
+                if not target:
+                    return ToolResult(
+                        success=False,
+                        error=f"Data contract '{contract_id}' not found"
+                    )
+                refusal = _update_refusal(ctx, self.name, target, update_data)
+                if refusal:
+                    return refusal
+
             # A status change goes through the lifecycle transition (allowed
             # transitions, before_status_change gates), like the change-status
             # route; an update can't change it.
@@ -338,11 +416,8 @@ class UpdateDataContractTool(BaseTool):
                             success=False, error=INVALID_SUNSET_DATE,
                             error_code=INVALID_SUNSET_DATE_CODE,
                         )
-                    updated = ctx.data_contracts_manager.transition_status(
-                        db=ctx.db,
-                        contract_id=contract_id,
-                        new_status=status.lower(),
-                        current_user=None,
+                    updated = _transition_status(
+                        ctx, self.name, contract_id, current_status, status.lower(),
                         deprecation=deprecation,
                     )
                 else:
@@ -350,12 +425,25 @@ class UpdateDataContractTool(BaseTool):
 
             # Update the contract
             if update_data:
-                updated = ctx.data_contracts_manager.update_contract_with_relations(
-                    db=ctx.db,
-                    contract_id=contract_id,
-                    contract_data=update_data,
-                    current_user=None
-                )
+                details = {"params": {"contract_id": contract_id}}
+                with audited(
+                    ctx, DATA_CONTRACTS_FEATURE_ID, self.name, "UPDATE", details
+                ) as outcome:
+                    updated = ctx.data_contracts_manager.update_contract_with_relations(
+                        db=ctx.db,
+                        contract_id=contract_id,
+                        contract_data=update_data,
+                        current_user=caller_email(ctx),
+                    )
+                    if updated is not None:
+                        details["updated_resource_id"] = contract_id
+                        outcome["success"] = True
+                if updated is not None:
+                    # The on_update workflows of PUT /data-contracts/{id}; a status
+                    # change alone fires on_status_change only, as change-status.
+                    ctx.data_contracts_manager.fire_update_trigger(
+                        ctx.db, contract_id, updated, update_data, caller_email(ctx)
+                    )
             
             if not updated:
                 return ToolResult(
@@ -793,12 +881,25 @@ class DeleteDataContractTool(BaseTool):
                 )
             contract_name = db_obj.name
 
-            ctx.data_contracts_manager.delete_contract_from_db(
-                db=ctx.db,
-                contract_id=contract_id,
-                current_user=None,
+            details: Dict[str, Any] = {
+                "params": {"contract_id": contract_id},
+                "deleted_resource_id_attempted": contract_id,
+            }
+            with audited(
+                ctx, DATA_CONTRACTS_FEATURE_ID, self.name, "DELETE", details
+            ) as outcome:
+                ctx.data_contracts_manager.delete_contract_from_db(
+                    db=ctx.db,
+                    contract_id=contract_id,
+                    current_user=caller_email(ctx),
+                )
+                ctx.db.commit()
+                details["response_status_code"] = 204
+                outcome["success"] = True
+            # The on_delete workflows of DELETE /data-contracts/{id}.
+            ctx.data_contracts_manager.fire_delete_trigger(
+                ctx.db, contract_id, caller_email(ctx)
             )
-            ctx.db.commit()
 
             logger.info(f"[delete_data_contract] SUCCESS: Deleted contract {contract_name}")
             return ToolResult(

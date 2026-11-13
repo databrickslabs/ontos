@@ -52,6 +52,20 @@ export function groupName(
   return group.name;
 }
 
+const SEEDED_GROUP_DESCRIPTION = 'Seeded lifecycle; reproduces the built-in transitions.';
+
+/** A group's description, in the UI language while it is the seeded one. */
+export function groupDescription(
+  group: { description?: string | null },
+  t: Translate,
+): string {
+  if (!group.description) return '';
+  if (group.description === SEEDED_GROUP_DESCRIPTION) {
+    return t('lifecycle:defaultGroupDescription', { defaultValue: group.description });
+  }
+  return group.description;
+}
+
 const SEEDED_GROUP_NAMES: Record<LifecycleEntityType, string> = {
   data_product: 'Default data product lifecycle',
   data_contract: 'Default data contract lifecycle',

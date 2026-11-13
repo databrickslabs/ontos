@@ -78,6 +78,22 @@ class TestDeployApprover:
 
         assert response.status_code == 403, response.text
 
+    def test_a_request_is_decided_once(self, client, db_session):
+        contract_id = _contract_id(client, db_session)
+        assert _decide(client, contract_id).status_code == 200
+        db_session.expire_all()
+        payload = json.loads(db_session.query(NotificationDb).filter_by(
+            action_type='handle_deploy_request',
+        ).one().action_payload)
+        assert (payload['handled'], payload['decision']) == (True, 'approve')
+
+        again = client.post(
+            f'/api/data-contracts/{contract_id}/handle-deploy', json={'decision': 'deny'},
+        )
+
+        assert again.status_code == 409, again.text
+        assert again.json()['detail']['code'] == 'deploy_request_already_decided'
+
     def test_a_request_a_workflow_handles_is_decided_by_the_workflow(self, client, db_session):
         """Only a workflow approval notification: even an admin is refused here."""
         contract_id = _contract_id(client)

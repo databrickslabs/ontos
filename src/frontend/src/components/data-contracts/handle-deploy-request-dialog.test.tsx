@@ -54,6 +54,20 @@ describe('HandleDeployRequestDialog', () => {
     expect(api.toast.mock.calls[0][0].description).toBe('Deployment request has been denied.');
   });
 
+  it('says in the user language that the request is already decided', async () => {
+    api.post.mockResolvedValue({
+      data: null, error: 'Server text', errorCode: 'deploy_request_already_decided',
+    });
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+
+    await waitFor(() => expect(api.toast).toHaveBeenCalledTimes(1));
+    expect(api.toast.mock.calls[0][0].description).toBe(
+      'This deployment request has already been decided.',
+    );
+  });
+
   it('says in the user language that a non-approver cannot decide', async () => {
     api.post.mockResolvedValue({
       data: null, error: 'Only the approvers of this deployment request can decide it.',

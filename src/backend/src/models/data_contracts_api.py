@@ -432,6 +432,10 @@ class DataContractBase(BaseModel):
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
 
+    class Config:
+        # The create dialog sends the field names (domainIds, primaryDomainId, ...)
+        populate_by_name = True
+
 
 class DataContractCreate(DataContractBase):
     # Additional ODCS fields for wizard

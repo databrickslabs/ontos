@@ -125,6 +125,7 @@
 
 ## 🐛 Bug Fixes
 
+- **data-contracts**: the domains picked when creating a contract are saved. Before, the create request dropped them (`domainIds` / `primaryDomainId` were read only under their snake_case names)
 - **settings**: redact secret-shaped keys in update_settings log line (#557)
 - **data-products**: surface proposed products in the steward review queue (#556)
 - **data-products**: actually gate consumer reads of unpublished products (#554)

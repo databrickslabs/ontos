@@ -214,6 +214,11 @@ def _action_outcomes(action_results) -> List[Dict[str, object]]:
     return outcomes
 
 
+def _matched_nothing(run) -> bool:
+    """A run that finished without selecting any entity (#1150 A)."""
+    return run.status == 'succeeded' and not (run.success_count or run.failure_count)
+
+
 class ComplianceManager:
     def __init__(self):
         # Stateless; uses DB via repositories
@@ -464,6 +469,9 @@ class ComplianceManager:
         critical_issues = 0
         for p in policies:
             runs = compliance_run_repo.list_for_policy(db, policy_id=p.id, limit=1)
+            if runs and _matched_nothing(runs[0]):
+                # Its 0 % checked nothing (no_entities_matched): left out, not an issue
+                continue
             score = runs[0].score if runs else 0.0
             scores.append(score)
             if (p.severity or '').lower() == 'critical' and score < 70:

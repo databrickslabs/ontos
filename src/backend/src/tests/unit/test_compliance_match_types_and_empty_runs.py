@@ -117,10 +117,10 @@ def product(db_session):
     return product
 
 
-def _run(db, rule):
+def _run(db, rule, severity='low'):
     policy = CompliancePolicyDb(
         id=str(uuid.uuid4()), name=f'policy-{uuid.uuid4().hex[:8]}', rule=rule,
-        category='Governance', severity='low', is_active=True,
+        category='Governance', severity=severity, is_active=True,
     )
     db.add(policy)
     db.flush()
@@ -211,6 +211,30 @@ def _load_failed(*_args, **_kwargs):
     error = EntityLoadError('Could not load the data_product entities')
     error.error_code, error.error_params = 'entities_load_failed', {'entityType': 'data_product'}
     raise error
+
+
+def test_a_run_that_matches_nothing_is_left_out_of_the_stats(db_session, product):
+    # A critical policy with a typo in its MATCH type checked nothing: it is neither
+    # a critical issue nor a 0 % in the overall compliance
+    _run(db_session, EMPTY_RULES['unknown_type'], severity='critical')
+    _run(db_session, f"MATCH (p:data_product) WHERE p.name = '{product.name}' "
+                     "ASSERT p.status = 'draft'", severity='critical')
+
+    stats = ComplianceManager().get_compliance_stats(db_session)
+
+    assert stats['overall_compliance'] == 100.0
+    assert stats['critical_issues'] == 0
+    assert stats['active_policies'] == 2
+
+
+def test_a_run_that_could_not_load_still_counts_in_the_stats(db_session):
+    with patch.object(AppEntityLoader, 'load_entities', side_effect=_load_failed):
+        _run(db_session, "MATCH (p:data_product) ASSERT p.status = 'active'", severity='critical')
+
+    stats = ComplianceManager().get_compliance_stats(db_session)
+
+    assert stats['overall_compliance'] == 0.0
+    assert stats['critical_issues'] == 1
 
 
 # --- A: the compliance-checks job --------------------------------------------

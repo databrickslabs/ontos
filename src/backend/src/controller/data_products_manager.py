@@ -4637,7 +4637,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Check if product is in a subscribable status
             # Only an active-category stage is subscribable
-            if product.status and lifecycle_service.category_of_row(product) != 'active':
+            # Through the session: a cold or stale cache still knows custom groups
+            if product.status and \
+                    lifecycle_service.category_of_row(product, db or self._db) != 'active':
                 # Try to get replacement product info if available (from #1042)
                 replacement_id = None
                 replacement_name = None

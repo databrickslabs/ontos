@@ -69,7 +69,8 @@
     "lifecycle_group_default_required": "Elk entiteitstype heeft een standaardlevenscyclus nodig: maak in plaats daarvan een andere groep de standaard.",
     "lifecycle_group_is_default": "De standaardlevenscyclus van een entiteitstype kan niet worden verwijderd.",
     "lifecycle_group_in_use_one": "Deze levenscyclus wordt door {{count}} entiteit gebruikt en kan niet worden verwijderd.",
-    "lifecycle_group_in_use_other": "Deze levenscyclus wordt door {{count}} entiteiten gebruikt en kan niet worden verwijderd."
+    "lifecycle_group_in_use_other": "Deze levenscyclus wordt door {{count}} entiteiten gebruikt en kan niet worden verwijderd.",
+    "lifecycle_transition_self": "Fase ‘{{key}}’ kan niet naar zichzelf overgaan."
   },
   "defaultGroupDescription": "Standaard aangemaakte levenscyclus; volgt de ingebouwde overgangen.",
   "editor": {
@@ -125,7 +126,9 @@
     "hint": "De fasen die het doorloopt. Beheerders en eigenaren kunnen dit later wijzigen; de status gaat dan terug naar de eerste fase."
   },
   "status": {
-    "groupTitle": "Levenscyclus-fasegroep"
+    "groupTitle": "Levenscyclus-fasegroep",
+    "loading": "Levenscyclus laden…",
+    "loadFailed": "De levenscyclus kon niet worden geladen, dus er kan geen statuswijziging worden aangeboden. Probeer het later opnieuw."
   },
   "change": {
     "action": "Levenscyclus wijzigen",

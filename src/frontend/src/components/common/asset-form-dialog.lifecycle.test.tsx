@@ -125,4 +125,27 @@ describe('AssetFormDialog lifecycle', () => {
     await waitFor(() => expect(selectWith('legacy')).toBeDefined());
     expect(selectWith('legacy')!.value).toBe('legacy');
   });
+
+  it('offers each stage once', async () => {
+    mockGet.mockImplementation(async (url: string) => url.startsWith('/api/lifecycle/')
+      ? { data: {
+        entity_type: 'asset', entity_id: 'a1', status: 'live',
+        group: { id: 'g-certified', name: 'Certified tables', entity_type: 'asset',
+          is_default_for_type: false },
+        stage: st('live', 'Live', 'active', 1),
+        allowed_transitions: [
+          st('live', 'Live', 'active', 1), st('retired', 'Retired', 'retired', 2),
+        ],
+      } }
+      : { data: GROUPS });
+    renderWithProviders(
+      <AssetFormDialog isOpen onOpenChange={vi.fn()} onSuccess={vi.fn()}
+        assetTypeId="t1" assetTypeName="Table"
+        asset={{ id: 'a1', name: 'orders', status: 'live', asset_type_id: 't1',
+          relationships: [], created_at: '', updated_at: '' } as any} />,
+    );
+
+    await waitFor(() => expect(selectWith('retired')).toBeDefined());
+    expect(optionValues(selectWith('retired')!)).toEqual(['live', 'retired']);
+  });
 });

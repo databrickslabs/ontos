@@ -69,7 +69,8 @@
     "lifecycle_group_default_required": "Todo tipo de entidade precisa de um ciclo de vida padrão: torne outro grupo o padrão.",
     "lifecycle_group_is_default": "O ciclo de vida padrão de um tipo de entidade não pode ser excluído.",
     "lifecycle_group_in_use_one": "Este ciclo de vida é usado por {{count}} entidade e não pode ser excluído.",
-    "lifecycle_group_in_use_other": "Este ciclo de vida é usado por {{count}} entidades e não pode ser excluído."
+    "lifecycle_group_in_use_other": "Este ciclo de vida é usado por {{count}} entidades e não pode ser excluído.",
+    "lifecycle_transition_self": "O estágio “{{key}}” não pode passar para ele mesmo."
   },
   "defaultGroupDescription": "Ciclo de vida inicial; reproduz as transições embutidas.",
   "editor": {
@@ -125,7 +126,9 @@
     "hint": "Os estágios por que vai passar. Administradores e donos podem mudar depois; isso volta o status ao primeiro estágio."
   },
   "status": {
-    "groupTitle": "Grupo de estágios do ciclo de vida"
+    "groupTitle": "Grupo de estágios do ciclo de vida",
+    "loading": "Carregando o ciclo de vida…",
+    "loadFailed": "Não foi possível carregar o ciclo de vida, então nenhuma mudança de status pode ser oferecida. Tente de novo mais tarde."
   },
   "change": {
     "action": "Mudar ciclo de vida",

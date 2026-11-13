@@ -115,4 +115,18 @@ describe('RequestProductActionDialog lifecycle', () => {
       new_status: 'sunset', deprecation_reason: 'Replaced by Orders v2 for every consumer.',
     });
   });
+
+  it('names the moves of the default lifecycle by their actions', async () => {
+    mockGet.mockImplementation(async (url: string) => url === '/api/lifecycle/data_product/prod-1'
+      ? { data: { ...LIFECYCLE, stage: stage('draft', 'Draft', 'draft', 0),
+        allowed_transitions: [stage('sandbox', 'Sandbox', 'draft', 1),
+          stage('proposed', 'Proposed', 'review', 2)] } }
+      : { data: [] });
+    render();
+
+    await waitFor(() => expect(document.querySelector('option[value="proposed"]')).not.toBeNull());
+    const select = document.querySelector('option[value="proposed"]')!.closest('select')!;
+    expect(Array.from(select.querySelectorAll('option')).map((o) => o.textContent)
+      .filter(Boolean)).toEqual(['Move to Sandbox', 'Submit for Review']);
+  });
 });

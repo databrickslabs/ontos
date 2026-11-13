@@ -69,7 +69,8 @@
     "lifecycle_group_default_required": "Cada tipo de entidad necesita un ciclo de vida predeterminado: haga predeterminado otro grupo.",
     "lifecycle_group_is_default": "El ciclo de vida predeterminado de un tipo de entidad no se puede eliminar.",
     "lifecycle_group_in_use_one": "Este ciclo de vida lo usa {{count}} entidad y no se puede eliminar.",
-    "lifecycle_group_in_use_other": "Este ciclo de vida lo usan {{count}} entidades y no se puede eliminar."
+    "lifecycle_group_in_use_other": "Este ciclo de vida lo usan {{count}} entidades y no se puede eliminar.",
+    "lifecycle_transition_self": "La etapa «{{key}}» no puede pasar a sí misma."
   },
   "defaultGroupDescription": "Ciclo de vida inicial; reproduce las transiciones integradas.",
   "editor": {
@@ -125,7 +126,9 @@
     "hint": "Las etapas por las que pasará. Los administradores y propietarios pueden cambiarlo después; eso restablece el estado a la primera etapa."
   },
   "status": {
-    "groupTitle": "Grupo de etapas del ciclo de vida"
+    "groupTitle": "Grupo de etapas del ciclo de vida",
+    "loading": "Cargando el ciclo de vida…",
+    "loadFailed": "No se pudo cargar el ciclo de vida, así que no se puede ofrecer ningún cambio de estado. Inténtelo más tarde."
   },
   "change": {
     "action": "Cambiar ciclo de vida",

@@ -10,6 +10,7 @@ import type { OutputPort, DataProduct } from '@/types/data-product';
 import CreateContractInlineDialog from '@/components/data-contracts/create-contract-inline-dialog';
 import EntityVersionPicker, { type ScopeValue } from '@/components/common/entity-version-picker';
 import { omitTags } from '@/lib/tag-payload';
+import { isContractPublishable } from '@/lib/lifecycle-stages';
 
 type LinkContractToPortDialogProps = {
   isOpen: boolean;
@@ -42,7 +43,6 @@ export default function LinkContractToPortDialog({
   // appear. The backend's role-aware visibility already enforces the
   // personal-draft and consumer rules; this filter narrows further to
   // the producer-publishable subset.
-  const activeStatuses = ['active', 'approved'];
 
   useEffect(() => {
     if (isOpen) {
@@ -168,7 +168,7 @@ export default function LinkContractToPortDialog({
                 value={pickerValue}
                 onChange={setPickerValue}
                 allowedScopes={['entity']}
-                statusFilter={activeStatuses}
+                rowFilter={isContractPublishable}
                 placeholder={t('data-products:linkContract.placeholders.chooseContract')}
               />
               <p className="text-xs text-muted-foreground">

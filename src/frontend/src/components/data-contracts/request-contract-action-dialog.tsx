@@ -25,7 +25,9 @@ import {
   useEntityLifecycle,
   useLifecycleStageGroups,
 } from '@/hooks/use-lifecycle-stage-groups';
-import { groupName, isSeededStage, stageLabel } from '@/lib/lifecycle-stages';
+import {
+  groupName, isContractPublishable, isSeededStage, stageLabel,
+} from '@/lib/lifecycle-stages';
 import StageBadge from '@/components/lifecycle/stage-badge';
 import StageGraphPreview from '@/components/lifecycle/stage-graph-preview';
 import type { LifecycleStage } from '@/types/lifecycle-stage-groups';
@@ -64,7 +66,9 @@ export default function RequestContractActionDialog({
   const { toast } = useToast();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
   // The contract's stage, the stages it may move to and its group, from the API
-  const { lifecycle } = useEntityLifecycle('data_contract', isOpen ? contractId : null);
+  const { lifecycle, loading: lifecycleLoading } = useEntityLifecycle(
+    'data_contract', isOpen ? contractId : null,
+  );
   const { groups } = useLifecycleStageGroups(isOpen ? 'data_contract' : null);
   const lifecycleGroup = groups.find((g) => g.id && g.id === lifecycle?.group.id)
     ?? groups.find((g) => g.is_default_for_type);
@@ -165,10 +169,11 @@ export default function RequestContractActionDialog({
           icon: <Rocket className="h-5 w-5" />,
           title: t('data-contracts:requests.publish.title', 'Request Publish'),
           description: t('data-contracts:requests.publish.description', 'Request to publish this contract with a defined visibility scope.'),
-          // Approved (the approve action's stage) or an active-category stage
-          enabled:
-            contractStatus?.toLowerCase() === 'approved' ||
-            currentStage?.category === 'active',
+          // An active-category stage or the approve action's (approved), as the
+          // backend's contract_publishable decides
+          enabled: isContractPublishable({
+            status: contractStatus, status_category: currentStage?.category,
+          }),
           endpoint: `/api/data-contracts/${contractId}/request-publish`,
         };
       case 'certify':
@@ -817,7 +822,17 @@ export default function RequestContractActionDialog({
               )}
 
               {/* Target Status Selection: the stages the contract's lifecycle allows next */}
-              {allowedTransitions.length > 0 ? (
+              {lifecycleLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t('lifecycle:status.loading')}
+                </div>
+              ) : !lifecycle ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{t('lifecycle:status.loadFailed')}</AlertDescription>
+                </Alert>
+              ) : allowedTransitions.length > 0 ? (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">{t('data-contracts:requests.statusChange.selectTargetLabel', 'Select Target Status *')}</Label>
                   <Select value={targetStatus} onValueChange={setTargetStatus}>

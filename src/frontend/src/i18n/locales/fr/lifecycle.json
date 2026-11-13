@@ -69,7 +69,8 @@
     "lifecycle_group_default_required": "Chaque type d’entité a besoin d’un cycle de vie par défaut : définissez plutôt un autre groupe par défaut.",
     "lifecycle_group_is_default": "Le cycle de vie par défaut d’un type d’entité ne peut pas être supprimé.",
     "lifecycle_group_in_use_one": "Ce cycle de vie est utilisé par {{count}} entité et ne peut pas être supprimé.",
-    "lifecycle_group_in_use_other": "Ce cycle de vie est utilisé par {{count}} entités et ne peut pas être supprimé."
+    "lifecycle_group_in_use_other": "Ce cycle de vie est utilisé par {{count}} entités et ne peut pas être supprimé.",
+    "lifecycle_transition_self": "L’étape « {{key}} » ne peut pas passer à elle-même."
   },
   "defaultGroupDescription": "Cycle de vie initial ; reproduit les transitions intégrées.",
   "editor": {
@@ -125,7 +126,9 @@
     "hint": "Les étapes qu’il suivra. Les administrateurs et propriétaires peuvent le changer plus tard ; le statut revient alors à la première étape."
   },
   "status": {
-    "groupTitle": "Groupe d’étapes du cycle de vie"
+    "groupTitle": "Groupe d’étapes du cycle de vie",
+    "loading": "Chargement du cycle de vie…",
+    "loadFailed": "Le cycle de vie n’a pas pu être chargé : aucun changement de statut ne peut être proposé. Réessayez plus tard."
   },
   "change": {
     "action": "Changer de cycle de vie",

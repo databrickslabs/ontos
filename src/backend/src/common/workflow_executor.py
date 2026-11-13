@@ -16,8 +16,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -386,87 +385,194 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
 _COMPLIANCE_TYPES = {'data_asset_review': 'review'}
 
 
-def _proposed_tags(db: Session, tags: Any) -> Dict[str, Any]:
-    """Proposed tag assignments (``AssignedTagCreate`` dicts) as AppEntityLoader's tags.
+def _tag_assignments(
+    db: Session, tags: Any, current: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Tag assignments as ``{namespace/name: value}``.
 
-    Keyed by ``namespace/name`` and, when no other proposed tag has the same
-    name, by name; the value is the assigned value, or True when it has none.
+    ``tags`` is a request's list (``AssignedTagCreate`` dicts, or FQN strings as
+    the managers also accept) or what assign-tag steps leave in the context
+    (``{key: value}``). A name without a namespace is in the default one, and an
+    assignment without a value has True; a later assignment of a tag wins.
+    In a list, as ``add_tag_to_entity`` stores it, a tag without a value keeps
+    its value in ``current`` (the entity's tags by ``namespace/name``) and an
+    empty string clears it.
     """
     from src.db_models.tags import TagDb
     from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR as SEP
 
-    assigned = []
-    for tag in tags or []:
-        if not isinstance(tag, dict):
-            continue
-        fqn = tag.get('tag_fqn')
-        if tag.get('tag_id'):
-            # As in AssignedTagCreate, the id wins over the name
-            stored = db.get(TagDb, tag['tag_id'])
-            fqn = f"{stored.namespace_name}{SEP}{stored.name}" if stored else None
+    current = current or {}
+    if isinstance(tags, dict):
+        items = list(tags.items())
+    else:
+        items = []
+        for tag in tags or []:
+            if isinstance(tag, str):
+                tag = {'tag_fqn': tag}
+            if not isinstance(tag, dict):
+                continue
+            fqn = tag.get('tag_fqn')
+            if tag.get('tag_id'):
+                # As in AssignedTagCreate, the id wins over the name
+                tag_row = db.get(TagDb, tag['tag_id'])
+                fqn = f"{tag_row.namespace_name}{SEP}{tag_row.name}" if tag_row else None
+            value = tag.get('assigned_value')
+            if value is None and fqn:
+                key = fqn if SEP in fqn else f"{DEFAULT_NAMESPACE_NAME}{SEP}{fqn}"
+                value = current.get(key)
+            items.append((fqn, None if value == '' else value))
+    assigned: Dict[str, Any] = {}
+    for fqn, value in items:
         if not fqn:
             continue
         if SEP not in fqn:
             fqn = f"{DEFAULT_NAMESPACE_NAME}{SEP}{fqn}"
-        value = tag.get('assigned_value')
-        assigned.append((fqn, fqn.split(SEP, 1)[1], True if value is None else value))
-    # As in _tags_by_entity: the name is a key when one namespace has it
-    names = [name for _, name in {(fqn, name) for fqn, name, _ in assigned}]
+        assigned[fqn] = True if value is None else value
+    return assigned
+
+
+def _tags_as_rules_read_them(assigned: Dict[str, Any]) -> Dict[str, Any]:
+    """``{namespace/name: value}`` keyed as AppEntityLoader keys tags (``tag_values``).
+
+    By ``namespace/name`` and, when no other namespace has a tag of that name, by name.
+    """
+    from src.models.tags import TAG_NAMESPACE_SEPARATOR as SEP
+
+    names = [fqn.split(SEP, 1)[1] for fqn in assigned]
     values: Dict[str, Any] = {}
-    for fqn, name, value in assigned:
+    for (fqn, value), name in zip(assigned.items(), names):
         values[fqn] = value
         if names.count(name) == 1:
             values[name] = value
     return values
 
 
-def _proposed_values(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """A before_update payload's values under AppEntityLoader's keys.
+def _future_tags(
+    db: Session, payload: Dict[str, Any], stored: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """The tags an entity will have after a before_update gate's update, as assignments.
 
-    The payload is the data contract update request (ODCS field names). A
-    field the request clears stays cleared (None).
+    A list in the update replaces the stored tags (``[]`` clears them), as
+    ``set_tags_for_entity`` does (a listed tag without a value keeps its stored
+    value); without one (no ``tags``, or None) the stored tags
+    stay, and tags earlier assign-tag steps set (a dict) go on top. None when the
+    update sends no list and there is no stored entity to read the tags from.
+    """
+    from src.models.tags import TAG_NAMESPACE_SEPARATOR as SEP
+
+    tags = payload.get('tags')
+    # Every stored tag is under its namespace/name; names alone are aliases
+    current = {
+        key: value for key, value in ((stored or {}).get('tags') or {}).items() if SEP in key
+    }
+    if isinstance(tags, list):
+        return _tag_assignments(db, tags, current)
+    if stored is None:
+        return None
+    future = current
+    if isinstance(tags, dict):
+        future.update(_tag_assignments(db, tags))
+    return future
+
+
+def _proposed_values(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """A before_update payload's values under AppEntityLoader's keys, except tags.
+
+    The payload is the data contract update request (ODCS field names). As
+    ``update_contract_with_relations`` does, a null leaves the stored value
+    (the key is omitted here); a domain field replaces the primary domain
+    (``domain``). Tags: ``_future_tags``.
     """
     proposed = {}
-    if 'tags' in payload:
-        tags = payload['tags']
-        # An assign-tag step puts {name: value} there; the request has a list
-        proposed['tags'] = tags if isinstance(tags, dict) else _proposed_tags(db, tags)
-    if 'owner_team_id' in payload:
+    if payload.get('owner_team_id') is not None:
         proposed['owner'] = payload['owner_team_id']
-    if 'descriptionPurpose' in payload or 'description' in payload:
-        # As DataContractsManager stores it: descriptionPurpose, else description.purpose
-        description = payload.get('description')
-        purpose = description.get('purpose') if isinstance(description, dict) else description
-        proposed['description'] = payload.get('descriptionPurpose') or purpose
+    # As DataContractsManager stores it: descriptionPurpose, else description.purpose
+    description = payload.get('description')
+    purpose = description.get('purpose') if isinstance(description, dict) else description
+    purpose = payload.get('descriptionPurpose') or purpose
+    if purpose is not None:
+        proposed['description'] = purpose
+    if any(payload.get(key) is not None for key in _DOMAIN_FIELDS):
+        proposed['domain'] = _proposed_primary_domain(payload)
     return proposed
 
 
+# The update fields that replace a contract's domains (as update_contract_with_relations
+# reads them; DataContractUpdate dumps them under these names).
+_DOMAIN_FIELDS = ('domainIds', 'primaryDomainId', 'domainId')
+
+
+def _proposed_primary_domain(payload: Dict[str, Any]) -> Optional[str]:
+    """The primary domain id an update leaves, as ``_resolve_domain_assignment`` picks it.
+
+    ``domainIds`` with ``primaryDomainId`` (else the first id), else the legacy
+    ``domainId``; None when neither has an id (the update unassigns the contract).
+    """
+    ids = payload.get('domainIds')
+    if isinstance(ids, list) and ids:
+        primary = payload.get('primaryDomainId')
+        return primary if primary in ids else ids[0]
+    return payload.get('domainId') or None
+
+
+def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
+    """The entity as it will be after a before_update gate's update.
+
+    What both WHERE and ASSERT of its policy check see: the stored entity as
+    AppEntityLoader gives it, with the update's fields over it (also under the
+    loader's keys), and the future tags (``_future_tags``) with their
+    ``tag_count`` / ``has_tags``, so ``HAS_TAG`` and the count agree. Fields
+    derived from the stored row that the update could change (``has_owner``,
+    relationship counts) are left out, as decided in #1019: they would
+    describe the entity before the update. A type the loader doesn't read, or
+    a step without an entity id, gets the payload with the update's values; a
+    stored entity that isn't found fails the step (``_compliance_entity``).
+    """
+    payload = context.entity if isinstance(context.entity, dict) else {}
+    stored = _compliance_entity(db, context)
+    try:
+        # Savepoint and coded error as in _rule_object (proposed tags are read by id)
+        with db.begin_nested():
+            tags = _future_tags(db, payload, stored)
+    except Exception as e:
+        raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
+    stored = stored or {}
+    # A null in the update leaves the stored value, as the manager does. The request's
+    # description object never replaces the stored purpose: _proposed_values maps it
+    sent = {
+        key: value for key, value in payload.items()
+        if key not in stored or (value is not None and key != 'description')
+    }
+    state = {**stored, **sent, **_proposed_values(payload)}
+    if state.get('tags') is None:
+        state.pop('tags', None)  # a null, with no stored tags to keep: none known
+    if tags is not None:
+        state['tags'] = _tags_as_rules_read_them(tags)
+        state['tag_count'] = len(tags)
+        state['has_tags'] = bool(tags)
+    return state
+
+
 def _policy_rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
-    """What a policy check's rule sees as ``obj``: the entity as a compliance run sees it.
+    """What a policy check's rule (WHERE and ASSERT) sees as ``obj``.
 
     For the types AppEntityLoader reads, the dict it gives a run
     (``description``, ``owner``, ``tags``...) over ``_rule_object``: the
     other triggers fire on the stored entity, and their payload's
     ``description`` / ``tags`` have the request's shape, not the run's.
-    Payload keys the loader doesn't have stay. ``before_update`` gates still
-    see only the proposed change (see ``_rule_object``), with its values
-    also under the loader's keys; ``before_create`` and ``on_delete`` have
-    no stored entity. As in ``_rule_object``, an entity the loader doesn't
-    find raises ``RuleEntityNotFoundError`` (the step fails) instead of
-    falling back to the payload.
+    Payload keys the loader doesn't have stay. ``before_update`` gates see
+    the entity as it will be after the update (``_before_update_object``);
+    ``before_create`` and ``on_delete`` have no stored entity. As in
+    ``_rule_object``, an entity the loader doesn't find raises
+    ``RuleEntityNotFoundError`` (the step fails) instead of falling back to
+    the payload.
     """
-    obj = _rule_object(db, context)
-    payload = context.entity if isinstance(context.entity, dict) else {}
     trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
     trigger_type = getattr(trigger_type, 'value', trigger_type)
     if trigger_type == 'before_update':
-        try:
-            # Savepoint and coded error as in _rule_object (it may read tags)
-            with db.begin_nested():
-                proposed = _proposed_values(db, payload)
-        except Exception as e:
-            raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
-        return {**obj, **proposed}
+        return _before_update_object(db, context)
+    obj = _rule_object(db, context)
+    payload = context.entity if isinstance(context.entity, dict) else {}
     if trigger_type in ('before_create', 'on_delete'):
         return obj
     loaded = _compliance_entity(db, context)
@@ -501,33 +607,6 @@ def _compliance_entity(db: Session, context: 'StepContext') -> Optional[Dict[str
     if not loaded:
         raise RuleEntityNotFoundError(context.entity_type, context.entity_id)
     return loaded
-
-
-def _policy_where_object(
-    db: Session, context: 'StepContext', rule_object: Dict[str, Any],
-) -> Dict[str, Any]:
-    """What a policy check's WHERE sees: the entity as it will be.
-
-    The rule object, except for ``before_update`` gates: their rule object is
-    only the proposed change, and a WHERE on a field the update doesn't carry
-    (``c.status = 'active'`` on an update of the description) would leave the
-    entity unselected and let the gate pass. Their WHERE sees the stored
-    entity with the proposed change over it; ASSERT still sees only the
-    change (#1019).
-    """
-    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
-    if getattr(trigger_type, 'value', trigger_type) != 'before_update':
-        return rule_object
-    stored = _compliance_entity(db, context)
-    if stored is None:
-        return rule_object
-    merged = {**stored, **rule_object}
-    # A dict is what an assign-tag step adds to the context: it adds to the stored
-    # tags, while the request's list replaces them
-    payload_tags = context.entity.get('tags') if isinstance(context.entity, dict) else None
-    if isinstance(payload_tags, dict) and isinstance(stored.get('tags'), dict):
-        merged['tags'] = {**stored['tags'], **rule_object.get('tags', {})}
-    return merged
 
 
 class ValidationStepHandler(StepHandler):
@@ -1454,8 +1533,8 @@ class AssignTagStepHandler(StepHandler):
             except Exception as e:
                 logger.warning(f"TagsManager integration failed (context still updated): {e}")
 
-            if 'tags' not in context.entity:
-                context.entity['tags'] = {}
+            if context.entity.get('tags') is None:
+                context.entity['tags'] = {}  # none yet, or an update request's null
             if effective_value is not None:
                 context.entity['tags'][key] = effective_value
             else:
@@ -1834,8 +1913,8 @@ class PolicyCheckStepHandler(StepHandler):
             if not self._match_selects(parsed, context):
                 return self._not_applicable(policy, context, 'match_type')
             rule_object = _policy_rule_object(self._db, context)
-            where_object = partial(_policy_where_object, self._db, context, rule_object)
-            if not self._where_selects(parsed, policy, context, where_object):
+            # The same object as ASSERT: for before_update, the entity after the update
+            if not self._where_selects(parsed, policy, context, rule_object):
                 return self._not_applicable(policy, context, 'where')
 
             # Evaluate the policy's rule against the entity
@@ -1892,7 +1971,7 @@ class PolicyCheckStepHandler(StepHandler):
     @staticmethod
     def _where_selects(
         parsed: Optional[Dict[str, Any]], policy, context: StepContext,
-        where_object: Callable[[], Dict[str, Any]],
+        obj: Dict[str, Any],
     ) -> bool:
         """Whether WHERE selects the entity.
 
@@ -1905,7 +1984,6 @@ class PolicyCheckStepHandler(StepHandler):
         where = (parsed or {}).get('where_clause')
         if where is None:
             return True
-        obj = where_object()  # Loaded only for a WHERE; its errors fail the step as coded
         try:
             return bool(Evaluator(obj).evaluate(where))
         except Exception as e:

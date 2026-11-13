@@ -579,12 +579,11 @@ def without_internal_properties(
 def with_internal_properties(
     new: Optional[Dict[str, Any]], current: Optional[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
-    """``new`` properties (internal keys stripped), with the internal keys of ``current`` kept."""
+    """``new`` properties, keeping the internal keys of ``current`` (never sent to clients)."""
     kept = {k: v for k, v in (current or {}).items() if k in INTERNAL_PROPERTY_KEYS}
-    base = without_internal_properties(new)
-    if base is None or not kept:
-        return base
-    return {**base, **kept}
+    if new is None or not kept:
+        return new
+    return {**new, **kept}
 
 
 class AssetStatus(str, Enum):

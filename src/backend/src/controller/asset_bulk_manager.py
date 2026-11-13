@@ -641,6 +641,8 @@ class AssetBulkManager:
                 result.errors += 1
                 result.items.append(item)
                 continue
+            # The internal keys (e.g. the Unity Catalog sync mark) are never imported
+            properties = without_internal_properties(properties)
 
             tags = _parse_tags(row.get("tags", ""))
             description = row.get("description", "").strip() or None

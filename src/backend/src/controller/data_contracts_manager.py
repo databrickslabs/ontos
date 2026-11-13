@@ -2798,14 +2798,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     if tags_data and not tag_creates:
                         logger.warning("No readable tag in the update of contract %s; its tags are kept", contract_id)
                     else:
-                        # Set tags for the contract entity
-                        self._tags_manager.set_tags_for_entity(
-                            db,
-                            entity_id=contract_id,
-                            entity_type="data_contract",
-                            tags=tag_creates,
-                            user_email=current_user
-                        )
+                        # Set tags for the contract entity inside a savepoint: a failed
+                        # write is rolled back on its own and the update's transaction stays usable.
+                        with db.begin_nested():
+                            self._tags_manager.set_tags_for_entity(
+                                db,
+                                entity_id=contract_id,
+                                entity_type="data_contract",
+                                tags=tag_creates,
+                                user_email=current_user,
+                                commit=False,
+                            )
                         logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
                 except Exception as e:
                     logger.error(f"Failed to update tags for contract {contract_id}: {e}")

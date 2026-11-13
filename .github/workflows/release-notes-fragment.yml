@@ -1,0 +1,70 @@
+name: release-notes-fragment
+
+# Release notes are one fragment file per PR under
+# src/docs/release-notes/unreleased/<section>/<slug>.md (see the README in
+# src/docs/release-notes/). This check validates the fragments a PR adds or
+# changes, and asks for one when the PR title type is feat, fix or perf.
+# Opt out with the `no-release-notes` label. While existing PRs still edit
+# src/docs/RELEASE_NOTES.md, editing it also passes (with a notice).
+
+on:
+  pull_request:
+    branches: [main, development]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: release notes fragment
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The PR merge commit and its base parent, to list the PR's files.
+          fetch-depth: 2
+
+      - name: Check release notes fragments
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          NO_RELEASE_NOTES: ${{ contains(github.event.pull_request.labels.*.name, 'no-release-notes') }}
+        run: |
+          set -euo pipefail
+          dir=src/docs/release-notes/unreleased
+          changed=$(git diff --name-only --diff-filter=ACMR HEAD^1 HEAD)
+
+          # Fragments added or changed by this PR.
+          fragments=()
+          while IFS= read -r file; do
+            if [ -n "$file" ]; then fragments+=("$file"); fi
+          done < <(printf '%s\n' "$changed" | grep -E "^${dir}/.+" | grep -v '/\.gitkeep$' || true)
+          if [ "${#fragments[@]}" -gt 0 ]; then
+            python3 src/scripts/assemble_release_notes.py --check "${fragments[@]}" > problems.txt || {
+              while IFS= read -r line; do echo "::error title=Release notes fragment::${line}"; done < problems.txt
+              exit 1
+            }
+            echo "Fragments are valid: ${fragments[*]}"
+            exit 0
+          fi
+
+          # No fragment: is one required?
+          type=$(printf '%s' "$PR_TITLE" | sed -E -n 's/^([a-z]+)(\([^)]*\))?!?:.*/\1/p')
+          case "$type" in
+            feat|fix|perf) ;;
+            *) echo "PR type '${type:-none}' needs no release note."; exit 0 ;;
+          esac
+          if [ "$NO_RELEASE_NOTES" = "true" ]; then
+            echo "Label no-release-notes: no fragment required."
+            exit 0
+          fi
+          if printf '%s\n' "$changed" | grep -qx 'src/docs/RELEASE_NOTES.md'; then
+            echo "::notice title=Release notes::This PR edits src/docs/RELEASE_NOTES.md. Please move the entry to a fragment in ${dir}/<section>/<slug>.md (see src/docs/release-notes/README.md)."
+            exit 0
+          fi
+          echo "::error title=Release notes fragment missing::A '${type}' PR needs a release note. Add ${dir}/<section>/<slug>.md (see src/docs/release-notes/README.md), or add the label no-release-notes."
+          exit 1

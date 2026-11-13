@@ -570,7 +570,7 @@ Creates an approval request and pauses workflow execution.
 |------------|------|-------------|
 | `approvers` | String | Approver specification (email, group, or role) |
 | `timeout_days` | Integer | Days before approval expires; `0` means no timeout, default 7 (accepted, not enforced yet: a pending approval never expires, [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
-| `require_all` | Boolean | Every resolved notification target must approve (a user target that user, a group or role target any one member; one person fills one target); any rejection fails the step. Default `false`: the first decision resumes the workflow |
+| `require_all` | Boolean | Every resolved notification target must approve (a user target that user, a group or role target any one member; one person decides once, for all the user targets naming them or else one group or role target); any rejection fails the step. Default `false`: the first decision resumes the workflow |
 
 **Approver Specifications:**
 - `domain_owners` - Owners of the entity's domain

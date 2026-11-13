@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import i18n from '@/i18n/config';
 
@@ -55,5 +55,36 @@ describe('ComplianceTemplatesSettings', () => {
     for (const english of ['Add Field', 'Field label', 'Multiple choice', 'Mandatory', 'Create']) {
       expect(screen.queryByText(english)).not.toBeInTheDocument();
     }
+  });
+
+  it('keeps accented letters when it derives the reference id from the label', async () => {
+    render(<ComplianceTemplatesSettings />);
+    await userEvent.click(await screen.findByRole('button', { name: /Add Template/ }));
+    await userEvent.type(screen.getByLabelText('Name'), 'Documentação');
+    await userEvent.click(screen.getByRole('button', { name: /Add Field/ }));
+    await userEvent.type(screen.getByPlaceholderText('Field label'), 'Limitações conhecidas');
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalled());
+    const [url, body] = mockPost.mock.calls[0];
+    expect(url).toBe('/api/compliance-templates');
+    expect(body.fields[0]).toMatchObject({
+      key: 'limitacoes-conhecidas',
+      reference_id: 'limitacoes-conhecidas',
+      label: 'Limitações conhecidas',
+    });
+  });
+
+  it('transliterates an explicit reference id too', async () => {
+    render(<ComplianceTemplatesSettings />);
+    await userEvent.click(await screen.findByRole('button', { name: /Add Template/ }));
+    await userEvent.type(screen.getByLabelText('Name'), 'Docs');
+    await userEvent.click(screen.getByRole('button', { name: /Add Field/ }));
+    await userEvent.type(screen.getByPlaceholderText('Field label'), 'Owner');
+    await userEvent.type(screen.getByPlaceholderText('Reference id (auto)'), 'Área Responsável');
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalled());
+    expect(mockPost.mock.calls[0][1].fields[0].reference_id).toBe('area-responsavel');
   });
 });

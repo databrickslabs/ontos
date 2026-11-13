@@ -36,6 +36,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { toReferenceSlug } from '@/lib/compliance-reference-id';
 
 interface ComplianceField {
   id?: string;
@@ -196,9 +197,6 @@ export default function ComplianceTemplatesSettings() {
     setDialogOpen(true);
   };
 
-  const toSlug = (s: string) =>
-    s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-
   const handleAddDraftField = () => {
     setDraftFields((prev) => [
       ...prev,
@@ -210,11 +208,11 @@ export default function ComplianceTemplatesSettings() {
   const draftToPayload = (f: DraftField, idx: number) => ({
     group_title: f.group_title.trim(),
     group_order: 0,
-    key: toSlug(f.label) || `field-${idx + 1}`,
+    key: toReferenceSlug(f.label) || `field-${idx + 1}`,
     label: f.label.trim(),
     reference_id:
-      (f.reference_id.trim() && toSlug(f.reference_id)) ||
-      toSlug(f.label) ||
+      (f.reference_id.trim() && toReferenceSlug(f.reference_id)) ||
+      toReferenceSlug(f.label) ||
       `field-${idx + 1}`,
     value_type: f.value_type,
     possible_values: VOCAB_TYPES.has(f.value_type)

@@ -15,6 +15,7 @@ import type { OutputPort, DataProduct } from '@/types/data-product';
 import type { DataContractListItem } from '@/types/data-contract';
 import type { DeliveryMethodRead } from '@/types/delivery-method';
 import CreateContractInlineDialog from '@/components/data-contracts/create-contract-inline-dialog';
+import { isContractPublishable } from '@/lib/lifecycle-stages';
 
 type OutputPortFormProps = {
   isOpen: boolean;
@@ -49,7 +50,6 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
   const [isLoadingContracts, setIsLoadingContracts] = useState(false);
   const [isCreateContractOpen, setIsCreateContractOpen] = useState(false);
 
-  const activeStatuses = ['active', 'approved'];
 
   useEffect(() => {
     if (isOpen) {
@@ -113,9 +113,8 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
       const response = await fetch('/api/data-contracts');
       if (!response.ok) throw new Error('Failed to fetch contracts');
       const data: DataContractListItem[] = await response.json();
-      const filteredContracts = data.filter(c => 
-        activeStatuses.includes(c.status?.toLowerCase() || '')
-      );
+      // Active or approved (by Stage Category): the contracts a port may use
+      const filteredContracts = data.filter((c) => isContractPublishable(c));
       setContracts(filteredContracts);
     } catch (error: any) {
       toast({

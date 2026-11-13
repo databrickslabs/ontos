@@ -480,6 +480,11 @@ describe('isProductActive', () => {
     expect(isProductActive(status)).toBe(false);
   });
 
+  it('follows the Stage Category of a custom stage', () => {
+    expect(isProductActive('live', 'active')).toBe(true);
+    expect(isProductActive('active', 'review')).toBe(false);
+  });
+
   it('is false for missing status', () => {
     expect(isProductActive(undefined)).toBe(false);
     expect(isProductActive(null)).toBe(false);

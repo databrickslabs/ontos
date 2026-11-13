@@ -40,19 +40,89 @@ export function isSeededStage(stage: Pick<LifecycleStage, 'key' | 'label'>): boo
   return SEEDED_STAGE_LABELS[stage.key] === stage.label;
 }
 
+/** The Stage Category of each seeded stage key (the same in every default group). */
+const SEEDED_CATEGORIES: Record<string, string> = {
+  draft: 'draft', sandbox: 'draft', proposed: 'review', under_review: 'review',
+  approved: 'review', active: 'active', deprecated: 'deprecated', retired: 'retired',
+};
+
+/** A row's status and Stage Category, as products (camelCase) and contracts send them. */
+export interface LifecycleRow {
+  status?: string | null;
+  status_category?: string | null;
+  statusCategory?: string | null;
+}
+
+/**
+ * The Stage Category of an entity's status, from the API (`status_category` /
+ * `statusCategory`); a row without it (an older API) falls back to the
+ * seeded keys.
+ */
+export function categoryOf(row: LifecycleRow | null | undefined): string | null {
+  if (!row) return null;
+  return row.status_category ?? row.statusCategory
+    ?? SEEDED_CATEGORIES[(row.status || '').toLowerCase()] ?? null;
+}
+
 /**
  * In a review stage that awaits a steward's decision (Approve / Reject): any
  * review-category stage but the approve action's own `approved`, as the
- * backend's lifecycle service decides (proposed / under_review by default). A
- * row without its category (an older API) falls back to the seeded keys.
+ * backend's lifecycle service decides (proposed / under_review by default).
  */
-export function awaitsReviewDecision(
-  entity: { status?: string | null; status_category?: string | null },
-): boolean {
+export function awaitsReviewDecision(entity: LifecycleRow): boolean {
   const status = (entity.status || '').toLowerCase();
-  const category = entity.status_category
-    ?? (['proposed', 'under_review'].includes(status) ? 'review' : null);
-  return category === 'review' && status !== 'approved';
+  return categoryOf(entity) === 'review' && status !== 'approved';
+}
+
+/**
+ * A contract that may be published, linked to an output port or certified
+ * from: an active-category stage, or the approve action's review stage
+ * (`approved`), as the backend's `contract_publishable` decides.
+ */
+export function isContractPublishable(contract: LifecycleRow): boolean {
+  const category = categoryOf(contract);
+  return category === 'active' || (category === 'review' && !awaitsReviewDecision(contract));
+}
+
+/** In an active-category stage (published, subscribable, certifiable). */
+export function isActiveStage(row: LifecycleRow | null | undefined): boolean {
+  return categoryOf(row) === 'active';
+}
+
+/**
+ * The action verb of a move between two seeded stages
+ * (`data-products:requestAction.transitions.<key>`), or null for any other move.
+ */
+export function seededTransitionAction(fromKey: string, toKey: string): string | null {
+  switch (toKey) {
+    case 'sandbox': return 'moveToSandbox';
+    case 'proposed': return 'submitForReview';
+    case 'draft': return fromKey === 'under_review' ? 'rejectReturnToDraft' : 'returnToDraft';
+    case 'under_review': return 'startReview';
+    case 'approved': return 'approve';
+    case 'active': return fromKey === 'deprecated' ? 'reactivate' : 'publishActivate';
+    case 'deprecated': return 'deprecate';
+    case 'retired': return 'retire';
+    default: return null;
+  }
+}
+
+/**
+ * How a status picker names a move: the action verb when both stages are
+ * seeded and unchanged (Submit for Review, Approve, ...), else the target
+ * stage's label.
+ */
+export function transitionLabel(
+  from: Pick<LifecycleStage, 'key' | 'label'> | null | undefined,
+  to: Pick<LifecycleStage, 'key' | 'label'>,
+  t: Translate,
+): string {
+  const action = from && isSeededStage(from) && isSeededStage(to)
+    ? seededTransitionAction(from.key, to.key)
+    : null;
+  return action
+    ? t(`data-products:requestAction.transitions.${action}`, { defaultValue: stageLabel(to, t) })
+    : stageLabel(to, t);
 }
 
 /** A Stage Category in the UI language. */

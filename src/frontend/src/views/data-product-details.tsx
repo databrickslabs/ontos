@@ -65,6 +65,7 @@ import CertificationBadge from '@/components/common/certification-badge';
 import PublicationScopeBadge from '@/components/common/publication-scope-badge';
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs';
 import EntityLifecycleStatus from '@/components/lifecycle/entity-lifecycle-status';
+import { isActiveStage } from '@/lib/lifecycle-stages';
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle';
 import { userHasApprovalPrivilege } from '@/lib/permissions';
 import { ApprovalEntity } from '@/types/settings';
@@ -222,12 +223,15 @@ export function resolveDomainLabel(args: {
 }
 
 /**
- * Whether the product is in the "active" lifecycle state. Centralised so the
- * "active" magic string lives in one place — used by the lifecycle approve /
+ * Whether the product is in an active-category stage (its Stage Category from
+ * the API, else the seeded `active`) — used by the lifecycle approve /
  * deprecate gates.
  */
-export function isProductActive(status: string | undefined | null): boolean {
-  return (status?.toLowerCase() || '') === 'active';
+export function isProductActive(
+  status: string | undefined | null,
+  statusCategory?: string | null,
+): boolean {
+  return isActiveStage({ status, statusCategory });
 }
 
 /**
@@ -874,8 +878,8 @@ export default function DataProductDetails() {
     }
   };
 
-  // Check if product is subscribable (active or certified)
-  const isSubscribable = product?.status && product.status.toLowerCase() === 'active';
+  // Subscribable in an active-category stage (the backend's rule)
+  const isSubscribable = Boolean(product?.status) && isActiveStage(product);
 
   // Helper function to update product with 409 handling
   const updateProduct = async (updatedProduct: DataProduct, forceUpdate: boolean = false) => {
@@ -1421,7 +1425,8 @@ export default function DataProductDetails() {
           <Button variant="outline" onClick={() => setIsRequestDialogOpen(true)} size="sm">
             <KeyRound className="mr-2 h-4 w-4" /> {t('data-products:details.actions.requestAccess')}
           </Button>
-          {isProductActive(product.status) && canApproveProductLifecycle && (
+          {isProductActive(product.status, product.statusCategory)
+            && canApproveProductLifecycle && (
             <Button
               variant="outline"
               size="sm"
@@ -1434,7 +1439,7 @@ export default function DataProductDetails() {
               <ShieldCheck className="mr-2 h-4 w-4" /> {t('data-products:details.actions.certify')}
             </Button>
           )}
-          {isProductActive(product.status) && canWrite && (
+          {isProductActive(product.status, product.statusCategory) && canWrite && (
             <Button
               variant="outline"
               size="sm"

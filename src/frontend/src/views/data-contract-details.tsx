@@ -70,15 +70,19 @@ import CertificationBadge from '@/components/common/certification-badge'
 import PublicationScopeBadge from '@/components/common/publication-scope-badge'
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs'
 import EntityLifecycleStatus from '@/components/lifecycle/entity-lifecycle-status'
-import { awaitsReviewDecision } from '@/lib/lifecycle-stages'
+import {
+  awaitsReviewDecision, categoryOf, isActiveStage, isContractPublishable, type LifecycleRow,
+} from '@/lib/lifecycle-stages'
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error'
 
-// Status-based editability constants
-// Only draft/proposed contracts can be edited in place
-const EDITABLE_STATUSES = ['draft', 'proposed']
+// Editable in place: a draft-category stage, or a review stage that still
+// awaits its decision (draft / proposed / under_review by default); later
+// stages are versioned (src.controller.lifecycle_service categories)
+const isEditableInPlace = (contract: LifecycleRow) =>
+  categoryOf(contract) === 'draft' || awaitsReviewDecision(contract)
 
 // View mode for filtering contract details sections
 type ViewMode = 'minimal' | 'medium' | 'large'
@@ -309,7 +313,7 @@ export default function DataContractDetails() {
 
   // Computed properties for status-based editability
   // Admins bypass status restrictions; others need draft/proposed
-  const canEditInPlace = isContractAdmin || !!(contract?.status && EDITABLE_STATUSES.includes(contract.status.toLowerCase()))
+  const canEditInPlace = isContractAdmin || !!(contract?.status && isEditableInPlace(contract))
   // Personal drafts are editable since they have draft status
   const isPersonalDraft = contract?.draftOwnerId != null
   // Contract is read-only if it's not editable and not a personal draft
@@ -1769,7 +1773,7 @@ export default function DataContractDetails() {
               <Button size="sm" variant="destructive" onClick={handleReject}>{t('data-contracts:detailsView.header.reject', 'Reject')}</Button>
             </>
           )}
-          {contract && contract.status?.toLowerCase() === 'active' && canApproveContractLifecycle && (
+          {contract && isActiveStage(contract) && canApproveContractLifecycle && (
             <Button
               variant="outline"
               size="sm"
@@ -1783,7 +1787,7 @@ export default function DataContractDetails() {
             </Button>
           )}
           {contract &&
-            ['active', 'approved'].includes((contract.status || '').toLowerCase()) &&
+            isContractPublishable(contract) &&
             canWriteContracts && (
               <Button
                 variant="outline"
@@ -2669,7 +2673,7 @@ export default function DataContractDetails() {
                 size="sm"
                 variant="outline"
                 onClick={() => setIsLinkProductDialogOpen(true)}
-                disabled={!contract || !['active', 'approved'].includes((contract.status || '').toLowerCase())}
+                disabled={!contract || !isContractPublishable(contract)}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
                 {t('data-contracts:detailsView.linkedProducts.linkExisting', 'Link to Existing Product')}
@@ -2677,7 +2681,7 @@ export default function DataContractDetails() {
               <Button
                 size="sm"
                 onClick={() => setIsCreateProductDialogOpen(true)}
-                disabled={!contract || !['active', 'approved'].includes((contract.status || '').toLowerCase())}
+                disabled={!contract || !isContractPublishable(contract)}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
                 {t('data-contracts:detailsView.linkedProducts.createProduct', 'Create Data Product')}
@@ -2697,7 +2701,7 @@ export default function DataContractDetails() {
               <div className="text-sm text-muted-foreground mb-4">
                 {t('data-contracts:detailsView.linkedProducts.emptyHint', 'Create a data product that uses this contract to govern a deliverable')}
               </div>
-              {contract && ['active', 'approved'].includes((contract.status || '').toLowerCase()) ? (
+              {contract && isContractPublishable(contract) ? (
                 <Button onClick={() => setIsCreateProductDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   {t('data-contracts:detailsView.linkedProducts.createProduct', 'Create Data Product')}

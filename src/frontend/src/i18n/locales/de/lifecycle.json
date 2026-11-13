@@ -69,7 +69,8 @@
     "lifecycle_group_default_required": "Jeder Entitätstyp braucht einen Standard-Lebenszyklus: Machen Sie stattdessen eine andere Gruppe zum Standard.",
     "lifecycle_group_is_default": "Der Standard-Lebenszyklus eines Entitätstyps kann nicht gelöscht werden.",
     "lifecycle_group_in_use_one": "Dieser Lebenszyklus wird von {{count}} Entität verwendet und kann nicht gelöscht werden.",
-    "lifecycle_group_in_use_other": "Dieser Lebenszyklus wird von {{count}} Entitäten verwendet und kann nicht gelöscht werden."
+    "lifecycle_group_in_use_other": "Dieser Lebenszyklus wird von {{count}} Entitäten verwendet und kann nicht gelöscht werden.",
+    "lifecycle_transition_self": "Die Phase „{{key}}“ kann nicht zu sich selbst wechseln."
   },
   "defaultGroupDescription": "Vorgegebener Lebenszyklus; entspricht den eingebauten Übergängen.",
   "editor": {
@@ -125,7 +126,9 @@
     "hint": "Die Phasen, die es durchläuft. Admins und Eigentümer können ihn später ändern; dabei wird der Status auf die erste Phase zurückgesetzt."
   },
   "status": {
-    "groupTitle": "Lebenszyklus-Phasengruppe"
+    "groupTitle": "Lebenszyklus-Phasengruppe",
+    "loading": "Lebenszyklus wird geladen…",
+    "loadFailed": "Der Lebenszyklus konnte nicht geladen werden, daher kann kein Statuswechsel angeboten werden. Versuchen Sie es später erneut."
   },
   "change": {
     "action": "Lebenszyklus ändern",

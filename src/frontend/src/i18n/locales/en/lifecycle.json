@@ -69,7 +69,8 @@
     "lifecycle_group_default_required": "Every entity type needs a default lifecycle: make another group the default instead.",
     "lifecycle_group_is_default": "The default lifecycle of an entity type can’t be deleted.",
     "lifecycle_group_in_use_one": "This lifecycle is used by {{count}} entity and can’t be deleted.",
-    "lifecycle_group_in_use_other": "This lifecycle is used by {{count}} entities and can’t be deleted."
+    "lifecycle_group_in_use_other": "This lifecycle is used by {{count}} entities and can’t be deleted.",
+    "lifecycle_transition_self": "Stage “{{key}}” can’t move to itself."
   },
   "defaultGroupDescription": "Seeded lifecycle; reproduces the built-in transitions.",
   "editor": {
@@ -125,7 +126,9 @@
     "hint": "The stages it moves through. Admins and owners can change it later; that resets the status to the first stage."
   },
   "status": {
-    "groupTitle": "Lifecycle stage group"
+    "groupTitle": "Lifecycle stage group",
+    "loading": "Loading the lifecycle…",
+    "loadFailed": "The lifecycle couldn’t be loaded, so no status change can be offered. Try again later."
   },
   "change": {
     "action": "Change lifecycle",

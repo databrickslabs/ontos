@@ -69,7 +69,8 @@
     "lifecycle_group_default_required": "Ogni tipo di entità ha bisogno di un ciclo di vita predefinito: rendi predefinito un altro gruppo.",
     "lifecycle_group_is_default": "Il ciclo di vita predefinito di un tipo di entità non può essere eliminato.",
     "lifecycle_group_in_use_one": "Questo ciclo di vita è usato da {{count}} entità e non può essere eliminato.",
-    "lifecycle_group_in_use_other": "Questo ciclo di vita è usato da {{count}} entità e non può essere eliminato."
+    "lifecycle_group_in_use_other": "Questo ciclo di vita è usato da {{count}} entità e non può essere eliminato.",
+    "lifecycle_transition_self": "La fase «{{key}}» non può passare a se stessa."
   },
   "defaultGroupDescription": "Ciclo di vita iniziale; riproduce le transizioni integrate.",
   "editor": {
@@ -125,7 +126,9 @@
     "hint": "Le fasi che attraverserà. Amministratori e proprietari possono cambiarlo in seguito; lo stato torna alla prima fase."
   },
   "status": {
-    "groupTitle": "Gruppo di fasi del ciclo di vita"
+    "groupTitle": "Gruppo di fasi del ciclo di vita",
+    "loading": "Caricamento del ciclo di vita…",
+    "loadFailed": "Impossibile caricare il ciclo di vita, quindi non è possibile proporre cambi di stato. Riprova più tardi."
   },
   "change": {
     "action": "Cambia ciclo di vita",

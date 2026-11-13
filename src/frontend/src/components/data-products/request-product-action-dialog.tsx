@@ -12,7 +12,7 @@ import { needsStatusChangeRequest, statusChangeErrorText } from '@/lib/status-ch
 import { useApprovalWizardTrigger, type AppActionTriggerType } from '@/hooks/use-approval-wizard-trigger';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { useEntityLifecycle } from '@/hooks/use-lifecycle-stage-groups';
-import { stageLabel } from '@/lib/lifecycle-stages';
+import { stageLabel, transitionLabel } from '@/lib/lifecycle-stages';
 import { Loader2, AlertCircle, FileText, Eye, Rocket, RefreshCw, ShieldCheck, Info } from 'lucide-react';
 import AccessRequestFields from '@/components/access/access-request-fields';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
@@ -680,7 +680,7 @@ export default function RequestProductActionDialog({
                   <SelectContent>
                     {allowedTransitions.map((stage) => (
                       <SelectItem key={stage.key} value={stage.key}>
-                        {stageLabel(stage, t)}
+                        {transitionLabel(lifecycle?.stage, stage, t)}
                       </SelectItem>
                     ))}
                   </SelectContent>

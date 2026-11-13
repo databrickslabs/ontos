@@ -69,7 +69,8 @@
     "lifecycle_group_default_required": "各エンティティタイプには既定のライフサイクルが必要です。代わりに別のグループを既定にしてください。",
     "lifecycle_group_is_default": "エンティティタイプの既定のライフサイクルは削除できません。",
     "lifecycle_group_in_use_one": "このライフサイクルは {{count}} 件のエンティティが使用しているため削除できません。",
-    "lifecycle_group_in_use_other": "このライフサイクルは {{count}} 件のエンティティが使用しているため削除できません。"
+    "lifecycle_group_in_use_other": "このライフサイクルは {{count}} 件のエンティティが使用しているため削除できません。",
+    "lifecycle_transition_self": "ステージ「{{key}}」は自分自身へ移行できません。"
   },
   "defaultGroupDescription": "初期設定のライフサイクル。組み込みの移行を再現します。",
   "editor": {
@@ -125,7 +126,9 @@
     "hint": "通過するステージです。管理者とオーナーは後で変更できますが、その場合ステータスは最初のステージに戻ります。"
   },
   "status": {
-    "groupTitle": "ライフサイクルステージグループ"
+    "groupTitle": "ライフサイクルステージグループ",
+    "loading": "ライフサイクルを読み込み中…",
+    "loadFailed": "ライフサイクルを読み込めなかったため、ステータス変更を提示できません。後でもう一度お試しください。"
   },
   "change": {
     "action": "ライフサイクルを変更",

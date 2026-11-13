@@ -146,9 +146,11 @@ export function useStatusOptions(
   }, [groups, groupId, lifecycle]);
   const options = useMemo<LifecycleStage[]>(() => {
     if (entityId) {
-      const stages = !lifecycle ? [] : lifecycle.stage
+      // The current stage first, then the allowed moves; each key once
+      const listed = !lifecycle ? [] : lifecycle.stage
         ? [lifecycle.stage, ...lifecycle.allowed_transitions]
         : lifecycle.allowed_transitions;
+      const stages = listed.filter((st, i) => listed.findIndex((o) => o.key === st.key) === i);
       const current = (currentStatus || '').toLowerCase();
       if (!current || stages.some((st) => st.key === current)) return stages;
       // Shown as stored (no label or colour of a stage to draw it with)

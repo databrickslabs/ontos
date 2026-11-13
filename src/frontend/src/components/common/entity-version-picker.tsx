@@ -26,7 +26,7 @@
  * opens the inline sub-picker, so cost scales with interaction depth
  * rather than catalog size.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Command,
@@ -71,11 +71,11 @@ type EntityVersionPickerProps = {
   value: ScopeValue | null
   onChange: (next: ScopeValue) => void
   allowedScopes?: Array<'entity' | 'family'>
-  // Filter the candidate set to rows with these statuses. When omitted,
-  // the picker shows whatever the backend returns for the caller (the
-  // backend already applies role-aware visibility, so no client-side
+  // Filter the candidate set (e.g. by the row's Stage Category). When
+  // omitted, the picker shows whatever the backend returns for the caller
+  // (the backend already applies role-aware visibility, so no client-side
   // filter is needed for the family-collapse case).
-  statusFilter?: string[]
+  rowFilter?: (row: FamilyRow) => boolean
   placeholder?: string
   disabled?: boolean
   className?: string
@@ -93,6 +93,9 @@ type FamilyRow = {
   name?: string
   version?: string
   status?: string
+  // Stage Category of `status` (contracts snake_case, products camelCase)
+  status_category?: string | null
+  statusCategory?: string | null
   versionFamilyId?: string
   // Both naming styles are accepted because /data-contracts and
   // /data-products use slightly different aliases today.
@@ -109,7 +112,7 @@ export function EntityVersionPicker({
   value,
   onChange,
   allowedScopes = ['entity'],
-  statusFilter,
+  rowFilter,
   placeholder,
   disabled,
   className,
@@ -128,27 +131,30 @@ export function EntityVersionPicker({
   )
 
   const apiBase = entityKind === 'contract' ? '/api/data-contracts' : '/api/data-products'
+  // The latest filter, without refetching when the caller passes a new function
+  const filterRef = useRef(rowFilter)
+  filterRef.current = rowFilter
+  const hasRowFilter = Boolean(rowFilter)
 
   useEffect(() => {
     let cancelled = false
     const fetchRows = async () => {
       setLoading(true)
       try {
-        // When a statusFilter is set we need to consider ALL versions,
+        // When a rowFilter is set we need to consider ALL versions,
         // not just the family rep. Otherwise a family whose rep was
         // promoted to draft (under the elevated-rank rule) would
         // disappear from a status-restricted picker, even though it
         // has a perfectly valid published version available — see the
         // POS Transaction Stream regression hit during the smoke test.
-        const wantsHistory = !!statusFilter?.length
+        const wantsHistory = Boolean(filterRef.current)
         const url = wantsHistory ? `${apiBase}?include_history=true` : apiBase
         const res = await fetch(url)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data: FamilyRow[] = await res.json()
         if (cancelled) return
-        let filtered = statusFilter
-          ? data.filter((r) => statusFilter.includes((r.status || '').toLowerCase()))
-          : data
+        const keep = filterRef.current
+        let filtered = keep ? data.filter((r) => keep(r)) : data
         // Collapse client-side: one row per family, preferring the
         // newest matching version. Family counts are computed BEFORE
         // collapse so the badge still tells the user "this family has
@@ -186,7 +192,7 @@ export function EntityVersionPicker({
     return () => {
       cancelled = true
     }
-  }, [apiBase, statusFilter?.join('|')])
+  }, [apiBase, hasRowFilter])
 
   // Resolve the currently-selected row for trigger display.
   const selectedRow = useMemo(() => {

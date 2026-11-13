@@ -227,8 +227,8 @@ export function EntityVersionPicker({
     }
     // Entity mode: anchor on this family so the inline VersionSelector
     // can offer a per-version pin. Default the entity to the family's
-    // representative (the row already in `rows`), but the user can refine
-    // via the sub-picker before closing.
+    // representative (the row already in `rows`); the user can refine it in
+    // the sub-picker, which renders below the field, so the list closes.
     setPinnedFamilyAnchorId(row.id)
     onChange({
       scope: 'entity',
@@ -237,6 +237,7 @@ export function EntityVersionPicker({
       displayName: row.name,
       displayVersion: row.version,
     })
+    setOpen(false)
   }
 
   const handlePickPinnedVersion = (versionRow: EntityVersionRow) => {

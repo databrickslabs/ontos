@@ -33,9 +33,12 @@ MATCH (prod:data_product) # Only data products
 - Generic: `Object` (matches all types)
 
 Type names ignore case and underscores: `DataProduct`, `dataProduct` and
-`data_product` all match data products. A run whose rule matches no entity
-(unknown type, or a `WHERE` that selects nothing) succeeds with the warning
-"no entities matched" instead of results.
+`data_product` all match data products. `data_asset_review`, the name workflows
+give reviews, matches reviews. Compliance runs and workflow `policy_check` steps
+resolve types the same way. A run whose rule matches no entity (unknown type, or
+a `WHERE` that selects nothing) succeeds with the warning "no entities matched"
+instead of results, and is left out of the overall compliance and the critical
+issue count.
 
 #### WHERE Clause (Optional)
 Filters entities before evaluation:

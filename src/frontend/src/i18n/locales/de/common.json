@@ -565,16 +565,25 @@
     "removeConfirm": "Möchten Sie diese Beziehung wirklich entfernen? Diese Aktion kann nicht rückgängig gemacht werden."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "{{kind}} auswählen…",
     "latestSuffix": "{{name}} (neueste)",
     "pinVersionTitle": "Eine bestimmte Version anheften",
     "pinVersion": "Version anheften",
     "followLatestTitle": "Immer der neuesten sichtbaren Version der Familie folgen",
     "followLatest": "Neueste verfolgen",
-    "searchPlaceholder": "{{kind}} suchen…",
     "loading": "Wird geladen…",
-    "noMatching": "Keine passenden {{kind}}.",
     "unnamed": "(unbenannt)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Vertrag auswählen…",
+      "search": "Verträge suchen…",
+      "noMatching": "Keine passenden Verträge."
+    },
+    "product": {
+      "select": "Produkt auswählen…",
+      "search": "Produkte suchen…",
+      "noMatching": "Keine passenden Produkte."
+    }
   },
   "entityTree": {
     "title": "Verwandte Entitäten",

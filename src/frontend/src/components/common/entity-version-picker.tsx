@@ -201,7 +201,7 @@ export function EntityVersionPicker({
   }, [value, rows])
 
   const triggerLabel = useMemo(() => {
-    if (!value) return placeholder || t('common:entityVersionPicker.selectPlaceholder', { kind: entityKind })
+    if (!value) return placeholder || t(`common:entityVersionPickerKinds.${entityKind}.select`)
     if (value.scope === 'family') {
       const name = selectedRow?.name || value.displayName || value.familyId
       return t('common:entityVersionPicker.latestSuffix', { name })
@@ -303,14 +303,14 @@ export function EntityVersionPicker({
         </PopoverTrigger>
         <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
           <Command>
-            <CommandInput placeholder={t('common:entityVersionPicker.searchPlaceholder', { kind: entityKind })} />
+            <CommandInput placeholder={t(`common:entityVersionPickerKinds.${entityKind}.search`)} />
             <CommandList>
               {loading ? (
                 <CommandEmpty>{t('common:entityVersionPicker.loading')}</CommandEmpty>
               ) : (
                 <>
                   <CommandEmpty>
-                    {t('common:entityVersionPicker.noMatching', { kind: entityKind })}
+                    {t(`common:entityVersionPickerKinds.${entityKind}.noMatching`)}
                     {emptyAction && <div className="mt-2">{emptyAction}</div>}
                   </CommandEmpty>
                   <CommandGroup>

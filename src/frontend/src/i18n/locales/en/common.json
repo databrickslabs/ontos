@@ -569,16 +569,25 @@
     "removeConfirm": "Are you sure you want to remove this relationship? This action cannot be undone."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Select {{kind}}…",
     "latestSuffix": "{{name}} (latest)",
     "pinVersionTitle": "Pin a specific version",
     "pinVersion": "Pin version",
     "followLatestTitle": "Always follow the family's latest visible version",
     "followLatest": "Follow latest",
-    "searchPlaceholder": "Search {{kind}}s…",
     "loading": "Loading…",
-    "noMatching": "No matching {{kind}}s.",
     "unnamed": "(unnamed)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Select a contract…",
+      "search": "Search contracts…",
+      "noMatching": "No matching contracts."
+    },
+    "product": {
+      "select": "Select a product…",
+      "search": "Search products…",
+      "noMatching": "No matching products."
+    }
   },
   "entityTree": {
     "title": "Related Entities",

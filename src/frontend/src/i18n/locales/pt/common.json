@@ -569,16 +569,25 @@
     "removeConfirm": "Tem certeza de que deseja remover este relacionamento? Esta ação não pode ser desfeita."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Selecione {{kind}}…",
     "latestSuffix": "{{name}} (mais recente)",
     "pinVersionTitle": "Fixar uma versão específica",
     "pinVersion": "Fixar versão",
     "followLatestTitle": "Seguir sempre a versão visível mais recente da família",
     "followLatest": "Seguir a mais recente",
-    "searchPlaceholder": "Pesquisar {{kind}}…",
     "loading": "Carregando…",
-    "noMatching": "Nenhum {{kind}} correspondente.",
     "unnamed": "(sem nome)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Selecione um contrato…",
+      "search": "Pesquisar contratos…",
+      "noMatching": "Nenhum contrato correspondente."
+    },
+    "product": {
+      "select": "Selecione um produto…",
+      "search": "Pesquisar produtos…",
+      "noMatching": "Nenhum produto correspondente."
+    }
   },
   "entityTree": {
     "title": "Entidades relacionadas",

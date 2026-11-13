@@ -227,15 +227,18 @@ def test_column_existing_tags_query_and_reconcile(tag_sync):
         {"tag_name": "unrelated", "tag_value": "y"},
     ]
     ws = MagicMock()
+    # Only a tag the delivery state recorded is removed; "unrelated" stays.
     updated, removed, errors = tag_sync.reconcile_tags(
         ws, spark, "COLUMN", "main.finance.t.amount",
         {"ontos_semantic_opex_spend": OPEX}, "ontos_semantic_",
+        previously_delivered={"ontos_semantic_old": "x"},
     )
     first = spark.sql.call_args_list[0].args[0]
     assert "information_schema.column_tags" in first and "column_name = 'amount'" in first
     assert (updated, removed, errors) == (1, 1, [])
     stmts = [c.args[0] for c in spark.sql.call_args_list[1:]]
     assert any("UNSET TAGS ('ontos_semantic_old')" in s for s in stmts)
+    assert not any("UNSET TAGS ('unrelated')" in s for s in stmts)
     assert any("SET TAGS ('ontos_semantic_opex_spend'" in s for s in stmts)
 
     # Idempotent: when the column already has the desired tag nothing is written.

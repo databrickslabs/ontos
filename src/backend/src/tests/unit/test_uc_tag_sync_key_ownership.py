@@ -1,10 +1,12 @@
-"""uc_tag_sync owns the keys its enabled configs produce, whatever their spelling.
+"""uc_tag_sync manages the tags it delivered, whatever the spelling of their keys.
 
 The job used to derive one common prefix from every enabled tag key. Keys that
 don't share a prefix (``ontos_domain`` with ``agent_readable``) fell back to the
 ``x_ontos_`` default, so the job stopped seeing the tags it had written before:
 stale tags stayed on linked and unlinked objects. A single key could also yield a
 prefix that matches user tags (``ontos_domain`` matches ``ontos_domain_team``).
+A tag is removed only when the delivery state recorded it on that object with its
+current value: a configured key alone may be the customer's tag.
 
 These tests run the real ``main()``. Only the UC, Spark and Lakebase boundaries are
 replaced by an in-memory tag store, so no workspace is touched.
@@ -294,10 +296,9 @@ def test_a_numbered_domain_key_is_owned_only_for_a_data_domain_base(tag_sync):
     assert not owned.owns("ontos_domain_x")
 
 
-def test_an_unrecorded_numbered_domain_tag_is_removed_and_a_user_numbered_tag_kept(
-    tag_sync, job
-):
-    """ontos_domain_2 is the job's numbered key; agent_readable_2 is not, so it stays."""
+def test_an_unrecorded_numbered_domain_tag_is_kept(tag_sync, job):
+    """ontos_domain_2 has the job's numbered key, but the state never recorded it there:
+    the customer may have set it, so it stays (as does agent_readable_2)."""
     _seed(job, ORDERS, {"ontos_domain_2": "Sales", "agent_readable_2": "mine"})
     job.state = {}
 
@@ -305,8 +306,18 @@ def test_an_unrecorded_numbered_domain_tag_is_removed_and_a_user_numbered_tag_ke
             [_table(tag_sync, domain="Finance")])
 
     assert job.store[("TABLE", ORDERS)] == {
-        "agent_readable_2": "mine", DOMAIN_KEY: "Finance",
+        "ontos_domain_2": "Sales", "agent_readable_2": "mine", DOMAIN_KEY: "Finance",
     }
+
+
+def test_a_recorded_numbered_domain_tag_is_removed_from_a_linked_table(tag_sync, job):
+    """The additional domain went away: the recorded ontos_domain_1 is removed."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "Finance", "ontos_domain_1": "Sales"})
+    job.state = _previous(ORDERS, {DOMAIN_KEY: "Finance", "ontos_domain_1": "Sales"})
+
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
+
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}
 
 
 def test_a_disabled_config_does_not_own_its_key(tag_sync):
@@ -330,11 +341,11 @@ def test_a_sanitized_key_owns_the_stored_key(tag_sync):
     assert owned.owns(DOMAIN_KEY)
 
 
-def test_an_unrecorded_sanitized_key_is_removed_from_a_linked_table(tag_sync, job):
-    """Key 'ontos-domain' is stored as ontos_domain: an unrecorded copy with no value
-    desired any more is removed from the still-linked table."""
+def test_a_recorded_sanitized_key_is_removed_from_a_linked_table(tag_sync, job):
+    """Key 'ontos-domain' is stored as ontos_domain: the recorded tag, with no value
+    desired any more, is removed from the still-linked table."""
     _seed(job, ORDERS, {DOMAIN_KEY: "Old", STATUS_KEY: "active"})
-    job.state = {}
+    job.state = _previous(ORDERS, {DOMAIN_KEY: "Old", STATUS_KEY: "active"})
 
     job.run([dict(DOMAIN_CFG, tag_key_format="ontos-domain"), STATUS_CFG],
             [_table(tag_sync, status="active")])
@@ -553,3 +564,103 @@ def test_a_corrupt_stored_state_is_replaced_but_does_not_open_the_legacy_cleanup
     assert saves == [True]
     assert legacy[0]["previous"] is None
     assert legacy[0]["cleanup_enabled"] is True
+
+
+# Only recorded tags are removed -------------------------------------------------------
+
+def test_a_customer_tag_with_a_configured_key_on_a_linked_table_is_kept(tag_sync, job):
+    """The table gets agent_readable and no domain. The customer set ontos_domain by
+    hand and the state never recorded it there: it stays."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "CustomerTeam"})
+    job.state = {}
+
+    job.run([DOMAIN_CFG, STATUS_CFG], [_table(tag_sync, status="active")])
+
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "CustomerTeam", STATUS_KEY: "active"}
+    assert ("TABLE", ORDERS, DOMAIN_KEY) not in job.unassigned
+    assert DOMAIN_KEY not in job.state["TABLE"][ORDERS]
+
+
+@pytest.mark.parametrize("linked", [True, False])
+def test_a_recorded_tag_whose_value_was_changed_outside_the_job_is_kept(
+    tag_sync, job, linked
+):
+    """The state recorded ontos_domain=Finance, the customer changed it to Mine: it is
+    the customer's now, kept, and no longer recorded."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "Mine", STATUS_KEY: "active"})
+    job.state = _previous(ORDERS, {DOMAIN_KEY: "Finance", STATUS_KEY: "active"})
+
+    job.run([DOMAIN_CFG, STATUS_CFG],
+            [_table(tag_sync, status="active")] if linked else [])
+
+    assert job.store[("TABLE", ORDERS)][DOMAIN_KEY] == "Mine"
+    assert DOMAIN_KEY not in job.state["TABLE"].get(ORDERS, {})
+
+
+def test_tag_keys_are_compared_case_sensitively(tag_sync, job):
+    """UC tag keys are case-sensitive: a recorded ontos_domain is not Ontos_Domain."""
+    _seed(job, ORDERS, {"Ontos_Domain": "Finance"})
+    job.state = _previous(ORDERS, {DOMAIN_KEY: "Finance"})
+
+    job.run([DOMAIN_CFG], [])
+
+    assert job.store[("TABLE", ORDERS)] == {"Ontos_Domain": "Finance"}
+    assert job.unassigned == []
+
+
+def test_a_failed_assign_then_an_unlink_keeps_the_customer_value(
+    tag_sync, job, monkeypatch
+):
+    """A tag policy rejects ontos_domain=Finance where the customer has Mine: the state
+    must not say Finance was delivered, so the later unlink keeps Mine."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "Mine"})
+    job.state = {}
+    real_assign = tag_sync.assign_tag
+
+    def rejected(spark, object_type, name, key, value):
+        if key == DOMAIN_KEY:
+            raise RuntimeError("[INVALID_PARAMETER_VALUE] value not allowed by tag policy")
+        real_assign(spark, object_type, name, key, value)
+
+    monkeypatch.setattr(tag_sync, "assign_tag", rejected)
+    with pytest.raises(SystemExit):
+        job.run([DOMAIN_CFG, STATUS_CFG],
+                [_table(tag_sync, domain="Finance", status="active")])
+    assert job.state["TABLE"][ORDERS] == {STATUS_KEY: "active"}
+
+    job.run([DOMAIN_CFG, STATUS_CFG], [])
+
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Mine"}
+
+
+def test_a_failed_update_keeps_the_value_the_job_wrote_before(tag_sync, job, monkeypatch):
+    """The update to Sales fails and the table still has the job's Finance: still
+    recorded, so a later unlink removes it."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "Finance"})
+    job.state = _previous(ORDERS, {DOMAIN_KEY: "Finance"})
+
+    def failing(*_a):
+        raise RuntimeError("transient")
+
+    monkeypatch.setattr(tag_sync, "assign_tag", failing)
+    with pytest.raises(SystemExit):
+        job.run([DOMAIN_CFG], [_table(tag_sync, domain="Sales")])
+
+    assert job.state["TABLE"][ORDERS] == {DOMAIN_KEY: "Finance"}
+
+
+
+def test_a_dry_run_splits_recorded_from_customer_owned_tags(tag_sync, job, capsys):
+    """Dry run: the recorded tag will be removed, the customer's configured key is kept."""
+    _seed(job, ORDERS, {"ontos_semantic_old": "stale", DOMAIN_KEY: "CustomerTeam",
+                        "owner": "finance"})
+    job.state = _previous(ORDERS, {"ontos_semantic_old": "stale"})
+
+    job.run([DOMAIN_CFG, STATUS_CFG, SEMANTIC_CFG], [_table(tag_sync, status="active")],
+            extra_args=("--dry_run", "true"))
+
+    out = capsys.readouterr().out
+    assert "remove (recorded, will remove)=['ontos_semantic_old']" in out
+    assert f"kept (customer-owned)=['{DOMAIN_KEY}']" in out
+    assert job.unassigned == [] and job.assigned == []
+

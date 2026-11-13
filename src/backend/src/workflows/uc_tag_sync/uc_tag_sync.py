@@ -897,14 +897,18 @@ def sanitize_tag_key(key: str) -> str:
 
 @dataclass(frozen=True)
 class TagOwnership:
-    """The tag keys this job manages by pattern: the exact keys its enabled configs produce.
+    """The tag keys the enabled configs produce by name.
 
-    A config without a placeholder owns its exact key (a data_domain key also owns its
+    A config without a placeholder produces its exact key (a data_domain key also its
     numbered additional keys, ``<key>_1``, ``<key>_2``...). A config whose key has a
-    placeholder owns no tag by pattern: the keys it produces are only known from the
-    current links and from the delivery state, so those are the only ones removed. A
-    literal such as ``x_`` would otherwise claim every user tag under it. ``prefixes``
-    stays for callers that pass a plain prefix string (see as_ownership).
+    placeholder matches no tag by name: a literal such as ``x_`` would claim every user
+    tag under it. ``prefixes`` stays for callers that pass a plain prefix string (see
+    as_ownership).
+
+    A matching key is not enough to remove a tag: the customer may have set that key
+    too. Only tags the delivery state recorded on the object, still with the recorded
+    value, are removed. A matching tag that wasn't recorded is the customer's and is
+    kept; dry runs list it as such.
     """
     exact: FrozenSet[str] = frozenset()
     numbered: FrozenSet[str] = frozenset()
@@ -939,6 +943,7 @@ class TagOwnership:
             if config.get("entity_type") == "data_domain":
                 numbered.add(key)
         return cls(frozenset(exact), frozenset(numbered))
+
 
 
 def legacy_cleanup_gate_prefix(tag_sync_configs: List[Dict[str, Any]], default: str) -> str:
@@ -1173,6 +1178,11 @@ def unassign_tag(spark: SparkSession, object_type: str, object_name: str, key: s
     )
 
 
+def same_tag_value(a: Optional[str], b: Optional[str]) -> bool:
+    """A tag set to None is stored as an empty value."""
+    return (a or "") == (b or "")
+
+
 def reconcile_tags(
     ws: WorkspaceClient,
     spark: SparkSession,
@@ -1181,32 +1191,55 @@ def reconcile_tags(
     desired: Dict[str, Optional[str]],
     owned: Union[str, TagOwnership],
     dry_run: bool = False,
-    previously_delivered: Iterable[str] = (),
-    still_present: Optional[Dict[str, Optional[str]]] = None,
+    previously_delivered: Optional[Dict[str, Optional[str]]] = None,
+    delivered: Optional[Dict[str, Optional[str]]] = None,
 ) -> Tuple[int, int, List[str]]:
     """Make the job's tags on one object match ``desired``.
 
-    Removes the tags this job manages that aren't desired: those ``owned`` matches, plus
-    the keys delivered to this object last run. Other tags on the object are left alone.
-    A tag whose removal failed is stored in ``still_present`` (key -> value) when given,
-    so the caller keeps it in the delivery state and the next run retries it.
+    ``previously_delivered`` is what the delivery state recorded on this object (key ->
+    value), or None when the state is unknown. Only a recorded tag that isn't desired
+    and still has the recorded value is removed: a tag the job didn't write, or whose
+    value was changed outside the job, is the customer's and stays, even when its key is
+    one the configs produce (``owned``; dry runs list those as customer-owned).
+
+    ``delivered``, when given, is filled with the job's tags on the object after the
+    call: the keys it assigned, the recorded ones that already had the desired value or
+    whose removal failed, and the recorded value of a key whose update failed. A failed
+    assignment is not recorded, so an unlink never removes the customer's value. With an
+    unknown state, a desired tag that already has the desired value is kept as the
+    job's, as before the state existed.
     """
     ownership = as_ownership(owned)
-    delivered_before = set(previously_delivered)
+    recorded = previously_delivered or {}
+    # Tag keys are case-sensitive in Unity Catalog (Owner and owner are two tags), so
+    # keys are compared exactly; only object names are lowercased.
     # All tags are read (empty prefix) so the upsert check sees every key the job wrote.
     existing = get_existing_prefixed_tags(spark, object_type, object_name, "")
     to_remove = [
         k for k in existing
-        if k not in desired and (ownership.owns(k) or k in delivered_before)
+        if k not in desired and k in recorded and same_tag_value(recorded[k], existing[k])
+    ]
+    # Not removed: a configured key the job didn't record, or a recorded one whose value
+    # was changed outside the job.
+    customer_owned = [
+        k for k in existing
+        if k not in desired and k not in to_remove and (ownership.owns(k) or k in recorded)
     ]
     to_upsert = {k: v for k, v in desired.items() if existing.get(k) != v}
+
+    ours: Dict[str, Optional[str]] = {}
+    for k, v in desired.items():
+        if k not in to_upsert and (previously_delivered is None or k in recorded):
+            ours[k] = v
 
     updated = 0
     removed = 0
     errors: List[str] = []
     if dry_run:
-        if to_remove or to_upsert:
-            print(f"[DRY-RUN] {object_type} {object_name} remove={to_remove} upsert={to_upsert}")
+        if to_remove or to_upsert or customer_owned:
+            print(f"[DRY-RUN] {object_type} {object_name} upsert={to_upsert} "
+                  f"remove (recorded, will remove)={to_remove} "
+                  f"kept (customer-owned)={customer_owned}")
         return (0, 0, [])
 
     for k in to_remove:
@@ -1217,19 +1250,25 @@ def reconcile_tags(
             msg = f"Failed to remove tag {k} from {object_type} {object_name}: {e}"
             print(f"[WARN] {msg}")
             errors.append(msg)
-            if still_present is not None:
-                still_present[k] = existing.get(k)
+            # Still on the object: kept in the state, so the next run retries it.
+            ours[k] = existing.get(k)
 
     for k, v in to_upsert.items():
         try:
             ensure_tag_key(ws, k)
             assign_tag(spark, object_type, object_name, k, v)
             updated += 1
+            ours[k] = v
         except Exception as e:
             msg = f"Failed to assign tag {k}={v} to {object_type} {object_name}: {e}"
             print(f"[WARN] {msg}")
             errors.append(msg)
+            if k in recorded and k in existing and same_tag_value(recorded[k], existing[k]):
+                # The value the job wrote before is still there: still the job's.
+                ours[k] = recorded[k]
 
+    if delivered is not None:
+        delivered.update(ours)
     return (updated, removed, errors)
 
 
@@ -1336,10 +1375,12 @@ def remove_delivered_tags(
 ) -> Tuple[int, List[str], Dict[str, Optional[str]]]:
     """Remove tags this job delivered from an object that no longer has a link.
 
-    Only the delivered keys are removed; other tags on the object stay. The delivery
-    state is the ownership here, so no prefix is needed. Returns
-    (removed, errors, still_delivered): still_delivered holds the keys that
-    couldn't be checked or removed, so the next run tries again.
+    Only the delivered keys that still have the delivered value are removed; other tags
+    on the object stay, and so does a delivered key whose value was changed outside the
+    job (it is the customer's now, and leaves the state). The delivery state is the
+    ownership here, so no prefix is needed. Returns (removed, errors, still_delivered):
+    still_delivered holds the keys that couldn't be checked or removed, so the next run
+    tries again.
     """
     try:
         existing = get_existing_prefixed_tags(spark, object_type, object_name, "")
@@ -1347,10 +1388,15 @@ def remove_delivered_tags(
         msg = f"[WARN] Failed to read tags of {object_type} {object_name}: {e}"
         print(msg)
         return (0, [], dict(delivered))
-    to_remove = [k for k in delivered if k in existing]
+    to_remove = [
+        k for k in delivered if k in existing and same_tag_value(delivered[k], existing[k])
+    ]
+    changed = [k for k in delivered if k in existing and k not in to_remove]
     if dry_run:
-        if to_remove:
-            print(f"[DRY-RUN] {object_type} {object_name} remove={to_remove}")
+        if to_remove or changed:
+            print(f"[DRY-RUN] {object_type} {object_name} "
+                  f"remove (recorded, will remove)={to_remove} "
+                  f"kept (customer-owned)={changed}")
         return (0, [], {})
 
     removed = 0
@@ -1791,15 +1837,14 @@ def sync_tags(
 ) -> SyncResult:
     """Reconcile UC tags for every linked object, then clean up lost links.
 
-    ownership says which tag keys the job manages by pattern (see TagOwnership); it
-    applies to full-run tables only: a column or a schema gets its tags from semantic
-    links, and a partial read is not the whole truth. previous is what the last run
-    delivered (None when it can't be read).
+    ownership is the keys the configs produce by name (see TagOwnership); it only
+    reports the customer's tags under those keys, nothing is removed by name. previous
+    is what the last run delivered (None when it can't be read).
 
-    A full run removes what previous says was delivered to an object, and cleans up the
-    objects that lost their links. A partial run (``partial``, a --limit read) removes
-    nothing and skips that cleanup, but keeps every record previous holds so the state
-    is not lost.
+    A full run removes what previous says was delivered to an object (with the value
+    still the delivered one), and cleans up the objects that lost their links. A partial
+    run (``partial``, a --limit read) removes nothing and skips that cleanup, but keeps
+    every record previous holds so the state is not lost.
     """
     result = SyncResult()
 
@@ -1807,23 +1852,21 @@ def sync_tags(
         object_type: str, fqn: str, desired: Dict[str, Optional[str]]
     ) -> Tuple[int, int]:
         recorded = (previous or {}).get(object_type, {}).get(fqn, {})
-        delivered_before = {} if partial else recorded
-        # A partial read may miss a table's contract or domain rows: its desired tags are
-        # then incomplete, so nothing is removed by pattern.
-        object_ownership = (
-            ownership if object_type == "TABLE" and not partial else TagOwnership()
+        # A partial read may miss a table's contract or domain rows: its desired tags
+        # are then incomplete, so nothing is removed (no record is passed).
+        delivered_before: Optional[Dict[str, Optional[str]]] = (
+            None if previous is None else {} if partial else recorded
         )
-        still_present: Dict[str, Optional[str]] = {}
-        u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, object_ownership,
+        ours: Dict[str, Optional[str]] = {}
+        u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, ownership,
                                     dry_run=dry_run,
                                     previously_delivered=delivered_before,
-                                    still_present=still_present)
+                                    delivered=ours)
         result.updated += u
         result.removed += r
         result.errors.extend(errs)
-        # Keys whose removal failed stay delivered, so the next run retries them.
-        result.delivered[object_type].setdefault(fqn, {}).update(desired)
-        result.delivered[object_type][fqn].update(still_present)
+        # Only the tags the job holds on the object: a failed assignment isn't recorded.
+        result.delivered[object_type].setdefault(fqn, {}).update(ours)
         if partial:
             # Nothing was removed on this partial read: the records the state holds for
             # this object stay as they are.

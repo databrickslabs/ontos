@@ -248,4 +248,6 @@ export interface AssetAnalysisResponse {
     // Security metadata for two-phased verification
     phase1_passed: boolean;
     render_as_markdown: boolean;
+    // Code of a notice shown in the user's language (e.g. llm_analysis_refused)
+    notice_code?: string | null;
 } 

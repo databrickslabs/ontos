@@ -138,6 +138,10 @@
     "runAiAnalysis": "AI 分析を実行",
     "aiAnalysisSummary": "AI 分析サマリー",
     "securityWarning": "セキュリティ警告",
+    "aiNotices": {
+      "analysisRefused": "モデルはこのコンテンツの分析を拒否しました。モデルの返答をプレーンテキストで以下に表示します。",
+      "safetyCheckRefused": "モデルがこのコンテンツのセキュリティチェックを拒否したため、AI 分析はブロックされました。コンテンツを手動で確認してください。"
+    },
     "modelLabel": "モデル",
     "generatedLabel": "生成日時",
     "modelReviewNotImplemented": "モデルレビューの詳細はまだ実装されていません。",

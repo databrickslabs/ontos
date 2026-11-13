@@ -5,17 +5,19 @@ Tools for searching, creating, updating, and deleting data products.
 """
 
 import json
-from contextlib import contextmanager
 import uuid
 from typing import Any, Dict, List, Optional
 from src.common.features import FeatureAccessLevel
+from src.tools.write_audit import audit_change, audited, caller_email as _caller_email
 from src.tools import read_access
 from src.tools import visibility as vis
 
 from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.controller import search_scoring
-from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.controller.lifecycle_fields import (
+    deprecation_details_from_strings, product_status_audit,
+)
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
@@ -292,50 +294,28 @@ DATA_PRODUCTS_FEATURE_ID = "data-products"
 PRODUCT_EDIT_NOT_ALLOWED_CODE = "product_edit_not_allowed"
 
 
-def _caller_email(ctx: ToolContext) -> Optional[str]:
-    return ctx.caller.email if ctx.caller else None
-
-
 def _audit_change(
     ctx: ToolContext, tool_name: str, action: str, success: bool, details: Dict[str, Any]
 ) -> None:
     """Write the data-products audit entry of the REST route doing the same change."""
-    # The module, not the function, so tests can replace log_system_action.
-    from src.controller import audit_manager
-
-    caller = ctx.caller
-    audit_manager.log_system_action(
-        username=(caller.email or caller.auth_path) if caller else "unknown",
-        feature=DATA_PRODUCTS_FEATURE_ID,
-        action=action,
-        success=success,
-        details={
-            **details,
-            "tool_name": tool_name,
-            "auth_path": caller.auth_path if caller else None,
-        },
-    )
+    audit_change(ctx, DATA_PRODUCTS_FEATURE_ID, tool_name, action, success, details)
 
 
-@contextmanager
 def _audited(ctx: ToolContext, tool_name: str, action: str, details: Dict[str, Any]):
     """Audit the change in the block once it ends: failed unless it sets ``success``."""
-    outcome = {"success": False}
-    try:
-        yield outcome
-    finally:
-        _audit_change(ctx, tool_name, action, outcome["success"], details)
+    return audited(ctx, DATA_PRODUCTS_FEATURE_ID, tool_name, action, details)
 
 
 def _transition_status(
     ctx: ToolContext, tool_name: str, product_id: str, status: str, **kwargs: Any
 ) -> None:
-    """The change-status route's call (the caller for the gates), audited as CHANGE_STATUS.
+    """The change-status route's call (the caller for the gates), audited as the route does
+    (``DEPRECATE`` / ``RETIRE`` for those targets, ``CHANGE_STATUS`` otherwise).
 
-    ``kwargs`` go to ``transition_status``.
+    ``kwargs`` go to ``transition_status``; its ``deprecation`` fills the audit details.
     """
-    details = {"product_id": product_id, "new_status": status}
-    with _audited(ctx, tool_name, "CHANGE_STATUS", details) as outcome:
+    action, details = product_status_audit(product_id, status, kwargs.get("deprecation"))
+    with _audited(ctx, tool_name, action, details) as outcome:
         ctx.data_products_manager.transition_status(
             product_id, status, current_user=_caller_email(ctx), **kwargs
         )
@@ -515,10 +495,11 @@ class UpdateDataProductTool(BaseTool):
         "status": {
             "type": "string",
             "description": (
-                "New status (draft, active, deprecated). Applied as a lifecycle transition: "
-                "only an allowed transition, and status change workflows can block it."
+                "New status (draft, active, deprecated, retired). Applied as a lifecycle "
+                "transition: only an allowed transition, and status change workflows can "
+                "block it."
             ),
-            "enum": ["draft", "active", "deprecated"]
+            "enum": ["draft", "active", "deprecated", "retired"]
         },
         "deprecation_reason": {
             "type": "string",

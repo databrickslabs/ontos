@@ -356,13 +356,16 @@ function CandidateSearchStep({
   };
 
   const handleAdd = (candidate: LinkCandidate) => {
+    // The candidate's own type: for an "Asset" range that is the asset's real type
+    // (e.g. "View"), which is what the asset's page looks the link up by.
+    const candidateType = candidate.entity_type || otherType;
     const ends = relationship.direction === 'outgoing'
       ? {
           source_type: entityType, source_id: entityId,
-          target_type: otherType, target_id: candidate.id,
+          target_type: candidateType, target_id: candidate.id,
         }
       : {
-          source_type: otherType, source_id: candidate.id,
+          source_type: candidateType, source_id: candidate.id,
           target_type: entityType, target_id: entityId,
         };
     onAddRelationship({

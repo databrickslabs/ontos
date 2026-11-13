@@ -123,6 +123,10 @@
     "unknownProduct": "Producto desconocido",
     "viewAllSubscribed": "Ver todas las suscripciones"
   },
+  "discoveryDomainGraph": {
+    "unavailable": "La jerarquía de dominios no está disponible para su rol.",
+    "error": "No se pudo cargar la jerarquía de dominios"
+  },
   "dataCurationSection": {
     "title": "Curación de datos",
     "createDataProduct": {

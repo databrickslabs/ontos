@@ -347,6 +347,22 @@
       "fail": "Fehlgeschlagen",
       "true": "Wahr",
       "false": "Falsch"
+    },
+    "checks": {
+      "button": "Prüfen",
+      "buttonHint": "Prüft den Workflow auf Probleme. Warnungen verhindern das Speichern nicht.",
+      "clean": "Keine Probleme gefunden.",
+      "errorsCount_one": "{{count}} Fehler",
+      "errorsCount_other": "{{count}} Fehler",
+      "warningsCount_one": "{{count}} Warnung",
+      "warningsCount_other": "{{count}} Warnungen"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "Schritt \"{{step}}\" beendet den Workflow, daher wird seine Verknüpfung zu \"{{target}}\" ignoriert und beim Speichern entfernt.",
+      "conditionalBranchMissing": "Bedingung \"{{step}}\" hat keinen Schritt für den Zweig {{branch}}. Ist die Bedingung {{branch}}, endet der Workflow als erfolgreich.",
+      "unreachableSteps": "Diese Schritte sind vom ersten Schritt aus nicht erreichbar: {{steps}}.",
+      "storedEntityTypeUnknown": "Der Trigger enthält \"{{entityType}}\", einen Entity-Typ, den es nicht mehr gibt. Er löst dafür nie aus.",
+      "storedEntityTypeUnsupported": "Der Trigger-Typ „{{trigger}}“ löst nie für {{entity}} aus."
     }
   },
   "approvalResponse": {
@@ -713,7 +729,9 @@
     "badges": {
       "default": "Standard",
       "approval": "Genehmigung",
-      "process": "Prozess"
+      "process": "Prozess",
+      "triggerWarnings": "Trigger-Warnung",
+      "triggerWarningsHint": "Der Trigger enthält Entity-Typen, die auf kein Ereignis zutreffen. Öffnen Sie den Workflow, um sie zu sehen."
     },
     "columns": {
       "steps": "Schritte",

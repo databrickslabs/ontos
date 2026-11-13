@@ -123,6 +123,10 @@
     "unknownProduct": "Onbekend product",
     "viewAllSubscribed": "Alle abonnementen bekijken"
   },
+  "discoveryDomainGraph": {
+    "unavailable": "De domeinhiërarchie is niet beschikbaar voor uw rol.",
+    "error": "De domeinhiërarchie kon niet worden geladen"
+  },
   "dataCurationSection": {
     "title": "Data Curatie",
     "createDataProduct": {

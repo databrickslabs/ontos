@@ -8,8 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from src.repositories.assets_repository import asset_type_repo, asset_repo, asset_relationship_repo
 from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
+from src.common.uc_comments import split_column_location
 from src.models.assets import (
-    description_sync_state,
+    description_sync_state, without_internal_properties,
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
     AssetCreate, AssetUpdate, AssetRead, AssetSummary,
     AssetRelationshipCreate, AssetRelationshipRead,
@@ -225,6 +226,8 @@ class AssetsManager(SearchableAsset):
         data = asset_in.model_dump()
         domain_ids = data.pop("domain_ids", None) or []
         primary_domain_id = data.pop("primary_domain_id", None)
+        # Clients never set the internal keys (e.g. the Unity Catalog sync mark)
+        data["properties"] = without_internal_properties(data.get("properties"))
         data["created_by"] = current_user_id
         db_asset = AssetDb(**data)
 
@@ -389,8 +392,6 @@ class AssetsManager(SearchableAsset):
             self._validate_properties(db, effective_type_id, asset_in.properties)
 
         update_data = asset_in.model_dump(exclude_unset=True)
-        description_changed = (
-            'description' in update_data and update_data['description'] != db_asset.description)
         if update_data.get('properties') is not None:
             # Clients never see the internal keys, so they can't send them back
             update_data['properties'] = with_internal_properties(
@@ -409,8 +410,6 @@ class AssetsManager(SearchableAsset):
                     domain_ids=domain_ids, primary_domain_id=primary_domain_id,
                     assigned_by=current_user_id,
                 )
-            if description_changed:
-                self.update_table_column_snapshot(db, updated)
             updated = self._asset_repo.get_with_relationships(db, updated.id)
             logger.info(f"Updated asset '{updated.name}' (id: {asset_id})")
             try:
@@ -438,13 +437,14 @@ class AssetsManager(SearchableAsset):
 
         An imported table or view keeps a snapshot of its columns; the table is
         the asset on the same platform located at the column's location minus
-        the column name.
+        the column name. Called once the column's description is in Unity Catalog.
         """
-        if getattr(column.asset_type, 'name', None) != 'Column' or not column.location:
+        if getattr(column.asset_type, 'name', None) != 'Column':
             return
-        table_location, _, column_name = column.location.rpartition('.')
-        if not table_location or not column_name:
+        split = split_column_location(column.location or '')
+        if split is None:
             return
+        table_location, column_name = split
         tables = db.query(AssetDb).filter(
             AssetDb.location == table_location, AssetDb.platform == column.platform,
             AssetDb.id != column.id,

@@ -153,6 +153,7 @@ from src.controller.lifecycle_fields import (
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
 from src.common.api_errors import CodedValueError
+from src.common.odcs_versions import check_api_version_change
 
 logger = get_logger(__name__)
 
@@ -2606,6 +2607,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # request-status-change, approve/reject), which runs the gates; an
             # update may only repeat it.
             check_status_unchanged(db_obj.status, data_dict.get('status'))
+            check_api_version_change(db_obj.api_version, data_dict.get('apiVersion'))
             
             # Validate required fields
             if data_dict.get('name') is not None and (not data_dict['name'] or not data_dict['name'].strip()):

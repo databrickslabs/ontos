@@ -436,5 +436,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     expect(screen.getByText('timestamp')).toBeInTheDocument()
     // and a timestamp gets the date format options
     expect(screen.getByText('Date Constraints')).toBeInTheDocument()
+    // but not the free-text timezone, a boolean for timestamps in ODCS v3.1
+    expect(screen.queryByText('Timezone')).not.toBeInTheDocument()
   })
 })

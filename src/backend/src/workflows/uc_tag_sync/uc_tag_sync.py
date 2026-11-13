@@ -1064,12 +1064,18 @@ def build_variables_for_dataset(d: DatasetTagInfo, link: Optional[SemanticLink] 
 # Databricks governed tags helpers ------------------------------------------------
 
 def ensure_tag_key(ws: WorkspaceClient, key: str) -> None:
-    # SDK doesn't yet expose create-if-missing uniformly for all backends; attempt idempotent create.
+    """Create the governed tag key if it is missing.
+
+    A key that already exists is fine. Any other failure is raised, so the caller counts
+    it as an error for the object instead of going on as if the key were there.
+    """
     try:
         ws.tags.create(key=key)
-    except Exception:
-        # Assume it exists already or creation is not required in this workspace
-        pass
+    except Exception as e:
+        text = f"{getattr(e, 'error_code', '') or ''} {_error_text(e)}".upper()
+        if "ALREADY_EXISTS" in text or "ALREADY EXISTS" in text:
+            return
+        raise
 
 
 def get_existing_prefixed_tags(spark: SparkSession, object_type: str, object_name: str, prefix: str) -> Dict[str, Optional[str]]:
@@ -1143,25 +1149,52 @@ TAG_SQL_ATTEMPTS = 3
 TAG_SQL_BACKOFFS: Tuple[float, ...] = (2.0, 10.0)
 TAG_SQL_SLEEP = time.sleep
 
-# Errors a retry can't fix, matched against the Spark error class and message:
-_NON_RETRYABLE_TAG_ERRORS = (
-    # The job's identity lacks a privilege on the object, e.g. APPLY TAG.
-    "PERMISSION_DENIED",
-    "INSUFFICIENT_PERMISSIONS",
-    "APPLY TAG",
-    # The table, view or column (or its schema / catalog) doesn't exist.
+# The table, view or column (or its schema / catalog) doesn't exist: the object is
+# skipped, not failed (see UcObjectMissing).
+_MISSING_OBJECT_ERRORS = (
     "TABLE_OR_VIEW_NOT_FOUND",
     "SCHEMA_NOT_FOUND",
     "CATALOG_NOT_FOUND",
     "UNRESOLVED_COLUMN",
 )
 
+# Errors a retry can't fix, matched against the Spark error class and message:
+_NON_RETRYABLE_TAG_ERRORS = _MISSING_OBJECT_ERRORS + (
+    # The job's identity lacks a privilege on the object, e.g. APPLY TAG.
+    "PERMISSION_DENIED",
+    "INSUFFICIENT_PERMISSIONS",
+    "APPLY TAG",
+)
 
-def _is_retryable_tag_error(error: Exception) -> bool:
+
+def _error_text(error: Exception) -> str:
     get_error_class = getattr(error, "getErrorClass", None)
     error_class = get_error_class() if callable(get_error_class) else None
-    text = f"{error_class or ''} {error}".upper()
+    return f"{error_class or ''} {error}".upper()
+
+
+def _is_retryable_tag_error(error: Exception) -> bool:
+    text = _error_text(error)
     return not any(marker in text for marker in _NON_RETRYABLE_TAG_ERRORS)
+
+
+def is_missing_object_error(error: Exception) -> bool:
+    """True when Unity Catalog says the object (or its schema / catalog) is gone."""
+    text = _error_text(error)
+    return any(marker in text for marker in _MISSING_OBJECT_ERRORS)
+
+
+class UcObjectMissing(Exception):
+    """A UC object a link points to doesn't exist (any more).
+
+    Raised without the SDK message, which can carry paths. The caller skips the object,
+    logs it and carries on with the rest of the batch.
+    """
+
+    def __init__(self, object_type: str, object_name: str):
+        super().__init__(f"{object_type} {object_name}: not found in Unity Catalog")
+        self.object_type = object_type
+        self.object_name = object_name
 
 
 def _run_tag_sql(spark: SparkSession, sql: str, *, attempts: int,
@@ -1210,6 +1243,7 @@ def reconcile_tags(
     dry_run: bool = False,
     previously_delivered: Optional[Dict[str, Optional[str]]] = None,
     delivered: Optional[Dict[str, Optional[str]]] = None,
+    warnings: Optional[List[str]] = None,
 ) -> Tuple[int, int, List[str]]:
     """Make the job's tags on one object match ``desired``.
 
@@ -1231,7 +1265,12 @@ def reconcile_tags(
     # Tag keys are case-sensitive in Unity Catalog (Owner and owner are two tags), so
     # keys are compared exactly; only object names are lowercased.
     # All tags are read (empty prefix) so the upsert check sees every key the job wrote.
-    existing = get_existing_prefixed_tags(spark, object_type, object_name, "")
+    try:
+        existing = get_existing_prefixed_tags(spark, object_type, object_name, "")
+    except Exception as e:
+        if is_missing_object_error(e):
+            raise UcObjectMissing(object_type, object_name) from None
+        raise
     to_remove = [
         k for k in existing
         if k not in desired and k in recorded and same_tag_value(recorded[k], existing[k])
@@ -1264,6 +1303,8 @@ def reconcile_tags(
             unassign_tag(spark, object_type, object_name, k)
             removed += 1
         except Exception as e:
+            if is_missing_object_error(e):
+                raise UcObjectMissing(object_type, object_name) from None
             msg = f"Failed to remove tag {k} from {object_type} {object_name}: {e}"
             print(f"[WARN] {msg}")
             errors.append(msg)
@@ -1271,12 +1312,31 @@ def reconcile_tags(
             ours[k] = existing.get(k)
 
     for k, v in to_upsert.items():
+        key_error: Optional[str] = None
         try:
             ensure_tag_key(ws, k)
+        except Exception as e:
+            if is_missing_object_error(e):
+                raise UcObjectMissing(object_type, object_name) from None
+            # The write is still tried: the key may exist under a name the check
+            # missed, or the job may be allowed to set tags it can't create.
+            key_error = f"Failed to create tag key {k} for {object_type} {object_name}: {e}"
+        try:
             assign_tag(spark, object_type, object_name, k, v)
             updated += 1
             ours[k] = v
+            if key_error is not None:
+                # The tag is on the object: a warning, without the SDK text.
+                msg = f"{object_type} {object_name}: tag key {k} could not be created"
+                print(f"[WARN] {msg}")
+                if warnings is not None:
+                    warnings.append(msg)
         except Exception as e:
+            if is_missing_object_error(e):
+                raise UcObjectMissing(object_type, object_name) from None
+            if key_error is not None:
+                print(f"[WARN] {key_error}")
+                errors.append(key_error)
             msg = f"Failed to assign tag {k}={v} to {object_type} {object_name}: {e}"
             print(f"[WARN] {msg}")
             errors.append(msg)
@@ -1440,11 +1500,14 @@ def remove_delivered_tags(
     job (it is the customer's now, and leaves the state). The delivery state is the
     ownership here, so no prefix is needed. Returns (removed, errors, still_delivered):
     still_delivered holds the keys that couldn't be checked or removed, so the next run
-    tries again.
+    tries again. Raises UcObjectMissing when the object no longer exists: there is
+    nothing left to remove.
     """
     try:
         existing = get_existing_prefixed_tags(spark, object_type, object_name, "")
     except Exception as e:
+        if is_missing_object_error(e):
+            raise UcObjectMissing(object_type, object_name) from None
         msg = f"[WARN] Failed to read tags of {object_type} {object_name}: {e}"
         print(msg)
         return (0, [], dict(delivered))
@@ -1467,6 +1530,8 @@ def remove_delivered_tags(
             unassign_tag(spark, object_type, object_name, k)
             removed += 1
         except Exception as e:
+            if is_missing_object_error(e):
+                raise UcObjectMissing(object_type, object_name) from None
             msg = f"Failed to remove tag {k} from {object_type} {object_name}: {e}"
             print(f"[WARN] {msg}")
             errors.append(msg)
@@ -1484,6 +1549,10 @@ class SyncResult:
     )
     # Objects not tagged on purpose, with the reason. They don't fail the run.
     skipped: List[str] = field(default_factory=list)
+    # Objects ("TYPE fqn") that had at least one tag error this run.
+    failed_objects: List[str] = field(default_factory=list)
+    # Things worth a look that did not stop a tag from being written.
+    warnings: List[str] = field(default_factory=list)
 
 
 # Unity Catalog documents no column tag DDL for a metric view's dimensions and measures:
@@ -1491,6 +1560,7 @@ class SyncResult:
 # SET TAG ON COLUMN names metric views. Their fields are left untagged until the job
 # writes metric view tags with a documented statement.
 METRIC_VIEW_TABLE_TYPE = "METRIC_VIEW"
+MISSING_OBJECT_SKIP_REASON = "not found in Unity Catalog"
 METRIC_VIEW_FIELD_SKIP_REASON = (
     "metric view field; Unity Catalog documents no column tag DDL for metric views"
 )
@@ -1914,6 +1984,17 @@ def sync_tags(
     if result is None:
         result = SyncResult()
 
+    def skip_missing(object_type: str, fqn: str) -> None:
+        # Only the object type and name are logged: the SDK error text can carry paths.
+        print(f"[WARN] Skipped {object_type} {fqn}: {MISSING_OBJECT_SKIP_REASON}")
+        result.skipped.append(f"{object_type} {fqn}: {MISSING_OBJECT_SKIP_REASON}")
+        # UC also answers "not found" for an object the job can't see (no USE CATALOG,
+        # catalog not bound to the workspace). Keep what an earlier run delivered there,
+        # so the tags are still removed once the object is reachable again.
+        kept = (previous or {}).get(object_type, {}).get(fqn)
+        if kept:
+            result.delivered[object_type][fqn] = dict(kept)
+
     def apply(
         object_type: str, fqn: str, desired: Dict[str, Optional[str]]
     ) -> Tuple[int, int]:
@@ -1931,18 +2012,25 @@ def sync_tags(
             u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, ownership,
                                         dry_run=dry_run,
                                         previously_delivered=delivered_before,
-                                        delivered=ours)
+                                        delivered=ours,
+                                        warnings=result.warnings)
+        except UcObjectMissing:
+            skip_missing(object_type, fqn)
+            return 0, 0
         except Exception as e:
             # E.g. its information_schema can't be read: the rest of the run goes on,
             # and the object keeps the record of the previous run.
             msg = f"Failed to sync tags of {object_type} {fqn}: {e}"
             print(f"[WARN] {msg}")
             result.errors.append(msg)
+            result.failed_objects.append(f"{object_type} {fqn}")
             result.delivered[object_type][fqn] = dict(recorded)
             return 0, 0
         result.updated += u
         result.removed += r
         result.errors.extend(errs)
+        if errs:
+            result.failed_objects.append(f"{object_type} {fqn}")
         # Only the tags the job holds on the object: a failed assignment isn't recorded.
         result.delivered[object_type].setdefault(fqn, {}).update(ours)
         if partial:
@@ -2017,14 +2105,20 @@ def sync_tags(
                 r, errs, still_delivered = remove_delivered_tags(
                     spark, object_type, fqn, tags, dry_run=dry_run
                 )
+            except UcObjectMissing:
+                skip_missing(object_type, fqn)
+                continue
             except Exception as e:
                 msg = f"Failed to clean up tags of {object_type} {fqn}: {e}"
                 print(f"[WARN] {msg}")
                 result.errors.append(msg)
+                result.failed_objects.append(f"{object_type} {fqn}")
                 result.delivered[object_type][fqn] = dict(tags)
                 continue
             result.removed += r
             result.errors.extend(errs)
+            if errs:
+                result.failed_objects.append(f"{object_type} {fqn}")
             if still_delivered:
                 result.delivered[object_type][fqn] = still_delivered
             if verbose:
@@ -2395,11 +2489,18 @@ def main() -> None:
 
     print("\n" + "=" * 80)
     msg = f"Summary: updated={updated_total} removed={removed_total} errors="
-    print(f"{msg}{len(all_errors)} skipped={len(result.skipped)}")
+    print(f"{msg}{len(all_errors)} skipped={len(result.skipped)} "
+          f"failed_objects={len(result.failed_objects)} "
+          f"warnings={len(result.warnings)}")
 
     if result.skipped:
         print(f"\n{len(result.skipped)} object(s) skipped (not errors):")
         for item in result.skipped:
+            print(f"  - {item}")
+
+    if result.warnings:
+        print(f"\n{len(result.warnings)} warning(s) (tags written):")
+        for item in result.warnings:
             print(f"  - {item}")
 
     if all_errors:

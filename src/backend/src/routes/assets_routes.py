@@ -31,6 +31,7 @@ from src.common.dependencies import (
     AuditManagerDep,
     AuditCurrentUserDep,
 )
+from src.common.api_errors import CodedValueError
 from src.common.errors import NotFoundError, ConflictError, ValidationError
 from src.common.logging import get_logger
 
@@ -316,6 +317,11 @@ def create_asset(
     except ConflictError as e:
         details["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except CodedValueError as e:
+        # The lifecycle's refusal (a stage the group doesn't have, a move it
+        # doesn't allow): its code reaches the UI
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to create asset '%s'", asset_in.name)
         details["exception"] = {"type": type(e).__name__, "message": str(e)}
@@ -452,6 +458,11 @@ def update_asset(
     except ConflictError as e:
         details["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except CodedValueError as e:
+        # The lifecycle's refusal (a stage the group doesn't have, a move it
+        # doesn't allow): its code reaches the UI
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to update asset %s", asset_id)
         details["exception"] = {"type": type(e).__name__, "message": str(e)}

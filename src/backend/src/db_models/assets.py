@@ -48,6 +48,12 @@ class AssetDb(Base):
     properties = Column(JSON, nullable=True)  # Type-specific metadata following type's schema
     tags = Column(JSON, nullable=True)  # Quick tags/classifications
     status = Column(String, nullable=False, default="active", index=True)
+    # Lifecycle Stage Group (#1213); ``status`` holds a stage key of it. NULL = the
+    # entity type's default group.
+    lifecycle_stage_group_id = Column(
+        String, ForeignKey('lifecycle_stage_groups.id', ondelete='RESTRICT'),
+        nullable=True, index=True,
+    )
 
     # Certification
     certification_level = Column(Integer, nullable=True, index=True)

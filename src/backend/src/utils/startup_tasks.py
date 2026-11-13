@@ -770,12 +770,18 @@ async def startup_event_handler(app: FastAPI):
         try:
             from src.repositories.certification_levels_repository import certification_levels_repo
             from src.repositories.maturity_repository import maturity_repo
+            from src.repositories.lifecycle_stage_groups_repository import (
+                lifecycle_stage_groups_repo,
+            )
 
             session_factory = get_session_factory()
             with session_factory() as db_session:
                 certification_levels_repo.seed_defaults(db_session)
                 maturity_repo.seed_defaults(db_session)
+                lifecycle_stage_groups_repo.seed_defaults(db_session)
                 db_session.commit()
+                from src.controller.lifecycle_service import lifecycle_service
+                lifecycle_service.warm(db_session)
             logger.info("Reference data seed step complete.")
         except Exception as e:
             logger.warning(f"Failed seeding reference data: {e}", exc_info=True)

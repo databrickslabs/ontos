@@ -419,6 +419,8 @@ class DataContractBase(BaseModel):
     name: str  # Required for app usability
     version: str = Field('1.0.0')
     status: str = Field('draft')
+    # Lifecycle Stage Group (#1213); None = the default data contract group
+    lifecycle_stage_group_id: Optional[str] = None
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
@@ -537,6 +539,10 @@ class DataContractRead(BaseModel):
     name: str  # Required for app usability
     version: str  # Required by ODCS
     status: str  # Required by ODCS
+    # Lifecycle Stage Group (#1213); ``status`` is a stage key of it
+    lifecycle_stage_group_id: Optional[str] = None
+    # Stage Category of ``status`` (draft, review, active, deprecated, retired)
+    status_category: Optional[str] = None
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     owner_team_name: Optional[str] = None  # Resolved at query time
     project_id: Optional[str] = None  # Project association
@@ -631,6 +637,14 @@ class DataContractRead(BaseModel):
         # under Pydantic v2 because this flag was missing.
         from_attributes = True
 
+    @model_validator(mode='after')
+    def _fill_status_category(self):
+        if self.status_category is None and self.status:
+            from src.controller.lifecycle_service import lifecycle_service
+            self.status_category = lifecycle_service.category_of_row(self)
+        return self
+
+
 
 class DataContractSummary(BaseModel):
     """Lightweight contract model for list endpoints -- no schema, quality, or comments."""
@@ -638,6 +652,10 @@ class DataContractSummary(BaseModel):
     name: str
     version: str
     status: str
+    # Lifecycle Stage Group (#1213); ``status`` is a stage key of it
+    lifecycle_stage_group_id: Optional[str] = None
+    # Stage Category of ``status`` (draft, review, active, deprecated, retired)
+    status_category: Optional[str] = None
     owner_team_id: Optional[str] = None
     owner_team_name: Optional[str] = None
     project_id: Optional[str] = None
@@ -690,6 +708,14 @@ class DataContractSummary(BaseModel):
 
     class Config:
         populate_by_name = True
+
+    @model_validator(mode='after')
+    def _fill_status_category(self):
+        if self.status_category is None and self.status:
+            from src.controller.lifecycle_service import lifecycle_service
+            self.status_category = lifecycle_service.category_of_row(self)
+        return self
+
 
 
 class DataContractCommentCreate(BaseModel):

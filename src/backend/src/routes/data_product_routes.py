@@ -345,7 +345,11 @@ async def publish_product(
         return {'status': updated_product.status}
     except ValueError as e:
         logger.error("Validation error publishing product %s: %s", product_id, e)
-        error_status = 409 if "Invalid transition" in str(e) else 400
+        # 409: the lifecycle has no (or no single) publish move from this stage
+        from src.common.api_errors import InvalidStatusTransitionError
+        from src.controller.lifecycle_service import LifecycleActionUnresolvedError
+        refused_move = isinstance(e, (InvalidStatusTransitionError, LifecycleActionUnresolvedError))
+        error_status = 409 if refused_move or "Invalid transition" in str(e) else 400
         raise HTTPException(status_code=error_status, detail=str(e))
     except HTTPException:
         raise
@@ -2774,7 +2778,8 @@ async def change_product_status(
         )
         
         audit_action, audit_details = product_status_audit(
-            product_id, payload.new_status, payload.deprecation_details()
+            product_id, payload.new_status, payload.deprecation_details(),
+            updated_product.status_category,
         )
         audit_manager.log_action(
             db=db,

@@ -66,12 +66,8 @@ from src.common.ontology_type_names import canonical_type_name
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
-from src.common.lifecycle_status import (
-    CONTRACT_STATUSES,
-    check_status_unchanged,
-    import_status,
-    normalize_new_status,
-)
+from src.common.lifecycle_status import check_status_unchanged
+from src.controller.lifecycle_service import lifecycle_service
 from src.models.data_contracts import (
     ColumnDefinition,
     DataContract,
@@ -164,6 +160,14 @@ class InvalidVersionFormatError(CodedValueError):
 
     def __init__(self, version: str, message: str):
         super().__init__(message, version=version)
+
+
+def _is_draft_stage(db, group_id: Optional[str], key: Optional[str]) -> bool:
+    """Whether ``key`` is a draft-category stage of the contract group ``group_id``."""
+    from types import SimpleNamespace
+
+    row = SimpleNamespace(status=key, lifecycle_stage_group_id=group_id)
+    return lifecycle_service.category_of(db, 'data_contract', row) == 'draft'
 
 
 def _relationship_read(rel) -> Dict[str, Any]:
@@ -1006,7 +1010,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             'apiVersion': db_obj.api_version or 'v3.1.0',
             'name': db_obj.name,
             'version': db_obj.version,
-            'status': db_obj.status,
+            # The Stage Category's standard value; the exact stage and group
+            # travel as ontosLifecycleStage / ontosLifecycleStageGroup
+            'status': lifecycle_service.export_status(
+                db_session, 'data_contract', db_obj
+            )[0],
         }
         
         # Apply multi-domain fields via the export adapter: primary name in `domain`,
@@ -1487,6 +1495,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
         _upsert_custom_property(odcs, ONTOS_ENTITY_ID_PROPERTY, db_obj.id)
         for prop, value in lifecycle_custom_properties(db_obj, 'data_contract').items():
+            _upsert_custom_property(odcs, prop, value)
+        for prop, value in lifecycle_service.export_status(
+            db_session, 'data_contract', db_obj
+        )[1].items():
             _upsert_custom_property(odcs, prop, value)
 
         # Build authoritative definitions
@@ -2464,10 +2476,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # draft_owner_id is cleared again on the draft->proposed transition.
             # A new contract starts in one of the lifecycle statuses; `certified`
             # is certification_level, set by the certify action.
-            status_value = normalize_new_status(data_dict.get('status'), CONTRACT_STATUSES)
+            # It starts in a stage of its lifecycle stage group (the default one
+            # unless the payload names one).
+            group_id, status_value = lifecycle_service.stage_for_new(
+                db, 'data_contract', data_dict.get('lifecycle_stage_group_id'),
+                data_dict.get('status'),
+            )
             draft_owner_id = (
                 current_user
-                if (status_value or '').lower() == 'draft' and not owner_team_id
+                if _is_draft_stage(db, group_id, status_value) and not owner_team_id
                 else None
             )
 
@@ -2476,6 +2493,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 name=data_dict.get('name'),
                 version=data_dict.get('version', '1.0.0'),
                 status=status_value,
+                lifecycle_stage_group_id=group_id,
                 owner_team_id=owner_team_id,
                 draft_owner_id=draft_owner_id,
                 project_id=project_id,  # Add project_id
@@ -3058,6 +3076,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
         import_links: Optional[ImportLinks] = None,
+        lifecycle_stage_group_id: Optional[str] = None,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
@@ -3088,7 +3107,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 'uploaded_contract'
             )
             version_val = parsed_odcs.get('version', '1.0.0')
-            status_val = normalize_new_status(parsed_odcs.get('status'), CONTRACT_STATUSES)
+            group_id, status_val = lifecycle_service.stage_for_new(
+                db, 'data_contract', lifecycle_stage_group_id, parsed_odcs.get('status'),
+            )
             owner_val = parsed_odcs.get('owner') or current_user or 'system'
             kind_val = parsed_odcs.get('kind', 'DataContract')
             api_version_val = parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version', 'v3.1.0')
@@ -3134,7 +3155,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # there; it is cleared again on the draft->proposed transition.
             draft_owner_id_val = (
                 current_user
-                if (status_val or '').lower() == 'draft' and not owner_team_id
+                if _is_draft_stage(db, group_id, status_val) and not owner_team_id
                 else None
             )
 
@@ -3167,6 +3188,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 name=name_val,
                 version=version_val,
                 status=status_val,
+                lifecycle_stage_group_id=group_id,
                 owner_team_id=owner_team_id,
                 kind=kind_val,
                 api_version=api_version_val,
@@ -3494,8 +3516,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     continue
                 try:
                     # A status Ontos doesn't have is imported as draft, with a note
-                    status_value, status_note = import_status(
-                        entity.get('status'), CONTRACT_STATUSES
+                    # The stage and group the file carries (ontosLifecycleStage /
+                    # ontosLifecycleStageGroup), else its status mapped by category
+                    group_id, status_value, status_note = lifecycle_service.imported_status(
+                        db, 'data_contract', entity.get('status'),
+                        entity.get('customProperties'),
                     )
                     entity = {**entity, 'status': status_value}
                     created = self.create_from_upload(
@@ -3503,6 +3528,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
                         import_links=links,
+                        lifecycle_stage_group_id=group_id,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
@@ -4389,21 +4415,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not contract:
             raise ValueError("Contract not found")
         
-        # Certification is now a separate dimension — removed from status transitions
-        from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
-        from src.common.api_errors import InvalidStatusTransitionError
-
-        # Lowercase and strict, as for products: a status outside the lifecycle
-        # (stored before the lifecycle cleanup) allows no transition
-        current_status = (contract.status or 'draft').lower()
-        new_status = (new_status or '').lower()
-        allowed = DATA_CONTRACT_TRANSITIONS.get(current_status, [])
-        if new_status not in allowed:
-            raise InvalidStatusTransitionError(
-                f"Invalid status transition from '{current_status}' to '{new_status}'. "
-                f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}",
-                fromStatus=current_status, toStatus=new_status, allowed=list(allowed),
-            )
+        # The contract's lifecycle stage group allows the move (coded
+        # InvalidStatusTransitionError otherwise). Lowercase and strict: a status
+        # that isn't a stage of the group allows no transition.
+        current_status, new_status = lifecycle_service.check_transition(
+            db, 'data_contract', contract, new_status
+        )
 
         # Run before_status_change workflows (gating)
         # (a gate that errors refuses the transition when it is fail_closed, #1103);
@@ -5028,11 +5045,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 created_by=current_user or "system"
             )
             
+            # The new version keeps the lifecycle and starts in its first stage
+            group_id, initial_key = lifecycle_service.initial_stage_of(
+                db, 'data_contract', source_contract
+            )
+            cloned_data['lifecycle_stage_group_id'] = group_id
+            cloned_data['status'] = initial_key
+
             # Set personal draft owner if cloning for editing
             if as_personal_draft:
                 cloned_data['draft_owner_id'] = current_user
-                # Personal drafts always start with draft status
-                cloned_data['status'] = 'draft'
             
             # Create new contract in database
             new_contract = DataContractDb(**cloned_data)
@@ -5570,10 +5592,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # so the whole family is reachable via one indexed equality lookup.
         # Previously neither was set on this lightweight path, which caused
         # the detail-view version selector to hide itself (see PRD #442).
+        # The clone keeps the lifecycle and starts in its first stage.
+        group_id, initial_key = lifecycle_service.initial_stage_of(
+            db, 'data_contract', original
+        )
         clone = DataContractDb(
             name=original.name,
             version=new_version,
-            status='draft',
+            status=initial_key,
             owner_team_id=original.owner_team_id,
             kind=original.kind,
             api_version=original.api_version,
@@ -5584,6 +5610,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             description_limitations=original.description_limitations,
             parent_contract_id=original.id,
             version_family_id=original.version_family_id,
+            lifecycle_stage_group_id=group_id,
             created_by=current_user,
             updated_by=current_user,
         )
@@ -5651,7 +5678,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Contract not found")
         
         from_status = (contract.status or '').lower()
-        if from_status != 'draft':
+        if lifecycle_service.category_of(db, 'data_contract', contract) != 'draft':
             raise ValueError(f"Cannot request review from status {contract.status}. Must be DRAFT.")
 
         # A contract must describe at least one schema object before it can be
@@ -5674,7 +5701,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # under steward review must be discoverable by stewards and other team
         # members, not just its author (PRD #442).
         contract = self.transition_status(
-            db=db, contract_id=contract_id, new_status='proposed',
+            db=db, contract_id=contract_id,
+            new_status=lifecycle_service.resolve_action(
+                db, 'data_contract', contract, 'submit_review'
+            ),
             current_user=current_user, also_set={'draft_owner_id': None},
         )
         self._update_search_index(contract, db)
@@ -6109,21 +6139,28 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         
         # Update contract status based on decision, through transition_status
         # so the lifecycle check and the before_status_change gates run
+        in_review = lifecycle_service.awaits_review_decision(db, 'data_contract', contract)
         if decision == 'approve':
-            if from_status not in ('proposed', 'under_review'):
+            if not in_review:
                 raise ValueError(f"Cannot approve from status {contract.status}")
             contract = self.transition_status(
-                db=db, contract_id=contract_id, new_status='approved',
+                db=db, contract_id=contract_id,
+                new_status=lifecycle_service.resolve_action(
+                    db, 'data_contract', contract, 'approve'
+                ),
                 current_user=current_user,
             )
             notification_title = "Contract Review Approved"
             notification_desc = f"Your contract '{contract.name}' has been approved by the data steward."
         elif decision == 'reject':
-            if from_status not in ('proposed', 'under_review'):
+            if not in_review:
                 raise ValueError(f"Cannot reject from status {contract.status}")
             # ODCS: rejected contracts return to draft for revisions
             contract = self.transition_status(
-                db=db, contract_id=contract_id, new_status='draft',
+                db=db, contract_id=contract_id,
+                new_status=lifecycle_service.resolve_action(
+                    db, 'data_contract', contract, 'reject'
+                ),
                 current_user=current_user,
             )
             notification_title = "Contract Review Rejected"
@@ -6535,7 +6572,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         current_status = (contract.status or 'draft').lower()
         target_status_lower = target_status.lower()
         
-        allowed_transitions = self._get_allowed_status_transitions(current_status)
+        allowed_transitions = self._get_allowed_status_transitions(current_status, contract, db)
         if target_status_lower not in allowed_transitions:
             raise ValueError(f"Invalid transition from '{current_status}' to '{target_status}'")
 
@@ -6653,7 +6690,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # Apply status change if approved
         if decision == 'approve':
             target_status_lower = target_status.lower()
-            allowed_transitions = self._get_allowed_status_transitions(from_status)
+            allowed_transitions = self._get_allowed_status_transitions(from_status, contract, db)
             if target_status_lower not in allowed_transitions:
                 # Coded: a request decided after the status changed (e.g. a
                 # second approval) is explained in the UI language
@@ -6744,15 +6781,20 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             "decision": decision
         }
     
-    def _get_allowed_status_transitions(self, current_status: str) -> List[str]:
+    def _get_allowed_status_transitions(
+        self, current_status: str, contract: Any = None, db=None,
+    ) -> List[str]:
         """Get allowed status transitions from current status.
 
-        The lifecycle map's (``DATA_CONTRACT_TRANSITIONS``), the one
-        ``transition_status`` applies. Certification isn't a status.
+        The ones ``transition_status`` applies: the contract's lifecycle stage
+        group (the default group without a contract). Certification isn't a status.
         """
-        from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
-
-        return list(DATA_CONTRACT_TRANSITIONS.get((current_status or 'draft').lower(), []))
+        current = (current_status or 'draft').lower()
+        group = (
+            lifecycle_service.group_for(db, 'data_contract', contract)
+            if contract is not None else lifecycle_service.default_group(db, 'data_contract')
+        )
+        return [stage.key for stage in group.targets(current)]
     
     def get_team_members_for_import(
         self,
@@ -7165,6 +7207,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 name=c.name,
                 version=c.version,
                 status=c.status,
+                lifecycle_stage_group_id=c.lifecycle_stage_group_id,
                 owner_team_id=c.owner_team_id,
                 owner_team_name=team_map.get(c.owner_team_id),
                 project_id=c.project_id,
@@ -7509,6 +7552,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             name=db_contract.name,
             version=db_contract.version,
             status=db_contract.status,
+            lifecycle_stage_group_id=db_contract.lifecycle_stage_group_id,
             owner_team_id=db_contract.owner_team_id,
             owner_team_name=owner_team_name,
             project_id=db_contract.project_id,

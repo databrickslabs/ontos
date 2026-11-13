@@ -223,6 +223,13 @@ class AssetsManager(SearchableAsset):
         data = asset_in.model_dump()
         domain_ids = data.pop("domain_ids", None) or []
         primary_domain_id = data.pop("primary_domain_id", None)
+        # A stage of its lifecycle stage group; without one, the group's first
+        # active stage (assets were created active before stage groups)
+        from src.controller.lifecycle_service import lifecycle_service
+        data["lifecycle_stage_group_id"], data["status"] = lifecycle_service.stage_for_new(
+            db, 'asset', data.get("lifecycle_stage_group_id"), data.get("status"),
+            default_category='active',
+        )
         data["created_by"] = current_user_id
         db_asset = AssetDb(**data)
 
@@ -387,6 +394,17 @@ class AssetsManager(SearchableAsset):
             self._validate_properties(db, effective_type_id, asset_in.properties)
 
         update_data = asset_in.model_dump(exclude_unset=True)
+        # A status change is a move its lifecycle stage group must allow
+        # (coded invalid_status_transition otherwise); repeating it is no change
+        from src.controller.lifecycle_service import lifecycle_service
+        if 'status' in update_data:
+            requested = (update_data.get('status') or '').strip().lower()
+            if not requested or requested == (db_asset.status or '').lower():
+                update_data.pop('status')
+            else:
+                _from, update_data['status'] = lifecycle_service.check_transition(
+                    db, 'asset', db_asset, requested,
+                )
         if update_data.get('properties') is not None:
             # Clients never see the internal keys, so they can't send them back
             update_data['properties'] = with_internal_properties(

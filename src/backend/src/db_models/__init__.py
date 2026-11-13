@@ -44,6 +44,7 @@ from . import entity_relationships
 from . import entity_subscriptions
 from . import estates
 from . import certification_levels
+from . import lifecycle_stage_groups
 from . import maturity
 from . import workflow_configurations
 from . import workflow_installations

@@ -10,10 +10,11 @@ by the certify action.
 from typing import Any, Dict, Iterable, Optional, Tuple
 
 from src.common.api_errors import CodedValueError
-from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS, DATA_PRODUCT_TRANSITIONS
+from src.common.lifecycle_defaults import default_transitions
 
-PRODUCT_STATUSES = tuple(DATA_PRODUCT_TRANSITIONS)
-CONTRACT_STATUSES = tuple(DATA_CONTRACT_TRANSITIONS)
+# The stage keys of the seeded default lifecycles
+PRODUCT_STATUSES = tuple(default_transitions('data_product'))
+CONTRACT_STATUSES = tuple(default_transitions('data_contract'))
 
 
 class StatusChangeRequiresTransitionError(CodedValueError):

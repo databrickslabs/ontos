@@ -283,7 +283,8 @@ def _product_candidates(
     from sqlalchemy.orm import load_only
 
     from src.common import product_read_rule as rule
-    from src.common.version_visibility import CONSUMER_VISIBLE_STATUSES
+    from src.common.version_visibility import CONSUMER_VISIBLE_CATEGORIES
+    from src.controller.lifecycle_service import lifecycle_service
     from src.db_models.data_products import DataProductDb
 
     email = user.email if user else None
@@ -303,11 +304,14 @@ def _product_candidates(
     model = DataProductDb
     q = db.query(model).options(load_only(
         model.id, model.name, model.status, model.draft_owner_id, model.owner_team_id, model.project_id,
+        model.lifecycle_stage_group_id,
     ))
     if search_term:
         q = q.filter(model.name.ilike(_ilike_pattern(search_term), escape="\\"))
     if not is_admin:
-        clauses = [func.lower(model.status).in_(sorted(CONSUMER_VISIBLE_STATUSES))]
+        clauses = [lifecycle_service.category_filter(
+            db, model, 'data_product', CONSUMER_VISIBLE_CATEGORIES,
+        )]
         if email:
             clauses.append(func.lower(model.draft_owner_id) == email.lower())
         if team_ids:

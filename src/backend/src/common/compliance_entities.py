@@ -57,7 +57,7 @@ class UnityCatalogLoader(EntityLoader):
         self.db = db
 
     def _table_template_fields(self) -> Dict[str, Dict[str, Any]]:
-        """Compliance template keys (``template_complete``, ...) by lowercase table full name.
+        """Compliance template keys (``template_complete``, ...) by table full name key.
 
         A table or view gets the keys of the Ontos table or view asset whose location
         is its full name. Empty without a database or when they can't be read (rules on
@@ -127,6 +127,7 @@ class UnityCatalogLoader(EntityLoader):
             # Load tables and views
             if 'table' in entity_types or 'view' in entity_types:
                 template_fields = self._table_template_fields()
+                from src.controller.compliance_template_assets import location_key
                 for catalog in self.ws.catalogs.list():
                     try:
                         for schema in self.ws.schemas.list(catalog_name=catalog.name):
@@ -155,7 +156,7 @@ class UnityCatalogLoader(EntityLoader):
                                         'updated_at': getattr(table, 'updated_at', None),
                                         'storage_location': getattr(table, 'storage_location', None),
                                         **template_fields.get(
-                                            str(getattr(table, 'full_name', '')).lower(), {}
+                                            location_key(getattr(table, 'full_name', '')), {}
                                         ),
                                     }
                             except Exception:

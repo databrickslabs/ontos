@@ -302,6 +302,16 @@ class TestTableObjects:
         assert [e["full_name"] for e in entities] == ["main.sales.orders"]
         assert "template_complete" not in entities[0]
 
+    def test_location_is_matched_without_backticks_spaces_or_case(self, db_session: Session):
+        _, f = _template(db_session, entity_type="asset")
+        asset_id = _table_asset(db_session, " `Main`.`Sales`.`Spaced` ")
+        _value(db_session, f["limitations"], asset_id, "ok", entity_type="asset")
+        entities = list(
+            UnityCatalogLoader(_workspace("main.sales.spaced"), db=db_session)
+            .load_entities(["table"])
+        )
+        assert entities[0]["template_field_limitations"] == "ok"
+
     def test_ambiguous_location_gets_no_keys(self, db_session: Session, documented_table):
         _table_asset(db_session, "main.sales.orders", type_name="View")
         entities = list(

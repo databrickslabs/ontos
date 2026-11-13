@@ -299,7 +299,8 @@ other property, for example `ASSERT p.template_field_retention_days >= 30`.
 
 Tables and views (`MATCH (t:table)`, `MATCH (v:view)`) carry the same keys for the
 template bound to table and view assets, when the Unity Catalog table is registered as
-an Ontos table or view asset whose location is its full name (`catalog.schema.table`).
+an Ontos table or view asset whose location is its full name (`catalog.schema.table`;
+backticks, outer spaces and case are ignored).
 A table with no such asset, or whose location two assets share, has none of the keys
 (rules on them see `null`):
 

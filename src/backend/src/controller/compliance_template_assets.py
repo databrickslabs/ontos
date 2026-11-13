@@ -58,12 +58,13 @@ def is_template_asset_type(asset_type_name: str | None) -> bool:
 
 
 def template_asset_ids_by_location(db: Session) -> Dict[str, str]:
-    """Table and view asset ids by lowercase location (a Unity Catalog full name).
+    """Table and view asset ids by location key (``location_key`` of a Unity Catalog
+    full name: no backticks or outer spaces, lowercase).
 
     A location two such assets share is left out: its values can't be told apart.
     """
     rows = (
-        db.query(AssetDb.id, func.lower(AssetDb.location))
+        db.query(AssetDb.id, location_key_sql(AssetDb.location))
         .join(AssetTypeDb, AssetDb.asset_type_id == AssetTypeDb.id)
         .filter(AssetTypeDb.name.in_(sorted(TEMPLATE_ASSET_TYPES)), AssetDb.location.isnot(None))
         .all()

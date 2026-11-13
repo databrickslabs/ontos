@@ -9,6 +9,7 @@ Thank you for your interest in contributing to Ontos! This document provides gui
 - [Development Setup](#development-setup)
 - [Commit Guidelines](#commit-guidelines)
 - [Versioning](#versioning)
+- [Release Notes](#release-notes)
 - [Release Process](#release-process)
 - [Pull Request Process](#pull-request-process)
 - [Code Style](#code-style)
@@ -293,6 +294,20 @@ The script will:
 
 ---
 
+## Release Notes
+
+Do not edit `src/docs/RELEASE_NOTES.md` in a PR. Add one fragment file instead, so two PRs never touch the same path:
+
+`src/docs/release-notes/unreleased/<section>/<slug>.md`
+
+- The file holds one entry: `- **area**: what changed for users`. Use a unique slug (the branch or feature name), not the PR number.
+- Sections: `upgrade-notes`, `features`, `bug-fixes`, `documentation`, `performance`, `refactoring`, `testing`, `maintenance`, `other`.
+- A change that needs an upgrade note gets a second fragment in `upgrade-notes`, ending with a `What to check:` line.
+- PRs titled `feat`, `fix` or `perf` need a fragment; the `release-notes-fragment` check fails without one. Use the `no-release-notes` label when there is nothing to tell users.
+- Check yours with `python3 src/scripts/assemble_release_notes.py --check`. Details: `src/docs/release-notes/README.md`.
+
+---
+
 ## Release Process
 
 ### 1. Prepare Release
@@ -312,9 +327,13 @@ git checkout -b release/0.5.0
 python src/scripts/bump_version.py 0.5.0
 ```
 
-### 3. Update Changelog (if maintaining one)
+### 3. Assemble Release Notes
 
-Add release notes to `CHANGELOG.md` summarizing changes since last release.
+```bash
+python src/scripts/assemble_release_notes.py --version 0.5.0
+```
+
+This writes the release-note fragments into `src/docs/RELEASE_NOTES.md` under the new version and deletes them. Add `--preview` to see the result first.
 
 ### 4. Commit and Tag
 

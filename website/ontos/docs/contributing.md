@@ -236,9 +236,13 @@ git checkout -b release/0.5.0
 python src/scripts/bump_version.py 0.5.0
 ```
 
-### 3. Update Changelog (if maintaining one)
+### 3. Assemble Release Notes
 
-Add release notes to `CHANGELOG.md` summarizing changes since last release.
+```bash
+python src/scripts/assemble_release_notes.py --version 0.5.0
+```
+
+This writes the release-note fragments into `src/docs/RELEASE_NOTES.md` under the new version and deletes them. Add `--preview` to see the result first.
 
 ### 4. Commit and Tag
 

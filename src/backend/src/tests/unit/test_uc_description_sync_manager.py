@@ -317,3 +317,21 @@ def test_a_column_name_with_dots_is_its_whole_last_part(db_session):
     _sync(db_session, asset, ws)
 
     assert _statements(ws) == ["COMMENT ON COLUMN `main`.`sales`.`orders`.`a.b` IS 'New text'"]
+
+
+def test_a_retry_after_a_save_without_a_token_writes_over_the_agreed_comment(db_session):
+    asset = _asset(db_session, description='New text')
+
+    def no_token():
+        raise UserTokenRequiredError('no token')
+
+    UcDescriptionSyncManager(_settings()).sync_after_update(
+        db_session, asset.id, description_sent=True, previous_description='Old text',
+        user_client=no_token,
+    )
+    ws = _ws(comment='Old text')
+
+    warning, state = _sync(db_session, asset, ws, previous='New text')
+
+    assert (warning, state) == (None, None)
+    assert _statements(ws) == ["COMMENT ON TABLE `main`.`sales`.`orders` IS 'New text'"]

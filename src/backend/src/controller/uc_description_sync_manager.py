@@ -242,13 +242,14 @@ class UcDescriptionSyncManager:
 
         table_fqn, column_name = target
         label = f'{table_fqn}.{column_name}' if column_name else table_fqn
+        baseline = self._baseline(asset, previous_description)
         if text and '\x00' in text:
             warning = _warning(CODE_UNSUPPORTED_TEXT, label)
-            return SyncOutcome(warning, self._store_state(db, asset, warning))
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=baseline))
         warehouse_id = getattr(self._settings, 'DATABRICKS_WAREHOUSE_ID', None)
         if not warehouse_id:
             warning = _warning(CODE_NO_WAREHOUSE, label)
-            return SyncOutcome(warning, self._store_state(db, asset, warning))
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=baseline))
         try:
             ws = user_client()
         except CodedValueError as e:
@@ -256,7 +257,7 @@ class UcDescriptionSyncManager:
             code = _CLIENT_ERROR_CODES.get(e.code, CODE_WRITE_FAILED)
             params = e.params if code == CODE_IMPORT_WRITE_LIMIT else {}
             warning = _warning(code, label, **params)
-            return SyncOutcome(warning, self._store_state(db, asset, warning))
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=baseline))
 
         try:
             table_type, uc_comment = read_comment(ws, table_fqn, column_name)
@@ -265,7 +266,8 @@ class UcDescriptionSyncManager:
                            label, asset.id, e.reason)
             warning = _warning(_REASON_CODES.get(e.reason, CODE_WRITE_FAILED), label)
             audit = {'before': None, 'after': text, 'outcome': 'failed'}
-            return SyncOutcome(warning, self._store_state(db, asset, warning), audit=audit)
+            state = self._store_state(db, asset, warning, agreed=baseline)
+            return SyncOutcome(warning, state, audit=audit)
         if table_type == METRIC_VIEW_TABLE_TYPE:
             logger.info("Not writing the description of asset %s: %s is a metric view",
                         asset.id, label)
@@ -300,6 +302,18 @@ class UcDescriptionSyncManager:
         logger.info("Wrote the description of asset %s to Unity Catalog (%s)", asset.id, label)
         audit['outcome'] = 'written'
         return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
+
+    @staticmethod
+    def _baseline(asset: AssetDb, previous_description: Optional[str]) -> Optional[str]:
+        """The comment Ontos agreed to before a failed save: the stored one, else the previous text.
+
+        Used when the failure happens before Unity Catalog is read, so a retry can still
+        replace the comment that was there (the previous text is what was last in sync).
+        """
+        stored = (asset.properties or {}).get(DESCRIPTION_SYNC_PROPERTY)
+        if isinstance(stored, dict) and stored.get('agreed') is not None:
+            return stored['agreed']
+        return previous_description or None
 
     @staticmethod
     def _stored_state(asset: AssetDb) -> Optional[DescriptionSyncState]:

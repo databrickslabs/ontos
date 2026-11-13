@@ -111,4 +111,18 @@ describe('RequestContractActionDialog lifecycle', () => {
     expect(await screen.findByText(/The lifecycle couldn’t be loaded/)).toBeInTheDocument();
     expect(screen.queryByText(/Terminal State/)).toBeNull();
   });
+
+  it.each([
+    ['active', false, true], ['approved', false, true], ['draft', true, false],
+  ])('offers requests from %s while its lifecycle can’t be read', async (status, publishOff,
+    reviewOff) => {
+    mockGet.mockImplementation(async (url: string) => url === '/api/lifecycle/data_contract/c-1'
+      ? { data: null, error: 'Entity not found' } : OTHER);
+    render(status);
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/lifecycle/data_contract/c-1'));
+    await act(async () => {});
+    expect(requestType('publish').disabled).toBe(publishOff);
+    expect(requestType('review').disabled).toBe(reviewOff);
+  });
 });

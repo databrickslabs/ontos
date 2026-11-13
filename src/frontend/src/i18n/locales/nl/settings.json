@@ -1003,6 +1003,10 @@
         "valueLabel": "Tagwaarde:",
         "sharedKeyHint": "Als de statustags van het product en het contract allebei met dezelfde sleutel zijn ingeschakeld, wordt de status van het product geschreven."
       },
+      "maturityThreshold": {
+        "variable": "true of false: het nummer van het niveau is minstens <order>",
+        "invalid": "Gebruik {ASSET.MATURITY_AT_LEAST:<volgorde>} met een niveaunummer, bijvoorbeeld {ASSET.MATURITY_AT_LEAST:1}."
+      },
       "assetVariables": {
         "assetId": "Asset-UUID",
         "assetType": "Naam van het assettype (Table, View, ...)",

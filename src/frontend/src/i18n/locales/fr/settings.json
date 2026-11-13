@@ -985,6 +985,10 @@
         "valueLabel": "Valeur du tag :",
         "sharedKeyHint": "Lorsque les tags de statut du produit et du contrat sont activés avec la même clé, c'est le statut du produit qui est écrit."
       },
+      "maturityThreshold": {
+        "variable": "true ou false : le numéro du niveau est au moins <order>",
+        "invalid": "Utilisez {ASSET.MATURITY_AT_LEAST:<ordre>} avec un numéro de niveau, par exemple {ASSET.MATURITY_AT_LEAST:1}."
+      },
       "assetVariables": {
         "assetId": "UUID de l'actif",
         "assetType": "Nom du type d'actif (Table, View, ...)",

@@ -1003,6 +1003,10 @@
         "valueLabel": "Tag value:",
         "sharedKeyHint": "When the product and contract status tags are both enabled with the same key, the product's status is written."
       },
+      "maturityThreshold": {
+        "variable": "true or false: the level number is at least <order>",
+        "invalid": "Use {ASSET.MATURITY_AT_LEAST:<order>} with a level number, for example {ASSET.MATURITY_AT_LEAST:1}."
+      },
       "assetVariables": {
         "assetId": "Asset UUID",
         "assetType": "Asset type name (Table, View, ...)",

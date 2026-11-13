@@ -985,6 +985,10 @@
         "valueLabel": "Valor de la etiqueta:",
         "sharedKeyHint": "Cuando las etiquetas de estado del producto y del contrato están activadas con la misma clave, se escribe el estado del producto."
       },
+      "maturityThreshold": {
+        "variable": "true o false: el número del nivel es al menos <order>",
+        "invalid": "Use {ASSET.MATURITY_AT_LEAST:<orden>} con un número de nivel, por ejemplo {ASSET.MATURITY_AT_LEAST:1}."
+      },
       "assetVariables": {
         "assetId": "UUID del activo",
         "assetType": "Nombre del tipo de activo (Table, View, ...)",

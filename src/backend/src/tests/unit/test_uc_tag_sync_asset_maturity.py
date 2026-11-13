@@ -129,6 +129,108 @@ def test_a_contract_dataset_of_the_same_table_keeps_the_asset_level(tag_sync):
     assert merged.contract_name == "orders"
 
 
+# --- Threshold variable: {ASSET.MATURITY_AT_LEAST:<order>} ----------------------------
+
+AT_LEAST_CFG = {
+    "entity_type": "asset", "enabled": True,
+    "tag_key_format": "agent_readable", "tag_value_format": "{ASSET.MATURITY_AT_LEAST:1}",
+}
+
+
+@pytest.mark.parametrize("order, expected", [
+    (2, "true"),      # above the threshold
+    (1, "true"),      # equal to the threshold
+    (0, "false"),     # below it
+    (None, "false"),  # no level: false, not no tag
+])
+def test_the_threshold_publishes_true_or_false(tag_sync, order, expected):
+    name = None if order is None else f"level {order}"
+    d = _dataset(tag_sync, asset_maturity_name=name, asset_maturity_order=order)
+
+    desired = tag_sync.build_desired_for_dataset(d, [AT_LEAST_CFG])
+
+    assert desired == {"agent_readable": expected}
+
+
+def test_the_threshold_resolves_next_to_the_other_variables(tag_sync):
+    cfg = {**AT_LEAST_CFG, "tag_key_format": "tier_{ASSET.MATURITY_AT_LEAST:2}",
+           "tag_value_format": "{ASSET.MATURITY_AT_LEAST:2} {ASSET.MATURITY}"}
+    d = _dataset(tag_sync, asset_maturity_name="2 stars", asset_maturity_order=2)
+
+    desired = tag_sync.build_desired_for_dataset(d, [cfg])
+
+    assert desired == {"tier_true": "true 2 stars"}
+
+
+@pytest.mark.parametrize("bad", [
+    "{ASSET.MATURITY_AT_LEAST:x}", "{ASSET.MATURITY_AT_LEAST:}", "{ASSET.MATURITY_AT_LEAST:-1}",
+])
+def test_a_malformed_threshold_publishes_no_tag(tag_sync, bad):
+    d = _dataset(tag_sync, asset_maturity_name="2 stars", asset_maturity_order=2)
+
+    desired = tag_sync.build_desired_for_dataset(d, [{**AT_LEAST_CFG, "tag_value_format": bad}])
+
+    assert desired == {}
+
+
+def test_the_threshold_publishes_no_tag_for_an_asset_type_without_levels(tag_sync):
+    # A metric view has no levels: "not rated" is not "below the level", so no "false"
+    metric_view = _dataset(tag_sync, asset_type="Metric View")
+
+    assert tag_sync.build_desired_for_dataset(metric_view, [AT_LEAST_CFG]) == {}
+
+
+def test_the_threshold_in_the_key_publishes_no_tag_for_an_asset_type_without_levels(tag_sync):
+    metric_view = _dataset(tag_sync, asset_type="Metric View")
+    cfg = {**AT_LEAST_CFG, "tag_key_format": "tier_{ASSET.MATURITY_AT_LEAST:1}",
+           "tag_value_format": "yes"}
+
+    assert tag_sync.build_desired_for_dataset(metric_view, [cfg]) == {}
+
+
+def test_an_entry_without_the_threshold_still_tags_an_asset_type_without_levels(tag_sync):
+    metric_view = _dataset(tag_sync, asset_type="Metric View")
+    cfg = {**AT_LEAST_CFG, "tag_value_format": "{ASSET.TYPE}"}
+
+    assert tag_sync.build_desired_for_dataset(metric_view, [cfg]) == {
+        "agent_readable": "Metric View",
+    }
+
+
+def test_a_view_without_a_level_still_gets_false(tag_sync):
+    view = _dataset(tag_sync, asset_type="View")
+
+    assert tag_sync.build_desired_for_dataset(view, [AT_LEAST_CFG]) == {
+        "agent_readable": "false",
+    }
+
+
+def test_the_threshold_is_only_resolved_on_an_asset_entry(tag_sync):
+    d = _dataset(tag_sync, asset_maturity_name="2 stars", asset_maturity_order=2)
+    d.product_name = "orders_product"
+    product = {**AT_LEAST_CFG, "entity_type": "data_product"}
+
+    assert tag_sync.build_desired_for_dataset(d, [product]) == {}
+
+
+def test_the_threshold_is_read_as_a_maturity_variable(tag_sync):
+    assert tag_sync.uses_asset_maturity(AT_LEAST_CFG) is True
+    assert tag_sync.maturity_configured([AT_LEAST_CFG]) is True
+    assert tag_sync.maturity_configured([{**AT_LEAST_CFG, "enabled": False}]) is False
+    assert tag_sync.uses_asset_maturity(TYPE_CFG) is False
+
+
+def test_resolve_maturity_at_least_resolves_each_occurrence(tag_sync):
+    resolved = tag_sync.resolve_maturity_at_least(
+        "{ASSET.MATURITY_AT_LEAST:1}|{ASSET.MATURITY_AT_LEAST:3}", "2")
+
+    assert resolved == "true|false"
+    assert tag_sync.resolve_maturity_at_least("{ASSET.MATURITY_AT_LEAST:1}", None) == "false"
+    assert tag_sync.resolve_maturity_at_least(
+        "{ASSET.MATURITY_AT_LEAST:1}", "2", applies=False) is None
+    assert tag_sync.resolve_maturity_at_least("plain", None, applies=False) == "plain"
+
+
 # --- Table tag only ---------------------------------------------------------------
 
 
@@ -186,6 +288,22 @@ def test_a_table_that_loses_its_level_loses_the_tag(tag_sync, uc):
     second = _sync(tag_sync, [_dataset(tag_sync)], previous=first.delivered)
 
     assert uc[("TABLE", TABLE)] == {"ontos_asset_type": "Table"}
+    assert second.removed == 1
+
+
+def test_a_metric_view_loses_a_threshold_tag_written_before(tag_sync, uc):
+    def run(datasets, previous=None):
+        return tag_sync.sync_tags(
+            MagicMock(), MagicMock(), datasets, tag_sync.DirectLinkInfos(),
+            [AT_LEAST_CFG], "agent_", previous=previous,
+        )
+
+    first = run([_dataset(tag_sync)])
+    assert uc[("TABLE", TABLE)] == {"agent_readable": "false"}
+    # The same table is now a metric view: no "false", and the old tag is removed
+    second = run([_dataset(tag_sync, asset_type="Metric View")], previous=first.delivered)
+
+    assert uc[("TABLE", TABLE)] == {}
     assert second.removed == 1
 
 

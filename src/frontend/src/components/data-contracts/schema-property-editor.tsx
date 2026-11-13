@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { ColumnProperty, QualityRule, SchemaRelationship } from '@/types/data-contract'
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import QualityRuleFormDialog from './quality-rule-form-dialog'
+import { hasDateConstraints } from './logical-types'
 
 // ODCS v3.1.0 logical types
 const LOGICAL_TYPES = [
@@ -686,7 +687,7 @@ function SchemaPropertyEditorInner(
                     </div>
                   )}
 
-                  {logicalType === 'date' && (
+                  {hasDateConstraints(logicalType) && (
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="prop-date-format" className="text-xs">{t('data-contracts:property.fields.format', 'Format')}</Label>

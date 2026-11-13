@@ -1369,6 +1369,9 @@ async def resume_workflow_execution(
                 },
             )
 
+        # The step the resume decides, read before the resume moves on
+        decided_step = _pending_step_id(db, execution_id)
+
         # Resume the workflow
         result = executor.resume_workflow(
             execution_id=execution_id,
@@ -1380,13 +1383,18 @@ async def resume_workflow_execution(
             },
             user_email=user_email,
         )
-        
+
         if not result:
             raise HTTPException(
-                status_code=404, 
+                status_code=404,
                 detail="Execution not found or not in paused state"
             )
-        
+
+        # An approval resumed here (e.g. by an external system) is decided:
+        # close its notifications so My actions stops offering it
+        _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
+        db.commit()
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',

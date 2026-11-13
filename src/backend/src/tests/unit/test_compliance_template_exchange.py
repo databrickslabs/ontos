@@ -790,10 +790,14 @@ class TestUnmatchedOnProductReads:
         assert (UNMATCHED in names) is allowed
 
     def test_an_edit_keeps_them_and_a_new_version_copies_them(self, db_session):
+        from src.repositories.data_products_repository import DataProductRepository
+
         _template(db_session, "data_product")
         manager, product_id = _upload(
             db_session, _product_doc({"unknown": 1}), _importer(),
         )
+        # A repository of its own: another unit test leaves the shared one patched.
+        manager._repo = DataProductRepository(DataProductDb)
         product = manager.get_product(product_id)
         # What the UI sends back: the product as the API shows it.
         update = product.model_dump(by_alias=False, exclude_none=True)

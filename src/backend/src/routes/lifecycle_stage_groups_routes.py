@@ -18,7 +18,7 @@
 Errors are coded (``{code, message, params}``): 400 invalid group or stage,
 404 unknown group or entity, 409 integrity conflicts.
 """
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -233,21 +233,55 @@ async def _owns(db, entity_type: str, entity: Any, user, request: Request) -> bo
         return False
 
 
-async def _can_read(db, entity_type: str, entity: Any, user, request: Request) -> bool:
-    if entity_type == 'data_contract':
-        # The contracts' own read rule (version family, team, personal drafts)
-        from src.routes.data_contracts_routes import (
-            contract_read_scope, get_data_contracts_manager,
-        )
-        scope = await contract_read_scope(request, db, user)
-        return get_data_contracts_manager(request).can_read_contract(db, entity, **scope)
-    if await _is_admin(entity_type, user, request):
-        return True
-    if entity_type == 'asset':
-        return True
-    if lifecycle_service.category_of(db, entity_type, entity) in ('active', 'deprecated'):
-        return True
-    return await _owns(db, entity_type, entity, user, request)
+class _Access:
+    """The caller's rights on one entity, each permission checked at most once
+    per request (the read rule, ``can_change_group`` and change-group share them)."""
+
+    def __init__(self, db, entity_type: str, entity: Any, user, request: Request):
+        self.db, self.entity_type, self.entity = db, entity_type, entity
+        self.user, self.request = user, request
+        self._cache: Dict[str, bool] = {}
+
+    async def _once(self, name: str, check) -> bool:
+        if name not in self._cache:
+            self._cache[name] = await check()
+        return self._cache[name]
+
+    async def admin(self) -> bool:
+        return await self._once('admin', lambda: _is_admin(
+            self.entity_type, self.user, self.request))
+
+    async def writer(self) -> bool:
+        return await self._once('writer', lambda: has_feature_permission(
+            ENTITY_FEATURES[self.entity_type], FeatureAccessLevel.READ_WRITE,
+            self.user, self.request))
+
+    async def owner(self) -> bool:
+        return await self._once('owner', lambda: _owns(
+            self.db, self.entity_type, self.entity, self.user, self.request))
+
+    async def can_read(self) -> bool:
+        if self.entity_type == 'data_contract':
+            # The contracts' own read rule (version family, team, personal drafts)
+            from src.routes.data_contracts_routes import (
+                contract_read_scope, get_data_contracts_manager,
+            )
+            scope = await contract_read_scope(self.request, self.db, self.user)
+            return get_data_contracts_manager(self.request).can_read_contract(
+                self.db, self.entity, **scope,
+            )
+        if await self.admin():
+            return True
+        if self.entity_type == 'asset':
+            return True
+        if lifecycle_service.category_of(self.db, self.entity_type, self.entity) in (
+                'active', 'deprecated'):
+            return True
+        return await self.owner()
+
+    async def can_change_group(self) -> bool:
+        """Read/Write on the entity's feature, and its admin or an owner."""
+        return await self.writer() and (await self.admin() or await self.owner())
 
 
 @router.get('/lifecycle/{entity_type}/{entity_id}', response_model=EntityLifecycleRead)
@@ -262,23 +296,13 @@ async def get_entity_lifecycle(
     await _require(ENTITY_FEATURES[entity_type], FeatureAccessLevel.READ_ONLY,
                    current_user, request)
     entity = _entity(db, entity_type, entity_id)
-    if not await _can_read(db, entity_type, entity, current_user, request):
+    access = _Access(db, entity_type, entity, current_user, request)
+    if not await access.can_read():
         raise HTTPException(status_code=404, detail="Entity not found")
     result = lifecycle_service.entity_lifecycle(db, entity_type, entity)
     # The UI offers "Change lifecycle" only to whom change-group accepts
-    result['can_change_group'] = await _can_change_group(
-        db, entity_type, entity, current_user, request,
-    )
+    result['can_change_group'] = await access.can_change_group()
     return result
-
-
-async def _can_change_group(db, entity_type: str, entity: Any, user, request: Request) -> bool:
-    if not await has_feature_permission(
-        ENTITY_FEATURES[entity_type], FeatureAccessLevel.READ_WRITE, user, request,
-    ):
-        return False
-    return (await _is_admin(entity_type, user, request)
-            or await _owns(db, entity_type, entity, user, request))
 
 
 @router.post('/lifecycle/{entity_type}/{entity_id}/change-group',
@@ -299,7 +323,9 @@ async def change_entity_lifecycle_group(
     feature = ENTITY_FEATURES[entity_type]
     await _require(feature, FeatureAccessLevel.READ_WRITE, current_user, request)
     entity = _entity(db, entity_type, entity_id)
-    if not await _can_change_group(db, entity_type, entity, current_user, request):
+    access = _Access(db, entity_type, entity, current_user, request)
+    access._cache['writer'] = True  # checked just above
+    if not await access.can_change_group():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only an admin or an owner can change the lifecycle",

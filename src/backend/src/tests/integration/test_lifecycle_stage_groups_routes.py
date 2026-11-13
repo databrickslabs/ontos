@@ -248,6 +248,24 @@ class TestNotAnAdmin:
         # Not its owner, not an admin: no "Change lifecycle"
         assert res.json()['can_change_group'] is False
 
+    def test_each_permission_is_checked_once_per_request(
+        self, client, db_session, mock_test_user, monkeypatch,
+    ):
+        from src.routes import lifecycle_stage_groups_routes as routes
+
+        calls = []
+
+        async def has_level(feature_id, level, user, request):
+            calls.append((feature_id, level))
+            return True
+
+        monkeypatch.setattr(routes, 'has_feature_permission', has_level)
+        pid = self._owned(db_session, 'draft', mock_test_user.email)
+        res = client.get(f'/api/lifecycle/data_product/{pid}')
+        assert res.status_code == 200, res.text
+        assert res.json()['can_change_group'] is True
+        assert len(calls) == len(set(calls)), calls
+
     def test_the_owner_may_change_the_group(self, client, db_session, mock_test_user, not_admin):
         pid = self._owned(db_session, 'draft', mock_test_user.email)
         res = client.get(f'/api/lifecycle/data_product/{pid}')

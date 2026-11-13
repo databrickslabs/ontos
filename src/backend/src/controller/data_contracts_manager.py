@@ -121,7 +121,8 @@ from src.utils.contract_servers import (
     odcs_property_value as odcs_server_value, property_values as server_property_values,
 )
 from src.utils.contract_owners import (
-    ONTOS_OWNERS_PROPERTY, owners_value, restore_owners, take_owners,
+    ONTOS_OWNERS_PROPERTY, OWNER_MEMBER_MARKER, OwnerRestorer, audit_restored,
+    is_owner_member, owners_value, restore_owners, take_owners, unrestored_owners,
 )
 from src.utils.contract_owner_team import (
     ONTOS_OWNER_TEAM_PROPERTY, owner_team_value, pop_owner_team,
@@ -186,13 +187,18 @@ def relationship_stable_id(rel_data: Dict[str, Any], from_document: bool) -> Opt
     return rel_data.get('id') if from_document else rel_data.get('stableId')
 
 
-def _writes_relationship_ids(api_version: Optional[str]) -> bool:
-    """A relationship `id` is ODCS v3.2.0+ (v3.1.0 relationships don't allow it)."""
+def _odcs_at_least(api_version: Optional[str], minimum: tuple) -> bool:
+    """Whether the contract's ODCS version is ``minimum`` (major, minor) or later."""
     parts = (api_version or 'v3.1.0').lstrip('vV').split('.')
     try:
-        return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0) >= (3, 2)
+        return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0) >= minimum
     except ValueError:
         return False
+
+
+def _writes_relationship_ids(api_version: Optional[str]) -> bool:
+    """A relationship `id` is ODCS v3.2.0+ (v3.1.0 relationships don't allow it)."""
+    return _odcs_at_least(api_version, (3, 2))
 
 
 def _relationship_read(rel) -> Dict[str, Any]:
@@ -995,7 +1001,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
     def _without_restored_owners(self, members: list, owners) -> list:
         """The team members, without those the export added for the business
-        owners being restored (``_merge_business_owners_into_team``)."""
+        owners being restored: marked by ``_merge_business_owners_into_team``
+        and matching a restored owner. An unmarked member (a real one, or an
+        ODCS v3.0.x export, which has no marker) is kept."""
         added = {
             (owner['email'].lower(),
              self.BUSINESS_ROLE_TO_TEAM_ROLE.get(role.name.lower(), role.name.lower()))
@@ -1003,12 +1011,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         }
         return [
             m for m in members
-            if not (isinstance(m, dict) and (str(m.get('username') or '').lower(),
-                                             str(m.get('role') or '').lower()) in added)
+            if not (is_owner_member(m) and (str(m.get('username') or '').lower(),
+                                            str(m.get('role') or '').lower()) in added)
         ]
 
     def _merge_business_owners_into_team(
-        self, members_list: list, db_session, object_type: str, object_id: str
+        self, members_list: list, db_session, object_type: str, object_id: str,
+        mark: bool = False,
     ) -> list:
         """Merge active Business Owners into the team members list for YAML export.
         Deduplicates by (username/email, role). Owners take precedence over existing members."""
@@ -1039,6 +1048,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 member_dict = {'role': team_role, 'username': username}
                 if owner.user_name:
                     member_dict['name'] = owner.user_name
+                if mark:  # so an import can leave it out when it restores the owner
+                    member_dict['customProperties'] = [
+                        {'property': OWNER_MEMBER_MARKER, 'value': True}]
                 members_list.append(member_dict)
                 existing_keys.add(key)
 
@@ -1385,8 +1397,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 members_list.append(member_dict)
 
         if db_session:
+            # Marked (v3.1.0+ team members have customProperties) so an import
+            # that restores the owners from ontosOwners leaves them out
             members_list = self._merge_business_owners_into_team(
-                members_list, db_session, 'data_contract', str(db_obj.id)
+                members_list, db_session, 'data_contract', str(db_obj.id),
+                mark=_odcs_at_least(db_obj.api_version, (3, 1)),
             )
 
         if members_list:
@@ -1523,7 +1538,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # The business owners, also merged into the team above (read back on import)
         owners = owners_value(db_session, 'data_contract', str(db_obj.id))
         if owners:
-            _upsert_custom_property(odcs, ONTOS_OWNERS_PROPERTY, owners)
+            # Entries an import couldn't restore (kept as stored) go out too
+            _upsert_custom_property(odcs, ONTOS_OWNERS_PROPERTY, owners + unrestored_owners(
+                odcs.get('customProperties'), owners))
         for prop, value in lifecycle_custom_properties(db_obj, 'data_contract').items():
             _upsert_custom_property(odcs, prop, value)
 
@@ -3117,6 +3134,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
         import_links: Optional[ImportLinks] = None,
+        owner_restorer: Optional[OwnerRestorer] = None,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
@@ -3127,6 +3145,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             current_user: Username of current user
             create_missing_domains: When True, auto-create by name any domain that
                 doesn't resolve (the opt-in "Create missing domains" import toggle, #851).
+            owner_restorer: whether the importer may assign the business owners
+                an Ontos export wrote (``ontosOwners``), and their audit; without
+                it they stay a custom property.
             import_links: Replacement links of the batch import
                 (``create_contracts_from_files``, which links a replacement
                 imported later and notes one that isn't in the target).
@@ -3186,7 +3207,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 pop_owner_team(db, parsed_odcs) or self._resolve_team_name_to_id(db, owner_val)
             )
             # The business owners an Ontos export wrote (ontosOwners) whose role exists
-            restored_owners = take_owners(db, parsed_odcs)
+            restored_owners = take_owners(db, parsed_odcs, owner_restorer)
 
             # Mirror the create() path (see there for the full rationale): a
             # draft contract with no owning team would otherwise be invisible to
@@ -3272,7 +3293,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if team_data:
                 self._create_team_members(db, created.id, team_data)
             self._create_team_metadata(db, created.id, team_raw)
-            restore_owners(db, 'data_contract', created.id, restored_owners, current_user)
+            restore_owners(db, 'data_contract', created.id, restored_owners, owner_restorer,
+                           current_user)
             
             # Create support channels if present
             support_data = parsed_odcs.get('support', [])
@@ -3340,6 +3362,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             db.commit()
             db.refresh(created)
+            audit_restored(owner_restorer)
             if import_links is not None:
                 import_links.record(original_id, created.id)
 
@@ -3449,6 +3472,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         adopt_ids: bool = True,
         on_duplicate: str = "skip",
         reveal_dup_detail: bool = False,
+        owner_restorer: Optional[OwnerRestorer] = None,
     ) -> BatchImportResult:
         """Import ODCS contracts from one or more uploaded files.
 
@@ -3570,6 +3594,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
                         import_links=links,
+                        owner_restorer=owner_restorer,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,

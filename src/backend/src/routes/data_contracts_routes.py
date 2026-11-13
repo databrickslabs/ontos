@@ -1700,6 +1700,23 @@ async def delete_contract(
             details=details_for_audit,
         )
 
+def _owner_restorer(request, audit_manager, auth_manager, current_user):
+    """Business owners an Ontos export wrote (ontosOwners) are assigned on import
+    only with the permission and the audit of POST /api/business-owners."""
+    from src.utils.contract_owners import OwnerRestorer
+
+    def audit(details):
+        audit_manager.log_action(
+            db=None, username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="business-owners", action="ASSIGN_OWNER", success=True, details=details,
+        )
+
+    allowed = user_has_feature_level(
+        auth_manager, current_user, 'business-owners', FeatureAccessLevel.READ_WRITE)
+    return OwnerRestorer(allowed=allowed, audit=audit)
+
+
 @router.post('/data-contracts/upload', response_model=BatchImportResult)
 async def upload_contract(
     request: Request,
@@ -1785,6 +1802,7 @@ async def upload_contract(
             adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
             reveal_dup_detail=reveal_dup_detail,
+            owner_restorer=_owner_restorer(request, audit_manager, auth_manager, current_user),
         )
         for safe_filename in decode_failures:
             result.add(ImportItemResult(
@@ -1885,6 +1903,7 @@ async def import_odcs_json(
             adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
             reveal_dup_detail=reveal_dup_detail,
+            owner_restorer=_owner_restorer(request, audit_manager, auth_manager, current_user),
         )
 
         success = result.created > 0

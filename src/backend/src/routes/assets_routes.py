@@ -468,8 +468,10 @@ def update_asset(
     """Updates an existing asset."""
     success = False
     details = {"params": {"asset_id": str(asset_id)}}
-    asset_in = asset_in.model_copy(
-        update={"properties": without_internal_properties(asset_in.properties)})
+    if asset_in.properties is not None:
+        # model_copy would mark an unsent field as set, so only a sent one is replaced
+        asset_in = asset_in.model_copy(
+            update={"properties": without_internal_properties(asset_in.properties)})
     try:
         existing = db.get(AssetDb, asset_id)
         previous_description = existing.description if existing is not None else None

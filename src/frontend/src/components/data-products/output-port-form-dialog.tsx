@@ -19,7 +19,8 @@ import CreateContractInlineDialog from '@/components/data-contracts/create-contr
 type OutputPortFormProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (port: OutputPort) => Promise<void>;
+  /** Resolve `false` when the change was not saved (e.g. the versioning dialog took over). */
+  onSubmit: (port: OutputPort) => Promise<void | boolean>;
   initial?: OutputPort;
   product?: DataProduct;
 };
@@ -160,8 +161,9 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
         autoApprove,
       };
 
-      await onSubmit(port);
+      const saved = await onSubmit(port);
       onOpenChange(false);
+      if (saved === false) return;
       toast({
         title: 'Success',
         description: initial ? 'Deliverable updated' : 'Deliverable added',

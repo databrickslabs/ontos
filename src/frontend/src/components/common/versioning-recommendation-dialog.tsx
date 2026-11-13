@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import MarkdownViewer from '@/components/ui/markdown-viewer'
 
 interface ChangeAnalysis {
   change_type: string
@@ -69,11 +70,19 @@ export default function VersioningRecommendationDialog({
   const getVersionBumpBadge = (bump: string) => {
     switch (bump) {
       case 'major':
-        return <Badge variant="destructive" className="text-xs">{t('common:versioning.bump.major')} {bump.toUpperCase()}</Badge>
+        return (
+          <Badge variant="destructive" className="text-xs">
+            {t('common:versioning.bump.major')}
+          </Badge>
+        )
       case 'minor':
-        return <Badge className="bg-blue-500 text-xs">{t('common:versioning.bump.minor')} {bump.toUpperCase()}</Badge>
+        return <Badge className="bg-blue-500 text-xs">{t('common:versioning.bump.minor')}</Badge>
       case 'patch':
-        return <Badge variant="secondary" className="text-xs">{t('common:versioning.bump.patch')} {bump.toUpperCase()}</Badge>
+        return (
+          <Badge variant="secondary" className="text-xs">
+            {t('common:versioning.bump.patch')}
+          </Badge>
+        )
       default:
         return <Badge variant="outline" className="text-xs">{bump.toUpperCase()}</Badge>
     }
@@ -152,7 +161,7 @@ export default function VersioningRecommendationDialog({
                 </CardHeader>
                 <CardContent>
                   <div className="prose prose-sm max-w-none">
-                    <pre className="whitespace-pre-wrap text-sm">{analysis.summary}</pre>
+                    <MarkdownViewer markdown={analysis.summary} />
                   </div>
                 </CardContent>
               </Card>

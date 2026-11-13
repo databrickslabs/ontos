@@ -447,6 +447,35 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
   );
 }
 
+/**
+ * PUT a product update. Resolves `{ status: 'versioning', detail }` when the
+ * backend answers 409 with `requires_versioning` (breaking change on a
+ * non-draft product), `{ status: 'applied' }` on success, and throws otherwise.
+ */
+export async function putProductUpdate(
+  productId: string,
+  body: unknown,
+  forceUpdate = false,
+  failureLabel = 'Update failed',
+  fetchFn: typeof fetch = fetch,
+): Promise<{ status: 'applied' } | { status: 'versioning'; detail: any }> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (forceUpdate) headers['X-Force-Update'] = 'true';
+  const res = await fetchFn(`/api/data-products/${productId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (res.status === 409) {
+    const detail = (await res.json())?.detail;
+    if (detail && typeof detail === 'object' && detail.requires_versioning) {
+      return { status: 'versioning', detail };
+    }
+  }
+  if (!res.ok) throw new Error(`${failureLabel} (${res.status})`);
+  return { status: 'applied' };
+}
+
 export default function DataProductDetails() {
   const { t } = useTranslation(['data-products', 'common']);
   const { productId } = useParams<{ productId: string }>();
@@ -887,38 +916,26 @@ export default function DataProductDetails() {
   // Check if product is subscribable (active or certified)
   const isSubscribable = product?.status && product.status.toLowerCase() === 'active';
 
-  // Helper function to update product with 409 handling
-  const updateProduct = async (updatedProduct: DataProduct, forceUpdate: boolean = false) => {
-    if (!productId) return;
-    
-    const headers: HeadersInit = { 'Content-Type': 'application/json' };
-    if (forceUpdate) {
-      headers['X-Force-Update'] = 'true';
+  // Helper function to update product with 409 handling. Resolves true when the
+  // update was applied, false when the versioning dialog took over.
+  const updateProduct = async (
+    updatedProduct: DataProduct,
+    forceUpdate: boolean = false,
+    failureLabel?: string,
+  ): Promise<boolean> => {
+    if (!productId) return false;
+
+    const result = await putProductUpdate(productId, updatedProduct, forceUpdate, failureLabel);
+    if (result.status === 'versioning') {
+      // Store the pending update and show versioning dialog
+      setPendingUpdate(updatedProduct);
+      setVersioningAnalysis(result.detail.change_analysis);
+      setVersioningUserCanOverride(result.detail.user_can_override);
+      setIsVersioningDialogOpen(true);
+      return false;
     }
-    
-    const res = await fetch(`/api/data-products/${productId}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(updatedProduct),
-    });
-    
-    // Handle 409 Conflict - versioning required
-    if (res.status === 409) {
-      const conflictData = await res.json();
-      const detail = conflictData.detail;
-      
-      if (detail && typeof detail === 'object' && detail.requires_versioning) {
-        // Store the pending update and show versioning dialog
-        setPendingUpdate(updatedProduct);
-        setVersioningAnalysis(detail.change_analysis);
-        setVersioningUserCanOverride(detail.user_can_override);
-        setIsVersioningDialogOpen(true);
-        return; // Don't throw, let the dialog handle it
-      }
-    }
-    
-    if (!res.ok) throw new Error(`Update failed (${res.status})`);
     await fetchProductDetails();
+    return true;
   };
 
   // Handlers for versioning dialog
@@ -952,13 +969,12 @@ export default function DataProductDetails() {
     if (!productId || !product) return;
     try {
       const updatedPorts = [...(product.inputPorts || []), port];
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to add consumable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...product, inputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to add consumable',
+      );
+      if (!applied) return false; // versioning dialog is open
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add consumable');
     }
@@ -969,13 +985,12 @@ export default function DataProductDetails() {
     try {
       const updatedPorts = [...(product.inputPorts || [])];
       updatedPorts[editingInputPortIndex] = port;
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to update consumable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...product, inputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to update consumable',
+      );
+      if (!applied) return false; // versioning dialog is open
       setEditingInputPortIndex(null);
       toast({ title: t('data-products:details.toasts.consumableUpdatedTitle'), description: t('data-products:details.toasts.consumableUpdatedMessage') });
     } catch (e: any) {
@@ -989,13 +1004,12 @@ export default function DataProductDetails() {
     if (!confirm(t('data-products:details.confirms.deleteConsumable'))) return;
     try {
       const updatedPorts = (product.inputPorts || []).filter((_, i) => i !== index);
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to delete consumable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...product, inputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to delete consumable',
+      );
+      if (!applied) return; // versioning dialog is open
       toast({ title: t('data-products:details.toasts.consumableDeletedTitle'), description: t('data-products:details.toasts.consumableDeletedMessage') });
     } catch (e: any) {
       toast({ title: t('common:toast.error'), description: e?.message || 'Failed to delete consumable', variant: 'destructive' });
@@ -1006,13 +1020,12 @@ export default function DataProductDetails() {
     if (!productId || !product) return;
     try {
       const updatedPorts = [...(product.outputPorts || []), port];
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to add deliverable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...product, outputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to add deliverable',
+      );
+      if (!applied) return false; // versioning dialog is open
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add deliverable');
     }
@@ -1023,13 +1036,12 @@ export default function DataProductDetails() {
     try {
       const updatedPorts = [...(product.outputPorts || [])];
       updatedPorts[editingOutputPortIndex] = port;
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to update deliverable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...product, outputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to update deliverable',
+      );
+      if (!applied) return false; // versioning dialog is open
       setEditingOutputPortIndex(null);
       toast({ title: t('data-products:details.toasts.deliverableUpdatedTitle'), description: t('data-products:details.toasts.deliverableUpdatedMessage') });
     } catch (e: any) {
@@ -1043,13 +1055,12 @@ export default function DataProductDetails() {
     if (!confirm(t('data-products:details.confirms.deleteDeliverable'))) return;
     try {
       const updatedPorts = (product.outputPorts || []).filter((_, i) => i !== index);
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to delete deliverable (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...product, outputPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to delete deliverable',
+      );
+      if (!applied) return; // versioning dialog is open
       toast({ title: t('data-products:details.toasts.deliverableDeletedTitle'), description: t('data-products:details.toasts.deliverableDeletedMessage') });
     } catch (e: any) {
       toast({ title: t('common:toast.error'), description: e?.message || 'Failed to delete deliverable', variant: 'destructive' });
@@ -1060,13 +1071,12 @@ export default function DataProductDetails() {
     if (!productId || !product) return;
     try {
       const updatedPorts = [...(product.managementPorts || []), port];
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to add management port (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...product, managementPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to add management port',
+      );
+      if (!applied) return false; // versioning dialog is open
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add management port');
     }
@@ -1077,13 +1087,12 @@ export default function DataProductDetails() {
     try {
       const updatedPorts = [...(product.managementPorts || [])];
       updatedPorts[editingManagementPortIndex] = port;
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to update management port (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...product, managementPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to update management port',
+      );
+      if (!applied) return false; // versioning dialog is open
       setEditingManagementPortIndex(null);
       toast({ title: t('data-products:details.toasts.managementPortUpdatedTitle'), description: t('data-products:details.toasts.managementPortUpdatedMessage') });
     } catch (e: any) {
@@ -1097,13 +1106,12 @@ export default function DataProductDetails() {
     if (!confirm(t('data-products:details.confirms.deleteManagementPort'))) return;
     try {
       const updatedPorts = (product.managementPorts || []).filter((_, i) => i !== index);
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
-      });
-      if (!res.ok) throw new Error(`Failed to delete management port (${res.status})`);
-      await fetchProductDetails();
+      const applied = await updateProduct(
+        { ...product, managementPorts: updatedPorts } as DataProduct,
+        false,
+        'Failed to delete management port',
+      );
+      if (!applied) return; // versioning dialog is open
       toast({ title: t('data-products:details.toasts.managementPortDeletedTitle'), description: t('data-products:details.toasts.managementPortDeletedMessage') });
     } catch (e: any) {
       toast({ title: t('common:toast.error'), description: e?.message || 'Failed to delete management port', variant: 'destructive' });

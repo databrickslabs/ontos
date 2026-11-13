@@ -4489,7 +4489,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         current_product_dict = self._product_db_to_dict(current_product_db)
         
         # Run change analysis
-        analysis = self.compare_products(current_product_dict, proposed_changes)
+        # Fields the caller left out are unchanged, not emptied.
+        analysis = self.compare_products(
+            current_product_dict, {**current_product_dict, **proposed_changes}
+        )
         
         # Classify changes
         metadata_changes = []
@@ -4532,7 +4535,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # Use the existing get_product logic which returns API model
         product_api = self.get_product(product_db.id)
         if product_api:
-            return product_api.model_dump(by_alias=True)
+            # Field names, not aliases: ProductChangeAnalyzer reads inputPorts /
+            # outputPorts / managementPorts / support, while the aliases are
+            # input_ports / output_ports / ... / support_channels.
+            return product_api.model_dump(by_alias=False)
         return {}
 
     # ==================== Subscription Methods ====================

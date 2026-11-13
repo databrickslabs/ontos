@@ -219,7 +219,8 @@ def test_a_comment_someone_else_wrote_is_kept_and_the_save_warns(db_session):
     assert outcome.in_sync is False
     assert outcome.state.code == CODE_EXISTING_COMMENT
     ws.statement_execution.execute_statement.assert_not_called()
-    assert outcome.audit == {'before': 'PII: CRM master, see runbook X', 'after': 'PII: CRM master, see runbook X', 'outcome': 'refused'}
+    comment = 'PII: CRM master, see runbook X'
+    assert outcome.audit == {'before': comment, 'after': comment, 'outcome': 'refused'}
     db_session.refresh(asset)
     assert asset.description == 'New text'
 

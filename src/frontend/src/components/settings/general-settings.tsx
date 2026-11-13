@@ -49,7 +49,8 @@ export default function GeneralSettings() {
   const { toast } = useToast();
 
   const hasWriteAccess = hasPermission('settings-general', FeatureAccessLevel.READ_WRITE);
-  // Turning the Unity Catalog write-back on writes org-wide: only an admin may (turning it off is open to writers)
+  // Turning the Unity Catalog write-back on writes org-wide: only an admin may.
+  // Turning it off stays open to writers.
   const hasAdminAccess = hasPermission('settings-general', FeatureAccessLevel.ADMIN);
 
   const [settings, setSettings] = useState<AppSettings>({

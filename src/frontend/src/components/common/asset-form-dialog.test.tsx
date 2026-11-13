@@ -90,7 +90,8 @@ describe('AssetFormDialog - Unity Catalog description warning', () => {
     expect(toastMock).toHaveBeenCalledTimes(1);
     expect(toastMock).toHaveBeenCalledWith({
       title: 'Saved in Ontos, not in Unity Catalog',
-      description: 'main.sales.orders was not found in Unity Catalog, or you don\'t have access to it, so its description was not written there.',
+      description: 'main.sales.orders was not found in Unity Catalog, or you don\'t have access ' +
+        'to it, so its description was not written there.',
     });
   });
 

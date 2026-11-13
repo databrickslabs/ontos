@@ -352,6 +352,8 @@ export const useApi = () => {
     let responseData: T = {} as T;
     let errorMsg: string | null = null;
     let errorStatus: number | undefined;
+    let errorCode: string | null = null;
+    let errorParams: Record<string, unknown> | null = null;
     try {
       const response = await fetch(url, { method: 'DELETE' });
 
@@ -391,6 +393,8 @@ export const useApi = () => {
           console.error("[useApi] DELETE error response from", url, "(", response.status, "):", errorBody);
           errorMsg = errorTextOf(errorBody, errorMsg ?? '');
           errorStatus = response.status;
+          errorCode = errorCodeOf(errorBody);
+          errorParams = errorParamsOf(errorBody);
       } else {
           // Success - check if there's response data (some DELETE endpoints return data)
           const contentType = response.headers.get('Content-Type');
@@ -412,7 +416,12 @@ export const useApi = () => {
     } finally {
       setLoading(false);
     }
-    return { data: responseData, error: errorMsg, ...(errorStatus !== undefined ? { status: errorStatus } : {}) };
+    return {
+      data: responseData,
+      error: errorMsg,
+      ...(errorStatus !== undefined ? { status: errorStatus } : {}),
+      ...(errorCode ? { errorCode, errorParams } : {}),
+    };
   }, []);
 
   return { get, post, put, patch, delete: delete_, loading };

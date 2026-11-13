@@ -8,10 +8,14 @@ import {
   ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { MaturityBadge } from '@/components/common/maturity-badge';
-import type { MaturityReport, LevelResult, MaturitySnapshot } from '@/types/maturity';
+import type { TFunction } from 'i18next';
+import type {
+  MaturityReport, LevelResult, MaturitySnapshot, GateResult,
+} from '@/types/maturity';
 
 interface MaturityPanelProps {
-  entityType: 'DataProduct' | 'DataContract';
+  /** 'Asset' only for table and view assets (other asset types have no maturity) */
+  entityType: 'DataProduct' | 'DataContract' | 'Asset';
   entityId: string;
 }
 
@@ -24,7 +28,20 @@ const STATUS_CONFIG = {
 const API_PREFIX: Record<string, string> = {
   DataProduct: '/api/data-products',
   DataContract: '/api/data-contracts',
+  Asset: '/api/assets',
 };
+
+/** Why a gate failed: a coded reason in the UI language, else the policy's failure text. */
+function gateReason(gate: GateResult, t: TFunction): string | null {
+  if (gate.passed) return null;
+  if (gate.message_code) {
+    return t(`data-products:maturityGateCodes.${gate.message_code}`, {
+      ...(gate.message_params ?? {}),
+      defaultValue: gate.failure_message || gate.message || '',
+    });
+  }
+  return gate.failure_message || gate.message || null;
+}
 
 export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
   const { t } = useTranslation(['data-products', 'common']);
@@ -32,7 +49,8 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
   const [history, setHistory] = useState<MaturitySnapshot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedLevel, setExpandedLevel] = useState<number | null>(null);
+  // undefined = not chosen by the user yet: the next level to reach is open
+  const [expandedLevel, setExpandedLevel] = useState<number | null | undefined>(undefined);
 
   const prefix = API_PREFIX[entityType] || API_PREFIX.DataProduct;
 
@@ -87,8 +105,15 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
     );
   }
 
+  const nextLevel = report.levels.find((l) => !l.achieved) ?? null;
+  const openLevel = expandedLevel === undefined ? nextLevel?.level_order ?? null : expandedLevel;
+  const currentLabel = report.achieved_level_name
+    || (report.total_levels > 0
+      ? t('data-products:maturity.belowFirstLevel')
+      : t('common:maturity.notAssessed'));
+
   return (
-    <Card>
+    <Card data-testid="maturity-panel">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
@@ -103,6 +128,9 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
               levelName={report.achieved_level_name}
               levelOrder={report.achieved_level_order}
               totalLevels={report.total_levels}
+              emptyLabel={report.total_levels > 0
+                ? t('data-products:maturity.belowFirstLevel')
+                : undefined}
             />
             <Button variant="ghost" size="icon" className="h-7 w-7"
               onClick={() => { fetchReport(true); fetchHistory(); }}
@@ -121,9 +149,32 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
             })}
           </p>
         ))}
+        {report.total_levels === 0 ? (
+          <p className="text-sm text-muted-foreground">{t('data-products:maturity.noLevels')}</p>
+        ) : (
+          <dl
+            className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2"
+            data-testid="maturity-summary"
+          >
+            <div>
+              <dt className="text-xs text-muted-foreground">
+                {t('data-products:maturity.currentLevel')}
+              </dt>
+              <dd className="font-medium">{currentLabel}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">
+                {t('data-products:maturity.nextLevel')}
+              </dt>
+              <dd className="font-medium">
+                {nextLevel ? nextLevel.level_name : t('data-products:maturity.topLevelReached')}
+              </dd>
+            </div>
+          </dl>
+        )}
         {/* Level progression */}
         {report.levels.map((level: LevelResult) => {
-          const isExpanded = expandedLevel === level.level_order;
+          const isExpanded = openLevel === level.level_order;
           const hasWarnings = level.gates.some(g => !g.passed && !g.required);
           const hasFails = level.gates.some(g => !g.passed && g.required);
 
@@ -138,6 +189,7 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
             <div key={level.level_order} className="rounded-md border overflow-hidden">
               <button
                 className={`flex items-center gap-3 w-full px-3 py-2.5 text-left ${cfg.bg}`}
+                aria-expanded={isExpanded}
                 onClick={() => setExpandedLevel(isExpanded ? null : level.level_order)}
               >
                 <LevelIcon className={`h-4 w-4 flex-shrink-0 ${cfg.color}`} />
@@ -155,22 +207,19 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
                     const gStatus = gate.passed ? 'pass' : (gate.required ? 'fail' : 'warn');
                     const gCfg = STATUS_CONFIG[gStatus];
                     const GateIcon = gCfg.icon;
+                    const reason = gateReason(gate, t);
                     return (
-                      <div key={gi} className="flex items-start gap-2 py-1">
-                        <GateIcon className={`h-3.5 w-3.5 mt-0.5 flex-shrink-0 ${gCfg.color}`} />
+                      <div key={gate.gate_id || gi} className="flex items-start gap-2 py-1"
+                        data-testid="maturity-gate" data-status={gStatus}>
+                        <GateIcon className={`h-3.5 w-3.5 mt-0.5 flex-shrink-0 ${gCfg.color}`}
+                          aria-hidden="true" />
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium">{gate.policy_name}</p>
-                          {gate.message && (
-                            <p className="text-xs text-muted-foreground">
-                              {gate.message_code
-                                ? t(`data-products:maturityGateCodes.${gate.message_code}`, {
-                                  ...(gate.message_params ?? {}),
-                                  defaultValue: gate.message,
-                                })
-                                : gate.message}
-                            </p>
-                          )}
+                          {reason && <p className="text-xs text-muted-foreground">{reason}</p>}
                         </div>
+                        <span className={`text-[10px] font-medium ${gCfg.color}`}>
+                          {t(`data-products:maturity.gateStatus.${gStatus}`)}
+                        </span>
                         <Badge variant="outline" className="text-[10px]">
                           {gate.required ? t('data-products:maturity.required') : t('data-products:maturity.advisory')}
                         </Badge>

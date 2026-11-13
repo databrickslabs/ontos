@@ -2,7 +2,7 @@
  * A gate that failed because the asset's Unity Catalog table couldn't be read
  * carries a code; the panel shows it in the UI language, not the English text.
  */
-import { screen, fireEvent } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import i18n from '@/i18n/config';
 import { renderWithProviders } from '@/test/utils';
@@ -52,7 +52,8 @@ async function renderPanel(lng: string) {
     json: async () => (url.includes('/history') ? [] : REPORT),
   })));
   renderWithProviders(<MaturityPanel entityType="DataProduct" entityId="p-1" />);
-  fireEvent.click(await screen.findByText('Documented'));
+  // The next level to reach (here the first) is open without a click
+  await screen.findByTestId('maturity-summary');
 }
 
 describe('MaturityPanel gate codes', () => {

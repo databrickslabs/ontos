@@ -1010,7 +1010,17 @@
     "required": "Requis",
     "advisory": "Indicatif",
     "overTime": "Maturité au fil du temps",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "currentLevel": "Niveau actuel",
+    "nextLevel": "Niveau suivant",
+    "belowFirstLevel": "Sous le premier niveau",
+    "topLevelReached": "Niveau le plus élevé atteint",
+    "noLevels": "Aucun niveau de maturité n'est encore défini pour ce type.",
+    "gateStatus": {
+      "pass": "Réussi",
+      "fail": "Échoué",
+      "warn": "Non satisfait"
+    }
   },
   "maturityGateCodes": {
     "maturity_uc_table_client_unavailable": "Unity Catalog est injoignable, les champs de la table {{tableName}} sont donc absents.",

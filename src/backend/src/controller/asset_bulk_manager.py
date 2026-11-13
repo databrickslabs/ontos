@@ -567,12 +567,14 @@ class AssetBulkManager:
 
     def execute_import(
         self, db: Session, *, file_bytes: bytes, filename: str, current_user_id: str,
-        after_save: Optional[Callable[[UUID, Optional[str]], None]] = None,
+        after_save: Optional[Callable[[UUID, Optional[str], bool], None]] = None,
     ) -> ImportResult:
         """Parse, validate, and execute the import in one transaction (not committed).
 
         Each row runs in a savepoint: a row that fails rolls back on its own. The
-        ``after_save(asset_id, previous_description)`` call records each saved row,
+        ``after_save(asset_id, previous_description, described)`` records each saved row;
+        ``described`` is False when the file has no description column (the description is
+        then left alone, not cleared),
         for the caller to write its description to Unity Catalog after the commit.
         """
         result = ImportResult()
@@ -595,6 +597,8 @@ class AssetBulkManager:
 
         # Track created assets for parent wiring
         created_assets: Dict[str, UUID] = {}  # name -> asset id
+        # A file without a description column leaves every description alone
+        has_description_column = "description" in rows[0]
 
         for idx, row in enumerate(rows):
             row_num = idx + 1
@@ -648,6 +652,7 @@ class AssetBulkManager:
 
             tags = _parse_tags(row.get("tags", ""))
             description = row.get("description", "").strip() or None
+            description_field = {"description": description} if has_description_column else {}
             platform_val = row.get("platform", "").strip() or None
             location_val = row.get("location", "").strip() or None
             # domain_ids: semicolon-separated; the first entry is treated as primary.
@@ -677,7 +682,7 @@ class AssetBulkManager:
                         previous_description = existing.description
                         update_data = AssetUpdate(
                             name=name,
-                            description=description,
+                            **description_field,
                             asset_type_id=type_id,
                             platform=platform_val,
                             location=location_val,
@@ -703,7 +708,7 @@ class AssetBulkManager:
                         if existing:
                             previous_description = existing.description
                             update_data = AssetUpdate(
-                                description=description,
+                                **description_field,
                                 properties=with_internal_properties(properties, existing.properties),
                                 tags=tags,
                                 status=status_val,
@@ -749,7 +754,7 @@ class AssetBulkManager:
 
             if after_save is not None:
                 try:
-                    after_save(UUID(item.asset_id), previous_description)
+                    after_save(UUID(item.asset_id), previous_description, has_description_column)
                 except Exception:
                     logger.warning("Post-save step failed for import row %s", item.row,
                                    exc_info=True)

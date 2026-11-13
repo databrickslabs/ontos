@@ -272,10 +272,14 @@ class UcDescriptionSyncManager:
             return SyncOutcome(state=current_state)
 
         audit = {'before': uc_comment, 'after': text, 'outcome': None}
+        # The comment Ontos agreed to on an earlier failed write (still in Unity Catalog)
+        stored = (asset.properties or {}).get(DESCRIPTION_SYNC_PROPERTY)
+        agreed = stored.get('agreed') if isinstance(stored, dict) else None
         if uc_comment == text:
             audit['outcome'] = 'unchanged'
             return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
-        if uc_comment is not None and uc_comment != (previous_description or None):
+        if (uc_comment is not None and uc_comment != (previous_description or None)
+                and uc_comment != agreed):
             # Not the comment Ontos agreed to before: a comment someone else wrote is kept
             logger.info("Kept the Unity Catalog comment of %s: it differs from the Ontos one "
                         "(asset %s)", label, asset.id)
@@ -290,7 +294,9 @@ class UcDescriptionSyncManager:
                            asset.id, e.reason)
             warning = _warning(_REASON_CODES.get(e.reason, CODE_WRITE_FAILED), label)
             audit.update(after=uc_comment, outcome='failed')
-            return SyncOutcome(warning, self._store_state(db, asset, warning), audit=audit)
+            # The comment still there was agreed to (it passed the guard), so a retry may replace it
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=uc_comment),
+                               audit=audit)
         logger.info("Wrote the description of asset %s to Unity Catalog (%s)", asset.id, label)
         audit['outcome'] = 'written'
         return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
@@ -302,6 +308,7 @@ class UcDescriptionSyncManager:
     @staticmethod
     def _store_state(
         db: Session, asset: AssetDb, warning: Optional[CodedWarning],
+        agreed: Optional[str] = None,
     ) -> Optional[DescriptionSyncState]:
         properties: Dict[str, Any] = dict(asset.properties or {})
         state = None
@@ -312,7 +319,11 @@ class UcDescriptionSyncManager:
                 code=warning.code, message=warning.message, params=warning.params,
                 at=datetime.now(timezone.utc),
             )
-            properties[DESCRIPTION_SYNC_PROPERTY] = state.model_dump(mode='json')
+            stored = state.model_dump(mode='json')
+            if agreed is not None:
+                # Internal: not part of the API state (description_sync_state ignores it)
+                stored['agreed'] = agreed
+            properties[DESCRIPTION_SYNC_PROPERTY] = stored
         if properties != (asset.properties or {}):
             # A new dict, so the JSON column is seen as changed
             asset.properties = properties or None

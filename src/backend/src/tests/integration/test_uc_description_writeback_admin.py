@@ -68,3 +68,14 @@ def test_a_non_admin_can_turn_it_off_and_save_it_unchanged(client, settings):
     assert _put(client, {'uc_description_writeback_enabled': True}).status_code == 200
     assert _put(client, {'uc_description_writeback_enabled': False}).status_code == 200
     assert settings.UC_DESCRIPTION_WRITEBACK_ENABLED is False
+
+
+def test_a_value_that_is_not_true_or_false_is_refused(client, settings):
+    _Checker.admin = True
+    try:
+        response = _put(client, {'uc_description_writeback_enabled': 'true'})
+    finally:
+        _Checker.admin = False
+
+    assert response.status_code == 400
+    assert settings.UC_DESCRIPTION_WRITEBACK_ENABLED is False

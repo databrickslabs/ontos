@@ -188,10 +188,10 @@ async def execute_import(
     """
     success = False
     details: dict = {"params": {"filename": file.filename}}
-    saved: List[Tuple[UUID, Optional[str]]] = []
+    saved: List[Tuple[UUID, Optional[str], bool]] = []
 
-    def record_saved(asset_id: UUID, previous_description: Optional[str]) -> None:
-        saved.append((asset_id, previous_description))
+    def record_saved(asset_id: UUID, previous_description: Optional[str], described: bool) -> None:
+        saved.append((asset_id, previous_description, described))
 
     try:
         contents = await file.read()
@@ -231,7 +231,7 @@ async def execute_import(
 
 def _write_imported_descriptions(
     db, settings, request: Request, result: ImportResult,
-    saved: List[Tuple[UUID, Optional[str]]],
+    saved: List[Tuple[UUID, Optional[str], bool]],
 ) -> list:
     """Write the committed rows' descriptions to Unity Catalog, one commit per row.
 
@@ -274,12 +274,12 @@ def _write_imported_descriptions(
         return client['ws']
 
     audit: list = []
-    for asset_id, previous_description in saved:
+    for asset_id, previous_description, described in saved:
         item = items.get(str(asset_id))
         try:
             outcome: SyncOutcome = description_sync.sync_after_update(
                 db, asset_id,
-                description_sent=True,
+                description_sent=described,
                 previous_description=previous_description,
                 user_client=user_client,
             )

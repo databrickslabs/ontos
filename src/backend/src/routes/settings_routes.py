@@ -75,6 +75,10 @@ async def update_settings(
     # Turning on the Unity Catalog description write-back changes what every user's
     # save writes to Unity Catalog, so only an admin may turn it on. (Turning it off,
     # or saving it unchanged, needs only READ_WRITE: the form always sends the value.)
+    if 'uc_description_writeback_enabled' in settings_payload and not isinstance(
+            settings_payload['uc_description_writeback_enabled'], bool):
+        raise HTTPException(
+            status_code=400, detail="uc_description_writeback_enabled must be true or false")
     if settings_payload.get('uc_description_writeback_enabled') is True \
             and not manager.uc_description_writeback_enabled:
         await PermissionChecker('settings-general', FeatureAccessLevel.ADMIN)(

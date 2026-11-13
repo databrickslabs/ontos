@@ -8,7 +8,7 @@ def test_an_after_save_error_leaves_the_row_saved(db_session):
         db_session.add(AssetTypeDb(name='Table', category='data'))
         db_session.flush()
 
-    def after_save(asset_id, previous_description):
+    def after_save(asset_id, previous_description, described):
         raise RuntimeError('unexpected')
 
     result = AssetBulkManager().execute_import(

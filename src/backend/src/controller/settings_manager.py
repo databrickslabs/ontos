@@ -1698,7 +1698,10 @@ class SettingsManager:
             logger.info(f"Updated ALLOW_JOB_ENABLEMENT_REQUESTS to: {value}")
 
         if 'uc_description_writeback_enabled' in settings:
-            value = bool(settings.get('uc_description_writeback_enabled'))
+            raw = settings.get('uc_description_writeback_enabled')
+            if not isinstance(raw, bool):
+                raise ValueError("uc_description_writeback_enabled must be true or false")
+            value = raw
             app_settings_repo.set(self._db, 'UC_DESCRIPTION_WRITEBACK_ENABLED', str(value).lower())
             self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED = value
             logger.info("Updated UC_DESCRIPTION_WRITEBACK_ENABLED to: %s", value)

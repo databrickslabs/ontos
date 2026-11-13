@@ -4,7 +4,7 @@ import json
 import argparse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import yaml
@@ -138,7 +138,7 @@ def create_dq_run(engine: Engine, contract_id: str) -> str:
             "id": run_id,
             "contract_id": contract_id,
             "status": "running",
-            "started_at": datetime.utcnow(),
+            "started_at": datetime.now(timezone.utc),
             "checks_passed": 0,
             "checks_failed": 0,
             "score": 0.0
@@ -182,7 +182,7 @@ def store_dq_result(
             "passed": passed,
             "violations_count": violations_count,
             "message": message,
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         })
         conn.commit()
 
@@ -212,7 +212,7 @@ def complete_dq_run(
         conn.execute(sql, {
             "id": run_id,
             "status": status,
-            "finished_at": datetime.utcnow(),
+            "finished_at": datetime.now(timezone.utc),
             "checks_passed": checks_passed,
             "checks_failed": checks_failed,
             "score": score,

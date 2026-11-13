@@ -757,3 +757,45 @@ def test_uc_read_failure_stores_a_certain_drop_to_no_level(db_session):
     assert [s.achieved_level_order for s in snapshots] == [2, None]
     kwargs = registry.return_value.on_maturity_change.call_args.kwargs
     assert kwargs['from_level'] == 2 and kwargs['to_level'] is None
+
+
+def test_kept_level_is_reported_with_its_certain_level(db_session):
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
+    _level(db_session, 2, 'Has columns', ['ASSERT obj.column_count > 0'])
+    eid = str(asset.id)
+    # A table without columns: level 2 fails, so level 1 is stored
+    MaturityEvaluator(_ws(_table([]))).evaluate(
+        db_session, entity_type='Asset', entity_id=eid, persist=True,
+    )
+
+    report = MaturityEvaluator(_ws(error=NotFound('gone'))).evaluate(
+        db_session, entity_type='Asset', entity_id=eid, persist=False,
+    )
+
+    # Stored level 1 is kept; it is the certain level, so it is reported
+    assert report.achieved_level_order == 1
+    assert [lv.level_order for lv in report.levels] == [1]
+    assert report.gates_total == 1 and report.gates_passed == 1
+
+
+def test_kept_level_without_its_certain_level_reports_no_levels(db_session):
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
+    _level(db_session, 2, 'Has columns', ['ASSERT obj.column_count > 0'])
+    eid = str(asset.id)
+    MaturityEvaluator(_ws(_table([('id', 'Order id')]))).evaluate(
+        db_session, entity_type='Asset', entity_id=eid, persist=True,
+    )
+    # Level 2 is stored; its result needs the table, which is now unreadable
+    db_session.query(MaturitySnapshotDb).filter_by(entity_id=eid).update(
+        {'achieved_level_order': 2})
+    db_session.flush()
+
+    report = MaturityEvaluator(_ws(error=NotFound('gone'))).evaluate(
+        db_session, entity_type='Asset', entity_id=eid, persist=False,
+    )
+
+    # Level 2 isn't among the certain levels, so none are reported: the counts agree
+    assert report.achieved_level_order == 2
+    assert report.levels == [] and report.gates_total == 0 and report.gates_passed == 0

@@ -4424,6 +4424,7 @@ def _relationship_db_to_dict(rel) -> dict:
         pass
     result = {
         'id': rel.id,
+        'stableId': rel.stable_id,  # the ODCS id (v3.2.0); `id` is the row id
         'type': rel.relationship_type,
         'to': to_val,
     }

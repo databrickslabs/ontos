@@ -1214,6 +1214,14 @@ class SettingsManager:
 
         try:
             content = doc_path.read_text(encoding="utf-8")
+            fragments_dir = doc_info.get("release_note_fragments")
+            if fragments_dir:
+                # Show unreleased fragments in the Unreleased block; the file is not changed.
+                from src.common.release_notes import render_unreleased_view
+
+                content = render_unreleased_view(
+                    content, self._get_docs_directory() / fragments_dir
+                )
             logger.info(f"Successfully loaded '{doc_name}' ({len(content)} chars)")
 
             result = {

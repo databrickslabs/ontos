@@ -397,6 +397,27 @@ def qualify_table_name(full_name: str, default_catalog: Optional[str], default_s
     return full_name
 
 
+def find_existing_id(engine: Engine, table: str, name: str) -> Optional[str]:
+    """Id of the row a discovered entity matches, by name: the key both the
+    skip and the update strategies use. Versions of an entity share its name,
+    so the newest row is the one updated."""
+    sql = text(f"SELECT id FROM {table} WHERE name = :name ORDER BY created_at DESC LIMIT 1")
+    with engine.connect() as conn:
+        return conn.execute(sql, {"name": name}).scalar()
+
+
+def _tables(objects: List[DiscoveredObject], default_catalog: Optional[str],
+            default_schema: Optional[str]) -> List[Tuple[str, str]]:
+    """(name, qualified name) of each discovered table, in discovery order."""
+    tables = []
+    for obj in objects:
+        if obj.object_type != 'TABLE':
+            continue
+        qualified_name = qualify_table_name(obj.full_name, default_catalog, default_schema)
+        tables.append((obj.table or qualified_name, qualified_name))
+    return tables
+
+
 def create_contracts(
     engine: Engine,
     entity_objects: Dict[str, List[DiscoveredObject]],
@@ -406,21 +427,42 @@ def create_contracts(
     dry_run: bool = False,
     verbose: bool = False
 ) -> Dict[str, int]:
-    """Create data contracts from discovered objects"""
-    stats = {"created": 0, "skipped": 0, "errors": 0}
-    
+    """Create data contracts from discovered objects.
+
+    With the ``update`` strategy an existing contract (matched by name) keeps
+    its id and gets a schema object for each tagged table it doesn't have yet.
+    """
+    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
+
+    # Raw SQL gets no ORM defaults, so every NOT NULL column of DataContractDb is set here.
+    contract_sql = text("""
+        INSERT INTO data_contracts (
+            id, name, kind, api_version, version, status,
+            published, version_family_id, publication_scope, created_at, updated_at
+        ) VALUES (
+            :id, :name, :kind, :api_version, :version, :status,
+            :published, :version_family_id, :publication_scope, :created_at, :updated_at
+        )
+    """)
+    touch_sql = text("UPDATE data_contracts SET updated_at = :updated_at WHERE id = :id")
+    known_sql = text(
+        "SELECT physical_name FROM data_contract_schema_objects WHERE contract_id = :id"
+    )
+    schema_obj_sql = text("""
+        INSERT INTO data_contract_schema_objects (
+            id, contract_id, name, logical_type, physical_name
+        ) VALUES (
+            :id, :contract_id, :name, :logical_type, :physical_name
+        )
+    """)
+
     for contract_name, objects in entity_objects.items():
         try:
             if verbose:
                 print(f"  Processing contract: {contract_name}")
-            
-            # Check if exists
-            check_sql = text("SELECT id FROM data_contracts WHERE name = :name")
-            with engine.connect() as conn:
-                result = conn.execute(check_sql, {"name": contract_name})
-                existing = result.fetchone()
-            
-            if existing:
+
+            existing_id = find_existing_id(engine, "data_contracts", contract_name)
+            if existing_id:
                 if conflict_strategy == 'skip':
                     if verbose:
                         print(f"    Skipped (already exists)")
@@ -428,74 +470,64 @@ def create_contracts(
                     continue
                 elif conflict_strategy == 'error':
                     raise ValueError(f"Contract '{contract_name}' already exists")
-                # elif 'update': continue with creation/update
-            
+            outcome = "updated" if existing_id else "created"
+
             if dry_run:
-                print(f"  [DRY-RUN] Would create contract: {contract_name} with {len(objects)} schema objects")
-                stats["created"] += 1
+                verb = "update" if existing_id else "create"
+                print(f"  [DRY-RUN] Would {verb} contract: {contract_name} "
+                      f"with {len(objects)} schema objects")
+                stats[outcome] += 1
                 continue
-            
-            # Create contract
-            contract_id = str(uuid4())
-            contract_sql = text("""
-                INSERT INTO data_contracts (
-                    id, name, kind, api_version, version, status, created_at, updated_at
-                ) VALUES (
-                    :id, :name, :kind, :api_version, :version, :status, :created_at, :updated_at
-                )
-                ON CONFLICT (id) DO UPDATE SET
-                    updated_at = :updated_at
-            """)
-            
-            with engine.connect() as conn:
-                conn.execute(contract_sql, {
-                    "id": contract_id,
-                    "name": contract_name,
-                    "kind": "DataContract",
-                    "api_version": "v3.1.0",
-                    "version": "1.0.0",
-                    "status": "draft",
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
-                })
-                conn.commit()
-            
-            # Create schema objects for each table
-            for obj in objects:
-                if obj.object_type != 'TABLE':
-                    continue
-                
-                qualified_name = qualify_table_name(obj.full_name, default_catalog, default_schema)
-                object_id = str(uuid4())
-                
-                schema_obj_sql = text("""
-                    INSERT INTO data_contract_schema_objects (
-                        id, contract_id, name, logical_type, physical_name
-                    ) VALUES (
-                        :id, :contract_id, :name, :logical_type, :physical_name
-                    )
-                """)
-                
-                with engine.connect() as conn:
+
+            now = datetime.utcnow()
+            added = 0
+            # One transaction: a contract whose schema objects failed would be
+            # skipped by every later run.
+            with engine.begin() as conn:
+                if existing_id:
+                    contract_id = existing_id
+                    conn.execute(touch_sql, {"id": contract_id, "updated_at": now})
+                    known = set(conn.execute(known_sql, {"id": contract_id}).scalars())
+                else:
+                    contract_id = str(uuid4())
+                    conn.execute(contract_sql, {
+                        "id": contract_id,
+                        "name": contract_name,
+                        "kind": "DataContract",
+                        "api_version": "v3.1.0",
+                        "version": "1.0.0",
+                        "status": "draft",
+                        "published": False,
+                        "version_family_id": contract_id,
+                        "publication_scope": "none",
+                        "created_at": now,
+                        "updated_at": now
+                    })
+                    known = set()
+
+                for name, qualified_name in _tables(objects, default_catalog, default_schema):
+                    if qualified_name in known:
+                        continue
+                    known.add(qualified_name)
                     conn.execute(schema_obj_sql, {
-                        "id": object_id,
+                        "id": str(uuid4()),
                         "contract_id": contract_id,
-                        "name": obj.table or qualified_name,
+                        "name": name,
                         "logical_type": "table",
                         "physical_name": qualified_name
                     })
-                    conn.commit()
-            
+                    added += 1
+
             if verbose:
-                print(f"    Created with {len([o for o in objects if o.object_type == 'TABLE'])} schema objects")
-            stats["created"] += 1
-            
+                print(f"    {outcome.capitalize()}, {added} schema object(s) added")
+            stats[outcome] += 1
+
         except Exception as e:
             print(f"  Error creating contract {contract_name}: {e}")
             if verbose:
                 traceback.print_exc()
             stats["errors"] += 1
-    
+
     return stats
 
 
@@ -508,21 +540,48 @@ def create_products(
     dry_run: bool = False,
     verbose: bool = False
 ) -> Dict[str, int]:
-    """Create data products from discovered objects"""
-    stats = {"created": 0, "skipped": 0, "errors": 0}
-    
+    """Create data products from discovered objects.
+
+    With the ``update`` strategy an existing product (matched by name) keeps
+    its id and gets an output port for each tagged table it doesn't have yet.
+    """
+    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
+
+    # Raw SQL skips the ORM's Python-side defaults, and a fresh database (tables
+    # from create_all) has no server defaults, so every NOT NULL column of
+    # DataProductDb is set here.
+    product_sql = text("""
+        INSERT INTO data_products (
+            id, api_version, kind, status, name, version, product_created_ts,
+            max_level_inheritance, version_family_id, published, publication_scope,
+            created_at, updated_at
+        ) VALUES (
+            :id, :api_version, :kind, :status, :name, :version, :product_created_ts,
+            :max_level_inheritance, :version_family_id, :published, :publication_scope,
+            :created_at, :updated_at
+        )
+    """)
+    touch_sql = text("UPDATE data_products SET updated_at = :updated_at WHERE id = :id")
+    known_sql = text(
+        "SELECT asset_identifier FROM data_product_output_ports WHERE product_id = :id"
+    )
+    port_sql = text("""
+        INSERT INTO data_product_output_ports (
+            id, product_id, name, version, asset_type, asset_identifier,
+            contains_pii, auto_approve
+        ) VALUES (
+            :id, :product_id, :name, :version, :asset_type, :asset_identifier,
+            :contains_pii, :auto_approve
+        )
+    """)
+
     for product_name, objects in entity_objects.items():
         try:
             if verbose:
                 print(f"  Processing product: {product_name}")
-            
-            # Check if exists
-            check_sql = text("SELECT id FROM data_products WHERE name = :name")
-            with engine.connect() as conn:
-                result = conn.execute(check_sql, {"name": product_name})
-                existing = result.fetchone()
-            
-            if existing:
+
+            existing_id = find_existing_id(engine, "data_products", product_name)
+            if existing_id:
                 if conflict_strategy == 'skip':
                     if verbose:
                         print(f"    Skipped (already exists)")
@@ -530,75 +589,69 @@ def create_products(
                     continue
                 elif conflict_strategy == 'error':
                     raise ValueError(f"Product '{product_name}' already exists")
-            
+            outcome = "updated" if existing_id else "created"
+
             if dry_run:
-                print(f"  [DRY-RUN] Would create product: {product_name} with {len(objects)} output ports")
-                stats["created"] += 1
+                verb = "update" if existing_id else "create"
+                print(f"  [DRY-RUN] Would {verb} product: {product_name} "
+                      f"with {len(objects)} output ports")
+                stats[outcome] += 1
                 continue
-            
-            # Create product
-            product_id = str(uuid4())
-            product_sql = text("""
-                INSERT INTO data_products (
-                    id, api_version, kind, status, name, version, product_created_ts, created_at, updated_at
-                ) VALUES (
-                    :id, :api_version, :kind, :status, :name, :version, :product_created_ts, :created_at, :updated_at
-                )
-                ON CONFLICT (id) DO UPDATE SET
-                    updated_at = :updated_at
-            """)
-            
-            with engine.connect() as conn:
-                conn.execute(product_sql, {
-                    "id": product_id,
-                    "api_version": "v1.0.0",
-                    "kind": "DataProduct",
-                    "status": "draft",
-                    "name": product_name,
-                    "version": "1.0.0",
-                    "product_created_ts": datetime.utcnow(),
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
-                })
-                conn.commit()
-            
-            # Create output ports for each table
-            for obj in objects:
-                if obj.object_type != 'TABLE':
-                    continue
-                
-                qualified_name = qualify_table_name(obj.full_name, default_catalog, default_schema)
-                port_id = str(uuid4())
-                
-                port_sql = text("""
-                    INSERT INTO output_ports (
-                        id, product_id, name, version, asset_type, asset_identifier
-                    ) VALUES (
-                        :id, :product_id, :name, :version, :asset_type, :asset_identifier
-                    )
-                """)
-                
-                with engine.connect() as conn:
+
+            now = datetime.utcnow()
+            added = 0
+            # One transaction: a product whose ports failed would be skipped
+            # by every later run.
+            with engine.begin() as conn:
+                if existing_id:
+                    product_id = existing_id
+                    conn.execute(touch_sql, {"id": product_id, "updated_at": now})
+                    known = set(conn.execute(known_sql, {"id": product_id}).scalars())
+                else:
+                    product_id = str(uuid4())
+                    conn.execute(product_sql, {
+                        "id": product_id,
+                        "api_version": "v1.0.0",
+                        "kind": "DataProduct",
+                        "status": "draft",
+                        "name": product_name,
+                        "version": "1.0.0",
+                        "product_created_ts": now,
+                        "max_level_inheritance": 99,
+                        "version_family_id": product_id,
+                        "published": False,
+                        "publication_scope": "none",
+                        "created_at": now,
+                        "updated_at": now
+                    })
+                    known = set()
+
+                for name, qualified_name in _tables(objects, default_catalog, default_schema):
+                    if qualified_name in known:
+                        continue
+                    known.add(qualified_name)
                     conn.execute(port_sql, {
-                        "id": port_id,
+                        "id": str(uuid4()),
                         "product_id": product_id,
-                        "name": obj.table or qualified_name,
+                        "name": name,
                         "version": "1.0.0",
                         "asset_type": "table",
-                        "asset_identifier": qualified_name
+                        "asset_identifier": qualified_name,
+                        "contains_pii": False,
+                        "auto_approve": False
                     })
-                    conn.commit()
-            
+                    added += 1
+
             if verbose:
-                print(f"    Created with {len([o for o in objects if o.object_type == 'TABLE'])} output ports")
-            stats["created"] += 1
-            
+                print(f"    {outcome.capitalize()}, {added} output port(s) added")
+            stats[outcome] += 1
+
         except Exception as e:
             print(f"  Error creating product {product_name}: {e}")
             if verbose:
                 traceback.print_exc()
             stats["errors"] += 1
-    
+
     return stats
 
 
@@ -610,21 +663,28 @@ def create_domains(
     dry_run: bool = False,
     verbose: bool = False
 ) -> Dict[str, int]:
-    """Create data domains from discovered objects"""
-    stats = {"created": 0, "skipped": 0, "errors": 0}
-    
+    """Create data domains from discovered objects.
+
+    With the ``update`` strategy an existing domain (matched by its unique
+    name) keeps its row; only ``updated_at`` changes, as the job sets nothing else.
+    """
+    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
+    domain_sql = text("""
+        INSERT INTO data_domains (
+            id, name, created_by, created_at, updated_at
+        ) VALUES (
+            :id, :name, :created_by, :created_at, :updated_at
+        )
+    """)
+    touch_sql = text("UPDATE data_domains SET updated_at = :updated_at WHERE id = :id")
+
     for domain_name, objects in entity_objects.items():
         try:
             if verbose:
                 print(f"  Processing domain: {domain_name}")
-            
-            # Check if exists
-            check_sql = text("SELECT id FROM data_domains WHERE name = :name")
-            with engine.connect() as conn:
-                result = conn.execute(check_sql, {"name": domain_name})
-                existing = result.fetchone()
-            
-            if existing:
+
+            existing_id = find_existing_id(engine, "data_domains", domain_name)
+            if existing_id:
                 if conflict_strategy == 'skip':
                     if verbose:
                         print(f"    Skipped (already exists)")
@@ -632,44 +692,37 @@ def create_domains(
                     continue
                 elif conflict_strategy == 'error':
                     raise ValueError(f"Domain '{domain_name}' already exists")
-            
+            outcome = "updated" if existing_id else "created"
+
             if dry_run:
-                print(f"  [DRY-RUN] Would create domain: {domain_name}")
-                stats["created"] += 1
+                verb = "update" if existing_id else "create"
+                print(f"  [DRY-RUN] Would {verb} domain: {domain_name}")
+                stats[outcome] += 1
                 continue
-            
-            # Create domain
-            domain_id = str(uuid4())
-            domain_sql = text("""
-                INSERT INTO data_domains (
-                    id, name, created_by, created_at, updated_at
-                ) VALUES (
-                    :id, :name, :created_by, :created_at, :updated_at
-                )
-                ON CONFLICT (id) DO UPDATE SET
-                    updated_at = :updated_at
-            """)
-            
-            with engine.connect() as conn:
-                conn.execute(domain_sql, {
-                    "id": domain_id,
-                    "name": domain_name,
-                    "created_by": created_by,
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
-                })
-                conn.commit()
-            
+
+            now = datetime.utcnow()
+            with engine.begin() as conn:
+                if existing_id:
+                    conn.execute(touch_sql, {"id": existing_id, "updated_at": now})
+                else:
+                    conn.execute(domain_sql, {
+                        "id": str(uuid4()),
+                        "name": domain_name,
+                        "created_by": created_by,
+                        "created_at": now,
+                        "updated_at": now
+                    })
+
             if verbose:
-                print(f"    Created")
-            stats["created"] += 1
-            
+                print(f"    {outcome.capitalize()}")
+            stats[outcome] += 1
+
         except Exception as e:
             print(f"  Error creating domain {domain_name}: {e}")
             if verbose:
                 traceback.print_exc()
             stats["errors"] += 1
-    
+
     return stats
 
 
@@ -726,7 +779,7 @@ def link_products_to_contracts(
             
             # Update output port
             update_sql = text("""
-                UPDATE output_ports
+                UPDATE data_product_output_ports
                 SET contract_id = :contract_id
                 WHERE product_id IN (SELECT id FROM data_products WHERE name = :product_name)
                   AND asset_identifier = :asset_identifier
@@ -861,7 +914,8 @@ def main():
             verbose=verbose
         )
         summary['contracts'] = contract_stats
-        print(f"  Created: {contract_stats['created']}, Skipped: {contract_stats['skipped']}, Errors: {contract_stats['errors']}")
+        print(f"  Created: {contract_stats['created']}, Updated: {contract_stats['updated']}, "
+              f"Skipped: {contract_stats['skipped']}, Errors: {contract_stats['errors']}")
     
     if 'product' in discovered:
         print(f"\nCreating Products...")
@@ -875,7 +929,8 @@ def main():
             verbose=verbose
         )
         summary['products'] = product_stats
-        print(f"  Created: {product_stats['created']}, Skipped: {product_stats['skipped']}, Errors: {product_stats['errors']}")
+        print(f"  Created: {product_stats['created']}, Updated: {product_stats['updated']}, "
+              f"Skipped: {product_stats['skipped']}, Errors: {product_stats['errors']}")
     
     if 'domain' in discovered:
         print(f"\nCreating Domains...")
@@ -888,7 +943,8 @@ def main():
             verbose=verbose
         )
         summary['domains'] = domain_stats
-        print(f"  Created: {domain_stats['created']}, Skipped: {domain_stats['skipped']}, Errors: {domain_stats['errors']}")
+        print(f"  Created: {domain_stats['created']}, Updated: {domain_stats['updated']}, "
+              f"Skipped: {domain_stats['skipped']}, Errors: {domain_stats['errors']}")
     
     # Link products to contracts
     if 'contract' in discovered and 'product' in discovered:

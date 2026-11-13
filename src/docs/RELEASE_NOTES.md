@@ -125,6 +125,7 @@
 
 ## 🐛 Bug Fixes
 
+- **assets**: editing an asset in its Edit dialog keeps the properties the dialog doesn't show. Before, saving replaced them with the dialog's fields, so editing a column (for example ticking *is primary key*) dropped its `data_type`, `nullable` and comment. The dialog now sends the stored properties with only the fields you changed
 - **data-contracts**: **Infer from Asset** sets each column's ODCS logical type from its physical type (`DATE` to `date`, `TIMESTAMP` to `timestamp`, `INT`/`BIGINT` to `integer`, `DOUBLE`/`DECIMAL` to `number`, `BOOLEAN` to `boolean`, `ARRAY` to `array`, `STRUCT`/`MAP` to `object`). Before, every column was `string`. The logical type lists of the contract editors now include the ODCS v3.1 types `timestamp` and `time`
 - **data-contracts**: the domains picked when creating a contract are saved. Before, the create request dropped them (`domainIds` / `primaryDomainId` were read only under their snake_case names)
 - **settings**: redact secret-shaped keys in update_settings log line (#557)

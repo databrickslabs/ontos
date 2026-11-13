@@ -462,5 +462,8 @@ def get_asset_maturity_history(
 # ===================================================================
 
 def register_routes(app):
+    from src.routes.maturity_bulk_routes import router as bulk_router
+
     app.include_router(router)
+    app.include_router(bulk_router)
     logger.info("Maturity routes registered")

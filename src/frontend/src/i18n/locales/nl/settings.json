@@ -1237,6 +1237,38 @@
       "reorderFailed": "Kon volgorde niet wijzigen"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Alle tabel- en view-assets evalueren",
+    "description": "Evalueert elk tabel- en view-asset binnen de scope met de huidige Asset-niveaus. Een asset die sinds de start van de run is geëvalueerd, wordt overgeslagen; er loopt één run tegelijk.",
+    "catalog": "Catalogus (optioneel)",
+    "schema": "Schema (optioneel)",
+    "start": "Assets evalueren",
+    "running": "Evalueren: {{processed}} van {{total}} assets",
+    "noAssetLevels": "Voeg eerst Asset-niveaus toe: zonder die wordt niets geëvalueerd.",
+    "lastRun": "Laatste run",
+    "none": "Er is nog geen run afgerond.",
+    "scope": "Scope: {{scope}}",
+    "allCatalogs": "Alle catalogi",
+    "startedBy": "Gestart door {{user}}",
+    "summary": "{{total}} assets: {{evaluated}} geëvalueerd, {{changed}} met gewijzigd niveau, {{errors}} fouten.",
+    "skipped": "Overgeslagen",
+    "errors": "Fouten",
+    "state": {
+      "running": "Bezig",
+      "completed": "Voltooid",
+      "failed": "Mislukt"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Geëvalueerd sinds de start van de run",
+      "maturity_bulk_skipped_not_found": "Asset niet gevonden",
+      "maturity_bulk_skipped_no_levels": "Geen Asset-niveaus",
+      "maturity_bulk_skipped_asset_type": "Geen tabel of view",
+      "maturity_bulk_evaluation_failed": "Evaluatie mislukt (zie serverlog)",
+      "maturity_bulk_run_failed": "De run is gestopt (zie serverlog)",
+      "maturity_bulk_run_in_progress": "Er loopt al een bulkevaluatie.",
+      "maturity_bulk_scope_invalid": "De scope is ongeldig."
+    }
+  },
   "maturityLevels": {
     "title": "Volwassenheidsniveaus",
     "description": "Definieer de volwassenheidsladder voor dataproducten en contracten. Elk niveau wordt afgeschermd door compliance-beleid.",

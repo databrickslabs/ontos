@@ -2300,6 +2300,31 @@ earlier run is removed. Change `<n>` to set another threshold. A malformed varia
 
 ---
 
+## Maturity Levels: Evaluate All Tables and Views
+
+Admins can evaluate the maturity of every table and view asset at once, instead of waiting
+for each asset to change or be opened. Go to **Settings → Maturity Levels**, open the
+**Evaluate all table and view assets** card, optionally type a catalog and a schema, and
+click **Evaluate assets**. The card polls the run while it goes and then shows its summary.
+
+- **Scope.** Without a catalog, every table and view asset is considered. A catalog (and
+  optionally a schema) limits the run to assets whose `catalog.schema.table` name starts
+  with it. Other asset types are never evaluated.
+- **Idempotent.** An asset evaluated since the run started (for example by a retry or a
+  second request) is skipped and counted as such. Running the same scope again evaluates
+  the assets again, and only a level change is logged and fires `ON_MATURITY_CHANGE`.
+- **Summary.** Evaluated, changed level, skipped (with a reason for each: evaluated since the
+  run started, asset not found, no Asset levels, not a table or view) and errors, each with
+  a code. An error never shows the exception text; the server log has it.
+- **One run at a time.** While a run is going, a new one is refused. The last summary stays
+  visible after a restart.
+- **Permission.** Only users with Settings read/write access (admins) can start a run. The
+  summary can be read by users with Settings read access.
+- **Scheduling.** A run is started from this card or from the API
+  (`POST /api/maturity-evaluations/assets`). It isn't scheduled yet.
+
+---
+
 ## Process Workflows
 
 Process Workflows enable automated, configurable multi-step processes that trigger on entity lifecycle events. They replace hardcoded business logic with flexible, user-editable flows that can be customized per organization.

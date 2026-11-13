@@ -1219,6 +1219,38 @@
       "reorderFailed": "Échec de la réorganisation"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Évaluer tous les assets table et vue",
+    "description": "Évalue chaque asset table et vue du périmètre avec les niveaux Asset actuels. Un asset évalué depuis le début de l'exécution est ignoré, et une seule exécution à la fois.",
+    "catalog": "Catalogue (facultatif)",
+    "schema": "Schéma (facultatif)",
+    "start": "Évaluer les assets",
+    "running": "Évaluation : {{processed}} sur {{total}} assets",
+    "noAssetLevels": "Créez d'abord les niveaux Asset : sans eux, rien n'est évalué.",
+    "lastRun": "Dernière exécution",
+    "none": "Aucune exécution terminée pour l'instant.",
+    "scope": "Périmètre : {{scope}}",
+    "allCatalogs": "Tous les catalogues",
+    "startedBy": "Lancée par {{user}}",
+    "summary": "{{total}} assets : {{evaluated}} évalués, {{changed}} au niveau modifié, {{errors}} erreurs.",
+    "skipped": "Ignorés",
+    "errors": "Erreurs",
+    "state": {
+      "running": "En cours",
+      "completed": "Terminée",
+      "failed": "Échouée"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Évalué depuis le début de l'exécution",
+      "maturity_bulk_skipped_not_found": "Asset introuvable",
+      "maturity_bulk_skipped_no_levels": "Aucun niveau Asset",
+      "maturity_bulk_skipped_asset_type": "Ni table ni vue",
+      "maturity_bulk_evaluation_failed": "Échec de l'évaluation (voir le journal du serveur)",
+      "maturity_bulk_run_failed": "L'exécution s'est arrêtée (voir le journal du serveur)",
+      "maturity_bulk_run_in_progress": "Une évaluation en masse est déjà en cours.",
+      "maturity_bulk_scope_invalid": "Le périmètre n'est pas valide."
+    }
+  },
   "maturityLevels": {
     "title": "Niveaux de maturité",
     "description": "Définissez l'échelle de maturité des produits de données et des contrats. Chaque niveau est conditionné par des politiques de conformité.",

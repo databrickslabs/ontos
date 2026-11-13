@@ -1219,6 +1219,38 @@
       "reorderFailed": "Neuanordnung fehlgeschlagen"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Alle Tabellen- und View-Assets bewerten",
+    "description": "Bewertet jedes Tabellen- und View-Asset im Umfang mit den aktuellen Asset-Levels. Ein seit Laufbeginn bewertetes Asset wird übersprungen; es läuft immer nur ein Lauf.",
+    "catalog": "Katalog (optional)",
+    "schema": "Schema (optional)",
+    "start": "Assets bewerten",
+    "running": "Bewertung: {{processed}} von {{total}} Assets",
+    "noAssetLevels": "Legen Sie zuerst Asset-Levels an: Ohne sie wird nichts bewertet.",
+    "lastRun": "Letzter Lauf",
+    "none": "Noch kein Lauf abgeschlossen.",
+    "scope": "Umfang: {{scope}}",
+    "allCatalogs": "Alle Kataloge",
+    "startedBy": "Gestartet von {{user}}",
+    "summary": "{{total}} Assets: {{evaluated}} bewertet, {{changed}} mit geändertem Level, {{errors}} Fehler.",
+    "skipped": "Übersprungen",
+    "errors": "Fehler",
+    "state": {
+      "running": "Läuft",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Seit Laufbeginn bewertet",
+      "maturity_bulk_skipped_not_found": "Asset nicht gefunden",
+      "maturity_bulk_skipped_no_levels": "Keine Asset-Levels",
+      "maturity_bulk_skipped_asset_type": "Keine Tabelle oder View",
+      "maturity_bulk_evaluation_failed": "Bewertung fehlgeschlagen (siehe Server-Log)",
+      "maturity_bulk_run_failed": "Der Lauf wurde gestoppt (siehe Server-Log)",
+      "maturity_bulk_run_in_progress": "Eine Massenbewertung läuft bereits.",
+      "maturity_bulk_scope_invalid": "Der Umfang ist ungültig."
+    }
+  },
   "maturityLevels": {
     "title": "Reifegradstufen",
     "description": "Definieren Sie die Reifegradleiter für Datenprodukte und Verträge. Jede Stufe ist durch Compliance-Richtlinien gesteuert.",

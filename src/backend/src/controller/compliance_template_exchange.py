@@ -6,13 +6,16 @@ field's reference id to its value. ODPS carries it on the data product; ODCS on
 the schema object whose ``physicalName`` (else ``name``) is a table or view asset.
 
 Import: the entry is read back into the values of the fields of the active
-template whose reference id it names (values that don't fit the field type are
-skipped). When it can't be applied (no active template, no matching asset, or
-the importing user may not write the values) the entry stays an ordinary
-custom property, so nothing is lost.
+template whose reference id it names. What can't be written (no active
+template, no matching asset, no rights, an unknown reference id, a value that
+doesn't fit the field) stays in the entry, an ordinary custom property; the
+export keeps those keys next to the live values. (On this stack's base the
+contract import doesn't store schema-level custom properties at all, so there
+the rest of a schema object's entry is only kept on development.)
 """
 import json
 import uuid
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 from fastapi import HTTPException, Request, status
@@ -49,12 +52,17 @@ def has_active_template(db: Session, entity_type: str) -> bool:
     return compliance_templates_repo.get_active_template(db, entity_type=entity_type) is not None
 
 
-def entity_values(db: Session, *, entity_type: str, entity_id: str) -> Optional[Dict[str, Any]]:
-    """Reference id -> stored value for the active template, in field order.
+@dataclass(frozen=True)
+class LiveValues:
+    """The stored values of an entity (reference id -> value, in field order) and the
+    reference ids of the active template's fields (the keys the live values own)."""
+    values: Dict[str, Any]
+    reference_ids: frozenset
 
-    ``None`` when no template is active for the entity type (the document's own
-    custom properties are then left as they are).
-    """
+
+def entity_values(db: Session, *, entity_type: str, entity_id: str) -> Optional[LiveValues]:
+    """The entity's live values; ``None`` when no template is active for its type
+    (the document's own custom properties are then left as they are)."""
     active = compliance_templates_repo.get_active_template(db, entity_type=entity_type)
     if active is None:
         return None
@@ -63,22 +71,32 @@ def entity_values(db: Session, *, entity_type: str, entity_id: str) -> Optional[
         db, entity_type=entity_type, entity_id=str(entity_id), field_ids=[f.id for f in fields]
     )
     stored = {r.field_id: r.value for r in rows if r.value is not None}
-    return {f.reference_id: stored[f.id] for f in fields if f.id in stored}
+    return LiveValues(
+        values={f.reference_id: stored[f.id] for f in fields if f.id in stored},
+        reference_ids=frozenset(f.reference_id for f in fields),
+    )
 
 
 def _is_entry(prop: Any) -> bool:
     return isinstance(prop, dict) and prop.get("property") == COMPLIANCE_VALUES_PROPERTY
 
 
-def apply_to_document(doc: Dict[str, Any], values: Optional[Dict[str, Any]]) -> None:
-    """Put the live values in ``doc["customProperties"]`` (replacing any stored entry).
+def apply_to_document(doc: Dict[str, Any], live: Optional[LiveValues]) -> None:
+    """Put the live values in the ``ontosComplianceValues`` entry of ``doc``.
 
-    ``values`` is ``None`` when no template is active: the document is untouched.
-    An empty mapping removes a stale entry.
+    The live values replace the stored entry's keys of the active template's
+    fields; its other keys (values an import couldn't write) are kept. ``live`` is
+    ``None`` when no template is active: the document is untouched. An entry left
+    empty is removed.
     """
-    if values is None:
+    if live is None:
         return
     current = doc.get("customProperties")
+    kept = {
+        ref: value for ref, value in (read_entry(current) or {}).items()
+        if ref not in live.reference_ids
+    }
+    values = {**live.values, **kept}
     if isinstance(current, dict):
         if values:
             current[COMPLIANCE_VALUES_PROPERTY] = dict(values)
@@ -240,7 +258,7 @@ def find_schema_asset(
 
 def schema_values(
     db: Session, *, physical_name: Optional[str], contract_id: str, schema_object_id: str
-) -> Optional[Dict[str, Any]]:
+) -> Optional[LiveValues]:
     """Values of the asset a schema object describes (``None``: leave the document as is)."""
     if not has_active_template(db, ASSET_ENTITY_TYPE):
         return None

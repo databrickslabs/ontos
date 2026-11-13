@@ -104,6 +104,10 @@ def _asset(db: Session, location: str, type_name: str = "Table", name: str | Non
     return asset
 
 
+def _live(values: dict, refs=None) -> cte.LiveValues:
+    return cte.LiveValues(values=values, reference_ids=frozenset(refs or values))
+
+
 def _entry(props) -> dict | None:
     return next((p["value"] for p in props or [] if p.get("property") == PROP), None)
 
@@ -263,7 +267,7 @@ class TestOdcs:
             {"property": "owner", "value": "sales"},
             {"property": PROP, "value": {"limitacoes": "old"}},
         ]}
-        cte.apply_to_document(schema_dict, {"limitacoes": "new"})
+        cte.apply_to_document(schema_dict, _live({"limitacoes": "new"}))
         assert schema_dict["customProperties"] == [
             {"property": "owner", "value": "sales"},
             {"property": PROP, "value": {"limitacoes": "new"}},
@@ -378,8 +382,8 @@ class TestOdps:
         )
         assert _stored(db_session, template, "data_product", product_id) == {"limitacoes": "ok"}
         exported = _export_product(manager, db_session, product_id)
-        # The export shows the live values; the stored remainder is still on the product.
-        assert _entry(exported["customProperties"]) == {"limitacoes": "ok"}
+        # The export shows the live values and keeps the remainder the import stored.
+        assert _entry(exported["customProperties"]) == {"limitacoes": "ok", "unknown": 1}
         product = db_session.get(DataProductDb, product_id)
         stored = [p for p in product.custom_properties if p.property == PROP]
         assert [cte.read_entry([{"property": PROP, "value": p.value}]) for p in stored] == [
@@ -419,15 +423,22 @@ class TestDocumentHelpers:
         doc = {"customProperties": [{"property": PROP, "value": {"a": 1}}, {"property": "x"}]}
         cte.apply_to_document(doc, None)
         assert _entry(doc["customProperties"]) == {"a": 1}
-        cte.apply_to_document(doc, {"b": 2})
+        cte.apply_to_document(doc, _live({"b": 2}, refs={"a", "b"}))
         assert doc["customProperties"] == [
             {"property": "x"}, {"property": PROP, "value": {"b": 2}},
         ]
-        cte.apply_to_document(doc, {})
+        cte.apply_to_document(doc, _live({}, refs={"b"}))
         assert doc["customProperties"] == [{"property": "x"}]
         only = {"customProperties": [{"property": PROP, "value": {"a": 1}}]}
-        cte.apply_to_document(only, {})
+        cte.apply_to_document(only, _live({}, refs={"a"}))
         assert "customProperties" not in only
+
+    def test_export_keeps_the_keys_an_import_could_not_write(self):
+        doc = {"customProperties": [
+            {"property": PROP, "value": {"limitacoes": "old", "unknown": 1}},
+        ]}
+        cte.apply_to_document(doc, _live({"limitacoes": "new"}, refs={"limitacoes"}))
+        assert _entry(doc["customProperties"]) == {"limitacoes": "new", "unknown": 1}
 
     def test_read_and_strip_the_entry(self):
         props = [{"property": "x", "value": 1}, {"property": PROP, "value": {"a": 1}}]

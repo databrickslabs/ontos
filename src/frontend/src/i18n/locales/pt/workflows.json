@@ -347,6 +347,22 @@
       "fail": "Reprovado",
       "true": "Verdadeiro",
       "false": "Falso"
+    },
+    "checks": {
+      "button": "Verificar",
+      "buttonHint": "Verifica o fluxo de trabalho em busca de problemas. Os avisos não impedem o salvamento.",
+      "clean": "Nenhum problema encontrado.",
+      "errorsCount_one": "{{count}} erro",
+      "errorsCount_other": "{{count}} erros",
+      "warningsCount_one": "{{count}} aviso",
+      "warningsCount_other": "{{count}} avisos"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "A etapa \"{{step}}\" encerra o fluxo, então o seu link para \"{{target}}\" é ignorado e removido ao salvar.",
+      "conditionalBranchMissing": "A condição \"{{step}}\" não tem uma etapa no ramo {{branch}}. Se a condição for {{branch}}, o fluxo termina como bem-sucedido.",
+      "unreachableSteps": "Estas etapas não são alcançáveis a partir da primeira etapa: {{steps}}.",
+      "storedEntityTypeUnknown": "O gatilho lista \"{{entityType}}\", um tipo de entidade que não existe mais. Ele nunca dispara para ele.",
+      "storedEntityTypeUnsupported": "O gatilho {{trigger}} nunca dispara para {{entity}}."
     }
   },
   "approvalResponse": {
@@ -713,7 +729,9 @@
     "badges": {
       "default": "Padrão",
       "approval": "Aprovação",
-      "process": "Processo"
+      "process": "Processo",
+      "triggerWarnings": "Aviso de gatilho",
+      "triggerWarningsHint": "O gatilho lista tipos de entidade que não correspondem a nenhum evento. Abra o fluxo de trabalho para vê-los."
     },
     "columns": {
       "steps": "Etapas",

@@ -850,6 +850,15 @@ def parse_rule(
         raise ValueError(f"Failed to parse rule: {str(e)}")
 
 
+def _tag_key(parser: Parser) -> str:
+    """A tag action's key: an identifier or a quoted fully qualified name."""
+    if parser.current().type == TokenType.STRING:
+        if not parser.current().value.strip():
+            raise parser.error("Tag key must not be empty")
+        return parser.advance().value.strip()
+    return parser.expect(TokenType.IDENTIFIER).value
+
+
 def parse_actions(parser: Parser) -> List[Dict[str, Any]]:
     """Parse action list from current parser position."""
     actions = []
@@ -870,15 +879,19 @@ def parse_actions(parser: Parser) -> List[Dict[str, Any]]:
             actions.append({'type': 'FAIL', 'message': message})
 
         elif action_type == TokenType.ASSIGN_TAG:
-            # ASSIGN_TAG key: value
-            key = parser.expect(TokenType.IDENTIFIER).value
-            parser.expect(TokenType.COLON)
-            value = parser.expect(TokenType.STRING).value
+            # ASSIGN_TAG key[: 'value']. The key is an identifier (a tag in the default
+            # namespace) or a quoted fully qualified name ('namespace/name'). Without a
+            # value only the key is assigned (an existing value is kept); '' clears it.
+            key = _tag_key(parser)
+            value = None
+            if parser.current().type == TokenType.COLON:
+                parser.advance()
+                value = parser.expect(TokenType.STRING).value
             actions.append({'type': 'ASSIGN_TAG', 'key': key, 'value': value})
 
         elif action_type == TokenType.REMOVE_TAG:
-            # REMOVE_TAG key
-            key = parser.expect(TokenType.IDENTIFIER).value
+            # REMOVE_TAG key (identifier or quoted 'namespace/name')
+            key = _tag_key(parser)
             actions.append({'type': 'REMOVE_TAG', 'key': key})
 
         elif action_type == TokenType.NOTIFY:

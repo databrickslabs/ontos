@@ -36,6 +36,7 @@ from src.models.process_workflows import (
     WorkflowExecution,
     WorkflowListResponse,
     WorkflowExecutionListResponse,
+    WorkflowValidationIssue,
     WorkflowValidationResult,
     StepTypeSchema,
     TemplateVarsResponse,
@@ -791,7 +792,27 @@ def _with_policy_errors(
     added = WorkflowValidationResult(valid=False, errors=errors)
     return WorkflowValidationResult(
         valid=False, errors=[*validation.errors, *added.errors], warnings=validation.warnings,
-        issues=[*validation.issues, *added.issues],
+        issues=[*validation.issues, *added.issues], warning_issues=validation.warning_issues,
+    )
+
+
+def _with_policy_warnings(
+    manager: WorkflowsManager, validation: WorkflowValidationResult, steps,
+) -> WorkflowValidationResult:
+    """The validation plus a warning for each policy_check step with no existing policy.
+
+    For an inactive workflow: it saves, but can't be activated until a policy is selected.
+    """
+    missing = manager.policy_reference_errors(steps)
+    if not missing:
+        return validation
+    return WorkflowValidationResult(
+        valid=validation.valid, errors=validation.errors, issues=validation.issues,
+        warnings=[*validation.warnings, *(str(m) for m in missing)],
+        warning_issues=[
+            *validation.warning_issues,
+            *(WorkflowValidationIssue(code=m.code, message=str(m), params=dict(m.params)) for m in missing),
+        ],
     )
 
 
@@ -1180,15 +1201,11 @@ async def validate_workflow(
         validation = WorkflowValidationResult(
             valid=False, errors=[*validation.errors, *added.errors],
             warnings=validation.warnings, issues=[*validation.issues, *added.issues],
+            warning_issues=validation.warning_issues,
         )
     if workflow.is_active:
         return _with_policy_errors(manager, validation, workflow.steps, True)
-    missing = manager.policy_reference_errors(workflow.steps)
-    if not missing:
-        return validation
-    return validation.model_copy(
-        update={'warnings': [*validation.warnings, *(str(m) for m in missing)]},
-    )
+    return _with_policy_warnings(manager, validation, workflow.steps)
 
 
 @router.post("/check-condition")

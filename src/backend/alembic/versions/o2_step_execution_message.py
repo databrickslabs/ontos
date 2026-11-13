@@ -1,7 +1,7 @@
 """keep the message of each workflow step result
 
 Revision ID: o2_step_execution_message
-Revises: s1_workflow_is_customized
+Revises: r2_canonical_relationship_types
 Create Date: 2026-11-11 18:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'o2_step_execution_message'
-down_revision: Union[str, None] = 's1_workflow_is_customized'
+down_revision: Union[str, None] = 'r2_canonical_relationship_types'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

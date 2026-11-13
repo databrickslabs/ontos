@@ -257,6 +257,13 @@
       "replacementVersion": "Replacement: {{replacementName}} (version {{replacementVersion}})"
     }
   },
+  "complianceRun": {
+    "title": "Compliance: {{policyName}}",
+    "summary": "Policy {{policyName}}: {{failedCount}} failed, {{passedCount}} passed.",
+    "failedEntities": "Failed: {{names}}",
+    "passedEntities": "Passed: {{names}}",
+    "namesWithMore": "{{names}} and {{count}} more"
+  },
   "metricViewChangeManual": {
     "title": "Apply the metric view change",
     "description": "The change request for the metric view {{fqn}} was approved. Run this statement to apply it:\n\n{{ddl}}"
@@ -264,5 +271,8 @@
   "metricViewChangeFailed": {
     "title": "Metric view change not delivered",
     "description": "The approved change request for the metric view {{fqn}} could not be delivered."
+  },
+  "complianceRunVisibility": {
+    "notShown": "{{count}} you can't see"
   }
 }

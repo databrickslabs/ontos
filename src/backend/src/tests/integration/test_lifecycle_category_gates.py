@@ -306,3 +306,18 @@ def test_another_users_draft_in_a_custom_first_stage_stays_hidden_on_a_cold_cach
         not_others_personal_draft(DataProductDb, 'me@example.com', db_session),
     ).all()
     assert visible == []
+
+
+def test_a_subscription_to_a_custom_active_stage_survives_a_cold_cache(client, db_session):
+    pid = _product(db_session, 'live', _live_group(client, 'data_product'))
+    lifecycle_service.invalidate()  # another worker created the group
+    res = client.post(f'/api/data-products/{pid}/subscribe', json={})
+    assert res.status_code == 200, res.text
+
+
+def test_a_review_request_in_the_default_lifecycle_starts_the_review(client, db_session):
+    pid = _product(db_session, 'draft')
+    res = client.post(f'/api/data-products/{pid}/request-review', json={})
+    assert res.status_code < 400, res.text
+    db_session.expire_all()
+    assert db_session.get(DataProductDb, pid).status == 'under_review'

@@ -19,12 +19,24 @@ _ON_DEMAND_CATEGORIES = ("deprecated", "retired")
 
 
 def _on_demand_statuses() -> set:
-    """Stage keys of the deprecated and retired categories in any known group."""
+    """Stage keys of the deprecated and retired categories in any group; the groups
+    are loaded through a short session, so a cold cache still knows custom stages."""
+    from src.common.database import get_session_factory
     from src.controller.lifecycle_service import lifecycle_service
 
     keys: set = set()
-    for category in _ON_DEMAND_CATEGORIES:
-        keys |= lifecycle_service.keys_of_category_anywhere(category)
+    factory = None
+    try:
+        factory = get_session_factory()
+    except Exception:
+        logger.debug("No session for the lifecycle groups; using the cached ones")
+    if factory is None:
+        for category in _ON_DEMAND_CATEGORIES:
+            keys |= lifecycle_service.keys_of_category_anywhere(category)
+        return keys
+    with factory() as db:
+        for category in _ON_DEMAND_CATEGORIES:
+            keys |= lifecycle_service.keys_of_category_anywhere(category, db)
     return keys
 
 

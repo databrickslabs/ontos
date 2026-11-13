@@ -328,3 +328,98 @@ def test_a_review_request_in_the_default_lifecycle_starts_the_review(client, db_
     assert res.status_code < 400, res.text
     db_session.expire_all()
     assert db_session.get(DataProductDb, pid).status == 'under_review'
+
+
+def _two_reviews(client):
+    """``draft -> vetting -> legal -> live``: two review stages, no seeded ones."""
+    res = client.post('/api/lifecycle-stage-groups', json={
+        'name': 'Two review steps', 'entity_type': 'data_product',
+        'stages': [_stage('draft', 'draft', 0, True), _stage('vetting', 'review', 1),
+                   _stage('legal', 'review', 2), _stage('live', 'active', 3),
+                   _stage('sunset', 'deprecated', 4)],
+        'transitions': [{'from_key': 'draft', 'to_key': 'vetting'},
+                        {'from_key': 'vetting', 'to_key': 'legal'},
+                        {'from_key': 'legal', 'to_key': 'live'},
+                        {'from_key': 'live', 'to_key': 'sunset'},
+                        {'from_key': 'sunset', 'to_key': 'live'}],
+    })
+    assert res.status_code == 201, res.text
+    return res.json()['id']
+
+
+def test_a_custom_groups_first_review_stage_is_edited_in_place(client, db_session):
+    group_id = _two_reviews(client)
+    vetting = db_session.get(DataProductDb, _product(db_session, 'vetting', group_id))
+    legal = db_session.get(DataProductDb, _product(db_session, 'legal', group_id))
+    assert lifecycle_service.submit_review_stage(db_session, 'data_product', vetting) == 'vetting'
+    assert lifecycle_service.editable_in_place(db_session, 'data_product', vetting)
+    assert not lifecycle_service.editable_in_place(db_session, 'data_product', legal)
+
+
+def test_several_review_stages_after_draft_have_no_submit_review_stage(client, db_session):
+    res = client.post('/api/lifecycle-stage-groups', json={
+        'name': 'Two ways in', 'entity_type': 'data_product',
+        'stages': [_stage('draft', 'draft', 0, True), _stage('fast', 'review', 1),
+                   _stage('slow', 'review', 2), _stage('live', 'active', 3)],
+        'transitions': [{'from_key': 'draft', 'to_key': 'fast'},
+                        {'from_key': 'draft', 'to_key': 'slow'},
+                        {'from_key': 'fast', 'to_key': 'live'},
+                        {'from_key': 'slow', 'to_key': 'live'}],
+    })
+    assert res.status_code == 201, res.text
+    fast = db_session.get(DataProductDb, _product(db_session, 'fast', res.json()['id']))
+    assert lifecycle_service.submit_review_stage(db_session, 'data_product', fast) is None
+    assert not lifecycle_service.editable_in_place(db_session, 'data_product', fast)
+
+
+def test_a_status_change_request_offers_the_groups_moves(client, db_session):
+    from unittest.mock import MagicMock
+
+    from src.controller.data_products_manager import DataProductsManager
+
+    group_id = _two_reviews(client)
+    mgr = DataProductsManager(db=db_session, ws_client=MagicMock(),
+                              notifications_manager=MagicMock(), tags_manager=MagicMock())
+    vetting = db_session.get(DataProductDb, _product(db_session, 'vetting', group_id))
+    assert mgr._get_allowed_status_transitions('vetting', vetting) == [
+        {'target': 'legal', 'label': 'Legal'},
+    ]
+    sunset = db_session.get(DataProductDb, _product(db_session, 'sunset', group_id))
+    assert mgr._get_allowed_status_transitions('sunset', sunset) == [
+        {'target': 'live', 'label': 'Reactivate'},
+    ]
+
+
+def test_a_product_created_in_a_group_without_draft_starts_in_its_first_stage(
+    client, db_session,
+):
+    group_id = _live_group(client, 'data_product')
+    res = client.post('/api/data-products', json={
+        'id': str(uuid.uuid4()), 'name': 'Intake product', 'version': '1.0.0',
+        'apiVersion': 'v1.0.0', 'kind': 'DataProduct', 'status': 'draft',
+        'lifecycleStageGroupId': group_id,
+    })
+    assert 200 <= res.status_code < 300, res.text
+    assert res.json()['status'] == 'intake'
+
+
+def test_on_demand_uc_tag_sync_knows_custom_stages_on_a_cold_cache(
+    client, db_session, monkeypatch,
+):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from src.common import uc_tag_sync_trigger as trigger
+
+    _live_group(client, 'data_product')  # 'sunset' is retired
+    lifecycle_service.invalidate()  # another worker created the group
+
+    @contextmanager
+    def session():
+        yield db_session
+
+    monkeypatch.setattr('src.common.database.get_session_factory', lambda: session)
+    jobs = SimpleNamespace(run_workflow_unless_pending=MagicMock(return_value=9))
+    monkeypatch.setattr(trigger, 'get_app_state_manager', lambda name: jobs)
+    assert trigger.request_uc_tag_sync_after_transition('data_product', 'p', 'live', 'sunset') == 9

@@ -395,11 +395,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # is certification_level, set by the certify action.
             # It starts in a stage of its lifecycle stage group (the default one
             # unless the payload names one).
+            requested_group = (product_data.get('lifecycle_stage_group_id')
+                               or product_data.get('lifecycleStageGroupId'))
+            requested_status = product_data.get('status')
+            # The create model defaults status to 'draft': in a named group without
+            # that stage it means "no status", i.e. the group's first stage
+            if requested_group and (requested_status or '').lower() == 'draft':
+                named = lifecycle_service.require_group(
+                    db_session, 'data_product', requested_group,
+                )
+                if 'draft' not in named.stages:
+                    requested_status = None
             group_id, stage_key = lifecycle_service.stage_for_new(
-                db_session, 'data_product',
-                product_data.get('lifecycle_stage_group_id')
-                or product_data.get('lifecycleStageGroupId'),
-                product_data.get('status'),
+                db_session, 'data_product', requested_group, requested_status,
             )
             product_data['status'] = stage_key
             product_data['lifecycle_stage_group_id'] = group_id

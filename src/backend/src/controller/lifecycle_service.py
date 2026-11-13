@@ -442,8 +442,10 @@ class LifecycleService:
                 return group.category(key)
         return DEFAULT_STAGE_CATEGORIES.get(key)
 
-    def keys_of_category_anywhere(self, category: str) -> set:
-        """Stage keys in ``category`` in any known group (seeded or cached)."""
+    def keys_of_category_anywhere(self, category: str, db: Optional[Session] = None) -> set:
+        """Stage keys in ``category`` in any known group (seeded or cached; with ``db``
+        the groups are (re)loaded first)."""
+        self._ensure(db)
         keys = {k for k, c in DEFAULT_STAGE_CATEGORIES.items() if c == category}
         for group in list(self._groups.values()):
             keys.update(s.key for s in group.stages.values() if s.category == category)

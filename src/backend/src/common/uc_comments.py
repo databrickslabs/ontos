@@ -32,7 +32,7 @@ class StatementError(RuntimeError):
 
 
 class CommentWriteError(RuntimeError):
-    """A comment was not written. ``reason`` is one of the reasons above (PERMISSION_DENIED, ...)."""
+    """A comment was not written. ``reason`` is a reason constant above (e.g. PERMISSION_DENIED)."""
 
     def __init__(self, reason: str, message: str):
         super().__init__(message)
@@ -81,7 +81,7 @@ def comment_statement(table_fqn: str, column_name: Optional[str], text: Optional
 def read_comment(
     ws: Any, table_fqn: str, column_name: Optional[str],
 ) -> Tuple[Optional[str], Optional[str]]:
-    """``(table_type, comment)`` of a table or view, or of one of its columns, as the caller reads it.
+    """``(table_type, comment)`` of a table or view, or of one of its columns, as read.
 
     ``table_type`` is the Unity Catalog type name (e.g. ``METRIC_VIEW``). Raises
     ``CommentWriteError`` (NOT_FOUND, PERMISSION_DENIED or FAILED) when it can't be read.

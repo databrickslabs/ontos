@@ -15,7 +15,7 @@ This workflow:
 import argparse
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
 from functools import reduce
 
@@ -213,7 +213,7 @@ def update_run_status(session, run_id: str, status: str, **kwargs):
     
     if status in ("completed", "failed"):
         update_fields.append("completed_at = :completed_at")
-        params["completed_at"] = datetime.utcnow()
+        params["completed_at"] = datetime.now(timezone.utc)
     
     query = f"UPDATE mdm_match_runs SET {', '.join(update_fields)} WHERE id = :id"
     session.execute(text(query), params)

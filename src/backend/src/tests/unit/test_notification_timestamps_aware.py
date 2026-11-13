@@ -123,3 +123,16 @@ def test_postgres_sessions_run_in_utc():
 
     assert '-ctimezone=UTC' in url
     assert '-csearch_path=app_schema' in url
+
+
+def test_job_scripts_do_not_stamp_naive_utc_times():
+    """The job scripts write to timestamptz columns too: utcnow() is naive and
+    would shift by the server's UTC offset the same way (#1449)."""
+    offenders = [
+        f'{path.relative_to(SRC)}:{node.lineno}'
+        for path in (SRC / 'workflows').rglob('*.py')
+        for node in ast.walk(ast.parse(path.read_text(encoding='utf-8')))
+        if _is_utcnow(node)
+    ]
+
+    assert offenders == []

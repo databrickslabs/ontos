@@ -14,6 +14,7 @@ import type { ColumnProperty, QualityRule, SchemaRelationship } from '@/types/da
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import QualityRuleFormDialog from './quality-rule-form-dialog'
 import { logicalTypesForVersion } from './odcs-logical-types'
+import { hasDateConstraints } from './logical-types'
 
 const CLASSIFICATION_LEVELS = ['public', 'internal', 'confidential', 'restricted', 'pii', '1', '2', '3', '4', '5']
 
@@ -685,7 +686,7 @@ function SchemaPropertyEditorInner(
                     </div>
                   )}
 
-                  {logicalType === 'date' && (
+                  {hasDateConstraints(logicalType) && (
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="prop-date-format" className="text-xs">{t('data-contracts:property.fields.format', 'Format')}</Label>

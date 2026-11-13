@@ -120,6 +120,9 @@ from src.utils.contract_servers import (
     json_list, json_list_text, keep_unsent_server_fields,
     odcs_property_value as odcs_server_value, property_values as server_property_values,
 )
+from src.utils.contract_owner_team import (
+    ONTOS_OWNER_TEAM_PROPERTY, owner_team_value, pop_owner_team,
+)
 from src.utils.odcs_values import page_text, typed_text, typed_value
 from src.utils.odcs_quality_operators import (
     implementation_text, odcs_quality_check, operator_columns, tags_text,
@@ -1491,6 +1494,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
         # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
         _upsert_custom_property(odcs, ONTOS_ENTITY_ID_PROPERTY, db_obj.id)
+        # The owner team, which ODCS has no field for (read back by create_from_upload)
+        owner_team = owner_team_value(db_session, db_obj.owner_team_id)
+        if owner_team:
+            _upsert_custom_property(odcs, ONTOS_OWNER_TEAM_PROPERTY, owner_team)
         for prop, value in lifecycle_custom_properties(db_obj, 'data_contract').items():
             _upsert_custom_property(odcs, prop, value)
 
@@ -3131,8 +3138,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     cprops.append({"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": original_domains})
                     parsed_odcs['customProperties'] = cprops
 
-            # Try to resolve owner as team name
-            owner_team_id = self._resolve_team_name_to_id(db, owner_val)
+            # The owner team an Ontos export wrote (ontosOwnerTeam), else the
+            # owner as a team name
+            owner_team_id = (
+                pop_owner_team(db, parsed_odcs) or self._resolve_team_name_to_id(db, owner_val)
+            )
 
             # Mirror the create() path (see there for the full rationale): a
             # draft contract with no owning team would otherwise be invisible to

@@ -217,7 +217,7 @@
     "notifications_failed": "Les notifications de la politique (NOTIFY) n'ont pas pu être envoyées pour cette exécution. Les résultats sont complets.",
     "llm_check_budget_exceeded": "{{count}} vérifications LLM n'ont pas été exécutées car l'exécution a atteint son budget de {{budget}} appels au modèle ; ces entités ont donc échoué. Relancez-la (les verdicts en cache ne comptent pas) ou augmentez COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
     "llm_check_daily_quota_exceeded": "{{count}} vérifications LLM n’ont pas été exécutées, car vous avez utilisé vos {{limit}} appels au modèle pour aujourd’hui ; ces entités ont donc échoué. Relancez-la demain (les verdicts en cache ne comptent pas) ou demandez à un administrateur d’augmenter COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY.",
-    "no_entities_matched": "Aucune entité ne correspond à cette règle, donc rien n'a été vérifié. Vérifiez le type MATCH et la condition WHERE."
+    "no_entities_matched": "Aucune entité ne correspond à cette règle, donc rien n'a été vérifié. Si vous en attendiez, vérifiez le type MATCH et la condition WHERE."
   },
   "actionOutcomes": {
     "status": {

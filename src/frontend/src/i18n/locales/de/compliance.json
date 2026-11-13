@@ -217,7 +217,7 @@
     "notifications_failed": "Die Benachrichtigungen der Richtlinie (NOTIFY) konnten für diesen Lauf nicht gesendet werden. Die Ergebnisse sind vollständig.",
     "llm_check_budget_exceeded": "{{count}} LLM-Prüfungen wurden nicht ausgeführt, weil der Lauf sein Budget von {{budget}} Modellaufrufen erreicht hat; diese Entitäten sind daher fehlgeschlagen. Führen Sie ihn erneut aus (zwischengespeicherte Urteile zählen nicht) oder erhöhen Sie COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
     "llm_check_daily_quota_exceeded": "{{count}} LLM-Prüfungen wurden nicht ausgeführt, weil Sie Ihre {{limit}} Modellaufrufe für heute aufgebraucht haben; diese Entitäten sind daher fehlgeschlagen. Führen Sie die Regel morgen erneut aus (zwischengespeicherte Urteile zählen nicht) oder bitten Sie einen Administrator, COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY zu erhöhen.",
-    "no_entities_matched": "Keine Entität entspricht dieser Regel, daher wurde nichts geprüft. Prüfen Sie den MATCH-Typ und die WHERE-Bedingung."
+    "no_entities_matched": "Keine Entität entspricht dieser Regel, daher wurde nichts geprüft. Falls Sie Treffer erwartet haben, prüfen Sie den MATCH-Typ und die WHERE-Bedingung."
   },
   "actionOutcomes": {
     "status": {

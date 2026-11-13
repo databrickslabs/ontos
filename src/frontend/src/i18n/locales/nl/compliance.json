@@ -217,7 +217,7 @@
     "notifications_failed": "De meldingen van het beleid (NOTIFY) konden voor deze uitvoering niet worden verzonden. De resultaten zijn volledig.",
     "llm_check_budget_exceeded": "{{count}} LLM-controles zijn niet uitgevoerd omdat de run zijn budget van {{budget}} modelaanroepen heeft bereikt, dus die entiteiten zijn afgekeurd. Voer de run opnieuw uit (oordelen uit de cache tellen niet mee) of verhoog COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
     "llm_check_daily_quota_exceeded": "{{count}} LLM-controles zijn niet uitgevoerd omdat u uw {{limit}} modelaanroepen voor vandaag hebt gebruikt, dus die entiteiten zijn mislukt. Voer de regel morgen opnieuw uit (gecachte oordelen tellen niet) of vraag een beheerder COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY te verhogen.",
-    "no_entities_matched": "Geen entiteit komt overeen met deze regel, dus er is niets gecontroleerd. Controleer het MATCH-type en de WHERE-voorwaarde."
+    "no_entities_matched": "Geen entiteit komt overeen met deze regel, dus er is niets gecontroleerd. Verwachtte u er wel een, controleer dan het MATCH-type en de WHERE-voorwaarde."
   },
   "actionOutcomes": {
     "status": {

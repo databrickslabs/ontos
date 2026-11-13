@@ -217,7 +217,7 @@
     "notifications_failed": "Non è stato possibile inviare le notifiche della policy (NOTIFY) per questa esecuzione. I risultati sono completi.",
     "llm_check_budget_exceeded": "{{count}} controlli LLM non sono stati eseguiti perché l'esecuzione ha raggiunto il suo budget di {{budget}} chiamate al modello, quindi quelle entità non sono state superate. Eseguila di nuovo (i verdetti in cache non contano) o aumenta COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
     "llm_check_daily_quota_exceeded": "{{count}} controlli LLM non sono stati eseguiti perché hai usato le tue {{limit}} chiamate al modello di oggi, quindi quelle entità non sono state superate. Eseguila di nuovo domani (i verdetti in cache non contano) o chiedi a un amministratore di aumentare COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY.",
-    "no_entities_matched": "Nessuna entità corrisponde a questa regola, quindi non è stato verificato nulla. Controlla il tipo MATCH e la condizione WHERE."
+    "no_entities_matched": "Nessuna entità corrisponde a questa regola, quindi non è stato verificato nulla. Se ne aspettavi qualcuna, controlla il tipo MATCH e la condizione WHERE."
   },
   "actionOutcomes": {
     "status": {

@@ -19,17 +19,18 @@ from src.common.dependencies import (
 )
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
-from src.routes.assets_routes import get_assets_manager
 from src.controller.asset_bulk_manager import (
     AssetBulkManager,
     ImportPreviewResult,
     ImportResult,
 )
+from src.routes.assets_routes import get_assets_manager
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/assets/bulk", tags=["Asset Bulk"])
 FEATURE_ID = "assets"
+
 
 def get_bulk_manager(request: Request = None) -> AssetBulkManager:
     """Build the bulk manager around the AssetsManager wired at startup.
@@ -168,6 +169,9 @@ async def execute_import(
         result = manager.execute_import(
             db, file_bytes=contents, filename=filename, current_user_id=current_user.email,
         )
+        # Commit first, then index: a failed commit must leave no search-index entries.
+        db.commit()
+        manager.index_committed_import(db, result)
         success = result.errors == 0
         details["result"] = {
             "created": result.created,
@@ -177,6 +181,7 @@ async def execute_import(
         return result
     except Exception as e:
         logger.exception("Failed to execute import")
+        db.rollback()
         details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to import: {str(e)}")
     finally:

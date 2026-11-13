@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
 from src.controller.assets_manager import AssetsManager, assets_manager as singleton
@@ -28,9 +28,15 @@ def test_get_assets_manager_returns_startup_instance():
     assert wired is not singleton
 
 
-def test_get_assets_manager_falls_back_without_request_or_state():
+def test_get_assets_manager_without_request_is_the_singleton():
     assert assets_routes.get_assets_manager() is singleton
-    assert assets_routes.get_assets_manager(_request(FastAPI())) is singleton
+
+
+def test_get_assets_manager_with_request_but_no_wired_manager_is_503():
+    """Never the singleton: it would skip the search index update silently."""
+    with pytest.raises(HTTPException) as exc:
+        assets_routes.get_assets_manager(_request(FastAPI()))
+    assert exc.value.status_code == 503
 
 
 def test_route_resolves_manager_with_search_manager_and_ontology():

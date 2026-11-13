@@ -8,8 +8,8 @@ from databricks.sdk.service.sql import StatementState
 
 from src.common import uc_comments
 from src.common.uc_comments import (
-    FAILED, NOT_FOUND, PERMISSION_DENIED, CommentWriteError, comment_statement, set_comment,
-    string_literal,
+    FAILED, NOT_FOUND, PERMISSION_DENIED, UNSUPPORTED_TEXT, CommentWriteError, comment_statement,
+    read_comment, set_comment, split_column_location, string_literal,
 )
 
 
@@ -116,3 +116,69 @@ def test_a_statement_still_running_at_the_timeout_is_cancelled(monkeypatch):
 
     assert raised.value.reason == FAILED
     ws.statement_execution.cancel_execution.assert_called_once_with('st-1')
+
+
+@pytest.mark.parametrize('text, literal', [
+    ('line one\nline two', "'line one\nline two'"),
+    ('Preço: 5 € – “aspas”', "'Preço: 5 € – “aspas”'"),
+    ('ends with a backslash \\', "'ends with a backslash \\\\'"),
+    ("it's", "'it\\'s'"),
+])
+def test_text_keeps_newlines_unicode_and_backslashes(text, literal):
+    assert string_literal(text) == literal
+
+
+def test_a_view_comment_is_a_table_statement():
+    assert comment_statement('main.sales.orders_v', None, 'x') == \
+        "COMMENT ON TABLE `main`.`sales`.`orders_v` IS 'x'"
+
+
+def test_a_nul_character_is_refused_before_any_statement():
+    ws = MagicMock()
+
+    with pytest.raises(CommentWriteError) as raised:
+        set_comment(ws, 'wh-1', 'main.sales.orders', None, 'bad\x00text')
+
+    assert raised.value.reason == UNSUPPORTED_TEXT
+    ws.statement_execution.execute_statement.assert_not_called()
+
+
+def test_a_column_location_splits_at_the_third_dot():
+    assert split_column_location('main.sales.orders.a.b') == ('main.sales.orders', 'a.b')
+    assert split_column_location('main.sales.orders') is None
+    assert split_column_location('main..orders.col') is None
+
+
+def test_read_comment_of_a_table_and_of_a_column():
+    ws = MagicMock()
+    ws.tables.get.return_value = SimpleNamespace(
+        table_type=SimpleNamespace(value='MANAGED'), comment='Orders',
+        columns=[SimpleNamespace(name='id', comment='Key')])
+
+    assert read_comment(ws, 'main.sales.orders', None) == ('MANAGED', 'Orders')
+    assert read_comment(ws, 'main.sales.orders', 'id') == ('MANAGED', 'Key')
+    ws.tables.get.assert_called_with(full_name='main.sales.orders')
+
+
+@pytest.mark.parametrize('error, reason', [
+    (PermissionDenied('no BROWSE'), PERMISSION_DENIED),
+    (RuntimeError('boom'), FAILED),
+])
+def test_read_comment_reports_the_reason(error, reason):
+    ws = MagicMock()
+    ws.tables.get.side_effect = error
+
+    with pytest.raises(CommentWriteError) as raised:
+        read_comment(ws, 'main.sales.orders', None)
+
+    assert raised.value.reason == reason
+
+
+def test_a_missing_column_is_not_found():
+    ws = MagicMock()
+    ws.tables.get.return_value = SimpleNamespace(table_type=None, comment=None, columns=[])
+
+    with pytest.raises(CommentWriteError) as raised:
+        read_comment(ws, 'main.sales.orders', 'gone')
+
+    assert raised.value.reason == NOT_FOUND

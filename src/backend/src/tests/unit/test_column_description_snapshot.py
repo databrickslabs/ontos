@@ -26,7 +26,7 @@ def _snapshot(columns):
     return {'owner': 'sales', 'schema': {'column_count': len(columns), 'columns': columns}}
 
 
-def test_a_column_description_updates_the_table_snapshot(db_session):
+def test_a_column_written_to_unity_catalog_updates_the_table_snapshot(db_session):
     table = _asset(db_session, 'Table', 'main.sales.orders', _snapshot([
         {'name': 'order_id', 'data_type': 'bigint', 'description': 'Old'},
         {'name': 'amount', 'data_type': 'decimal', 'description': 'Amount'},
@@ -36,6 +36,8 @@ def test_a_column_description_updates_the_table_snapshot(db_session):
     AssetsManager().update_asset(db_session, asset_id=column.id,
                                  asset_in=AssetUpdate(description='The order key'),
                                  current_user_id='u@example.com')
+    # The save's route does this once the description is in Unity Catalog
+    AssetsManager.update_table_column_snapshot(db_session, column)
 
     db_session.refresh(table)
     columns = table.properties['schema']['columns']
@@ -43,6 +45,20 @@ def test_a_column_description_updates_the_table_snapshot(db_session):
                           'description': 'The order key'}
     assert columns[1]['description'] == 'Amount'
     assert table.properties['owner'] == 'sales'
+
+
+def test_a_save_alone_leaves_the_snapshot_until_unity_catalog_has_it(db_session):
+    table = _asset(db_session, 'Table', 'main.sales.orders', _snapshot([
+        {'name': 'order_id', 'description': 'Old'},
+    ]))
+    column = _asset(db_session, 'Column', 'main.sales.orders.order_id', description='Old')
+
+    AssetsManager().update_asset(db_session, asset_id=column.id,
+                                 asset_in=AssetUpdate(description='New'),
+                                 current_user_id='u@example.com')
+
+    db_session.refresh(table)
+    assert table.properties['schema']['columns'][0]['description'] == 'Old'
 
 
 def test_other_updates_leave_the_snapshot_alone(db_session):

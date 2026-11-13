@@ -1332,6 +1332,11 @@ class SettingsManager:
             return self._jobs.list_available_workflows()
         return []
 
+    @property
+    def uc_description_writeback_enabled(self) -> bool:
+        """Whether saves write asset descriptions to Unity Catalog (the admin setting)."""
+        return bool(self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED)
+
     def get_settings(self) -> dict:
         """Get current settings"""
         # Refresh available jobs from filesystem to reflect changes

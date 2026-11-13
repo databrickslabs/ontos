@@ -21,7 +21,7 @@ from ..common.dependencies import (
     CurrentUserDep,
     DBSessionDep,
 )
-from ..common.authorization import get_user_details_from_sdk
+from ..common.authorization import PermissionChecker, get_user_details_from_sdk
 from ..common.manager_dependencies import get_auth_manager
 from ..controller.authorization_manager import AuthorizationManager
 from ..models.users import UserInfo
@@ -68,8 +68,17 @@ async def update_settings(
     settings_payload: dict, # Renamed to avoid conflict with module
     manager: SettingsManager = Depends(get_settings_manager),
     _: bool = Depends(PermissionChecker('settings-general', FeatureAccessLevel.READ_WRITE)),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
     """Update settings"""
+    # Turning on the Unity Catalog description write-back changes what every user's
+    # save writes to Unity Catalog, so only an admin may turn it on. (Turning it off,
+    # or saving it unchanged, needs only READ_WRITE: the form always sends the value.)
+    if settings_payload.get('uc_description_writeback_enabled') is True \
+            and not manager.uc_description_writeback_enabled:
+        await PermissionChecker('settings-general', FeatureAccessLevel.ADMIN)(
+            request, user_details, auth_manager)
     success = False
     details = {}
     try:

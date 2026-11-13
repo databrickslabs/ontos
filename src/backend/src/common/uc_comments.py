@@ -6,11 +6,12 @@ caller passes the workspace client, so Unity Catalog checks the permissions of
 whoever that client belongs to (the user's on-behalf-of client, or the app's).
 """
 import time
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 # Why a comment could not be written (``CommentWriteError.reason``)
 PERMISSION_DENIED = 'permission_denied'
 NOT_FOUND = 'not_found'
+UNSUPPORTED_TEXT = 'unsupported_text'
 FAILED = 'failed'
 
 # Markers in Databricks SQL error messages
@@ -31,11 +32,22 @@ class StatementError(RuntimeError):
 
 
 class CommentWriteError(RuntimeError):
-    """A comment was not written. ``reason`` is one of PERMISSION_DENIED, NOT_FOUND, FAILED."""
+    """A comment was not written. ``reason`` is one of PERMISSION_DENIED, NOT_FOUND, UNSUPPORTED_TEXT, FAILED."""
 
     def __init__(self, reason: str, message: str):
         super().__init__(message)
         self.reason = reason
+
+
+def split_column_location(location: str) -> Optional[Tuple[str, str]]:
+    """``(table_fqn, column_name)`` of a ``catalog.schema.table.column`` location, or None.
+
+    Only the first three dots separate the parts: a column name may contain dots.
+    """
+    parts = (location or '').strip().split('.', 3)
+    if len(parts) == 4 and all(parts):
+        return '.'.join(parts[:3]), parts[3]
+    return None
 
 
 def quote_identifier(name: str) -> str:
@@ -64,6 +76,32 @@ def comment_statement(table_fqn: str, column_name: Optional[str], text: Optional
         target = f'TABLE {quote_name(table_fqn)}'
     value = string_literal(text) if text else 'NULL'
     return f'COMMENT ON {target} IS {value}'
+
+
+def read_comment(ws: Any, table_fqn: str, column_name: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """``(table_type, comment)`` of a table or view, or of one of its columns, as the caller may read it.
+
+    ``table_type`` is the Unity Catalog type name (e.g. ``METRIC_VIEW``). Raises
+    ``CommentWriteError`` (NOT_FOUND, PERMISSION_DENIED or FAILED) when it can't be read.
+    """
+    from databricks.sdk.errors import NotFound, PermissionDenied
+
+    try:
+        info = ws.tables.get(full_name=table_fqn)
+    except NotFound as e:
+        raise CommentWriteError(NOT_FOUND, str(e)) from e
+    except PermissionDenied as e:
+        raise CommentWriteError(PERMISSION_DENIED, str(e)) from e
+    except Exception as e:
+        raise CommentWriteError(FAILED, str(e)) from e
+    table_type = getattr(info.table_type, 'value', info.table_type)
+    table_type = str(table_type) if table_type is not None else None
+    if not column_name:
+        return table_type, info.comment or None
+    for column in info.columns or []:
+        if column.name == column_name:
+            return table_type, column.comment or None
+    raise CommentWriteError(NOT_FOUND, f'Column {column_name} not found')
 
 
 def classify_error(message: str) -> str:
@@ -116,6 +154,9 @@ def set_comment(
     """
     from databricks.sdk.errors import PermissionDenied
 
+    if text and '\x00' in text:
+        # Unity Catalog stores no NUL characters; the statement would not be valid SQL
+        raise CommentWriteError(UNSUPPORTED_TEXT, 'The text contains a NUL character')
     statement = comment_statement(table_fqn, column_name, text)
     try:
         execute_statement(ws, warehouse_id, statement, timeout_seconds=timeout_seconds)

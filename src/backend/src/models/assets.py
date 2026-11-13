@@ -567,14 +567,24 @@ def public_properties(properties: Optional[Dict[str, Any]]) -> Optional[Dict[str
     return {k: v for k, v in properties.items() if k not in INTERNAL_PROPERTY_KEYS}
 
 
+def without_internal_properties(
+    properties: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """``properties`` minus the internal keys: a client can't set them (they are set by Ontos)."""
+    if properties is None:
+        return None
+    return {k: v for k, v in properties.items() if k not in INTERNAL_PROPERTY_KEYS}
+
+
 def with_internal_properties(
     new: Optional[Dict[str, Any]], current: Optional[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
-    """``new`` properties, keeping the internal keys of ``current`` (never sent to clients)."""
+    """``new`` properties (internal keys stripped), with the internal keys of ``current`` kept."""
     kept = {k: v for k, v in (current or {}).items() if k in INTERNAL_PROPERTY_KEYS}
-    if new is None or not kept:
-        return new
-    return {**new, **kept}
+    base = without_internal_properties(new)
+    if base is None or not kept:
+        return base
+    return {**base, **kept}
 
 
 class AssetStatus(str, Enum):

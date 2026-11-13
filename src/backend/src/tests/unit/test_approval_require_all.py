@@ -699,7 +699,7 @@ class TestRoleAssignedUsers:
             title='Approval Required', recipient='Reviewers', recipient_role_id='r-rev',
         )
         manager._repo = MagicMock()
-        manager._repo.get_multi.return_value = [notification]
+        manager._repo.get_addressed_to.return_value = [notification]
 
         listed = manager.get_notifications(db=None, user_info=_user('eve@x.com'))
         hidden = manager.get_notifications(db=None, user_info=_user('ana@x.com'))

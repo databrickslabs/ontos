@@ -14,7 +14,7 @@ import type { ColumnProperty, QualityRule, SchemaRelationship } from '@/types/da
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import QualityRuleFormDialog from './quality-rule-form-dialog'
 import { logicalTypesForVersion } from './odcs-logical-types'
-import { hasDateConstraints } from './logical-types'
+import { hasDateConstraints, takesTimezoneName } from './logical-types'
 
 const CLASSIFICATION_LEVELS = ['public', 'internal', 'confidential', 'restricted', 'pii', '1', '2', '3', '4', '5']
 
@@ -692,10 +692,12 @@ function SchemaPropertyEditorInner(
                         <Label htmlFor="prop-date-format" className="text-xs">{t('data-contracts:property.fields.format', 'Format')}</Label>
                         <Input id="prop-date-format" value={dateFormat} onChange={(e) => setDateFormat(e.target.value)} placeholder={t('data-contracts:property.fields.formatPlaceholder', 'e.g., yyyy-MM-dd')} className="h-9" />
                       </div>
+                      {takesTimezoneName(logicalType) && (
                       <div className="space-y-1.5">
                         <Label htmlFor="prop-timezone" className="text-xs">{t('data-contracts:property.fields.timezone', 'Timezone')}</Label>
                         <Input id="prop-timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder={t('data-contracts:property.fields.timezonePlaceholder', 'e.g., UTC')} className="h-9" />
                       </div>
+                      )}
                       <div className="space-y-1.5">
                         <Label htmlFor="prop-custom-format" className="text-xs">{t('data-contracts:property.fields.customFormat', 'Custom Format')}</Label>
                         <Input id="prop-custom-format" value={customFormat} onChange={(e) => setCustomFormat(e.target.value)} className="h-9" />

@@ -42,6 +42,7 @@ from src.repositories.process_workflows_repository import workflow_execution_rep
 if TYPE_CHECKING:
     from src.controller.lifecycle_fields import DeprecationDetails
 from src.common.logging import get_logger
+from src.controller.notifications_manager import principal_identity
 from src.common.workflow_notification_texts import (
     DEFAULT_TEMPLATE_MESSAGE,
     DEFAULT_TEMPLATE_TITLE,
@@ -753,7 +754,8 @@ def _resolve_role_to_users(
             for identifier, role_uuid in _resolve_role_to_users(db, seg, context):
                 if not identifier:
                     continue
-                key = (identifier, role_uuid)
+                # Emails and names ignore case, as on delivery
+                key = (identifier.strip().lower() if not role_uuid else identifier, role_uuid)
                 if key not in seen:
                     seen.add(key)
                     out.append((identifier, role_uuid))
@@ -3505,8 +3507,9 @@ class WorkflowExecutor:
         Every notification target resolved when the step paused must decide:
         a user target needs that user's decision, a group or role target one
         decision from any member. ``decides_for(target, role_id)`` tells which
-        targets the caller can fill. One person fills at most one target per
-        step: their own user target if it is pending, else the first pending
+        targets the caller can fill. One person decides once per step: the
+        decision fills every pending user target naming them (their email,
+        username or ``user:<x>``: the same person), else the first pending
         group or role target in the order the step resolved them. Only the
         targets decide: a caller who is none of them (an admin, who may act on
         any approval without ``require_all``) is refused. The decisions are
@@ -3556,18 +3559,23 @@ class WorkflowExecutor:
             if not open_targets:
                 outcome = 'no_longer_pending'
             else:
-                # Their own user target first, else the first pending group/role
-                own = [(k, t) for k, t in open_targets if not t[1] and t[0].lower() in caller]
-                key, (target, role_id) = (own or open_targets)[0]
-                decisions.append({
-                    'target': target,
-                    'role_id': role_id,
-                    'decided_by': user_email or username,
-                    'decision': 'approved' if approved else 'rejected',
-                    'at': datetime.utcnow().isoformat(),
-                    'reason': reason,
-                })
-                pending.remove(key)
+                # Every user target naming them (``user:alice``, ``alice`` and
+                # ``alice@x.com`` are one person), else the first group/role
+                own = [
+                    (k, t) for k, t in open_targets
+                    if not t[1] and principal_identity(t[0]) in caller
+                ]
+                at = datetime.utcnow().isoformat()
+                for key, (target, role_id) in own or open_targets[:1]:
+                    decisions.append({
+                        'target': target,
+                        'role_id': role_id,
+                        'decided_by': user_email or username,
+                        'decision': 'approved' if approved else 'rejected',
+                        'at': at,
+                        'reason': reason,
+                    })
+                    pending.remove(key)
                 record.result_data = json.dumps({**data, 'decisions': decisions})
                 self._db.add(record)
                 self._db.flush()

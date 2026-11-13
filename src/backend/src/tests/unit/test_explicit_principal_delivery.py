@@ -82,3 +82,22 @@ def test_admins_keep_access_to_explicit_principals(manager):
     admin = _user('ada@example.com', groups=['admins'])
     assert _access(manager, 'group:Data Steward', admin) is True
     assert _visible(manager, 'group:Data Steward', admin) is False
+
+
+def _matches(manager, recipient, user):
+    return manager.recipient_matcher(user)(recipient, None)
+
+
+@pytest.mark.parametrize('recipient, user, expected', [
+    # require_all asks the matcher which targets the caller fills (#1119)
+    ('group:Data Steward', GROUP_MEMBER, True),
+    ('group:Data Steward', ROLE_MEMBER, False),
+    ('user:DataSteward', NAMED_USER, True),
+    ('user:ds@example.com', NAMED_USER, True),
+    ('user:DataSteward', ROLE_MEMBER, False),
+    # Group names ignore case, as emails and usernames do
+    ('group:data steward', GROUP_MEMBER, True),
+    ('GROUP-X', _user('gus@example.com', groups=['group-x']), True),
+])
+def test_the_require_all_matcher_reads_explicit_principals(manager, recipient, user, expected):
+    assert _matches(manager, recipient, user) is expected

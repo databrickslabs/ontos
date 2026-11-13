@@ -399,4 +399,40 @@ describe('DataContractWizardDialog Schema Inference', () => {
       expect(screen.getByDisplayValue('int_col')).toBeInTheDocument()
     })
   })
+
+  it('shows an inferred timestamp column as an ODCS timestamp', async () => {
+    currentMockSchemas = [
+      {
+        name: 'events',
+        physicalName: '',
+        description: '',
+        physicalType: 'table',
+        properties: [
+          {
+            name: 'event_ts', physicalType: 'TIMESTAMP', logicalType: 'timestamp',
+            required: false, description: '', partitioned: false,
+          },
+        ]
+      }
+    ]
+
+    renderWithProviders(
+      <DataContractWizardDialog
+        isOpen={true}
+        onOpenChange={mockOnOpenChange}
+        onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    fireEvent.click(screen.getByText(/Infer from Asset/i))
+    fireEvent.click(screen.getByTestId('select-dataset'))
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('event_ts')).toBeInTheDocument()
+    })
+    // The logical type select only shows a value it lists
+    expect(screen.getByText('timestamp')).toBeInTheDocument()
+  })
 })

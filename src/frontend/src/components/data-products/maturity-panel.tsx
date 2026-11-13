@@ -113,6 +113,14 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {report.notices?.map((notice) => (
+          <p key={notice.code} className="text-xs text-muted-foreground">
+            {t(`data-products:maturityGateCodes.${notice.code}`, {
+              ...(notice.params ?? {}),
+              defaultValue: notice.message,
+            })}
+          </p>
+        ))}
         {/* Level progression */}
         {report.levels.map((level: LevelResult) => {
           const isExpanded = expandedLevel === level.level_order;

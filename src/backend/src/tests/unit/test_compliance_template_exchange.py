@@ -1,13 +1,15 @@
 """Compliance template values in ODCS and ODPS export and import.
 
-ODCS carries a table's or view's values on the schema object whose physicalName
-is the asset; ODPS carries a data product's values on the product. Both use one
-``ontosComplianceValues`` custom property (reference id -> value). The managers
-run on the test database; the route permission check is mocked.
+ODCS carries a table's or view's values on the schema object that is the asset;
+ODPS carries a data product's values on the product. Both use one
+``ontosComplianceValues`` custom property (reference id -> value); what an
+import can't write is kept apart in ``ontosComplianceValuesUnmatched``. The
+managers run on the test database; the permission checks are given or mocked.
 """
 import asyncio
 import contextlib
 import copy
+import json
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,7 +26,6 @@ from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.compliance_templates import ComplianceTemplateValueDb
-from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_products import DataProductDb
 from src.db_models.entity_relationships import EntityRelationshipDb
 from src.models.compliance_templates import (
@@ -35,6 +36,9 @@ from src.models.compliance_templates import (
 from src.repositories.data_contracts_repository import data_contract_repo
 
 PROP = cte.COMPLIANCE_VALUES_PROPERTY
+UNMATCHED = cte.UNMATCHED_VALUES_PROPERTY
+IMPORTER = "importer@example.com"
+CAN_READ_ALL = cte.ValuesReadAccess(values=True, assets_rw=True)
 
 
 def _drop_templates(db: Session, entity_type: str) -> None:
@@ -89,7 +93,7 @@ def _stored(db: Session, template, entity_type: str, entity_id) -> dict:
     return {ref_by_id[r.field_id]: r.value for r in rows}
 
 
-def _asset(db: Session, location: str, type_name: str = "Table", name: str | None = None):
+def _asset(db: Session, location, type_name: str = "Table", name: str | None = None):
     asset_type = db.query(AssetTypeDb).filter(AssetTypeDb.name == type_name).first()
     if asset_type is None:
         asset_type = AssetTypeDb(id=uuid.uuid4(), name=type_name)
@@ -104,28 +108,34 @@ def _asset(db: Session, location: str, type_name: str = "Table", name: str | Non
     return asset
 
 
-def _live(values: dict, refs=None) -> cte.LiveValues:
-    return cte.LiveValues(values=values, reference_ids=frozenset(refs or values))
+def _entry(props, name: str = PROP) -> dict | None:
+    return cte.read_entry(props, name)
 
 
-def _entry(props) -> dict | None:
-    return next((p["value"] for p in props or [] if p.get("property") == PROP), None)
+def _importer(values: bool = True, assets: bool = True) -> cte.ComplianceImport:
+    return cte.ComplianceImport(
+        user_email=IMPORTER, can_write_values=values, can_write_assets=values and assets,
+    )
 
 
-def _contract_doc(physical_name: str, values: dict | None = None) -> dict:
+def _schema(physical_name, values: dict | None = None, unmatched: dict | None = None) -> dict:
     schema = {
         "name": "orders", "physicalName": physical_name, "logicalType": "object",
         "properties": [{"name": "id", "logicalType": "integer"}],
+        "customProperties": [{"property": "owner", "value": "sales"}],
     }
     if values is not None:
-        schema["customProperties"] = [
-            {"property": "owner", "value": "sales"},
-            {"property": PROP, "value": values},
-        ]
+        schema["customProperties"].append({"property": PROP, "value": values})
+    if unmatched is not None:
+        schema["customProperties"].append({"property": UNMATCHED, "value": unmatched})
+    return schema
+
+
+def _contract_doc(physical_name, values: dict | None = None) -> dict:
     return {
         "kind": "DataContract", "apiVersion": "v3.0.2", "id": str(uuid.uuid4()),
         "name": f"Orders {uuid.uuid4().hex[:6]}", "version": "1.0.0", "status": "draft",
-        "schema": [schema],
+        "schema": [_schema(physical_name, values)],
     }
 
 
@@ -140,15 +150,14 @@ def contracts(tmp_path: Path):
     return DataContractsManager(data_dir=tmp_path)
 
 
-def _import_contract(contracts, db: Session, doc: dict, values_user: str | None):
+def _import_contract(contracts, db: Session, doc: dict, imp):
     with patch.object(DataContractsManager, "_update_search_index"):
         return contracts.create_from_upload(
-            db, copy.deepcopy(doc), current_user="importer",
-            compliance_values_user=values_user,
+            db, copy.deepcopy(doc), current_user="importer", compliance_import=imp,
         )
 
 
-def _export_contract(contracts, db: Session, contract_id: str) -> dict:
+def _export_contract(contracts, db: Session, contract_id: str, access=CAN_READ_ALL) -> dict:
     """``build_odcs_from_db``; its own semantic-links session reuses the test session."""
     @contextlib.contextmanager
     def _same_session():
@@ -157,140 +166,191 @@ def _export_contract(contracts, db: Session, contract_id: str) -> dict:
     db.expire_all()
     with patch("src.common.database.get_db_session", _same_session):
         return contracts.build_odcs_from_db(
-            data_contract_repo.get_with_all(db, id=contract_id), db
+            data_contract_repo.get_with_all(db, id=contract_id), db, compliance_read=access,
         )
 
 
-class TestOdcs:
+class TestOdcsExport:
 
-    def test_export_puts_the_table_values_on_its_schema_object(self, db_session, contracts):
+    @pytest.fixture
+    def documented(self, db_session, contracts):
         template = _template(db_session, "asset")
         table = _asset(db_session, "main.sales.orders")
         _fill(db_session, template, "asset", table.id, {
             "limitacoes": "Atualização diária", "refresh-hours": 24,
         })
-        created = _import_contract(contracts, db_session, _contract_doc("MAIN.sales.orders"), None)
+        created = _import_contract(
+            contracts, db_session, _contract_doc("`MAIN`.sales.orders "), None,
+        )
+        return table, created.id
 
-        exported = _export_contract(contracts, db_session, created.id)
+    def test_the_table_values_go_on_its_schema_object(self, db_session, contracts, documented):
+        _, contract_id = documented
+        exported = _export_contract(contracts, db_session, contract_id)
         assert _entry(exported["schema"][0].get("customProperties")) == {
             "limitacoes": "Atualização diária", "refresh-hours": 24,
         }
 
-    def test_import_writes_the_values_back_to_the_table(self, db_session, contracts):
+    @pytest.mark.parametrize("access", [
+        None,
+        cte.ValuesReadAccess(),
+        cte.ValuesReadAccess(values=True, assets_rw=False),
+        cte.ValuesReadAccess(values=True, asset_accessible=lambda asset: False),
+    ])
+    def test_omitted_without_the_read_rights(self, db_session, contracts, documented, access):
+        _, contract_id = documented
+        exported = _export_contract(contracts, db_session, contract_id, access=access)
+        assert _entry(exported["schema"][0].get("customProperties")) is None
+
+    def test_a_reader_of_a_linked_product_sees_them(self, db_session, contracts, documented):
+        table, contract_id = documented
+        seen = []
+
+        def _accessible(asset):
+            seen.append(asset.id)
+            return True
+
+        access = cte.ValuesReadAccess(values=True, asset_accessible=_accessible)
+        exported = _export_contract(contracts, db_session, contract_id, access=access)
+        assert _entry(exported["schema"][0].get("customProperties")) is not None
+        assert seen == [table.id]
+
+    def test_a_bare_table_name_matches_no_asset(self, db_session, contracts):
+        template = _template(db_session, "asset")
+        table = _asset(db_session, None, name="orders_by_name")
+        _fill(db_session, template, "asset", table.id, {"limitacoes": "x"})
+        created = _import_contract(contracts, db_session, _contract_doc("orders_by_name"), None)
+        exported = _export_contract(contracts, db_session, created.id)
+        assert _entry(exported["schema"][0].get("customProperties")) is None
+
+
+class TestOdcsImport:
+
+    def test_writes_the_values_to_the_table_and_audits_them(self, db_session, contracts):
         template = _template(db_session, "asset")
         table = _asset(db_session, "main.sales.orders_in")
         doc = _contract_doc(
             "main.sales.orders_in",
             {"limitacoes": "Sem histórico", "refresh-hours": "6", "unknown": "x"},
         )
-        created = _import_contract(contracts, db_session, doc, "importer@example.com")
+        imp = _importer()
+        created = _import_contract(contracts, db_session, doc, imp)
 
         assert _stored(db_session, template, "asset", table.id) == {
             "limitacoes": "Sem histórico", "refresh-hours": 6,
         }
-        # The values live on the table, not as a stored schema custom property.
-        contract = db_session.get(DataContractDb, created.id)
-        assert PROP not in [p.property for p in contract.schema_objects[0].custom_properties]
-
+        assert imp.written == [{
+            "entityType": "asset", "entityId": str(table.id),
+            "referenceIds": ["limitacoes", "refresh-hours"],
+        }]
         exported = _export_contract(contracts, db_session, created.id)
-        assert _entry(exported["schema"][0]["customProperties"]) == {
+        assert _entry(exported["schema"][0].get("customProperties")) == {
             "limitacoes": "Sem histórico", "refresh-hours": 6,
         }
 
-    def test_import_merges_with_values_already_on_the_table(self, db_session, contracts):
-        template = _template(db_session, "asset")
-        table = _asset(db_session, "main.sales.orders_merge")
-        _fill(db_session, template, "asset", table.id, {"refresh-hours": 1})
-        doc = _contract_doc("main.sales.orders_merge", {"limitacoes": "Nova"})
-        _import_contract(contracts, db_session, doc, "importer@example.com")
-        assert _stored(db_session, template, "asset", table.id) == {
-            "limitacoes": "Nova", "refresh-hours": 1,
-        }
-
-    def test_import_overwrites_a_stored_value(self, db_session, contracts):
+    def test_merges_overwrites_and_never_clears(self, db_session):
         template = _template(db_session, "asset")
         table = _asset(db_session, "main.sales.orders_over")
-        _fill(db_session, template, "asset", table.id, {"limitacoes": "old"})
-        doc = _contract_doc("main.sales.orders_over", {"limitacoes": "new"})
-        _import_contract(contracts, db_session, doc, "importer@example.com")
+        _fill(db_session, template, "asset", table.id, {"limitacoes": "old", "refresh-hours": 1})
+        schema = [_schema("main.sales.orders_over", {"limitacoes": "new", "refresh-hours": None})]
+        cte.import_schema_entries(db_session, schema, _importer())
         rows = db_session.query(ComplianceTemplateValueDb).filter_by(
             entity_type="asset", entity_id=str(table.id),
-            field_id=_field_id(template, "limitacoes"),
         ).all()
-        assert [(r.value, r.filled_by) for r in rows] == [("new", "importer@example.com")]
-
-    def test_unmatched_schema_object_keeps_the_entry(self, db_session):
-        _template(db_session, "asset")
-        matched = _asset(db_session, "main.sales.orders_known")
-        schema = _contract_doc("main.sales.not_registered", {"limitacoes": "kept"})["schema"]
-        schema += _contract_doc("main.sales.orders_known", {"limitacoes": "moved"})["schema"]
-
-        imported = cte.import_schema_values(db_session, schema, user_email="u@example.com")
-
-        assert [(asset.id, written) for asset, written in imported] == [
-            (matched.id, ["limitacoes"]),
-        ]
-        # The unmatched object keeps the entry as an ordinary custom property.
-        assert cte.read_entry(schema[0]["customProperties"]) == {"limitacoes": "kept"}
-        assert schema[1]["customProperties"] == [{"property": "owner", "value": "sales"}]
-
-    def test_values_not_written_stay_in_the_entry(self, db_session):
-        _template(db_session, "asset")
-        _asset(db_session, "main.sales.orders_rest")
-        schema = _contract_doc(
-            "main.sales.orders_rest",
-            {"limitacoes": "ok", "refresh-hours": "soon", "unknown": 1},
-        )["schema"]
-        cte.import_schema_values(db_session, schema, user_email="u@example.com")
-        assert cte.read_entry(schema[0]["customProperties"]) == {
-            "refresh-hours": "soon", "unknown": 1,
+        by_field = {r.field_id: (r.value, r.filled_by) for r in rows}
+        assert by_field == {
+            _field_id(template, "limitacoes"): ("new", IMPORTER),
+            _field_id(template, "refresh-hours"): (1, "owner@example.com"),
         }
 
-    def test_without_the_right_to_write_values_nothing_is_written(self, db_session, contracts):
+    def test_matches_by_location_only(self, db_session):
+        template = _template(db_session, "asset")
+        named = _asset(db_session, None, name="orders")
+        schema = [_schema("orders", {"limitacoes": "x"})]
+        cte.import_schema_entries(db_session, schema, _importer())
+        assert _stored(db_session, template, "asset", named.id) == {}
+        assert _entry(schema[0]["customProperties"], UNMATCHED) == {"limitacoes": "x"}
+
+    def test_unwritten_values_are_kept_apart(self, db_session):
+        _template(db_session, "asset")
+        _asset(db_session, "main.sales.orders_rest")
+        schema = [
+            _schema(
+                "main.sales.orders_rest",
+                {"limitacoes": "ok", "refresh-hours": "soon", "unknown": 1},
+                unmatched={"older": "kept"},
+            ),
+            _schema("main.sales.not_registered", {"limitacoes": "no table"}),
+        ]
+        cte.import_schema_entries(db_session, schema, _importer())
+        first, second = (s["customProperties"] for s in schema)
+        assert _entry(first) is None
+        assert _entry(first, UNMATCHED) == {"older": "kept", "refresh-hours": "soon", "unknown": 1}
+        assert _entry(second, UNMATCHED) == {"limitacoes": "no table"}
+        assert first[0] == {"property": "owner", "value": "sales"}
+
+    def test_a_reimported_unmatched_entry_is_never_written(self, db_session):
+        template = _template(db_session, "asset")
+        table = _asset(db_session, "main.sales.orders_again")
+        schema = [_schema("main.sales.orders_again", unmatched={"limitacoes": "leftover"})]
+        cte.import_schema_entries(db_session, schema, _importer())
+        assert _stored(db_session, template, "asset", table.id) == {}
+        assert _entry(schema[0]["customProperties"], UNMATCHED) == {"limitacoes": "leftover"}
+
+    def test_values_rw_without_asset_edit_keeps_them_unwritten(self, db_session):
         template = _template(db_session, "asset")
         table = _asset(db_session, "main.sales.orders_ro")
-        doc = _contract_doc("main.sales.orders_ro", {"limitacoes": "x"})
-        with patch.object(cte, "import_schema_values") as take:
-            _import_contract(contracts, db_session, doc, None)
-        take.assert_not_called()
+        schema = [_schema("main.sales.orders_ro", {"limitacoes": "x"})]
+        cte.import_schema_entries(db_session, schema, _importer(assets=False))
         assert _stored(db_session, template, "asset", table.id) == {}
+        assert _entry(schema[0]["customProperties"], UNMATCHED) == {"limitacoes": "x"}
 
-    def test_without_an_active_template_nothing_is_taken(self, db_session):
-        _drop_templates(db_session, "asset")
-        _asset(db_session, "main.sales.orders_none")
-        schema = _contract_doc("main.sales.orders_none", {"limitacoes": "kept"})["schema"]
-        assert cte.import_schema_values(db_session, schema, user_email="u@example.com") == []
-        assert cte.read_entry(schema[0]["customProperties"]) == {"limitacoes": "kept"}
+    def test_without_values_rw_everything_is_dropped(self, db_session, contracts):
+        template = _template(db_session, "asset")
+        table = _asset(db_session, "main.sales.orders_none")
+        schema = [_schema("main.sales.orders_none", {"limitacoes": "x"}, unmatched={"a": 1})]
+        cte.import_schema_entries(db_session, schema, _importer(values=False))
+        assert _stored(db_session, template, "asset", table.id) == {}
+        assert schema[0]["customProperties"] == [{"property": "owner", "value": "sales"}]
 
-    def test_export_replaces_a_stored_entry_with_the_live_values(self):
-        schema_dict = {"customProperties": [
-            {"property": "owner", "value": "sales"},
-            {"property": PROP, "value": {"limitacoes": "old"}},
-        ]}
-        cte.apply_to_document(schema_dict, _live({"limitacoes": "new"}))
-        assert schema_dict["customProperties"] == [
-            {"property": "owner", "value": "sales"},
-            {"property": PROP, "value": {"limitacoes": "new"}},
-        ]
+    def test_a_failed_write_keeps_the_values_unwritten(self, db_session):
+        template = _template(db_session, "asset")
+        table = _asset(db_session, "main.sales.orders_fail")
+        schema = [_schema("main.sales.orders_fail", {"limitacoes": "x"})]
+        imp = _importer()
+        with patch.object(cte, "apply_imported_values", side_effect=RuntimeError("boom")):
+            cte.import_schema_entries(db_session, schema, imp)
+        assert _stored(db_session, template, "asset", table.id) == {}
+        assert imp.written == []
+        assert _entry(schema[0]["customProperties"], UNMATCHED) == {"limitacoes": "x"}
+
+    def test_an_oversized_entry_is_ignored(self, db_session):
+        template = _template(db_session, "asset")
+        table = _asset(db_session, "main.sales.orders_big")
+        big = {f"k{i}": i for i in range(cte.MAX_ENTRY_KEYS + 1)}
+        big["limitacoes"] = "x"
+        schema = [_schema("main.sales.orders_big", big)]
+        cte.import_schema_entries(db_session, schema, _importer())
+        assert _stored(db_session, template, "asset", table.id) == {}
+        assert schema[0]["customProperties"] == [{"property": "owner", "value": "sales"}]
 
 
 class TestFindSchemaAsset:
 
-    def test_matches_the_location_then_the_name(self, db_session):
-        by_location = _asset(db_session, "cat.sch.orders_loc")
-        by_name = _asset(db_session, None, name="orders_by_name")
-        assert cte.find_schema_asset(db_session, physical_name="CAT.SCH.ORDERS_LOC") is by_location
-        assert cte.find_schema_asset(db_session, physical_name="orders_by_name") is by_name
+    def test_matches_the_normalized_location(self, db_session):
+        asset = _asset(db_session, " `Cat`.`Sch`.Orders_Loc ")
+        assert cte.find_schema_asset(db_session, physical_name="cat.sch.orders_loc") is asset
+        assert cte.find_schema_asset(db_session, physical_name="`CAT`.sch.`ORDERS_LOC`") is asset
 
-    def test_ambiguous_or_other_asset_types_do_not_match(self, db_session):
+    def test_name_ambiguous_or_other_asset_types_do_not_match(self, db_session):
+        _asset(db_session, None, name="orders_by_name")
         _asset(db_session, "cat.sch.twice")
         _asset(db_session, "cat.sch.twice", type_name="View")
         _asset(db_session, "cat.sch.dash", type_name="Dashboard")
-        assert cte.find_schema_asset(db_session, physical_name="cat.sch.twice") is None
-        assert cte.find_schema_asset(db_session, physical_name="cat.sch.dash") is None
-        assert cte.find_schema_asset(db_session, physical_name="  ") is None
+        for name in ("orders_by_name", "cat.sch.twice", "cat.sch.dash", "  ", None):
+            assert cte.find_schema_asset(db_session, physical_name=name) is None
 
-    def test_the_auto_link_wins_over_the_name(self, db_session):
+    def test_the_auto_link_wins_over_the_location(self, db_session):
         _asset(db_session, "cat.sch.linked")
         linked = _asset(db_session, "elsewhere.orders")
         db_session.add(EntityRelationshipDb(
@@ -305,7 +365,7 @@ class TestFindSchemaAsset:
         assert found is linked
 
 
-def _product_doc(values: dict | None) -> dict:
+def _product_doc(values: dict | None, unmatched: dict | None = None) -> dict:
     doc = {
         "apiVersion": "v1.0.0", "kind": "DataProduct", "id": str(uuid.uuid4()),
         "name": f"Orders {uuid.uuid4().hex[:6]}", "version": "1.0.0", "status": "draft",
@@ -313,19 +373,23 @@ def _product_doc(values: dict | None) -> dict:
     }
     if values is not None:
         doc["customProperties"].append({"property": PROP, "value": values})
+    if unmatched is not None:
+        doc["customProperties"].append({"property": UNMATCHED, "value": unmatched})
     return doc
 
 
-def _upload(db: Session, doc: dict, values_user: str | None):
+def _upload(db: Session, doc: dict, imp):
     manager = DataProductsManager(db=db)
     created, errors = manager.upload_products_batch(
-        yaml.safe_dump(doc).encode(), "product.yaml", compliance_values_user=values_user,
+        yaml.safe_dump(doc).encode(), "product.yaml", compliance_import=imp,
     )
     assert errors == []
     return manager, created[0].id
 
 
-def _export_product(manager: DataProductsManager, db: Session, product_id: str) -> dict:
+def _export_product(
+    manager: DataProductsManager, db: Session, product_id: str, access=CAN_READ_ALL
+) -> dict:
     """``build_odps_export`` on a product read from the database.
 
     On this base the export reads snake_case attributes the API model doesn't
@@ -345,190 +409,292 @@ def _export_product(manager: DataProductsManager, db: Session, product_id: str) 
     )
     with patch.object(manager, "get_product", return_value=product), \
             patch.object(manager, "get_product_hierarchy", return_value={}):
-        return manager.build_odps_export(product_id, db=db)
+        return manager.build_odps_export(product_id, db=db, compliance_read=access)
+
+
+def _product_props(db: Session, product_id: str) -> dict:
+    db.expire_all()
+    return {p.property: p.value for p in db.get(DataProductDb, product_id).custom_properties}
 
 
 class TestOdps:
 
     def test_import_then_export_round_trip(self, db_session):
         template = _template(db_session, "data_product")
+        imp = _importer()
         manager, product_id = _upload(
-            db_session, _product_doc({"limitacoes": "Só PJ", "refresh-hours": 12}),
-            "importer@example.com",
+            db_session, _product_doc({"limitacoes": "Só PJ", "refresh-hours": 12}), imp,
         )
         assert _stored(db_session, template, "data_product", product_id) == {
             "limitacoes": "Só PJ", "refresh-hours": 12,
         }
-        product = db_session.get(DataProductDb, product_id)
-        assert [p.property for p in product.custom_properties] == ["tier"]
+        assert imp.written == [{
+            "entityType": "data_product", "entityId": str(product_id),
+            "referenceIds": ["limitacoes", "refresh-hours"],
+        }]
+        assert list(_product_props(db_session, product_id)) == ["tier"]
 
         exported = _export_product(manager, db_session, product_id)
         assert _entry(exported["customProperties"]) == {"limitacoes": "Só PJ", "refresh-hours": 12}
         assert {"property": "tier", "value": "gold"} in exported["customProperties"]
 
+    @pytest.mark.parametrize("access", [None, cte.ValuesReadAccess()])
+    def test_export_omits_them_without_the_values_read_right(self, db_session, access):
+        _template(db_session, "data_product")
+        manager, product_id = _upload(
+            db_session, _product_doc({"limitacoes": "x", "unknown": 1}), _importer(),
+        )
+        exported = _export_product(manager, db_session, product_id, access=access)
+        assert _entry(exported["customProperties"]) is None
+        assert _entry(exported["customProperties"], UNMATCHED) is None
+        assert exported["customProperties"] == [{"property": "tier", "value": "gold"}]
+
     def test_export_reflects_values_filled_in_the_app(self, db_session):
         template = _template(db_session, "data_product")
-        manager, product_id = _upload(db_session, _product_doc(None), "importer@example.com")
+        manager, product_id = _upload(db_session, _product_doc(None), _importer())
         assert _entry(_export_product(manager, db_session, product_id)["customProperties"]) is None
 
         _fill(db_session, template, "data_product", product_id, {"limitacoes": "Revisado"})
         exported = _export_product(manager, db_session, product_id)
         assert _entry(exported["customProperties"]) == {"limitacoes": "Revisado"}
 
-    def test_values_not_written_stay_a_custom_property(self, db_session):
+    def test_unwritten_values_are_kept_apart_and_exported_apart(self, db_session):
         template = _template(db_session, "data_product")
         manager, product_id = _upload(
-            db_session, _product_doc({"limitacoes": "ok", "unknown": 1}), "importer@example.com",
+            db_session,
+            _product_doc({"limitacoes": "ok", "refresh-hours": "soon", "unknown": 1, "n": None}),
+            _importer(),
         )
         assert _stored(db_session, template, "data_product", product_id) == {"limitacoes": "ok"}
+        props = _product_props(db_session, product_id)
+        assert PROP not in props
+        assert json.loads(props[UNMATCHED]) == {"refresh-hours": "soon", "unknown": 1}
+
         exported = _export_product(manager, db_session, product_id)
-        # The export shows the live values and keeps the remainder the import stored.
-        assert _entry(exported["customProperties"]) == {"limitacoes": "ok", "unknown": 1}
-        product = db_session.get(DataProductDb, product_id)
-        stored = [p for p in product.custom_properties if p.property == PROP]
-        assert [cte.read_entry([{"property": PROP, "value": p.value}]) for p in stored] == [
-            {"unknown": 1},
-        ]
+        assert _entry(exported["customProperties"]) == {"limitacoes": "ok"}
+        assert _entry(exported["customProperties"], UNMATCHED) == {
+            "refresh-hours": "soon", "unknown": 1,
+        }
 
-    def test_a_failed_write_keeps_the_product_and_the_entry(self, db_session):
+    def test_a_reimported_unmatched_entry_is_never_written(self, db_session):
         template = _template(db_session, "data_product")
+        _, product_id = _upload(
+            db_session, _product_doc(None, unmatched={"limitacoes": "leftover"}), _importer(),
+        )
+        assert _stored(db_session, template, "data_product", product_id) == {}
+        assert json.loads(_product_props(db_session, product_id)[UNMATCHED]) == {
+            "limitacoes": "leftover",
+        }
+
+    def test_a_failed_write_keeps_the_product_and_the_values_apart(self, db_session):
+        template = _template(db_session, "data_product")
+        imp = _importer()
         with patch.object(cte, "apply_imported_values", side_effect=RuntimeError("boom")):
-            _, product_id = _upload(
-                db_session, _product_doc({"limitacoes": "x"}), "importer@example.com",
-            )
-        assert db_session.get(DataProductDb, product_id) is not None
+            _, product_id = _upload(db_session, _product_doc({"limitacoes": "x"}), imp)
         assert _stored(db_session, template, "data_product", product_id) == {}
-        product = db_session.get(DataProductDb, product_id)
-        assert PROP in [p.property for p in product.custom_properties]
+        assert imp.written == []
+        assert json.loads(_product_props(db_session, product_id)[UNMATCHED]) == {"limitacoes": "x"}
 
-    def test_without_the_right_to_write_values_nothing_is_written(self, db_session):
+    def test_without_values_rw_nothing_is_written_or_kept(self, db_session):
         template = _template(db_session, "data_product")
-        _, product_id = _upload(db_session, _product_doc({"limitacoes": "x"}), None)
+        _, product_id = _upload(
+            db_session, _product_doc({"limitacoes": "x"}, unmatched={"a": 1}),
+            _importer(values=False),
+        )
         assert _stored(db_session, template, "data_product", product_id) == {}
-        product = db_session.get(DataProductDb, product_id)
-        assert PROP in [p.property for p in product.custom_properties]
+        assert list(_product_props(db_session, product_id)) == ["tier"]
 
-    def test_without_an_active_template_the_entry_stays_a_custom_property(self, db_session):
+    def test_without_an_active_template_the_values_are_kept_apart(self, db_session):
         _drop_templates(db_session, "data_product")
         manager, product_id = _upload(
-            db_session, _product_doc({"limitacoes": "kept"}), "importer@example.com",
+            db_session, _product_doc({"limitacoes": "kept"}), _importer(),
         )
         exported = _export_product(manager, db_session, product_id)
-        assert PROP in [p["property"] for p in exported["customProperties"]]
+        assert _entry(exported["customProperties"], UNMATCHED) == {"limitacoes": "kept"}
+        assert _entry(exported["customProperties"]) is None
 
 
 class TestDocumentHelpers:
 
     def test_apply_to_document(self):
-        doc = {"customProperties": [{"property": PROP, "value": {"a": 1}}, {"property": "x"}]}
-        cte.apply_to_document(doc, None)
-        assert _entry(doc["customProperties"]) == {"a": 1}
-        # A live value replaces its key; a stored key with no live value stays.
-        cte.apply_to_document(doc, _live({"a": 2, "b": 3}, refs={"a", "b"}))
+        doc = {"customProperties": [
+            {"property": PROP, "value": {"stale": 1}},
+            {"property": UNMATCHED, "value": {"u": 1}},
+            {"property": "x"},
+        ]}
+        cte.apply_to_document(doc, {"a": 2}, readable=True)
         assert doc["customProperties"] == [
-            {"property": "x"}, {"property": PROP, "value": {"a": 2, "b": 3}},
+            {"property": "x"},
+            {"property": UNMATCHED, "value": {"u": 1}},
+            {"property": PROP, "value": {"a": 2}},
         ]
-        doc["customProperties"] = [{"property": "x"}]
-        cte.apply_to_document(doc, _live({}, refs={"b"}))
+        cte.apply_to_document(doc, None, readable=True)
+        assert doc["customProperties"] == [
+            {"property": "x"}, {"property": UNMATCHED, "value": {"u": 1}},
+        ]
+        cte.apply_to_document(doc, {"a": 2}, readable=False)
         assert doc["customProperties"] == [{"property": "x"}]
-        only = {"customProperties": [{"property": PROP, "value": {}}]}
-        cte.apply_to_document(only, _live({}, refs={"a"}))
+        only = {"customProperties": [{"property": PROP, "value": {"a": 1}}]}
+        cte.apply_to_document(only, {}, readable=True)
         assert "customProperties" not in only
 
-    def test_export_keeps_the_keys_an_import_could_not_write(self):
-        doc = {"customProperties": [
-            {"property": PROP, "value": {"limitacoes": "old", "unknown": 1}},
-        ]}
-        cte.apply_to_document(doc, _live({"limitacoes": "new"}, refs={"limitacoes"}))
-        assert _entry(doc["customProperties"]) == {"limitacoes": "new", "unknown": 1}
-
-    def test_export_keeps_a_known_field_value_that_did_not_fit(self, db_session):
-        _template(db_session, "data_product")
-        manager, product_id = _upload(
-            db_session, _product_doc({"limitacoes": "ok", "refresh-hours": "soon"}),
-            "importer@example.com",
-        )
-        exported = _export_product(manager, db_session, product_id)
-        assert _entry(exported["customProperties"]) == {
-            "limitacoes": "ok", "refresh-hours": "soon",
-        }
-
-    def test_export_keeps_an_entry_imported_without_rights(self, db_session):
-        _template(db_session, "data_product")
-        manager, product_id = _upload(db_session, _product_doc({"limitacoes": "x"}), None)
-        exported = _export_product(manager, db_session, product_id)
-        assert _entry(exported["customProperties"]) == {"limitacoes": "x"}
-
-    def test_read_and_strip_the_entry(self):
-        props = [{"property": "x", "value": 1}, {"property": PROP, "value": {"a": 1}}]
+    def test_read_and_strip_the_entries(self):
+        props = [
+            {"property": "x", "value": 1},
+            {"property": PROP, "value": {"a": 1}},
+            {"property": UNMATCHED, "value": '{"b": 2}'},
+        ]
         assert cte.read_entry(props) == {"a": 1}
-        assert cte.without_entry(props) == [{"property": "x", "value": 1}]
+        assert cte.read_entry(props, UNMATCHED) == {"b": 2}
+        assert cte.without_entries(props) == [{"property": "x", "value": 1}]
         assert cte.read_entry({PROP: {"a": 1}, "x": 1}) == {"a": 1}
-        assert cte.without_entry({PROP: {"a": 1}, "x": 1}) == {"x": 1}
+        assert cte.without_entries({PROP: {"a": 1}, UNMATCHED: {}, "x": 1}) == {"x": 1}
         assert cte.read_entry([{"property": PROP, "value": "not a mapping"}]) is None
-        assert cte.read_entry([{"property": PROP, "value": '{"a": 1}'}]) == {"a": 1}
         assert cte.read_entry(None) is None
 
-    def test_imported_values_that_do_not_fit_are_skipped(self, db_session):
+    def test_the_entry_size_is_capped(self):
+        too_many = {f"k{i}": i for i in range(cte.MAX_ENTRY_KEYS + 1)}
+        too_big = {"k": "x" * cte.MAX_ENTRY_BYTES}
+        assert cte.read_entry([{"property": PROP, "value": too_many}]) is None
+        assert cte.read_entry([{"property": PROP, "value": too_big}]) is None
+        assert cte.read_entry([{"property": PROP, "value": json.dumps(too_big)}]) is None
+
+    def test_imported_values_skip_nulls_and_report_the_rest(self, db_session):
         template = _template(db_session, "data_product")
-        written = cte.apply_imported_values(
+        written, rest = cte.apply_imported_values(
             db_session, entity_type="data_product", entity_id="p-1",
-            values={"refresh-hours": "soon", "limitacoes": "ok", "other": 1},
+            values={
+                "refresh-hours": "soon", "limitacoes": "ok", "other": 1, "nothing": None,
+            },
             user_email="u@example.com",
         )
         assert written == ["limitacoes"]
+        assert rest == {"refresh-hours": "soon", "other": 1}
         assert _stored(db_session, template, "data_product", "p-1") == {"limitacoes": "ok"}
 
+    @pytest.mark.parametrize("bad", ["NaN", "Infinity", "1e999", float("inf")])
+    def test_non_finite_numbers_are_not_written(self, db_session, bad):
+        template = _template(db_session, "data_product")
+        written, rest = cte.apply_imported_values(
+            db_session, entity_type="data_product", entity_id="p-2",
+            values={"refresh-hours": bad}, user_email="u@example.com",
+        )
+        assert (written, list(rest)) == ([], ["refresh-hours"])
+        assert _stored(db_session, template, "data_product", "p-2") == {}
 
-class TestCanImportValues:
 
-    @pytest.mark.parametrize("entity_type,features", [
-        ("data_product", ["compliance-template-values"]),
-        ("asset", ["compliance-template-values", "assets"]),
+def _checker(log: list, denied: dict):
+    """A ``PermissionChecker`` stand-in: records the checks, raises for ``denied``."""
+    def _make(feature_id, level):
+        async def _check(request, user, auth_manager):
+            log.append((feature_id, level.value))
+            if feature_id in denied:
+                raise HTTPException(status_code=denied[feature_id])
+        return _check
+    return _make
+
+
+_USER = SimpleNamespace(email="u@example.com", username="u")
+
+
+class TestAccess:
+
+    @pytest.mark.parametrize("denied,values,assets", [
+        ({}, True, True),
+        ({"assets": 403}, True, False),
+        ({"compliance-template-values": 403}, False, False),
     ])
-    def test_needs_the_values_feature_and_for_assets_asset_edit(self, entity_type, features):
-        checked = []
+    def test_import_needs_read_write(self, denied, values, assets):
+        log: list = []
+        with patch("src.common.authorization.PermissionChecker", side_effect=_checker(log, denied)):
+            imp = asyncio.run(cte.import_access(None, _USER, None))
+        assert (imp.can_write_values, imp.can_write_assets) == (values, assets)
+        assert imp.user_email == "u@example.com"
+        assert all(level == "Read/Write" for _, level in log)
+        assert log[0][0] == "compliance-template-values"
 
-        def _checker(feature_id, level):
-            async def _check(request, user, auth_manager):
-                checked.append((feature_id, level.value))
-            return _check
+    def test_read_needs_the_values_feature_read_only(self):
+        log: list = []
+        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+        with patch("src.common.authorization.PermissionChecker", side_effect=_checker(log, {})):
+            access = asyncio.run(cte.read_access(request, _USER, None, None))
+        assert log == [("compliance-template-values", "Read-only"), ("assets", "Read/Write")]
+        assert access.values and access.assets_rw and access.may_read_product()
 
-        with patch("src.common.authorization.PermissionChecker", side_effect=_checker):
-            allowed = asyncio.run(
-                cte.can_import_values(None, None, None, entity_type=entity_type)
-            )
-        assert allowed is True
-        assert [f for f, _ in checked] == features
+    def test_read_without_the_values_feature_reads_nothing(self):
+        log: list = []
+        denied = {"compliance-template-values": 403}
+        with patch("src.common.authorization.PermissionChecker", side_effect=_checker(log, denied)):
+            access = asyncio.run(cte.read_access(None, _USER, None, None))
+        assert not access.may_read_product()
+        assert not access.may_read_asset(SimpleNamespace(id=uuid.uuid4()))
 
-    def test_forbidden_means_no_and_other_errors_propagate(self):
-        def _deny(status_code):
-            def _checker(feature_id, level):
-                async def _check(request, user, auth_manager):
-                    raise HTTPException(status_code=status_code)
-                return _check
-            return _checker
-
-        with patch("src.common.authorization.PermissionChecker", side_effect=_deny(403)):
-            assert asyncio.run(
-                cte.can_import_values(None, None, None, entity_type="asset")
-            ) is False
-        with patch("src.common.authorization.PermissionChecker", side_effect=_deny(500)):
+    def test_other_errors_propagate(self):
+        with patch(
+            "src.common.authorization.PermissionChecker",
+            side_effect=_checker([], {"compliance-template-values": 500}),
+        ):
             with pytest.raises(HTTPException):
-                asyncio.run(cte.can_import_values(None, None, None, entity_type="asset"))
+                asyncio.run(cte.import_access(None, _USER, None))
 
 
-class TestContractImportRoute:
+class TestRoutes:
+    """The routes pass the user's rights to the managers and audit what was written."""
 
-    @pytest.mark.parametrize("allowed,expected", [(True, "u@example.com"), (False, None)])
-    def test_values_user_follows_the_asset_rights(self, allowed, expected):
+    def test_odcs_export_passes_the_read_access(self):
         from src.routes import data_contracts_routes as routes
 
-        user = SimpleNamespace(email="u@example.com", username="u")
+        access = cte.ValuesReadAccess(values=True)
+        manager = SimpleNamespace(build_odcs_from_db=lambda db_obj, db, compliance_read: (
+            {"kind": "DataContract", "seen": compliance_read is access}
+        ))
+        db_obj = SimpleNamespace(name="Orders")
 
-        async def _can(request, user_, auth_manager, *, entity_type):
-            assert entity_type == "asset"
-            return allowed
+        async def _read(request, user, auth_manager, db):
+            return access
 
-        with patch.object(cte, "can_import_values", side_effect=_can):
-            assert asyncio.run(routes._compliance_values_user(None, user, None)) == expected
+        with patch.object(cte, "read_access", side_effect=_read), \
+                patch.object(routes.data_contract_repo, "get_with_all", return_value=db_obj):
+            resp = asyncio.run(routes.export_odcs(
+                "c-1", request=None, db=None, manager=manager, _=True, user=_USER,
+                auth_manager=None,
+            ))
+        assert yaml.safe_load(resp.body)["seen"] is True
+
+    def test_odcs_upload_audits_the_values_written(self):
+        from src.routes import data_contracts_routes as routes
+
+        imp = cte.ComplianceImport(user_email="u@example.com", can_write_values=True)
+        logged = {}
+
+        def _create(db, parsed_odcs, current_user, compliance_import):
+            assert compliance_import is imp
+            imp.record("asset", "a-1", ["limitacoes"])
+            return SimpleNamespace(id="c-1")
+
+        async def _access(request, user, auth_manager):
+            return imp
+
+        manager = SimpleNamespace(
+            parse_uploaded_file=lambda **kw: {}, validate_odcs=lambda parsed, strict: [],
+            create_from_upload=_create, _build_contract_api_model=lambda db, obj: {"id": "c-1"},
+        )
+        audit = SimpleNamespace(log_action=lambda **kw: logged.update(kw))
+
+        class _File:
+            filename = "c.yaml"
+            content_type = "application/x-yaml"
+
+            async def read(self):
+                return b"kind: DataContract"
+
+        request = SimpleNamespace(client=None)
+        with patch.object(cte, "import_access", side_effect=_access), \
+                patch.object(routes.data_contract_repo, "get_with_all", return_value=None):
+            asyncio.run(routes.upload_contract(
+                request, db=None, audit_manager=audit, current_user=_USER, file=_File(),
+                manager=manager, _=True, user=_USER, auth_manager=None,
+            ))
+        assert logged["details"]["compliance_values_written"] == [
+            {"entityType": "asset", "entityId": "a-1", "referenceIds": ["limitacoes"]},
+        ]

@@ -9,6 +9,7 @@ permission checks on top.
 import uuid
 from typing import Any, Dict
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
@@ -38,6 +39,17 @@ class ComplianceTemplateAssetError(ValueError):
 
     def to_detail(self) -> Dict[str, Any]:
         return {"code": self.code, "message": str(self), "params": self.params}
+
+
+def location_key(value: str | None) -> str:
+    """Match key of an asset location or a table name: no backticks or outer
+    whitespace, lowercase (``` `Main`.`Sales`.orders ``` -> ``main.sales.orders``)."""
+    return (value or "").replace("`", "").strip().lower()
+
+
+def location_key_sql(column):
+    """``location_key`` as a SQL expression on a column."""
+    return func.lower(func.trim(func.replace(column, "`", "")))
 
 
 def is_template_asset_type(asset_type_name: str | None) -> bool:

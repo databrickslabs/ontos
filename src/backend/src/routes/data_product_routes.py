@@ -1399,13 +1399,19 @@ async def export_odps(
     background_tasks: BackgroundTasks,
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
     """Export a Data Product as ODPS v1.0.0 YAML, including entity relationship-based datasets."""
     from fastapi.responses import Response
     success = False
     details = {"product_id": product_id, "action": "export_odps"}
     try:
-        odps = manager.build_odps_export(product_id, db=db)
+        # The product's compliance template values only for a user who may read them
+        compliance_read = await compliance_template_exchange.read_access(
+            request, user, auth_manager, db
+        )
+        odps = manager.build_odps_export(product_id, db=db, compliance_read=compliance_read)
         yaml_content = yaml.dump(odps, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
         raw_name = (odps.get("name") or "product").lower().replace(" ", "_")
@@ -1675,13 +1681,13 @@ async def upload_data_products(
             raise exc
 
         # Delegate to manager
-        can_import_values = await compliance_template_exchange.can_import_values(
-            request, user, auth_manager, entity_type="data_product"
+        compliance_import = await compliance_template_exchange.import_access(
+            request, user, auth_manager
         )
         created_products, errors_list = manager.upload_products_batch(
-            content, file.filename,
-            compliance_values_user=(user.email or user.username) if can_import_values else None,
+            content, file.filename, compliance_import=compliance_import,
         )
+        details_for_audit["compliance_values_written"] = compliance_import.written
 
         # Extract created IDs for audit
         created_ids = [p.id for p in created_products if p and hasattr(p, 'id')]

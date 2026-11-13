@@ -1554,7 +1554,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         file_content: bytes,
         filename: str,
-        compliance_values_user: Optional[str] = None,
+        compliance_import=None,
     ) -> tuple[List[DataProductApi], List[Dict[str, Any]]]:
         """
         Process and create multiple data products from uploaded YAML/JSON file.
@@ -1569,9 +1569,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Args:
             file_content: Raw file bytes
             filename: Original filename (used to detect format)
-            compliance_values_user: When set (the caller checked the rights), each
+            compliance_import: A ``ComplianceImport`` (the importer's rights): each
                 product's ``ontosComplianceValues`` are written to its compliance
-                template values, filled by this user
+                template values, and what was written is recorded on it
 
         Returns:
             Tuple of (created_products, errors_list)
@@ -1609,9 +1609,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # Process each product
         created_products: List[DataProductApi] = []
         errors: List[Dict[str, Any]] = []
-        import_compliance_values = bool(compliance_values_user) and (
-            compliance_template_exchange.has_active_template(self._db, "data_product")
-        )
 
         for idx, product_data in enumerate(data_list):
             if not isinstance(product_data, dict):
@@ -1625,15 +1622,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             try:
                 # create_product() always generates a UUID; preserve_source_id=True
                 # stores any non-UUID original id as a sourceId custom property
-                compliance_values = None
-                if import_compliance_values:
-                    compliance_values = compliance_template_exchange.read_entry(
-                        product_data.get('customProperties')
+                compliance_entries = None
+                if compliance_import is not None:
+                    compliance_entries = compliance_template_exchange.take_product_entries(
+                        product_data
                     )
                 created_product = self.create_product(product_data, preserve_source_id=True)
-                if compliance_values:
+                if compliance_entries is not None:
                     self._import_compliance_values(
-                        created_product.id, compliance_values, compliance_values_user
+                        created_product.id, *compliance_entries, compliance_import
                     )
                 created_products.append(created_product)
                 logger.info(f"Successfully created product {created_product.id} from batch upload")
@@ -1654,28 +1651,25 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         return created_products, errors
 
     def _import_compliance_values(
-        self, product_id: str, values: Dict[str, Any], current_user: Optional[str]
+        self, product_id: str, values, carried, compliance_import
     ) -> None:
-        """Store an imported product's template values.
+        """Store an imported product's template values (the product is already stored).
 
-        The product was stored with the entry as a custom property; the values
-        written leave it. If this fails, the product keeps the whole entry.
+        The values are written in a savepoint; what isn't written is kept as the
+        product's ``ontosComplianceValuesUnmatched`` custom property when the
+        importer may write values. A failure here leaves the product as it is.
         """
         try:
-            with self._db.begin_nested():
-                written = compliance_template_exchange.apply_imported_values(
-                    self._db, entity_type="data_product", entity_id=str(product_id),
-                    values=values, user_email=current_user,
-                )
-                compliance_template_exchange.keep_unwritten_product_values(
-                    self._db, product_id=str(product_id), values=values, written=written
-                )
+            compliance_template_exchange.import_product_values(
+                self._db, product_id=str(product_id), values=values, carried=carried,
+                imp=compliance_import,
+            )
+            self._db.commit()
         except Exception:
+            self._db.rollback()
             logger.warning(
                 "Compliance values of imported product %s not stored", product_id, exc_info=True
             )
-            return
-        self._db.commit()
 
     def create_new_version(self, original_product_id: str, request: NewVersionRequest) -> DataProductApi:
         """Creates a new version of an ODPS v1.0.0 data product."""
@@ -3169,8 +3163,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         product_id: str,
         db: Optional[Session] = None,
+        compliance_read=None,
     ) -> Dict[str, Any]:
         """Build a full ODPS v1.0.0-compatible YAML export of a Data Product.
+
+        ``compliance_read`` (a ``ValuesReadAccess``): the exporting user's right to
+        read the product's compliance template values; without it they're omitted.
 
         Includes the standard ODPS structure plus entity relationship-based
         dataset hierarchy as an extension section.
@@ -3265,11 +3263,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 rebuilt_props, odps.get("customProperties")
             )
         # Compliance template values of the product (replaces a stored copy)
-        compliance_template_exchange.apply_to_document(
-            odps,
-            compliance_template_exchange.entity_values(
-                session, entity_type="data_product", entity_id=product_id
-            ),
+        compliance_template_exchange.apply_product_export(
+            session, odps, product_id=product_id, access=compliance_read
         )
 
         if product.authoritative_definitions:

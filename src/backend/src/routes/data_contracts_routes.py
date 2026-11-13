@@ -89,14 +89,11 @@ def get_jobs_manager(request: Request):
     return getattr(request.app.state, 'jobs_manager', None)
 
 
-async def _compliance_values_user(
+async def _compliance_import(
     request: Request, user: UserInfo, auth_manager: AuthorizationManager
-) -> Optional[str]:
-    """Who fills imported table and view template values; ``None``: the user may not."""
-    allowed = await compliance_template_exchange.can_import_values(
-        request, user, auth_manager, entity_type="asset"
-    )
-    return (user.email or user.username) if allowed else None
+) -> compliance_template_exchange.ComplianceImport:
+    """The importer's rights on table and view template values (and the audit record)."""
+    return await compliance_template_exchange.import_access(request, user, auth_manager)
 
  
 
@@ -1575,12 +1572,14 @@ async def upload_contract(
             logger.warning(warning)
         
         # Create contract with all nested entities using manager
+        compliance_import = await _compliance_import(request, user, auth_manager)
         created = manager.create_from_upload(
             db=db,
             parsed_odcs=parsed,
             current_user=current_user.username if current_user else None,
-            compliance_values_user=await _compliance_values_user(request, user, auth_manager),
+            compliance_import=compliance_import,
         )
+        details_for_audit["compliance_values_written"] = compliance_import.written
         
         success = True
         created_contract_id = created.id
@@ -1666,12 +1665,14 @@ async def import_odcs_json(
         for warning in validation_warnings[:5]:
             logger.warning(warning)
 
+        compliance_import = await _compliance_import(request, user, auth_manager)
         created = manager.create_from_upload(
             db=db,
             parsed_odcs=parsed,
             current_user=current_user.username if current_user else None,
-            compliance_values_user=await _compliance_values_user(request, user, auth_manager),
+            compliance_import=compliance_import,
         )
+        details_for_audit["compliance_values_written"] = compliance_import.written
 
         success = True
         created_contract_id = created.id
@@ -1898,14 +1899,26 @@ async def get_schema_properties(
 
 
 @router.get('/data-contracts/{contract_id}/odcs/export')
-async def export_odcs(contract_id: str, db: DBSessionDep, manager: DataContractsManager = Depends(get_data_contracts_manager), _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
+async def export_odcs(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+):
     try:
         from fastapi.responses import Response
 
         db_obj = data_contract_repo.get_with_all(db, id=contract_id)
         if not db_obj:
             raise HTTPException(status_code=404, detail="Contract not found")
-        odcs = manager.build_odcs_from_db(db_obj, db)
+        # Tables' compliance template values only for a user who may read them
+        compliance_read = await compliance_template_exchange.read_access(
+            request, user, auth_manager, db
+        )
+        odcs = manager.build_odcs_from_db(db_obj, db, compliance_read=compliance_read)
 
         # Convert to YAML format for ODCS compliance
         yaml_content = yaml.dump(odcs, default_flow_style=False, allow_unicode=True, sort_keys=False)

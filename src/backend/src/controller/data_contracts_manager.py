@@ -812,7 +812,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         return members_list
 
-    def build_odcs_from_db(self, db_obj: DataContractDb, db_session=None) -> Dict[str, Any]:
+    def build_odcs_from_db(
+        self, db_obj: DataContractDb, db_session=None, compliance_read=None
+    ) -> Dict[str, Any]:
+        """ODCS document of a contract. ``compliance_read`` (a ``ValuesReadAccess``):
+        the exporting user's right to read the tables' compliance template values;
+        without it the schema objects carry none."""
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
@@ -1268,16 +1273,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     schema_dict['customProperties'] = custom_props
 
                 # Compliance template values of the table or view this object describes
-                if db_session is not None:
-                    compliance_template_exchange.apply_to_document(
-                        schema_dict,
-                        compliance_template_exchange.schema_values(
-                            db_session,
-                            physical_name=schema_obj.physical_name or schema_obj.name,
-                            contract_id=db_obj.id,
-                            schema_object_id=schema_obj.id,
-                        ),
-                    )
+                compliance_template_exchange.apply_schema_export(
+                    db_session, schema_dict,
+                    physical_name=schema_obj.physical_name,
+                    contract_id=db_obj.id,
+                    schema_object_id=schema_obj.id,
+                    access=compliance_read if db_session is not None else None,
+                )
 
                 # Schema-level relationships (ODCS v3.1.0)
                 if hasattr(schema_obj, 'relationships') and schema_obj.relationships:
@@ -2902,7 +2904,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         db,
         parsed_odcs: dict,
         current_user: Optional[str] = None,
-        compliance_values_user: Optional[str] = None,
+        compliance_import=None,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
@@ -2911,9 +2913,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db: Database session
             parsed_odcs: Parsed ODCS dictionary
             current_user: Username of current user
-            compliance_values_user: When set (the caller checked the rights), the schema
+            compliance_import: A ``ComplianceImport`` (the importer's rights): the schema
                 objects' ``ontosComplianceValues`` are written to the matching table and
-                view assets, filled by this user
+                view assets, and what was written is recorded on it
             
         Returns:
             Created DataContractDb instance
@@ -2992,9 +2994,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Parse and create schema objects if present
             # Accept both ODCS standard 'schema' and Pydantic field name 'contract_schema'
             schema_data = parsed_odcs.get('schema') or parsed_odcs.get('contract_schema', [])
-            if compliance_values_user and isinstance(schema_data, list):
-                compliance_template_exchange.import_schema_values(
-                    db, schema_data, user_email=compliance_values_user
+            if compliance_import is not None and isinstance(schema_data, list):
+                compliance_template_exchange.import_schema_entries(
+                    db, schema_data, compliance_import
                 )
             if isinstance(schema_data, list) and schema_data:
                 self._create_schema_objects(db, created.id, schema_data, current_user)

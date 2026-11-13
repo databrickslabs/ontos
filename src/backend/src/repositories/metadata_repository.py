@@ -69,6 +69,7 @@ class RichTextRepository(CRUDBase[RichTextMetadataDb, RichTextCreate, RichTextUp
                 RichTextMetadataDb.entity_type == entity_type,
                 RichTextMetadataDb.entity_id == entity_id,
                 RichTextMetadataDb.inheritable == True,
+                RichTextMetadataDb.is_shared == False,
                 RichTextMetadataDb.level <= max_level
             )
             .order_by(RichTextMetadataDb.level.asc(), RichTextMetadataDb.created_at.desc())
@@ -118,6 +119,7 @@ class LinkRepository(CRUDBase[LinkMetadataDb, LinkCreate, LinkUpdate]):
                 LinkMetadataDb.entity_type == entity_type,
                 LinkMetadataDb.entity_id == entity_id,
                 LinkMetadataDb.inheritable == True,
+                LinkMetadataDb.is_shared == False,
                 LinkMetadataDb.level <= max_level
             )
             .order_by(LinkMetadataDb.level.asc(), LinkMetadataDb.created_at.desc())
@@ -177,6 +179,7 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
                 DocumentMetadataDb.entity_type == entity_type,
                 DocumentMetadataDb.entity_id == entity_id,
                 DocumentMetadataDb.inheritable == True,
+                DocumentMetadataDb.is_shared == False,
                 DocumentMetadataDb.level <= max_level
             )
             .order_by(DocumentMetadataDb.level.asc(), DocumentMetadataDb.created_at.desc())

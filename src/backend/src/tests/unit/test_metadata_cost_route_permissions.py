@@ -12,13 +12,17 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from src.common.api_errors import coded_http_exception_handler
 from src.common.authorization import get_user_details_from_sdk
+from src.common.config import get_settings
 from src.common.dependencies import get_current_user_details_for_audit, get_db
 from src.common.features import ACCESS_LEVEL_ORDER, FeatureAccessLevel
 from src.common.manager_dependencies import get_audit_manager, get_auth_manager, get_metadata_manager
+from src.common.workspace_client import get_workspace_client
 from src.controller.costs_manager import CostsManager
-from src.controller.metadata_manager import MetadataManager
+from src.controller.metadata_manager import MetadataManager, SHARED_ENTITY_ID, NotSharedAssetError
 from src.models.costs import CostItem, CostItemCreate
 from src.models.metadata import (
     METADATA_ENTITY_FEATURES, DocumentCreate, LinkCreate, MetadataAttachmentCreate, RichText, RichTextCreate,
@@ -90,6 +94,9 @@ def make_client(metadata_manager, costs_manager):
         app.dependency_overrides[get_audit_manager] = lambda: MagicMock()
         app.dependency_overrides[get_metadata_manager] = lambda: metadata_manager
         app.dependency_overrides[costs_routes.get_costs_manager] = lambda: costs_manager
+        app.dependency_overrides[get_settings] = lambda: MagicMock()
+        app.dependency_overrides[get_workspace_client] = lambda: MagicMock()
+        app.add_exception_handler(StarletteHTTPException, coded_http_exception_handler)
         return TestClient(app)
     return _make
 
@@ -137,7 +144,66 @@ class TestEntityRoutes:
     def test_unknown_entity_type_is_rejected(self, make_client):
         client = make_client({"data-domains": FeatureAccessLevel.ADMIN})
 
-        assert client.get("/api/entities/bogus/rich-texts?entity_id=e1").status_code == 400
+        resp = client.get("/api/entities/bogus/rich-texts?entity_id=e1")
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "unsupported_entity_type"
+
+
+class TestSharedScopeOnEntityRoutes:
+    """Library records are created only on /metadata/shared; entity-scoped creates refuse the shared scope."""
+
+    def test_product_writer_cannot_create_a_library_note(self, make_client, metadata_manager):
+        client = make_client({"data-products": RW})
+
+        resp = client.post("/api/entities/data_product/rich-texts?entity_id=e1", json={**_note(), "is_shared": True})
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "shared_scope_not_allowed"
+        metadata_manager.create_rich_text.assert_not_called()
+
+    def test_shared_entity_id_is_refused_for_notes(self, make_client, metadata_manager):
+        client = make_client({"data-products": RW})
+
+        resp = client.post(
+            f"/api/entities/data_product/rich-texts?entity_id={SHARED_ENTITY_ID}",
+            json={**_note(), "entity_id": SHARED_ENTITY_ID},
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "shared_scope_not_allowed"
+        metadata_manager.create_rich_text.assert_not_called()
+
+    def test_product_writer_cannot_create_a_library_link(self, make_client, metadata_manager):
+        client = make_client({"data-products": RW})
+        link = {"entity_id": "e1", "entity_type": "data_product", "title": "t", "url": "https://example.com", "is_shared": True}
+
+        resp = client.post("/api/entities/data_product/links?entity_id=e1", json=link)
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "shared_scope_not_allowed"
+        metadata_manager.create_link.assert_not_called()
+
+    def test_shared_entity_id_is_refused_for_documents(self, make_client, metadata_manager):
+        client = make_client({"data-products": RW})
+
+        resp = client.post(
+            f"/api/entities/data_product/documents?entity_id={SHARED_ENTITY_ID}",
+            data={"title": "t"},
+            files={"file": ("a.txt", b"x", "text/plain")},
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "shared_scope_not_allowed"
+        metadata_manager.create_document_record.assert_not_called()
+
+    def test_entity_scoped_note_on_a_real_entity_still_works(self, make_client, metadata_manager):
+        metadata_manager.create_rich_text.return_value = _rich_text()
+        client = make_client({"data-products": RW})
+
+        resp = client.post("/api/entities/data_product/rich-texts?entity_id=e1", json={**_note(), "is_shared": False})
+
+        assert resp.status_code == 201
 
 
 class TestRecordRoutes:
@@ -191,7 +257,7 @@ class TestRecordRoutes:
         metadata_manager.get_merged_metadata.assert_not_called()
 
     def test_attaching_a_non_shared_asset_is_refused(self, make_client, metadata_manager):
-        metadata_manager.attach_shared_asset.side_effect = ValueError("Only shared library assets can be attached")
+        metadata_manager.attach_shared_asset.side_effect = NotSharedAssetError("Only shared library assets can be attached")
         client = make_client({"data-products": RW})
 
         resp = client.post(
@@ -200,6 +266,39 @@ class TestRecordRoutes:
         )
 
         assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "not_shared_asset"
+
+    def test_merged_metadata_refuses_the_shared_id(self, make_client, metadata_manager):
+        client = make_client({"data-products": FeatureAccessLevel.READ_ONLY})
+
+        resp = client.get(f"/api/entities/data_product/metadata/merged?entity_id={SHARED_ENTITY_ID}")
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "shared_scope_not_allowed"
+        metadata_manager.get_merged_metadata.assert_not_called()
+
+    def test_merged_metadata_refuses_the_shared_id_as_a_contract(self, make_client, metadata_manager):
+        client = make_client({"data-products": FeatureAccessLevel.READ_ONLY, "data-contracts": FeatureAccessLevel.READ_ONLY})
+
+        resp = client.get(
+            f"/api/entities/data_product/metadata/merged?entity_id=e1&contract_ids=c1,{SHARED_ENTITY_ID}",
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "shared_scope_not_allowed"
+        metadata_manager.get_merged_metadata.assert_not_called()
+
+    def test_attaching_to_the_shared_id_is_refused(self, make_client, metadata_manager):
+        client = make_client({"data-products": RW})
+
+        resp = client.post(
+            f"/api/entities/data_product/attachments?entity_id={SHARED_ENTITY_ID}",
+            json={"asset_type": "rich_text", "asset_id": str(uuid.uuid4())},
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "shared_scope_not_allowed"
+        metadata_manager.attach_shared_asset.assert_not_called()
 
     def test_shared_library_keeps_the_domain_feature(self, make_client, metadata_manager):
         metadata_manager.list_shared_assets.return_value = SimpleNamespace(
@@ -296,6 +395,24 @@ class TestRecordLookups:
                 db_session, entity_type="data_product", entity_id="p2",
                 data=MetadataAttachmentCreate(asset_type="rich_text", asset_id=str(private.id)), user_email="u@example.com",
             )
+
+    def test_shared_records_are_not_listed_under_an_entity_kind(self, db_session):
+        manager = MetadataManager()
+        manager.create_shared_rich_text(
+            db_session,
+            data=RichTextCreate(entity_id="p1", entity_type="data_contract", title="t", content_markdown="c", inheritable=True),
+            user_email="u@example.com",
+        )
+
+        assert manager.list_rich_texts(db_session, entity_type="data_contract", entity_id=SHARED_ENTITY_ID) == []
+        merged = manager.get_merged_metadata(
+            db_session, entity_type="data_product", entity_id=SHARED_ENTITY_ID, contract_ids=["c1", SHARED_ENTITY_ID],
+        )
+        assert merged.rich_texts == []
+        merged_contract = manager.get_merged_metadata(
+            db_session, entity_type="data_product", entity_id="p9", contract_ids=[SHARED_ENTITY_ID],
+        )
+        assert merged_contract.rich_texts == []
 
     def test_cost_items_report_their_entity_kind(self, db_session):
         manager = CostsManager()

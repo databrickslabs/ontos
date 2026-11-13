@@ -126,7 +126,7 @@ class TagRepository(CRUDBase[TagDb, TagCreate, TagUpdate]):
 
     def get_multi_with_filters(
         self, db: Session, *, 
-        skip: int = 0, limit: int = 100, 
+        skip: int = 0, limit: Optional[int] = None, 
         namespace_id: Optional[UUID] = None,
         namespace_name: Optional[str] = None,
         name_contains: Optional[str] = None,
@@ -237,36 +237,65 @@ class EntityTagAssociationRepository(CRUDBase[EntityTagAssociationDb, BaseModel,
         assigned_value: Optional[str] = None,
         assigned_by: Optional[str] = None
     ) -> EntityTagAssociationDb:
+        """Assign a tag, or update the value of an assignment that exists.
+
+        ``assigned_value=None`` keeps the stored value: the entity forms and the tags
+        panel send a tag that stays selected without its value (#1420), and payloads
+        that went through ``model_dump`` carry ``None`` for every tag. An empty string
+        clears the value. ``assigned_by`` changes only when the value does.
+        """
         # Check if association already exists to prevent duplicates by unique constraint
         existing_assoc = db.query(EntityTagAssociationDb).filter_by(
-            entity_id=entity_id, 
-            entity_type=entity_type, 
+            entity_id=entity_id,
+            entity_type=entity_type,
             tag_id=tag_id
             # Not filtering by assigned_value for existence check, as one tag per entity
         ).first()
-        
+
         if existing_assoc:
-            # If it exists, update assigned_value and assigned_by if different
-            if (assigned_value is not None and existing_assoc.assigned_value != assigned_value) or \
-               (assigned_by is not None and existing_assoc.assigned_by != assigned_by):
-                existing_assoc.assigned_value = assigned_value
-                existing_assoc.assigned_by = assigned_by
-                # assigned_at is automatically updated by onupdate=func.now() if that was set, else set manually
-                # existing_assoc.assigned_at = func.now() # if needed
-                db.add(existing_assoc)
+            if assigned_value is not None:
+                new_value = assigned_value or None
+                if existing_assoc.assigned_value != new_value:
+                    existing_assoc.assigned_value = new_value
+                    if assigned_by is not None:
+                        existing_assoc.assigned_by = assigned_by
+                    # assigned_at is automatically updated by onupdate=func.now() if that was set, else set manually
+                    # existing_assoc.assigned_at = func.now() # if needed
+                    db.add(existing_assoc)
             return existing_assoc
-        
+
         assoc = EntityTagAssociationDb(
             entity_id=entity_id,
             entity_type=entity_type,
             tag_id=tag_id,
-            assigned_value=assigned_value,
+            assigned_value=assigned_value or None,
             assigned_by=assigned_by
         )
         db.add(assoc)
         # db.commit() # Handled by manager
         # db.refresh(assoc)
         return assoc
+
+    def copy_tags_for_entity(
+        self, db: Session, *, source_id: str, target_id: str, entity_type: str, assigned_by: Optional[str] = None
+    ) -> None:
+        """Copy a source entity's tag assignments, with their values, onto a new entity (#1489).
+
+        Writes in the caller's transaction and does not commit; a failure raises,
+        so the caller's rollback also drops the copy.
+        """
+        source = db.query(EntityTagAssociationDb).filter_by(
+            entity_id=str(source_id), entity_type=entity_type,
+        ).all()
+        for assoc in source:
+            self.add_tag_to_entity(
+                db,
+                entity_id=str(target_id),
+                entity_type=entity_type,
+                tag_id=assoc.tag_id,
+                assigned_value=assoc.assigned_value,
+                assigned_by=assigned_by,
+            )
 
     def remove_tag_from_entity(self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID) -> bool:
         assoc = db.query(EntityTagAssociationDb).filter_by(

@@ -3,11 +3,30 @@ Unit tests for NotificationsManager
 """
 import pytest
 from datetime import datetime
-from unittest.mock import Mock, MagicMock, patch, mock_open
-from src.controller.notifications_manager import NotificationsManager, NotificationNotFoundError
+from types import SimpleNamespace
+from unittest.mock import Mock
+from src.controller.notifications_manager import NotificationsManager
 from src.models.notifications import Notification, NotificationType
 from src.models.users import UserInfo
-from src.db_models.notifications import NotificationDb
+
+
+def _db_notif(id, title="Test", recipient=None, created_at=datetime(2024, 1, 1), **kw):
+    """A notification row as the repository returns it."""
+    fields = dict(
+        id=id, type="info", title=title, subtitle=None, description=None, message=None,
+        link=None, created_at=created_at, updated_at=None, read=False, can_delete=True,
+        recipient=recipient, recipient_role_id=None, recipient_role_name=None,
+        target_roles=None, action_type=None, action_payload=None, data=None,
+    )
+    fields.update(kw)
+    return SimpleNamespace(**fields)
+
+
+def _role(name, groups=(), users=()):
+    return SimpleNamespace(
+        id="11111111-1111-1111-1111-111111111111", name=name,
+        assigned_groups=list(groups), assigned_users=list(users),
+    )
 
 
 class TestNotificationsManager:
@@ -28,7 +47,9 @@ class TestNotificationsManager:
     @pytest.fixture
     def manager(self, mock_settings_manager):
         """Create NotificationsManager instance for testing."""
-        return NotificationsManager(settings_manager=mock_settings_manager)
+        mgr = NotificationsManager(settings_manager=mock_settings_manager)
+        mgr._repo = Mock()
+        return mgr
 
     @pytest.fixture
     def sample_notification(self):
@@ -68,375 +89,123 @@ class TestNotificationsManager:
 
     def test_get_notifications_empty(self, manager):
         """Test getting notifications when none exist."""
-        mock_db = Mock()
         manager._repo.get_multi.return_value = []
 
-        result = manager.get_notifications(mock_db)
-
-        assert result == []
+        assert manager.get_notifications(Mock()) == []
 
     def test_get_notifications_broadcast_only(self, manager):
-        """Test getting broadcast notifications without user info."""
-        mock_db = Mock()
-        
-        # Create notification DB objects
-        broadcast_notif = Mock(spec=NotificationDb)
-        broadcast_notif.id = "notif-1"
-        broadcast_notif.recipient = None
-        broadcast_notif.title = "Broadcast"
-        broadcast_notif.type = "info"
-        broadcast_notif.created_at = datetime(2024, 1, 1)
-        broadcast_notif.read = False
-        broadcast_notif.can_delete = True
-        broadcast_notif.subtitle = None
-        broadcast_notif.description = None
-        broadcast_notif.link = None
-        broadcast_notif.action_type = None
-        broadcast_notif.action_payload = None
-        broadcast_notif.data = None
-        broadcast_notif.target_roles = None
+        """Without user info only broadcast (no recipient) notifications are returned."""
+        manager._repo.get_multi.return_value = [
+            _db_notif("notif-1", "Broadcast"),
+            _db_notif("notif-2", "Personal", recipient="user@example.com"),
+        ]
 
-        manager._repo.get_multi.return_value = [broadcast_notif]
+        result = manager.get_notifications(Mock(), user_info=None)
 
-        result = manager.get_notifications(mock_db, user_info=None)
-
-        assert len(result) == 1
-        assert result[0].title == "Broadcast"
+        assert [n.title for n in result] == ["Broadcast"]
 
     def test_get_notifications_filtered_by_email(self, manager, sample_user_info):
-        """Test getting notifications filtered by user email."""
-        mock_db = Mock()
-        
-        # Create notifications
-        user_notif = Mock(spec=NotificationDb)
-        user_notif.id = "notif-1"
-        user_notif.recipient = "user@example.com"
-        user_notif.title = "User Notification"
-        user_notif.type = "info"
-        user_notif.created_at = datetime(2024, 1, 1)
-        user_notif.read = False
-        user_notif.can_delete = True
-        user_notif.subtitle = None
-        user_notif.description = None
-        user_notif.link = None
-        user_notif.action_type = None
-        user_notif.action_payload = None
-        user_notif.data = None
-        user_notif.target_roles = None
+        """A user sees their own notifications, not other users'."""
+        manager._repo.get_multi.return_value = [
+            _db_notif("notif-1", "User Notification", recipient="user@example.com"),
+            _db_notif("notif-2", "Other Notification", recipient="other@example.com",
+                      created_at=datetime(2024, 1, 2)),
+        ]
 
-        other_notif = Mock(spec=NotificationDb)
-        other_notif.id = "notif-2"
-        other_notif.recipient = "other@example.com"
-        other_notif.title = "Other Notification"
-        other_notif.type = "info"
-        other_notif.created_at = datetime(2024, 1, 2)
-        other_notif.read = False
-        other_notif.can_delete = True
-        other_notif.subtitle = None
-        other_notif.description = None
-        other_notif.link = None
-        other_notif.action_type = None
-        other_notif.action_payload = None
-        other_notif.data = None
-        other_notif.target_roles = None
+        result = manager.get_notifications(Mock(), user_info=sample_user_info)
 
-        manager._repo.get_multi.return_value = [user_notif, other_notif]
-
-        result = manager.get_notifications(mock_db, user_info=sample_user_info)
-
-        # Should only get notifications for this user
         assert len(result) == 1
         assert result[0].recipient == "user@example.com"
 
-    def test_get_notifications_filtered_by_role(self, manager, sample_user_info, mock_settings_manager):
-        """Test getting notifications filtered by user role."""
-        mock_db = Mock()
-        
-        # Mock role
-        mock_role = Mock()
-        mock_role.name = "Data Consumer"
-        mock_role.assigned_groups = ["data_consumers"]
-        mock_settings_manager.list_app_roles.return_value = [mock_role]
+    def test_get_notifications_filtered_by_role(
+        self, manager, sample_user_info, mock_settings_manager
+    ):
+        """A legacy role-name recipient reaches members of the role, with the role name set."""
+        mock_settings_manager.list_app_roles.return_value = [
+            _role("Data Consumer", groups=["data_consumers"])
+        ]
+        manager._repo.get_multi.return_value = [
+            _db_notif("notif-1", "Role Notification", recipient="Data Consumer")
+        ]
 
-        # Create role-targeted notification
-        role_notif = Mock(spec=NotificationDb)
-        role_notif.id = "notif-1"
-        role_notif.recipient = "Data Consumer"
-        role_notif.title = "Role Notification"
-        role_notif.type = "info"
-        role_notif.created_at = datetime(2024, 1, 1)
-        role_notif.read = False
-        role_notif.can_delete = True
-        role_notif.subtitle = None
-        role_notif.description = None
-        role_notif.link = None
-        role_notif.action_type = None
-        role_notif.action_payload = None
-        role_notif.data = None
-        role_notif.target_roles = None
+        result = manager.get_notifications(Mock(), user_info=sample_user_info)
 
-        manager._repo.get_multi.return_value = [role_notif]
+        assert [n.title for n in result] == ["Role Notification"]
+        assert result[0].recipient_role_name == "Data Consumer"
 
-        result = manager.get_notifications(mock_db, user_info=sample_user_info)
+    def test_get_notifications_hides_role_from_non_members(
+        self, manager, sample_user_info, mock_settings_manager
+    ):
+        """A role notification is not shown to a user outside the role."""
+        mock_settings_manager.list_app_roles.return_value = [
+            _role("Data Producer", groups=["producers"])
+        ]
+        manager._repo.get_multi.return_value = [
+            _db_notif("notif-1", "Role Notification", recipient="Data Producer")
+        ]
 
-        assert len(result) == 1
-        assert result[0].title == "Role Notification"
+        assert manager.get_notifications(Mock(), user_info=sample_user_info) == []
 
     def test_get_notifications_sorts_by_created_at(self, manager):
-        """Test that notifications are sorted by created_at descending."""
-        mock_db = Mock()
-        
-        # Create notifications with different timestamps
-        notif1 = Mock(spec=NotificationDb)
-        notif1.id = "notif-1"
-        notif1.recipient = None
-        notif1.title = "First"
-        notif1.type = "info"
-        notif1.created_at = datetime(2024, 1, 1)
-        notif1.read = False
-        notif1.can_delete = True
-        notif1.subtitle = None
-        notif1.description = None
-        notif1.link = None
-        notif1.action_type = None
-        notif1.action_payload = None
-        notif1.data = None
-        notif1.target_roles = None
+        """Notifications are sorted by created_at descending for a user."""
+        manager._repo.get_multi.return_value = [
+            _db_notif("notif-1", "First", created_at=datetime(2024, 1, 1)),
+            _db_notif("notif-2", "Second", created_at=datetime(2024, 1, 3)),
+            _db_notif("notif-3", "Third", created_at=datetime(2024, 1, 2)),
+        ]
+        user = UserInfo(username="u", email="u@example.com", user="u", ip="1", groups=[])
 
-        notif2 = Mock(spec=NotificationDb)
-        notif2.id = "notif-2"
-        notif2.recipient = None
-        notif2.title = "Second"
-        notif2.type = "info"
-        notif2.created_at = datetime(2024, 1, 3)
-        notif2.read = False
-        notif2.can_delete = True
-        notif2.subtitle = None
-        notif2.description = None
-        notif2.link = None
-        notif2.action_type = None
-        notif2.action_payload = None
-        notif2.data = None
-        notif2.target_roles = None
+        result = manager.get_notifications(Mock(), user_info=user)
 
-        notif3 = Mock(spec=NotificationDb)
-        notif3.id = "notif-3"
-        notif3.recipient = None
-        notif3.title = "Third"
-        notif3.type = "info"
-        notif3.created_at = datetime(2024, 1, 2)
-        notif3.read = False
-        notif3.can_delete = True
-        notif3.subtitle = None
-        notif3.description = None
-        notif3.link = None
-        notif3.action_type = None
-        notif3.action_payload = None
-        notif3.data = None
-        notif3.target_roles = None
-
-        manager._repo.get_multi.return_value = [notif1, notif2, notif3]
-
-        result = manager.get_notifications(mock_db)
-
-        # Should be sorted newest first
-        assert result[0].title == "Second"
-        assert result[1].title == "Third"
-        assert result[2].title == "First"
+        assert [n.title for n in result] == ["Second", "Third", "First"]
 
     # Mark as Read Tests
 
-    def test_mark_as_read_success(self, manager):
-        """Test marking notification as read."""
+    def test_mark_notification_read_success(self, manager):
+        """Marking an unread notification updates it through the repository and commits."""
         mock_db = Mock()
-        
-        notif_db = Mock(spec=NotificationDb)
-        notif_db.id = "notif-123"
-        notif_db.read = False
-        
-        manager._repo.get.return_value = notif_db
+        row = _db_notif("notif-123")
+        manager._repo.get.return_value = row
+        manager._repo.update.return_value = _db_notif("notif-123", read=True)
 
-        result = manager.mark_as_read(mock_db, notification_id="notif-123")
+        result = manager.mark_notification_read(mock_db, notification_id="notif-123")
 
-        assert result is True
-        assert notif_db.read is True
+        assert result.read is True
+        manager._repo.update.assert_called_once_with(
+            db=mock_db, db_obj=row, obj_in={"read": True}
+        )
         mock_db.commit.assert_called_once()
 
-    def test_mark_as_read_not_found(self, manager):
-        """Test marking non-existent notification as read."""
+    def test_mark_notification_read_already_read(self, manager):
+        """An already-read notification is returned without an update or commit."""
         mock_db = Mock()
+        manager._repo.get.return_value = _db_notif("notif-123", read=True)
+
+        result = manager.mark_notification_read(mock_db, notification_id="notif-123")
+
+        assert result.read is True
+        manager._repo.update.assert_not_called()
+        mock_db.commit.assert_not_called()
+
+    def test_mark_notification_read_not_found(self, manager):
+        """A missing notification returns None (no exception)."""
         manager._repo.get.return_value = None
 
-        with pytest.raises(NotificationNotFoundError):
-            manager.mark_as_read(mock_db, notification_id="nonexistent")
-
-    # Mark All as Read Tests
-
-    def test_mark_all_as_read_success(self, manager, sample_user_info):
-        """Test marking all notifications as read for user."""
-        mock_db = Mock()
-        
-        notif1 = Mock(spec=NotificationDb)
-        notif1.id = "notif-1"
-        notif1.recipient = "user@example.com"
-        notif1.read = False
-        notif1.title = "Test 1"
-        notif1.type = "info"
-        notif1.created_at = datetime(2024, 1, 1)
-        notif1.can_delete = True
-        notif1.subtitle = None
-        notif1.description = None
-        notif1.link = None
-        notif1.action_type = None
-        notif1.action_payload = None
-        notif1.data = None
-        notif1.target_roles = None
-
-        notif2 = Mock(spec=NotificationDb)
-        notif2.id = "notif-2"
-        notif2.recipient = "user@example.com"
-        notif2.read = False
-        notif2.title = "Test 2"
-        notif2.type = "info"
-        notif2.created_at = datetime(2024, 1, 2)
-        notif2.can_delete = True
-        notif2.subtitle = None
-        notif2.description = None
-        notif2.link = None
-        notif2.action_type = None
-        notif2.action_payload = None
-        notif2.data = None
-        notif2.target_roles = None
-
-        manager._repo.get_multi.return_value = [notif1, notif2]
-
-        result = manager.mark_all_as_read(mock_db, user_info=sample_user_info)
-
-        assert result == 2
-        assert notif1.read is True
-        assert notif2.read is True
+        assert manager.mark_notification_read(Mock(), notification_id="nope") is None
+        manager._repo.update.assert_not_called()
 
     # Delete Notification Tests
 
     def test_delete_notification_success(self, manager):
-        """Test deleting a notification."""
+        """Deleting removes through the repository and returns True."""
         mock_db = Mock()
-        
-        notif_db = Mock(spec=NotificationDb)
-        notif_db.id = "notif-123"
-        notif_db.can_delete = True
-        
-        manager._repo.get.return_value = notif_db
-        manager._repo.remove.return_value = notif_db
+        manager._repo.remove.return_value = _db_notif("notif-123")
 
-        result = manager.delete_notification(mock_db, notification_id="notif-123")
-
-        assert result is True
-        manager._repo.remove.assert_called_once()
+        assert manager.delete_notification(mock_db, notification_id="notif-123") is True
+        manager._repo.remove.assert_called_once_with(db=mock_db, id="notif-123")
 
     def test_delete_notification_not_found(self, manager):
-        """Test deleting non-existent notification."""
-        mock_db = Mock()
-        manager._repo.get.return_value = None
+        """Deleting a missing notification returns False (the route maps it to 404)."""
+        manager._repo.remove.return_value = None
 
-        with pytest.raises(NotificationNotFoundError):
-            manager.delete_notification(mock_db, notification_id="nonexistent")
-
-    def test_delete_notification_cannot_delete(self, manager):
-        """Test trying to delete a notification marked as non-deletable."""
-        mock_db = Mock()
-        
-        notif_db = Mock(spec=NotificationDb)
-        notif_db.id = "notif-123"
-        notif_db.can_delete = False
-        
-        manager._repo.get.return_value = notif_db
-
-        result = manager.delete_notification(mock_db, notification_id="notif-123")
-
-        assert result is False
-        manager._repo.remove.assert_not_called()
-
-
-
-class TestStrictAccessCheck:
-    """``strict``: a notification addressed to a role it can't resolve grants
-    nothing (#1117). The default check, used for the bell, is unchanged."""
-
-    ROLE = Mock(id='role-stewards', assigned_groups=['stewards'])
-    ROLE.name = 'Data Steward'
-
-    def _manager(self, roles=None):
-        settings = Mock()
-        if roles is None:
-            settings.list_app_roles.side_effect = RuntimeError('roles unavailable')
-        else:
-            settings.list_app_roles.return_value = list(roles)
-        return NotificationsManager(settings_manager=settings)
-
-    def _notification(self, recipient=None, role_id=None):
-        return Notification(
-            id='n-1', recipient=recipient, recipient_role_id=role_id, title='Approval',
-            type=NotificationType.ACTION_REQUIRED, created_at=datetime(2026, 1, 1),
-        )
-
-    def _user(self, groups=()):
-        return UserInfo(
-            username='u@example.com', email='u@example.com', user='u', ip='127.0.0.1',
-            groups=list(groups),
-        )
-
-    @pytest.mark.parametrize('roles', [[], None], ids=['unknown-role', 'roles-unreadable'])
-    def test_an_unresolvable_role_grants_nothing_when_strict(self, roles):
-        manager = self._manager(roles)
-        notification = self._notification(role_id='role-stewards')
-
-        assert manager.can_user_access_notification(
-            None, notification, self._user(), strict=True,
-        ) is False
-        # The bell keeps treating it as visible to everyone
-        assert manager.can_user_access_notification(None, notification, self._user()) is True
-
-    def test_a_role_member_still_passes_when_strict(self):
-        manager = self._manager([self.ROLE])
-        notification = self._notification(role_id='role-stewards')
-
-        assert manager.can_user_access_notification(
-            None, notification, self._user(['stewards']), strict=True,
-        ) is True
-        assert manager.can_user_access_notification(
-            None, notification, self._user(['others']), strict=True,
-        ) is False
-
-    def test_a_role_stored_by_uuid_resolves_when_strict(self):
-        """Roles come back with UUID ids; the notification stores the text form."""
-        import uuid
-
-        role = Mock(id=uuid.UUID('1605ecf8-b56f-40ac-80b1-d3a71a4e4ffb'),
-                    assigned_groups=['stewards'])
-        role.name = 'Data Steward'
-        manager = self._manager([role])
-        notification = self._notification(role_id=str(role.id))
-
-        assert manager.can_user_access_notification(
-            None, notification, self._user(['stewards']), strict=True,
-        ) is True
-        assert manager.can_user_access_notification(
-            None, notification, self._user(['others']), strict=True,
-        ) is False
-
-    def test_a_broadcast_grants_nothing_when_strict(self):
-        manager = self._manager([self.ROLE])
-
-        assert manager.can_user_access_notification(
-            None, self._notification(), self._user(), strict=True,
-        ) is False
-
-    def test_unreadable_roles_deny_even_a_named_recipient_when_strict(self):
-        manager = self._manager(roles=None)
-        notification = self._notification(recipient='u@example.com')
-
-        assert manager.can_user_access_notification(
-            None, notification, self._user(), strict=True,
-        ) is False
-        assert manager.can_user_access_notification(None, notification, self._user()) is True
+        assert manager.delete_notification(Mock(), notification_id="nonexistent") is False

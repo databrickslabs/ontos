@@ -5,12 +5,14 @@ Tools for searching, creating, updating, and deleting teams.
 """
 
 from typing import Any, Dict, List, Optional
+from src.common.features import FeatureAccessLevel
 
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchIndexItem
 from src.controller import search_scoring
 from src.models.search_config import SearchConfig
 from src.repositories.entity_domain_association_repository import entity_domain_repo
+from src.tools import read_access
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
@@ -70,7 +72,11 @@ class SearchTeamsTool(BaseTool):
                 )
                 db_query = db_query.filter(TeamDb.id.in_(team_ids or ["__none__"]))
 
-            teams_db = db_query.limit(5000).all()
+            # GET /api/teams needs Read-only on teams: without it, no team.
+            if read_access.has_feature_read_level(ctx, read_access.TEAMS_FEATURE):
+                teams_db = db_query.limit(5000).all()
+            else:
+                teams_db = []
             logger.debug(f"[search_teams] Found {len(teams_db)} total teams in database")
 
             # Adapt rows to SearchIndexItem so the shared scorer applies (teams are
@@ -130,7 +136,13 @@ class GetTeamTool(BaseTool):
     ) -> ToolResult:
         """Get a team by ID."""
         logger.info(f"[get_team] Starting - team_id={team_id}")
-        
+        not_found = ToolResult(success=False, error=f"Team '{team_id}' not found")
+        hidden = read_access.without_read_level(
+            ctx, self.name, read_access.TEAMS_FEATURE, not_found, team_id
+        )
+        if hidden:
+            return hidden
+
         try:
             from src.controller.teams_manager import teams_manager
             
@@ -200,6 +212,7 @@ class CreateTeamTool(BaseTool):
     }
     required_params = ["name", "title"]
     required_scope = "teams:write"
+    required_permission = ("teams", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -279,6 +292,7 @@ class UpdateTeamTool(BaseTool):
     }
     required_params = ["team_id"]
     required_scope = "teams:write"
+    required_permission = ("teams", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -362,6 +376,7 @@ class DeleteTeamTool(BaseTool):
     }
     required_params = ["team_id"]
     required_scope = "teams:write"
+    required_permission = ("teams", FeatureAccessLevel.ADMIN)
     
     async def execute(
         self,

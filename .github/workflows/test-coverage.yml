@@ -268,7 +268,15 @@ jobs:
       - name: Install Playwright browsers
         working-directory: ./src/frontend
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        # --with-deps runs apt-get; retried because a runner's apt mirror sometimes
+        # fails to serve its index ("Some index files failed to download", exit 100).
+        run: |
+          for attempt in 1 2 3; do
+            npx playwright install --with-deps chromium && exit 0
+            echo "::warning::Playwright install failed (attempt $attempt of 3)"
+            sleep $((attempt * 30))
+          done
+          exit 1
 
       # Saved right after the install (not in a post step) so a later timeout
       # or cancel doesn't lose it. Pushes only: PR runs never save.
@@ -282,7 +290,14 @@ jobs:
       - name: Install Playwright OS deps only
         working-directory: ./src/frontend
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        # Retried for the same apt mirror failures as the browser install above.
+        run: |
+          for attempt in 1 2 3; do
+            npx playwright install-deps chromium && exit 0
+            echo "::warning::Playwright OS deps install failed (attempt $attempt of 3)"
+            sleep $((attempt * 30))
+          done
+          exit 1
 
       - name: Start backend server
         working-directory: ./src

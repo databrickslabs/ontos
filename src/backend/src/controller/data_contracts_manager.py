@@ -62,6 +62,7 @@ def _upsert_custom_property(data: dict, prop: str, value) -> None:
 import yaml
 from sqlalchemy.orm import Session
 
+from src.common.ontology_type_names import canonical_type_name
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
@@ -875,7 +876,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             existing = (
                 db_session.query(EntityRelationshipDb)
                 .filter(
-                    EntityRelationshipDb.source_type.in_(PHYSICAL_TABLE_ASSET_TYPES),
+                    EntityRelationshipDb.source_type.in_([canonical_type_name(t) for t in PHYSICAL_TABLE_ASSET_TYPES]),
                     EntityRelationshipDb.source_id == str(asset.id),
                     EntityRelationshipDb.target_type == "DataContract",
                     EntityRelationshipDb.target_id == contract_id,
@@ -4276,7 +4277,82 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.rollback()
             logger.error(f"Error deleting property authoritative definition: {e}", exc_info=True)
             raise
-    
+
+    # --- Workflow Triggers of a Contract Change ---
+    # Run by the REST routes and the assistant tools alike: the blocking
+    # before_update gates before an update; on_create / on_update / on_delete
+    # once the change succeeded (not blocking, a failing workflow only logged).
+
+    @staticmethod
+    def run_update_gates(
+        db: Session, contract: Any, changes: Dict[str, Any], user_email: Optional[str]
+    ) -> tuple[bool, List[Any]]:
+        """Run the before_update gates of an update; ``(passed, executions)``.
+
+        ``changes`` are the fields sent. A gate that raises is logged and lets
+        the update proceed (``(True, [])``).
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType
+        try:
+            return get_trigger_registry(db).before_update(
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=str(contract.id),
+                entity_name=getattr(contract, 'name', None),
+                entity_data=changes,
+                user_email=user_email,
+            )
+        except Exception as e:
+            logger.warning(f"before_update trigger failed for contract {contract.id}: {e}")
+            return True, []
+
+    @staticmethod
+    def fire_create_trigger(db: Session, contract: Any, user_email: Optional[str]) -> None:
+        """Fire on_create for a contract just created."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_create",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=str(contract.id),
+            entity_name=contract.name,
+            entity_data={
+                "contract_id": str(contract.id), "name": contract.name,
+                "status": getattr(contract, 'status', 'draft'),
+            },
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def fire_update_trigger(
+        db: Session, contract_id: str, contract: Any, changes: Dict[str, Any],
+        user_email: Optional[str],
+    ) -> None:
+        """Fire on_update for a contract just updated; ``changes`` are the fields sent."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_update",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=getattr(contract, 'name', None),
+            entity_data=changes,
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def fire_delete_trigger(db: Session, contract_id: str, user_email: Optional[str]) -> None:
+        """Fire on_delete for a contract just deleted."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_delete",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_data={"contract_id": contract_id},
+            user_email=user_email,
+        )
+
     # --- Workflow Transition Methods ---
     
     def transition_status(
@@ -4577,7 +4653,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         contract = data_contract_repo.get(db, id=contract_id)
         if not contract:
             raise ValueError("Contract not found")
-        
+
+        # Only the contract's own runs (the route answers 404 otherwise)
+        from src.db_models.data_contracts import DataProfilingRunDb
+        run = db.query(DataProfilingRunDb.id).filter(
+            DataProfilingRunDb.id == run_id, DataProfilingRunDb.contract_id == contract_id
+        ).first()
+        if not run:
+            raise ValueError("Profile run not found")
+
         suggestions = suggested_quality_checks_repo.get_by_profile_run_id(db, run_id)
         
         result = []
@@ -6758,6 +6842,87 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 elevated.add(fid)
         return elevated
 
+    @staticmethod
+    def _visible_to_non_admin(contract, elevated_families: Set[str]) -> bool:
+        """The list's per-row rule for a caller who isn't a feature admin (PRD #442).
+
+        A published row (active/deprecated) is visible to everyone; any other
+        status only when the caller is elevated for the row's version family.
+        """
+        from src.common.version_visibility import is_admin_only_status, is_visible_consumer
+
+        if (contract.version_family_id or contract.id) in elevated_families:
+            return True
+        return not is_admin_only_status(contract) and is_visible_consumer(contract)
+
+    @staticmethod
+    def _is_others_personal_draft(contract, caller_email: Optional[str]) -> bool:
+        """Whether ``contract`` is another user's personal draft (tier 1, PRD #442).
+
+        A personal draft is a row in ``draft`` status with a ``draft_owner_id``;
+        only its owner reads it, even inside an elevated family. The owner stamp
+        doesn't hide a row in any other status: an active or deprecated contract
+        that still carries it is published, and readable by everyone.
+        """
+        status = (contract.status or "").strip().lower()
+        return (
+            status == "draft"
+            and bool(contract.draft_owner_id)
+            and contract.draft_owner_id != caller_email
+        )
+
+    def readable_contracts(
+        self,
+        db,
+        contracts,
+        *,
+        is_admin: bool,
+        caller_email: Optional[str],
+        caller_team_ids: Optional[Set[str]],
+    ) -> list:
+        """The rows of ``contracts`` the caller may read by id, in their order.
+
+        Same rule as the list (:meth:`_query_contracts`): feature admins read
+        everything; for anyone else a contract is readable when it is published
+        or when the caller is elevated for its version family (draft owner or
+        owning-team member of any version). On top of the list, another user's
+        personal draft (see :meth:`_is_others_personal_draft`) is never readable.
+        """
+        if is_admin:
+            return list(contracts)
+        candidates = [
+            c for c in contracts if not self._is_others_personal_draft(c, caller_email)
+        ]
+        if all(self._visible_to_non_admin(c, set()) for c in candidates):
+            return candidates
+        family_ids = {c.version_family_id or c.id for c in candidates}
+        family_rows = db.query(DataContractDb).filter(
+            DataContractDb.version_family_id.in_(family_ids)
+            | DataContractDb.id.in_(family_ids)
+        ).all()
+        elevated = self._elevated_contract_families(
+            db, family_rows, caller_email=caller_email, caller_team_ids=caller_team_ids
+        )
+        return [c for c in candidates if self._visible_to_non_admin(c, elevated)]
+
+    def can_read_contract(
+        self,
+        db,
+        contract,
+        *,
+        is_admin: bool,
+        caller_email: Optional[str],
+        caller_team_ids: Optional[Set[str]],
+    ) -> bool:
+        """Whether the caller may read ``contract`` by id (see :meth:`readable_contracts`)."""
+        return bool(self.readable_contracts(
+            db,
+            [contract],
+            is_admin=is_admin,
+            caller_email=caller_email,
+            caller_team_ids=caller_team_ids,
+        ))
+
     def _query_contracts(
         self,
         db,
@@ -6783,8 +6948,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from src.common.version_visibility import (
             collapse_by_family,
             family_counts as compute_family_counts,
-            is_admin_only_status,
-            is_visible_consumer,
         )
 
         wanted_domain_ids = list(domain_ids or [])
@@ -6802,7 +6965,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     (DataContractDb.project_id == project_id) |
                     (DataContractDb.project_id.is_(None))
                 )
-            contracts = query.limit(500).all()
+            contracts = query.all()
         else:
             contracts = data_contract_repo.get_multi(
                 db,
@@ -6827,10 +6990,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # consumer-visibility rule. Admins bypass.
         if not is_admin:
             contracts = [
-                c
-                for c in contracts
-                if (c.version_family_id or c.id) in elevated_families
-                or (not is_admin_only_status(c) and is_visible_consumer(c))
+                c for c in contracts if self._visible_to_non_admin(c, elevated_families)
             ]
 
         # Optional status filter (e.g. ?status=draft). Applied after the

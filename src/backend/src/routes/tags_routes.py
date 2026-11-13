@@ -81,7 +81,7 @@ async def list_tag_namespaces(
     db: DBSessionDep,
     manager: TagsManager = Depends(get_tags_manager),
     skip: int = 0,
-    limit: int = Query(default=100, le=1000),
+    limit: Optional[int] = Query(default=None, ge=1),
     _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.READ_ONLY)),
 ):
     return manager.list_namespaces(db, skip=skip, limit=limit)
@@ -241,7 +241,7 @@ async def list_tags(
     db: DBSessionDep,
     manager: TagsManager = Depends(get_tags_manager),
     skip: int = 0,
-    limit: int = Query(default=100, le=1000),
+    limit: Optional[int] = Query(default=None, ge=1),
     namespace_id: Optional[UUID] = Query(None, description="Filter by namespace ID"),
     namespace_name: Optional[str] = Query(None, description="Filter by namespace name"),
     name_contains: Optional[str] = Query(None, description="Filter by tag name containing string (case-insensitive)"),
@@ -432,7 +432,7 @@ async def list_namespace_permissions(
     db: DBSessionDep,
     manager: TagsManager = Depends(get_tags_manager),
     skip: int = 0,
-    limit: int = Query(default=100, le=1000),
+    limit: Optional[int] = Query(default=None, ge=1),
     _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.READ_ONLY)),
 ):
     # Check if namespace exists first (optional, manager method might do it)

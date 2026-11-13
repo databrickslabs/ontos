@@ -339,7 +339,8 @@
       "for_request_access": "Richiedi accesso (procedura guidata)",
       "for_request_publish": "Richiedi pubblicazione (procedura guidata)",
       "for_request_certify": "Richiedi certificazione (procedura guidata)",
-      "for_request_status_change": "Richiedi modifica di stato (procedura guidata)"
+      "for_request_status_change": "Richiedi modifica di stato (procedura guidata)",
+      "on_request_definition_change": "Richiesta di modifica della definizione"
     },
     "entityTypes": {
       "catalog": "Catalogo",
@@ -356,7 +357,8 @@
       "data_asset_review": "Revisione asset",
       "job": "Job",
       "subscription": "Abbonamento",
-      "user": "Utente"
+      "user": "Utente",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validazione",
@@ -473,7 +475,10 @@
     "selectRelTypePrompt": "Seleziona un tipo di relazione per trovare le entità di destinazione",
     "createRelationship": "Crea relazione",
     "relationshipCreated": "Relazione creata",
-    "assetFallback": "Asset"
+    "assetFallback": "Asset",
+    "conceptRelationshipHint": "«{{relationship}}» collega questo elemento a un concetto come relazione: compare in Relazioni e nella lineage. Per mostrare il concetto nei dettagli di questo elemento e in {{conceptSection}} nella pagina del concetto, usa invece {{section}}.",
+    "targetNotPickable": "{{type}} non può essere scelto qui. Si gestisce nella sua pagina.",
+    "noAccessToTarget": "Non hai accesso a {{type}}. Chiedi a un amministratore l'accesso in lettura per collegarlo."
   },
   "assetForm": {
     "groups": {

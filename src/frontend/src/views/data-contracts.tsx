@@ -28,6 +28,7 @@ import VersionCountBadge from '@/components/common/version-count-badge';
 import { Switch } from '@/components/ui/switch';
 import type { CertificationLevel } from '@/types/lifecycle';
 import { useApi } from '@/hooks/use-api';
+import { usePersistentState } from '@/hooks/use-persistent-state';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { internalErrorText } from '@/lib/server-error-text';
@@ -40,7 +41,7 @@ export default function DataContracts() {
   // "Show all versions" toggle — flips the family-collapse on the backend.
   // When false (default) the list collapses to one row per version family
   // and exposes a "N versions" badge. See PRD #442.
-  const [includeHistory, setIncludeHistory] = useState(false);
+  const [includeHistory, setIncludeHistory] = usePersistentState('data-contracts-include-history', false, (v): v is boolean => typeof v === 'boolean');
   const [error, setError] = useState<string | null>(null);
   const [openWizard, setOpenWizard] = useState(false);
   const [openUploadDialog, setOpenUploadDialog] = useState(false);

@@ -1271,6 +1271,18 @@ Link individual columns to business properties.
 - Supports data lineage and impact analysis
 - Facilitates cross-domain data discovery
 
+#### Linked Business Concepts vs. the "Has Concepts" relationship
+
+There are two ways to connect an item to a concept, stored in different places:
+
+| | Linked Business Concepts | "Has Concepts" relationship |
+|---|---|---|
+| Where you add it | The *Linked Business Concepts* field in an item's details (assets, products, contracts, domains) and on schema objects and properties | **Add Relationship** on the item's *Relationships* tab |
+| What it stores | A semantic link (item → concept IRI) | A relationship record `hasSemanticConcept` (item → concept) |
+| Where it shows | The item's details, the concept's *Linked Entities* panel, concept mapping status, search and business lineage | The item's *Relationships* tab and its lineage |
+
+Use **Linked Business Concepts** to say what an item *means*. That's the link the concept's page, search and the glossary coverage read. The "Has Concepts" relationship shows only on the item's side: the concept's page doesn't list it.
+
 ### Contract Lifecycle
 
 #### 1. Draft
@@ -2307,9 +2319,9 @@ Steps are the building blocks of workflows:
 | Step Type | Description | Configuration |
 |-----------|-------------|---------------|
 | **Validation** | Evaluate a compliance rule | Rule DSL expression |
-| **Approval** | Request human approval | Approvers; timeout and require all are accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
+| **Approval** | Request human approval | Approvers; require all (every approver decides: a user for themselves, any one member for a group or role, one person for one approver); timeout in days, `0` = no timeout, accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
 | **Notification** | Send a notification | Recipients, template, message |
-| **Assign Tag** | Add or update a tag | Key, value or value source |
+| **Assign Tag** | Add or update a tag | Key, and a fixed value, a value from the run, or no value |
 | **Remove Tag** | Remove a tag | Key to remove |
 | **Conditional** | Branch based on condition | Condition expression |
 | **Script** | Execute custom logic | Script code |
@@ -2408,7 +2420,7 @@ To change the recipients, edit the **Notify Owners** step. To write your own tex
 
 #### After an Upgrade
 
-The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
+The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. Defaults that someone edited are kept unless you tick **Also reset default workflows that were edited** in the confirmation, and the active state of a workflow is never changed. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
 
 Reloading replaces changes made to the default workflows themselves; duplicate a default before editing it to keep your version.
 
@@ -2457,7 +2469,7 @@ A workflow whose trigger is **Manual** never fires on its own. To start it, open
 
 - **Scope** is saved but not applied yet ([#1118](https://github.com/databrickslabs/ontos/issues/1118)).
 - **Scheduled** workflows do not run yet ([#941](https://github.com/databrickslabs/ontos/issues/941)).
-- **Approval steps**: `require_all` and `timeout_days` are accepted but not enforced. The first decision resumes the workflow, and a pending approval never expires ([#1119](https://github.com/databrickslabs/ontos/issues/1119)).
+- **Approval steps**: `timeout_days` is accepted but not enforced: a pending approval never expires ([#1119](https://github.com/databrickslabs/ontos/issues/1119)); an admin can cancel it. With `require_all`, every approver decides and any rejection fails the step.
 
 #### Blocking vs Non-Blocking
 
@@ -2475,7 +2487,7 @@ Approval steps pause workflow execution:
 4. Approver makes decision via notification
 5. Workflow resumes with on_pass or on_fail path
 
-Only the recipients of the step the execution is waiting at can decide it (admins can decide any approval). On an owner approval (`DomainOwner`, `ContractApprover`) the requester can't decide their own request, even when the approval falls back to a role they hold. Approval notifications created before an upgrade to a version with this check don't record their step; any recipient of the execution's approvals can still decide those, as before.
+Only the recipients of the step the execution is waiting at can decide it (admins can decide any approval, except one that requires every approver, where an admin who isn't one of them can only cancel it). An admin who cancels an execution waiting at an approval ends that step as failed (reason `cancelled_by_admin`): the workflow follows its rejection path, so the requester is told when the workflow does so, and the approvers' open requests are closed. On an owner approval (`DomainOwner`, `ContractApprover`) the requester can't decide their own request, even when the approval falls back to a role they hold. Approval notifications created before an upgrade to a version with this check don't record their step; any recipient of the execution's approvals can still decide those, as before.
 
 ### Workflow Best Practices
 
@@ -3021,6 +3033,41 @@ POST /mcp
 > user**, scoped to that user's grants. External agents calling with only an
 > `X-API-Key` (no forwarded user identity) run as the app service principal, as
 > before.
+>
+> **Who the tools act for.** With a forwarded user token
+> (`x-forwarded-access-token`), the caller is the user, or service principal,
+> that `current_user.me()` returns for that token; the `X-Forwarded-Email`
+> header never names the caller. The tools then apply the caller's Ontos roles
+> like the REST API: a tool that changes data needs the feature level of the
+> matching route (and `update_data_product` changes a product's fields only for
+> its owners or a data-products admin, as `PUT /api/data-products/{id}`; each
+> product change is audited under `data-products` and fires the workflow
+> triggers of its route; each contract change is audited under
+> `data-contracts` and fires the workflow triggers of its route, and a failing
+> `before_update` workflow refuses `update_data_contract` as it refuses
+> `PUT /api/data-contracts/{id}`), and data products and
+> contracts are returned only when the
+> caller has the feature's Read-only level (data-products, data-contracts) and
+> may read them (published ones, or drafts the caller owns or administers;
+> anything else is answered as not found). `global_search` also keeps only rows
+> of the features the caller reads, like `/api/search`. The token's scopes still
+> limit which tools can be called. A request with only an `X-API-Key` has no
+> user: it gets Read-only on the features its token's scopes name
+> (`data-products:*`, `contracts:*`, `domains:*`, `teams:*`, `projects:*`,
+> `semantic:*`, `tags:*`; `*` names them all), reads published products and
+> contracts only, and its tools that change data are refused.
+> `execute_sparql_query` is for semantic-models admins only.
+>
+> **Visibility.** The search and list tools (`search_*`, `list_*`, `global_search`,
+> `find_entities_by_concept`, `list_semantic_links`) take `visibility`:
+> `published` (active and published to the marketplace, the MCP default) or
+> `readable` (everything the caller may read, the Ask Ontos default). Searches
+> also take `min_certification_level` and `include_history` (default: the newest
+> version of each product or contract). Get-by-id tools are not affected.
+>
+> **Keyless MCP** (no `X-API-Key`, keyless default token enabled) is accepted only
+> with a forwarded user token; a request that carries only `X-Forwarded-Email` or
+> `X-Forwarded-User` is refused (`-32001`) and audited as `IDENTITY_REJECTED`.
 
 #### Authentication
 

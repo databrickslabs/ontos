@@ -214,6 +214,14 @@ compliance alerts when the bound contract's quality checks fail.
 
 - `publication_scope` controls marketplace visibility: `none` (default),
   `domain`, `organization`, `external`.
+- `publication_scope`, `published_at` and `published_by` are read-only in the
+  API (marked `readOnly` in the OpenAPI schema). `POST /api/data-products` and
+  `PUT /api/data-products/{id}` accept them in the body, so a GET response can
+  be sent back unchanged, but ignore them. Change the scope only with
+  `POST /api/data-products/{id}/publish`,
+  `POST /api/data-products/{id}/set-publication-scope` (body `{"scope": ...}`)
+  or `POST /api/data-products/{id}/unpublish`; these check that the product is
+  `active` and that every output port has an approved or active contract.
 - The legacy `published` boolean column is retained for backward DB
   compatibility but is superseded by `publication_scope`.
 - Consumers can subscribe to a product (`DataProductSubscriptionDb`),

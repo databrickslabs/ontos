@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import VolumeType
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.config import Settings, resolve_volume
 from src.common.workspace_client import get_workspace_client
@@ -27,6 +28,18 @@ logger = get_logger(__name__)
 
 # Constant for shared asset entity_id
 SHARED_ENTITY_ID = "__shared__"
+
+
+class NotSharedAssetError(CodedValueError):
+    """Only a shared library asset can be attached to an entity."""
+
+    code = 'not_shared_asset'
+
+
+class SharedScopeNotAllowedError(CodedValueError):
+    """Library records are created on the shared metadata routes, not on an entity's own."""
+
+    code = 'shared_scope_not_allowed'
 
 # Session.info keys of the document files to delete once the session commits.
 _PENDING_FILES_KEY = "ontos_pending_document_files"
@@ -388,11 +401,11 @@ class MetadataManager:
     ) -> MetadataAttachment:
         """Attach a shared asset to an entity.
 
-        Raises ValueError if ``asset_id`` is not a shared library asset: attaching an
-        entity's own note would expose it through the target's merged metadata.
+        Raises NotSharedAssetError if ``asset_id`` is not a shared library asset: attaching
+        an entity's own note would expose it through the target's merged metadata.
         """
         if not self.is_shared_asset(db, kind=data.asset_type, id=data.asset_id):
-            raise ValueError("Only shared library assets can be attached")
+            raise NotSharedAssetError("Only shared library assets can be attached")
         # Check if attachment already exists
         existing = self._attachment_repo.get_attachment(
             db, entity_type=entity_type, entity_id=entity_id,

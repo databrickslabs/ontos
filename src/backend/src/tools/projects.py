@@ -5,11 +5,13 @@ Tools for searching, creating, updating, and deleting projects.
 """
 
 from typing import Any, Dict, List, Optional
+from src.common.features import FeatureAccessLevel
 
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchIndexItem
 from src.controller import search_scoring
 from src.models.search_config import SearchConfig
+from src.tools import read_access
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
@@ -57,7 +59,10 @@ class SearchProjectsTool(BaseTool):
             from src.db_models.projects import ProjectDb
 
             projects_db = ctx.db.query(ProjectDb).limit(5000).all()
-            logger.debug(f"[search_projects] Found {len(projects_db)} total projects in database")
+            # Only the projects GET /api/projects lists for the caller.
+            visible = read_access.visible_project_ids(ctx, [p.id for p in projects_db])
+            projects_db = [p for p in projects_db if str(p.id) in visible]
+            logger.debug(f"[search_projects] {len(projects_db)} projects visible to the caller")
 
             # Adapt rows to SearchIndexItem so the shared scorer applies (projects are
             # not part of the persistent search index).
@@ -116,7 +121,11 @@ class GetProjectTool(BaseTool):
     ) -> ToolResult:
         """Get a project by ID."""
         logger.info(f"[get_project] Starting - project_id={project_id}")
-        
+        # Read-only on projects and the project list's visibility, as search_projects.
+        if not read_access.visible_project_ids(ctx, [project_id]):
+            not_found = ToolResult(success=False, error=f"Project '{project_id}' not found")
+            return read_access.denied(ctx, self.name, not_found, [str(project_id)])
+
         try:
             from src.controller.projects_manager import projects_manager
             
@@ -193,6 +202,7 @@ class CreateProjectTool(BaseTool):
     }
     required_params = ["name", "title"]
     required_scope = "projects:write"
+    required_permission = ("projects", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -275,6 +285,7 @@ class UpdateProjectTool(BaseTool):
     }
     required_params = ["project_id"]
     required_scope = "projects:write"
+    required_permission = ("projects", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -356,6 +367,7 @@ class DeleteProjectTool(BaseTool):
     }
     required_params = ["project_id"]
     required_scope = "projects:write"
+    required_permission = ("projects", FeatureAccessLevel.ADMIN)
     
     async def execute(
         self,

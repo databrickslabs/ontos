@@ -19,7 +19,13 @@ from sqlalchemy.orm import Session
 
 from src.common.api_errors import new_error_id
 from src.common.config import Settings, get_settings
-from src.common.llm_content import block_types, coerce_message_text
+from src.common.llm_content import (
+    REFUSAL_DISPLAY_MAX_CHARS,
+    block_types,
+    coerce_message_text,
+    refusal_text,
+    truncate_text,
+)
 from src.common.logging import get_logger
 from src.tools.system_prompts import get_system_prompt
 from src.models.llm_search import (
@@ -29,6 +35,7 @@ from src.models.llm_search import (
     GetDataProductCostsParams, GetTableSchemaParams, ExecuteAnalyticsQueryParams
 )
 from src.tools import ToolRegistry, ToolContext, create_default_registry
+from src.tools.base import ToolCaller
 
 logger = get_logger(__name__)
 
@@ -375,6 +382,8 @@ class LLMSearchManager:
         # ``None`` afterwards so the manager is safe to reuse across
         # requests within a process.
         self._chat_context: Optional[Dict[str, Any]] = None
+        # The caller the tools act for, set by ``chat()`` like ``_chat_context``.
+        self._tool_caller: Optional[ToolCaller] = None
 
         # Initialize tool registry with all default tools
         self._tool_registry = create_default_registry()
@@ -391,7 +400,10 @@ class LLMSearchManager:
             data_contracts_manager=self._data_contracts_manager,
             semantic_models_manager=self._semantic_models_manager,
             costs_manager=self._costs_manager,
-            search_manager=self._search_manager
+            search_manager=self._search_manager,
+            caller=self._tool_caller,
+            # The chat shows what its user may read (drafts they own included).
+            default_visibility="readable",
         )
     
     def _get_latest_user_message(self, session: ConversationSession) -> str:
@@ -462,6 +474,7 @@ class LLMSearchManager:
         page_url: Optional[str] = None,
         feature_id: Optional[str] = None,
         selected_entity: Optional[Dict[str, Any]] = None,
+        caller: Optional[ToolCaller] = None,
     ) -> ChatResponse:
         """
         Process a chat message and return the assistant's response.
@@ -482,6 +495,8 @@ class LLMSearchManager:
                 prompt today.
             selected_entity: Entity the user has selected in the UI
                 (Phase 3). Dict with optional ``type``, ``name``, ``id``.
+            caller: Who the tools act for. Without one, tools that change
+                data are refused.
 
         Returns:
             ChatResponse with the assistant's message
@@ -496,6 +511,7 @@ class LLMSearchManager:
             "feature_id": feature_id,
             "selected_entity": selected_entity,
         }
+        self._tool_caller = caller
         try:
             return await self._chat_inner(
                 user_message=user_message,
@@ -505,6 +521,7 @@ class LLMSearchManager:
             )
         finally:
             self._chat_context = None
+            self._tool_caller = None
 
     async def _chat_inner(
         self,
@@ -786,7 +803,11 @@ class LLMSearchManager:
                             "tool": tool_name,
                             "args": tool_args,
                             "success": False,
-                            "error": result.error
+                            "error": result.error,
+                            "error_code": result.error_code,
+                            # The params of a coded refusal (tool_not_permitted).
+                            **{k: result.data[k] for k in ("feature_id", "required_level")
+                               if k in (result.data or {})},
                         })
                     else:
                         result_summary = str(result_dict)[:500] + "..." if len(str(result_dict)) > 500 else str(result_dict)
@@ -818,14 +839,26 @@ class LLMSearchManager:
                         content=json.dumps(result_dict), tool_call_id=tc.id
                     )
             else:
+                reply_content = assistant_message.content or ""
+                is_refusal = not coerce_message_text(reply_content).strip()
+                if is_refusal:
+                    # A refusal (OpenAI ``refusal`` block or field) is the
+                    # model's reply: show it rather than an empty-answer error.
+                    reply_content = refusal_text(assistant_message)
+                # The refusal goes through the same strippers as an answer.
                 cleaned_content, citations, confidence_labels = _strip_internal_citations(
-                    assistant_message.content or ""
+                    reply_content
                 )
                 # Sanitize orphan asterisk runs. The system prompt forbids
                 # ``****``/``*****`` as visual markers, but the LLM still
                 # emits them occasionally. ``****`` (4+) is never valid
                 # CommonMark, so stripping it is safe.
                 cleaned_content = _strip_asterisk_runs(cleaned_content)
+                if is_refusal:
+                    # Capped: it is stored and kept in the session history.
+                    cleaned_content = truncate_text(
+                        cleaned_content.strip(), REFUSAL_DISPLAY_MAX_CHARS
+                    )
                 if not cleaned_content.strip():
                     # Reasoning-only or blank content: fail the turn with a code
                     # instead of storing an empty reply.

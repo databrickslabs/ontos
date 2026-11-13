@@ -17,6 +17,11 @@ import {
 } from '@/components/common/list-view-skeleton';
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
 import { complianceRunWarningText } from '@/lib/compliance-run-warning';
+import {
+  complianceActionError,
+  complianceActionLabel,
+  complianceActionOutcomes,
+} from '@/lib/compliance-action-outcome';
 
 interface Run {
   id: string; // UUID
@@ -73,6 +78,27 @@ export default function ComplianceRunDetails() {
     { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (
       <span className="text-sm text-muted-foreground break-words">{row.original.message || t('compliance:results.empty')}</span>
     ) },
+    { id: 'actions', header: t('compliance:results.actions'), cell: ({ row }) => {
+      const outcomes = complianceActionOutcomes(row.original.details_json);
+      if (outcomes.length === 0) {
+        return <span className="text-sm text-muted-foreground">{t('compliance:results.empty')}</span>;
+      }
+      return (
+        <ul className="space-y-1">
+          {outcomes.map((outcome, i) => (
+            <li key={i} className="flex flex-wrap items-center gap-2 text-sm">
+              <Badge variant={outcome.success ? 'secondary' : 'destructive'}>
+                {outcome.success ? t('compliance:actionOutcomes.status.done') : t('compliance:actionOutcomes.status.failed')}
+              </Badge>
+              <span className="break-words">{complianceActionLabel(t, outcome)}</span>
+              {!outcome.success && (
+                <span className="text-muted-foreground break-words">{complianceActionError(t, outcome)}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      );
+    } },
   ], [t]);
 
   const load = useCallback(async () => {

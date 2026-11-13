@@ -634,6 +634,46 @@ class GitService:
             logger.error(f"Error saving YAML file: {e}")
             return False
 
+    def save_text(self, filename: str, text: str, subdir: Optional[str] = None) -> bool:
+        """Save a text file in the repository as is (without committing).
+
+        Like ``save_yaml`` for content that must be kept verbatim (a metric
+        view's YAML, a SQL statement). Returns True if successful.
+        """
+        if not self.is_cloned:
+            logger.warning("Git repository not cloned")
+            return False
+        try:
+            file_dir = self._repo_dir / subdir if subdir else self._repo_dir
+            file_dir.mkdir(parents=True, exist_ok=True)
+            file_path = file_dir / filename
+            if file_path.resolve().parent != file_dir.resolve():
+                logger.error("Refusing to write outside the repository: %s", filename)
+                return False
+            file_path.write_text(text, encoding='utf-8')
+            logger.info(f"Saved file: {file_path}")
+            self._copy_to_volume(file_path)
+            return True
+        except Exception as e:
+            logger.error(f"Error saving file: {e}")
+            return False
+
+    def load_text(self, filename: str, subdir: Optional[str] = None) -> Optional[str]:
+        """The text of a file in the repository, or None when it does not exist.
+
+        Unlike ``load_yaml``, a file that exists but can't be read raises, so a
+        caller putting files back as they were never takes it for a missing one.
+        """
+        if not self.is_cloned:
+            raise RuntimeError("Git repository not cloned")
+        file_dir = self._repo_dir / subdir if subdir else self._repo_dir
+        file_path = file_dir / filename
+        if file_path.resolve().parent != file_dir.resolve():
+            raise ValueError(f"Refusing to read outside the repository: {filename}")
+        if not file_path.exists():
+            return None
+        return file_path.read_text(encoding='utf-8')
+
     def load_yaml(self, filename: str, subdir: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Load a YAML file from the Git repository.
         

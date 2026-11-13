@@ -3,7 +3,7 @@ import {
   Search, Loader2, Check, Database, Table2, Eye, Radio,
   LayoutDashboard, BookOpen, BrainCircuit, Globe, Zap,
   Box, Server, Shapes, FolderTree, Columns2, FileCode, Brain,
-  Activity, Shield, FolderOpen,
+  Activity, Shield, FolderOpen, Lightbulb, Users, Briefcase, Package, FileText, Info,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { useFormatLabel } from '@/lib/format-label';
 import { getTargetTypeName } from '@/lib/relationship-type';
+import { assetTypeLocalName, GENERIC_ASSET_TARGET, relationshipTargetSource } from '@/lib/relationship-target-source';
 import { AssetTypeRead } from '@/types/asset';
 import type { RelationshipDefinition } from '@/types/ontology-schema';
 
@@ -41,7 +42,20 @@ interface TargetEntity {
   name: string;
   type: string;
   location?: string;
+  /** Second line, e.g. a concept's IRI */
+  detail?: string;
+  /** Icon lookup key when `type` is a display label */
+  iconKey?: string;
 }
+
+interface LinkCandidate {
+  id: string;
+  name: string;
+  entity_type: string;
+  context?: string | null;
+}
+
+const CANDIDATE_LIMIT = 50;
 
 const ASSET_TYPE_ICONS: Record<string, React.ElementType> = {
   Dataset: Database,
@@ -53,6 +67,13 @@ const ASSET_TYPE_ICONS: Record<string, React.ElementType> = {
   'ML Model': BrainCircuit,
   'API Endpoint': Globe,
   Stream: Zap,
+  // Non-asset targets, by ontology local name
+  DataDomain: FolderTree,
+  DataProduct: Package,
+  DataContract: FileText,
+  Team: Users,
+  Project: Briefcase,
+  OntologyConcept: Lightbulb,
 };
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -88,7 +109,7 @@ function TargetResultRow({ entity, isSelected, onSelect }: {
   onSelect: () => void;
 }) {
   const { t } = useTranslation('common');
-  const Icon = getAssetIcon(entity.type);
+  const Icon = getAssetIcon(entity.iconKey ?? entity.type);
   return (
     <button
       onClick={onSelect}
@@ -102,6 +123,9 @@ function TargetResultRow({ entity, isSelected, onSelect }: {
         <div className="text-sm font-medium truncate">{entity.name}</div>
         {entity.location && (
           <div className="text-xs text-muted-foreground truncate">{entity.location}</div>
+        )}
+        {entity.detail && (
+          <div className="text-xs text-muted-foreground/70 font-mono truncate">{entity.detail}</div>
         )}
       </div>
       <Badge variant="outline" className="text-xs flex-shrink-0">
@@ -177,6 +201,11 @@ export function AddRelationshipDialog({
   // Browse state
   const [assetTypes, setAssetTypes] = useState<AssetTypeRead[]>([]);
   const [typesLoading, setTypesLoading] = useState(false);
+  const [typesLoaded, setTypesLoaded] = useState(false);
+  // Bumped whenever the relationship type changes: answers to older requests are dropped.
+  const requestSeq = useRef(0);
+  // The caller may not read the target type (403): say so instead of "nothing found".
+  const [accessDenied, setAccessDenied] = useState(false);
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   const [browseResults, setBrowseResults] = useState<TargetEntity[]>([]);
   const [browseTotal, setBrowseTotal] = useState(0);
@@ -197,10 +226,31 @@ export function AddRelationshipDialog({
   const targetTypeLabel = selectedRelDef?.target_type_label
     || selectedRelDef?.target_type_iri?.split('#')[1]
     || '';
-  const targetAssetTypes = targetTypeLabel ? [targetTypeLabel] : [];
+  const targetTypeName = selectedRelDef ? getTargetTypeName(selectedRelDef) : '';
+  // Where the targets come from: assets, link candidates (domains, concepts, ...)
+  // or nowhere (managed on another page). Asset types are matched by local name,
+  // since target_type_label is translated.
+  const targetSource = useMemo(() => {
+    if (!targetTypeName) return null;
+    const source = relationshipTargetSource(targetTypeName, assetTypes.map(at => at.name));
+    // Without the asset type list (failed load) a type can't be ruled out: search
+    // assets by the target's label, as before.
+    if (source.kind === 'unsupported' && !typesLoaded) {
+      return { kind: 'asset' as const, assetTypeNames: targetTypeLabel ? [targetTypeLabel] : null };
+    }
+    return source;
+  }, [targetTypeName, targetTypeLabel, assetTypes, typesLoaded]);
+  const usesCandidates = targetSource?.kind === 'candidates';
+  const isUnsupported = targetSource?.kind === 'unsupported' && !typesLoading;
+  const isConceptTarget = targetTypeName === 'OntologyConcept';
+  const targetAssetTypes = useMemo(
+    () => (targetSource?.kind === 'asset' ? targetSource.assetTypeNames ?? [] : []),
+    [targetSource],
+  );
 
   // Group asset types by category, filtered by target type
   const groupedTypes = useMemo(() => {
+    if (targetSource?.kind !== 'asset') return [];
     const filtered = targetAssetTypes.length > 0
       ? assetTypes.filter(t => targetAssetTypes.includes(t.name))
       : assetTypes;
@@ -219,7 +269,7 @@ export function AddRelationshipDialog({
         types: types.sort((a, b) => a.name.localeCompare(b.name)),
       }))
       .sort((a, b) => a.order - b.order);
-  }, [assetTypes, targetAssetTypes, t]);
+  }, [assetTypes, targetAssetTypes, targetSource, t]);
 
   // Auto-select the only matching type in browse mode
   useEffect(() => {
@@ -250,13 +300,56 @@ export function AddRelationshipDialog({
   const fetchAssetTypes = useCallback(async () => {
     setTypesLoading(true);
     try {
-      const response = await apiGet<AssetTypeRead[]>('/api/asset-types?limit=100');
+      const response = await apiGet<AssetTypeRead[]>('/api/asset-types');
       if (!response.error && Array.isArray(response.data)) {
         setAssetTypes(response.data.filter(t => t.status === 'active'));
+        setTypesLoaded(true);
       }
     } catch { /* silent */ }
     finally { setTypesLoading(false); }
   }, [apiGet]);
+
+  const fetchCandidates = useCallback(async (query: string): Promise<{ items: TargetEntity[]; total: number } | null> => {
+    const seq = requestSeq.current;
+    const params = new URLSearchParams({ target_type: targetTypeName, limit: String(CANDIDATE_LIMIT) });
+    if (query) params.set('query', query);
+    const response = await apiGet<{ candidates: LinkCandidate[]; total: number }>(
+      `/api/suggestions/link-candidates?${params}`,
+    );
+    if (seq !== requestSeq.current) return null; // the relationship type changed meanwhile
+    if (response.status === 403) {
+      setAccessDenied(true);
+      return { items: [], total: 0 };
+    }
+    const candidates = response.data?.candidates;
+    if (response.error || !Array.isArray(candidates)) return { items: [], total: 0 };
+    return {
+      items: candidates.map(c => ({
+        id: c.id,
+        name: c.name,
+        type: targetTypeLabel,
+        iconKey: targetTypeName,
+        location: c.context ?? undefined,
+        detail: isConceptTarget ? c.id : undefined,
+      })),
+      total: response.data?.total ?? candidates.length,
+    };
+  }, [apiGet, targetTypeName, targetTypeLabel, isConceptTarget]);
+
+  const fetchBrowseCandidates = useCallback(async (nameFilter?: string) => {
+    setBrowseLoading(true);
+    try {
+      const result = await fetchCandidates(nameFilter && nameFilter.length >= 2 ? nameFilter : '');
+      if (!result) return;
+      setBrowseResults(result.items);
+      setBrowseTotal(result.total);
+    } catch {
+      setBrowseResults([]);
+      setBrowseTotal(0);
+    } finally {
+      setBrowseLoading(false);
+    }
+  }, [fetchCandidates]);
 
   const doSearch = useCallback(async (query: string) => {
     if (query.length < 2) {
@@ -265,11 +358,19 @@ export function AddRelationshipDialog({
     }
     setSearchLoading(true);
     try {
+      if (usesCandidates) {
+        const result = await fetchCandidates(query);
+        if (result) setSearchResults(result.items);
+        return;
+      }
+      const seq = requestSeq.current;
       let url = `/api/assets?name=${encodeURIComponent(query)}&limit=20`;
       if (targetAssetTypes.length > 0) {
         url += `&asset_type_names=${encodeURIComponent(targetAssetTypes.join(','))}`;
       }
       const response = await apiGet<{ items: any[]; total: number }>(url);
+      if (seq !== requestSeq.current) return;
+      if (response.status === 403) setAccessDenied(true);
       const items = response.data?.items;
       if (!response.error && Array.isArray(items)) {
         setSearchResults(items.map(a => ({
@@ -286,16 +387,19 @@ export function AddRelationshipDialog({
     } finally {
       setSearchLoading(false);
     }
-  }, [apiGet, targetAssetTypes]);
+  }, [apiGet, targetAssetTypes, usesCandidates, fetchCandidates]);
 
   const fetchBrowseAssets = useCallback(async (typeId: string, nameFilter?: string) => {
     setBrowseLoading(true);
     try {
+      const seq = requestSeq.current;
       let url = `/api/assets?asset_type_id=${typeId}&limit=50`;
       if (nameFilter && nameFilter.length >= 2) {
         url += `&name=${encodeURIComponent(nameFilter)}`;
       }
       const response = await apiGet<{ items: any[]; total: number }>(url);
+      if (seq !== requestSeq.current) return;
+      if (response.status === 403) setAccessDenied(true);
       const items = response.data?.items;
       if (!response.error && Array.isArray(items)) {
         setBrowseResults(items.map(a => ({
@@ -326,6 +430,8 @@ export function AddRelationshipDialog({
   };
 
   const handleTypeSelect = (typeId: string) => {
+    requestSeq.current += 1;
+    setAccessDenied(false);
     setSelectedTypeId(typeId);
     setBrowseFilter('');
     fetchBrowseAssets(typeId);
@@ -334,6 +440,14 @@ export function AddRelationshipDialog({
   const handleBrowseFilterChange = (value: string) => {
     setBrowseFilter(value);
     if (browseDebounceRef.current) clearTimeout(browseDebounceRef.current);
+    if (usesCandidates) {
+      if (value.length === 0) {
+        fetchBrowseCandidates();
+      } else {
+        browseDebounceRef.current = setTimeout(() => fetchBrowseCandidates(value), 300);
+      }
+      return;
+    }
     if (selectedTypeId) {
       if (value.length === 0) {
         fetchBrowseAssets(selectedTypeId);
@@ -346,6 +460,10 @@ export function AddRelationshipDialog({
   };
 
   const handleRelTypeChange = (val: string) => {
+    requestSeq.current += 1;
+    setAccessDenied(false);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (browseDebounceRef.current) clearTimeout(browseDebounceRef.current);
     setSelectedRelType(val);
     setSelectedTarget(null);
     setSearchQuery('');
@@ -363,14 +481,19 @@ export function AddRelationshipDialog({
     if (!selectedTarget || !selectedRelType || !selectedRelDef) return;
     setCreateLoading(true);
     try {
-      const tType = getTargetTypeName(selectedRelDef) || selectedTarget.type;
-      const payload = {
+      // An "Asset" range takes the picked asset's own type, which its page looks up by.
+      const tType = targetTypeName === GENERIC_ASSET_TARGET
+        ? assetTypeLocalName(selectedTarget.type)
+        : getTargetTypeName(selectedRelDef) || selectedTarget.type;
+      const payload: Record<string, unknown> = {
         source_type: entityType,
         source_id: entityId,
         target_type: tType,
         target_id: selectedTarget.id,
         relationship_type: selectedRelDef.property_name,
       };
+      // Concepts live outside the database: keep the label so the link has a name.
+      if (isConceptTarget) payload.properties = { target_label: selectedTarget.name };
       const response = await apiPost('/api/entity-relationships', payload);
       if (response.error) throw new Error(response.error);
       toast({ title: t('common:addRelationship.relationshipCreated') });
@@ -385,6 +508,8 @@ export function AddRelationshipDialog({
   };
 
   const resetState = () => {
+    requestSeq.current += 1; // answers to requests of the closed dialog are dropped
+    setAccessDenied(false);
     setSelectedRelType('');
     setSelectedTarget(null);
     setMode('browse');
@@ -403,6 +528,13 @@ export function AddRelationshipDialog({
       fetchAssetTypes();
     }
   }, [isOpen]);
+
+  // Browsing non-asset targets needs no type pick: list them right away.
+  useEffect(() => {
+    if (selectedRelType && usesCandidates && mode === 'browse') {
+      fetchBrowseCandidates(browseFilter);
+    }
+  }, [selectedRelType, usesCandidates, mode]);
 
   useEffect(() => {
     if (mode === 'search' && selectedRelType) {
@@ -479,9 +611,30 @@ export function AddRelationshipDialog({
                 </Tabs>
               </div>
 
+              {isConceptTarget && (
+                <div className="px-6 pb-3">
+                  <p className="flex gap-2 text-xs text-muted-foreground">
+                    <Info className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                    <span>{t('common:addRelationship.conceptRelationshipHint', {
+                      relationship: formatLabel(selectedRelDef?.label ?? ''),
+                      section: t('assets:detail.linkedConcepts'),
+                      conceptSection: t('semantic-models:linkedObjects.title'),
+                    })}</span>
+                  </p>
+                </div>
+              )}
+
               {/* Content area */}
               <div className="flex-1 min-h-0 px-6 overflow-hidden">
-                {mode === 'search' ? (
+                {isUnsupported || (accessDenied && (usesCandidates || mode === 'search')) ? (
+                  <div className="min-h-[200px] flex items-center justify-center">
+                    <p className="text-sm text-muted-foreground text-center max-w-sm">
+                      {accessDenied
+                        ? t('common:addRelationship.noAccessToTarget', { type: targetTypeLabel })
+                        : t('common:addRelationship.targetNotPickable', { type: targetTypeLabel })}
+                    </p>
+                  </div>
+                ) : mode === 'search' ? (
                   <div className="flex flex-col h-full min-h-[200px] overflow-hidden">
                     <div className="relative mb-3">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -508,6 +661,38 @@ export function AddRelationshipDialog({
                             : t('common:addRelationship.typeToSearchHint')
                         }
                       />
+                    </ScrollArea>
+                  </div>
+                ) : usesCandidates ? (
+                  <div className="flex flex-col h-full min-h-[250px] border rounded-md overflow-hidden">
+                    <div className="relative px-3 py-2 border-b">
+                      <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder={t('common:addRelationship.filterPlaceholder', { type: targetTypeLabel || t('common:addRelationship.entitiesFallback') })}
+                        value={browseFilter}
+                        onChange={(e) => handleBrowseFilterChange(e.target.value)}
+                        className="pl-8 h-8 text-sm"
+                      />
+                    </div>
+                    <ScrollArea className="flex-1">
+                      <div className="p-1">
+                        <TargetResultsList
+                          results={browseResults}
+                          loading={browseLoading}
+                          selectedId={selectedTarget?.id ?? null}
+                          onSelect={handleSelectTarget}
+                          emptyMessage={
+                            browseFilter.length >= 2
+                              ? t('common:addRelationship.noMatchingEntities')
+                              : t('common:addRelationship.noEntitiesOfType')
+                          }
+                        />
+                      </div>
+                      {browseTotal > CANDIDATE_LIMIT && !browseLoading && (
+                        <p className="text-xs text-muted-foreground text-center py-2">
+                          {t('common:addRelationship.showingLimit', { total: browseTotal })}
+                        </p>
+                      )}
                     </ScrollArea>
                   </div>
                 ) : (
@@ -578,9 +763,11 @@ export function AddRelationshipDialog({
                                 selectedId={selectedTarget?.id ?? null}
                                 onSelect={handleSelectTarget}
                                 emptyMessage={
-                                  browseFilter.length >= 2
-                                    ? t('common:addRelationship.noMatchingEntities')
-                                    : t('common:addRelationship.noEntitiesOfType')
+                                  accessDenied
+                                    ? t('common:addRelationship.noAccessToTarget', { type: selectedTypeName || targetTypeLabel })
+                                    : browseFilter.length >= 2
+                                      ? t('common:addRelationship.noMatchingEntities')
+                                      : t('common:addRelationship.noEntitiesOfType')
                                 }
                               />
                             </div>
@@ -611,7 +798,7 @@ export function AddRelationshipDialog({
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-muted-foreground">{t('common:addRelationship.selected')}</span>
                     <Badge variant="secondary" className="gap-1">
-                      {(() => { const Icon = getAssetIcon(selectedTarget.type); return <Icon className="h-3 w-3" />; })()}
+                      {(() => { const Icon = getAssetIcon(selectedTarget.iconKey ?? selectedTarget.type); return <Icon className="h-3 w-3" />; })()}
                       <span className="max-w-48 truncate">{selectedTarget.name}</span>
                     </Badge>
                     <Badge variant="outline" className="text-xs">{selectedTarget.type}</Badge>

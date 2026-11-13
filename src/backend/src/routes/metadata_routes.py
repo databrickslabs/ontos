@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import StreamingResponse
 from fastapi import Response
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
@@ -19,7 +20,7 @@ from src.common.authorization import (
 )
 from src.common.logging import get_logger
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header, is_safe_path_component
-from src.controller.metadata_manager import MetadataManager, SHARED_ENTITY_ID
+from src.controller.metadata_manager import MetadataManager, NotSharedAssetError, SHARED_ENTITY_ID, SharedScopeNotAllowedError
 from src.common.manager_dependencies import get_auth_manager, get_metadata_manager
 from src.models.metadata import (
     METADATA_ENTITY_FEATURES,
@@ -58,6 +59,13 @@ def _storage_segment(entity_id: str) -> str:
     if is_safe_path_component(entity_id):
         return entity_id
     return "iri-" + hashlib.sha256(entity_id.encode("utf-8")).hexdigest()[:32]
+
+
+def _refuse_shared_scope(is_shared: bool, entity_id: str) -> None:
+    """Entity-scoped creates never make library records; those are created on /metadata/shared."""
+    if is_shared or entity_id == SHARED_ENTITY_ID:
+        err = SharedScopeNotAllowedError("Shared library records are created on the shared metadata routes.")
+        raise HTTPException(status_code=400, detail=str(err)) from err
 
 
 def _record_permission(kind: str, required_level: FeatureAccessLevel, not_found_detail: str):
@@ -103,6 +111,7 @@ async def create_rich_text(
     try:
         if payload.entity_type != entity_type or payload.entity_id != entity_id:
             raise HTTPException(status_code=400, detail="Entity path does not match body")
+        _refuse_shared_scope(payload.is_shared, payload.entity_id)
         result = manager.create_rich_text(db, data=payload, user_email=current_user.email if current_user else None)
         
         audit_manager.log_action(
@@ -205,6 +214,7 @@ async def create_link(
     try:
         if payload.entity_type != entity_type or payload.entity_id != entity_id:
             raise HTTPException(status_code=400, detail="Entity path does not match body")
+        _refuse_shared_scope(payload.is_shared, payload.entity_id)
         result = manager.create_link(db, data=payload, user_email=current_user.email if current_user else None)
         
         audit_manager.log_action(
@@ -312,6 +322,19 @@ async def upload_document(
         # Validate path components to prevent directory traversal
         if not is_safe_path_component(entity_type):
             raise HTTPException(status_code=400, detail="Invalid entity_type or entity_id")
+        _refuse_shared_scope(False, entity_id)
+
+        # Validate the request before touching the volume, so a rejected
+        # request never leaves an orphaned file behind.
+        try:
+            payload = DocumentCreate(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                title=title,
+                short_description=short_description,
+            )
+        except ValidationError as e:
+            raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
         
         # Ensure volume/path
         base_dir = f"uploads/{entity_type}/{_storage_segment(entity_id)}"
@@ -339,12 +362,6 @@ async def upload_document(
         # Upload file bytes to the UC Volume path (path, file-like object, overwrite)
         ws.files.upload(dest_path, BytesIO(content))
 
-        payload = DocumentCreate(
-            entity_type=entity_type,
-            entity_id=entity_id,
-            title=title,
-            short_description=short_description,
-        )
         result = manager.create_document_record(
             db,
             data=payload,
@@ -590,6 +607,7 @@ async def attach_shared_asset(
     _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_WRITE)),
 ):
     """Attach a shared metadata asset to an entity."""
+    _refuse_shared_scope(False, entity_id)
     try:
         result = manager.attach_shared_asset(
             db, entity_type=entity_type, entity_id=entity_id,
@@ -607,8 +625,8 @@ async def attach_shared_asset(
         )
         
         return result
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Only shared library assets can be attached")
+    except NotSharedAssetError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
     except Exception as e:
         logger.exception("Failed attaching shared asset to %s/%s", entity_type, entity_id)
         raise HTTPException(status_code=500, detail="Failed to attach shared asset")
@@ -684,6 +702,9 @@ async def get_merged_metadata(
     Only metadata with level <= max_level and inheritable=True will be inherited.
     """
     contract_id_list = [cid.strip() for cid in contract_ids.split(",") if cid.strip()] if contract_ids else None
+    _refuse_shared_scope(False, entity_id)
+    for contract_id in contract_id_list or []:
+        _refuse_shared_scope(False, contract_id)
     if contract_id_list:
         # Inherited metadata is the contracts' own, so reading it needs contract access too.
         await check_feature_permission(

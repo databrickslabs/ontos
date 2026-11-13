@@ -186,6 +186,11 @@
       "concept-review-approval": {
         "notify-approved": "Tu concepto '{{entity_name}}' ha sido aprobado.",
         "notify-rejected": "Tu concepto '{{entity_name}}' fue devuelto para cambios. Revisa el comentario del revisor y vuelve a enviarlo."
+      },
+      "metric-view-change-request": {
+        "notify-requester": "Tu cambio en la metric view '{{entity_name}}' se envió para aprobación.",
+        "notify-approved": "Tu cambio en la metric view '{{entity_name}}' se aprobó y se está entregando.",
+        "notify-rejected": "Tu cambio en la metric view '{{entity_name}}' fue rechazado."
       }
     },
     "approval": {
@@ -213,7 +218,8 @@
         "entity": "Entidad",
         "ontology_concept": "Concepto",
         "ontology_collection": "Esquema de conceptos",
-        "concept_changeset": "Conjunto de cambios de conceptos"
+        "concept_changeset": "Conjunto de cambios de conceptos",
+        "metric_view": "Metric View"
       }
     },
     "approvalMessages": {
@@ -250,5 +256,23 @@
       "retiredVersion": "{{entity_type}} '{{entity_name}}' (versión {{version}}) se ha retirado.",
       "replacementVersion": "Reemplazo: {{replacementName}} (versión {{replacementVersion}})"
     }
+  },
+  "complianceRun": {
+    "title": "Cumplimiento: {{policyName}}",
+    "summary": "Política {{policyName}}: {{failedCount}} fallidas, {{passedCount}} aprobadas.",
+    "failedEntities": "Fallidas: {{names}}",
+    "passedEntities": "Aprobadas: {{names}}",
+    "namesWithMore": "{{names}} y {{count}} más"
+  },
+  "metricViewChangeManual": {
+    "title": "Aplica el cambio de la metric view",
+    "description": "Se aprobó la solicitud de cambio de la metric view {{fqn}}. Ejecuta esta sentencia para aplicarla:\n\n{{ddl}}"
+  },
+  "metricViewChangeFailed": {
+    "title": "Cambio de la metric view no entregado",
+    "description": "No se pudo entregar la solicitud de cambio aprobada de la metric view {{fqn}}."
+  },
+  "complianceRunVisibility": {
+    "notShown": "{{count}} que no puede ver"
   }
 }

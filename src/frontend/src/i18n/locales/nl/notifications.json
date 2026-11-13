@@ -186,6 +186,11 @@
       "concept-review-approval": {
         "notify-approved": "Je concept '{{entity_name}}' is goedgekeurd.",
         "notify-rejected": "Je concept '{{entity_name}}' is teruggestuurd voor wijzigingen. Lees de opmerking van de reviewer en dien het opnieuw in."
+      },
+      "metric-view-change-request": {
+        "notify-requester": "Uw wijziging van de metric view '{{entity_name}}' is ter goedkeuring ingediend.",
+        "notify-approved": "Uw wijziging van de metric view '{{entity_name}}' is goedgekeurd en wordt geleverd.",
+        "notify-rejected": "Uw wijziging van de metric view '{{entity_name}}' is afgewezen."
       }
     },
     "approval": {
@@ -213,7 +218,8 @@
         "entity": "Entiteit",
         "ontology_concept": "Concept",
         "ontology_collection": "Conceptschema",
-        "concept_changeset": "Conceptwijzigingenset"
+        "concept_changeset": "Conceptwijzigingenset",
+        "metric_view": "Metric View"
       }
     },
     "approvalMessages": {
@@ -250,5 +256,23 @@
       "retiredVersion": "{{entity_type}} '{{entity_name}}' (versie {{version}}) is buiten gebruik gesteld.",
       "replacementVersion": "Vervanging: {{replacementName}} (versie {{replacementVersion}})"
     }
+  },
+  "complianceRun": {
+    "title": "Compliance: {{policyName}}",
+    "summary": "Beleid {{policyName}}: {{failedCount}} mislukt, {{passedCount}} geslaagd.",
+    "failedEntities": "Mislukt: {{names}}",
+    "passedEntities": "Geslaagd: {{names}}",
+    "namesWithMore": "{{names}} en nog {{count}}"
+  },
+  "metricViewChangeManual": {
+    "title": "Pas de wijziging van de metric view toe",
+    "description": "Het wijzigingsverzoek voor de metric view {{fqn}} is goedgekeurd. Voer dit statement uit om het toe te passen:\n\n{{ddl}}"
+  },
+  "metricViewChangeFailed": {
+    "title": "Wijziging van de metric view niet geleverd",
+    "description": "Het goedgekeurde wijzigingsverzoek voor de metric view {{fqn}} kon niet worden geleverd."
+  },
+  "complianceRunVisibility": {
+    "notShown": "{{count}} die u niet kunt zien"
   }
 }

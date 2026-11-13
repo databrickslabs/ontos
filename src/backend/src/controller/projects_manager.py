@@ -93,8 +93,15 @@ class ProjectsManager(SearchableAsset):
             data.pop('metadata')
         return data
 
-    def _convert_db_to_read_model(self, db_project: ProjectDb, db: Optional[Session] = None) -> ProjectRead:
-        """Helper to convert DB model to Read model."""
+    def _convert_db_to_read_model(
+        self, db_project: ProjectDb, db: Optional[Session] = None, tags: Optional[List[AssignedTag]] = None,
+    ) -> ProjectRead:
+        """Helper to convert DB model to Read model.
+
+        Tags come from ``tags`` when the caller loaded them in a batch, else from
+        ``db``. A read without either has no tags, and the edit dialog would then
+        save ``tags: []`` and clear them (#1420).
+        """
         project_read = ProjectRead.model_validate(db_project)
 
         # Set owner_team_name from the owner_team relationship
@@ -102,7 +109,9 @@ class ProjectsManager(SearchableAsset):
             project_read.owner_team_name = db_project.owner_team.name
 
         # Load tags from TagsManager
-        if db:
+        if tags is not None:
+            project_read.tags = tags
+        elif db:
             try:
                 assigned_tags = self.tags_manager.list_assigned_tags(
                     db, entity_id=db_project.id, entity_type="project"
@@ -194,13 +203,13 @@ class ProjectsManager(SearchableAsset):
         db_project = self.project_repo.get_with_teams(db, project_id)
         if not db_project:
             return None
-        return self._convert_db_to_read_model(db_project)
+        return self._convert_db_to_read_model(db_project, db)
 
     def get_all_projects(
         self, 
         db: Session, 
         skip: int = 0, 
-        limit: int = 100,
+        limit: Optional[int] = None,
         user_identifier: Optional[str] = None,
         user_groups: Optional[List[str]] = None,
         is_admin: bool = False
@@ -221,17 +230,29 @@ class ProjectsManager(SearchableAsset):
                 db, user_identifier, user_groups
             )
             # Apply pagination to domain-filtered results
-            db_projects = db_projects[skip:skip+limit] if limit > 0 else db_projects[skip:]
+            db_projects = db_projects[skip:skip + limit] if limit else db_projects[skip:]
         else:
             # No user context, return empty list
             db_projects = []
         
-        return [self._convert_db_to_read_model(project) for project in db_projects]
+        try:
+            tags_by_project = self.tags_manager.list_assigned_tags_for_entities(
+                db, entity_ids=[p.id for p in db_projects], entity_type="project",
+            )
+        except Exception as e:
+            # Load them one by one instead: a project listed without its tags would be
+            # saved with ``tags: []`` by the edit dialog
+            logger.warning(f"Failed to batch-load tags for the project list: {e}")
+            return [self._convert_db_to_read_model(project, db) for project in db_projects]
+        return [
+            self._convert_db_to_read_model(project, tags=tags_by_project.get(project.id, []))
+            for project in db_projects
+        ]
 
     def get_projects_summary(self, db: Session) -> List[ProjectSummary]:
         """Gets a summary list of projects for dropdowns/selection."""
         logger.debug("Fetching projects summary")
-        db_projects = self.project_repo.get_multi_with_teams(db, limit=1000)
+        db_projects = self.project_repo.get_multi_with_teams(db)
         return [self._convert_db_to_summary_model(project) for project in db_projects]
 
     def visible_project_ids(
@@ -427,7 +448,7 @@ class ProjectsManager(SearchableAsset):
         if not db_project:
             raise NotFoundError(f"Project with id '{project_id}' not found.")
 
-        read_model = self._convert_db_to_read_model(db_project)
+        read_model = self._convert_db_to_read_model(db_project, db)
 
         try:
             self.project_repo.remove(db=db, id=project_id)

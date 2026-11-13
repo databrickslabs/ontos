@@ -14,9 +14,10 @@ from src.common.team_role_override import pick_team_role_override
 # Import dependencies needed for the moved function
 from databricks.sdk.errors import NotFound
 from src.controller.users_manager import UsersManager
-from src.common.config import get_settings, Settings
+from src.common.config import MIN_DEMO_SETUP_TOKEN_LENGTH, get_settings, Settings
 # Import from the new dependencies file
 from src.common.manager_dependencies import get_auth_manager, get_users_manager, get_settings_manager
+from src.common.api_errors import UnsupportedEntityTypeError
 from src.controller.settings_manager import SettingsManager
 from src.models.settings import ApprovalEntity
 # Import OBO workspace client for current user lookup
@@ -53,6 +54,50 @@ def is_user_admin(user_groups: Optional[List[str]], settings: Settings) -> bool:
         logger.error("Error parsing APP_ADMIN_DEFAULT_GROUPS: %s", e)
         # Fallback to simple check
         return "admins" in [g.lower() for g in user_groups]
+
+
+async def resolve_effective_permissions(
+    user_email: Optional[str],
+    user_groups: Optional[List[str]],
+    request: Request,
+    auth_manager: Optional[AuthorizationManager] = None,
+) -> Dict[str, FeatureAccessLevel]:
+    """The caller's effective feature levels, as every feature check resolves them.
+
+    Precedence: an applied role override, else the merge of the team role
+    override and the roles matching the groups or the email. Shared by
+    :class:`PermissionChecker`, :func:`is_user_feature_admin`,
+    :func:`enforce_feature_permission` and the assistant tools
+    (``src.tools.caller``), which check levels outside ``Depends``.
+
+    ``auth_manager`` defaults to the one in ``request.app.state``
+    (``PermissionChecker`` passes its injected one).
+    Raises ``RuntimeError`` when no ``AuthorizationManager`` is configured.
+    """
+    if auth_manager is None:
+        auth_manager = getattr(request.app.state, "authorization_manager", None)
+    if auth_manager is None:
+        raise RuntimeError("AuthorizationManager not found in app state")
+    settings_manager: Optional[SettingsManager] = getattr(
+        request.app.state, "settings_manager", None
+    )
+
+    team_role_override = await get_user_team_role_overrides(
+        user_email, user_groups or [], request
+    )
+
+    applied_role_id: Optional[str] = None
+    if settings_manager is not None:
+        try:
+            applied_role_id = settings_manager.get_applied_role_override_for_user(user_email)
+        except Exception:
+            applied_role_id = None
+
+    if applied_role_id and settings_manager is not None:
+        return settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+    return auth_manager.get_user_effective_permissions(
+        user_groups or [], team_role_override, user_email=user_email
+    )
 
 
 async def is_user_feature_admin(
@@ -97,37 +142,9 @@ async def is_user_feature_admin(
     if not user_email:
         return False
     try:
-        auth_manager: Optional[AuthorizationManager] = getattr(
-            request.app.state, "authorization_manager", None
-        )
-        settings_manager: Optional[SettingsManager] = getattr(
-            request.app.state, "settings_manager", None
-        )
-        if auth_manager is None:
+        if getattr(request.app.state, "authorization_manager", None) is None:
             return False
-
-        team_role_override = await get_user_team_role_overrides(
-            user_email, user_groups or [], request
-        )
-
-        applied_role_id: Optional[str] = None
-        if settings_manager is not None:
-            try:
-                applied_role_id = settings_manager.get_applied_role_override_for_user(
-                    user_email
-                )
-            except Exception:
-                applied_role_id = None
-
-        if applied_role_id and settings_manager is not None:
-            effective = settings_manager.get_feature_permissions_for_role_id(
-                applied_role_id
-            )
-        else:
-            effective = auth_manager.get_user_effective_permissions(
-                user_groups or [], team_role_override, user_email=user_email
-            )
-
+        effective = await resolve_effective_permissions(user_email, user_groups, request)
         return effective.get(feature_id) == FeatureAccessLevel.ADMIN
     except Exception:
         logger.exception(
@@ -538,7 +555,37 @@ async def enforce_feature_permission(
         logger.critical("AuthorizationManager not found in app state during enforce_feature_permission")
         raise HTTPException(status_code=503, detail="Authorization service not configured.")
 
-    await check_feature_permission(request, user_details, auth_manager, feature_id, required_level)
+    try:
+        # Mirror PermissionChecker.__call__: team override → applied role override → group merge.
+        effective_permissions = await resolve_effective_permissions(
+            user_details.email, user_details.groups, request
+        )
+
+        if not auth_manager.has_permission(effective_permissions, feature_id, required_level):
+            user_level = effective_permissions.get(feature_id, FeatureAccessLevel.NONE)
+            logger.warning(
+                "Permission denied for user '%s' on feature '%s'. Required: '%s', Found: '%s'",
+                user_details.user or user_details.email,
+                feature_id,
+                required_level.value,
+                user_level.value,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Insufficient permissions for feature '{feature_id}'. Required level: {required_level.value}.",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error(
+            "Unexpected error during enforce_feature_permission for feature '%s'",
+            feature_id,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error checking user permissions.",
+        )
 
 
 async def has_feature_permission(
@@ -623,31 +670,10 @@ async def check_feature_permission(
         )
 
     try:
-        # Check for team role overrides
-        team_role_override = await get_user_team_role_overrides(
-            user_details.email,
-            user_details.groups or [],
-            request
+        # Applied role override, else team role override + group/email roles.
+        effective_permissions = await resolve_effective_permissions(
+            user_details.email, user_details.groups, request, auth_manager=auth_manager
         )
-
-        # Check if an explicit role override is applied for this user
-        applied_role_id = None
-        try:
-            settings_manager = getattr(request.app.state, 'settings_manager', None)
-            if settings_manager:
-                applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
-        except Exception:
-            applied_role_id = None
-
-        if applied_role_id and settings_manager:
-            # Build effective permissions directly from the selected role
-            effective_permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-        else:
-            effective_permissions = auth_manager.get_user_effective_permissions(
-                user_details.groups,
-                team_role_override,
-                user_email=user_details.email,
-            )
         has_required_permission = auth_manager.has_permission(
             effective_permissions,
             feature_id,
@@ -733,11 +759,10 @@ async def check_entity_permission(
     """Check ``required_level`` on the feature that owns ``entity_type``; 400 for unknown types."""
     feature_id = features_by_entity_type.get(entity_type or "")
     if not feature_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported entity type.",
-        )
+        err = UnsupportedEntityTypeError("Unsupported entity type.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
     await check_feature_permission(request, user_details, auth_manager, feature_id, required_level)
+
 
 # --- Pre-configured Dependency Instances (Optional but convenient) ---
 # You can create instances here for common permission levels
@@ -832,9 +857,17 @@ demo_setup_token_scheme = APIKeyHeader(
 )
 
 
+DEMO_ACCESS_VIA_ADMIN = "admin"
+DEMO_ACCESS_VIA_SETUP_TOKEN = "setup_token"
+
+
 def is_valid_demo_setup_token(provided: Optional[str], configured: Optional[str]) -> bool:
-    """Constant-time check of a presented token. Always False when no token is configured."""
-    if not configured or not provided:
+    """Constant-time check of a presented token.
+
+    Always False when no token is configured, or when the configured one is shorter than
+    ``MIN_DEMO_SETUP_TOKEN_LENGTH`` (settings drop it at startup; this guards later changes).
+    """
+    if not configured or not provided or len(configured) < MIN_DEMO_SETUP_TOKEN_LENGTH:
         return False
     return hmac.compare_digest(provided.encode("utf-8"), configured.encode("utf-8"))
 
@@ -845,8 +878,11 @@ async def require_demo_admin_or_setup_token(
     settings: Settings = Depends(get_settings),
     user_details: UserInfo = Depends(get_user_details_from_sdk),
     auth_manager: AuthorizationManager = Depends(get_auth_manager),
-) -> None:
+) -> str:
     """Allow the call for a ``settings-general`` ADMIN, or for a valid ``DEMO_SETUP_TOKEN``.
+
+    Returns how access was granted (``"setup_token"`` or ``"admin"``) for the routes' audit
+    entries.
 
     A presented token that is wrong, or presented while ``DEMO_SETUP_TOKEN`` is unset, does
     not grant access; the request then falls through to the admin check (403 for non-admins).
@@ -857,9 +893,10 @@ async def require_demo_admin_or_setup_token(
             "Demo-data access granted by setup token for '%s'",
             user_details.user or user_details.email,
         )
-        return
+        return DEMO_ACCESS_VIA_SETUP_TOKEN
     if setup_token:
         logger.warning("Demo-data setup token rejected or not configured")
     await PermissionChecker("settings-general", FeatureAccessLevel.ADMIN)(
         request, user_details, auth_manager
     )
+    return DEMO_ACCESS_VIA_ADMIN

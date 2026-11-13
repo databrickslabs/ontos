@@ -17,17 +17,22 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.common.features import FeatureAccessLevel
+from src.controller import audit_manager
 from src.controller.data_contracts_manager import DataContractsManager
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_domains import DataDomain
 from src.repositories.entity_domain_association_repository import entity_domain_repo
-from src.tools.base import ToolContext
+from src.tools.base import ToolCaller, ToolContext
 from src.tools.registry import ToolRegistry
 from src.tools.data_contracts import UpdateDataContractTool
 
 
 @pytest.fixture
-def manager() -> DataContractsManager:
+def manager(monkeypatch) -> DataContractsManager:
+    # The tool's audit entry is written in its own session, whose commit would
+    # commit this test's rows on the shared in-memory connection.
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
     mgr = DataContractsManager(data_dir=Path('/tmp'))
     mgr._update_search_index = lambda *a, **k: None
     mgr._queue_delivery = lambda *a, **k: None
@@ -36,8 +41,10 @@ def manager() -> DataContractsManager:
 
 def _contract(db_session, status='draft') -> str:
     cid = str(uuid.uuid4())
+    # The editor's own draft: the tool applies the contract read rule first.
     db_session.add(DataContractDb(
         id=cid, name=f'Contract {cid[:8]}', version='1.0.0', status=status,
+        draft_owner_id=EDITOR.email,
     ))
     db_session.commit()
     return cid
@@ -50,10 +57,16 @@ def _domain(db_session, name) -> str:
     return did
 
 
+# The level PUT /api/data-contracts/{id} needs, which the tool checks too.
+EDITOR = ToolCaller(email='editor@example.com', auth_path='test',
+                    permissions={'data-contracts': FeatureAccessLevel.READ_WRITE})
+
+
 def _run(db_session, manager, args):
     registry = ToolRegistry()
     registry.register(UpdateDataContractTool())
-    ctx = ToolContext(db=db_session, settings=MagicMock(), data_contracts_manager=manager)
+    ctx = ToolContext(db=db_session, settings=MagicMock(), caller=EDITOR,
+                      data_contracts_manager=manager)
     return asyncio.run(registry.execute('update_data_contract', ctx, args))
 
 

@@ -59,6 +59,12 @@ class UserTokenRequiredError(CodedValueError):
     code = 'user_token_required'
 
 
+class UnsupportedEntityTypeError(CodedValueError):
+    """An entity type that a route's feature map does not cover."""
+
+    code = 'unsupported_entity_type'
+
+
 def _coded_cause(exc: BaseException) -> Optional[CodedValueError]:
     """The ``CodedValueError`` an HTTP error was raised from, if it carries its message."""
     seen = set()

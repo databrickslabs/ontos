@@ -340,7 +340,8 @@
       "for_request_access": "Toegang Aanvragen (Wizard)",
       "for_request_publish": "Publicatie Aanvragen (Wizard)",
       "for_request_certify": "Certificering Aanvragen (Wizard)",
-      "for_request_status_change": "Statuswijziging Aanvragen (Wizard)"
+      "for_request_status_change": "Statuswijziging Aanvragen (Wizard)",
+      "on_request_definition_change": "Verzoek tot definitiewijziging"
     },
     "entityTypes": {
       "catalog": "Catalogus",
@@ -360,7 +361,8 @@
       "user": "Gebruiker",
       "ontology_concept": "Concept",
       "ontology_collection": "Collectie",
-      "concept_changeset": "Concept-wijzigingsset"
+      "concept_changeset": "Concept-wijzigingsset",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validatie",
@@ -477,7 +479,10 @@
     "selectRelTypePrompt": "Selecteer een relatietype om doelentiteiten te vinden",
     "createRelationship": "Relatie aanmaken",
     "relationshipCreated": "Relatie aangemaakt",
-    "assetFallback": "Asset"
+    "assetFallback": "Asset",
+    "conceptRelationshipHint": "'{{relationship}}' koppelt dit item als relatie aan een concept: die verschijnt onder Relaties en in de lineage. Gebruik {{section}} om het concept in de details van dit item en onder {{conceptSection}} op de conceptpagina te tonen.",
+    "targetNotPickable": "{{type}} kan hier niet worden gekozen. Het wordt op een eigen pagina beheerd.",
+    "noAccessToTarget": "U hebt geen toegang tot {{type}}. Vraag een beheerder om leestoegang om ernaar te koppelen."
   },
   "assetForm": {
     "groups": {

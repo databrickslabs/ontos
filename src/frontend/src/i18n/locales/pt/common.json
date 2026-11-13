@@ -340,7 +340,8 @@
       "for_request_access": "Solicitar acesso (assistente)",
       "for_request_publish": "Solicitar publicação (assistente)",
       "for_request_certify": "Solicitar certificação (assistente)",
-      "for_request_status_change": "Solicitar alteração de status (assistente)"
+      "for_request_status_change": "Solicitar alteração de status (assistente)",
+      "on_request_definition_change": "Solicitação de alteração de definição"
     },
     "entityTypes": {
       "catalog": "Catálogo",
@@ -360,7 +361,8 @@
       "user": "Usuário",
       "ontology_concept": "Conceito",
       "ontology_collection": "Esquema de conceitos",
-      "concept_changeset": "Conjunto de alterações de conceitos"
+      "concept_changeset": "Conjunto de alterações de conceitos",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validação",
@@ -477,7 +479,10 @@
     "selectRelTypePrompt": "Selecione um tipo de relacionamento para encontrar entidades de destino",
     "createRelationship": "Criar relacionamento",
     "relationshipCreated": "Relacionamento criado",
-    "assetFallback": "Ativo"
+    "assetFallback": "Ativo",
+    "conceptRelationshipHint": "“{{relationship}}” liga este item a um conceito como relação: ela aparece em Relações e na linhagem. Para mostrar o conceito nos detalhes deste item e em {{conceptSection}} na página do conceito, use {{section}}.",
+    "targetNotPickable": "{{type}} não pode ser escolhido aqui. É gerido na sua própria página.",
+    "noAccessToTarget": "Você não tem acesso a {{type}}. Peça acesso de leitura a um administrador para criar o vínculo."
   },
   "assetForm": {
     "groups": {

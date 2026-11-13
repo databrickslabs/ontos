@@ -7,7 +7,18 @@ rows written before keep their meaning); anything else, and a string that
 would read back as another type (``"42"``, ``"true"``), is stored as JSON.
 """
 import json
+import math
 from typing import Any, Optional
+
+
+def _no_constant(name: str):
+    raise ValueError(name)
+
+
+def strict_loads(text: str) -> Any:
+    """``json.loads`` without the non-standard ``NaN`` / ``Infinity``, which
+    aren't JSON (an API answer with them fails): such text stays text."""
+    return json.loads(text, parse_constant=_no_constant)
 
 
 def typed_text(value: Any) -> Optional[str]:
@@ -16,10 +27,12 @@ def typed_text(value: Any) -> Optional[str]:
         return None
     if isinstance(value, str):
         try:
-            json.loads(value)
+            strict_loads(value)
         except ValueError:
             return value  # plain text
         return json.dumps(value)  # text that reads as JSON: keep it a string
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
     return json.dumps(value)
 
 
@@ -28,6 +41,13 @@ def typed_value(text: Optional[str]) -> Any:
     if text is None:
         return None
     try:
-        return json.loads(text)
+        return strict_loads(text)
     except (TypeError, ValueError):
         return text
+
+
+def page_text(text: Optional[str]) -> Optional[str]:
+    """A stored value as the contract page shows and edits it: text values as
+    the text (not JSON-quoted), other values as their JSON text."""
+    value = typed_value(text)
+    return value if isinstance(value, str) else text

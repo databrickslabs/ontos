@@ -120,7 +120,7 @@ from src.utils.contract_servers import (
     json_list, json_list_text, keep_unsent_server_fields,
     odcs_property_value as odcs_server_value, property_values as server_property_values,
 )
-from src.utils.odcs_values import typed_text, typed_value
+from src.utils.odcs_values import page_text, typed_text, typed_value
 from src.utils.odcs_quality_operators import (
     implementation_text, odcs_quality_check, operator_columns, tags_text,
 )
@@ -2146,7 +2146,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                   apply_lifecycle: bool = False,
                                   import_links: Optional[ImportLinks] = None,
                                   source_id: Optional[str] = None,
-                                  previous_ids: Optional[Dict[str, str]] = None,
+                                  previous: Optional[Dict[str, tuple]] = None,
                                   ) -> Dict[str, Any]:
         """Create custom properties from ODCS customProperties (handles both array and dict formats).
         
@@ -2187,14 +2187,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Legacy dict format
             for key, value in custom_props.items():
                 if value is not None:
-                    # The map the contract page sends back holds the stored
-                    # text (the contract API returns it as is): keep text as is
+                    # The map the contract page sends back holds the values as
+                    # the contract API shows them (page_text); one that wasn't
+                    # edited keeps its stored text, other text is stored as is.
+                    # The map has no ids: a property keeps the one it had.
+                    stable_id, stored = (previous or {}).get(key, (None, None))
+                    if isinstance(value, str):
+                        unedited = stored is not None and value == page_text(stored)
+                        text = stored if unedited else value
+                    else:
+                        text = typed_text(value)
                     custom_prop_db = DataContractCustomPropertyDb(
                         contract_id=contract_id,
-                        # The map has no ids: keep the ones the properties had
-                        stable_id=(previous_ids or {}).get(key),
+                        stable_id=stable_id,
                         property=key,
-                        value=value if isinstance(value, str) else typed_text(value)
+                        value=text,
                     )
                     db.add(custom_prop_db)
         return columns
@@ -2826,7 +2833,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 existing = db.query(DataContractCustomPropertyDb).filter(
                     DataContractCustomPropertyDb.contract_id == contract_id
                 )
-                previous_ids = {cp.property: cp.stable_id for cp in existing if cp.stable_id}
+                previous = {cp.property: (cp.stable_id, cp.value) for cp in existing}
                 # Remove existing custom properties
                 existing.delete()
 
@@ -2834,7 +2841,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if data_dict['customProperties']:
                     self._create_custom_properties(
                         db, contract_id, data_dict['customProperties'],
-                        previous_ids=previous_ids)
+                        previous=previous)
             
             # Handle contract-level semantic links if provided
             if data_dict.get('authoritativeDefinitions') is not None:
@@ -7260,7 +7267,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         custom_properties = {}
         if getattr(db_contract, 'custom_properties', None):
             for cp in db_contract.custom_properties:
-                custom_properties[cp.property] = cp.value
+                # Text without its JSON quoting; other values as JSON text
+                custom_properties[cp.property] = page_text(cp.value)
         
         # The SLA form's four values, kept as SLA properties
         from src.utils.contract_sla import legacy_sla_from_rows

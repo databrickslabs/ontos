@@ -78,6 +78,24 @@ class TestDeployApprover:
 
         assert response.status_code == 403, response.text
 
+    def test_a_request_a_workflow_handles_is_decided_by_the_workflow(self, client, db_session):
+        """Only a workflow approval notification: even an admin is refused here."""
+        contract_id = _contract_id(client)
+        db_session.add(NotificationDb(
+            id=str(uuid.uuid4()), type='action_required', title='Approval Required',
+            recipient='Admin', created_at=datetime.utcnow(), action_type='workflow_approval',
+            can_delete=False, read=False, action_payload=json.dumps({
+                'execution_id': str(uuid.uuid4()), 'entity_type': 'data_contract',
+                'entity_id': contract_id, 'contract_id': contract_id,
+            }),
+        ))
+        db_session.commit()
+
+        response = _decide(client, contract_id)
+
+        assert response.status_code == 403, response.text
+        assert response.json()['detail']['code'] == 'deploy_request_not_an_approver'
+
     def test_a_member_of_a_recipient_group_decides(self, client, db_session, as_user):
         contract_id = _contract_id(client, db_session, recipient='group:release-managers')
         as_user('rita@example.com', ['data-producers', 'release-managers'])

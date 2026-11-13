@@ -124,6 +124,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 draft_owner_id=getattr(obj_in, 'draft_owner_id', None),
                 consumer_principals=cp_json,
             )
+            # An imported ODPS document carries its own creation timestamp; without
+            # one the column's server default (now) applies.
+            created_ts = getattr(obj_in, 'productCreatedTs', None)
+            if created_ts is not None:
+                db_obj.product_created_ts = created_ts
 
             # 2. Create Structured Description (One-to-One)
             if obj_in.description:

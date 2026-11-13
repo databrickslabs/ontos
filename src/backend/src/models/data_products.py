@@ -593,6 +593,9 @@ class DataProductCreate(BaseModel):
     managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports", description="Management ports")
     support: Optional[List[Support]] = Field(None, alias="support_channels", description="Support channels")
     team: Optional[Team] = Field(None, description="Team")
+    productCreatedTs: Optional[datetime] = Field(
+        None, description="Creation timestamp (kept from an imported ODPS document)"
+    )
 
     # Versioning
     parent_product_id: Optional[str] = Field(None, alias="parentProductId", description="Parent version ID for version lineage")

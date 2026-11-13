@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.controller.compliance_templates_manager import compliance_templates_manager
-from src.db_models.assets import AssetDb
+from src.db_models.assets import AssetDb, AssetTypeDb
 from src.repositories.assets_repository import asset_repo
 
 logger = get_logger(__name__)
@@ -55,6 +55,26 @@ def location_key_sql(column):
 def is_template_asset_type(asset_type_name: str | None) -> bool:
     """True when assets of this type can carry compliance template values."""
     return asset_type_name in TEMPLATE_ASSET_TYPES
+
+
+def template_asset_ids_by_location(db: Session) -> Dict[str, str]:
+    """Table and view asset ids by lowercase location (a Unity Catalog full name).
+
+    A location two such assets share is left out: its values can't be told apart.
+    """
+    rows = (
+        db.query(AssetDb.id, func.lower(AssetDb.location))
+        .join(AssetTypeDb, AssetDb.asset_type_id == AssetTypeDb.id)
+        .filter(AssetTypeDb.name.in_(sorted(TEMPLATE_ASSET_TYPES)), AssetDb.location.isnot(None))
+        .all()
+    )
+    ids: Dict[str, str] = {}
+    shared: set[str] = set()
+    for asset_id, location in rows:
+        if location in ids:
+            shared.add(location)
+        ids[location] = str(asset_id)
+    return {location: i for location, i in ids.items() if location not in shared}
 
 
 def resolve_template_asset(db: Session, asset_id: str) -> AssetDb:

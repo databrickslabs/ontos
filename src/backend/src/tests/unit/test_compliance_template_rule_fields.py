@@ -6,18 +6,29 @@ objects that compliance runs (``AppEntityLoader``) and maturity gates
 (``build_data_product_dict``) evaluate. Uses the in-memory SQLite session.
 """
 import uuid
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.common.compliance_dsl import evaluate_rule_on_object
-from src.common.compliance_entities import AppEntityLoader
+from src.common.compliance_entities import (
+    AppEntityLoader,
+    EntityFilter,
+    UnityCatalogLoader,
+    create_entity_iterator,
+)
 from src.controller.compliance_templates_manager import (
     compliance_templates_manager,
     rule_field_key,
 )
-from src.controller.entity_dict_builder import build_data_product_dict
+from src.controller.entity_dict_builder import (
+    _add_compliance_template_fields,
+    build_data_product_dict,
+)
+from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.compliance_templates import (
     ComplianceTemplateDb,
     ComplianceTemplateFieldDb,
@@ -199,3 +210,109 @@ class TestRuleObjects:
         assert "template_complete" not in d
         # The failed read was rolled back to its savepoint; the session still works.
         assert db_session.get(DataProductDb, product_with_values) is not None
+
+
+def _table_asset(db: Session, location: str, type_name: str = "Table") -> str:
+    asset_type = db.query(AssetTypeDb).filter(AssetTypeDb.name == type_name).first()
+    if asset_type is None:
+        asset_type = AssetTypeDb(id=uuid.uuid4(), name=type_name)
+        db.add(asset_type)
+        db.flush()
+    asset = AssetDb(
+        id=uuid.uuid4(), name=f"t_{uuid.uuid4().hex[:6]}", asset_type_id=asset_type.id,
+        location=location, status="active",
+    )
+    db.add(asset)
+    db.flush()
+    return str(asset.id)
+
+
+def _workspace(*full_names: str):
+    """A workspace client whose Unity Catalog lists the given ``catalog.schema.table``s."""
+    tables = [
+        SimpleNamespace(
+            name=n.split(".")[2], full_name=n,
+            table_type="VIEW" if n.endswith("_v") else "MANAGED",
+        )
+        for n in full_names
+    ]
+    ws = MagicMock()
+    ws.catalogs.list.return_value = [SimpleNamespace(name="main")]
+    ws.schemas.list.return_value = [SimpleNamespace(name="sales")]
+    ws.tables.list.return_value = tables
+    return ws
+
+
+class TestTableObjects:
+    """Tables and views: the keys of the Ontos table or view asset of the UC table."""
+
+    @pytest.fixture
+    def documented_table(self, db_session: Session):
+        _, f = _template(db_session, entity_type="asset")
+        asset_id = _table_asset(db_session, "main.sales.orders")
+        _value(db_session, f["limitations"], asset_id, "Daily refresh", entity_type="asset")
+        return asset_id
+
+    def test_uc_loader_adds_the_asset_template_keys(self, db_session: Session, documented_table):
+        _table_asset(db_session, "MAIN.SALES.PENDING_V", type_name="View")
+        ws = _workspace("main.sales.orders", "main.sales.pending_v", "main.sales.unregistered")
+        loaded = {
+            e["full_name"]: e
+            for e in UnityCatalogLoader(ws, db=db_session).load_entities(["table", "view"])
+        }
+        orders = loaded["main.sales.orders"]
+        assert orders["template_complete"] is True
+        assert orders["template_field_limitations"] == "Daily refresh"
+        assert orders["template_field_intended_use"] == "analytics"
+        pending = loaded["main.sales.pending_v"]
+        assert pending["type"] == "view"
+        assert pending["template_mandatory_missing_count"] == 1
+        # A table with no Ontos asset has no template keys (rules on them see None).
+        assert "template_complete" not in loaded["main.sales.unregistered"]
+
+    def test_compliance_rule_on_a_table(self, db_session: Session, documented_table):
+        ws = _workspace("main.sales.orders")
+        entities = list(
+            create_entity_iterator(db=db_session, workspace_client=ws).iterate(
+                EntityFilter(entity_types=["table"])
+            )
+        )
+        assert [e["full_name"] for e in entities] == ["main.sales.orders"]
+        assert evaluate_rule_on_object(
+            "MATCH (t:table) ASSERT t.template_applicable AND t.template_complete", entities[0]
+        ) == (True, None)
+
+    def test_uc_loader_without_a_database_has_no_template_keys(self, documented_table):
+        entities = list(
+            UnityCatalogLoader(_workspace("main.sales.orders")).load_entities(["table"])
+        )
+        assert "template_complete" not in entities[0]
+
+    def test_uc_loader_still_loads_when_template_keys_fail(
+        self, db_session: Session, documented_table, monkeypatch
+    ):
+        def _bad_query(db, **kwargs):
+            db.execute(text("SELECT * FROM no_such_compliance_table"))
+
+        monkeypatch.setattr(compliance_templates_manager, "rule_fields_for_entities", _bad_query)
+        entities = list(
+            UnityCatalogLoader(_workspace("main.sales.orders"), db=db_session)
+            .load_entities(["table"])
+        )
+        assert [e["full_name"] for e in entities] == ["main.sales.orders"]
+        assert "template_complete" not in entities[0]
+
+    def test_ambiguous_location_gets_no_keys(self, db_session: Session, documented_table):
+        _table_asset(db_session, "main.sales.orders", type_name="View")
+        entities = list(
+            UnityCatalogLoader(_workspace("main.sales.orders"), db=db_session)
+            .load_entities(["table"])
+        )
+        assert "template_complete" not in entities[0]
+
+    def test_maturity_gate_on_a_table_asset(self, db_session: Session, documented_table):
+        """The keys a table or view asset's maturity dict gets (see the PR notes)."""
+        d: dict = {}
+        _add_compliance_template_fields(db_session, d, "asset", documented_table)
+        assert evaluate_rule_on_object("ASSERT obj.template_complete", d) == (True, None)
+        assert d["template_field_limitations"] == "Daily refresh"

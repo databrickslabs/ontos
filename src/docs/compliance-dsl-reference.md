@@ -297,6 +297,17 @@ ASSERT p.template_applicable AND p.template_complete
 or `ASSERT p.template_mandatory_missing_count = 0`. Rules on field values work like any
 other property, for example `ASSERT p.template_field_retention_days >= 30`.
 
+Tables and views (`MATCH (t:table)`, `MATCH (v:view)`) carry the same keys for the
+template bound to table and view assets, when the Unity Catalog table is registered as
+an Ontos table or view asset whose location is its full name (`catalog.schema.table`).
+A table with no such asset, or whose location two assets share, has none of the keys
+(rules on them see `null`):
+
+```
+MATCH (t:table)
+ASSERT t.template_applicable AND t.template_complete
+```
+
 ## Best Practices
 
 1. **Use WHERE to Filter**: Narrow down entities before ASSERT evaluation for performance

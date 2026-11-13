@@ -124,9 +124,12 @@ export function useEntityLifecycle(
  */
 export function useStatusOptions(
   entityType: LifecycleEntityType,
-  { entityId, groupId, enabled = true }: {
+  { entityId, groupId, currentStatus, enabled = true }: {
     entityId?: string | null;
     groupId?: string | null;
+    /** An existing entity's stored status: always offered, even before (or
+     * without) its lifecycle, or when it isn't a stage of its group. */
+    currentStatus?: string | null;
     enabled?: boolean;
   },
 ) {
@@ -143,13 +146,20 @@ export function useStatusOptions(
   }, [groups, groupId, lifecycle]);
   const options = useMemo<LifecycleStage[]>(() => {
     if (entityId) {
-      if (!lifecycle) return [];
-      return lifecycle.stage
+      const stages = !lifecycle ? [] : lifecycle.stage
         ? [lifecycle.stage, ...lifecycle.allowed_transitions]
         : lifecycle.allowed_transitions;
+      const current = (currentStatus || '').toLowerCase();
+      if (!current || stages.some((st) => st.key === current)) return stages;
+      // Shown as stored (no label or colour of a stage to draw it with)
+      const stored: LifecycleStage = {
+        key: current, label: currentStatus as string, category: 'draft', color: null,
+        order: -1, is_initial: false,
+      };
+      return [stored, ...stages];
     }
     return group ? [...group.stages].sort((a, b) => a.order - b.order) : [];
-  }, [entityId, lifecycle, group]);
+  }, [entityId, lifecycle, group, currentStatus]);
   const initial = group
     ? ([...group.stages].sort((a, b) => a.order - b.order).find((s) => s.is_initial) ?? null)
     : null;

@@ -6,9 +6,10 @@ Handles product creation, updates, versioning, contract integration, and search 
 """
 
 import asyncio
+import json
 import uuid
 from contextlib import nullcontext
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Any, Set
 from uuid import UUID
 from pathlib import Path
@@ -75,6 +76,63 @@ def _canonical_uuid(value: str) -> Optional[str]:
         return str(uuid.UUID(value))
     except (ValueError, AttributeError):
         return None
+
+
+def _decode_stored_cp_value(value: Any) -> Any:
+    """Give an ODPS custom-property value back its JSON type for the export.
+
+    The TEXT column holds strings verbatim and every other type JSON-encoded, so a
+    stored ``'42'`` or ``'{"a": 1}'`` is a number or an object again here. Only text
+    that JSON-decodes to a number, boolean, list or object (and, for numbers, prints
+    back the same) is converted; any other text stays a string.
+    """
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if text in ('true', 'false'):
+        return text == 'true'
+    if text[:1] in ('[', '{'):
+        try:
+            return json.loads(text)
+        except ValueError:
+            return value
+    try:
+        number = json.loads(text)
+    except ValueError:
+        return value
+    if isinstance(number, (int, float)) and not isinstance(number, bool) \
+            and json.dumps(number) == text:
+        return number
+    return value
+
+
+def _odps_custom_property(cp: Any) -> Dict[str, Any]:
+    """A stored custom property as an ODPS ``customProperties`` item."""
+    item: Dict[str, Any] = {"property": cp.property, "value": _decode_stored_cp_value(cp.value)}
+    if getattr(cp, 'description', None):
+        item["description"] = cp.description
+    return item
+
+
+def _odps_authoritative_definition(ad: Any) -> Dict[str, Any]:
+    item = {"url": ad.url, "type": ad.type}
+    if getattr(ad, 'description', None):
+        item["description"] = ad.description
+    return item
+
+
+def _odps_timestamp(value: Any) -> Optional[str]:
+    """ISO 8601 UTC timestamp for ``productCreatedTs`` (naive values are UTC)."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _odps_non_empty(**fields: Any) -> Dict[str, Any]:
+    """The given fields, without the ones that are None or empty (False and 0 stay)."""
+    return {k: v for k, v in fields.items() if v is not None and v != '' and v != []}
 
 
 def _upsert_custom_property(data: Dict[str, Any], prop: str, value: Any) -> None:
@@ -4171,6 +4229,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         domain_export_adapter.apply_odcs(odps, session, "data_product", product_id)
         if product.tenant:
             odps["tenant"] = product.tenant
+        created_ts = _odps_timestamp(product.productCreatedTs)
+        if created_ts:
+            odps["productCreatedTs"] = created_ts
+
+        tag_names = [
+            t.tag_name if getattr(t, 'namespace_name', None) in (None, 'default')
+            else t.fully_qualified_name
+            for t in (product.tags or []) if getattr(t, 'tag_name', None)
+        ]
+        if tag_names:
+            odps["tags"] = tag_names
 
         if product.description:
             desc: Dict[str, Any] = {}
@@ -4194,24 +4263,37 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         if product.outputPorts:
             odps["outputPorts"] = [
-                {k: v for k, v in {
-                    "name": p.name, "version": p.version,
-                    "contractId": p.contractId,
+                _odps_non_empty(
+                    name=p.name, description=p.description, type=p.type,
+                    version=p.version, contractId=p.contractId,
+                    sbom=[_odps_non_empty(type=b.type, url=b.url) for b in p.sbom or []],
+                    inputContracts=[
+                        {"id": c.id, "version": c.version} for c in p.inputContracts or []
+                    ],
                     # ODPS has no port status: carried as a custom property.
-                    "customProperties": (
+                    customProperties=(
                         [{"property": ONTOS_PORT_STATUS_PROPERTY, "value": p.status}]
                         if p.status else None
                     ),
-                }.items() if v}
+                )
                 for p in product.outputPorts
+            ]
+
+        if product.managementPorts:
+            odps["managementPorts"] = [
+                _odps_non_empty(
+                    name=p.name, content=p.content, type=p.type, url=p.url,
+                    channel=p.channel, description=p.description,
+                )
+                for p in product.managementPorts
             ]
 
         if product.support:
             odps["support"] = [
-                {k: v for k, v in {
-                    "channel": s.channel, "url": s.url,
-                    "tool": s.tool, "scope": s.scope,
-                }.items() if v}
+                _odps_non_empty(
+                    channel=s.channel, url=s.url, description=s.description,
+                    tool=s.tool, scope=s.scope, invitationUrl=s.invitationUrl,
+                )
                 for s in product.support
             ]
 
@@ -4219,10 +4301,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         team_members = []
         if product.team and product.team.members:
             team_members = [
-                {k: v for k, v in {
-                    "username": m.username, "role": m.role,
-                    "name": getattr(m, 'name', None),
-                }.items() if v}
+                _odps_non_empty(
+                    username=m.username, role=m.role, name=getattr(m, 'name', None),
+                    description=m.description,
+                    dateIn=m.dateIn.isoformat() if m.dateIn else None,
+                    dateOut=m.dateOut.isoformat() if m.dateOut else None,
+                    replacedByUsername=m.replacedByUsername,
+                )
                 for m in product.team.members
             ]
         team_members = self._merge_business_owners_into_team(
@@ -4233,12 +4318,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             odps["team"] = {"members": team_members}
             if team_name:
                 odps["team"]["name"] = team_name
+            if product.team and product.team.description:
+                odps["team"]["description"] = product.team.description
 
         if product.customProperties:
-            rebuilt_props = [
-                {"property": cp.property, "value": cp.value}
-                for cp in product.customProperties
-            ]
+            rebuilt_props = [_odps_custom_property(cp) for cp in product.customProperties]
             # Preserve the additionalDomains entry apply_odcs injected above; a plain
             # overwrite here drops additional domains on export/round-trip.
             odps["customProperties"] = domain_export_adapter.merge_custom_properties(
@@ -4253,8 +4337,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         if product.authoritativeDefinitions:
             odps["authoritativeDefinitions"] = [
-                {"url": ad.url, "type": ad.type}
-                for ad in product.authoritativeDefinitions
+                _odps_authoritative_definition(ad) for ad in product.authoritativeDefinitions
             ]
 
         # Extension: include entity relationship-based dataset hierarchy

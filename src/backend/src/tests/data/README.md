@@ -36,6 +36,7 @@ tests/data/
 | `full-example.odps_v1_0_0-ontos-extensions.yaml` | Full example **plus Ontos extensions** (`consumer_principals`, `max_level_inheritance`, `ontos.businessOwners`, namespaced tag FQNs, semantic assignments on product and ports). |
 | `minimal.odps_v1_0_0.yaml` | Only the required fields (`apiVersion`, `kind`, `id`, `status`). |
 | `ports-matrix.odps_v1_0_0.yaml` | Every input/output/management port variant (Kafka topic, Databricks share, S3 file, BigQuery, contract-less, tagged). |
+| `maximal.odps_v1_0_0.yaml` | Every field of the ODPS v1.0.0 standard, set on the product and on each port, support channel, team and member (used by the upload-export fidelity test). |
 | `multi-product-batch.odps_v1_0_0.yaml` | Top-level list of products (mix of valid + invalid) for the batch upload path. |
 
 ## Ontos extension encoding conventions

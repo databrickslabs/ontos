@@ -1,0 +1,189 @@
+apiVersion: v1.0.0
+kind: DataProduct
+id: d0d0d0d0-0000-4000-8000-000000000002
+name: Maximal Product
+version: 2.0.0
+status: active
+domain: maximal-domain
+tenant: maximal-tenant
+authoritativeDefinitions:
+- url: https://example.com/prod/def
+  type: businessDefinition
+  description: prod ad description
+description:
+  purpose: p purpose
+  limitations: p limitations
+  usage: p usage
+  authoritativeDefinitions:
+  - url: https://example.com/pdesc/def
+    type: businessDefinition
+    description: pdesc ad description
+  customProperties:
+  - property: pdescCpStr
+    value: pdesc-cp-value
+    description: pdesc cp description
+  - property: pdescCpNum
+    value: 42
+  - property: pdescCpObj
+    value:
+      nested:
+      - 1
+      - two
+customProperties:
+- property: prodCpStr
+  value: prod-cp-value
+  description: prod cp description
+- property: prodCpNum
+  value: 42
+- property: prodCpObj
+  value:
+    nested:
+    - 1
+    - two
+tags:
+- product-tag-a
+- product-tag-b
+inputPorts:
+- name: in-orders
+  version: 1.0.0
+  contractId: c0ffee00-0000-4000-8000-000000000001
+  tags:
+  - in-tag
+  customProperties:
+  - property: inCpStr
+    value: in-cp-value
+    description: in cp description
+  - property: inCpNum
+    value: 42
+  - property: inCpObj
+    value:
+      nested:
+      - 1
+      - two
+  authoritativeDefinitions:
+  - url: https://example.com/in/def
+    type: businessDefinition
+    description: in ad description
+outputPorts:
+- name: out-orders
+  description: out desc
+  type: tables
+  version: 1.0.0
+  contractId: c0ffee00-0000-4000-8000-000000000001
+  sbom:
+  - type: external
+    url: https://example.com/sbom
+  inputContracts:
+  - id: c0ffee00-0000-4000-8000-000000000001
+    version: 1.2.3
+  tags:
+  - out-tag
+  customProperties:
+  - property: outCpStr
+    value: out-cp-value
+    description: out cp description
+  - property: outCpNum
+    value: 42
+  - property: outCpObj
+    value:
+      nested:
+      - 1
+      - two
+  authoritativeDefinitions:
+  - url: https://example.com/out/def
+    type: businessDefinition
+    description: out ad description
+managementPorts:
+- name: mgmt-obs
+  content: observability
+  type: rest
+  url: https://example.com/obs
+  channel: obs-channel
+  description: mgmt desc
+  tags:
+  - mgmt-tag
+  customProperties:
+  - property: mgmtCpStr
+    value: mgmt-cp-value
+    description: mgmt cp description
+  - property: mgmtCpNum
+    value: 42
+  - property: mgmtCpObj
+    value:
+      nested:
+      - 1
+      - two
+  authoritativeDefinitions:
+  - url: https://example.com/mgmt/def
+    type: businessDefinition
+    description: mgmt ad description
+support:
+- channel: '#prod'
+  url: https://chat.example.com/prod
+  description: p support
+  tool: slack
+  scope: issues
+  invitationUrl: https://chat.example.com/pinvite
+  tags:
+  - sup-tag
+  customProperties:
+  - property: psupCpStr
+    value: psup-cp-value
+    description: psup cp description
+  - property: psupCpNum
+    value: 42
+  - property: psupCpObj
+    value:
+      nested:
+      - 1
+      - two
+  authoritativeDefinitions:
+  - url: https://example.com/psup/def
+    type: businessDefinition
+    description: psup ad description
+team:
+  name: Product Team
+  description: p team desc
+  members:
+  - username: carol@example.com
+    name: Carol
+    description: p member
+    role: owner
+    dateIn: '2024-02-01'
+    dateOut: '2025-02-01'
+    replacedByUsername: dave@example.com
+    tags:
+    - pm-tag
+    customProperties:
+    - property: pmemberCpStr
+      value: pmember-cp-value
+      description: pmember cp description
+    - property: pmemberCpNum
+      value: 42
+    - property: pmemberCpObj
+      value:
+        nested:
+        - 1
+        - two
+    authoritativeDefinitions:
+    - url: https://example.com/pmember/def
+      type: businessDefinition
+      description: pmember ad description
+  tags:
+  - pteam-tag
+  customProperties:
+  - property: pteamCpStr
+    value: pteam-cp-value
+    description: pteam cp description
+  - property: pteamCpNum
+    value: 42
+  - property: pteamCpObj
+    value:
+      nested:
+      - 1
+      - two
+  authoritativeDefinitions:
+  - url: https://example.com/pteam/def
+    type: businessDefinition
+    description: pteam ad description
+productCreatedTs: '2024-06-07T08:09:10.000Z'

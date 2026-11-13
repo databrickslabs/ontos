@@ -4896,7 +4896,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from src.db_models.data_contracts import (
             DataContractTagDb, DataContractServerDb, DataContractServerPropertyDb,
             DataContractRoleDb, DataContractRolePropertyDb, DataContractTeamDb,
-            DataContractSupportDb, DataContractPricingDb,
+            DataContractSupportDb, DataContractPricingDb, DataContractTeamMetadataDb,
             DataContractCustomPropertyDb, DataContractSlaPropertyDb,
             DataContractAuthoritativeDefinitionDb,
             SchemaObjectDb, SchemaPropertyDb,
@@ -4986,11 +4986,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     for prop_data in properties:
                         db.add(DataContractRolePropertyDb(**prop_data))
             
-            # Team members
+            # Team members and the ODCS team object
             if source_contract.team:
                 cloned_team = cloner.clone_team_members(source_contract.team, new_contract.id)
                 for member_data in cloned_team:
                     db.add(DataContractTeamDb(**member_data))
+            cloned_metadata = cloner.clone_team_metadata(
+                source_contract.team_metadata, new_contract.id)
+            if cloned_metadata:
+                db.add(DataContractTeamMetadataDb(**cloned_metadata))
             
             # Support channels
             if source_contract.support:

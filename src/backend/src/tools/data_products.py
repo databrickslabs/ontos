@@ -15,7 +15,9 @@ from src.tools import visibility as vis
 from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.controller import search_scoring
-from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.controller.lifecycle_fields import (
+    deprecation_details_from_strings, product_status_audit,
+)
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
@@ -307,12 +309,13 @@ def _audited(ctx: ToolContext, tool_name: str, action: str, details: Dict[str, A
 def _transition_status(
     ctx: ToolContext, tool_name: str, product_id: str, status: str, **kwargs: Any
 ) -> None:
-    """The change-status route's call (the caller for the gates), audited as CHANGE_STATUS.
+    """The change-status route's call (the caller for the gates), audited as the route does
+    (``DEPRECATE`` / ``RETIRE`` for those targets, ``CHANGE_STATUS`` otherwise).
 
-    ``kwargs`` go to ``transition_status``.
+    ``kwargs`` go to ``transition_status``; its ``deprecation`` fills the audit details.
     """
-    details = {"product_id": product_id, "new_status": status}
-    with _audited(ctx, tool_name, "CHANGE_STATUS", details) as outcome:
+    action, details = product_status_audit(product_id, status, kwargs.get("deprecation"))
+    with _audited(ctx, tool_name, action, details) as outcome:
         ctx.data_products_manager.transition_status(
             product_id, status, current_user=_caller_email(ctx), **kwargs
         )
@@ -492,10 +495,11 @@ class UpdateDataProductTool(BaseTool):
         "status": {
             "type": "string",
             "description": (
-                "New status (draft, active, deprecated). Applied as a lifecycle transition: "
-                "only an allowed transition, and status change workflows can block it."
+                "New status (draft, active, deprecated, retired). Applied as a lifecycle "
+                "transition: only an allowed transition, and status change workflows can "
+                "block it."
             ),
-            "enum": ["draft", "active", "deprecated"]
+            "enum": ["draft", "active", "deprecated", "retired"]
         },
         "deprecation_reason": {
             "type": "string",

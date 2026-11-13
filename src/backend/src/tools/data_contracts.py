@@ -105,8 +105,17 @@ def _transition_status(
 
     ``kwargs`` go to ``transition_status``.
     """
+    from src.controller.lifecycle_service import lifecycle_service
+    from src.repositories.data_contracts_repository import data_contract_repo
+
     details = {"contract_id": contract_id, "from": from_status}
-    action = LIFECYCLE_AUDIT_ACTIONS.get(status.lower(), "CHANGE_STATUS")
+    # By the target's Stage Category in the contract's lifecycle stage group
+    contract = data_contract_repo.get(ctx.db, id=contract_id)
+    category = (
+        lifecycle_service.group_for(ctx.db, 'data_contract', contract).category(status)
+        if contract is not None else None
+    )
+    action = LIFECYCLE_AUDIT_ACTIONS.get(category or status.lower(), "CHANGE_STATUS")
     with audited(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, action, details) as outcome:
         updated = ctx.data_contracts_manager.transition_status(
             db=ctx.db, contract_id=contract_id, new_status=status,
@@ -399,10 +408,12 @@ class UpdateDataContractTool(BaseTool):
                     )
                 current_status = (current.status or 'draft').lower()
                 if current_status != status.lower():
-                    from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
-                    allowed = DATA_CONTRACT_TRANSITIONS.get(current_status)
-                    # A status outside the map allows any transition, as in the manager
-                    if allowed is not None and status.lower() not in allowed:
+                    # The contract's lifecycle stage group, as transition_status checks it
+                    from src.controller.lifecycle_service import lifecycle_service
+                    allowed = lifecycle_service.allowed_target_keys(
+                        ctx.db, 'data_contract', current
+                    )
+                    if status.lower() not in allowed:
                         return ToolResult(
                             success=False,
                             **invalid_transition(current_status, status.lower(), allowed),

@@ -32,7 +32,9 @@ from src.common.workflow_triggers import StatusChangeBlockedError
 from src.controller.data_products_manager import DataProductsManager
 from src.db_models.data_products import DataProductDb
 from src.models.data_products import ChangeStatusPayload
-from src.models.lifecycle import DATA_PRODUCT_TRANSITIONS
+from src.common.lifecycle_defaults import default_transitions
+
+DATA_PRODUCT_TRANSITIONS = default_transitions('data_product')
 from src.routes import data_product_routes
 from src.tests.unit.test_tool_error_text import DOMAIN_READER, SECRET, _assert_generic
 from src.tools.base import TOOL_FAILED_CODE, ToolContext, tool_failure

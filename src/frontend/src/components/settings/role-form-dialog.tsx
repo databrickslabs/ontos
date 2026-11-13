@@ -54,6 +54,7 @@ const SETTINGS_SUB_GROUPS: SettingsSubGroup[] = [
             'projects',
             'settings-certification-levels',
             'settings-maturity-levels',
+            'settings-lifecycle-stage-groups',
         ],
     },
     {

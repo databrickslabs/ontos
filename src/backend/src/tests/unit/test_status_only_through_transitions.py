@@ -37,7 +37,10 @@ from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_products import DataProductDb
-from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS, DATA_PRODUCT_TRANSITIONS
+from src.common.lifecycle_defaults import default_transitions
+
+DATA_PRODUCT_TRANSITIONS = default_transitions('data_product')
+DATA_CONTRACT_TRANSITIONS = default_transitions('data_contract')
 
 
 @pytest.fixture

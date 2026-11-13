@@ -6,6 +6,7 @@
 - **compliance-templates**: compliance templates can be bound to table and view assets (entity type `asset`). Table and view pages get the Compliance button and modal with the advisory count of missing mandatory fields; filling the values needs the right to edit the asset, reading them the right to read it. Assets have no publish gate. Editing a table or view fills the defaults of a new template, as on data products.
 - **compliance-templates**: the compliance templates settings page, the template editor, the Compliance modal and the data product Compliance button are translated (all locales).
 - **compliance-templates**: field keys and reference ids derived from a label keep accented letters (`Limitações conhecidas` gives `limitacoes-conhecidas`, not `limita-es-conhecidas`). Existing fields keep their ids.
+- **compliance-templates**: template values travel in ODCS and ODPS files as the `ontosComplianceValues` custom property (reference id to value): on the data product in ODPS, and in ODCS on the schema object whose `physicalName` is the table or view. Importing writes them back to the fields of the active template when the importer may fill those values (for tables and views, also edit the asset); otherwise the property is kept as is.
 - **maturity**: add configurable multi-level maturity assessment for data products and contracts
 - **term-mapping**: ontology term suggestion, AR-based review, inline suggester
 - **semantic-models**: humanize RDF source labels across UI

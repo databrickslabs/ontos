@@ -58,6 +58,11 @@ from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
 from src.common.deployment_dependencies import get_deployment_policy_manager
 from src.controller.deployment_policy_manager import DeploymentPolicyManager
+from src.common.authorization import get_user_details_from_sdk
+from src.common.manager_dependencies import get_auth_manager
+from src.controller import compliance_template_exchange
+from src.controller.authorization_manager import AuthorizationManager
+from src.models.users import UserInfo
 from pydantic import BaseModel, Field
 import uuid
 import yaml
@@ -1519,6 +1524,17 @@ async def delete_contract(
             details=details_for_audit,
         )
 
+
+async def _compliance_values_user(
+    request: Request, user: UserInfo, auth_manager: AuthorizationManager
+) -> Optional[str]:
+    """Who fills imported table and view template values; ``None``: the user may not."""
+    allowed = await compliance_template_exchange.can_import_values(
+        request, user, auth_manager, entity_type="asset"
+    )
+    return (user.email or user.username) if allowed else None
+
+
 @router.post('/data-contracts/upload')
 async def upload_contract(
     request: Request,
@@ -1528,6 +1544,8 @@ async def upload_contract(
     file: UploadFile = File(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
     """Upload a contract file and parse it into normalized ODCS structure"""
     # SECURITY: Sanitize filename for safe logging and processing
@@ -1560,7 +1578,8 @@ async def upload_contract(
         created = manager.create_from_upload(
             db=db,
             parsed_odcs=parsed,
-            current_user=current_user.username if current_user else None
+            current_user=current_user.username if current_user else None,
+            compliance_values_user=await _compliance_values_user(request, user, auth_manager),
         )
         
         success = True
@@ -1626,6 +1645,8 @@ async def import_odcs_json(
     body: dict = Body(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
     """Import an ODCS contract from a pasted JSON object."""
     success = False
@@ -1649,6 +1670,7 @@ async def import_odcs_json(
             db=db,
             parsed_odcs=parsed,
             current_user=current_user.username if current_user else None,
+            compliance_values_user=await _compliance_values_user(request, user, auth_manager),
         )
 
         success = True

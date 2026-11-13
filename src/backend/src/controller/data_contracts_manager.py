@@ -58,6 +58,7 @@ from src.db_models.data_contracts import (
 )
 from src.repositories.data_contracts_repository import data_contract_repo
 from src.repositories.teams_repository import team_repo
+from src.controller import compliance_template_exchange
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.controller.domain_export_adapter import domain_export_adapter
 
@@ -1265,6 +1266,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             cp_item['id'] = custom_prop.stable_id
                         custom_props.append(cp_item)
                     schema_dict['customProperties'] = custom_props
+
+                # Compliance template values of the table or view this object describes
+                if db_session is not None:
+                    compliance_template_exchange.apply_to_document(
+                        schema_dict,
+                        compliance_template_exchange.schema_values(
+                            db_session,
+                            physical_name=schema_obj.physical_name or schema_obj.name,
+                            contract_id=db_obj.id,
+                            schema_object_id=schema_obj.id,
+                        ),
+                    )
 
                 # Schema-level relationships (ODCS v3.1.0)
                 if hasattr(schema_obj, 'relationships') and schema_obj.relationships:
@@ -2888,7 +2901,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         self,
         db,
         parsed_odcs: dict,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        compliance_values_user: Optional[str] = None,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
@@ -2897,6 +2911,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db: Database session
             parsed_odcs: Parsed ODCS dictionary
             current_user: Username of current user
+            compliance_values_user: When set (the caller checked the rights), the schema
+                objects' ``ontosComplianceValues`` are written to the matching table and
+                view assets, filled by this user
             
         Returns:
             Created DataContractDb instance
@@ -2975,8 +2992,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Parse and create schema objects if present
             # Accept both ODCS standard 'schema' and Pydantic field name 'contract_schema'
             schema_data = parsed_odcs.get('schema') or parsed_odcs.get('contract_schema', [])
+            compliance_values = []
+            if compliance_values_user and isinstance(schema_data, list):
+                compliance_values = compliance_template_exchange.take_schema_entries(
+                    db, schema_data
+                )
             if isinstance(schema_data, list) and schema_data:
                 self._create_schema_objects(db, created.id, schema_data, current_user)
+            for asset, values in compliance_values:
+                compliance_template_exchange.apply_imported_values(
+                    db, entity_type="asset", entity_id=str(asset.id), values=values,
+                    user_email=compliance_values_user,
+                )
             
             # Create team members and metadata if present (v3.1.0: team can be object or deprecated array)
             team_raw = parsed_odcs.get('team')

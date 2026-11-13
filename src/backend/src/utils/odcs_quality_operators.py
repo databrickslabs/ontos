@@ -7,6 +7,9 @@ The contract wizard and API use shorter names (``mustBeGt``,
 ``mustBeBetweenMin`` ...). Both are read; the ODCS export writes the ODCS names.
 Values are stored as text (``0`` included) and exported as numbers again when
 they are numbers.
+
+A check's ``tags`` (an array) and an object ``implementation`` are stored as
+JSON text (the columns are text), and exported in the shape they came in.
 """
 import json
 from typing import Any, Dict, Optional
@@ -56,6 +59,48 @@ def _as_value(text: Optional[str]) -> Any:
         return text
 
 
+def tags_text(tags: Any) -> Optional[str]:
+    """A check's ``tags`` for its text column: an ODCS list as JSON; text (what
+    the quality rule form sends) as is."""
+    if tags is None or isinstance(tags, str):
+        return tags
+    return json.dumps(list(tags) if isinstance(tags, tuple) else tags)
+
+
+def implementation_text(implementation: Any) -> Optional[str]:
+    """A custom check's ``implementation`` for its text column: a string as is,
+    an object (ODCS allows both) as JSON."""
+    if implementation is None or isinstance(implementation, str):
+        return implementation
+    return json.dumps(implementation)
+
+
+def odcs_tags(text: Optional[str]) -> Optional[list]:
+    """The stored tags as the ODCS list: JSON as stored, other text split at commas."""
+    if not text:
+        return None
+    try:
+        value = json.loads(text)
+    except (TypeError, ValueError):
+        value = text
+    if isinstance(value, str):
+        value = [part.strip() for part in value.split(',')]
+    if not isinstance(value, list):
+        value = [value]
+    tags = [str(tag) for tag in value if tag not in (None, '')]
+    return tags or None
+
+
+def odcs_implementation(text: Optional[str]) -> Any:
+    """The stored implementation: an object stored as JSON decoded, text as is."""
+    if not text or text.lstrip()[:1] not in ('{', '['):
+        return text
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError):
+        return text
+
+
 def operator_columns(rule: Dict[str, Any]) -> Dict[str, Optional[str]]:
     """Column values for the operators of an incoming rule (any accepted naming)."""
     columns = {column: _as_text(_first(rule, keys)) for column, keys in _SCALAR_OPERATORS.items()}
@@ -96,8 +141,8 @@ def _uses_metric(api_version: Optional[str]) -> bool:
 _CHECK_FIELDS = (
     ('stable_id', 'id'), ('description', 'description'), ('dimension', 'dimension'),
     ('business_impact', 'businessImpact'), ('severity', 'severity'), ('method', 'method'),
-    ('schedule', 'schedule'), ('scheduler', 'scheduler'), ('unit', 'unit'), ('tags', 'tags'),
-    ('query', 'query'), ('engine', 'engine'), ('implementation', 'implementation'),
+    ('schedule', 'schedule'), ('scheduler', 'scheduler'), ('unit', 'unit'),
+    ('query', 'query'), ('engine', 'engine'),
 )
 
 
@@ -113,5 +158,11 @@ def odcs_quality_check(check: Any, api_version: Optional[str]) -> Dict[str, Any]
         value = getattr(check, column, None)
         if value:
             out[key] = value
+    tags = odcs_tags(getattr(check, 'tags', None))
+    if tags:
+        out['tags'] = tags
+    implementation = odcs_implementation(getattr(check, 'implementation', None))
+    if implementation:
+        out['implementation'] = implementation
     out.update(odcs_operators(check))
     return out

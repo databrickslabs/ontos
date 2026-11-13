@@ -116,7 +116,9 @@ from src.db_models.data_contracts import (
     SchemaPropertyRelationshipDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
-from src.utils.odcs_quality_operators import odcs_quality_check, operator_columns
+from src.utils.odcs_quality_operators import (
+    implementation_text, odcs_quality_check, operator_columns, tags_text,
+)
 from src.utils.schema_editor_fields import keep_unsent_fields
 from src.utils.property_custom_properties import SCHEMA_PROPERTY_ORDER
 from src.utils.property_custom_properties import (
@@ -2000,12 +2002,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             severity=rule_dict.get('severity'),
             type=rule_dict.get('type', 'library'),
             unit=rule_dict.get('unit'),
-            tags=rule_dict.get('tags'),
+            tags=tags_text(rule_dict.get('tags')),
             # ODCS v3.1.0 library rules name it `metric` (`rule` is the older name)
             rule=rule_dict.get('rule') or rule_dict.get('metric'),
             query=rule_dict.get('query'),
             engine=rule_dict.get('engine'),
-            implementation=rule_dict.get('implementation'),
+            implementation=implementation_text(rule_dict.get('implementation')),
             **operator_columns(rule_dict),
         )
 
@@ -2356,11 +2358,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 schedule=rule_data.get('schedule'),
                 scheduler=rule_data.get('scheduler'),
                 unit=rule_data.get('unit'),
-                tags=rule_data.get('tags'),
+                tags=tags_text(rule_data.get('tags')),
                 rule=rule_data.get('rule') or rule_data.get('metric'),
                 query=rule_data.get('query'),
                 engine=rule_data.get('engine'),
-                implementation=rule_data.get('implementation'),
+                implementation=implementation_text(rule_data.get('implementation')),
                 **operator_columns(rule_data),
             )
             db.add(quality_rule_db)

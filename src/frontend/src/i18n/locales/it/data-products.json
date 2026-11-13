@@ -1127,8 +1127,8 @@
     "exportSuccessfulDesc": "Scaricato {{filename}}",
     "exportFailed": "Esportazione non riuscita",
     "exportFailedDesc": "Impossibile esportare il prodotto dati",
-    "exportDescription": "Cliccando su \"Esporta\" questo prodotto verrà scaricato come file JSON conforme a ODPS v1.0.0. I campi di audit (created_at, updated_at) verranno esclusi per la portabilità.",
-    "exportAsJson": "Esporta come JSON",
+    "exportDescription": "Cliccando su \"Esporta\" questo prodotto verrà scaricato come file YAML ODPS v1.0.0, generato dal prodotto salvato in modo che una reimportazione lo ripristini.",
+    "exportAsJson": "Esporta come YAML",
     "currentProduct": "Prodotto attuale",
     "unnamed": "Senza nome",
     "noProductDesc": "Nessun prodotto selezionato. Apri questa finestra da una pagina di dettagli del prodotto per esportare."

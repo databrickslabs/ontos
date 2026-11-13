@@ -7,6 +7,7 @@ through extension fields (``customProperties.additionalDomains`` for ODCS/ODPS, 
 tag key, so additional domains cannot share a single key). This adapter centralises those
 conventions so both the export and import code paths stay consistent and testable.
 """
+import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -242,6 +243,12 @@ class DomainExportAdapter:
         domain string at all.
         """
         existing = _get_custom_property(odcs, ONTOS_ORIGINAL_DOMAIN_PROPERTY)
+        if isinstance(existing, str) and existing.strip()[:1] == "[":
+            # An export from before the value kept its type carries the list as JSON text.
+            try:
+                existing = json.loads(existing)
+            except ValueError:
+                pass
         if isinstance(existing, list) and existing:
             return [str(v) for v in existing]
         if isinstance(existing, str) and existing:

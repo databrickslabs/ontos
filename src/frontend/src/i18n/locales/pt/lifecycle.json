@@ -119,5 +119,26 @@
     "orange": "Laranja",
     "red": "Vermelho",
     "pink": "Rosa"
+  },
+  "picker": {
+    "label": "Ciclo de vida",
+    "hint": "Os estágios por que vai passar. Administradores e donos podem mudar depois; isso volta o status ao primeiro estágio."
+  },
+  "status": {
+    "groupTitle": "Grupo de estágios do ciclo de vida"
+  },
+  "change": {
+    "action": "Mudar ciclo de vida",
+    "title": "Mudar ciclo de vida",
+    "description": "Hoje segue “{{group}}”. Escolha o grupo de estágios que deve seguir no lugar.",
+    "newGroup": "Novo ciclo de vida",
+    "chooseGroup": "Escolha um ciclo de vida…",
+    "reset": "O status volta ao primeiro estágio do novo ciclo de vida:",
+    "resetHint": "Nenhuma etapa de controle de workflow roda. Uma entidade publicada deixa de estar publicada, e a mudança vai para o histórico de alterações. É recusada enquanto houver uma solicitação de workflow pendente.",
+    "confirm": "Mudar ciclo de vida"
+  },
+  "graph": {
+    "title": "Ciclo de vida: {{name}}",
+    "hint": "O estágio atual está destacado; os retornos são tracejados."
   }
 }

@@ -34,6 +34,8 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { cn } from '@/lib/utils';
+import StageBadge from '@/components/lifecycle/stage-badge';
+import { useStageLookup } from '@/hooks/use-lifecycle-stage-groups';
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Table2, Eye, Columns2, LayoutDashboard, Globe, FileCode, Brain, Activity,
@@ -46,13 +48,6 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; or
   integration: { label: 'Integration', icon: Globe, order: 3 },
   system: { label: 'Systems', icon: Server, order: 4 },
   custom: { label: 'Custom', icon: Shapes, order: 5 },
-};
-
-const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-  draft: 'outline',
-  active: 'default',
-  deprecated: 'secondary',
-  archived: 'destructive',
 };
 
 function getIconComponent(iconName?: string | null): React.ElementType {
@@ -282,6 +277,9 @@ export default function AssetExplorerView() {
     fetchAssetTypes();
   };
 
+  // Status badges from the stage data of each asset's lifecycle stage group
+  const stageOf = useStageLookup('asset');
+
   const columns = useMemo<ColumnDef<AssetRead>[]>(() => {
     const cols: ColumnDef<AssetRead>[] = [
     {
@@ -340,9 +338,10 @@ export default function AssetExplorerView() {
       accessorKey: 'status',
       header: t('common:labels.status'),
       cell: ({ row }) => (
-        <Badge variant={STATUS_VARIANT[row.original.status] ?? 'outline'}>
-          {row.original.status}
-        </Badge>
+        <StageBadge
+          stage={stageOf(row.original.lifecycle_stage_group_id, row.original.status)}
+          status={row.original.status}
+        />
       ),
     },
     {
@@ -431,7 +430,7 @@ export default function AssetExplorerView() {
     },
     ];
     return cols;
-  }, [canWrite, canAdmin, navigate, selectedTypeId]);
+  }, [canWrite, canAdmin, navigate, selectedTypeId, stageOf]);
 
   if (apiIsLoading && assetTypes.length === 0) {
     // Asset Explorer uses a sidebar (asset type nav) + main DataTable layout

@@ -119,5 +119,26 @@
     "orange": "Orange",
     "red": "Rouge",
     "pink": "Rose"
+  },
+  "picker": {
+    "label": "Cycle de vie",
+    "hint": "Les étapes qu’il suivra. Les administrateurs et propriétaires peuvent le changer plus tard ; le statut revient alors à la première étape."
+  },
+  "status": {
+    "groupTitle": "Groupe d’étapes du cycle de vie"
+  },
+  "change": {
+    "action": "Changer de cycle de vie",
+    "title": "Changer de cycle de vie",
+    "description": "Il suit actuellement « {{group}} ». Choisissez le groupe d’étapes qu’il doit suivre à la place.",
+    "newGroup": "Nouveau cycle de vie",
+    "chooseGroup": "Choisissez un cycle de vie…",
+    "reset": "Le statut revient à la première étape du nouveau cycle de vie :",
+    "resetHint": "Aucune étape de contrôle de workflow ne s’exécute. Une entité publiée est dépubliée, et le changement est inscrit au journal des modifications. Il est refusé tant qu’une demande de workflow est en attente.",
+    "confirm": "Changer de cycle de vie"
+  },
+  "graph": {
+    "title": "Cycle de vie : {{name}}",
+    "hint": "L’étape actuelle est encadrée ; les retours sont en pointillés."
   }
 }

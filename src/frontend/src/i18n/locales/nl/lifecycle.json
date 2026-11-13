@@ -119,5 +119,26 @@
     "orange": "Oranje",
     "red": "Rood",
     "pink": "Roze"
+  },
+  "picker": {
+    "label": "Levenscyclus",
+    "hint": "De fasen die het doorloopt. Beheerders en eigenaren kunnen dit later wijzigen; de status gaat dan terug naar de eerste fase."
+  },
+  "status": {
+    "groupTitle": "Levenscyclus-fasegroep"
+  },
+  "change": {
+    "action": "Levenscyclus wijzigen",
+    "title": "Levenscyclus wijzigen",
+    "description": "Het volgt nu ‘{{group}}’. Kies de levenscyclus-fasegroep die het in plaats daarvan moet volgen.",
+    "newGroup": "Nieuwe levenscyclus",
+    "chooseGroup": "Kies een levenscyclus…",
+    "reset": "De status gaat terug naar de eerste fase van de nieuwe levenscyclus:",
+    "resetHint": "Er worden geen workflowcontroles uitgevoerd. Een gepubliceerde entiteit wordt teruggetrokken en de wijziging komt in het wijzigingslogboek. Zolang een workflowaanvraag openstaat, wordt dit geweigerd.",
+    "confirm": "Levenscyclus wijzigen"
+  },
+  "graph": {
+    "title": "Levenscyclus: {{name}}",
+    "hint": "De huidige fase is omlijnd; terugstappen zijn gestippeld."
   }
 }

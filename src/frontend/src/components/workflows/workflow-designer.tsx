@@ -145,6 +145,7 @@ import {
   isTriggerEntitySupported,
   ENTITY_TYPE_TO_APPROVAL_ENTITY,
   statusValuesForEntities,
+  stageKeysByEntityType,
   getTriggerTypeLabel,
   getEntityTypeLabel,
 } from '@/lib/workflow-labels';
@@ -161,6 +162,7 @@ import {
 } from './workflow-layout';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { WorkflowCanvasSkeleton } from '@/components/common/list-view-skeleton';
+import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups';
 import {
   CONTRACT_APPROVER_TOKEN,
   ASSET_OWNER_TOKEN,
@@ -863,6 +865,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const { t } = useTranslation(['workflows', 'common']);
   const { get, post, put } = useApi();
   const { toast } = useToast();
+  // The stage keys of every Lifecycle Stage Group, for the status trigger pickers
+  const { groups: lifecycleGroups } = useLifecycleStageGroups();
+  const lifecycleStages = useMemo(
+    () => stageKeysByEntityType(lifecycleGroups), [lifecycleGroups],
+  );
 
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
@@ -2124,7 +2131,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                     // or unknown entity) falls back to a plain input. "Any" =
                     // unset (fires regardless of that side of the transition).
                     const ANY = '__any__';
-                    const statusOpts = statusValuesForEntities(entityTypes as string[]);
+                    const statusOpts = statusValuesForEntities(
+                      entityTypes as string[], lifecycleStages,
+                    );
                     const StatusField = ({
                       label, value, onChange,
                     }: { label: string; value: string; onChange: (v: string) => void }) => (

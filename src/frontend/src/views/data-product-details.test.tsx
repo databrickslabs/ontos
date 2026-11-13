@@ -16,7 +16,6 @@ import {
   computeDefaultViewMode,
   shouldShowSectionForViewMode,
   formatDateString,
-  getStatusBadgeVariant,
   IN_PLACE_EDITABLE_STATUSES,
   isStatusEditableInPlace,
   isPersonalDraftProduct,
@@ -274,37 +273,6 @@ describe('formatDateString', () => {
   });
 });
 
-describe('getStatusBadgeVariant', () => {
-  it.each([
-    ['active', 'default'],
-    ['Active', 'default'],
-    ['ACTIVE', 'default'],
-  ])('maps %s → default', (status, variant) => {
-    expect(getStatusBadgeVariant(status)).toBe(variant);
-  });
-
-  it.each([
-    ['draft', 'secondary'],
-    ['proposed', 'secondary'],
-  ])('maps %s → secondary', (status, variant) => {
-    expect(getStatusBadgeVariant(status)).toBe(variant);
-  });
-
-  it.each([
-    ['retired', 'outline'],
-    ['deprecated', 'outline'],
-  ])('maps %s → outline', (status, variant) => {
-    expect(getStatusBadgeVariant(status)).toBe(variant);
-  });
-
-  it("falls back to 'default' for unknown / missing status", () => {
-    expect(getStatusBadgeVariant(undefined)).toBe('default');
-    expect(getStatusBadgeVariant(null)).toBe('default');
-    expect(getStatusBadgeVariant('')).toBe('default');
-    expect(getStatusBadgeVariant('archived')).toBe('default');
-  });
-});
-
 describe('IN_PLACE_EDITABLE_STATUSES', () => {
   it('contains exactly the lifecycle statuses where in-place editing is allowed', () => {
     expect(IN_PLACE_EDITABLE_STATUSES).toEqual([
@@ -329,6 +297,13 @@ describe('isStatusEditableInPlace', () => {
     expect(isStatusEditableInPlace('DRAFT')).toBe(true);
     expect(isStatusEditableInPlace('Sandbox')).toBe(true);
     expect(isStatusEditableInPlace('Under_Review')).toBe(true);
+  });
+
+  it('follows the Stage Category of a custom stage', () => {
+    expect(isStatusEditableInPlace('needs_review', 'review')).toBe(true);
+    expect(isStatusEditableInPlace('ideation', 'draft')).toBe(true);
+    expect(isStatusEditableInPlace('live', 'active')).toBe(false);
+    expect(isStatusEditableInPlace('needs_review')).toBe(false);
   });
 
   it.each(['active', 'retired', 'deprecated'])(

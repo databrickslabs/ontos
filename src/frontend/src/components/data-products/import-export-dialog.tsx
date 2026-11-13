@@ -190,7 +190,7 @@ export default function ImportExportDialog({
   /**
    * Handles export to JSON
    */
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!currentProduct) {
       toast({
         title: t('data-products:importExport.noProductSelected'),
@@ -201,18 +201,20 @@ export default function ImportExportDialog({
     }
 
     try {
-      // Remove audit fields for clean ODPS export
-      const { created_at, updated_at, project_id, ...odpsProduct } = currentProduct;
+      // The server builds the ODPS document from the stored product, so the file
+      // carries everything the import reads back (same pattern as the ODCS export).
+      const productId = encodeURIComponent(currentProduct.id);
+      const res = await fetch(`/api/data-products/${productId}/odps/export`);
+      if (!res.ok) throw new Error(t('data-products:importExport.exportFailedDesc'));
+      const text = await res.text();
+      const contentDisposition = res.headers.get('Content-Disposition') || '';
+      const suggestedName = contentDisposition.match(/filename="?([^";]+)"?/i)?.[1];
 
-      // Format JSON with indentation
-      const jsonString = JSON.stringify(odpsProduct, null, 2);
-
-      // Create blob and download
-      const blob = new Blob([jsonString], { type: 'application/json' });
+      const blob = new Blob([text], { type: 'application/x-yaml; charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${currentProduct.id || 'data-product'}-odps-v1.0.0.json`;
+      a.download = suggestedName || `${currentProduct.id || 'data-product'}-odps.yaml`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

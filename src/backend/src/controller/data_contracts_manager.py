@@ -120,6 +120,9 @@ from src.utils.contract_servers import (
     json_list, json_list_text, keep_unsent_server_fields,
     odcs_property_value as odcs_server_value, property_values as server_property_values,
 )
+from src.utils.contract_owners import (
+    ONTOS_OWNERS_PROPERTY, owners_value, restore_owners, take_owners,
+)
 from src.utils.contract_owner_team import (
     ONTOS_OWNER_TEAM_PROPERTY, owner_team_value, pop_owner_team,
 )
@@ -990,6 +993,20 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         "business sponsor": "business steward",
     }
 
+    def _without_restored_owners(self, members: list, owners) -> list:
+        """The team members, without those the export added for the business
+        owners being restored (``_merge_business_owners_into_team``)."""
+        added = {
+            (owner['email'].lower(),
+             self.BUSINESS_ROLE_TO_TEAM_ROLE.get(role.name.lower(), role.name.lower()))
+            for owner, role in owners
+        }
+        return [
+            m for m in members
+            if not (isinstance(m, dict) and (str(m.get('username') or '').lower(),
+                                             str(m.get('role') or '').lower()) in added)
+        ]
+
     def _merge_business_owners_into_team(
         self, members_list: list, db_session, object_type: str, object_id: str
     ) -> list:
@@ -1503,6 +1520,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         owner_team = owner_team_value(db_session, db_obj.owner_team_id)
         if owner_team:
             _upsert_custom_property(odcs, ONTOS_OWNER_TEAM_PROPERTY, owner_team)
+        # The business owners, also merged into the team above (read back on import)
+        owners = owners_value(db_session, 'data_contract', str(db_obj.id))
+        if owners:
+            _upsert_custom_property(odcs, ONTOS_OWNERS_PROPERTY, owners)
         for prop, value in lifecycle_custom_properties(db_obj, 'data_contract').items():
             _upsert_custom_property(odcs, prop, value)
 
@@ -3164,6 +3185,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             owner_team_id = (
                 pop_owner_team(db, parsed_odcs) or self._resolve_team_name_to_id(db, owner_val)
             )
+            # The business owners an Ontos export wrote (ontosOwners) whose role exists
+            restored_owners = take_owners(db, parsed_odcs)
 
             # Mirror the create() path (see there for the full rationale): a
             # draft contract with no owning team would otherwise be invisible to
@@ -3244,10 +3267,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             # Create team members and metadata if present (v3.1.0: team can be object or deprecated array)
             team_raw = parsed_odcs.get('team')
-            team_data = self._normalize_team_data(team_raw)
+            team_data = self._without_restored_owners(
+                self._normalize_team_data(team_raw), restored_owners)
             if team_data:
                 self._create_team_members(db, created.id, team_data)
             self._create_team_metadata(db, created.id, team_raw)
+            restore_owners(db, 'data_contract', created.id, restored_owners, current_user)
             
             # Create support channels if present
             support_data = parsed_odcs.get('support', [])

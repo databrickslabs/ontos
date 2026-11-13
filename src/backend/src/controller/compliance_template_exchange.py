@@ -86,7 +86,9 @@ def apply_to_document(doc: Dict[str, Any], live: Optional[LiveValues]) -> None:
 
     A live value replaces the stored entry's key; the stored keys with no live
     value (values an import couldn't write) are kept. Written keys left the stored
-    entry on import, so a value cleared in the app doesn't come back. ``live`` is
+    entry on import, so clearing them in the app sticks. A leftover the import
+    couldn't write shows again if its field is later filled and then cleared in
+    the app: the stored entry isn't edited by the values routes. ``live`` is
     ``None`` when no template is active: the document is untouched. An entry left
     empty is removed.
     """

@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://localhost:8000';
+// Packages grouped into the `vendor` chunk (same set as the former object-form manualChunks).
+const VENDOR_CHUNK_TEST = /[\\/]node_modules[\\/](react|react-dom|react-router-dom)[\\/]/;
 const devPort = Number(process.env.VITE_PORT) || 3000;
 
 export default defineConfig(({ command }) => ({
@@ -37,13 +39,14 @@ export default defineConfig(({ command }) => ({
     emptyOutDir: true,
     assetsDir: "", // Customize assets directory
     manifest: true, // Generate manifest file
-    rollupOptions: {
+    // `rollupOptions` is deprecated in Vite 8 (Rolldown); `codeSplitting` replaces manualChunks.
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
+        codeSplitting: {
+          groups: [{ name: 'vendor', test: VENDOR_CHUNK_TEST }],
         },
       },
-    }
+    },
   },
   server: {
     port: devPort,

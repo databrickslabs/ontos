@@ -27,4 +27,10 @@ const localStorageMock = (() => {
   };
 })();
 
-global.localStorage = localStorageMock as any;
+// `globalThis.localStorage` is getter-only in recent Node/Vitest, so plain
+// assignment throws; redefine the property instead.
+Object.defineProperty(globalThis, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+  configurable: true,
+});

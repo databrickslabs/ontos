@@ -147,6 +147,23 @@ class TestEntityLifecycle:
         assert res.json()['detail']['code'] == 'lifecycle_group_not_found'
 
 
+    def test_changing_to_the_current_group_is_a_409(self, client, db_session):
+        pid = _product(db_session, 'retired')
+        res = client.post(f'/api/lifecycle/data_product/{pid}/change-group',
+                          json={'group_id': DEFAULT_GROUP_IDS['data_product']})
+        assert res.status_code == 409
+        assert res.json()['detail']['code'] == 'lifecycle_change_same_group'
+
+    def test_a_group_whose_first_stage_is_active_cant_be_saved(self, client):
+        body = _group()
+        body['stages'][0]['is_initial'] = False
+        body['stages'][1]['is_initial'] = True
+        body['transitions'].append({'from_key': 'active', 'to_key': 'draft'})
+        res = client.post('/api/lifecycle-stage-groups', json=body)
+        assert res.status_code == 400
+        assert res.json()['detail']['code'] == 'lifecycle_group_initial_not_draft'
+
+
 class TestNamedActions:
     def test_an_ambiguous_submit_review_is_a_409(self, client, db_session):
         created = _create(client, _group(extra_review=True))

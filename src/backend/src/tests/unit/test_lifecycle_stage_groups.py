@@ -449,10 +449,17 @@ class TestStandardsRoundTrip:
         assert props['ontosLifecycleStage'] == 'needs_review'
         assert props['ontosLifecycleStageGroup'] == 'Authority resolution'
 
-        group_id, key, _note = lifecycle_service.imported_status(
-            db_session, 'data_product', odps['status'], odps['customProperties'],
+        result = product_manager.create_products_from_files(
+            [('p.json', json.dumps(odps).encode('utf-8'))], user='alice@example.com',
+            on_duplicate='new',
         )
-        assert (group_id, key) == (group.id, 'needs_review')
+        assert (result.created, result.failed) == (1, 0), result.items
+        imported = db_session.get(DataProductDb, result.created_ids[0])
+        assert (imported.lifecycle_stage_group_id, imported.status) == (group.id, 'needs_review')
+        # The lifecycle properties set the stage and group; they aren't stored as such
+        assert 'ontosLifecycleStage' not in {
+            p.property for p in imported.custom_properties
+        }
 
 
 def test_a_contract_keeps_its_group_on_transitions(db_session):
@@ -641,3 +648,90 @@ class TestAssetStatusChanges:
         assert _bulk_status(db_session, asset, 'deprecated') == 'deprecated'
         with pytest.raises(InvalidStatusTransitionError):
             _bulk_status(db_session, asset, 'draft')
+
+
+class TestIndependentReview:
+    def test_changing_to_the_current_group_is_refused(self, db_session):
+        pid = _product(db_session, 'retired')
+        with pytest.raises(LifecycleGroupConflictError) as err:
+            lifecycle_service.change_group(
+                db_session, 'data_product', pid, DEFAULT_GROUP_IDS['data_product'], 'bob',
+            )
+        assert err.value.code == 'lifecycle_change_same_group'
+        db_session.expire_all()
+        assert db_session.get(DataProductDb, pid).status == 'retired'
+
+    def test_a_group_whose_first_stage_isnt_draft_is_refused(self, db_session):
+        group = _looping_group()
+        group['stages'][0].update(is_initial=False)
+        group['stages'][1].update(is_initial=True)  # active first: would skip review
+        group['transitions'].append({'from_key': 'active', 'to_key': 'draft'})
+        with pytest.raises(LifecycleGroupInvalidError) as err:
+            lifecycle_service.save_group(db_session, group, 'admin')
+        assert err.value.code == 'lifecycle_group_initial_not_draft'
+
+    def test_sandbox_ranks_below_the_other_stages_for_an_elevated_reader(self):
+        sandbox = SimpleNamespace(status='sandbox', lifecycle_stage_group_id=None)
+        active = SimpleNamespace(status='active', lifecycle_stage_group_id=None)
+        draft = SimpleNamespace(status='draft', lifecycle_stage_group_id=None)
+        rank = lambda r: compute_rank(r, has_elevated_access=True)  # noqa: E731
+        assert rank(draft) < rank(active) < rank(sandbox)
+
+    def test_backfilled_rows_match_while_no_group_is_loaded(self, db_session):
+        pid = _product(db_session, 'proposed', DEFAULT_GROUP_IDS['data_product'])
+        lifecycle_service.invalidate()
+        rows = db_session.query(DataProductDb).filter(lifecycle_service.category_filter(
+            db_session, DataProductDb, 'data_product', ['review'],
+        )).all()
+        assert [r.id for r in rows] == [pid]
+
+    def test_the_personal_draft_filter_judges_each_row_by_its_own_group(self, db_session):
+        from src.common.version_visibility import not_others_personal_draft
+
+        intake = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        other = _looping_group('Intake is live')
+        other['stages'].append(_stage('intake', 'active', 4))
+        other['transitions'].append({'from_key': 'draft', 'to_key': 'intake'})
+        other_group = lifecycle_service.save_group(db_session, other, 'admin')
+        hidden = _product(db_session, 'intake', intake.id, draft_owner_id='bob@example.com')
+        shown = _product(db_session, 'intake', other_group.id, draft_owner_id='bob@example.com')
+        visible = {r.id for r in db_session.query(DataProductDb).filter(
+            not_others_personal_draft(DataProductDb, 'alice@example.com'),
+        )}
+        assert shown in visible and hidden not in visible
+
+    def test_a_status_outside_the_group_exports_a_standard_value(self, db_session):
+        row = SimpleNamespace(status='archived', lifecycle_stage_group_id=None)
+        status, props = lifecycle_service.export_status(db_session, 'data_contract', row)
+        assert status == 'draft'
+        assert props['ontosLifecycleStage'] == 'archived'
+
+    @pytest.mark.parametrize('status, approved, expected', [
+        ('draft', True, 'active'),
+        ('retired', True, 'retired'),  # no publish move from retired
+        ('active', False, 'active'),  # no reject move from active
+    ])
+    def test_an_asset_review_result_follows_the_assets_lifecycle(
+        self, db_session, status, approved, expected,
+    ):
+        from src.common.workflow_executor import WorkflowExecutor
+        from src.db_models.assets import AssetTypeDb
+        from src.models.process_workflows import TriggerContext, TriggerType
+
+        asset_type = AssetTypeDb(id=uuid.uuid4(), name=f'Type {uuid.uuid4().hex[:6]}')
+        db_session.add(asset_type)
+        asset = AssetDb(id=uuid.uuid4(), name='Orders', asset_type_id=asset_type.id,
+                        status=status)
+        db_session.add(asset)
+        db_session.commit()
+        context = TriggerContext(
+            entity_type='asset', entity_id=str(asset.id), entity_name='Orders',
+            trigger_type=TriggerType.ON_REQUEST_REVIEW,
+        )
+        workflow = SimpleNamespace(name='Review',
+                                   trigger=SimpleNamespace(type=TriggerType.ON_REQUEST_REVIEW))
+        WorkflowExecutor(db_session)._handle_workflow_completion(
+            trigger_context=context, workflow=workflow, succeeded=approved,
+        )
+        db_session.expire_all()
+        assert db_session.get(AssetDb, asset.id).status == expected

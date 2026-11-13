@@ -31,10 +31,18 @@ import {
   CardSkeleton,
   SkeletonLine,
 } from '@/components/common/list-view-skeleton';
-import { DEFAULT_APP_NAME } from '@/lib/branding';
+import {
+  DEFAULT_APP_NAME,
+  isValidImageUrl,
+  resolveBrandingAssetUrl,
+  resolveDarkTheme,
+} from '@/lib/branding';
+import { ThemeColorField } from '@/components/settings/theme-color-field';
 
 const APP_DISPLAY_NAME_MAX_LEN = 64;
 const APP_SHORT_NAME_MAX_LEN = 16;
+const APP_TAGLINE_MAX_LEN = 80;
+const BRANDING_PATH_TRAVERSAL_CODE = 'branding_path_traversal';
 
 interface UICustomizationState {
   i18nEnabled: boolean;
@@ -44,7 +52,16 @@ interface UICustomizationState {
   appDisplayName: string;
   appShortName: string;
   faviconUrl: string;
+  appTagline: string;
+  customLogoDarkUrl: string;
+  themePrimary: string;
+  themePrimaryDark: string;
+  themeAccent: string;
+  themeAccentDark: string;
+  showPoweredBy: boolean;
 }
+
+type ThemeColorKey = 'themePrimary' | 'themePrimaryDark' | 'themeAccent' | 'themeAccentDark';
 
 export default function UICustomizationSettings() {
   const { t } = useTranslation(['settings', 'common']);
@@ -61,12 +78,20 @@ export default function UICustomizationSettings() {
     appDisplayName: '',
     appShortName: '',
     faviconUrl: '',
+    appTagline: '',
+    customLogoDarkUrl: '',
+    themePrimary: '',
+    themePrimaryDark: '',
+    themeAccent: '',
+    themeAccentDark: '',
+    showPoweredBy: true,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [previewTab, setPreviewTab] = useState<'edit' | 'preview'>('edit');
   const [logoError, setLogoError] = useState(false);
   const [faviconError, setFaviconError] = useState(false);
+  const [logoDarkError, setLogoDarkError] = useState(false);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -83,6 +108,13 @@ export default function UICustomizationSettings() {
             appDisplayName: data.ui_app_display_name || '',
             appShortName: data.ui_app_short_name || '',
             faviconUrl: data.ui_favicon_url || '',
+            appTagline: data.ui_app_tagline || '',
+            customLogoDarkUrl: data.ui_custom_logo_dark_url || '',
+            themePrimary: data.ui_theme_primary || '',
+            themePrimaryDark: data.ui_theme_primary_dark || '',
+            themeAccent: data.ui_theme_accent || '',
+            themeAccentDark: data.ui_theme_accent_dark || '',
+            showPoweredBy: data.ui_show_powered_by ?? true,
           });
         }
       } catch (error) {
@@ -108,6 +140,13 @@ export default function UICustomizationSettings() {
           ui_app_display_name: settings.appDisplayName.trim() || null,
           ui_app_short_name: settings.appShortName.trim() || null,
           ui_favicon_url: settings.faviconUrl || null,
+          ui_app_tagline: settings.appTagline.trim() || null,
+          ui_custom_logo_dark_url: settings.customLogoDarkUrl.trim() || null,
+          ui_theme_primary: settings.themePrimary.trim() || null,
+          ui_theme_primary_dark: settings.themePrimaryDark.trim() || null,
+          ui_theme_accent: settings.themeAccent.trim() || null,
+          ui_theme_accent_dark: settings.themeAccentDark.trim() || null,
+          ui_show_powered_by: settings.showPoweredBy,
         }),
       });
       if (response.ok) {
@@ -125,8 +164,15 @@ export default function UICustomizationSettings() {
         refreshBranding();
       } else {
         const detail = await response.json().catch(() => null);
+        const coded = detail && typeof detail.detail === 'object' ? detail.detail : null;
         const message =
           (detail && typeof detail.detail === 'string' && detail.detail) ||
+          (coded?.code === BRANDING_PATH_TRAVERSAL_CODE
+            ? t(
+              'settings:uiCustomization.errorCodes.brandingPathTraversal',
+              { defaultValue: coded.message },
+            )
+            : coded?.message) ||
           t(
             'settings:uiCustomization.messages.saveError',
             'Failed to save UI customization settings',
@@ -151,8 +197,36 @@ export default function UICustomizationSettings() {
       setLogoError(false);
     } else if (name === 'faviconUrl') {
       setFaviconError(false);
+    } else if (name === 'customLogoDarkUrl') {
+      setLogoDarkError(false);
     }
   };
+
+  const handleColorChange = (key: ThemeColorKey) => (value: string) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleResetColors = () => {
+    setSettings((prev) => ({
+      ...prev,
+      themePrimary: '',
+      themePrimaryDark: '',
+      themeAccent: '',
+      themeAccentDark: '',
+    }));
+  };
+
+  // Dark colors in effect when the dark fields are empty
+  const derivedDark = resolveDarkTheme({
+    primary: settings.themePrimary,
+    accent: settings.themeAccent,
+  });
+  const hasThemeColors = [
+    settings.themePrimary,
+    settings.themePrimaryDark,
+    settings.themeAccent,
+    settings.themeAccentDark,
+  ].some((v) => v.trim());
 
   const handleI18nToggle = (checked: boolean) => {
     setSettings((prev) => ({ ...prev, i18nEnabled: checked }));
@@ -167,8 +241,9 @@ export default function UICustomizationSettings() {
   };
 
   const handleResetLogo = () => {
-    setSettings((prev) => ({ ...prev, customLogoUrl: '' }));
+    setSettings((prev) => ({ ...prev, customLogoUrl: '', customLogoDarkUrl: '' }));
     setLogoError(false);
+    setLogoDarkError(false);
   };
 
   const handleResetFavicon = () => {
@@ -177,19 +252,10 @@ export default function UICustomizationSettings() {
   };
 
   const handleResetBrandingNames = () => {
-    setSettings((prev) => ({ ...prev, appDisplayName: '', appShortName: '' }));
+    setSettings((prev) => ({ ...prev, appDisplayName: '', appShortName: '', appTagline: '' }));
   };
 
-  /** Validate http/https image URL. Shared between custom logo and favicon. */
-  const validateImageUrl = (url: string): boolean => {
-    if (!url) return true;
-    try {
-      const parsed = new URL(url);
-      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-    } catch {
-      return false;
-    }
-  };
+  const validateImageUrl = isValidImageUrl;
   // Keep legacy alias used by existing logo block.
   const validateLogoUrl = validateImageUrl;
 
@@ -255,7 +321,7 @@ export default function UICustomizationSettings() {
                 {t('settings:uiCustomization.branding.title', 'Branding')}
               </h3>
             </div>
-            {(settings.appDisplayName || settings.appShortName) && (
+            {(settings.appDisplayName || settings.appShortName || settings.appTagline) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -322,6 +388,44 @@ export default function UICustomizationSettings() {
               </p>
             </div>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="appTagline">
+              {t('settings:uiCustomization.branding.taglineLabel', 'Tagline (optional)')}
+            </Label>
+            <Input
+              id="appTagline"
+              name="appTagline"
+              value={settings.appTagline}
+              onChange={handleChange}
+              disabled={!hasWriteAccess}
+              maxLength={APP_TAGLINE_MAX_LEN}
+            />
+            <p className="text-sm text-muted-foreground">
+              {t('settings:uiCustomization.branding.taglineHelp', {
+                max: APP_TAGLINE_MAX_LEN,
+              })}
+            </p>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="showPoweredBy" className="text-base font-medium">
+                {t('settings:uiCustomization.branding.poweredByLabel', {
+                  name: DEFAULT_APP_NAME,
+                })}
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                {t('settings:uiCustomization.branding.poweredByHelp')}
+              </p>
+            </div>
+            <Switch
+              id="showPoweredBy"
+              checked={settings.showPoweredBy}
+              onCheckedChange={(checked) =>
+                setSettings((prev) => ({ ...prev, showPoweredBy: checked }))
+              }
+              disabled={!hasWriteAccess}
+            />
+          </div>
         </div>
 
         <Separator />
@@ -356,7 +460,7 @@ export default function UICustomizationSettings() {
             />
             {settings.customLogoUrl && !validateLogoUrl(settings.customLogoUrl) && (
               <p className="text-sm text-destructive">
-                {t('settings:uiCustomization.logo.invalidUrl', 'Please enter a valid HTTP or HTTPS URL')}
+                {t('settings:uiCustomization.logo.invalidUrlOrPath')}
               </p>
             )}
             <p className="text-sm text-muted-foreground">
@@ -375,14 +479,14 @@ export default function UICustomizationSettings() {
                 </div>
               ) : (
                 <img
-                  src={settings.customLogoUrl}
+                  src={resolveBrandingAssetUrl(settings.customLogoUrl) || undefined}
                   alt={t('settings:uiCustomization.logo.previewAlt')}
                   className="h-10 w-10 object-contain"
                   onError={() => setLogoError(true)}
                 />
               )}
               <a
-                href={settings.customLogoUrl}
+                href={resolveBrandingAssetUrl(settings.customLogoUrl) || undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-primary hover:underline flex items-center gap-1"
@@ -390,6 +494,49 @@ export default function UICustomizationSettings() {
                 <ExternalLink className="h-3 w-3" />
                 {t('settings:uiCustomization.logo.openInNewTab', 'Open in new tab')}
               </a>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="customLogoDarkUrl">
+              {t('settings:uiCustomization.logo.darkUrlLabel')}
+            </Label>
+            <Input
+              id="customLogoDarkUrl"
+              name="customLogoDarkUrl"
+              value={settings.customLogoDarkUrl}
+              onChange={handleChange}
+              placeholder={t('settings:uiCustomization.logo.darkUrlPlaceholder')}
+              disabled={!hasWriteAccess}
+            />
+            {settings.customLogoDarkUrl && !validateImageUrl(settings.customLogoDarkUrl) && (
+              <p className="text-sm text-destructive">
+                {t('settings:uiCustomization.logo.invalidUrlOrPath')}
+              </p>
+            )}
+            <p className="text-sm text-muted-foreground">
+              {t('settings:uiCustomization.logo.darkUrlHelp')}
+            </p>
+          </div>
+          {settings.customLogoDarkUrl && validateImageUrl(settings.customLogoDarkUrl) && (
+            <div className="flex items-center gap-4 rounded-lg border bg-zinc-900 p-4">
+              <span className="text-sm text-zinc-300">
+                {t('settings:uiCustomization.logo.preview', 'Preview:')}
+              </span>
+              {logoDarkError ? (
+                <div className="flex items-center gap-2 text-red-400">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="text-sm">
+                    {t('settings:uiCustomization.logo.loadError', 'Failed to load image')}
+                  </span>
+                </div>
+              ) : (
+                <img
+                  src={resolveBrandingAssetUrl(settings.customLogoDarkUrl) || undefined}
+                  alt={t('settings:uiCustomization.logo.previewAlt')}
+                  className="h-10 w-10 object-contain"
+                  onError={() => setLogoDarkError(true)}
+                />
+              )}
             </div>
           )}
         </div>
@@ -429,7 +576,7 @@ export default function UICustomizationSettings() {
             />
             {settings.faviconUrl && !validateImageUrl(settings.faviconUrl) && (
               <p className="text-sm text-destructive">
-                {t('settings:uiCustomization.favicon.invalidUrl', 'Please enter a valid HTTP or HTTPS URL')}
+                {t('settings:uiCustomization.logo.invalidUrlOrPath')}
               </p>
             )}
             <p className="text-sm text-muted-foreground">
@@ -453,14 +600,14 @@ export default function UICustomizationSettings() {
                 </div>
               ) : (
                 <img
-                  src={settings.faviconUrl}
+                  src={resolveBrandingAssetUrl(settings.faviconUrl) || undefined}
                   alt={t('settings:uiCustomization.favicon.previewAlt')}
                   className="h-6 w-6 object-contain"
                   onError={() => setFaviconError(true)}
                 />
               )}
               <a
-                href={settings.faviconUrl}
+                href={resolveBrandingAssetUrl(settings.faviconUrl) || undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-primary hover:underline flex items-center gap-1"
@@ -470,6 +617,66 @@ export default function UICustomizationSettings() {
               </a>
             </div>
           )}
+        </div>
+
+        <Separator />
+
+        {/* Theme colors ("essential + auto": dark colors and contrast are computed) */}
+        <div className="space-y-4" data-testid="theme-colors-section">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Palette className="h-5 w-5 text-muted-foreground" />
+              <h3 className="text-lg font-medium">
+                {t('settings:uiCustomization.theme.title')}
+              </h3>
+            </div>
+            {hasThemeColors && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleResetColors}
+                disabled={!hasWriteAccess}
+              >
+                <RotateCcw className="h-4 w-4 mr-1" />
+                {t('common:actions.reset', 'Reset')}
+              </Button>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {t('settings:uiCustomization.theme.help')}
+          </p>
+          <div className="grid gap-6 md:grid-cols-2">
+            <ThemeColorField
+              id="themePrimary"
+              label={t('settings:uiCustomization.theme.primaryLight')}
+              value={settings.themePrimary}
+              onChange={handleColorChange('themePrimary')}
+              disabled={!hasWriteAccess}
+            />
+            <ThemeColorField
+              id="themePrimaryDark"
+              label={t('settings:uiCustomization.theme.primaryDark')}
+              value={settings.themePrimaryDark}
+              onChange={handleColorChange('themePrimaryDark')}
+              disabled={!hasWriteAccess}
+              derived={derivedDark.primary}
+            />
+            <ThemeColorField
+              id="themeAccent"
+              label={t('settings:uiCustomization.theme.accentLight')}
+              value={settings.themeAccent}
+              onChange={handleColorChange('themeAccent')}
+              disabled={!hasWriteAccess}
+            />
+            <ThemeColorField
+              id="themeAccentDark"
+              label={t('settings:uiCustomization.theme.accentDark')}
+              value={settings.themeAccentDark}
+              onChange={handleColorChange('themeAccentDark')}
+              disabled={!hasWriteAccess}
+              derived={derivedDark.accent}
+            />
+          </div>
         </div>
 
         <Separator />

@@ -5,15 +5,20 @@ This module provides centralized sanitization functions using bleach
 to clean user input and LLM-generated content before rendering in the UI.
 """
 
+import re
 from typing import Optional
 from urllib.parse import urlparse
 
 import bleach
 
+from src.common.api_errors import CodedValueError
+
 # Branding constraints (issue #240)
 APP_DISPLAY_NAME_MAX_LEN = 64
 APP_SHORT_NAME_MAX_LEN = 16
 BRANDING_URL_SCHEMES = ('http', 'https')
+APP_TAGLINE_MAX_LEN = 80
+_HEX_COLOR_RE = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
 
 # HTML/Markdown sanitization configuration
 ALLOWED_TAGS = [
@@ -73,11 +78,18 @@ def sanitize_app_display_name(
     return cleaned
 
 
+class BrandingPathTraversalError(CodedValueError):
+    """A branding image path with a ``..`` segment."""
+
+    code = 'branding_path_traversal'
+
+
 def validate_branding_url(value: Optional[str], *, field: str = 'URL') -> Optional[str]:
     """Validate a branding image URL (custom logo, favicon).
 
-    Returns ``None`` for empty input. Enforces http/https schemes (rejecting
-    ``javascript:``, ``data:``, file paths, etc.) and requires a host. Raises
+    Returns ``None`` for empty input. Accepts a root-relative path to an asset
+    served by the app itself (``/branding/acme/logo.svg``), or an http/https URL
+    with a host (rejecting ``javascript:``, ``data:``, ``file:``, etc.). Raises
     ``ValueError`` on invalid input; the settings route maps this to a 400.
     """
     if value is None:
@@ -87,6 +99,16 @@ def validate_branding_url(value: Optional[str], *, field: str = 'URL') -> Option
     cleaned = value.strip()
     if not cleaned:
         return None
+    if any(not ch.isprintable() or ch.isspace() or ch == '\\' for ch in cleaned):
+        raise ValueError(
+            f"{field} must not contain spaces, backslashes or control characters"
+        )
+    if cleaned.startswith('/') and not cleaned.startswith('//'):
+        if _climbs_out_of_folder(cleaned):
+            raise BrandingPathTraversalError(
+                f"{field} must not contain '..' path segments", field=field
+            )
+        return cleaned
     try:
         parsed = urlparse(cleaned)
     except Exception as exc:
@@ -98,3 +120,53 @@ def validate_branding_url(value: Optional[str], *, field: str = 'URL') -> Option
     if not parsed.netloc:
         raise ValueError(f"{field} is missing a host")
     return cleaned
+
+
+def _climbs_out_of_folder(value: str) -> bool:
+    """True when a root-relative path has a ``..`` segment (also percent-encoded)."""
+    path = value.split('?', 1)[0].split('#', 1)[0]
+    return any(seg.lower() in ('..', '%2e%2e', '.%2e', '%2e.') for seg in path.split('/'))
+
+
+def coerce_branding_url(value: Optional[str]) -> Optional[str]:
+    """Like ``validate_branding_url`` but returns ``None`` for invalid input.
+
+    Used for values that come straight from the environment (never validated on
+    the way in), so an unsafe one is dropped instead of reaching ``<img src>``.
+    """
+    try:
+        return validate_branding_url(value)
+    except ValueError:
+        return None
+
+
+def validate_hex_color(value: Optional[str], *, field: str = 'color') -> Optional[str]:
+    """Validate a theme color given as ``#rgb`` or ``#rrggbb``.
+
+    Returns the color as lowercase ``#rrggbb``, or ``None`` for empty input.
+    Raises ``ValueError`` for anything else (the value ends up in injected CSS).
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if not _HEX_COLOR_RE.match(cleaned):
+        raise ValueError(f"{field} must be a hex color like #2563eb")
+    if len(cleaned) == 4:
+        cleaned = '#' + ''.join(ch * 2 for ch in cleaned[1:])
+    return cleaned.lower()
+
+
+def coerce_hex_color(value: Optional[str]) -> Optional[str]:
+    """Like ``validate_hex_color`` but returns ``None`` for invalid input.
+
+    Used where a value may come straight from the environment (never validated
+    on the way in), so a typo falls back to the default theme instead of failing.
+    """
+    try:
+        return validate_hex_color(value)
+    except ValueError:
+        return None

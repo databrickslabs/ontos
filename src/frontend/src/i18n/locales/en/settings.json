@@ -669,11 +669,14 @@
       "urlLabel": "Logo URL",
       "urlPlaceholder": "https://example.com/logo.svg",
       "help": "Enter the URL of your custom logo. Supports SVG, PNG, or JPG formats. Recommended size: 40x40 pixels.",
-      "invalidUrl": "Please enter a valid HTTP or HTTPS URL",
       "preview": "Preview:",
       "loadError": "Failed to load image",
       "openInNewTab": "Open in new tab",
-      "previewAlt": "Logo preview"
+      "previewAlt": "Logo preview",
+      "darkUrlLabel": "Dark mode logo URL (optional)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Used in dark mode. Leave empty to use the logo above in both modes.",
+      "invalidUrlOrPath": "Enter an HTTP or HTTPS URL, or an app path starting with /"
     },
     "about": {
       "title": "Custom About Page Content",
@@ -692,6 +695,9 @@
       "help": "Enter custom CSS to override the default theme. You can modify CSS variables defined in :root to change colors throughout the app."
     },
     "saveButton": "Save UI Settings",
+    "errorCodes": {
+      "brandingPathTraversal": "The path must not contain \"..\" segments"
+    },
     "messages": {
       "saveSuccess": "UI customization settings saved",
       "saveError": "Failed to save UI customization settings",
@@ -704,18 +710,38 @@
       "shortNameHelp": "Used in tight spaces (e.g. \"Ask {{shortName}}\"). Falls back to the display name when empty. Maximum {{max}} characters.",
       "displayNameLabel": "Display name",
       "shortNameLabel": "Short name (optional)",
-      "title": "Branding"
+      "title": "Branding",
+      "taglineLabel": "Tagline (optional)",
+      "taglineHelp": "Short subtitle shown under the name in the sidebar and on the home page. Maximum {{max}} characters.",
+      "poweredByLabel": "Show \"Powered by {{name}}\" in the sidebar",
+      "poweredByHelp": "Shown in the sidebar footer only while a custom display name or logo is set."
     },
     "favicon": {
       "previewAlt": "Favicon preview",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Applied at runtime to the browser tab. The static <link rel=\"icon\"> in the shipped index.html and the PWA manifest are not updated by this setting.",
-      "invalidUrl": "Please enter a valid HTTP or HTTPS URL",
       "loadError": "Failed to load image",
       "openInNewTab": "Open in new tab",
       "preview": "Preview:",
       "title": "Browser Favicon",
       "urlLabel": "Favicon URL"
+    },
+    "theme": {
+      "title": "Theme Colors",
+      "help": "Pick the primary color (buttons, links, focus ring) and the accent color (hover and selected backgrounds). Text colors are chosen automatically for contrast, and an empty dark mode color is derived from the light one.",
+      "primaryLight": "Primary color",
+      "primaryDark": "Primary color (dark mode)",
+      "accentLight": "Accent color",
+      "accentDark": "Accent color (dark mode)",
+      "pickerLabel": "{{field}}: color picker",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Enter a hex color like #2563eb",
+      "auto": "Automatic: {{color}} (derived from the light color)",
+      "contrast": "{{text}} text, contrast {{ratio}}:1",
+      "textLight": "Light",
+      "textDark": "Dark",
+      "meetsAA": "AA",
+      "belowAA": "Below AA"
     }
   },
   "connectors": {

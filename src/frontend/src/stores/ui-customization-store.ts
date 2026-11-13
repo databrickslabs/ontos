@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import {
   applyBranding,
+  applyThemeColors,
+  type BrandingTheme,
   DEFAULT_APP_NAME,
   resolveAppName,
   resolveShortName,
@@ -15,6 +17,13 @@ export interface UICustomizationSettings {
   appDisplayName: string | null;
   appShortName: string | null;
   faviconUrl: string | null;
+  /** Optional subtitle shown next to the name (sidebar, home). */
+  appTagline: string | null;
+  /** Logo for dark mode; falls back to customLogoUrl. */
+  customLogoDarkUrl: string | null;
+  theme: BrandingTheme;
+  /** Show "Powered by Ontos" in the sidebar footer while a custom brand is set. */
+  showPoweredBy: boolean;
   isLoaded: boolean;
 }
 
@@ -35,6 +44,10 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
   appDisplayName: null,
   appShortName: null,
   faviconUrl: null,
+  appTagline: null,
+  customLogoDarkUrl: null,
+  theme: {},
+  showPoweredBy: true,
   isLoaded: false,
 
   setSettings: (settings) => set((state) => ({ ...state, ...settings })),
@@ -52,10 +65,20 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
           appDisplayName: data.app_display_name || null,
           appShortName: data.app_short_name || null,
           faviconUrl: data.favicon_url || null,
+          appTagline: data.app_tagline || null,
+          customLogoDarkUrl: data.custom_logo_dark_url || null,
+          theme: {
+            primary: data.theme?.primary || null,
+            primaryDark: data.theme?.primary_dark || null,
+            accent: data.theme?.accent || null,
+            accentDark: data.theme?.accent_dark || null,
+          },
+          showPoweredBy: data.show_powered_by ?? true,
           isLoaded: true,
         });
 
         injectCustomCss(data.custom_css);
+        applyThemeColors(get().theme);
 
         // Apply branding side effects (title + favicon)
         applyBranding({

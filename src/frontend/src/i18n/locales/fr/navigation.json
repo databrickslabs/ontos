@@ -34,5 +34,8 @@
       "seeding_failed": "Les rôles, équipes ou projets par défaut n'ont pas pu être créés. La cause figure dans les journaux du serveur.",
       "database_unavailable": "La base de données de métadonnées n'a pas pu être initialisée. La cause figure dans les journaux du serveur."
     }
+  },
+  "branding": {
+    "poweredBy": "Powered by {{name}}"
   }
 }

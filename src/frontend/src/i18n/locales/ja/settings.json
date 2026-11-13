@@ -651,11 +651,14 @@
       "urlLabel": "ロゴURL",
       "urlPlaceholder": "https://example.com/logo.svg",
       "help": "カスタムロゴのURLを入力してください。SVG、PNG、JPG形式をサポート。推奨サイズ：40x40ピクセル。",
-      "invalidUrl": "有効なHTTPまたはHTTPS URLを入力してください",
       "preview": "プレビュー：",
       "loadError": "画像の読み込みに失敗しました",
       "openInNewTab": "新しいタブで開く",
-      "previewAlt": "ロゴのプレビュー"
+      "previewAlt": "ロゴのプレビュー",
+      "darkUrlLabel": "ダークモード用ロゴの URL（任意）",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "ダークモードで使用されます。空欄の場合は、上のロゴを両方のモードで使用します。",
+      "invalidUrlOrPath": "HTTP または HTTPS の URL、または / で始まるアプリ内のパスを入力してください"
     },
     "about": {
       "title": "カスタム「About」ページコンテンツ",
@@ -674,6 +677,9 @@
       "help": "デフォルトテーマを上書きするカスタムCSSを入力してください。"
     },
     "saveButton": "UI設定を保存",
+    "errorCodes": {
+      "brandingPathTraversal": "パスに「..」セグメントを含めることはできません"
+    },
     "messages": {
       "saveSuccess": "UIカスタマイズ設定を保存しました",
       "saveError": "設定の保存に失敗しました",
@@ -686,18 +692,38 @@
       "shortNameHelp": "スペースが限られた箇所で使用されます（例: 「{{shortName}}に聞く」）。空欄の場合は表示名にフォールバックします。最大 {{max}} 文字。",
       "displayNameLabel": "表示名",
       "shortNameLabel": "短縮名（任意）",
-      "title": "ブランディング"
+      "title": "ブランディング",
+      "taglineLabel": "タグライン（任意）",
+      "taglineHelp": "サイドバーとホームページで名前の下に表示される短いサブタイトルです。最大 {{max}} 文字。",
+      "poweredByLabel": "サイドバーに「Powered by {{name}}」を表示する",
+      "poweredByHelp": "カスタムの表示名またはロゴが設定されている場合にのみ、サイドバーのフッターに表示されます。"
     },
     "favicon": {
       "previewAlt": "ファビコンのプレビュー",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "ブラウザのタブに実行時に適用されます。同梱の index.html 内の静的な <link rel=\"icon\"> と PWA マニフェストは、この設定では更新されません。",
-      "invalidUrl": "有効な HTTP または HTTPS の URL を入力してください",
       "loadError": "画像の読み込みに失敗しました",
       "openInNewTab": "新しいタブで開く",
       "preview": "プレビュー:",
       "title": "ブラウザのファビコン",
       "urlLabel": "ファビコン URL"
+    },
+    "theme": {
+      "title": "テーマカラー",
+      "help": "プライマリカラー（ボタン、リンク、フォーカスリング）とアクセントカラー（ホバー時や選択中の背景）を選びます。文字色はコントラストを確保するよう自動で選ばれ、ダークモードの色が空欄の場合はライトモードの色から自動で算出されます。",
+      "primaryLight": "プライマリカラー",
+      "primaryDark": "プライマリカラー（ダークモード）",
+      "accentLight": "アクセントカラー",
+      "accentDark": "アクセントカラー（ダークモード）",
+      "pickerLabel": "{{field}}：カラーピッカー",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "#2563eb のような 16 進数のカラーコードを入力してください",
+      "auto": "自動：{{color}}（ライトモードの色から算出）",
+      "contrast": "文字色：{{text}}、コントラスト {{ratio}}:1",
+      "textLight": "明",
+      "textDark": "暗",
+      "meetsAA": "AA",
+      "belowAA": "AA 未満"
     }
   },
   "connectors": {

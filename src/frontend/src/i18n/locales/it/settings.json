@@ -651,11 +651,14 @@
       "urlLabel": "URL del logo",
       "urlPlaceholder": "https://esempio.com/logo.svg",
       "help": "Inserisci l'URL del tuo logo personalizzato. Formati supportati: SVG, PNG, JPG.",
-      "invalidUrl": "Inserisci un URL HTTP o HTTPS valido",
       "preview": "Anteprima:",
       "loadError": "Impossibile caricare l'immagine",
       "openInNewTab": "Apri in nuova scheda",
-      "previewAlt": "Anteprima del logo"
+      "previewAlt": "Anteprima del logo",
+      "darkUrlLabel": "URL del logo per la modalità scura (facoltativo)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Usato in modalità scura. Lascia vuoto per usare il logo qui sopra in entrambe le modalità.",
+      "invalidUrlOrPath": "Inserisci un URL HTTP o HTTPS, oppure un percorso dell’app che inizia con /"
     },
     "about": {
       "title": "Contenuto personalizzato pagina Informazioni",
@@ -674,6 +677,9 @@
       "help": "Inserisci CSS personalizzato per sovrascrivere il tema predefinito."
     },
     "saveButton": "Salva impostazioni UI",
+    "errorCodes": {
+      "brandingPathTraversal": "Il percorso non può contenere segmenti \"..\""
+    },
     "messages": {
       "saveSuccess": "Impostazioni di personalizzazione salvate",
       "saveError": "Impossibile salvare le impostazioni",
@@ -686,18 +692,38 @@
       "shortNameHelp": "Usato negli spazi ridotti (es. \"Chiedi a {{shortName}}\"). Se vuoto, viene usato il nome visualizzato. Massimo {{max}} caratteri.",
       "displayNameLabel": "Nome visualizzato",
       "shortNameLabel": "Nome breve (facoltativo)",
-      "title": "Branding"
+      "title": "Branding",
+      "taglineLabel": "Slogan (facoltativo)",
+      "taglineHelp": "Breve sottotitolo mostrato sotto il nome nella barra laterale e nella home page. Massimo {{max}} caratteri.",
+      "poweredByLabel": "Mostra \"Powered by {{name}}\" nella barra laterale",
+      "poweredByHelp": "Compare nel piè della barra laterale solo quando è impostato un nome visualizzato o un logo personalizzato."
     },
     "favicon": {
       "previewAlt": "Anteprima della favicon",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Applicata in fase di esecuzione alla scheda del browser. Il tag statico <link rel=\"icon\"> nell'index.html distribuito e il manifest PWA non vengono aggiornati da questa impostazione.",
-      "invalidUrl": "Inserisci un URL HTTP o HTTPS valido",
       "loadError": "Impossibile caricare l'immagine",
       "openInNewTab": "Apri in una nuova scheda",
       "preview": "Anteprima:",
       "title": "Favicon del browser",
       "urlLabel": "URL della favicon"
+    },
+    "theme": {
+      "title": "Colori del tema",
+      "help": "Scegli il colore principale (pulsanti, link, anello di focus) e il colore di accento (sfondi al passaggio del mouse e degli elementi selezionati). I colori del testo vengono scelti automaticamente per il contrasto e un colore della modalità scura lasciato vuoto viene ricavato da quello chiaro.",
+      "primaryLight": "Colore principale",
+      "primaryDark": "Colore principale (modalità scura)",
+      "accentLight": "Colore di accento",
+      "accentDark": "Colore di accento (modalità scura)",
+      "pickerLabel": "{{field}}: selettore colore",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Inserisci un colore esadecimale come #2563eb",
+      "auto": "Automatico: {{color}} (ricavato dal colore chiaro)",
+      "contrast": "Testo {{text}}, contrasto {{ratio}}:1",
+      "textLight": "chiaro",
+      "textDark": "scuro",
+      "meetsAA": "AA",
+      "belowAA": "Sotto AA"
     }
   },
   "connectors": {

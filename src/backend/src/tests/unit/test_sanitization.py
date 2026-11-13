@@ -8,12 +8,15 @@ Tests HTML/Markdown sanitization including:
 """
 import pytest
 
+from src.common.api_errors import CodedValueError
 from src.common.sanitization import (
     APP_DISPLAY_NAME_MAX_LEN,
     APP_SHORT_NAME_MAX_LEN,
+    coerce_hex_color,
     sanitize_app_display_name,
     sanitize_markdown_input,
     validate_branding_url,
+    validate_hex_color,
 )
 
 
@@ -211,3 +214,68 @@ class TestBrandingUrlValidation:
         with pytest.raises(ValueError):
             validate_branding_url(123)  # type: ignore[arg-type]
 
+
+
+class TestBrandingAssetPath:
+    """Root-relative app asset paths are accepted as branding URLs."""
+
+    def test_root_relative_path_allowed(self):
+        path = "/branding/acme/logo.svg"
+        assert validate_branding_url(path) == path
+
+    @pytest.mark.parametrize("value", [
+        "//evil.example/x.svg", "/a b.svg", "/a\\b.svg",
+        "/../etc/x.svg", "/branding/../../x.svg", "/branding/%2e%2e/x.svg",
+        "/a\tb.svg",
+    ])
+    def test_rejects_other_origin_or_odd_paths(self, value):
+        with pytest.raises(ValueError):
+            validate_branding_url(value)
+
+    def test_dots_inside_a_file_name_are_fine(self):
+        assert validate_branding_url("/branding/logo..v2.svg") == "/branding/logo..v2.svg"
+
+
+class TestHexColorValidation:
+    """Theme colors end up in injected CSS, so only #rgb / #rrggbb pass."""
+
+    def test_none_and_empty_return_none(self):
+        assert validate_hex_color(None) is None
+        assert validate_hex_color("  ") is None
+
+    def test_normalizes_case_and_short_form(self):
+        assert validate_hex_color(" #2563eb ") == "#2563eb"
+        assert validate_hex_color("#F0a") == "#ff00aa"
+
+    @pytest.mark.parametrize(
+        "value", ["red", "#12345", "#gggggg", "2563eb", "#fff;}body{x:y", "rgb(1,2,3)"]
+    )
+    def test_rejects_non_hex(self, value):
+        with pytest.raises(ValueError):
+            validate_hex_color(value)
+
+    def test_coerce_returns_none_for_invalid(self):
+        assert coerce_hex_color("#fff;}") is None
+        assert coerce_hex_color("#ABCDEF") == "#abcdef"
+
+
+class TestBrandingValueRuleEdges:
+    """The rule the form mirrors: no control chars, no `http:foo`, coded traversal error."""
+
+    @pytest.mark.parametrize("value", [
+        "http:foo", "https:/foo", "http://", "http:///x.svg",
+        "https://cdn.example/a\tb.svg", "https://cdn.example/a\nb.svg",
+        "https://cdn.example/a b.svg", "https://cdn.example\\x.svg",
+    ])
+    def test_rejects_malformed_http_values(self, value):
+        with pytest.raises(ValueError):
+            validate_branding_url(value)
+
+    @pytest.mark.parametrize("value", [
+        "/../x.svg", "/branding/%2e%2e/x.svg", "/a/../b.svg", "/a/..?x=1",
+    ])
+    def test_traversal_has_its_own_coded_error(self, value):
+        with pytest.raises(CodedValueError) as exc:
+            validate_branding_url(value, field='logo')
+        assert exc.value.code == 'branding_path_traversal'
+        assert 'no scheme' not in str(exc.value)

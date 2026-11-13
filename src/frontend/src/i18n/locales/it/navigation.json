@@ -34,5 +34,8 @@
       "seeding_failed": "Impossibile creare ruoli, team o progetti predefiniti. La causa è nei log del server.",
       "database_unavailable": "Impossibile inizializzare il database dei metadati. La causa è nei log del server."
     }
+  },
+  "branding": {
+    "poweredBy": "Powered by {{name}}"
   }
 }

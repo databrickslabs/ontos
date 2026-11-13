@@ -143,3 +143,115 @@ def test_branding_rejects_display_name_too_long(client: TestClient):
     assert response.status_code == 400
     detail = response.json().get("detail", "")
     assert "display name" in detail.lower() or "characters" in detail.lower()
+
+
+def test_ui_customization_extra_branding_defaults(client: TestClient):
+    """Tagline, dark logo and theme colors are exposed and unset by default."""
+    payload = client.get("/api/settings/ui-customization").json()
+    assert payload["app_tagline"] is None
+    assert payload["custom_logo_dark_url"] is None
+    assert payload["theme"] == {
+        "primary": None, "primary_dark": None, "accent": None, "accent_dark": None,
+    }
+
+
+def test_ui_customization_extra_branding_round_trip(client: TestClient):
+    """PUT validates/normalizes the new branding keys; GET returns them; null clears."""
+    put = client.put(
+        "/api/settings",
+        json={
+            "ui_app_tagline": "  Ontology of Acme ",
+            "ui_custom_logo_dark_url": "/branding/acme/logo-dark.svg",
+            "ui_theme_primary": "#2563eb",
+            "ui_theme_primary_dark": "#93c5fd",
+        },
+    )
+    assert put.status_code == 200, put.text
+    boot = client.get("/api/settings/ui-customization").json()
+    assert boot["app_tagline"] == "Ontology of Acme"
+    assert boot["custom_logo_dark_url"] == "/branding/acme/logo-dark.svg"
+    assert boot["theme"]["primary"] == "#2563eb"
+    assert boot["theme"]["primary_dark"] == "#93c5fd"
+    assert boot["theme"]["accent"] is None
+
+    bad = client.put("/api/settings", json={"ui_theme_accent": "red;}"})
+    assert bad.status_code == 400
+
+    clear = client.put(
+        "/api/settings",
+        json={"ui_app_tagline": None, "ui_theme_primary": "", "ui_custom_logo_dark_url": None},
+    )
+    assert clear.status_code == 200, clear.text
+    boot = client.get("/api/settings/ui-customization").json()
+    assert boot["app_tagline"] is None
+    assert boot["custom_logo_dark_url"] is None
+    assert boot["theme"]["primary"] is None
+    assert boot["theme"]["primary_dark"] == "#93c5fd"
+
+
+@pytest.mark.parametrize(
+    "key", ["ui_custom_logo_url", "ui_custom_logo_dark_url", "ui_favicon_url"]
+)
+@pytest.mark.parametrize("value", [
+    "javascript:alert(1)", "data:image/svg+xml,<svg/>", "//evil.example/x.svg",
+    "/../etc/x.svg", "/branding/%2e%2e/x.svg", "/a b.svg",
+])
+def test_branding_images_reject_unsafe_values(client: TestClient, key: str, value: str):
+    """Image fields take http(s) URLs or clean root-relative paths, nothing else."""
+    response = client.put("/api/settings", json={key: value})
+    assert response.status_code == 400
+    boot = client.get("/api/settings/ui-customization").json()
+    assert boot.get(key.removeprefix("ui_")) != value
+
+
+def test_ui_customization_ignores_invalid_env_color(client: TestClient, test_settings):
+    """A malformed color coming from the environment is dropped, not injected."""
+    test_settings.UI_THEME_PRIMARY = "#fff;}body{display:none"
+    try:
+        payload = client.get("/api/settings/ui-customization").json()
+        assert payload["theme"]["primary"] is None
+    finally:
+        test_settings.UI_THEME_PRIMARY = None
+
+
+def test_ui_customization_show_powered_by(client: TestClient, test_settings):
+    """The powered-by toggle defaults to on, round-trips as a bool and rejects other types."""
+    try:
+        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is True
+        assert client.get("/api/settings").json()["ui_show_powered_by"] is True
+
+        put = client.put("/api/settings", json={"ui_show_powered_by": False})
+        assert put.status_code == 200, put.text
+        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is False
+        assert client.get("/api/settings").json()["ui_show_powered_by"] is False
+
+        bad = client.put("/api/settings", json={"ui_show_powered_by": "no"})
+        assert bad.status_code == 400
+        # null clears the stored override but keeps the value in effect until restart
+        clear = client.put("/api/settings", json={"ui_show_powered_by": None})
+        assert clear.status_code == 200, clear.text
+        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is False
+    finally:
+        test_settings.UI_SHOW_POWERED_BY = True
+
+
+def test_branding_traversal_path_returns_a_coded_error(client: TestClient):
+    """A `..` path says so (code + params) instead of "no scheme"."""
+    response = client.put("/api/settings", json={"ui_custom_logo_url": "/../x.svg"})
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "branding_path_traversal"
+    assert detail["params"] == {"field": "custom logo URL"}
+    assert "no scheme" not in detail["message"]
+
+
+def test_rejected_branding_save_leaves_earlier_keys_unchanged(client: TestClient):
+    """One bad value makes the whole save a no-op."""
+    before = client.get("/api/settings/ui-customization").json()
+    bad = client.put("/api/settings", json={
+        "ui_app_tagline": "Half saved",
+        "ui_theme_primary": "#2563eb",
+        "ui_favicon_url": "javascript:alert(1)",
+    })
+    assert bad.status_code == 400
+    assert client.get("/api/settings/ui-customization").json() == before

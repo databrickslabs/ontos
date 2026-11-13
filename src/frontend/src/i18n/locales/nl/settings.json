@@ -669,11 +669,14 @@
       "urlLabel": "Logo URL",
       "urlPlaceholder": "https://voorbeeld.nl/logo.svg",
       "help": "Voer de URL van uw aangepaste logo in. Ondersteunde formaten: SVG, PNG, JPG.",
-      "invalidUrl": "Voer een geldige HTTP of HTTPS URL in",
       "preview": "Voorbeeld:",
       "loadError": "Afbeelding kon niet worden geladen",
       "openInNewTab": "Open in nieuw tabblad",
-      "previewAlt": "Logo-voorbeeld"
+      "previewAlt": "Logo-voorbeeld",
+      "darkUrlLabel": "Logo-URL voor de donkere modus (optioneel)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Gebruikt in de donkere modus. Laat leeg om het logo hierboven in beide modi te gebruiken.",
+      "invalidUrlOrPath": "Voer een HTTP- of HTTPS-URL in, of een app-pad dat met / begint"
     },
     "about": {
       "title": "Aangepaste Over-pagina inhoud",
@@ -692,6 +695,9 @@
       "help": "Voer aangepaste CSS in om het standaardthema te overschrijven."
     },
     "saveButton": "UI-instellingen opslaan",
+    "errorCodes": {
+      "brandingPathTraversal": "Het pad mag geen \"..\"-segmenten bevatten"
+    },
     "messages": {
       "saveSuccess": "UI-aanpassingsinstellingen opgeslagen",
       "saveError": "Kon instellingen niet opslaan",
@@ -704,18 +710,38 @@
       "shortNameHelp": "Gebruikt in krappe ruimtes (bijv. \"Vraag {{shortName}}\"). Valt terug op de weergavenaam indien leeg. Maximaal {{max}} tekens.",
       "displayNameLabel": "Weergavenaam",
       "shortNameLabel": "Korte naam (optioneel)",
-      "title": "Branding"
+      "title": "Branding",
+      "taglineLabel": "Slogan (optioneel)",
+      "taglineHelp": "Korte ondertitel onder de naam in de zijbalk en op de startpagina. Maximaal {{max}} tekens.",
+      "poweredByLabel": "\"Powered by {{name}}\" in de zijbalk tonen",
+      "poweredByHelp": "Wordt onderaan de zijbalk getoond, alleen zolang er een eigen weergavenaam of logo is ingesteld."
     },
     "favicon": {
       "previewAlt": "Favicon-voorbeeld",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Wordt tijdens runtime toegepast op het browsertabblad. De statische <link rel=\"icon\"> in de meegeleverde index.html en het PWA-manifest worden niet bijgewerkt door deze instelling.",
-      "invalidUrl": "Voer een geldige HTTP- of HTTPS-URL in",
       "loadError": "Kon afbeelding niet laden",
       "openInNewTab": "Openen in nieuw tabblad",
       "preview": "Voorbeeld:",
       "title": "Browser-favicon",
       "urlLabel": "Favicon-URL"
+    },
+    "theme": {
+      "title": "Themakleuren",
+      "help": "Kies de primaire kleur (knoppen, links, focusring) en de accentkleur (achtergronden bij aanwijzen en van geselecteerde items). Tekstkleuren worden automatisch gekozen voor voldoende contrast, en een lege kleur voor de donkere modus wordt afgeleid van de lichte.",
+      "primaryLight": "Primaire kleur",
+      "primaryDark": "Primaire kleur (donkere modus)",
+      "accentLight": "Accentkleur",
+      "accentDark": "Accentkleur (donkere modus)",
+      "pickerLabel": "{{field}}: kleurkiezer",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Voer een hexkleur in, zoals #2563eb",
+      "auto": "Automatisch: {{color}} (afgeleid van de lichte kleur)",
+      "contrast": "{{text}} tekst, contrast {{ratio}}:1",
+      "textLight": "Lichte",
+      "textDark": "Donkere",
+      "meetsAA": "AA",
+      "belowAA": "Onder AA"
     }
   },
   "connectors": {

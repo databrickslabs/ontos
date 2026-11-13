@@ -34,5 +34,8 @@
       "seeding_failed": "No se pudieron crear los roles, equipos o proyectos predeterminados. La causa está en los registros del servidor.",
       "database_unavailable": "No se pudo inicializar la base de datos de metadatos. La causa está en los registros del servidor."
     }
+  },
+  "branding": {
+    "poweredBy": "Powered by {{name}}"
   }
 }

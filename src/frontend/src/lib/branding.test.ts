@@ -4,6 +4,18 @@ import {
   resolveAppName,
   resolveShortName,
   applyBranding,
+  applyThemeColors,
+  buildThemeCss,
+  hexToHslTriplet,
+  pickForeground,
+  resolveBrandingAssetUrl,
+  isValidImageUrl,
+  contrastRatio,
+  describeContrast,
+  deriveDarkColor,
+  normalizeHexColor,
+  resolveDarkTheme,
+  formatContrastRatio,
 } from './branding';
 
 describe('branding', () => {
@@ -62,5 +74,129 @@ describe('branding', () => {
       expect(existing.getAttribute('href')).toBeTruthy();
       expect(existing.getAttribute('href')).not.toBe('');
     });
+  });
+});
+
+describe('branding assets and theme colors', () => {
+  it('resolves app asset paths and keeps URLs as given', () => {
+    expect(resolveBrandingAssetUrl('  ')).toBeNull();
+    expect(resolveBrandingAssetUrl(null)).toBeNull();
+    // Vitest runs in dev mode, where public assets are served from the root
+    expect(resolveBrandingAssetUrl('/branding/acme/mark.svg')).toBe('/branding/acme/mark.svg');
+    expect(resolveBrandingAssetUrl('/api/branding/logo')).toBe('/api/branding/logo');
+    expect(resolveBrandingAssetUrl('https://cdn.example/x.svg')).toBe('https://cdn.example/x.svg');
+  });
+
+  it('accepts https URLs and app asset paths, rejects traversal and other origins', () => {
+    expect(isValidImageUrl('')).toBe(true);
+    expect(isValidImageUrl('https://cdn.example/x.svg')).toBe(true);
+    expect(isValidImageUrl('/branding/acme/logo..v2.svg')).toBe(true);
+    for (const bad of [
+      'javascript:alert(1)', 'data:image/svg+xml,<svg/>', '//evil.example/x.svg',
+      '/a b.svg', '/a\\b.svg', '/../x.svg', '/branding/%2E%2e/x.svg',
+    ]) {
+      expect(isValidImageUrl(bad)).toBe(false);
+    }
+  });
+
+  it('applies the same rule as the backend to http(s) values and control characters', () => {
+    for (const bad of [
+      'http:foo', 'https:/foo', 'http://', 'http:///x.svg', 'https://cdn.example/a\tb.svg',
+      'https://cdn.example/a\nb.svg', 'https://cdn.example/a b.svg', 'https://cdn.example\\x.svg',
+      '/a\tb.svg', '/a/..?x=1',
+    ]) {
+      expect(isValidImageUrl(bad)).toBe(false);
+    }
+    expect(isValidImageUrl('  https://cdn.example/x.svg ')).toBe(true);
+    expect(isValidImageUrl('HTTPS://cdn.example/x.svg')).toBe(true);
+  });
+
+  it('refuses unsafe values instead of resolving them', () => {
+    for (const bad of ['javascript:alert(1)', 'data:image/svg+xml,<svg/>', '//evil.example/x.svg',
+      '/../x.svg', 'http:foo']) {
+      expect(resolveBrandingAssetUrl(bad)).toBeNull();
+    }
+  });
+
+  it('converts hex colors to HSL triplets and rejects anything else', () => {
+    expect(hexToHslTriplet('#ff0000')).toBe('0 100% 50%');
+    expect(hexToHslTriplet('#fff')).toBe('0 0% 100%');
+    expect(hexToHslTriplet('#2563eb')).toBe('221 83% 53%');
+    expect(hexToHslTriplet('red')).toBeNull();
+    expect(hexToHslTriplet('#fff;}body{')).toBeNull();
+  });
+
+  it('picks a readable foreground', () => {
+    expect(pickForeground('#2563eb')).toBe('0 0% 98%');
+    expect(pickForeground('#93c5fd')).toBe('0 0% 9%');
+    expect(pickForeground('#ffffff')).toBe('0 0% 9%');
+  });
+
+  it('builds no CSS when unset and derives missing dark colors from the light ones', () => {
+    expect(buildThemeCss(null)).toBe('');
+    expect(buildThemeCss({ primary: 'nope' })).toBe('');
+    const css = buildThemeCss({ primary: '#2563eb', accentDark: '#1e293b' });
+    expect(css).toContain(':root {\n  --primary: 221 83% 53%;');
+    const derived = hexToHslTriplet(deriveDarkColor('#2563eb', 'primary'));
+    expect(derived).not.toBe('221 83% 53%');
+    expect(css).toContain(`.dark {\n  --primary: ${derived};`);
+    expect(css).toMatch(/\.dark \{[\s\S]*--accent: 217 33% 17%;/);
+    // A configured dark color wins over the derived one
+    expect(buildThemeCss({ primary: '#2563eb', primaryDark: '#93c5fd' }))
+      .toContain('.dark {\n  --primary: 212 96% 78%;');
+  });
+
+  it('computes WCAG contrast and the text color for a background', () => {
+    expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 5);
+    expect(contrastRatio('#fff', '#fff')).toBeCloseTo(1, 5);
+    expect(contrastRatio('red', '#fff')).toBeNull();
+    const darkBlue = describeContrast('#1d4ed8');
+    expect(darkBlue).toMatchObject({
+      foreground: 'light',
+      foregroundHex: '#fafafa',
+      meetsAA: true,
+    });
+    // Light text still reads best on this blue, but it falls just short of AA
+    const blue = describeContrast('#2f6fed');
+    expect(blue).toMatchObject({ foreground: 'light', meetsAA: false });
+    expect(blue!.ratio).toBeGreaterThan(4.3);
+    // Mid-tone yellow: neither text color reaches AA with the light one; dark text wins
+    const yellow = describeContrast('#f5b400');
+    expect(yellow).toMatchObject({ foreground: 'dark', meetsAA: true });
+    const mid = describeContrast('#777777');
+    expect(mid!.meetsAA).toBe(false);
+    expect(describeContrast('')).toBeNull();
+    expect(formatContrastRatio(4.49)).toBe('4.4');
+    expect(formatContrastRatio(4.5)).toBe('4.5');
+  });
+
+  it('derives dark-mode colors that read on the dark background', () => {
+    const darkBackground = '#11171d';
+    const primary = deriveDarkColor('#2563eb', 'primary')!;
+    expect(primary).toMatch(/^#[0-9a-f]{6}$/);
+    expect(contrastRatio(primary, darkBackground)!).toBeGreaterThanOrEqual(4.5);
+    // Same hue, only lighter
+    expect(hexToHslTriplet(primary)!.split(' ')[0]).toBe('221');
+    // An already light primary is kept
+    expect(deriveDarkColor('#93c5fd', 'primary')).toBe('#93c5fd');
+    // Accent becomes a dark, muted surface of the same hue
+    const accent = deriveDarkColor('#dbeafe', 'accent')!;
+    // (hex rounding moves hue/saturation by a point)
+    expect(hexToHslTriplet(accent)).toMatch(/^21[34] (29|30)% 20%$/);
+    expect(deriveDarkColor('nope', 'accent')).toBeNull();
+    expect(resolveDarkTheme({ primary: '#2563eb', accentDark: '#ABC' })).toEqual({
+      primary,
+      accent: '#aabbcc',
+    });
+    expect(normalizeHexColor(' #ABC ')).toBe('#aabbcc');
+  });
+
+  it('injects the theme style before custom CSS and removes it when cleared', () => {
+    document.head.innerHTML = '<style id="custom-user-css"></style>';
+    applyThemeColors({ primary: '#2563eb' });
+    const styles = Array.from(document.head.querySelectorAll('style')).map((el) => el.id);
+    expect(styles).toEqual(['branding-theme', 'custom-user-css']);
+    applyThemeColors({});
+    expect(document.getElementById('branding-theme')).toBeNull();
   });
 });

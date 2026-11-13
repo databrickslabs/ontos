@@ -34,5 +34,8 @@
       "seeding_failed": "Standardrollen, -teams oder -projekte konnten nicht erstellt werden. Die Ursache steht in den Serverprotokollen.",
       "database_unavailable": "Die Metadatendatenbank konnte nicht initialisiert werden. Die Ursache steht in den Serverprotokollen."
     }
+  },
+  "branding": {
+    "poweredBy": "Powered by {{name}}"
   }
 }

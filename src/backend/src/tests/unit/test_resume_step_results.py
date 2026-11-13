@@ -20,10 +20,11 @@ from src.models.process_workflows import (
     StepType,
     TriggerContext,
     TriggerType,
+    WorkflowExecutionCreate,
     WorkflowStepCreate,
     WorkflowTrigger,
 )
-from src.repositories.process_workflows_repository import process_workflow_repo
+from src.repositories.process_workflows_repository import process_workflow_repo, workflow_execution_repo
 
 RULE = 'MATCH (obj:Object) ASSERT 1 = 1'
 FAILING_RULE = 'MATCH (obj:Object) ASSERT 1 = 2'
@@ -208,3 +209,27 @@ def test_the_execution_details_return_each_step_message(db_session):
     by_key = {s['step_key']: s for s in details['step_executions']}
     assert by_key['validate']['message'].startswith('Assertion failed')
     assert by_key['done']['message'] == 'Workflow completed successfully'
+
+
+def test_runs_written_within_one_second_restore_the_later_one(db_session):
+    """Two runs of a step written in the same second (SQLite keeps whole
+    seconds) still sort by when they ran, so the later run is the one restored."""
+    db_workflow = _create(db_session, [_step('check', StepType.VALIDATION, {'rule': RULE})])
+    workflow = WorkflowsManager(db_session).get_workflow(db_workflow.id)
+    steps_by_id = {s.step_id: s for s in workflow.steps}
+    execution = workflow_execution_repo.create(
+        db_session, WorkflowExecutionCreate(workflow_id=db_workflow.id),
+    )
+    first = workflow_execution_repo.add_step_execution(
+        db_session, execution_id=execution.id, step_id=steps_by_id['check'].id,
+        status='failed', passed=False, message='first run',
+    )
+    second = workflow_execution_repo.add_step_execution(
+        db_session, execution_id=execution.id, step_id=steps_by_id['check'].id,
+        status='failed', passed=False, message='second run',
+    )
+    assert first.started_at < second.started_at
+
+    restored = WorkflowExecutor(db_session)._restored_step_results(execution.id, steps_by_id)
+
+    assert restored['check']['message'] == 'second run'

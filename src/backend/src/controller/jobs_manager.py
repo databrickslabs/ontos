@@ -582,6 +582,10 @@ class JobsManager:
                 'postgres_db': str(getattr(self._settings, 'PGDATABASE', '') or ''),
                 'postgres_port': str(getattr(self._settings, 'PGPORT', '5432') or '5432'),
                 'postgres_schema': str(getattr(self._settings, 'PGSCHEMA', 'public') or 'public'),
+                # The app's volume (dashboard snapshots are stored there)
+                'databricks_volume': str(getattr(self._settings, 'DATABRICKS_VOLUME', '') or ''),
+                'databricks_catalog': str(getattr(self._settings, 'DATABRICKS_CATALOG', '') or ''),
+                'databricks_schema': str(getattr(self._settings, 'DATABRICKS_SCHEMA', '') or ''),
                 # Telemetry parameters for WorkspaceClient identification
                 'product_name': 'ontos',
                 'product_version': __version__,

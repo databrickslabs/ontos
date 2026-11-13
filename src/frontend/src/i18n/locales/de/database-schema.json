@@ -86,5 +86,21 @@
     },
     "warningsTitle": "Warnungen ({{count}})",
     "moreWarnings": "+{{count}} weitere"
+  },
+  "sync": {
+    "keepInSync": "Synchron halten",
+    "description": "Diese Auswahl regelmäßig erneut importieren: Änderungen in der Quelle werden übernommen, und Elemente, die es in der Quelle nicht mehr gibt, werden stillgelegt.",
+    "interval": "Wie oft",
+    "intervals": {
+      "60": "Stündlich",
+      "1440": "Täglich",
+      "10080": "Wöchentlich"
+    },
+    "retireAfter": "Stilllegen nach verpassten Synchronisierungen",
+    "retireAfterHint": "Elemente, die in so vielen vollständigen Synchronisierungen hintereinander fehlen, werden stillgelegt (nie gelöscht).",
+    "save": "Synchronisierung speichern",
+    "saved": "Synchronisierung „{{name}}“ gespeichert",
+    "nextRun": "Nächster Lauf",
+    "saveFailed": "Synchronisierung konnte nicht gespeichert werden"
   }
 }

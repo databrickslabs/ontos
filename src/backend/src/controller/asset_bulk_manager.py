@@ -709,15 +709,18 @@ class AssetBulkManager:
                             previous_description = existing.description
                             update_data = AssetUpdate(
                                 **description_field,
-                                properties=with_internal_properties(properties, existing.properties),
+                                properties=with_internal_properties(
+                                    properties, existing.properties),
                                 tags=tags,
                                 status=status_val,
                             )
                             updated = self._asset_repo.update(
-                                db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
+                                db=db, db_obj=existing,
+                                obj_in=update_data.model_dump(exclude_unset=True)
                             )
                             db.flush()
-                            self._set_asset_domains(db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
+                            self._set_asset_domains(
+                                db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
                             item.action = ImportAction.UPDATE
                             item.asset_id = str(updated.id)
                             result.updated += 1
@@ -739,7 +742,8 @@ class AssetBulkManager:
                             db.add(db_asset)
                             db.flush()
                             db.refresh(db_asset)
-                            self._set_asset_domains(db, db_asset.id, domain_ids_val, primary_domain_val, current_user_id)
+                            self._set_asset_domains(
+                                db, db_asset.id, domain_ids_val, primary_domain_val, current_user_id)
                             item.action = ImportAction.CREATE
                             item.asset_id = str(db_asset.id)
                             result.created += 1

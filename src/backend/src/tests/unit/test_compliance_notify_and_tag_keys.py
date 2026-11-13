@@ -467,7 +467,7 @@ class TestNotifyGateOnRoutes:
         app.dependency_overrides[get_db] = _db
         app.dependency_overrides[get_audit_manager] = lambda: MagicMock()
         # Write access, but not admin: the NOTIFY gate refuses
-        level = lambda auth_manager, u, feature, required, request: required != FeatureAccessLevel.ADMIN  # noqa: E731
+        level = lambda auth_manager, u, feature, required, request=None: required != FeatureAccessLevel.ADMIN  # noqa: E731
         with patch.object(compliance_routes, 'user_has_feature_level', side_effect=level), \
              patch.object(compliance_routes, 'manager') as manager:
             yield TestClient(app), manager

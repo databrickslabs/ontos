@@ -739,7 +739,7 @@ class AccessGrantsManager:
         try:
             notification = Notification(
                 id=str(uuid.uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 type=NotificationType.ACTION_REQUIRED,
                 title="New Access Grant Request",
                 subtitle=f"From: {request.requester_email}",
@@ -801,7 +801,7 @@ class AccessGrantsManager:
             
             notification = Notification(
                 id=str(uuid.uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 type=NotificationType.INFO if approved else NotificationType.WARNING,
                 title=title,
                 description=description,
@@ -865,7 +865,7 @@ class AccessGrantsManager:
             
             notification = Notification(
                 id=str(uuid.uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 type=NotificationType.WARNING,
                 title="Access Revoked",
                 description=description,
@@ -920,7 +920,7 @@ class AccessGrantsManager:
         try:
             notification = Notification(
                 id=str(uuid.uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 type=NotificationType.WARNING,
                 title="Access Expiring Soon",
                 description=(

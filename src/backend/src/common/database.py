@@ -4,7 +4,7 @@ import time
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypeVar
 
 from sqlalchemy import create_engine, text, event
@@ -167,7 +167,7 @@ class InMemoryStore:
         if 'id' not in data:
             data['id'] = str(len(self._data[table_name]) + 1)
         if 'created_at' not in data:
-            data['created_at'] = datetime.utcnow().isoformat()
+            data['created_at'] = datetime.now(timezone.utc).isoformat()
         if 'updated_at' not in data:
             data['updated_at'] = data['created_at']
 

@@ -1,5 +1,5 @@
 import uuid # Import uuid
-from datetime import datetime # Import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, List
 
 from fastapi import APIRouter, Request, Depends, HTTPException
@@ -444,7 +444,7 @@ async def request_role_access(
 
     # Fallback to direct notification if no workflow configured
     placeholder_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     try:
         approver_list = ", ".join(approver_role_names)

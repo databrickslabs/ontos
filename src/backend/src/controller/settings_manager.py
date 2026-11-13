@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
@@ -2646,7 +2646,7 @@ class SettingsManager:
 
             # Provide placeholder ID and created_at for Pydantic validation
             placeholder_id = str(uuid4())
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             requester_notification = Notification(
                 id=placeholder_id,

@@ -1,4 +1,5 @@
 from datetime import datetime
+from src.common.time_utils import utc_now
 from typing import Optional
 
 from sqlalchemy import Column, String, DateTime, Text, Boolean, ForeignKey, Integer, Float
@@ -20,8 +21,8 @@ class CompliancePolicyDb(Base):
     category = Column(String, nullable=True)
     severity = Column(String, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
     runs = relationship("ComplianceRunDb", back_populates="policy", cascade="all, delete-orphan", lazy="selectin")
 
@@ -33,7 +34,7 @@ class ComplianceRunDb(Base):
     id = Column(String, primary_key=True)
     policy_id = Column(String, ForeignKey('compliance_policies.id'), nullable=False, index=True)
     status = Column(String, default='queued', nullable=False, index=True)  # queued|running|succeeded|failed
-    started_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     finished_at = Column(DateTime(timezone=True), nullable=True)
     success_count = Column(Integer, default=0, nullable=False)
     failure_count = Column(Integer, default=0, nullable=False)
@@ -63,7 +64,7 @@ class ComplianceResultDb(Base):
     passed = Column(Boolean, default=False, nullable=False)
     message = Column(Text, nullable=True)
     details_json = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     run = relationship("ComplianceRunDb", back_populates="results")
 

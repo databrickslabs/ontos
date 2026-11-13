@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 import yaml
@@ -37,8 +37,8 @@ class EntitlementsSyncManager:
 
     def create_config(self, config: EntitlementSyncConfig) -> EntitlementSyncConfig:
         """Create a new sync configuration"""
-        config.created_at = datetime.utcnow()
-        config.updated_at = datetime.utcnow()
+        config.created_at = datetime.now(timezone.utc)
+        config.updated_at = datetime.now(timezone.utc)
         self.configs.append(config)
         return config
 
@@ -46,7 +46,7 @@ class EntitlementsSyncManager:
         """Update an existing sync configuration"""
         for i, existing_config in enumerate(self.configs):
             if existing_config.id == config_id:
-                config.updated_at = datetime.utcnow()
+                config.updated_at = datetime.now(timezone.utc)
                 self.configs[i] = config
                 return config
         return None

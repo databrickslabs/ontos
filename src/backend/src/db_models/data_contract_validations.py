@@ -5,6 +5,7 @@ Stores results of validation runs on data contracts (schema drift, access, SLA, 
 """
 
 from datetime import datetime
+from src.common.time_utils import utc_now
 from sqlalchemy import Column, String, DateTime, Text, Boolean, ForeignKey, Integer, Float
 from sqlalchemy.orm import relationship
 
@@ -18,7 +19,7 @@ class DataContractValidationRunDb(Base):
     id = Column(String, primary_key=True)
     contract_id = Column(String, ForeignKey('data_contracts.id'), nullable=False, index=True)
     status = Column(String, default='running', nullable=False, index=True)  # running|succeeded|failed
-    started_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     finished_at = Column(DateTime(timezone=True), nullable=True)
     checks_passed = Column(Integer, default=0, nullable=False)
     checks_failed = Column(Integer, default=0, nullable=False)
@@ -43,7 +44,7 @@ class DataContractValidationResultDb(Base):
     passed = Column(Boolean, default=False, nullable=False)
     message = Column(Text, nullable=True)
     details_json = Column(Text, nullable=True)  # JSON with specific violation details
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     # Relationship to run
     run = relationship("DataContractValidationRunDb", back_populates="results")

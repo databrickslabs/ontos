@@ -703,6 +703,19 @@ def initialize_managers(app: FastAPI):
             logger.error(f"Failed to start background job polling: {e}", exc_info=True)
             # Don't fail startup if polling fails to start
 
+        # --- Start the workflow scheduler (#941) ---
+        try:
+            if settings.WORKFLOW_SCHEDULER_ENABLED:
+                from src.controller.workflow_scheduler import WorkflowScheduler
+
+                app.state.workflow_scheduler = WorkflowScheduler(
+                    change_check_seconds=settings.WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS,
+                    idle_recheck_seconds=settings.WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS,
+                )
+                app.state.workflow_scheduler.start()
+        except Exception as e:
+            logger.error(f"Failed to start the workflow scheduler: {e}", exc_info=True)
+
         # --- Load demo data if conditions are met ---
         # Only load demo data when:
         # 1. APP_DEMO_MODE is enabled

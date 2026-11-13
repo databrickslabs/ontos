@@ -5,7 +5,7 @@ import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, TypeVar
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
@@ -966,6 +966,30 @@ def init_db() -> None:
         engine = None # Reset public engine on failure
         raise ConnectionError("Failed to initialize database connection or run migrations.") from e
 
+# Called (no arguments) when a request's session first touches the database, i.e.
+# while the database is awake anyway; e.g. the workflow scheduler then checks for
+# schedule changes made through other app instances (#941).
+_request_db_use_listeners: List[Callable[[], None]] = []
+
+
+def add_request_db_use_listener(listener: Callable[[], None]) -> None:
+    """Call ``listener`` whenever a request session begins a database transaction.
+
+    It runs in the request's thread, so it must be cheap and must not use the
+    database itself; exceptions are logged and swallowed.
+    """
+    if listener not in _request_db_use_listeners:
+        _request_db_use_listeners.append(listener)
+
+
+def _notify_request_db_use(*_args) -> None:
+    for listener in list(_request_db_use_listeners):
+        try:
+            listener()
+        except Exception as e:
+            logger.warning(f"Request database-use listener failed: {e}")
+
+
 def get_db():
     global _SessionLocal
     if _SessionLocal is None:
@@ -974,6 +998,8 @@ def get_db():
         raise RuntimeError("Database session factory is not available. Database might not have been initialized correctly.")
     
     db = _SessionLocal()
+    if _request_db_use_listeners and isinstance(db, SQLAlchemySession):
+        event.listen(db, 'after_begin', _notify_request_db_use, once=True)
     try:
         yield db
         db.commit()  # Commit the transaction on successful completion of the request

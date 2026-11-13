@@ -1982,9 +1982,9 @@ true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
 -- Contract lifecycle monitoring workflow
 ('02a00004-0000-4000-8000-000000000004', 'Contract Lifecycle Monitor', 'Checks daily that no data contract is deprecated or retired and notifies the owner when one is.', 
-'{"type": "scheduled", "schedule": "0 6 * * *"}',
+'{"type": "scheduled", "schedule": "0 0 6 * * ?"}',
 '{"type": "all"}',
-true, false, 1, 'system@demo', 'system@demo', NOW(), NOW()),
+false, false, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
 -- Full governance workflow with multiple checks
 ('02a00005-0000-4000-8000-000000000005', 'Full Governance Pre-Check', 'Comprehensive pre-creation validation including naming, GDPR controls for PII products, and restricted access for confidential contracts.', 

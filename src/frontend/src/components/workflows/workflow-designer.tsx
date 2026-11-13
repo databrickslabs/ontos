@@ -154,6 +154,9 @@ import { UnknownEntityTypesNotice } from './unknown-entity-types-notice';
 import { workflowIssueNodeIds, workflowWarningText } from './workflow-warnings';
 import { WorkflowWarningsPanel, type WorkflowIssueItem } from './workflow-warnings-panel';
 import {
+  DEFAULT_SCHEDULE_TIMEZONE, TriggerScheduleFields, isScheduleIssue,
+} from './trigger-schedule-fields';
+import {
   TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
 } from './workflow-entry-step';
 import {
@@ -934,6 +937,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [triggerToStatus, setTriggerToStatus] = useState('');
   const [triggerOnError, setTriggerOnError] = useState<GateErrorMode>('fail_open');
   const [triggerDisabledFor, setTriggerDisabledFor] = useState<GateExemptions>(EMPTY_GATE_EXEMPTIONS);
+  // scheduled only: Quartz cron and IANA timezone, and the backend's error about them
+  const [triggerSchedule, setTriggerSchedule] = useState('');
+  const [triggerTimezone, setTriggerTimezone] = useState(DEFAULT_SCHEDULE_TIMEZONE);
+  const [scheduleIssue, setScheduleIssue] = useState<WorkflowValidationIssue | null>(null);
   // Selected exemptions whose entity was deleted: the backend refuses to save them
   const [missingExemptions, setMissingExemptions] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
@@ -1009,6 +1016,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     description: string;
     triggerType: TriggerType;
     entityTypes: EntityType[];
+    schedule?: string;
+    timezone?: string;
     isActive: boolean;
     steps: WorkflowStepCreate[];
   }
@@ -1077,6 +1086,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     if (name !== originalState.name) return true;
     if (description !== originalState.description) return true;
     if (triggerType !== originalState.triggerType) return true;
+    if (triggerType === 'scheduled' && (triggerSchedule !== (originalState.schedule ?? '')
+      || triggerTimezone !== (originalState.timezone ?? DEFAULT_SCHEDULE_TIMEZONE))) return true;
     if (isActive !== originalState.isActive) return true;
     
     // Compare entity types
@@ -1090,7 +1101,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     return false;
   }, [
     originalState, name, description, triggerType, entityTypes, unknownEntityTypes,
-    storedUnknownTypes.length,
+    storedUnknownTypes.length, triggerSchedule, triggerTimezone,
     isActive, steps, isNew,
   ]);
 
@@ -1216,6 +1227,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             setTriggerToStatus(response.data.trigger.to_status || '');
             setTriggerOnError(response.data.trigger.on_error || 'fail_open');
             setTriggerDisabledFor({ ...EMPTY_GATE_EXEMPTIONS, ...(response.data.trigger.disabled_for || {}) });
+            // The stored timezone as is (empty = UTC): a save that leaves both unchanged
+            // isn't checked again by the backend
+            setTriggerSchedule(response.data.trigger.schedule || '');
+            setTriggerTimezone(response.data.trigger.timezone || '');
             setIsActive(response.data.is_active);
             setWorkflowType((response.data.workflow_type as WorkflowTypeValue) || 'process');
             const loadedSteps = response.data.steps.map(s => ({
@@ -1236,6 +1251,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
               description: response.data.description || '',
               triggerType: response.data.trigger.type,
               entityTypes: [...response.data.trigger.entity_types],
+              schedule: response.data.trigger.schedule || '',
+              timezone: response.data.trigger.timezone || '',
               isActive: response.data.is_active,
               steps: loadedSteps.map(s => ({ ...s })),
             });
@@ -1583,6 +1600,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
       ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
       ...(triggerType === 'before_status_change' ? { on_error: triggerOnError, disabled_for: triggerDisabledFor } : {}),
+      // Both sent, even empty: an empty schedule gets the backend's schedule_required
+      ...(triggerType === 'scheduled'
+        ? { schedule: triggerSchedule.trim(), timezone: triggerTimezone.trim() || null }
+        : {}),
     },
     workflow_type: workflowType || 'process',
     is_active: isActive,
@@ -1741,7 +1762,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         const failedStep = issues
           ?.map(issue => issue.params?.step)
           .find(step => steps.some(s => s.step_id === step));
-        if (typeof failedStep === 'string') {
+        const failedSchedule = issues?.find(issue => isScheduleIssue(issue.code)) ?? null;
+        setScheduleIssue(failedSchedule);
+        if (failedSchedule) {
+          setSelectedNodeId('trigger');  // the error shows at the schedule field
+        } else if (typeof failedStep === 'string') {
           setInvalidStepId(failedStep);
           setSelectedNodeId(failedStep);
         } else if (issues?.some(issue => issue.code.startsWith('trigger_entity_type_'))) {
@@ -1764,6 +1789,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           description,
           triggerType,
           entityTypes: [...entityTypes],
+          schedule: triggerSchedule,
+          timezone: triggerTimezone,
           isActive,
           steps: steps.map(s => ({ ...s })),
         });
@@ -2159,6 +2186,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       </div>
                     );
                   })()}
+
+                  {triggerType === 'scheduled' && (
+                    <TriggerScheduleFields
+                      schedule={triggerSchedule}
+                      timezone={triggerTimezone}
+                      onScheduleChange={(v) => { setTriggerSchedule(v); setScheduleIssue(null); }}
+                      onTimezoneChange={(v) => { setTriggerTimezone(v); setScheduleIssue(null); }}
+                      issue={scheduleIssue}
+                    />
+                  )}
 
                   {triggerType === 'before_status_change' && (
                     <div className="flex items-start justify-between gap-3">

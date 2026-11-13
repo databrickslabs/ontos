@@ -308,6 +308,7 @@ async def startup_event():
 # Application Shutdown Event
 async def shutdown_event():
     logger.info("Running application shutdown event...")
+    _stop_workflow_scheduler()
     logger.info("Application shutdown complete.")
 
 # --- FastAPI App Instantiation (AFTER defining lifecycle functions) ---
@@ -591,13 +592,24 @@ def _managers_running() -> bool:
 
 
 def _stop_job_polling() -> None:
-    """Stop the running managers' job poller before they are replaced."""
+    """Stop the running managers' job poller and workflow scheduler before they are replaced."""
     jobs_manager = getattr(app.state, "jobs_manager", None)
     if jobs_manager is not None:
         try:
             jobs_manager.stop_background_polling()
         except Exception as e:
             logger.warning(f"Could not stop the job poller before re-initializing: {e}")
+    _stop_workflow_scheduler()
+
+
+def _stop_workflow_scheduler() -> None:
+    """Stop the workflow scheduler thread (#941), if one runs."""
+    scheduler = getattr(app.state, "workflow_scheduler", None)
+    if scheduler is not None:
+        try:
+            scheduler.stop()
+        except Exception as e:
+            logger.warning(f"Could not stop the workflow scheduler: {e}")
 
 
 def _close_replaced_manager_session(old_session) -> None:

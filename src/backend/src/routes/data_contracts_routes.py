@@ -2069,7 +2069,7 @@ async def get_schema_properties(
     if limit > 0:
         query = query.offset(skip).limit(limit)
     props = query.all()
-    from src.utils.property_custom_properties import custom_properties_by_property
+    from src.utils.property_custom_properties import custom_properties_by_property, decode_value
     custom_props = custom_properties_by_property(db, [p.id for p in props])
 
     items = []
@@ -2092,13 +2092,15 @@ async def get_schema_properties(
             "partitioned": p.partitioned,
             "partitionKeyPosition": p.partition_key_position,
             "classification": p.classification,
-            "description": p.transform_description,
+            "description": p.description,
+            "physicalName": p.physical_name,
             "businessName": p.business_name,
             "criticalDataElement": p.critical_data_element,
             "examples": p.examples,
             "transformLogic": p.transform_logic,
             "transformSourceObjects": p.transform_source_objects,
             "transformDescription": p.transform_description,
+            "tags": decode_value(p.tags) if p.tags else None,
             "encryptedName": p.encrypted_name,
             "customProperties": custom_props.get(p.id, {}),
         }

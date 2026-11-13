@@ -1153,8 +1153,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                 prop_dict['transformSourceObjects'] = json.loads(prop.transform_source_objects)
                             except (json.JSONDecodeError, TypeError):
                                 prop_dict['transformSourceObjects'] = prop.transform_source_objects
-                        if prop.transform_description:
-                            prop_dict['description'] = prop.transform_description
+                        if prop.description:
+                            prop_dict['description'] = prop.description
                         if prop.examples:
                             try:
                                 prop_dict['examples'] = json.loads(prop.examples)
@@ -1173,12 +1173,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
                         # Add missing ODCS property-level fields
 
-                        # Add physicalName field - use convention or check for separate field
-                        if hasattr(prop, 'physical_name') and prop.physical_name:
+                        if prop.physical_name:
                             prop_dict['physicalName'] = prop.physical_name
-                        else:
-                            # Naming convention: the logical name with underscores
-                            prop_dict['physicalName'] = prop.name.replace(' ', '_').lower()
 
                         if getattr(prop, 'business_name', None):
                             prop_dict['businessName'] = prop.business_name
@@ -1190,12 +1186,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         if getattr(prop, 'transform_description', None):
                             prop_dict['transformDescription'] = prop.transform_description
 
-                        # Property-level tags - always include, even if empty for ODCS compliance
-                        # Tags are now rich objects managed by TagsManager
-                        if hasattr(prop, 'tags') and prop.tags:
-                            prop_dict['tags'] = prop.tags
-                        else:
-                            prop_dict['tags'] = []
+                        # Stored as a JSON list (see _create_schema_objects)
+                        if prop.tags:
+                            prop_dict['tags'] = _json_list(prop.tags)
 
                         # Property-level authoritative definitions (if relationship exists)
                         if hasattr(prop, 'authoritative_definitions') and prop.authoritative_definitions:
@@ -1848,7 +1841,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     encrypted_name=prop_dict.get('encryptedName'),
                     transform_logic=prop_dict.get('transformLogic'),
                     transform_source_objects=transform_source_objects_json,
-                    transform_description=prop_dict.get('description'),
+                    physical_name=prop_dict.get('physicalName') or prop_dict.get('physical_name'),
+                    description=prop_dict.get('description'),
+                    transform_description=prop_dict.get('transformDescription'),
+                    tags=json.dumps(prop_dict['tags']) if prop_dict.get('tags') else None,
                     examples=examples_json,
                     critical_data_element=prop_dict.get('criticalDataElement', False),
                     logical_type_options_json=json.dumps(logical_type_options) if logical_type_options else None,
@@ -7204,13 +7200,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     "partitioned": p.partitioned,
                     "partitionKeyPosition": p.partition_key_position,
                     "classification": p.classification,
-                    "description": p.transform_description,
+                    "description": p.description,
+                    "physicalName": p.physical_name,
                     "businessName": p.business_name,
                     "criticalDataElement": p.critical_data_element,
                     "examples": p.examples,
                     "transformLogic": p.transform_logic,
                     "transformSourceObjects": p.transform_source_objects,
                     "transformDescription": p.transform_description,
+                    "tags": _json_list(p.tags) if p.tags else None,
                     "encryptedName": p.encrypted_name,
                     "customProperties": prop_custom_props.get(p.id, {}),
                 }

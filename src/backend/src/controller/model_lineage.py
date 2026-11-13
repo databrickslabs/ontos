@@ -226,7 +226,7 @@ class ModelLineageResolver:
                     return {
                         "name": prop.business_name or prop.name,
                         "status": prop.logical_type,
-                        "description": prop.transform_description,
+                        "description": prop.description,
                         "context_id": obj.contract_id if obj else None,
                     }
         except Exception as e:

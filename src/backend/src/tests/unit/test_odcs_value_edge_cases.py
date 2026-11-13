@@ -180,3 +180,22 @@ def test_resaving_the_quality_rules_the_api_returns_keeps_the_implementation(
 
     check = _export(manager, db_session, cid)['schema'][0]['quality'][0]
     assert check['implementation'] == implementation
+
+
+def test_editing_a_value_in_the_page_map_stores_the_edit(db_session):
+    manager = _manager()
+    cid = _upload(manager, db_session, _odcs(customProperties=[
+        {'id': 'cp-code', 'property': 'code', 'value': '42'},
+        {'id': 'cp-plain', 'property': 'plain', 'value': 'text'}]))
+    shown = _api(manager, db_session, cid).customProperties
+    shown['plain'] = 'edited'
+    shown['new'] = 'x'
+
+    manager.update_contract_with_relations(
+        db_session, cid, DataContractUpdate.model_validate({'customProperties': shown}),
+        current_user='alice')
+
+    exported = {c['property']: c for c in _export(manager, db_session, cid)['customProperties']}
+    assert exported['plain'] == {'property': 'plain', 'value': 'edited', 'id': 'cp-plain'}
+    assert exported['code'] == {'property': 'code', 'value': '42', 'id': 'cp-code'}
+    assert exported['new'] == {'property': 'new', 'value': 'x'}

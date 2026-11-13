@@ -114,6 +114,21 @@ def _odps_custom_property(cp: Any) -> Dict[str, Any]:
     return item
 
 
+def _port_ontos_properties(port: Any) -> List[Dict[str, Any]]:
+    """The stored output port fields ODPS has no place for, as ``ontos*`` custom properties."""
+    props: List[Dict[str, Any]] = []
+    if port.status:
+        props.append({"property": ONTOS_PORT_STATUS_PROPERTY, "value": port.status})
+    server = port.server.model_dump(by_alias=True, exclude_none=True) if port.server else None
+    if server:
+        props.append({"property": ONTOS_PORT_SERVER_PROPERTY, "value": server})
+    if port.containsPii:
+        props.append({"property": ONTOS_PORT_CONTAINS_PII_PROPERTY, "value": True})
+    if port.autoApprove:
+        props.append({"property": ONTOS_PORT_AUTO_APPROVE_PROPERTY, "value": True})
+    return props
+
+
 def _odps_authoritative_definition(ad: Any) -> Dict[str, Any]:
     item = {"url": ad.url, "type": ad.type}
     if getattr(ad, 'description', None):
@@ -179,6 +194,10 @@ from src.models.data_products import (
     SubscribersListResponse,
     OnBehalfOf,
     ONTOS_PORT_STATUS_PROPERTY,
+    ONTOS_PORT_SERVER_PROPERTY,
+    ONTOS_PORT_CONTAINS_PII_PROPERTY,
+    ONTOS_PORT_AUTO_APPROVE_PROPERTY,
+    ONTOS_OWNER_TEAM_PROPERTY,
 )
 from src.models.assets import public_properties
 from src.models.import_results import BatchImportResult, ImportItemResult
@@ -470,6 +489,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 and not product_data.get('project_id')
             ):
                 product_data['draft_owner_id'] = user
+
+            self._apply_imported_owner_team(db_session, product_data)
 
             # Lifecycle fields exported as ontos* customProperties map back to
             # columns on import, checked before anything is created
@@ -4200,6 +4221,36 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         return members_list
 
+    @staticmethod
+    def _owner_team_name(session: Session, team_id: Optional[str]) -> Optional[str]:
+        """Name of the owner team, or None when unset or not found."""
+        if not team_id:
+            return None
+        try:
+            team = team_repo.get(session, id=UUID(str(team_id)))
+        except (ValueError, TypeError):
+            return None
+        return team.name if team else None
+
+    @staticmethod
+    def _apply_imported_owner_team(session: Session, product_data: Dict[str, Any]) -> None:
+        """Set ``owner_team_id`` from an exported ``ontosOwnerTeam`` custom property.
+
+        Only when the payload names no owner team and a team with that name exists (the
+        property is then consumed); otherwise it stays a plain custom property.
+        """
+        props = product_data.get('customProperties')
+        if not isinstance(props, list) or product_data.get('owner_team_id'):
+            return
+        for item in props:
+            if isinstance(item, dict) and item.get('property') == ONTOS_OWNER_TEAM_PROPERTY:
+                name = item.get('value')
+                team = team_repo.get_by_name(session, name=name) if isinstance(name, str) else None
+                if team:
+                    product_data['owner_team_id'] = str(team.id)
+                    props.remove(item)
+                return
+
     def build_odps_export(
         self,
         product_id: str,
@@ -4271,11 +4322,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     inputContracts=[
                         {"id": c.id, "version": c.version} for c in p.inputContracts or []
                     ],
-                    # ODPS has no port status: carried as a custom property.
-                    customProperties=(
-                        [{"property": ONTOS_PORT_STATUS_PROPERTY, "value": p.status}]
-                        if p.status else None
-                    ),
+                    # ODPS has no port status, server, PII or auto-approve: carried as
+                    # custom properties.
+                    customProperties=_port_ontos_properties(p) or None,
                 )
                 for p in product.outputPorts
             ]
@@ -4335,6 +4384,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         _upsert_custom_property(odps, ONTOS_ENTITY_ID_PROPERTY, product.id)
         for prop, value in lifecycle_custom_properties(product, 'data_product').items():
             _upsert_custom_property(odps, prop, value)
+        owner_team_name = self._owner_team_name(session, product.owner_team_id)
+        if owner_team_name:
+            _upsert_custom_property(odps, ONTOS_OWNER_TEAM_PROPERTY, owner_team_name)
 
         if product.authoritativeDefinitions:
             odps["authoritativeDefinitions"] = [

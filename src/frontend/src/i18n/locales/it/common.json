@@ -565,16 +565,25 @@
     "removeConfirm": "Sei sicuro di voler rimuovere questa relazione? Questa azione non può essere annullata."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Seleziona {{kind}}…",
     "latestSuffix": "{{name}} (più recente)",
     "pinVersionTitle": "Fissa una versione specifica",
     "pinVersion": "Fissa versione",
     "followLatestTitle": "Segui sempre l'ultima versione visibile della famiglia",
     "followLatest": "Segui l'ultima versione",
-    "searchPlaceholder": "Cerca {{kind}}…",
     "loading": "Caricamento…",
-    "noMatching": "Nessun {{kind}} corrispondente.",
     "unnamed": "(senza nome)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Seleziona un contratto…",
+      "search": "Cerca contratti…",
+      "noMatching": "Nessun contratto corrispondente."
+    },
+    "product": {
+      "select": "Seleziona un prodotto…",
+      "search": "Cerca prodotti…",
+      "noMatching": "Nessun prodotto corrispondente."
+    }
   },
   "entityTree": {
     "title": "Entità correlate",

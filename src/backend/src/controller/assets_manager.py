@@ -19,6 +19,7 @@ from src.models.assets import (
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
 from src.common.errors import ConflictError, NotFoundError, ValidationError
 from src.common.logging import get_logger
+from src.common.odcs_logical_types import column_logical_type
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.database import get_session_factory
 from src.controller.change_log_manager import change_log_manager
@@ -26,6 +27,8 @@ from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
 
 logger = get_logger(__name__)
+
+_UNSET = object()
 
 ONTOS_NS = "http://ontos.app/ontology#"
 
@@ -384,7 +387,11 @@ class AssetsManager(SearchableAsset):
 
         effective_type_id = asset_in.asset_type_id or db_asset.asset_type_id
         if asset_in.properties is not None:
-            self._validate_properties(db, effective_type_id, asset_in.properties)
+            # Only what the update changes: a stored legacy value that doesn't fit the
+            # schema doesn't block an edit of another field (the dialog sends them back)
+            stored = db_asset.properties or {}
+            changed = {k: v for k, v in asset_in.properties.items() if stored.get(k, _UNSET) != v}
+            self._validate_properties(db, effective_type_id, changed)
 
         update_data = asset_in.model_dump(exclude_unset=True)
         if update_data.get('properties') is not None:
@@ -812,7 +819,9 @@ class AssetsManager(SearchableAsset):
                     {
                         "name": c.get("name", ""),
                         "physicalType": c.get("data_type", ""),
-                        "logicalType": c.get("logical_type", "string"),
+                        "logicalType": column_logical_type(
+                            c.get("logical_type"), c.get("data_type")
+                        ),
                         "required": not c.get("nullable", True),
                         "description": c.get("description", ""),
                         "partitioned": c.get("is_partition_key", False),
@@ -844,7 +853,9 @@ class AssetsManager(SearchableAsset):
             columns.append({
                 "name": child.name,
                 "physicalType": props.get("data_type", ""),
-                "logicalType": props.get("logical_type", "string"),
+                "logicalType": column_logical_type(
+                    props.get("logical_type"), props.get("data_type")
+                ),
                 "required": not props.get("nullable", True),
                 "description": child.description or "",
                 "partitioned": props.get("is_partition_key", False),

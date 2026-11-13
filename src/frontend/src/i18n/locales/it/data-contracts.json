@@ -543,6 +543,9 @@
     "ownerTeamIdHint": "Facoltativo: ereditato dal prodotto se disponibile",
     "creating": "Creazione..."
   },
+  "apiVersionErrors": {
+    "unsupported": "apiVersion {{apiVersion}} non è una versione ODCS. Usa una delle versioni ODCS, ad esempio v3.1.0."
+  },
   "basicForm": {
     "editTitle": "Modifica Metadati Contratto",
     "createTitle": "Crea Nuovo Contratto Dati",

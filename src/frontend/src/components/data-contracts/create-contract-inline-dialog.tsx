@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { Loader2 } from 'lucide-react';
 import { internalErrorText } from '@/lib/server-error-text';
+import { odcsApiVersionErrorText } from '@/lib/odcs-api-version-error';
 
 type PrefillData = {
   domain?: string;
@@ -83,7 +84,7 @@ export default function CreateContractInlineDialog({
         version: version.trim(),
         status: status,
         kind: 'DataContract',
-        apiVersion: '3.0.2'
+        apiVersion: 'v3.1.0'
       };
 
       // Add optional fields if provided
@@ -103,7 +104,9 @@ export default function CreateContractInlineDialog({
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(
-          internalErrorText(errorText) ?? (errorText || t('data-contracts:createInline.createError', 'Failed to create contract'))
+          odcsApiVersionErrorText(errorText, t) ?? internalErrorText(errorText) ?? (
+            errorText || t('data-contracts:createInline.createError', 'Failed to create contract')
+          )
         );
       }
 

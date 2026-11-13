@@ -213,7 +213,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         owner_team_id: ownerTeamId && ownerTeamId !== '__none__' ? ownerTeamId : undefined,
         project_id: projectId && projectId !== '__none__' ? projectId : undefined,
         kind: 'DataContract',
-        apiVersion: 'v3.1.0',
+        // A new contract only: editing keeps the stored ODCS version (v3.0.x stays v3.0.x)
+        ...(isEdit ? {} : { apiVersion: 'v3.1.0' }),
         domainIds: domainIds,
         primaryDomainId: primaryDomainId,
         tenant: tenant.trim() || undefined,

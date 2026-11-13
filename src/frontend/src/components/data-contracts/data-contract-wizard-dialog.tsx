@@ -13,6 +13,7 @@ import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
+import { hasDateConstraints } from './logical-types'
 
 type WizardProps = {
   isOpen: boolean
@@ -33,6 +34,8 @@ interface SemanticConcept {
 const LOGICAL_TYPES = [
   'string',
   'date',
+  'timestamp',
+  'time',
   'number',
   'integer',
   'object',
@@ -1054,7 +1057,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                   </div>
                                 )}
 
-                                {(col as any).logicalType === 'date' && (
+                                {hasDateConstraints((col as any).logicalType) && (
                                   <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
                                     <div className="text-[11px] font-medium mb-2">{t('data-contracts:wizard.constraints.date', 'Date Constraints')}</div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -1074,15 +1077,6 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                             <SelectItem value="timestamp" className="text-xs">{t('data-contracts:wizard.constraints.dateFormats.unixTimestamp', 'Unix timestamp')}</SelectItem>
                                           </SelectContent>
                                         </Select>
-                                      </div>
-                                      <div>
-                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.timezone', 'Timezone')}</Label>
-                                        <Input
-                                          placeholder={t('data-contracts:wizard.constraints.timezonePlaceholder', 'UTC, America/New_York')}
-                                          value={(col as any).timezone || ''}
-                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, timezone: e.target.value || undefined } : y) } : x))}
-                                          className="mt-0.5 h-7 text-xs"
-                                        />
                                       </div>
                                       <div>
                                         <Label className="text-[10px]">{t('data-contracts:wizard.constraints.customFormat', 'Custom Format')}</Label>

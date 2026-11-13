@@ -125,6 +125,7 @@
 
 ## 🐛 Bug Fixes
 
+- **data-contracts**: a contract's `apiVersion` must be an ODCS version. `POST /api/data-contracts` and `PUT /api/data-contracts/{id}` store a version sent without its `v` as `v<version>` (`3.0.2` becomes `v3.0.2`) and refuse any other value with a 422 whose error type is `odcs_api_version_unsupported` (param `api_version`). Contracts created from **Link contract > Create New Contract** now get `v3.1.0`
 - **catalog-commander**: the column schema of a table uses the same ODCS logical types as **Infer from Asset**: `TIMESTAMP` / `TIMESTAMP_NTZ` columns are `timestamp` (before: `date`) `TIME` is `time` and `INTERVAL` columns are `string` (before: `date` and `integer`)
 - **ui**: the contract and product picker (Link contract, product and contract versions) names the kind in the user's language: *Pesquisar contratos…* instead of *Pesquisar contract…*. The keys `common:entityVersionPicker.selectPlaceholder`, `searchPlaceholder` and `noMatching` are replaced by `common:entityVersionPickerKinds.<contract|product>.select`, `search` and `noMatching`
 - **ui**: lists and pickers that open from a popover inside a dialog can be clicked again, such as the contract list of a deliverable's **Link contract** dialog. Before, the list showed over the dialog but clicks went to the dialog under it (two copies of a Radix UI package; the frontend now pins one with an npm override). The Link contract dialog's buttons are now translated

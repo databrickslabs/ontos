@@ -4,6 +4,7 @@ from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
+from src.common.odcs_versions import normalize_odcs_api_version
 
 if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed
@@ -436,6 +437,8 @@ class DataContractBase(BaseModel):
         # The create dialog sends the field names (domainIds, primaryDomainId, ...)
         populate_by_name = True
 
+    _api_version = field_validator('apiVersion', mode='before')(normalize_odcs_api_version)
+
 
 class DataContractCreate(DataContractBase):
     # Additional ODCS fields for wizard
@@ -534,6 +537,8 @@ class DataContractUpdate(BaseModel):
 
     class Config:
         populate_by_name = True
+
+    _api_version = field_validator('apiVersion', mode='before')(normalize_odcs_api_version)
 
 
 class DataContractRead(BaseModel):

@@ -83,7 +83,7 @@ export default function CreateContractInlineDialog({
         version: version.trim(),
         status: status,
         kind: 'DataContract',
-        apiVersion: '3.0.2'
+        apiVersion: 'v3.1.0'
       };
 
       // Add optional fields if provided

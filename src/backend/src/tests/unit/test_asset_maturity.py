@@ -317,8 +317,12 @@ def test_gate_on_uc_fields_says_the_table_could_not_be_read(db_session):
         db_session, entity_type='Asset', entity_id=str(asset.id), persist=False,
     )
 
-    # The levels were computed from missing fields, so none are reported; the notice says why
-    assert report.levels == [] and report.achieved_level_order is None
+    # Owned (no UC field) passes; the level with the UC gate and the failing owner gate
+    # is a certain failure, so the result is kept, with the UC gate's code
+    assert report.achieved_level_order == 1
+    uc_gate, owner_gate = report.levels[1].gates
+    assert uc_gate.message_code == 'maturity_uc_table_unreadable'
+    assert owner_gate.passed is False and owner_gate.message_code is None
     assert [n.code for n in report.notices] == ['maturity_uc_table_unreadable']
     assert report.notices[0].params == {'tableName': FQN}
     assert str(error) not in report.model_dump_json()
@@ -363,7 +367,7 @@ def test_uc_read_failure_keeps_the_stored_level(db_session, error):
     assert [s.achieved_level_order for s in snapshots] == [2]
 
 
-def test_uc_read_failure_before_any_level_stores_nothing(db_session):
+def test_uc_read_failure_before_any_level_stores_only_the_certain_part(db_session):
     asset = _asset(db_session)
     _ladder_with_a_uc_gate(db_session)
 
@@ -372,9 +376,11 @@ def test_uc_read_failure_before_any_level_stores_nothing(db_session):
             db_session, entity_type='Asset', entity_id=str(asset.id), persist=True,
         )
 
-    assert report.achieved_level_order is None
-    assert db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).count() == 0
-    assert not registry.return_value.on_maturity_change.called
+    # Level 1 doesn't use UC fields: a certain rise from nothing, so it is stored and fires
+    assert report.achieved_level_order == 1
+    snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).all()
+    assert [s.achieved_level_order for s in snapshots] == [1]
+    assert registry.return_value.on_maturity_change.called
 
 
 def test_level_is_stored_again_once_the_table_reads(db_session):
@@ -683,7 +689,7 @@ def test_metric_view_assets_are_evaluated_like_tables(db_session):
     assert d['entity_type'] == 'Asset' and d['asset_type'] == 'Metric View'
 
 
-def test_unreadable_table_stores_no_level_and_reports_no_levels(db_session):
+def test_unreadable_table_keeps_the_certain_part_of_the_ladder(db_session):
     asset = _asset(db_session)
     _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
     _level(db_session, 2, 'Documented', ['ASSERT obj.column_count > 0'])
@@ -692,6 +698,33 @@ def test_unreadable_table_stores_no_level_and_reports_no_levels(db_session):
         db_session, entity_type='Asset', entity_id=str(asset.id), persist=False,
     )
 
-    assert report.levels == [] and report.achieved_level_order is None
-    assert report.gates_total == 0 and report.gates_passed == 0
+    # Level 1 doesn't use UC fields and rises above nothing stored: a certain rise.
+    # Level 2 needs the table, so only level 1 is reported.
+    assert report.achieved_level_order == 1 and len(report.levels) == 1
+    assert report.gates_total == 1 and report.gates_passed == 1
     assert [n.code for n in report.notices] == ['maturity_uc_table_unreadable']
+
+
+def test_unreadable_table_still_stores_a_certain_rise(db_session):
+    asset = _asset(db_session, description=None)
+    _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
+    _level(db_session, 2, 'Described', ['ASSERT obj.has_description = True'])
+    _level(db_session, 3, 'Documented columns', ['ASSERT obj.column_count > 0'])
+    evaluator_ok = MaturityEvaluator(_ws(_table([('id', 'Order id')])))
+    first = evaluator_ok.evaluate(
+        db_session, entity_type='Asset', entity_id=str(asset.id), persist=True,
+    )
+    assert first.achieved_level_order == 1
+
+    # The description is added, and the table can no longer be read
+    asset.description = 'Orders'
+    db_session.flush()
+    report = MaturityEvaluator(_ws(error=NotFound('gone'))).evaluate(
+        db_session, entity_type='Asset', entity_id=str(asset.id), persist=True,
+    )
+
+    # Level 2 passes on a field the table doesn't provide: a certain rise, stored
+    assert report.achieved_level_order == 2
+    assert [lv.level_order for lv in report.levels] == [1, 2]
+    snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).all()
+    assert sorted(s.achieved_level_order for s in snapshots) == [1, 2]

@@ -116,8 +116,9 @@ class TestAssetMaturityRoutes:
         assert response.status_code == 200, response.text
         report = response.json()
         # Nothing was stored before, so no level is kept and none is reported
-        assert report['achieved_level_order'] is None
-        assert report['levels'] == []
+        # Described (no UC field) is certain and reported; the UC level is not
+        assert report['achieved_level_order'] == 1
+        assert [lv['level_name'] for lv in report['levels']] == ['Described']
         assert 'gone' not in response.text
         assert [n['code'] for n in report['notices']] == ['maturity_uc_table_unreadable']
         assert report['notices'][0]['params'] == {'tableName': FQN}

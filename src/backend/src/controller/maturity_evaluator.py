@@ -129,14 +129,20 @@ class MaturityEvaluator:
         total_gates = 0
         # A required gate on UC table fields ran while the table couldn't be read
         uc_gate_ran = False
-        # The level that stopped the ladder failed a gate that doesn't need UC fields
-        certain_failure = False
+        # Levels whose result doesn't depend on UC fields, from the first level up
+        prefix_len = 0
+        prefix_order = None
+        prefix_name = None
+        prefix_open = True
+        # The first level that isn't certain failed on a gate that doesn't need UC fields
+        blocker_certain = False
 
         for level in levels:
             gates = level.gates or []
             gate_results = []
             all_required_pass = True
             level_certain_failure = False
+            level_uses_uc = False
 
             for gate in gates:
                 total_gates += 1
@@ -162,6 +168,7 @@ class MaturityEvaluator:
                     _UC_FIELD_IN_RULE.search(policy.rule or "")
                 )
                 uc_gate_ran = uc_gate_ran or (uses_uc_fields and gate.required)
+                level_uses_uc = level_uses_uc or (uses_uc_fields and gate.required)
                 if passed:
                     total_gates_passed += 1
                 elif gate.required:
@@ -198,11 +205,19 @@ class MaturityEvaluator:
                 gates=gate_results,
             ))
 
+            if prefix_open:
+                if all_required_pass and not level_uses_uc:
+                    prefix_len += 1
+                    prefix_order = level.level_order
+                    prefix_name = level.name
+                else:
+                    prefix_open = False
+                    blocker_certain = (not all_required_pass) and level_certain_failure
+
             if all_required_pass:
                 achieved_order = level.level_order
                 achieved_name = level.name
             else:
-                certain_failure = level_certain_failure
                 # Cumulative: stop evaluating higher levels
                 break
 
@@ -227,16 +242,27 @@ class MaturityEvaluator:
                 db, entity_type=entity_type, entity_id=entity_id
             )
             prev_order = previous.achieved_level_order if previous else None
-            # A failed gate that doesn't need UC fields caps the level below the stored
-            # one: that drop doesn't depend on the table, so it is stored as usual
-            real_drop = certain_failure and prev_order is not None and (
-                achieved_order is None or achieved_order < prev_order
+            # The levels up to the first uncertain one don't depend on UC fields. Their
+            # result is certain when the first other level certainly fails (the rest of the
+            # ladder can't be reached), or when it rises above the stored level. Anything
+            # else would be a drop or a rise that the unreadable table could change, so
+            # the stored level is kept.
+            certain_rise = prefix_order is not None and (
+                prev_order is None or prefix_order > prev_order
             )
-            if not real_drop:
-                # The result depends on table fields that couldn't be read, so it is not a
-                # maturity outcome: keep the stored level, store nothing, change nothing,
-                # fire nothing. The levels were computed from missing fields, so they are
-                # not reported; the notice says why.
+            certain_levels = prefix_len + (1 if blocker_certain else 0)
+            if blocker_certain or certain_rise:
+                report.levels = report.levels[:certain_levels]
+                report.gates_total = sum(len(lr.gates) for lr in report.levels)
+                report.gates_passed = sum(
+                    1 for lr in report.levels for gr in lr.gates if gr.passed
+                )
+                report.achieved_level_order = prefix_order
+                report.achieved_level_name = prefix_name
+                report.notices = [uc_notice]
+                achieved_order = prefix_order
+                achieved_name = prefix_name
+            else:
                 logger.warning(
                     "Maturity of %s %s not updated: its UC table could not be read (%s)",
                     entity_type, entity_id, uc_notice.code,
@@ -248,9 +274,13 @@ class MaturityEvaluator:
                     achieved_level_order=prev_order,
                     achieved_level_name=previous.achieved_level_name if previous else None,
                     total_levels=len(levels),
+                    gates_passed=sum(
+                        1 for lr in level_results[:prefix_len] for gr in lr.gates if gr.passed
+                    ),
+                    gates_total=sum(len(lr.gates) for lr in level_results[:prefix_len]),
                     evaluated_at=datetime.now(timezone.utc),
                     evaluated_by=evaluated_by,
-                    levels=[],
+                    levels=level_results[:prefix_len],
                     notices=[uc_notice],
                 )
 

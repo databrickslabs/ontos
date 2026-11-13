@@ -543,6 +543,9 @@
     "ownerTeamIdHint": "Facultatif : hérité du produit si disponible",
     "creating": "Création..."
   },
+  "apiVersionErrors": {
+    "unsupported": "apiVersion {{apiVersion}} n'est pas une version ODCS. Utilisez une des versions ODCS, par exemple v3.1.0."
+  },
   "basicForm": {
     "editTitle": "Modifier les métadonnées du contrat",
     "createTitle": "Créer un nouveau contrat de données",

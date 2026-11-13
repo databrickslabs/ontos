@@ -543,6 +543,9 @@
     "ownerTeamIdHint": "Optional: Wird vom Produkt übernommen, falls verfügbar",
     "creating": "Wird erstellt..."
   },
+  "apiVersionErrors": {
+    "unsupported": "apiVersion {{apiVersion}} ist keine ODCS-Version. Verwenden Sie eine ODCS-Version, zum Beispiel v3.1.0."
+  },
   "basicForm": {
     "editTitle": "Vertragsmetadaten bearbeiten",
     "createTitle": "Neuen Datenvertrag erstellen",

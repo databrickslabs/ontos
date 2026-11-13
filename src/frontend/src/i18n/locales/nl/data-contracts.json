@@ -543,6 +543,9 @@
     "ownerTeamIdHint": "Optioneel: Overgeërfd van product indien beschikbaar",
     "creating": "Aanmaken..."
   },
+  "apiVersionErrors": {
+    "unsupported": "apiVersion {{apiVersion}} is geen ODCS-versie. Gebruik een van de ODCS-versies, bijvoorbeeld v3.1.0."
+  },
   "basicForm": {
     "editTitle": "Contractmetadata bewerken",
     "createTitle": "Nieuw datacontract aanmaken",

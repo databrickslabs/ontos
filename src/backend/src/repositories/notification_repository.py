@@ -1,7 +1,8 @@
+from dataclasses import dataclass
 from sqlalchemy.orm import Session
-from typing import Any, Dict, Union, Optional, List
+from typing import Any, Dict, FrozenSet, Union, Optional, List
 import json # For handling JSON strings
-from sqlalchemy import func
+from sqlalchemy import and_, func, not_, or_, true
 
 from src.common.repository import CRUDBase
 from src.db_models.notifications import NotificationDb # SQLAlchemy model
@@ -13,6 +14,65 @@ logger = get_logger(__name__)
 # Use NotificationApi for create/update types for simplicity
 NotificationCreate = NotificationApi
 NotificationUpdate = Union[NotificationApi, Dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class RecipientKeys:
+    """What one user can match in a notification's recipient fields, for the SQL prefilter.
+
+    The prefilter selects a superset of the rows the user can see; NotificationsManager
+    still decides each row, so an extra row is harmless and a missing one is the bug (#1526).
+    """
+    identities: FrozenSet[str] = frozenset()      # the user's email and username, lower-cased
+    names: FrozenSet[str] = frozenset()           # groups and legacy role names the user is in
+    role_ids: FrozenSet[str] = frozenset()        # app role ids the user is a member of
+    known_role_ids: FrozenSet[str] = frozenset()  # every app role id that exists
+
+
+def _no_recipient():
+    return or_(NotificationDb.recipient.is_(None), NotificationDb.recipient == '')
+
+
+def _is_actionable():
+    return and_(NotificationDb.action_type.isnot(None), NotificationDb.action_type != '')
+
+
+def _is_decided():
+    """Decided: the ``handled`` marker that approval and request decisions write into
+    ``action_payload``, or a delivery's ``completed`` marker (json.dumps spacing). Opening a
+    notification sets ``read`` too, so ``read`` alone does not say a request is decided (#1526)."""
+    payload = func.coalesce(NotificationDb.action_payload, '')
+    return or_(payload.contains('"handled": true'), payload.contains('"completed": true'))
+
+
+def _is_pending_actionable():
+    """Actionable and not decided yet: never capped, so it stays in My actions and the bell."""
+    return and_(_is_actionable(), not_(_is_decided()))
+
+
+def _addressed_to(keys: Optional[RecipientKeys]):
+    """Rows that may be addressed to the user: the user, a group or role they are in, or a
+    broadcast. ``keys=None`` selects the rows with no recipient (no user to match)."""
+    if keys is None:
+        return _no_recipient()
+    clauses = []
+    if keys.identities:
+        clauses.append(func.lower(func.trim(NotificationDb.recipient)).in_(sorted(keys.identities)))
+    if keys.names:
+        clauses.append(NotificationDb.recipient.in_(sorted(keys.names)))
+    if keys.role_ids:
+        clauses.append(NotificationDb.recipient_role_id.in_(sorted(keys.role_ids)))
+    # Broadcast: no recipient and no app role it names (a role that no longer exists included)
+    if keys.known_role_ids:
+        unknown_role = or_(
+            NotificationDb.recipient_role_id.is_(None),
+            NotificationDb.recipient_role_id == '',
+            NotificationDb.recipient_role_id.notin_(sorted(keys.known_role_ids)),
+        )
+    else:
+        unknown_role = true()
+    clauses.append(and_(_no_recipient(), unknown_role))
+    return or_(*clauses)
 
 class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, NotificationUpdate]):
     """Repository for Notification CRUD operations.
@@ -30,6 +90,37 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
     def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[NotificationDb]:
         """Get multiple notifications. Pydantic validators handle JSON deserialization."""
         return super().get_multi(db, skip=skip, limit=limit)
+
+    def get_addressed_to(
+        self, db: Session, *, keys: Optional[RecipientKeys], history_limit: int,
+    ) -> List[NotificationDb]:
+        """Rows that may be addressed to one user, newest first.
+
+        Every pending actionable row (an action type, not decided yet) is returned, so an
+        approval or request never drops out of My actions or the bell. The other rows, decided
+        actionable ones included, are capped at the newest ``history_limit``. ``keys=None``:
+        the rows with no recipient.
+        """
+        visible = _addressed_to(keys)
+        pending = db.query(NotificationDb).filter(
+            visible, _is_pending_actionable(),
+        ).order_by(NotificationDb.created_at.desc()).all()
+        history = db.query(NotificationDb).filter(
+            visible, not_(_is_pending_actionable()),
+        ).order_by(NotificationDb.created_at.desc()).limit(history_limit).all()
+        return pending + history
+
+    def get_by_action_type(
+        self, db: Session, action_type: str, *, unread_only: bool = False,
+    ) -> List[NotificationDb]:
+        """Every row of one action type, newest first, optionally only the unread ones.
+
+        Not capped: a pending request or delivery must be found whatever its age.
+        """
+        query = db.query(NotificationDb).filter(NotificationDb.action_type == action_type)
+        if unread_only:
+            query = query.filter(NotificationDb.read == False)  # noqa: E712
+        return query.order_by(NotificationDb.created_at.desc()).all()
 
     # Override create and update to handle potential JSON string conversion for payload
     # and explicit Enum -> String conversion for the 'type' field.

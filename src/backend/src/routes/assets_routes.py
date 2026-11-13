@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 
 from src.models.assets import (
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
-    AssetCreate, AssetUpdate, AssetRead, AssetSummary, AssetUpdateResult, without_internal_properties,
+    AssetCreate, AssetUpdate, AssetRead, AssetSummary, AssetUpdateResult,
+    without_internal_properties,
     AssetRelationshipCreate, AssetRelationshipRead,
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteRequest, CascadeDeleteResult,
@@ -314,7 +315,8 @@ def create_asset(
     details = {"params": {"name": asset_in.name, "type_id": str(asset_in.asset_type_id)}}
     created_id = None
     # Clients never set the internal keys (e.g. the Unity Catalog sync mark)
-    asset_in = asset_in.model_copy(update={"properties": without_internal_properties(asset_in.properties)})
+    asset_in = asset_in.model_copy(
+        update={"properties": without_internal_properties(asset_in.properties)})
     try:
         result = manager.create_asset(db=db, asset_in=asset_in, current_user_id=current_user.email)
         db.commit()
@@ -466,7 +468,8 @@ def update_asset(
     """Updates an existing asset."""
     success = False
     details = {"params": {"asset_id": str(asset_id)}}
-    asset_in = asset_in.model_copy(update={"properties": without_internal_properties(asset_in.properties)})
+    asset_in = asset_in.model_copy(
+        update={"properties": without_internal_properties(asset_in.properties)})
     try:
         existing = db.get(AssetDb, asset_id)
         previous_description = existing.description if existing is not None else None

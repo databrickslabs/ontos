@@ -21,7 +21,9 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.controller.assets_manager import AssetsManager
-from src.controller.uc_description_sync_manager import import_writes_uc_warning, uc_comment_target_for
+from src.controller.uc_description_sync_manager import (
+    import_writes_uc_warning, uc_comment_target_for,
+)
 from src.db_models.assets import AssetDb, AssetRelationshipDb
 from src.models.assets import (
     CodedWarning, without_internal_properties,
@@ -749,7 +751,8 @@ class AssetBulkManager:
                 try:
                     after_save(UUID(item.asset_id), previous_description)
                 except Exception:
-                    logger.warning("Post-save step failed for import row %s", item.row, exc_info=True)
+                    logger.warning("Post-save step failed for import row %s", item.row,
+                                   exc_info=True)
             result.items.append(item)
 
         # Wire parent relationships (skip if cycles detected)

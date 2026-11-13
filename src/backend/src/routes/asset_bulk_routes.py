@@ -292,7 +292,8 @@ def _write_imported_descriptions(
             db.rollback()
             logger.warning("Writing the imported description of asset %s failed", asset_id,
                            exc_info=True)
-            outcome = SyncOutcome(warning=write_failed_warning(item.name if item else str(asset_id)))
+            label = item.name if item else str(asset_id)
+            outcome = SyncOutcome(warning=write_failed_warning(label))
         if outcome.audit:
             audit.append({'asset_id': str(asset_id), **outcome.audit})
         if outcome.warning is not None and item is not None:

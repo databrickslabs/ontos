@@ -64,7 +64,7 @@ def user_ws(monkeypatch):
 
 
 def _uc_client(comment=None):
-    """A workspace client: the statement succeeds, and the table (with a column) reads as ``comment``."""
+    """A workspace client: statements succeed; the table (with a column) reads as ``comment``."""
     ws = MagicMock()
     ws.statement_execution.execute_statement.return_value = SimpleNamespace(
         status=SimpleNamespace(state=StatementState.SUCCEEDED, error=None), statement_id='st-1')

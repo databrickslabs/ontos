@@ -251,6 +251,53 @@ class TestDescriptionWriteback:
         assert 'uc_description_sync' not in (created.get('properties') or {})
         assert created['description_sync'] is None
 
+    def test_a_write_step_that_raises_still_saves_and_warns(self, client, settings, table,
+                                                           user_ws, monkeypatch):
+        from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
+
+        def boom(*args, **kwargs):
+            raise RuntimeError('unexpected')
+
+        monkeypatch.setattr(UcDescriptionSyncManager, 'sync_after_update', boom)
+
+        body = _put(client, table, 'Orders placed online')
+
+        assert body['warnings'][0]['code'] == 'uc_description_write_failed'
+        assert client.get(f'/api/assets/{table.id}').json()['description'] == 'Orders placed online'
+
+    def test_a_create_whose_write_step_raises_still_creates(self, client, settings, db_session,
+                                                            user_ws, monkeypatch):
+        from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
+
+        def boom(*args, **kwargs):
+            raise RuntimeError('unexpected')
+
+        monkeypatch.setattr(UcDescriptionSyncManager, 'sync_after_update', boom)
+
+        response = client.post('/api/assets', headers=TOKEN, json={
+            'name': 'orders', 'asset_type_id': str(_type(db_session, 'Table').id),
+            'platform': 'databricks', 'location': 'main.sales.orders_new',
+            'description': 'Orders placed online'})
+
+        assert response.status_code == 201, response.text
+        assert response.json()['warnings'][0]['code'] == 'uc_description_write_failed'
+
+    def test_a_retry_after_a_failed_write_writes_the_agreed_comment_over(
+            self, client, settings, table, monkeypatch):
+        from src.routes import assets_routes
+
+        ws = _uc_client(comment='Old')
+        _fail_with(ws, 'PERMISSION_DENIED')
+        monkeypatch.setattr(assets_routes, 'get_obo_workspace_client', lambda request: ws)
+        _put(client, table, 'New')
+        ws.statement_execution.execute_statement.return_value = SimpleNamespace(
+            status=SimpleNamespace(state=StatementState.SUCCEEDED, error=None), statement_id='st-2')
+
+        body = _put(client, table, 'New')
+
+        assert body['warnings'] == [] and body['description_sync'] is None
+        assert _statements(ws)[-1] == "COMMENT ON TABLE `main`.`sales`.`orders` IS 'New'"
+
     def test_with_the_setting_off_an_old_mark_is_not_shown(self, client, settings, table,
                                                             user_ws):
         _fail_with(user_ws, 'PERMISSION_DENIED')
@@ -270,6 +317,41 @@ def _import_csv(client, csv_text, headers=TOKEN):
 
 
 class TestBulkImportWriteback:
+    def test_internal_keys_in_a_csv_are_not_imported(self, client, settings, table, user_ws):
+        import csv
+        import io
+        import json
+
+        props = json.dumps({'owner': 'sales', 'uc_description_sync': {'code': 'fake'},
+                            'metric_view': {'spec': 'x'}})
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(['name', 'asset_type', 'platform', 'location', 'description', 'properties'])
+        writer.writerow(['orders', 'Table', 'databricks', 'main.sales.orders', 'Old', props])
+        writer.writerow(['notes', 'Table', 'snowflake', 'db.s.notes', 'Notes', props])
+
+        body = _import_csv(client, buffer.getvalue())
+
+        assert body['errors'] == 0
+        read = client.get(f'/api/assets/{table.id}').json()
+        assert read['description_sync'] is None
+        assert read['properties'] == {'owner': 'sales'}
+        user_ws.statement_execution.execute_statement.assert_not_called()
+
+    def test_a_file_without_a_description_column_leaves_the_comments_alone(
+            self, client, settings, table, monkeypatch):
+        from src.routes import assets_routes
+
+        ws = _uc_client(comment='Old')
+        monkeypatch.setattr(assets_routes, 'get_obo_workspace_client', lambda request: ws)
+
+        body = _import_csv(client, 'name,asset_type,platform,location,status\n'
+                                   'orders,Table,databricks,main.sales.orders,active\n')
+
+        assert body['errors'] == 0
+        assert client.get(f'/api/assets/{table.id}').json()['description'] == 'Old'
+        ws.statement_execution.execute_statement.assert_not_called()
+
     CSV = ('name,asset_type,platform,location,description\n'
            'orders,Table,databricks,main.sales.orders,Orders placed online\n'
            'notes,Table,snowflake,db.s.notes,Not in Unity Catalog\n')

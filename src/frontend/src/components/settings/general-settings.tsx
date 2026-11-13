@@ -43,6 +43,12 @@ const SERVER_ERROR_KEYS: Record<string, string> = {
   instance_name_invalid: 'settings:general.instanceIdentity.name.invalid',
 };
 
+/** A blank or out-of-range import limit falls back to the default: it never fails the save. */
+function clampWriteLimit(value: number): number {
+  if (!Number.isFinite(value) || value < 1) return 100;
+  return Math.min(Math.round(value), 10000);
+}
+
 export default function GeneralSettings() {
   const { t } = useTranslation(['settings', 'common']);
   const { hasPermission } = usePermissions();
@@ -147,7 +153,8 @@ export default function GeneralSettings() {
           llm_disclaimer_text: settings.llmDisclaimerText,
           allow_job_enablement_requests: settings.allowJobEnablementRequests,
           uc_description_writeback_enabled: settings.ucDescriptionWritebackEnabled,
-          uc_description_import_write_limit: settings.ucDescriptionImportWriteLimit,
+          uc_description_import_write_limit: clampWriteLimit(
+            settings.ucDescriptionImportWriteLimit),
           schema_import_child_limit: settings.schemaImportChildLimit,
           // A value equal to the default (or blank) clears the override, so an untouched
           // field never pins the derived default.

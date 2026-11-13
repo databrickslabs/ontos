@@ -211,9 +211,18 @@ export function AssetFormDialog({
           primary_domain_id: values.primary_domain_id ?? null,
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
-        const response = await apiPost<AssetRead>('/api/assets', payload);
+        const response = await apiPost<AssetUpdateResult>('/api/assets', payload);
         if (response.error) throw new Error(response.error);
-        toast({ title: t('common:assetForm.createdToast', { name: assetTypeName }) });
+        // Created, but e.g. the description could not be written to Unity Catalog
+        const warnings = response.data?.warnings ?? [];
+        if (warnings.length > 0) {
+          toast({
+            title: t('assets:descriptionSync.warningTitle', 'Saved in Ontos, not in Unity Catalog'),
+            description: warnings.map((w) => descriptionSyncText(t, w)).join(' '),
+          });
+        } else {
+          toast({ title: t('common:assetForm.createdToast', { name: assetTypeName }) });
+        }
         onSuccess(response.data!);
       }
       onOpenChange(false);

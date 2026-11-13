@@ -3877,12 +3877,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if not contract_db:
             raise ValueError(f"Data Contract with ID {contract_id} not found")
 
-        # Validate contract status
-        valid_statuses = ['active', 'approved']
-        if contract_db.status and contract_db.status.lower() not in valid_statuses:
+        # An active-category stage or approved, the rule for publishing it
+        if contract_db.status and not lifecycle_service.contract_publishable(
+                self._db, contract_db):
             raise ValueError(
                 f"Cannot create product from contract in status '{contract_db.status}'. "
-                f"Contract must be in one of: {', '.join(valid_statuses)}"
+                "Contract must be approved or active."
             )
 
         # Create ODPS product data

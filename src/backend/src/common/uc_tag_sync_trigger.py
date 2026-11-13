@@ -1,8 +1,9 @@
 """Request a ``uc_tag_sync`` run after a lifecycle transition.
 
 The job writes each table's ``ontos_lifecycle_status`` tag. A transition into or out of
-``deprecated`` / ``retired`` asks for a run right away; other status changes reach
-Unity Catalog with the next scheduled run. Without the job installed, nothing is
+a deprecated- or retired-category stage (``deprecated`` / ``retired`` by default, or a
+custom stage of those categories) asks for a run right away; other status changes
+reach Unity Catalog with the next scheduled run. Without the job installed, nothing is
 requested.
 """
 
@@ -14,7 +15,17 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 UC_TAG_SYNC_WORKFLOW_ID = "uc_tag_sync"
-_ON_DEMAND_STATUSES = frozenset({"deprecated", "retired"})
+_ON_DEMAND_CATEGORIES = ("deprecated", "retired")
+
+
+def _on_demand_statuses() -> set:
+    """Stage keys of the deprecated and retired categories in any known group."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    keys: set = set()
+    for category in _ON_DEMAND_CATEGORIES:
+        keys |= lifecycle_service.keys_of_category_anywhere(category)
+    return keys
 
 
 def request_uc_tag_sync_after_transition(
@@ -28,7 +39,7 @@ def request_uc_tag_sync_after_transition(
     Returns the run id, or None when no run was requested. Never raises.
     """
     old, new = (from_status or "").lower(), (to_status or "").lower()
-    if old == new or not ({old, new} & _ON_DEMAND_STATUSES):
+    if old == new or not ({old, new} & _on_demand_statuses()):
         return None
     try:
         jobs_manager = get_app_state_manager("jobs_manager")

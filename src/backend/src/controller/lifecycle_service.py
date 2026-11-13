@@ -351,13 +351,61 @@ class LifecycleService:
             return False
         return _normalized(getattr(entity, 'status', None)) != NAMED_ACTIONS['approve'][0]
 
+    def submit_review_stage(self, db: Optional[Session], entity_type: str,
+                            entity: Any) -> Optional[str]:
+        """The stage submit-review moves the entity's group to (``proposed`` by
+        default): the action's seeded stage when the group has it, else the only
+        review stage a draft-category stage moves to; None when there are several."""
+        group = self.group_for(db, entity_type, entity)
+        seeded = NAMED_ACTIONS['submit_review'][0]
+        if seeded in group.stages:
+            return seeded
+        candidates = {
+            target.key
+            for stage in group.stages.values() if stage.category == 'draft'
+            for target in group.targets(stage.key) if target.category == 'review'
+        }
+        return candidates.pop() if len(candidates) == 1 else None
+
     def editable_in_place(self, db: Optional[Session], entity_type: str, entity: Any) -> bool:
-        """Edited in place rather than versioned: a draft-category stage, or a review
-        stage that still awaits its decision (draft, sandbox, proposed, under_review
-        by default). The update routes' versioning check and the clone-for-editing
-        guard share this rule."""
-        return (self.category_of(db, entity_type, entity) == 'draft'
-                or self.awaits_review_decision(db, entity_type, entity))
+        """Edited in place rather than versioned: a draft-category stage, or the stage
+        submit-review reaches (draft, sandbox, proposed by default). Once a review
+        has started, a breaking change is versioned. The update routes' versioning
+        check and the clone-for-editing guard share this rule."""
+        if self.category_of(db, entity_type, entity) == 'draft':
+            return True
+        key = _normalized(getattr(entity, 'status', None))
+        return bool(key) and key == self.submit_review_stage(db, entity_type, entity)
+
+    def review_activation_steps(
+        self, db: Optional[Session], entity_type: str, entity: Any,
+    ) -> Optional[List[str]]:
+        """The stages a reviewed entity walks through to an active-category stage,
+        from its review stage: at each step an allowed active stage, else the next
+        review stage forward (``proposed -> under_review -> approved -> active`` by
+        default). None when the entity isn't in review or no path reaches active."""
+        group = self.group_for(db, entity_type, entity)
+        current = _normalized(getattr(entity, 'status', None))
+        if group.category(current) != 'review':
+            return None
+        steps: List[str] = []
+        seen = {current}
+        while group.category(current) != ACTIVE:
+            targets = group.targets(current)
+            active = [s for s in targets if s.category == ACTIVE]
+            if active:
+                nxt = next((s for s in active if s.key == ACTIVE), active[0])
+            else:
+                order = group.stages[current].order
+                forward = [s for s in targets
+                           if s.category == 'review' and s.order > order and s.key not in seen]
+                if not forward:
+                    return None
+                nxt = forward[0]
+            steps.append(nxt.key)
+            seen.add(nxt.key)
+            current = nxt.key
+        return steps
 
     def contract_publishable(self, db: Optional[Session], entity: Any) -> bool:
         """A contract may be published (or its publication requested): it is in an

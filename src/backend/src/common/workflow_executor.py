@@ -3908,15 +3908,25 @@ class WorkflowExecutor:
         from src.controller.data_contracts_manager import get_live_contracts_manager
         from src.repositories.data_contracts_repository import data_contract_repo
 
-        target_status = 'approved' if approved else 'draft'
+        from src.controller.lifecycle_service import NAMED_ACTIONS, lifecycle_service
+
         contract = data_contract_repo.get(db=self._db, id=contract_id)
         if not contract:
             return
         current_status = (contract.status or '').lower()
+        action = 'approve' if approved else 'reject'
+        # The approve / reject action's stage (approved / draft by default)
+        target_status = NAMED_ACTIONS[action][0]
         if current_status == target_status:
             return
         # A review stage that awaits a decision (proposed / under_review by default)
-        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.awaits_review_decision(self._db, 'data_contract', contract):
+            try:
+                target_status = lifecycle_service.resolve_action(
+                    self._db, 'data_contract', contract, action,
+                )
+            except ValueError:
+                pass  # transition_status below refuses it and the approver is told
         if not lifecycle_service.awaits_review_decision(self._db, 'data_contract', contract):
             reason = f"the contract is not under review (status '{current_status}')"
             logger.warning(
@@ -4229,12 +4239,8 @@ class WorkflowExecutor:
             # Don't fail the workflow for status update issues
     
     # A reviewed product goes active through the lifecycle steps it still
-    # needs, or back to draft; each step is a transition_status call.
-    _PRODUCT_ACTIVATION_STEPS = {
-        'proposed': ['under_review', 'approved', 'active'],
-        'under_review': ['approved', 'active'],
-        'approved': ['active'],
-    }
+    # needs (lifecycle_service.review_activation_steps), or back to its reject
+    # stage; each step is a transition_status call.
 
     def _apply_product_review_outcome(
         self,
@@ -4267,14 +4273,23 @@ class WorkflowExecutor:
         product = self._db.get(DataProductDb, product_id)
         if product is None:
             return
+        from src.controller.lifecycle_service import lifecycle_service
+
         current_status = (product.status or 'draft').lower()
-        target_status = 'active' if succeeded else 'draft'
-        if current_status == target_status:
-            return
-        if succeeded:
-            steps = self._PRODUCT_ACTIVATION_STEPS.get(current_status)
-        else:
-            steps = [target_status] if current_status in self._PRODUCT_ACTIVATION_STEPS else None
+        # In review (a review-category stage): walk to an active stage, or move to
+        # the reject action's stage; by Stage Category, so custom groups work too
+        in_review = lifecycle_service.category_of(self._db, 'data_product', product) == 'review'
+        steps = None
+        if in_review and succeeded:
+            steps = lifecycle_service.review_activation_steps(self._db, 'data_product', product)
+        elif in_review:
+            try:
+                steps = [lifecycle_service.resolve_action(
+                    self._db, 'data_product', product, 'reject',
+                )]
+            except ValueError:
+                steps = None
+        target_status = steps[-1] if steps else ('active' if succeeded else 'draft')
         if not steps:
             logger.warning(
                 "Review outcome of data product %s not applied: it is no longer in review "

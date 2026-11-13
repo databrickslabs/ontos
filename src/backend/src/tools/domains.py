@@ -9,6 +9,7 @@ from uuid import UUID
 from src.common.features import FeatureAccessLevel
 
 from src.common.logging import get_logger
+from src.tools import read_access
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
@@ -63,6 +64,8 @@ class SearchDomainsTool(BaseTool):
                 type_filter="data-domain",
                 limit=limit,
                 offset=offset,
+                # No domains without Read-only on data-domains, as GET /api/data-domains.
+                allowed_features=read_access.allowed_features(ctx),
             )
             logger.info(
                 f"[search_domains] SUCCESS: returned {data['returned']} of "
@@ -107,7 +110,13 @@ class GetDomainTool(BaseTool):
     ) -> ToolResult:
         """Get a data domain by ID."""
         logger.info(f"[get_domain] Starting - domain_id={domain_id}")
-        
+        not_found = ToolResult(success=False, error=f"Data domain '{domain_id}' not found")
+        hidden = read_access.without_read_level(
+            ctx, self.name, read_access.DOMAINS_FEATURE, not_found, domain_id
+        )
+        if hidden:
+            return hidden
+
         try:
             from src.db_models.data_domains import DataDomain
             

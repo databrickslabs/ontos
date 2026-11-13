@@ -14,6 +14,7 @@ import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
 import { DataContractStatus } from '@/lib/odcs-lifecycle'
+import { hasDateConstraints } from './logical-types'
 
 type WizardProps = {
   isOpen: boolean
@@ -1058,7 +1059,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                   </div>
                                 )}
 
-                                {(col as any).logicalType === 'date' && (
+                                {hasDateConstraints((col as any).logicalType) && (
                                   <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
                                     <div className="text-[11px] font-medium mb-2">{t('data-contracts:wizard.constraints.date', 'Date Constraints')}</div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">

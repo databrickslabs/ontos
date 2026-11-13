@@ -434,5 +434,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     })
     // The logical type select only shows a value it lists
     expect(screen.getByText('timestamp')).toBeInTheDocument()
+    // and a timestamp gets the date format options
+    expect(screen.getByText('Date Constraints')).toBeInTheDocument()
   })
 })

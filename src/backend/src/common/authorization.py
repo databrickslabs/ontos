@@ -66,8 +66,9 @@ async def resolve_effective_permissions(
     Precedence: an applied role override, else the merge of the team role
     override and the roles matching the groups or the email. Shared by
     :class:`PermissionChecker`, :func:`is_user_feature_admin`,
-    :func:`enforce_feature_permission` and the assistant tools
-    (``src.tools.caller``), which check levels outside ``Depends``.
+    :func:`enforce_feature_permission`, :func:`user_passes_permission_check`
+    and the assistant tools (``src.tools.caller``), which check levels outside
+    ``Depends``.
 
     ``auth_manager`` defaults to the one in ``request.app.state``
     (``PermissionChecker`` passes its injected one).
@@ -77,14 +78,29 @@ async def resolve_effective_permissions(
         auth_manager = getattr(request.app.state, "authorization_manager", None)
     if auth_manager is None:
         raise RuntimeError("AuthorizationManager not found in app state")
-    settings_manager: Optional[SettingsManager] = getattr(
-        request.app.state, "settings_manager", None
-    )
 
     team_role_override = await get_user_team_role_overrides(
         user_email, user_groups or [], request
     )
+    return permissions_with_team_override(
+        user_email, user_groups, request, auth_manager, team_role_override
+    )
 
+
+def permissions_with_team_override(
+    user_email: Optional[str],
+    user_groups: Optional[List[str]],
+    request: Request,
+    auth_manager: AuthorizationManager,
+    team_role_override: Optional[str],
+) -> Dict[str, FeatureAccessLevel]:
+    """:func:`resolve_effective_permissions` once the team role override is known.
+
+    For synchronous callers (:func:`user_passes_permission_check`).
+    """
+    settings_manager: Optional[SettingsManager] = getattr(
+        request.app.state, "settings_manager", None
+    )
     applied_role_id: Optional[str] = None
     if settings_manager is not None:
         try:
@@ -428,6 +444,13 @@ async def require_ontos_admin(
 
 async def get_user_team_role_overrides(user_identifier: str, user_groups: List[str], request: Request) -> Optional[str]:
     """Get the highest team role override for a user."""
+    return team_role_override_for_user(user_identifier, user_groups, request)
+
+
+def team_role_override_for_user(
+    user_identifier: str, user_groups: List[str], request: Request,
+) -> Optional[str]:
+    """``get_user_team_role_overrides`` for synchronous callers."""
     try:
         # Get teams manager from app state
         teams_manager = getattr(request.app.state, 'teams_manager', None)
@@ -643,6 +666,27 @@ def user_has_feature_level(auth_manager, user, feature_id: str, required_level: 
     except Exception:
         logger.warning("user_has_feature_level check failed for feature '%s'; denying.", feature_id, exc_info=True)
         return False
+
+
+def user_passes_permission_check(
+    request: Request, user_details: UserInfo, feature_id: str, level: FeatureAccessLevel,
+) -> bool:
+    """Whether ``PermissionChecker(feature_id, level)`` would let the user through.
+
+    For synchronous callers that branch on a permission instead of refusing.
+    """
+    auth_manager = getattr(request.app.state, 'authorization_manager', None)
+    if not auth_manager or not user_details:
+        return False
+    if not user_details.groups and not user_details.email:
+        return False
+    team_role_override = team_role_override_for_user(
+        user_details.email, user_details.groups or [], request,
+    )
+    effective = permissions_with_team_override(
+        user_details.email, user_details.groups, request, auth_manager, team_role_override,
+    )
+    return auth_manager.has_permission(effective, feature_id, level)
 
 
 class PermissionChecker:

@@ -250,6 +250,39 @@ class TestGetProject:
         _assert_not_found(_exec(world, NO_LEVEL, 'get_project', project_id=world.public.id))
 
 
+def _writer(level, groups=('users',), project_ids=...):
+    kw = {} if project_ids is ... else {'project_ids': project_ids}
+    return ToolCaller(email='carl@example.com', auth_path='test', groups=list(groups),
+                      permissions={'projects': level, 'teams': RO}, **kw)
+
+
+class TestProjectWriteTools:
+    """update_project / delete_project answer "not found" for a project the list hides."""
+
+    @pytest.mark.parametrize('level', [FeatureAccessLevel.READ_WRITE, FeatureAccessLevel.ADMIN])
+    def test_a_hidden_project_cannot_be_updated_or_deleted(self, world, level):
+        caller = _writer(level)
+        _assert_not_found(_exec(world, caller, 'update_project',
+                                project_id=world.private.id, title='hijacked'))
+        if level == FeatureAccessLevel.ADMIN:  # delete_project needs Admin
+            _assert_not_found(_exec(world, caller, 'delete_project',
+                                    project_id=world.private.id))
+        world.db.expire_all()
+        row = world.db.get(ProjectDb, world.private.id)
+        assert row is not None and row.title != 'hijacked'
+
+    def test_a_visible_project_can_be_updated(self, world):
+        res = _exec(world, _writer(FeatureAccessLevel.READ_WRITE), 'update_project',
+                    project_id=world.public.id, title='renamed')
+        assert res.success is True, res.error
+
+    def test_the_admin_group_updates_a_hidden_project(self, world):
+        res = _exec(world, _writer(FeatureAccessLevel.ADMIN, ('admins',), None),
+                    'update_project', project_id=world.private.id, title='by-admin')
+        assert res.success is True, res.error
+        assert world.db.get(ProjectDb, world.private.id).title == 'by-admin'
+
+
 class TestDomainTools:
     def test_without_the_level_nothing_is_returned(self, world):
         res = _exec(world, OUTSIDER, 'search_domains', query='*')

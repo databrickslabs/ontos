@@ -25,6 +25,7 @@ import {
   Truck,
   ShieldCheck,
   Activity,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -55,6 +56,13 @@ const settingsNavGroups: SettingsNavGroup[] = [
       { path: '/settings/projects', labelKey: 'settings:tabs.projects', defaultLabel: 'Projects', icon: FolderOpen, permissionId: 'projects' },
       { path: '/settings/certification-levels', labelKey: 'settings:tabs.certificationLevels', defaultLabel: 'Certification Levels', icon: ShieldCheck, permissionId: 'settings-certification-levels' },
       { path: '/settings/maturity-levels', labelKey: 'settings:tabs.maturityLevels', defaultLabel: 'Maturity Levels', icon: Activity, permissionId: 'settings-maturity-levels' },
+      {
+        path: '/settings/lifecycle-stage-groups',
+        labelKey: 'lifecycle:settings.tab',
+        defaultLabel: 'Lifecycle Stage Groups',
+        icon: Workflow,
+        permissionId: 'settings-lifecycle-stage-groups',
+      },
     ],
   },
   {

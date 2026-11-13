@@ -1,0 +1,64 @@
+{
+  "stage": {
+    "draft": "Entwurf",
+    "sandbox": "Sandbox",
+    "proposed": "Vorgeschlagen",
+    "under_review": "In Prüfung",
+    "approved": "Genehmigt",
+    "active": "Aktiv",
+    "deprecated": "Veraltet",
+    "retired": "Stillgelegt"
+  },
+  "category": {
+    "draft": "Entwurf",
+    "review": "Prüfung",
+    "active": "Aktiv",
+    "deprecated": "Veraltet",
+    "retired": "Stillgelegt"
+  },
+  "entityType": {
+    "data_product": "Datenprodukte",
+    "data_contract": "Datenverträge",
+    "asset": "Assets"
+  },
+  "defaultGroupName": {
+    "data_product": "Standard-Lebenszyklus für Datenprodukte",
+    "data_contract": "Standard-Lebenszyklus für Datenverträge",
+    "asset": "Standard-Lebenszyklus für Assets"
+  },
+  "settings": {
+    "tab": "Lebenszyklus-Phasengruppen",
+    "title": "Lebenszyklus-Phasengruppen",
+    "description": "Die Phasen, die jeder Entitätstyp durchläuft, und die erlaubten Wechsel zwischen ihnen. Jede Phase gehört zu einer Kategorie, die Veröffentlichung, Marketplace und den ODCS-/ODPS-Export steuert.",
+    "empty": "Noch keine Lebenszyklus-Phasengruppen.",
+    "groupList": "Lebenszyklus-Phasengruppen",
+    "default": "Standard"
+  },
+  "errors": {
+    "none": "keine",
+    "invalid_status_transition": "Wechsel von {{fromStatus}} zu {{toStatus}} nicht möglich. Erlaubt: {{allowed}}.",
+    "lifecycle_action_ambiguous": "Mehrere Phasen der Kategorie {{category}} können auf {{fromStatus}} folgen ({{candidates}}). Wechseln Sie stattdessen direkt zu einer davon.",
+    "lifecycle_group_not_found": "Die Lebenszyklus-Phasengruppe existiert nicht.",
+    "lifecycle_group_wrong_entity_type": "Diese Lebenszyklus-Phasengruppe gehört zu einem anderen Entitätstyp.",
+    "lifecycle_change_same_group": "Es folgt bereits diesem Lebenszyklus; ändern Sie stattdessen den Status.",
+    "lifecycle_change_pending_request": "Der Lebenszyklus kann nicht geändert werden, solange eine Workflow-Anfrage offen ist.",
+    "lifecycle_stage_invalid_key": "Der Phasenschlüssel „{{key}}“ darf nur Kleinbuchstaben, Ziffern und Unterstriche enthalten.",
+    "lifecycle_stage_duplicate_key": "Der Phasenschlüssel „{{key}}“ wird doppelt verwendet.",
+    "lifecycle_stage_invalid_category": "„{{category}}“ ist keine Phasenkategorie.",
+    "lifecycle_transition_unknown_stage": "Der Wechsel {{fromKey}} → {{toKey}} nennt eine Phase, die die Gruppe nicht hat.",
+    "lifecycle_group_initial_stage_one": "Eine Gruppe braucht genau eine erste Phase; sie hat {{count}}.",
+    "lifecycle_group_initial_stage_other": "Eine Gruppe braucht genau eine erste Phase; sie hat {{count}}.",
+    "lifecycle_group_initial_not_draft": "Die erste Phase „{{key}}“ muss zur Kategorie Entwurf gehören, damit ein Lebenszykluswechsel die Prüfung nicht überspringt.",
+    "lifecycle_group_unreachable_stages": "Diese Phasen sind von der ersten Phase aus nicht erreichbar: {{stages}}.",
+    "lifecycle_group_no_active_stage": "Eine Gruppe braucht mindestens eine Phase der Kategorie Aktiv.",
+    "lifecycle_stage_in_use_one": "Die Phase „{{key}}“ kann nicht entfernt werden: {{count}} Entität ist darin.",
+    "lifecycle_stage_in_use_other": "Die Phase „{{key}}“ kann nicht entfernt werden: {{count}} Entitäten sind darin.",
+    "lifecycle_stage_in_workflow": "Die Phase „{{key}}“ kann nicht entfernt werden: Workflows verwenden sie ({{workflows}}).",
+    "lifecycle_group_name_taken": "Für diesen Entitätstyp gibt es bereits einen Lebenszyklus namens „{{name}}“.",
+    "lifecycle_group_entity_type_immutable": "Der Entitätstyp einer Gruppe kann sich nicht ändern.",
+    "lifecycle_group_default_required": "Jeder Entitätstyp braucht einen Standard-Lebenszyklus: Machen Sie stattdessen eine andere Gruppe zum Standard.",
+    "lifecycle_group_is_default": "Der Standard-Lebenszyklus eines Entitätstyps kann nicht gelöscht werden.",
+    "lifecycle_group_in_use_one": "Dieser Lebenszyklus wird von {{count}} Entität verwendet und kann nicht gelöscht werden.",
+    "lifecycle_group_in_use_other": "Dieser Lebenszyklus wird von {{count}} Entitäten verwendet und kann nicht gelöscht werden."
+  }
+}

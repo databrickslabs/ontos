@@ -1,7 +1,7 @@
 /**
  * Every locale has the same keys as English in the data contract, data
  * product, workflow, data domain, database schema and default workflow text
- * namespaces, so no text falls back to English.
+ * namespaces and the lifecycle stage group texts, so no text falls back to English.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -11,6 +11,9 @@ const FILES = import.meta.glob(
   './locales/*/{data-contracts,data-products,workflows,data-domains,database-schema,workflowDefaults}.json',
   { eager: true },
 ) as Record<string, { default: Messages }>;
+const LIFECYCLE_FILES = import.meta.glob('./locales/*/lifecycle.json', {
+  eager: true,
+}) as Record<string, { default: Messages }>;
 
 // Plural forms that only some languages use (`_many` in Portuguese, Spanish,
 // French and Italian; `_few`, `_two`, `_zero` in others): a locale may add
@@ -26,7 +29,7 @@ function keys(messages: Messages, prefix = ''): string[] {
 }
 
 const byNamespace: Record<string, Record<string, Messages>> = {};
-for (const [path, module] of Object.entries(FILES)) {
+for (const [path, module] of Object.entries({ ...FILES, ...LIFECYCLE_FILES })) {
   const [, locale, file] = /\.\/locales\/([^/]+)\/([^/]+)\.json$/.exec(path)!;
   (byNamespace[file] ??= {})[locale] = module.default;
 }

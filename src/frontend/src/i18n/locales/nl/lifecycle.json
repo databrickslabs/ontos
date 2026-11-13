@@ -1,0 +1,64 @@
+{
+  "stage": {
+    "draft": "Concept",
+    "sandbox": "Sandbox",
+    "proposed": "Voorgesteld",
+    "under_review": "In Beoordeling",
+    "approved": "Goedgekeurd",
+    "active": "Actief",
+    "deprecated": "Verouderd",
+    "retired": "Buiten Gebruik"
+  },
+  "category": {
+    "draft": "Concept",
+    "review": "Beoordeling",
+    "active": "Actief",
+    "deprecated": "Verouderd",
+    "retired": "Buiten Gebruik"
+  },
+  "entityType": {
+    "data_product": "Dataproducten",
+    "data_contract": "Datacontracten",
+    "asset": "Assets"
+  },
+  "defaultGroupName": {
+    "data_product": "Standaardlevenscyclus voor dataproducten",
+    "data_contract": "Standaardlevenscyclus voor datacontracten",
+    "asset": "Standaardlevenscyclus voor assets"
+  },
+  "settings": {
+    "tab": "Levenscyclus-fasegroepen",
+    "title": "Levenscyclus-fasegroepen",
+    "description": "De fasen die elk entiteitstype doorloopt en de toegestane overgangen ertussen. Elke fase hoort bij een categorie, die publicatie, de Marketplace en de ODCS/ODPS-export bepaalt.",
+    "empty": "Nog geen levenscyclus-fasegroepen.",
+    "groupList": "Levenscyclus-fasegroepen",
+    "default": "Standaard"
+  },
+  "errors": {
+    "none": "geen",
+    "invalid_status_transition": "Kan niet van {{fromStatus}} naar {{toStatus}}. Toegestaan: {{allowed}}.",
+    "lifecycle_action_ambiguous": "Meerdere fasen van de categorie {{category}} kunnen op {{fromStatus}} volgen ({{candidates}}). Wijzig de status in plaats daarvan naar een van deze.",
+    "lifecycle_group_not_found": "De levenscyclus-fasegroep bestaat niet.",
+    "lifecycle_group_wrong_entity_type": "Deze levenscyclus-fasegroep is voor een ander entiteitstype.",
+    "lifecycle_change_same_group": "Volgt deze levenscyclus al; wijzig in plaats daarvan de status.",
+    "lifecycle_change_pending_request": "De levenscyclus kan niet wijzigen zolang er een workflowaanvraag openstaat.",
+    "lifecycle_stage_invalid_key": "Fasesleutel ‘{{key}}’ mag alleen kleine letters, cijfers en underscores bevatten.",
+    "lifecycle_stage_duplicate_key": "Fasesleutel ‘{{key}}’ wordt twee keer gebruikt.",
+    "lifecycle_stage_invalid_category": "‘{{category}}’ is geen fasecategorie.",
+    "lifecycle_transition_unknown_stage": "De overgang {{fromKey}} → {{toKey}} noemt een fase die de groep niet heeft.",
+    "lifecycle_group_initial_stage_one": "Een groep heeft precies één eerste fase nodig; deze heeft er {{count}}.",
+    "lifecycle_group_initial_stage_other": "Een groep heeft precies één eerste fase nodig; deze heeft er {{count}}.",
+    "lifecycle_group_initial_not_draft": "De eerste fase ‘{{key}}’ moet in de categorie Concept vallen, zodat een levenscycluswijziging de beoordeling niet overslaat.",
+    "lifecycle_group_unreachable_stages": "Deze fasen zijn vanaf de eerste fase niet bereikbaar: {{stages}}.",
+    "lifecycle_group_no_active_stage": "Een groep heeft minstens één fase in de categorie Actief nodig.",
+    "lifecycle_stage_in_use_one": "Fase ‘{{key}}’ kan niet worden verwijderd: {{count}} entiteit staat erin.",
+    "lifecycle_stage_in_use_other": "Fase ‘{{key}}’ kan niet worden verwijderd: {{count}} entiteiten staan erin.",
+    "lifecycle_stage_in_workflow": "Fase ‘{{key}}’ kan niet worden verwijderd: workflows gebruiken deze ({{workflows}}).",
+    "lifecycle_group_name_taken": "Er bestaat al een levenscyclus met de naam ‘{{name}}’ voor dit entiteitstype.",
+    "lifecycle_group_entity_type_immutable": "Het entiteitstype van een groep kan niet wijzigen.",
+    "lifecycle_group_default_required": "Elk entiteitstype heeft een standaardlevenscyclus nodig: maak in plaats daarvan een andere groep de standaard.",
+    "lifecycle_group_is_default": "De standaardlevenscyclus van een entiteitstype kan niet worden verwijderd.",
+    "lifecycle_group_in_use_one": "Deze levenscyclus wordt door {{count}} entiteit gebruikt en kan niet worden verwijderd.",
+    "lifecycle_group_in_use_other": "Deze levenscyclus wordt door {{count}} entiteiten gebruikt en kan niet worden verwijderd."
+  }
+}

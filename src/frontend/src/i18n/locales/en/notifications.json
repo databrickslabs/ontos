@@ -191,6 +191,9 @@
         "notify-requester": "Your change to the metric view '{{entity_name}}' has been submitted for approval.",
         "notify-approved": "Your change to the metric view '{{entity_name}}' has been approved and is being delivered.",
         "notify-rejected": "Your change to the metric view '{{entity_name}}' has been rejected."
+      },
+      "authority-relation-review-request": {
+        "notify-owner": "The review process for Authority Relation '{{entity_name}}' has started. Assigned reviewers have each been sent an Asset Review to complete."
       }
     },
     "approval": {

@@ -37,6 +37,10 @@
           "in_progress": "進行中",
           "unknown": "不明"
         }
+      },
+      "authorityResolution": {
+        "title": "権限解決",
+        "description": "有効な Authority Relation"
       }
     }
   },

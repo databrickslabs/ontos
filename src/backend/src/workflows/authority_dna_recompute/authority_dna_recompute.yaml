@@ -1,0 +1,65 @@
+name: "Authority Relation DNA Recompute"
+description: "Recompute the DNA-Coefficient for every Authority Relation that has a schedule set"
+format: "MULTI_TASK"
+environments:
+  - environment_key: "authority-dna-recompute-env"
+    spec:
+      dependencies:
+        - "databricks-sdk>=0.81.0"
+        - "sqlalchemy"
+        - "psycopg2-binary"
+tasks:
+  - task_key: "authority_dna_recompute"
+    spark_python_task:
+      python_file: "authority_dna_recompute.py"
+      parameters:
+        - "--verbose"
+        - "{{job.parameters.verbose}}"
+        - "--lakebase_instance_name"
+        - "{{job.parameters.lakebase_instance_name}}"
+        - "--postgres_host"
+        - "{{job.parameters.postgres_host}}"
+        - "--postgres_db"
+        - "{{job.parameters.postgres_db}}"
+        - "--postgres_port"
+        - "{{job.parameters.postgres_port}}"
+        - "--postgres_schema"
+        - "{{job.parameters.postgres_schema}}"
+        - "--product_name"
+        - "{{job.parameters.product_name}}"
+        - "--product_version"
+        - "{{job.parameters.product_version}}"
+    environment_key: "authority-dna-recompute-env"
+
+schedule:
+  quartz_cron_expression: "0 0 3 * * ?"  # Daily at 3 AM UTC
+  timezone_id: "UTC"
+  pause_status: "PAUSED"
+
+# Standard runtime parameters (defaults, overridden by configurable_parameters from UI)
+parameters:
+  verbose: "false"
+  lakebase_instance_name: ""
+  postgres_host: ""
+  postgres_db: ""
+  postgres_port: "5432"
+  postgres_schema: "public"
+  product_name: "ontos"
+  product_version: "0.0.0"
+
+# Configurable parameters (managed via UI)
+configurable_parameters:
+  - name: "verbose"
+    type: "boolean"
+    description: "Enable verbose logging"
+    required: false
+    default: false
+
+timeout_seconds: 7200  # 2 hours (evidence reads can be large)
+max_concurrent_runs: 1
+
+tags:
+  environment: "production"
+  team: "governance"
+  workflow_type: "authority_resolution"
+  owner: "ontos"

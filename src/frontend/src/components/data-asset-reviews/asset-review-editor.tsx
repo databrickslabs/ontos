@@ -34,6 +34,7 @@ import ReactMarkdown from 'react-markdown';
 import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent-dialog';
 import MdmMatchReview from '@/components/mdm/mdm-match-review';
 import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
+import AuthorityRelationReview from '@/components/authority-resolution/authority-relation-review';
 import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
 
 // Register languages (using base import which has the static method)
@@ -46,6 +47,10 @@ const SyntaxHighlighter = SyntaxHighlighterBase as React.ComponentType<any>;
 interface AssetReviewEditorProps {
     requestId: string;
     asset: ReviewedAsset;
+    /** The task's assigned reviewer (from the review request), used by
+     *  reviewer-identity-specific editors (e.g. Authority Relation) so the
+     *  assigned reviewer's context loads regardless of who is viewing. */
+    reviewerEmail?: string | null;
     api: ReturnType<typeof useApi>;
     onReviewSave: (updatedAsset: ReviewedAsset) => void; // Callback after saving
     onNext?: () => void; // Callback to navigate to next asset
@@ -82,10 +87,11 @@ const checkApiResponse = <T,>(
     return response.data as T;
 };
 
-export default function AssetReviewEditor({ 
-    requestId, 
-    asset, 
-    api, 
+export default function AssetReviewEditor({
+    requestId,
+    asset,
+    reviewerEmail,
+    api,
     onReviewSave,
     onNext,
     hasNext = false,
@@ -369,6 +375,28 @@ export default function AssetReviewEditor({
                     hasNext={hasNext}
                     currentIndex={currentIndex}
                     totalCount={totalCount}
+                />
+            </div>
+        );
+    }
+
+    // Handle Authority Relation reviews with the role-specific review editor.
+    // The reviewer is the current user completing their assigned review task;
+    // asset_fqn is authority-relation://{relation_id}.
+    if (asset.asset_type === AssetType.AUTHORITY_RELATION) {
+        const relationId = asset.asset_fqn.replace(/^authority-relation:\/\//, '').split('#')[0];
+        return (
+            <div className="px-1 pb-1">
+                <AuthorityRelationReview
+                    relationId={relationId}
+                    reviewer={reviewerEmail}
+                    onCompleted={() => {
+                        onReviewSave({
+                            ...asset,
+                            status: ReviewedAssetStatus.APPROVED,
+                            updated_at: new Date().toISOString(),
+                        });
+                    }}
                 />
             </div>
         );

@@ -2,7 +2,8 @@
 export type EntityType =
   | 'data_domain' | 'data_product' | 'data_contract'
   | 'data_contract_schema' | 'data_contract_property'
-  | 'dataset' | 'asset' | 'uc_catalog' | 'uc_schema' | 'uc_table' | 'uc_column';
+  | 'dataset' | 'asset' | 'uc_catalog' | 'uc_schema' | 'uc_table' | 'uc_column'
+  | 'authority_relation';
 
 export interface EntitySemanticLink {
   id: string;

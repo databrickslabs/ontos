@@ -27,7 +27,10 @@ TABLE = "search_documents"
 
 def _table_exists(conn, name: str) -> bool:
     return conn.execute(
-        sa.text("SELECT 1 FROM information_schema.tables WHERE table_name = :n"),
+        sa.text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = current_schema() AND table_name = :n"
+        ),
         {"n": name},
     ).scalar() is not None
 

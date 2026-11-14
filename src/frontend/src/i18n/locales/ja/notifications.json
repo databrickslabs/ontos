@@ -191,6 +191,9 @@
         "notify-requester": "メトリックビュー '{{entity_name}}' への変更を承認のために提出しました。",
         "notify-approved": "メトリックビュー '{{entity_name}}' への変更が承認され、配信中です。",
         "notify-rejected": "メトリックビュー '{{entity_name}}' への変更は却下されました。"
+      },
+      "authority-relation-review-request": {
+        "notify-owner": "Authority Relation '{{entity_name}}' のレビュープロセスを開始しました。割り当てられた各レビュアーに Asset Review が送信されました。"
       }
     },
     "approval": {

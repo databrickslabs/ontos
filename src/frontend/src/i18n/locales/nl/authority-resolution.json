@@ -1,0 +1,540 @@
+{
+  "title": {
+    "main": "Autoriteitsresolutie"
+  },
+  "list": {
+    "description": "Stel Authority Relations (ARF) op die zachte beslissingsbevoegdheid expliciet en aanroepbaar voor agents maken. Elke relatie heeft een DNA-Coefficient — een divergentiemaat waarbij 0.0 het beste is — berekend op basis van gekoppeld bewijs, en wordt pas actief zodra deze binnen de drempel valt en volledig is bevestigd.",
+    "buttonNew": "Nieuwe Authority Relation",
+    "buttonDeleteSelected": "Geselecteerde verwijderen ({{count}})",
+    "columnDnaco": "DNAco",
+    "columnMaturity": "Volwassenheid",
+    "columnAction": "Actie",
+    "columnUsage": "Gebruik",
+    "confirmDelete": "Authority Relation \"{{name}}\" verwijderen?",
+    "confirmBulkDelete": "{{count}} geselecteerde Authority Relation(s) verwijderen?",
+    "bulkDeleteSuccess": "{{count}} Authority Relation(s) verwijderd."
+  },
+  "details": {
+    "defaultTitle": "Authority Relation",
+    "notFound": "Authority Relation niet gevonden.",
+    "backButton": "Terug naar lijst",
+    "buttonNewVersion": "Nieuwe versie",
+    "buttonRequest": "Aanvragen...",
+    "buttonComputeDnaco": "DNAco berekenen",
+    "buttonActivate": "Activeren",
+    "buttonTest": "Testen",
+    "buttonAffirm": "Bevestigen",
+    "buttonReview": "Beoordelen",
+    "dnaComputeFailed": "Berekening van DNAco mislukt",
+    "dnaComputed": "DNAco berekend",
+    "dnaComputedMsg": "omvang {{magnitude}} · {{divergent}}/{{total}} afwijkend",
+    "activateFailed": "Kan niet activeren",
+    "activated": "Authority Relation geactiveerd",
+    "affirmFailed": "Bevestigen mislukt",
+    "confirmDelete": "Deze Authority Relation verwijderen?",
+    "versionCreated": "Nieuwe versie aangemaakt",
+    "versionCreatedMsg": "v{{version}} (concept)",
+    "familySlugHint": "@id voor agents (versiefamilie)",
+    "tileUsage": "Gebruik",
+    "tileApproved": "Goedgekeurd",
+    "tileDenied": "Geweigerd",
+    "tileDnaco": "DNA-Coefficient",
+    "tileDnacoHint": "0.0 is het beste",
+    "tileDnacoHintHover": "0.0 is het beste — beweeg erover voor dimensies",
+    "dnacoDimensions": "DNAco-dimensies",
+    "dnacoFormula": "Totaal = 1 − ∏(1 − dₙ) = {{value}}",
+    "dnacoFormulaDescription": "kans op divergentie op ≥1 dimensie",
+    "activationRequires": "Activering vereist dat de DNA-Coefficient is gemeten en binnen de bovengrens ({{threshold}}) valt, en dat elke vereiste bevestiging is voltooid{{affirmed}}.",
+    "notYetFullyAffirmed": "(nog niet volledig bevestigd)",
+    "cardApprovers": "Goedkeurders (N-functionele poort)",
+    "noApprovers": "Geen goedkeurders gedefinieerd.",
+    "alsoReviewer": "ook beoordelaar",
+    "affirmed": "bevestigd",
+    "pending": "in afwachting",
+    "cardReviewers": "Beoordelaars (geïnterviewd om te bevestigen dat de relatie de werkelijkheid weergeeft)",
+    "cardReviewProcess": "Beoordelingsproces",
+    "workflowsSection": "Workflows",
+    "assetReviewsSection": "Asset-beoordelingen",
+    "noReviewersAssigned": "Geen beoordelaars toegewezen.",
+    "reviewStatus": "beoordeling: {{status}}",
+    "linkWorkflow": "Workflow",
+    "linkOpenReview": "Beoordeling openen",
+    "notStarted": "niet gestart",
+    "cardHistory": "Geschiedenis",
+    "dnaRunsSection": "DNA-Coefficient-runs",
+    "dnaRunResult": "{{divergent}}/{{total}} afwijkend",
+    "decisionsSection": "Recente beslissingen",
+    "cardRelation": "Authority Relation",
+    "labelActorRole": "Actorrol",
+    "labelActorIdentity": "Actoridentiteit",
+    "labelAction": "Actie",
+    "labelObject": "Object",
+    "labelDomainContext": "Domeincontext",
+    "labelJustificationChain": "Rechtvaardigingsketen",
+    "cardRuntimeEvidence": "Runtime & bewijs",
+    "labelDecisionCriteria": "Beslissingscriteria",
+    "criterion": "Criterium",
+    "noCriteria": "Geen criteria — de poort is onbeperkt (keurt elk verzoek goed).",
+    "labelEvidenceSources": "Bewijsbronnen",
+    "linkCatalogCommander": "{{ref}} openen in Catalog Commander",
+    "labelGovernsConceptsHint": "Stuurt bedrijfsconcepten aan",
+    "labelPrerequisites": "Vereist (voorafgaande ARs)",
+    "required": "vereist",
+    "optional": "optioneel",
+    "noPrerequisites": "Geen — deze AR beslist zonder een upstream-poort te doorlopen.",
+    "labelResourceRefs": "Resourceverwijzingen (getypeerde verwijzingen)",
+    "mcpAuth": "MCP-authenticatie: {{auth}}",
+    "noResourceRefs": "Geen — canonieke velden worden rechtstreeks uit de AR-rij gelezen.",
+    "labelRecomputeSchedule": "Herberekeningsschema",
+    "cronManualOnly": "Alleen handmatig",
+    "cronCustom": "Aangepast ({{cron}})",
+    "cronHourly": "Elk uur (op :{{min}})",
+    "cronDaily": "Dagelijks om {{time}}",
+    "cronWeekly": "Wekelijks op {{day}} om {{time}}",
+    "cronMonthly": "Maandelijks (1e) om {{time}}",
+    "dialogTitleReview": "Beoordeling van Authority Relation",
+    "dialogTitleVersion": "Nieuwe versie aanmaken",
+    "versionDialogDescription": "Maakt van deze Authority Relation een momentopname als nieuwe conceptversie. De regel, criteria, deelnemers, bewijs en domeinen worden gekopieerd; gemeten DNAco en gebruikstellers worden gereset.",
+    "labelNewVersion": "Nieuwe versie",
+    "labelChangeSummary": "Samenvatting van wijzigingen (optioneel)",
+    "placeholderChangeSummary": "Wat is er gewijzigd in deze versie?",
+    "buttonCreateVersion": "Versie aanmaken",
+    "dialogTitleTest": "Autoriteitsresolutie testen",
+    "testDialogDescription": "Proefrun op de beslissingslogica van deze Authority Relation — werkt in elke status en legt de beslissing niet vast en wijzigt de gebruikstellers niet. Live beslissingen komen van de MCP-tool resolve_authority tegen een actieve AR.",
+    "labelSigner": "Ondertekenaar (actoridentiteit)",
+    "labelValue": "Waarde",
+    "testCosignLabel": "medeondertekening aanwezig",
+    "testEscalatedLabel": "geëscaleerd",
+    "testPrerequisiteChain": "Keten van vereisten",
+    "testResolvedRefs": "Opgeloste resourceverwijzingen",
+    "buttonTestResolve": "Oplossen"
+  },
+  "conceptLinks": {
+    "failedLink": "Koppelen van concept mislukt",
+    "failedUnlink": "Ontkoppelen van concept mislukt",
+    "buttonAddConcept": "Concept toevoegen"
+  },
+  "status": {
+    "draft": "Concept",
+    "active": "Actief",
+    "needs_review": "Beoordeling nodig",
+    "retired": "Buiten gebruik",
+    "deprecated": "Verouderd"
+  },
+  "verdict": {
+    "approved": "Goedgekeurd",
+    "denied": "Geweigerd",
+    "conflict": "Conflict",
+    "no_authority": "Geen autoriteit",
+    "error": "Fout"
+  },
+  "refType": {
+    "literal": "Letterlijk",
+    "ontos_entity": "Ontos-entiteit",
+    "mcp_tool": "MCP-tool"
+  },
+  "resolverAuth": {
+    "obo": "aanroeper (OBO)",
+    "app_sp": "service principal van de app"
+  },
+  "reviewStatus": {
+    "na": "N.v.t.",
+    "pending": "In afwachting",
+    "in_review": "In beoordeling",
+    "completed": "Voltooid"
+  },
+  "workflowStatus": {
+    "running": "Wordt uitgevoerd",
+    "succeeded": "Geslaagd",
+    "failed": "Mislukt",
+    "pending": "In afwachting",
+    "completed": "Voltooid",
+    "defined": "Gedefinieerd",
+    "paused": "Wacht op goedkeuring",
+    "cancelled": "Geannuleerd"
+  },
+  "dnaRunStatus": {
+    "running": "Wordt uitgevoerd",
+    "succeeded": "Geslaagd",
+    "failed": "Mislukt"
+  },
+  "decisionSource": {
+    "mcp": "MCP",
+    "evidence": "Bewijs",
+    "ui": "UI"
+  },
+  "sourceType": {
+    "delta_table": "Delta-tabel",
+    "data_product": "Dataproduct",
+    "asset": "Asset"
+  },
+  "direction": {
+    "actual-exceeds-documented": "Werkelijkheid overschrijdt gedocumenteerd",
+    "documented-exceeds-actual": "Gedocumenteerd overschrijdt werkelijkheid",
+    "neutral": "Neutraal"
+  },
+  "editor": {
+    "title": {
+      "new": "Nieuwe Authority Relation",
+      "edit": "Authority Relation bewerken"
+    },
+    "labels": {
+      "name": "Naam",
+      "slug": "Slug",
+      "description": "Beschrijving",
+      "actorRole": "Actorrol",
+      "actorIdentity": "Actoridentiteit",
+      "action": "Actie",
+      "objectType": "Objecttype",
+      "objectId": "Object-id",
+      "threshold": "Drempel",
+      "currency": "Valuta",
+      "market": "Markt",
+      "time": "Tijd",
+      "dayOfWeek": "Dag van de week",
+      "minuteOfHour": "Minuut van het uur",
+      "recomputeFrequency": "Herberekeningsfrequentie",
+      "dnaMaxThreshold": "Max. DNA-Coefficient om te activeren"
+    },
+    "hints": {
+      "slug": "Stabiele sleutel waarmee agents deze AR aanroepen. Gedeeld door elke versie van de familie.",
+      "authorityRelation": "De ARF-tuple: <strong>wie</strong> (actorrol + ondertekenende identiteit) welke <strong>actie</strong> mag uitvoeren op welk <strong>object</strong>.",
+      "domainContext": "Het evalueerbare predicaat: de context (drempel, valuta, markt) waarin deze autoriteit geldt. Criteria worden hiertegen geëvalueerd.",
+      "dnaMaxThreshold": "De divergentiebovengrens. De DNA-Coefficient meet hoe ver eerdere beslissingen van deze regel <strong>afwijken</strong> (0.0 = perfecte match, hoger = slechter). De AR kan alleen worden geactiveerd zolang de gemeten waarde op of onder deze grens blijft; een actieve AR die later boven de grens uitkomt, wordt automatisch gemarkeerd als <strong>Beoordeling nodig</strong>.",
+      "mcpResolverCredentials": "<strong>OBO:</strong> MCP-tools draaien met de eigen rechten van de aanroeper; een aanroeper zonder doorgegeven token krijgt no_authority. <strong>Service principal van de app:</strong> tools draaien als de Ontos-app voor elke aanroeper, zodat het resultaat niet meer afhangt van wie het vraagt. Gebruik dit alleen als de tool data moet zien die aanroepers niet kunnen zien.",
+      "mcpNoCallerToken": "Er is geen aanroepertoken doorgegeven, dus deze lijst is opgehaald als de service principal van de Ontos-app. Aanroepers van een OBO-geauthenticeerde AR hebben mogelijk geen toegang tot deze services."
+    },
+    "sections": {
+      "authorityRelation": "Authority Relation",
+      "domainContext": "Domeincontext",
+      "decisionCriteria": "Beslissingscriteria",
+      "domains": "Domeinen",
+      "evidenceSources": "Bewijsbronnen",
+      "participants": "Deelnemers",
+      "requires": "Vereist",
+      "resourceRefs": "Resourceverwijzingen",
+      "mcpResolverCredentials": "Referenties van MCP-resolver",
+      "dnaSchedule": "DNA-Coefficient-schema",
+      "tags": "Tags",
+      "ownership": "Eigenaarschap & project"
+    },
+    "sectionDescriptions": {
+      "decisionCriteria": "Stel de regels op die de resolutiepoort afdwingt (en waartegen de DNA-Coefficient divergentie meet). Elk criterium is een herbruikbare <strong>Compliance Check</strong>.",
+      "evidenceSources": "Koppel de eerdere beslissingen waartegen de DNA-Coefficient wordt gemeten. Voeg een of meer bronnen toe — een <strong>Delta-tabel</strong>, een <strong>Dataproduct</strong> of een <strong>Asset</strong> (volumebestand, tabel of view). Elke bron wijst zijn kolommen toe aan de canonieke AR-elementen via de kolomtoewijzing.",
+      "participants": "De N-functionele poort en beoordeling. <strong>Goedkeurders</strong> tellen mee voor de bevestigingspoort. <strong> Beoordelaars</strong> worden tijdens het beoordelingsproces geïnterviewd om te bevestigen dat de relatie de werkelijkheid weergeeft. Een principal kan beide zijn.",
+      "requires": "Voorafgaande ARs: elk moet <strong>goedgekeurd</strong> oplossen voordat deze beslist. Gekeyd op de familie-slug (niet de versie), zodat deze AR blijft werken wanneer een voorafgaande AR een nieuwe versie krijgt. Opslaan vereist dat deze AR een eigen slug heeft.",
+      "resourceRefs": "Waar veldwaarden vandaan komen. In plaats van een gewone letterlijke waarde ondersteun je een canoniek veld (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) met een getypeerde verwijzing. Een <strong> Ontos-entiteit</strong>-verwijzing wordt bij evaluatie opnieuw opgelost tegen de kennisgraaf, zodat de waarde actueel blijft wanneer het onderliggende concept, product of domein verandert. <strong> MCP-tool</strong>-verwijzingen roepen op beslissingstijd een Unity Catalog MCP-service aan; criteria kunnen vergelijken met de opgeloste waarde als <code>obj.ref_{{fieldPlaceholder}}</code> (punten worden underscores, bijv. <code>obj.ref_actor_identity</code>).",
+      "dnaSchedule": "Hoe vaak de DNA-Coefficient opnieuw wordt berekend tegen de bewijsbronnen.",
+      "domainContext": "Het evalueerbare predicaat: de context (drempel, valuta, markt) waarin deze autoriteit geldt. Criteria worden hiertegen geëvalueerd."
+    },
+    "fields": {
+      "name": {
+        "placeholder": "EMEA-North discount approval"
+      },
+      "slug": {
+        "placeholder": "ar-disc-emea-north"
+      },
+      "actorRole": {
+        "placeholder": "Regional Sales Manager – East"
+      },
+      "actorIdentity": {
+        "placeholder": "rsm-east@example.com"
+      },
+      "objectType": {
+        "placeholder": "data_product | data_contract"
+      },
+      "objectId": {
+        "placeholder": "dp-1234"
+      },
+      "threshold": {
+        "placeholder": "0.15"
+      },
+      "currency": {
+        "placeholder": "EUR"
+      },
+      "market": {
+        "placeholder": "emea-north"
+      },
+      "dnaMaxThreshold": {
+        "placeholder": "0.3"
+      },
+      "ownerTeam": "Eigenaarsteam",
+      "project": "Project",
+      "noTeam": "Geen team",
+      "noProject": "Geen project"
+    },
+    "evidenceSources": {
+      "type": {
+        "deltaTable": "Delta-tabel",
+        "dataProduct": "Dataproduct",
+        "asset": "Asset"
+      },
+      "placeholders": {
+        "deltaTable": "catalog.schema.promotion_decisions",
+        "dataProduct": "dataproduct-id",
+        "asset": "asset-FQN (tabel/view/volume)",
+        "label": "Optioneel label",
+        "columnMap": "Kolomtoewijzing (JSON)"
+      },
+      "messages": {
+        "dataProductNotYetSupported": "Dataproductbronnen worden vastgelegd maar nog niet gelezen voor DNAco (v1)."
+      }
+    },
+    "affirmations": {
+      "selectRoleLabel": "Selecteer een rol…",
+      "principalPlaceholder": "principal (e-mail of groep)",
+      "principalTypeUser": "gebruiker",
+      "principalTypeGroup": "groep",
+      "approverLabel": "goedkeurder",
+      "reviewerLabel": "beoordelaar",
+      "validation": {
+        "roleRequired": "Deelnemer {{index}}: kies een bedrijfsrol",
+        "roleRequiredDescription": "Elke deelnemer met een principal moet aan een bedrijfsrol (uit Instellingen) zijn gekoppeld.",
+        "principalRequired": "Deelnemer {{index}}: voer een principal in",
+        "principalRequiredDescription": "Elke deelnemer met een rol moet een e-mailadres of groepsidentificator hebben."
+      }
+    },
+    "prerequisites": {
+      "selectPrerequisiteLabel": "Selecteer een voorafgaande AR…",
+      "requiredLabel": "vereist",
+      "notePlaceholder": "Optionele notitie"
+    },
+    "resourceRefs": {
+      "fieldPathPlaceholder": "actor_identity | object_id | domain_context.market",
+      "literalPlaceholder": "Letterlijke waarde (bijv. rsm-east@example.com)",
+      "entityTypePlaceholder": "Kies een type…",
+      "entityIdPlaceholder": "Kies een entiteit…",
+      "entityIdDisabledPlaceholder": "Kies eerst een type…",
+      "refType": {
+        "literal": "Letterlijk",
+        "ontosEntity": "Ontos-entiteit",
+        "mcpTool": "MCP-tool"
+      },
+      "entityType": {
+        "businessConcept": "Bedrijfsconcept",
+        "dataProduct": "Dataproduct",
+        "dataDomain": "Datadomein"
+      }
+    },
+    "mcpResolverAuth": {
+      "obo": "Aanroepende gebruiker / agent (OBO) — standaard",
+      "appServicePrincipal": "Service principal van de Ontos-app"
+    },
+    "buttons": {
+      "addEvidenceSource": "Bewijsbron toevoegen",
+      "addParticipant": "Deelnemer toevoegen",
+      "addPrerequisite": "Vereiste toevoegen",
+      "addResourceRef": "Resourceverwijzing toevoegen",
+      "cancel": "Annuleren",
+      "create": "Aanmaken",
+      "save": "Opslaan"
+    },
+    "actions": {
+      "approve": "Goedkeuren",
+      "escalate": "Escaleren",
+      "override": "Overschrijven",
+      "delegate": "Delegeren",
+      "veto": "Veto"
+    },
+    "validation": {
+      "nameRequired": "Naam is verplicht",
+      "invalidColumnMap": "Ongeldige kolomtoewijzing",
+      "columnMapError": "De kolomtoewijzing voor \"{{ref}}\" moet geldige JSON zijn."
+    }
+  },
+  "criteria": {
+    "description": "De poort keurt alleen goed als elk ingeschakeld criterium slaagt. Een criterium dat voor een eerdere beslissing faalt, telt als divergentie in de DNA-Coefficient — gewogen en getekend op basis van de richting. Eén samengestelde regel is prima; splits alleen in afzonderlijke criteria als je divergentie per reden wilt.",
+    "mode": {
+      "builder": "Gestructureerd",
+      "raw": "Ruwe ASSERT",
+      "existing": "Bestaande controle hergebruiken"
+    },
+    "predicate": {
+      "allowlist": "Toegestane ondertekenaars",
+      "ceiling": "Numerieke bovengrens",
+      "requiredFlag": "Vereiste vlag",
+      "actionMatch": "Actie-overeenkomst"
+    },
+    "predicateDefaults": {
+      "allowlistField": "actor_identity",
+      "allowlistName": "Geautoriseerde ondertekenaar",
+      "allowlistFailure": "Ondertekenaar is niet geautoriseerd.",
+      "ceilingField": "value",
+      "ceilingName": "Binnen drempel",
+      "ceilingFailure": "Waarde overschrijdt de drempel zonder escalatie.",
+      "requiredFlagField": "cosign_present",
+      "requiredFlagName": "Vereiste vlag aanwezig",
+      "requiredFlagFailure": "Een vereiste voorwaarde ontbreekt.",
+      "actionMatchField": "action",
+      "actionMatchName": "Actie-overeenkomst",
+      "actionMatchFailure": "Actie is niet toegestaan."
+    },
+    "fields": {
+      "fieldPlaceholder": "veld (bijv. actor_identity)",
+      "allowlistPlaceholder": "rsm-east, rsm-west",
+      "actionMatchPlaceholder": "approve",
+      "ceilingPlaceholder": "0.15",
+      "ceilingAllowEscalation": "toestaan indien geëscaleerd",
+      "criterionNamePlaceholder": "Criteriumnaam",
+      "failureMessagePlaceholder": "Weigeringsbericht dat wordt getoond bij falen",
+      "rawRulePlaceholder": "obj.actor_identity IN ['rsm-east'] AND (obj.value <= 0.15 OR obj.escalated = True)"
+    },
+    "validation": {
+      "validateButton": "Valideren",
+      "ruleValid": "Regel is geldig",
+      "ruleInvalid": "Ongeldig"
+    },
+    "divergence": {
+      "direction": "Richting",
+      "weight": "Gewicht",
+      "dimension": "Dimensie",
+      "dimensionPlaceholder": "people",
+      "reusedCheckBadge": "hergebruikte controle"
+    },
+    "buttons": {
+      "addCriterion": "Criterium toevoegen"
+    },
+    "selections": {
+      "selectComplianceCheck": "Selecteer een Compliance Check…"
+    },
+    "assertPrefix": "ASSERT"
+  },
+  "mcp": {
+    "extraSchemas": {
+      "label": "Extra schema's",
+      "hint": "catalog.schema, kommagescheiden, om naar MCP-services te zoeken. system.ai is altijd inbegrepen.",
+      "placeholder": "main.app_ontos"
+    },
+    "services": {
+      "selectLabel": "Kies een MCP-server…"
+    },
+    "tools": {
+      "selectLabel": "Kies een tool…",
+      "loadingLabel": "Tools laden…"
+    },
+    "params": {
+      "label": "Params (JSON)",
+      "hint": "Stringwaarden zijn Jinja-templates over het verzoek plus <code>ar.*</code>, bijv. <code>{{exampleActor}}</code>, <code>{{exampleMarket}}</code>.",
+      "errorInvalid": "Ongeldige JSON.",
+      "errorNotObject": "Params moeten een JSON-object zijn."
+    },
+    "resultPointer": {
+      "label": "Resultaatverwijzing",
+      "hint": "JSONPath in de toolrespons; <code>$</code> is de volledige respons.",
+      "placeholder": "$  or  $.user.email  or  $.items[0].name"
+    },
+    "buttons": {
+      "refresh": "Vernieuwen"
+    }
+  },
+  "schedule": {
+    "frequency": {
+      "label": "Herberekeningsfrequentie",
+      "off": "Uit (alleen handmatig)",
+      "hourly": "Elk uur",
+      "daily": "Dagelijks",
+      "weekly": "Wekelijks",
+      "monthly": "Maandelijks (1e)",
+      "custom": "Aangepast"
+    },
+    "time": {
+      "label": "Tijd"
+    },
+    "minuteOfHour": {
+      "label": "Minuut van het uur"
+    },
+    "dayOfWeek": {
+      "label": "Dag van de week",
+      "sunday": "Zondag",
+      "monday": "Maandag",
+      "tuesday": "Dinsdag",
+      "wednesday": "Woensdag",
+      "thursday": "Donderdag",
+      "friday": "Vrijdag",
+      "saturday": "Zaterdag"
+    },
+    "descriptions": {
+      "off": "Geen automatische herberekening. De DNA-Coefficient wordt alleen bijgewerkt als je op Berekenen klikt of de AR bewerkt.",
+      "custom": "Aangepast schema: <code>{{cron}}</code>",
+      "scheduled": "De geplande herberekeningstaak voert dit uit volgens dit ritme (opgeslagen als <code>{{cron}}</code>)."
+    }
+  },
+  "infoHint": {
+    "ariaLabel": "Meer info"
+  },
+  "review": {
+    "errors": {
+      "noReviewerIdentity": "Geen beoordelaarsidentiteit beschikbaar.",
+      "noReviewFound": "Geen beoordeling voor jou gevonden op deze Authority Relation."
+    },
+    "toasts": {
+      "submitFailed": "Indienen van beoordeling mislukt",
+      "submitSuccess": "Beoordeling ingediend"
+    },
+    "statuses": {
+      "completed": "voltooid"
+    },
+    "details": {
+      "title": "Details van Authority Relation",
+      "actorIdentity": "Actoridentiteit",
+      "action": "Actie",
+      "domainContext": "Domeincontext",
+      "decisionCriteria": "Beslissingscriteria",
+      "criterion": "Criterium",
+      "empty": "—",
+      "evidenceSources": "Bewijsbronnen",
+      "evidenceBinding": "Bewijskoppeling",
+      "justificationChain": "Rechtvaardigingsketen"
+    },
+    "questionnaire": {
+      "confirmation": "Bevestiging",
+      "elicitation": "Gestructureerde uitvraag",
+      "placeholder": "Je antwoord…"
+    },
+    "actions": {
+      "submitReview": "Beoordeling indienen"
+    }
+  },
+  "request": {
+    "types": {
+      "review": {
+        "title": "Beoordeling aanvragen",
+        "description": "Start de N-functionele beoordeling: elke toegewezen beoordelaar krijgt een Asset-beoordeling om te bevestigen dat de relatie de werkelijkheid weergeeft, en de beoordelingsworkflow wordt gestart."
+      },
+      "statusChange": {
+        "title": "Status wijzigen",
+        "description": "Verplaats deze Authority Relation door haar levenscyclus. Activering vereist dat de DNA-Coefficient binnen de bovengrens is gemeten en dat elke vereiste bevestiging is voltooid."
+      }
+    },
+    "dialog": {
+      "title": "Actie aanvragen",
+      "description": "Selecteer het type verzoek dat je voor deze Authority Relation wilt indienen."
+    },
+    "relationInfo": {
+      "label": "Authority Relation",
+      "status": "Status"
+    },
+    "form": {
+      "requestType": "Type verzoek *",
+      "message": "Bericht (optioneel)",
+      "messagePlaceholder": "Voeg notities voor de beoordelaars toe…",
+      "targetStatus": "Doelstatus *",
+      "statusPlaceholder": "Kies doelstatus…"
+    },
+    "errors": {
+      "selectStatus": "Selecteer een doelstatus.",
+      "submitFailed": "Indienen van verzoek mislukt"
+    },
+    "toasts": {
+      "reviewRequested": "Beoordeling aangevraagd",
+      "reviewersNotified": "{{count}} beoordelaar(s) op de hoogte gesteld.",
+      "statusChanged": "Status gewijzigd",
+      "statusSetTo": "Status ingesteld op \"{{status}}\"."
+    },
+    "actions": {
+      "submitting": "Indienen…",
+      "changeStatus": "Status wijzigen",
+      "sendRequest": "Verzoek verzenden"
+    }
+  }
+}

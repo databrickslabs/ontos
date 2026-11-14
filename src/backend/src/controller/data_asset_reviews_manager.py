@@ -117,6 +117,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return AssetType.MDM_MATCH
         if fqn.startswith('term-mapping://'):
             return AssetType.CONCEPT_MAPPING_SUGGESTION
+        if fqn.startswith('authority-relation://'):
+            return AssetType.AUTHORITY_RELATION
         if fqn.startswith('knowledge-concept://'):
             return AssetType.KNOWLEDGE_CONCEPT
         if fqn.startswith('concept-changeset://'):

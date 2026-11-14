@@ -136,6 +136,11 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'allowed_levels': ADMIN_ONLY_LEVELS,  # Admin manages personas/groups
         'group': GROUP_GOVERN,
     },
+    'authority-resolution': {
+        'name': 'Authority Resolution',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # Stewards author ARs, admins manage
+        'group': GROUP_GOVERN,
+    },
     'entitlements-sync': {
         'name': 'Entitlements Sync',
         'allowed_levels': ADMIN_ONLY_LEVELS,  # Admin manages sync jobs

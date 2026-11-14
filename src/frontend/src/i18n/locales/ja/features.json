@@ -90,5 +90,9 @@
   "about": {
     "name": "概要",
     "description": "アプリケーションと機能に関する情報。"
+  },
+  "authority-resolution": {
+    "name": "権限解決",
+    "description": "Authority Relation（ARF）を作成し、それに対してエージェントの決定を解決します。"
   }
 }

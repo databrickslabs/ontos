@@ -202,16 +202,22 @@ class StepResult:
         return entry
 
 
-def _next_step_id(workflow: 'ProcessWorkflow', step: 'WorkflowStep', result: StepResult) -> Optional[str]:
+def _next_step_id(
+    workflow: 'ProcessWorkflow', step: 'WorkflowStep', result: StepResult,
+    continue_on_failure: bool = False,
+) -> Optional[str]:
     """The step to run after ``step``: none after a Pass or Fail step, else its branch.
 
     A conditional's branches are its true and false results, so a condition that
-    couldn't be evaluated has no branch: the run ends there, failed.
+    couldn't be evaluated has no branch: the run ends there, failed. A failed
+    non-fatal step (``continue_on_failure``) continues via ``on_pass``.
     """
     if ends_process_run(getattr(workflow, 'workflow_type', None), step.step_type):
         return None
     if is_conditional_step_type(step.step_type) and result.branch is None:
         return None
+    if continue_on_failure and not result.passed:
+        return step.on_pass
     return step.on_pass if result.takes_pass_branch() else step.on_fail
 
 
@@ -3258,12 +3264,26 @@ class WorkflowExecutor:
                 )
                 break
             
+            # A step may opt out of failing the whole flow (e.g. best-effort
+            # notifications): when fail_flow_on_failure is off, a failed step is
+            # logged and the flow continues via on_pass rather than terminating.
+            route_passed = result.passed or (
+                not is_conditional_step_type(step.step_type) and not self._step_fail_flow(step)
+            )
+            if not result.passed and route_passed:
+                logger.warning(
+                    f"Step '{step.step_id}' failed but is non-fatal "
+                    f"(fail_flow_on_failure=false); continuing. Error: {result.error}"
+                )
+
             # Determine next step
-            current_step_id = _next_step_id(workflow, step, result)
-            
+            current_step_id = _next_step_id(
+                workflow, step, result, continue_on_failure=route_passed,
+            )
+
             # If no next step, we're done
             if not current_step_id:
-                if result.passed:
+                if route_passed:
                     final_status = ExecutionStatus.SUCCEEDED
                 else:
                     final_status = ExecutionStatus.FAILED
@@ -3850,12 +3870,24 @@ class WorkflowExecutor:
                 )
                 break
             
+            # Non-fatal steps (fail_flow_on_failure=false) continue via on_pass.
+            route_passed = result.passed or (
+                not is_conditional_step_type(step.step_type) and not self._step_fail_flow(step)
+            )
+            if not result.passed and route_passed:
+                logger.warning(
+                    f"Step '{step.step_id}' failed but is non-fatal "
+                    f"(fail_flow_on_failure=false); continuing. Error: {result.error}"
+                )
+
             # Determine next step
-            next_step_id = _next_step_id(workflow, step, result)
-            
+            next_step_id = _next_step_id(
+                workflow, step, result, continue_on_failure=route_passed,
+            )
+
             # If no next step, we're done
             if not next_step_id:
-                if result.passed:
+                if route_passed:
                     final_status = ExecutionStatus.SUCCEEDED
                 else:
                     final_status = ExecutionStatus.FAILED
@@ -4214,6 +4246,22 @@ class WorkflowExecutor:
             logger.error(f"Error updating entity status after workflow completion: {e}", exc_info=True)
             # Don't fail the workflow for status update issues
     
+    def _step_fail_flow(self, step: WorkflowStep) -> bool:
+        """Whether a failure of this step should fail the whole flow.
+
+        Reads ``fail_flow_on_failure`` from the step config (default ``True`` —
+        strict). Set it ``false`` on best-effort steps (e.g. notifications) so a
+        step failure logs and the flow continues via ``on_pass`` instead of
+        terminating the execution.
+        """
+        config = step.config or {}
+        if isinstance(config, str):
+            try:
+                config = json.loads(config)
+            except Exception:
+                config = {}
+        return bool(config.get("fail_flow_on_failure", True))
+
     # A reviewed product goes active through the lifecycle steps it still
     # needs, or back to draft; each step is a transition_status call.
     _PRODUCT_ACTIVATION_STEPS = {

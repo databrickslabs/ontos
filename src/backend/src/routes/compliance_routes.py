@@ -19,7 +19,7 @@ from src.models.compliance import (
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
 from src.common.compliance_entities import validate_rule
-from src.common.notification_audience import NotifyAudience, audience_for, violation_text, violations as notify_violations
+from src.common.notification_audience import NotifyAudience, audience_for_request, violation_text, violations as notify_violations
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -132,7 +132,8 @@ async def create_policy(
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
     author = _author(current_user)
     if rule_notify_targets(policy.rule):
-        require_notify_audience(db, policy.rule, audience_for(db, author[0], author[1]))
+        audience = await audience_for_request(db, request, auth_manager, author[0], author[1])
+        require_notify_audience(db, policy.rule, audience)
     created = manager.create_policy(
         db, 
         policy, 
@@ -192,7 +193,7 @@ async def update_policy(
     unclaimed = existing is not None and existing.rule_author_email is None
     audience = None
     if (changed and notify_involved) or unclaimed:
-        audience = audience_for(db, author[0], author[1])
+        audience = await audience_for_request(db, request, auth_manager, author[0], author[1])
     author_to_record = None
     if rule_changed:
         require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)

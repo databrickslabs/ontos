@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.common.api_errors import CodedValueError
-from src.common.notification_audience import ENTITY_DEPENDENT_TOKENS, NotifyAudience, audience_for, normalized
+from src.common.notification_audience import ENTITY_DEPENDENT_TOKENS, NotifyAudience, normalized
 from src.common.logging import get_logger
 from src.db_models.notification_recipients import NotificationRecipientDb
 from src.db_models.settings import AppRoleDb
@@ -165,8 +165,8 @@ class NotificationRecipientsManager:
             )
         ]
 
-    def usable_by_user(self, db: Session, email: Optional[str], groups: Optional[List[str]]) -> List[NotificationRecipientDb]:
-        return self.usable_by(db, audience_for(db, email, groups))
+    def usable_by_user(self, db: Session, audience: NotifyAudience) -> List[NotificationRecipientDb]:
+        return self.usable_by(db, audience)
 
 
 def _dump(values: List[str]) -> str:

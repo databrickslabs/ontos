@@ -318,7 +318,9 @@ ADMIN_AUDIENCE = NotifyAudience(email=None, is_admin=True, role_ids=frozenset())
 def _run(db, rule, entities, current_user='steward@example.com'):
     # Policies run with their author's audience; this one is authored by an admin
     group = f'old-admins-{uuid.uuid4().hex[:8]}'
-    db.add(AppRoleDb(name=f'Old Admin {group}', assigned_groups=json.dumps([group]), is_admin=True))
+    # Admin is the compliance feature level (not the is_admin flag): the author holds compliance ADMIN
+    db.add(AppRoleDb(name=f'Old Admin {group}', assigned_groups=json.dumps([group]),
+                     feature_permissions=json.dumps({'compliance': 'Admin'})))
     db.flush()
     policy = CompliancePolicyDb(
         id=str(uuid.uuid4()), name='Classified products', rule=rule, is_active=True,
@@ -382,7 +384,8 @@ class TestRuns:
             rule="MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL NOTIFY 'a@example.com'",
             rule_author_email='admin@example.com', rule_author_groups=json.dumps(['old-admins-errors']),
         )
-        db_session.add(AppRoleDb(name='Old Admin errors', assigned_groups='["old-admins-errors"]', is_admin=True))
+        db_session.add(AppRoleDb(name='Old Admin errors', assigned_groups='["old-admins-errors"]',
+                                 feature_permissions='{"compliance": "Admin"}'))
         db_session.add(policy)
         db_session.flush()
         iterator = MagicMock()

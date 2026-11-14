@@ -1,7 +1,10 @@
 """Who a compliance policy's NOTIFY action may notify (#1450).
 
-Admins (compliance Admin, or a role flagged as admin) may notify anyone. Other policy
-authors may notify:
+Admins may notify anyone. "Admin" is the feature level only: a user is an admin when the
+app's own resolution gives them ``compliance`` ADMIN (the roles matching their groups or
+email, a team role override, an applied role). A role's ``is_admin`` flag, and the workspace
+admin groups, don't make anyone a NOTIFY admin: a workspace admin is covered when their
+roles grant compliance ADMIN. Other policy authors may notify:
 
 - ``self``: the policy's author (also by their own email);
 - ``entity_owner`` / ``owner``: the entity's owners;
@@ -16,7 +19,6 @@ The same check runs when a rule is saved (against the editor) and when it runs (
 the policy's recorded author and that author's groups at their last rule change), so a
 scheduled run with no user is checked too.
 """
-import json
 from dataclasses import dataclass
 from typing import Dict, FrozenSet, Iterable, List, Optional, Tuple
 
@@ -28,6 +30,8 @@ from src.repositories.notification_recipient_repository import json_list, notifi
 
 RECIPIENT_PREFIX = 'recipient:'
 SELF_TOKEN = 'self'
+# The feature whose ADMIN level makes an author a NOTIFY admin
+NOTIFY_FEATURE = 'compliance'
 
 
 def normalized(token: str) -> str:
@@ -58,31 +62,67 @@ class NotifyAudience:
 Violation = Tuple[str, Dict[str, str]]
 
 
-def audience_for(db: Session, email: Optional[str], groups: Optional[Iterable[str]]) -> NotifyAudience:
-    """The audience of a user with these groups and email, from the roles as they are now."""
-    from src.common.authorization import is_user_admin
-    from src.common.config import get_settings
+def feature_admin_offline(db: Session, email: Optional[str], groups: Optional[Iterable[str]]) -> bool:
+    """Whether a user holds compliance ADMIN, resolved without a request (the run path).
 
+    Mirrors ``authorization.resolve_effective_permissions`` step by step: an applied role
+    override, else the team role override and the roles matching the groups or the email.
+    The request-bound pieces are read from the database directly: the teams and the settings
+    managers take the session.
+    """
+    from src.common.config import get_settings
+    from src.common.team_role_override import pick_team_role_override
+    from src.controller.authorization_manager import AuthorizationManager
+    from src.controller.settings_manager import SettingsManager
+    from src.controller.teams_manager import TeamsManager
+
+    group_list = list(groups or [])
+    settings_manager = SettingsManager(db, get_settings())
+    applied_role_id = settings_manager.get_applied_role_override_for_user(email)
+    if applied_role_id:
+        permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+    else:
+        team_role = None
+        if email:
+            teams = TeamsManager().get_teams_for_user(db, email)
+            team_role = pick_team_role_override(teams, email, group_list)
+        permissions = AuthorizationManager(settings_manager).get_user_effective_permissions(
+            group_list, team_role, user_email=email,
+        )
+    return permissions.get(NOTIFY_FEATURE) == FeatureAccessLevel.ADMIN
+
+
+async def audience_for_request(
+    db: Session, request, auth_manager, email: Optional[str], groups: Optional[Iterable[str]],
+) -> NotifyAudience:
+    """The audience of the caller of a request: admin is the app's own resolution for the request
+    (``resolve_effective_permissions``, which also reads the team role override)."""
+    from src.common import authorization
+
+    groups = list(groups or [])
+    levels = await authorization.resolve_effective_permissions(email, groups, request, auth_manager)
+    return audience_for(db, email, groups, admin=levels.get(NOTIFY_FEATURE) == FeatureAccessLevel.ADMIN)
+
+
+def audience_for(
+    db: Session, email: Optional[str], groups: Optional[Iterable[str]], *, admin: Optional[bool] = None,
+) -> NotifyAudience:
+    """The audience of a user: their roles as they are now, and admin (the compliance feature level).
+
+    ``admin`` is the caller's resolved feature level when the caller has a request; without it
+    (the run path, for a recorded author) admin is resolved from the database.
+    """
     group_set = {g.lower() for g in (groups or []) if g}
     email_norm = (email or '').strip().lower() or None
     role_ids = set()
-    # Workspace admins (APP_ADMIN_DEFAULT_GROUPS) are admins here too, as elsewhere in the app
-    is_admin = bool(groups) and is_user_admin(list(groups), get_settings())
     for role in db.query(AppRoleDb).all():
         role_groups = {g.lower() for g in json_list(role.assigned_groups)}
         role_users = {u.lower() for u in json_list(role.assigned_users)}
-        if not (group_set & role_groups or (email_norm and email_norm in role_users)):
-            continue
-        role_ids.add(str(role.id))
-        try:
-            permissions = json.loads(role.feature_permissions or '{}')
-        except (TypeError, ValueError):
-            permissions = {}
-        if not isinstance(permissions, dict):
-            permissions = {}
-        if role.is_admin or permissions.get('compliance') == FeatureAccessLevel.ADMIN.value:
-            is_admin = True
-    return NotifyAudience(email=email, is_admin=is_admin, role_ids=frozenset(role_ids))
+        if group_set & role_groups or (email_norm and email_norm in role_users):
+            role_ids.add(str(role.id))
+    if admin is None:
+        admin = feature_admin_offline(db, email, groups)
+    return NotifyAudience(email=email, is_admin=bool(admin), role_ids=frozenset(role_ids))
 
 
 def target_violation(db: Session, token: str, audience: NotifyAudience) -> Optional[Violation]:

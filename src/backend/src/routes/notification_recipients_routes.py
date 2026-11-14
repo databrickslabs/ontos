@@ -6,6 +6,9 @@ from src.common.dependencies import AuditCurrentUserDep, AuditManagerDep, DBSess
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker
 from src.common.logging import get_logger
+from src.common.manager_dependencies import get_auth_manager
+from src.common.notification_audience import audience_for_request
+from src.controller.authorization_manager import AuthorizationManager
 from src.controller.notification_recipients_manager import NotificationRecipientError, notification_recipients_manager
 from src.db_models.notification_recipients import NotificationRecipientDb
 from src.models.notification_recipients import (
@@ -119,14 +122,18 @@ async def delete_notification_recipient(
 
 @router.get('/compliance/notification-recipients/available')
 async def list_available_notification_recipients(
+    request: Request,
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('compliance', FeatureAccessLevel.READ_WRITE)),
 ) -> List[Dict[str, Any]]:
     """The active recipients the current user may name in a NOTIFY action (admins: all)."""
-    usable = notification_recipients_manager.usable_by_user(
-        db, current_user.email if current_user else None, current_user.groups if current_user else [],
+    audience = await audience_for_request(
+        db, request, auth_manager,
+        current_user.email if current_user else None, current_user.groups if current_user else [],
     )
+    usable = notification_recipients_manager.usable_by_user(db, audience)
     return [{'id': str(r.id), 'name': r.name, 'description': r.description} for r in usable]
 
 

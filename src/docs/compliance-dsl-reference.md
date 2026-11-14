@@ -228,7 +228,7 @@ ON_FAIL NOTIFY recipient:'Data Stewards'
   Keywords such as `owner`, `entity_owner`, `self` or `requester` match without case, spaces and underscores (`Owner`, `Entity Owner`, `SELF`). Any other name that is not an email, a group or an app role fails the action (*not a known recipient*); it doesn't become a recipient that no user matches.
 
   `requester` / `trigger_user` is the user who started the run, so scheduled runs of the compliance-checks job have none. A recipient list that resolves to nobody for an entity fails the action for that entity.
-- **Who may notify whom.** The policy's author decides. An admin (compliance Admin, or a role flagged as admin) may notify any target. Anyone else may notify:
+- **Who may notify whom.** The policy's author decides. An admin (compliance ADMIN, the feature level the app resolves for the user; a role's `is_admin` flag doesn't count) may notify any target. Anyone else may notify:
   - `self`, which is the author, by their own email too;
   - `entity_owner` / `owner`;
   - a Notification Recipient whose allowed roles include one of the author's roles.

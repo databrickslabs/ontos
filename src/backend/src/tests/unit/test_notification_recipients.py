@@ -174,9 +174,32 @@ class TestAudience:
         assert violations(db_session, 'self', audience) == []  # nobody to resolve to; the run has no recipient
         assert violations(db_session, STEWARD_EMAIL, audience)
 
-    def test_a_workspace_admin_without_an_app_role_is_an_admin(self, db_session, roles):
-        # APP_ADMIN_DEFAULT_GROUPS (default 'admins') makes a user an admin here too, as elsewhere in the app
+    def test_a_workspace_admin_group_alone_is_not_a_notify_admin(self, db_session, roles):
+        # Admin is the compliance feature level only: no workspace-group shortcut. A workspace admin
+        # is an admin when their roles grant compliance ADMIN (the admin role in the fixture does)
         audience = audience_for(db_session, 'ws-admin@example.com', ['admins'])
+        assert not audience.is_admin
+        assert violations(db_session, "Anyone Else", audience)
+
+    def test_a_role_flagged_is_admin_without_compliance_admin_is_not_an_admin(self, db_session, roles):
+        db_session.add(AppRoleDb(
+            name=f'NR Flagged {uuid.uuid4().hex[:8]}', assigned_groups=json.dumps(['nr-flagged']),
+            feature_permissions=json.dumps({'compliance': 'Read/Write'}), is_admin=True,
+        ))
+        db_session.flush()
+        audience = audience_for(db_session, 'flagged@example.com', ['nr-flagged'])
+        assert not audience.is_admin
+        assert violations(db_session, "Anyone Else", audience)
+
+    def test_a_team_role_granting_compliance_admin_is_an_admin_at_run_time(self, db_session, roles):
+        # The run path has no request: the team role override is read from the database
+        team_admin = AppRoleDb(name=f'NR Team Admin {uuid.uuid4().hex[:8]}', assigned_groups=json.dumps([]),
+                               feature_permissions=json.dumps({'compliance': 'Admin'}))
+        db_session.add(team_admin)
+        db_session.flush()
+        with patch('src.controller.teams_manager.TeamsManager.get_teams_for_user', return_value=[]), \
+                patch('src.common.team_role_override.pick_team_role_override', return_value=team_admin.name):
+            audience = audience_for(db_session, 'member@example.com', [])
         assert audience.is_admin
         assert violations(db_session, "Anyone Else", audience) == []
 

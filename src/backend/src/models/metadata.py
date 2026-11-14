@@ -9,7 +9,24 @@ from pydantic import BaseModel, Field, HttpUrl
 # ============================================================================
 # Entity Types Pattern
 # ============================================================================
-ENTITY_TYPE_PATTERN = r"^(data_domain|data_product|data_contract|dataset|asset)$"
+# Every entity kind that renders EntityMetadataPanel (see the EntityKind union in
+# frontend components/metadata/entity-metadata-panel.tsx). Kept as an explicit
+# allow-list because entity_type is also used in document upload paths.
+#
+# Each kind maps to the feature that authorizes its metadata: writing a note on a
+# data product needs write access to data products, not to domains.
+METADATA_ENTITY_FEATURES = {
+    "data_domain": "data-domains",
+    "data_product": "data-products",
+    "data_contract": "data-contracts",
+    "dataset": "assets",  # removed entity; Assets replaced Datasets, old rows stay readable
+    "asset": "assets",
+    "concept": "semantic-models",
+    "collection": "semantic-models",
+    "compliance_policy": "compliance",
+}
+METADATA_ENTITY_TYPES = tuple(METADATA_ENTITY_FEATURES)
+ENTITY_TYPE_PATTERN = rf"^({'|'.join(METADATA_ENTITY_TYPES)})$"
 
 
 # ============================================================================

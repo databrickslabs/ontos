@@ -14,9 +14,20 @@ class CostCenter(str):
     OTHER = "OTHER"
 
 
+# Entity kinds that render the costs panel, each mapped to the feature that
+# authorizes its cost items.
+COST_ENTITY_FEATURES = {
+    "data_domain": "data-domains",
+    "data_product": "data-products",
+    "data_contract": "data-contracts",
+    "asset": "assets",
+}
+COST_ENTITY_TYPE_PATTERN = rf"^({'|'.join(COST_ENTITY_FEATURES)})$"
+
+
 class CostItemBase(BaseModel):
     entity_id: str
-    entity_type: str = Field(..., pattern=r"^(data_domain|data_product|data_contract|asset)$")
+    entity_type: str = Field(..., pattern=COST_ENTITY_TYPE_PATTERN)
     title: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
     cost_center: str = Field(..., pattern=r"^(INFRASTRUCTURE|HR|STORAGE|MAINTENANCE|OTHER)$")

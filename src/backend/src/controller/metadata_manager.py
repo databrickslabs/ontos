@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import VolumeType
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.config import Settings, resolve_volume
 from src.common.workspace_client import get_workspace_client
@@ -27,6 +28,24 @@ logger = get_logger(__name__)
 
 # Constant for shared asset entity_id
 SHARED_ENTITY_ID = "__shared__"
+
+
+class NotSharedAssetError(CodedValueError):
+    """Only a shared library asset can be attached to an entity."""
+
+    code = 'not_shared_asset'
+
+
+class SharedScopeNotAllowedError(CodedValueError):
+    """Library records are created on the shared metadata routes, not on an entity's own."""
+
+    code = 'shared_scope_not_allowed'
+
+
+def _refuse_shared_scope_create(is_shared: bool, entity_id: str) -> None:
+    """Entity-scoped creates never make library records, whichever caller creates them."""
+    if is_shared or entity_id == SHARED_ENTITY_ID:
+        raise SharedScopeNotAllowedError("Shared library records are created on the shared metadata routes.")
 
 # Session.info keys of the document files to delete once the session commits.
 _PENDING_FILES_KEY = "ontos_pending_document_files"
@@ -119,6 +138,7 @@ class MetadataManager:
 
     # --- Rich Text ---
     def create_rich_text(self, db: Session, *, data: RichTextCreate, user_email: Optional[str]) -> RichText:
+        _refuse_shared_scope_create(data.is_shared, data.entity_id)
         db_obj = self._rich_text_repo.create(db, obj_in=data)
         db.commit()
         db.refresh(db_obj)
@@ -153,6 +173,7 @@ class MetadataManager:
 
     # --- Link ---
     def create_link(self, db: Session, *, data: LinkCreate, user_email: Optional[str]) -> Link:
+        _refuse_shared_scope_create(data.is_shared, data.entity_id)
         db_obj = self._link_repo.create(db, obj_in=data)
         db.commit()
         db.refresh(db_obj)
@@ -187,6 +208,7 @@ class MetadataManager:
 
     # --- Document ---
     def create_document_record(self, db: Session, *, data: DocumentCreate, filename: str, content_type: Optional[str], size_bytes: Optional[int], storage_path: str, user_email: Optional[str]) -> Document:
+        _refuse_shared_scope_create(data.is_shared, data.entity_id)
         # DocumentCreate has base fields; other metadata supplied by upload logic
         from src.db_models.metadata import DocumentMetadataDb
         db_obj = DocumentMetadataDb(
@@ -228,6 +250,33 @@ class MetadataManager:
         if not db_obj:
             return None
         return Document.from_orm(db_obj)
+
+    def _repo_for(self, kind: str):
+        return {
+            "rich_text": self._rich_text_repo,
+            "link": self._link_repo,
+            "document": self._document_repo,
+        }[kind]
+
+    @staticmethod
+    def _is_shared(db_obj) -> bool:
+        return bool(db_obj.is_shared) or db_obj.entity_id == SHARED_ENTITY_ID
+
+    def get_record_scope(self, db: Session, *, kind: str, id: str) -> Optional[Tuple[str, bool]]:
+        """``(entity_type, is_shared)`` of a rich text, link or document, or None if it doesn't exist.
+
+        Shared library records keep the entity type they were created from, so
+        callers authorize them by the shared flag, not by that type.
+        """
+        db_obj = self._repo_for(kind).get(db, id=id)
+        if not db_obj:
+            return None
+        return db_obj.entity_type, self._is_shared(db_obj)
+
+    def is_shared_asset(self, db: Session, *, kind: str, id: str) -> bool:
+        """True if ``id`` is a shared library asset of that kind (only those can be attached)."""
+        db_obj = self._repo_for(kind).get(db, id=id)
+        return bool(db_obj) and self._is_shared(db_obj)
 
     # --- Entity deletion ---
     def remove_all_for_entity(
@@ -359,7 +408,13 @@ class MetadataManager:
         data: MetadataAttachmentCreate,
         user_email: Optional[str]
     ) -> MetadataAttachment:
-        """Attach a shared asset to an entity."""
+        """Attach a shared asset to an entity.
+
+        Raises NotSharedAssetError if ``asset_id`` is not a shared library asset: attaching
+        an entity's own note would expose it through the target's merged metadata.
+        """
+        if not self.is_shared_asset(db, kind=data.asset_type, id=data.asset_id):
+            raise NotSharedAssetError("Only shared library assets can be attached")
         # Check if attachment already exists
         existing = self._attachment_repo.get_attachment(
             db, entity_type=entity_type, entity_id=entity_id,

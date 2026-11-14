@@ -1,3 +1,5 @@
+import hashlib
+import uuid
 from io import BytesIO
 from typing import Annotated, List, Optional
 
@@ -9,12 +11,19 @@ from pydantic import ValidationError
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import PermissionChecker
+from src.common.authorization import (
+    EntityTypePermissionChecker,
+    PermissionChecker,
+    check_entity_permission,
+    check_feature_permission,
+    get_user_details_from_sdk,
+)
 from src.common.logging import get_logger
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header, is_safe_path_component
-from src.controller.metadata_manager import MetadataManager, SHARED_ENTITY_ID
-from src.common.manager_dependencies import get_metadata_manager
+from src.controller.metadata_manager import MetadataManager, NotSharedAssetError, SHARED_ENTITY_ID, SharedScopeNotAllowedError
+from src.common.manager_dependencies import get_auth_manager, get_metadata_manager
 from src.models.metadata import (
+    METADATA_ENTITY_FEATURES,
     RichText, RichTextCreate, RichTextUpdate,
     Link, LinkCreate, LinkUpdate,
     Document, DocumentCreate,
@@ -23,13 +32,67 @@ from src.models.metadata import (
 )
 from src.common.config import get_settings, Settings
 from src.common.workspace_client import get_workspace_client
+from src.controller.authorization_manager import AuthorizationManager
+from src.models.users import UserInfo
 from databricks.sdk import WorkspaceClient
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Metadata"])
 
-FEATURE_ID = "data-domains"  # Use domain feature for now; can widen later
+# Shared library assets (/metadata/shared..., and records flagged shared) keep the
+# domain feature. Routes on one entity's metadata check the feature that owns that
+# entity's kind (METADATA_ENTITY_FEATURES).
+FEATURE_ID = "data-domains"
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
+def _storage_segment(entity_id: str) -> str:
+    """Volume path segment for an entity id. IRIs (concepts, collections) contain '/', so they're hashed."""
+    if is_safe_path_component(entity_id):
+        return entity_id
+    return "iri-" + hashlib.sha256(entity_id.encode("utf-8")).hexdigest()[:32]
+
+
+def _refuse_shared_scope(is_shared: bool, entity_id: str) -> None:
+    """Entity-scoped creates never make library records; those are created on /metadata/shared."""
+    if is_shared or entity_id == SHARED_ENTITY_ID:
+        err = SharedScopeNotAllowedError("Shared library records are created on the shared metadata routes.")
+        raise HTTPException(status_code=400, detail=str(err)) from err
+
+
+def _record_permission(kind: str, required_level: FeatureAccessLevel, not_found_detail: str):
+    """Dependency for routes addressed by record id: check the feature of the record's entity kind.
+
+    Shared library records are checked against the library's feature, whatever
+    entity kind they were created from.
+    """
+    async def dependency(
+        id: str,
+        request: Request,
+        db: DBSessionDep,
+        user_details: UserInfo = Depends(get_user_details_from_sdk),
+        auth_manager: AuthorizationManager = Depends(get_auth_manager),
+        manager: MetadataManager = Depends(get_metadata_manager),
+    ) -> None:
+        scope = manager.get_record_scope(db, kind=kind, id=id) if _is_uuid(id) else None
+        if scope is None:
+            raise HTTPException(status_code=404, detail=not_found_detail)
+        entity_type, is_shared = scope
+        if is_shared:
+            await check_feature_permission(request, user_details, auth_manager, FEATURE_ID, required_level)
+            return
+        await check_entity_permission(
+            request, user_details, auth_manager, METADATA_ENTITY_FEATURES, entity_type, required_level,
+        )
+    return dependency
 
 
 # --- Rich Text ---
@@ -43,11 +106,12 @@ async def create_rich_text(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_WRITE)),
 ):
     try:
         if payload.entity_type != entity_type or payload.entity_id != entity_id:
             raise HTTPException(status_code=400, detail="Entity path does not match body")
+        _refuse_shared_scope(payload.is_shared, payload.entity_id)
         result = manager.create_rich_text(db, data=payload, user_email=current_user.email if current_user else None)
         
         audit_manager.log_action(
@@ -74,7 +138,7 @@ async def list_rich_texts(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_ONLY)),
 ):
     return manager.list_rich_texts(db, entity_type=entity_type, entity_id=entity_id)
 
@@ -88,7 +152,7 @@ async def update_rich_text(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(_record_permission("rich_text", FeatureAccessLevel.READ_WRITE, "Rich text not found")),
 ):
     updated = manager.update_rich_text(db, id=id, data=payload, user_email=current_user.email if current_user else None)
     if not updated:
@@ -115,7 +179,7 @@ async def delete_rich_text(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(_record_permission("rich_text", FeatureAccessLevel.READ_WRITE, "Rich text not found")),
 ):
     ok = manager.delete_rich_text(db, id=id, user_email=current_user.email if current_user else None)
     if not ok:
@@ -145,11 +209,12 @@ async def create_link(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_WRITE)),
 ):
     try:
         if payload.entity_type != entity_type or payload.entity_id != entity_id:
             raise HTTPException(status_code=400, detail="Entity path does not match body")
+        _refuse_shared_scope(payload.is_shared, payload.entity_id)
         result = manager.create_link(db, data=payload, user_email=current_user.email if current_user else None)
         
         audit_manager.log_action(
@@ -176,7 +241,7 @@ async def list_links(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_ONLY)),
 ):
     return manager.list_links(db, entity_type=entity_type, entity_id=entity_id)
 
@@ -190,7 +255,7 @@ async def update_link(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(_record_permission("link", FeatureAccessLevel.READ_WRITE, "Link not found")),
 ):
     updated = manager.update_link(db, id=id, data=payload, user_email=current_user.email if current_user else None)
     if not updated:
@@ -217,7 +282,7 @@ async def delete_link(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(_record_permission("link", FeatureAccessLevel.READ_WRITE, "Link not found")),
 ):
     ok = manager.delete_link(db, id=id, user_email=current_user.email if current_user else None)
     if not ok:
@@ -251,12 +316,13 @@ async def upload_document(
     manager: MetadataManager = Depends(get_metadata_manager),
     settings: Settings = Depends(get_settings),
     ws: WorkspaceClient = Depends(get_workspace_client),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_WRITE)),
 ):
     try:
         # Validate path components to prevent directory traversal
-        if not is_safe_path_component(entity_type) or not is_safe_path_component(entity_id):
+        if not is_safe_path_component(entity_type):
             raise HTTPException(status_code=400, detail="Invalid entity_type or entity_id")
+        _refuse_shared_scope(False, entity_id)
 
         # Validate the request before touching the volume, so a rejected
         # request never leaves an orphaned file behind.
@@ -271,7 +337,7 @@ async def upload_document(
             raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
         
         # Ensure volume/path
-        base_dir = f"uploads/{entity_type}/{entity_id}"
+        base_dir = f"uploads/{entity_type}/{_storage_segment(entity_id)}"
         volume_fs_base = manager.ensure_volume_path(ws, settings, base_dir)
 
         # Read file content
@@ -330,7 +396,7 @@ async def list_documents(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_ONLY)),
 ):
     return manager.list_documents(db, entity_type=entity_type, entity_id=entity_id)
 
@@ -340,7 +406,7 @@ async def get_document(
     id: str,
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(_record_permission("document", FeatureAccessLevel.READ_ONLY, "Document not found")),
 ):
     doc = manager.get_document(db, id=id)
     if not doc:
@@ -356,7 +422,7 @@ async def delete_document(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(_record_permission("document", FeatureAccessLevel.READ_WRITE, "Document not found")),
 ):
     ok = manager.delete_document(db, id=id, user_email=current_user.email if current_user else None)
     if not ok:
@@ -538,9 +604,19 @@ async def attach_shared_asset(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+    _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_WRITE)),
 ):
     """Attach a shared metadata asset to an entity."""
+    _refuse_shared_scope(False, entity_id)
+    if not _is_uuid(payload.asset_id):
+        err = NotSharedAssetError("Only shared library assets can be attached")
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    scope = manager.get_record_scope(db, kind=payload.asset_type, id=payload.asset_id)
+    if scope is not None and scope[1]:
+        # An attached library note is readable on the entity, so attaching it needs library read access.
+        await check_feature_permission(request, user_details, auth_manager, FEATURE_ID, FeatureAccessLevel.READ_ONLY)
     try:
         result = manager.attach_shared_asset(
             db, entity_type=entity_type, entity_id=entity_id,
@@ -558,6 +634,8 @@ async def attach_shared_asset(
         )
         
         return result
+    except NotSharedAssetError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
     except Exception as e:
         logger.exception("Failed attaching shared asset to %s/%s", entity_type, entity_id)
         raise HTTPException(status_code=500, detail="Failed to attach shared asset")
@@ -569,7 +647,7 @@ async def list_attachments(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_ONLY)),
 ):
     """List all shared asset attachments for an entity."""
     return manager.list_attachments(db, entity_type=entity_type, entity_id=entity_id)
@@ -586,7 +664,7 @@ async def detach_shared_asset(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_WRITE)),
 ):
     """Detach a shared metadata asset from an entity."""
     ok = manager.detach_shared_asset(
@@ -619,9 +697,12 @@ async def get_merged_metadata(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     contract_ids: Optional[str] = Query(None, description="Comma-separated contract IDs for inheritance"),
     max_level: int = Query(99, ge=0, le=999, description="Maximum inheritance level"),
+    request: Request = None,
     db: DBSessionDep = None,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+    _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_ONLY)),
 ):
     """
     Get merged metadata for an entity, including inherited metadata from contracts.
@@ -629,7 +710,16 @@ async def get_merged_metadata(
     For Data Products and Datasets, pass contract_ids to include inherited metadata.
     Only metadata with level <= max_level and inheritable=True will be inherited.
     """
-    contract_id_list = [cid.strip() for cid in contract_ids.split(",")] if contract_ids else None
+    contract_id_list = [cid.strip() for cid in contract_ids.split(",") if cid.strip()] if contract_ids else None
+    _refuse_shared_scope(False, entity_id)
+    for contract_id in contract_id_list or []:
+        _refuse_shared_scope(False, contract_id)
+    if contract_id_list:
+        # Inherited metadata is the contracts' own, so reading it needs contract access too.
+        await check_feature_permission(
+            request, user_details, auth_manager,
+            METADATA_ENTITY_FEATURES["data_contract"], FeatureAccessLevel.READ_ONLY,
+        )
     return manager.get_merged_metadata(
         db, entity_type=entity_type, entity_id=entity_id,
         contract_ids=contract_id_list, max_level_inheritance=max_level
@@ -647,7 +737,7 @@ async def get_document_content(
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
     ws: WorkspaceClient = Depends(get_workspace_client),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(_record_permission("document", FeatureAccessLevel.READ_ONLY, "Document not found")),
 ):
     doc = manager.get_document(db, id=id)
     if not doc:

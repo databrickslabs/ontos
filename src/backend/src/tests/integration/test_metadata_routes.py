@@ -174,5 +174,6 @@ class TestAssetMetadataRoutes:
             data={"title": "Snapshot"},
             files={"file": ("snapshot.png", b"\x89PNG", "image/png")},
         )
-        assert response.status_code == 422, response.text
+        assert response.status_code == 400, response.text
+        assert response.json()["detail"]["code"] == "unsupported_entity_type"
         mock_ws.files.upload.assert_not_called()

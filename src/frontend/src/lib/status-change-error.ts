@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { ApiResponse } from '@/hooks/use-api';
+import { serverErrorText } from './server-error-text';
 
 /** A workflow's reason, as `failed_execution_reasons` sends it. */
 interface BlockedReason {
@@ -158,7 +159,8 @@ export function apiErrorOf(
   if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
     const coded = detail as { code?: string; message?: string; params?: Record<string, unknown> };
     return {
-      error: coded.message || fallback,
+      // The same app-wide translations useApi applies (serverErrorText), before the English message
+      error: serverErrorText(body) ?? (coded.message || fallback),
       errorCode: coded.code ?? null,
       errorParams: coded.params && typeof coded.params === 'object' ? coded.params : null,
     };

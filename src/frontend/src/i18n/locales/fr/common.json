@@ -723,7 +723,9 @@
     "selectedOfMax": "{{count}} sur {{max}} étiquettes sélectionnées",
     "valueLabel": "Valeur",
     "valuePlaceholder": "Saisir une valeur",
-    "noValue": "Aucune valeur"
+    "noValue": "Aucune valeur",
+    "valueLoading": "Chargement des valeurs de l'étiquette...",
+    "valueUnavailable": "Valeurs indisponibles : les définitions de l'étiquette n'ont pas pu être chargées."
   },
   "userInfo": {
     "actingAs": "Agissant en tant que {{label}} (mode test)",

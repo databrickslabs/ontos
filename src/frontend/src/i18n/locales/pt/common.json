@@ -727,7 +727,9 @@
     "selectedOfMax": "{{count}} de {{max}} tags selecionadas",
     "valueLabel": "Valor",
     "valuePlaceholder": "Digite um valor",
-    "noValue": "Sem valor"
+    "noValue": "Sem valor",
+    "valueLoading": "Carregando os valores da tag...",
+    "valueUnavailable": "Valores indisponíveis: não foi possível carregar as definições da tag."
   },
   "userInfo": {
     "actingAs": "Atuando como {{label}} (modo de teste)",

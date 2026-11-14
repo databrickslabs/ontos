@@ -723,7 +723,9 @@
     "selectedOfMax": "{{count}} di {{max}} tag selezionati",
     "valueLabel": "Valore",
     "valuePlaceholder": "Inserisci un valore",
-    "noValue": "Nessun valore"
+    "noValue": "Nessun valore",
+    "valueLoading": "Caricamento dei valori del tag...",
+    "valueUnavailable": "Valori non disponibili: impossibile caricare le definizioni del tag."
   },
   "userInfo": {
     "actingAs": "Stai agendo come {{label}} (modalità test)",

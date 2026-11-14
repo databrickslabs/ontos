@@ -85,6 +85,9 @@ async def create_data_domain(
         logger.error("Data domain creation conflict for '%s': %s", domain_in.name, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Data domain already exists")
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         logger.exception("Failed to create data domain '%s'", domain_in.name)
@@ -216,6 +219,9 @@ async def update_data_domain(
         logger.error("Data domain update conflict %s: %s", domain_id, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Data domain conflict")
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         logger.exception("Failed to update data domain %s", domain_id)

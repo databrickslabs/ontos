@@ -723,7 +723,9 @@
     "selectedOfMax": "{{count}} de {{max}} etiquetas seleccionadas",
     "valueLabel": "Valor",
     "valuePlaceholder": "Introduzca un valor",
-    "noValue": "Sin valor"
+    "noValue": "Sin valor",
+    "valueLoading": "Cargando los valores de la etiqueta...",
+    "valueUnavailable": "Valores no disponibles: no se pudieron cargar las definiciones de la etiqueta."
   },
   "userInfo": {
     "actingAs": "Actuando como {{label}} (modo de prueba)",

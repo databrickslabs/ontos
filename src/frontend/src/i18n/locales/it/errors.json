@@ -28,5 +28,6 @@
   "userTokenRequired": "Questa richiesta richiede il tuo token di accesso Databricks, ma non ne è stato ricevuto nessuno. Ricarica la pagina; se il problema persiste, chiedi a un amministratore di abilitare l'autorizzazione utente per l'app.",
   "subscription": {
     "productNotSubscribable": "Impossibile sottoscrivere '{{productName}}': il suo stato è '{{status}}'. Solo i prodotti attivi accettano nuove sottoscrizioni."
-  }
+  },
+  "tagValueNotAllowed": "\"{{value}}\" non è un valore consentito per il tag \"{{tag}}\". Valori consentiti: {{allowed}}."
 }

@@ -115,6 +115,9 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
             db_obj_data['parent_id'] = str(db_obj_data['parent_id'])
 
         # Tags are now handled by TagsManager - no serialization needed
+        # Saved once the row exists; values are checked first, so a refused value writes nothing.
+        tags_data = domain_in.tags or []
+        self.tags_manager.check_assigned_values(db, tags_data)
 
         db_domain = DataDomain(**db_obj_data)
 
@@ -122,6 +125,11 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
             db.add(db_domain)
             db.flush() 
             db.refresh(db_domain, attribute_names=['id', 'parent']) # Refresh to get ID and potentially loaded parent
+            if tags_data:
+                self.tags_manager.set_tags_for_entity(
+                    db, entity_id=str(db_domain.id), entity_type="data_domain",
+                    tags=tags_data, user_email=current_user_id, commit=False,
+                )
             # Eagerly load children for count, or rely on lazy load if simple len() is fine.
             # For now, let's assume session context handles children for len()
             # If specific loading is needed: db.refresh(db_domain, attribute_names=['children'])
@@ -239,6 +247,11 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         update_data = domain_in.model_dump(exclude_unset=True)
 
         # Tags are now handled by TagsManager - no serialization needed
+        # Omitted (or null) keeps the stored tags, [] clears them; values are checked before any write.
+        update_data.pop('tags', None)
+        tags_data = domain_in.tags
+        if tags_data is not None:
+            self.tags_manager.check_assigned_values(db, tags_data, entity_id=str(domain_id), entity_type="data_domain")
 
         try:
             # The CRUDBase update method takes obj_in which can be a dict or Pydantic model.
@@ -248,6 +261,12 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
             db.flush()
             db.refresh(updated_db_domain, attribute_names=['parent']) # Ensure parent is loaded if parent_id changed
             # db.refresh(updated_db_domain, attribute_names=['children']) # if children count could change indirectly
+
+            if tags_data is not None:
+                self.tags_manager.set_tags_for_entity(
+                    db, entity_id=str(updated_db_domain.id), entity_type="data_domain",
+                    tags=tags_data, user_email=current_user_id, commit=False,
+                )
 
             logger.debug(f"Successfully updated data domain '{updated_db_domain.name}' (id: {domain_id})")
             

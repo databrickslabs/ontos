@@ -30,6 +30,9 @@ def mock_product_db():
 def data_products_manager(mock_db):
     """DataProductsManager with mocked dependencies."""
     manager = DataProductsManager(mock_db)
+    # Own repo mock: the default _repo is the shared data_product_repo
+    # singleton, so stubbing its methods would leak into other tests
+    manager._repo = MagicMock()
     return manager
 
 
@@ -189,3 +192,37 @@ class TestPublishWithCompliance:
         # The actual update_product method should not call check_completeness.
         # We don't test it here, but this comment documents the expected behavior.
         pass
+
+
+class TestSetPublicationScopeWithCompliance:
+    """Tests for set_publication_scope (the UI publish path) with compliance gate."""
+
+    @pytest.fixture
+    def unpublished_product(self, mock_product_db):
+        mock_product_db.status = "active"
+        mock_product_db.publication_scope = "none"
+        return mock_product_db
+
+    def test_publishing_is_blocked_when_mandatory_fields_missing(self, data_products_manager, mock_db, unpublished_product):
+        data_products_manager._repo.get = MagicMock(return_value=unpublished_product)
+        with patch("src.controller.data_products_manager.compliance_templates_manager") as mock_mgr, \
+                patch.object(data_products_manager, "_validate_output_port_contracts"):
+            mock_mgr.check_completeness.return_value = CompletenessResult(
+                passed=False, missing=["Data Owner"], messages=["Data Owner is required"]
+            )
+
+            with pytest.raises(ValueError, match="required compliance fields are incomplete"):
+                data_products_manager.set_publication_scope("prod-123", "domain", "user@example.com", db=mock_db)
+
+            assert unpublished_product.publication_scope == "none"
+            mock_db.commit.assert_not_called()
+
+    def test_unpublishing_skips_the_compliance_check(self, data_products_manager, mock_db, mock_product_db):
+        mock_product_db.publication_scope = "domain"
+        data_products_manager._repo.get = MagicMock(return_value=mock_product_db)
+        with patch("src.controller.data_products_manager.compliance_templates_manager") as mock_mgr, \
+                patch("src.common.workflow_triggers.get_trigger_registry"):
+            data_products_manager.set_publication_scope("prod-123", "none", "user@example.com", db=mock_db)
+
+            mock_mgr.check_completeness.assert_not_called()
+            assert mock_product_db.publication_scope == "none"

@@ -1,7 +1,7 @@
 """Add compliance templates tables (definition, fields, values)
 
 Revision ID: p1_compliance_templates
-Revises: l1_entity_domain_associations
+Revises: o2_step_execution_message
 Create Date: 2026-08-13
 
 Introduces the Compliance Templates feature: an admin-defined, typed, grouped
@@ -21,7 +21,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from alembic import op
 
 revision: str = "p1_compliance_templates"
-down_revision: str | None = "l1_entity_domain_associations"
+down_revision: str | None = "o2_step_execution_message"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

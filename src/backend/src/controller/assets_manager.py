@@ -738,6 +738,35 @@ class AssetsManager(SearchableAsset):
         item = self._build_search_index_item(asset_db_obj)
         if item is not None:
             self._notify_index_upsert(item)
+        else:
+            # Retired assets have no item: drop any entry an earlier version indexed.
+            self._notify_index_remove(f"asset::{asset_db_obj.id}")
+
+    def upsert_search_index_for(self, db: Session, asset_ids: List[UUID]) -> None:
+        """Upsert the given assets in the search index with one batch call.
+
+        For writers that commit later (bulk import): call after the DB commit, so a
+        rolled-back write never leaves index entries behind.
+        """
+        if not asset_ids:
+            return
+        assets = db.query(AssetDb).filter(AssetDb.id.in_(list(asset_ids))).all()
+        if not assets:
+            return
+        domains_map = entity_domain_repo.get_domains_for_entities(
+            db, entity_type="asset", entity_ids=[str(a.id) for a in assets]
+        )
+        items = []
+        for a in assets:
+            item = self._build_search_index_item(
+                a, preloaded_domains=domains_map.get(str(a.id), []),
+            )
+            if item is not None:
+                items.append(item)
+            else:
+                # Retired: drop an entry indexed while the asset was active.
+                self._notify_index_remove(f"asset::{a.id}")
+        self._notify_index_upsert_many(items)
 
     def get_search_index_items(self) -> List[SearchIndexItem]:
         """Index all active assets for unified search."""

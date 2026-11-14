@@ -139,6 +139,17 @@ class SearchManager:
             return
         self._backend.upsert([item])
 
+    def upsert_items(self, items: List[SearchIndexItem]) -> None:
+        """Insert or update several items in one backend call. A disabled item is removed."""
+        enabled = []
+        for item in items:
+            if self._is_item_enabled(item):
+                enabled.append(item)
+            else:
+                self._backend.remove(item.id)
+        if enabled:
+            self._backend.upsert(enabled)
+
     def remove_item(self, item_id: str) -> None:
         """Remove an item from the active backend's index. No-op if not found."""
         self._backend.remove(item_id)

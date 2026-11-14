@@ -549,6 +549,11 @@ class AssignTagToEntityTool(BaseTool):
     ) -> ToolResult:
         """Assign a tag to an entity."""
         logger.info(f"[assign_tag_to_entity] Starting - entity_type={entity_type}, entity_id={entity_id}, tag_id={tag_id}")
+        # Asset tags are also written by the asset routes, which require assets READ_WRITE
+        if entity_type == "asset":
+            refusal = permission_refusal(ctx, "assets", FeatureAccessLevel.READ_WRITE, self.name)
+            if refusal:
+                return refusal
         # An entity of a product or contract the caller can't read is answered
         # like a missing one.
         refusal = read_access.unreadable_target(
@@ -623,6 +628,10 @@ class RemoveTagFromEntityTool(BaseTool):
     ) -> ToolResult:
         """Remove a tag from an entity."""
         logger.info(f"[remove_tag_from_entity] Starting - entity_type={entity_type}, entity_id={entity_id}, tag_id={tag_id}")
+        if entity_type == "asset":
+            refusal = permission_refusal(ctx, "assets", FeatureAccessLevel.READ_WRITE, self.name)
+            if refusal:
+                return refusal
         # An entity of a product or contract the caller can't read is answered
         # like a missing one.
         refusal = read_access.unreadable_target(

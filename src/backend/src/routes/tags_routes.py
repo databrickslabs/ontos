@@ -565,19 +565,6 @@ async def _asset_tags_need_asset_write(
     if entity_type == "asset":
         await PermissionChecker('assets', FeatureAccessLevel.READ_WRITE)(request, user_details, auth_manager)
 
-def _refresh_asset_search(request: Request, db, entity_type: str, entity_id: str) -> None:
-    """Asset tags are edited here, not on the asset: refresh the asset's search entry.
-    The write is committed by now; a refresh failure is logged, never a 500."""
-    if entity_type != "asset":
-        return
-    assets_manager = getattr(request.app.state, "assets_manager", None)
-    if assets_manager is None:
-        return
-    try:
-        assets_manager.refresh_search_entry(db, UUID(entity_id))
-    except Exception as e:
-        logger.warning(f"Search refresh failed for asset {entity_id}: {e}")
-
 # Reads use tags:READ_ONLY (widely granted, drives entity detail panels).
 # Writes use tags:READ_WRITE; per-namespace permissions are additionally enforced
 # inside TagsManager via TagNamespacePermission.
@@ -616,7 +603,6 @@ async def set_entity_tags(
 
     try:
         result = manager.set_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type, tags=tags, user_email=current_user.email)
-        _refresh_asset_search(request, db, entity_type, entity_id)
         success = True
         details["assigned_tags"] = [str(t.tag_id) for t in result]
         return result
@@ -664,7 +650,6 @@ async def add_tag_to_entity_route(
 
     try:
         result = manager.add_tag_to_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id, assigned_value=assigned_value, user_email=current_user.email)
-        _refresh_asset_search(request, db, entity_type, entity_id)
         success = True
         return result
     except HTTPException as e:
@@ -711,7 +696,6 @@ async def remove_tag_from_entity_route(
         ok = manager.remove_tag_from_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id, user_email=current_user.email if current_user else None)
         if not ok:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag association not found")
-        _refresh_asset_search(request, db, entity_type, entity_id)
         success = True
         return
     except HTTPException as e:

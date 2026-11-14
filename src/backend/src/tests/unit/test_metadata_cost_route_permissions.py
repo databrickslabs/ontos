@@ -22,7 +22,7 @@ from src.common.features import ACCESS_LEVEL_ORDER, FeatureAccessLevel
 from src.common.manager_dependencies import get_audit_manager, get_auth_manager, get_metadata_manager
 from src.common.workspace_client import get_workspace_client
 from src.controller.costs_manager import CostsManager
-from src.controller.metadata_manager import MetadataManager, SHARED_ENTITY_ID, NotSharedAssetError
+from src.controller.metadata_manager import MetadataManager, SHARED_ENTITY_ID, NotSharedAssetError, SharedScopeNotAllowedError
 from src.models.costs import CostItem, CostItemCreate
 from src.models.metadata import (
     METADATA_ENTITY_FEATURES, DocumentCreate, LinkCreate, MetadataAttachmentCreate, RichText, RichTextCreate,
@@ -257,6 +257,7 @@ class TestRecordRoutes:
         metadata_manager.get_merged_metadata.assert_not_called()
 
     def test_attaching_a_non_shared_asset_is_refused(self, make_client, metadata_manager):
+        metadata_manager.get_record_scope.return_value = ("data_product", False)
         metadata_manager.attach_shared_asset.side_effect = NotSharedAssetError("Only shared library assets can be attached")
         client = make_client({"data-products": RW})
 
@@ -298,6 +299,33 @@ class TestRecordRoutes:
 
         assert resp.status_code == 400
         assert resp.json()["detail"]["code"] == "shared_scope_not_allowed"
+        metadata_manager.attach_shared_asset.assert_not_called()
+
+    def test_attaching_a_library_note_needs_library_read_access(self, make_client, metadata_manager):
+        # Attached library notes are readable on the entity, so the attacher needs library read access.
+        metadata_manager.get_record_scope.return_value = ("data_product", True)
+        url = "/api/entities/compliance_policy/attachments?entity_id=e1"
+        body = {"asset_type": "rich_text", "asset_id": str(uuid.uuid4())}
+
+        assert make_client({"compliance": RW}).post(url, json=body).status_code == 403
+        metadata_manager.attach_shared_asset.assert_not_called()
+
+        # Past the gate, the manager's answer is the response (a stand-in refusal keeps the mock serialisable).
+        metadata_manager.attach_shared_asset.side_effect = NotSharedAssetError("Only shared library assets can be attached")
+        resp = make_client({"compliance": RW, "data-domains": FeatureAccessLevel.READ_ONLY}).post(url, json=body)
+        assert resp.status_code == 400
+        metadata_manager.attach_shared_asset.assert_called_once()
+
+    def test_attaching_a_malformed_asset_id_is_a_coded_400(self, make_client, metadata_manager):
+        client = make_client({"data-products": RW})
+
+        resp = client.post(
+            "/api/entities/data_product/attachments?entity_id=e1",
+            json={"asset_type": "rich_text", "asset_id": "not-a-uuid"},
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "not_shared_asset"
         metadata_manager.attach_shared_asset.assert_not_called()
 
     def test_shared_library_keeps_the_domain_feature(self, make_client, metadata_manager):
@@ -394,6 +422,21 @@ class TestRecordLookups:
             manager.attach_shared_asset(
                 db_session, entity_type="data_product", entity_id="p2",
                 data=MetadataAttachmentCreate(asset_type="rich_text", asset_id=str(private.id)), user_email="u@example.com",
+            )
+
+    def test_manager_refuses_shared_scope_on_entity_creates(self, db_session):
+        manager = MetadataManager()
+        with pytest.raises(SharedScopeNotAllowedError):
+            manager.create_rich_text(
+                db_session,
+                data=RichTextCreate(entity_id="p1", entity_type="data_product", title="t", content_markdown="c", is_shared=True),
+                user_email="u@example.com",
+            )
+        with pytest.raises(SharedScopeNotAllowedError):
+            manager.create_link(
+                db_session,
+                data=LinkCreate(entity_id=SHARED_ENTITY_ID, entity_type="data_product", title="t", url="https://example.com"),
+                user_email="u@example.com",
             )
 
     def test_shared_records_are_not_listed_under_an_entity_kind(self, db_session):

@@ -604,10 +604,19 @@ async def attach_shared_asset(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_WRITE)),
 ):
     """Attach a shared metadata asset to an entity."""
     _refuse_shared_scope(False, entity_id)
+    if not _is_uuid(payload.asset_id):
+        err = NotSharedAssetError("Only shared library assets can be attached")
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    scope = manager.get_record_scope(db, kind=payload.asset_type, id=payload.asset_id)
+    if scope is not None and scope[1]:
+        # An attached library note is readable on the entity, so attaching it needs library read access.
+        await check_feature_permission(request, user_details, auth_manager, FEATURE_ID, FeatureAccessLevel.READ_ONLY)
     try:
         result = manager.attach_shared_asset(
             db, entity_type=entity_type, entity_id=entity_id,

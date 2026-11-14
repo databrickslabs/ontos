@@ -41,6 +41,12 @@ class SharedScopeNotAllowedError(CodedValueError):
 
     code = 'shared_scope_not_allowed'
 
+
+def _refuse_shared_scope_create(is_shared: bool, entity_id: str) -> None:
+    """Entity-scoped creates never make library records, whichever caller creates them."""
+    if is_shared or entity_id == SHARED_ENTITY_ID:
+        raise SharedScopeNotAllowedError("Shared library records are created on the shared metadata routes.")
+
 # Session.info keys of the document files to delete once the session commits.
 _PENDING_FILES_KEY = "ontos_pending_document_files"
 _PENDING_FILES_LISTENING = "ontos_pending_document_files_listening"
@@ -132,6 +138,7 @@ class MetadataManager:
 
     # --- Rich Text ---
     def create_rich_text(self, db: Session, *, data: RichTextCreate, user_email: Optional[str]) -> RichText:
+        _refuse_shared_scope_create(data.is_shared, data.entity_id)
         db_obj = self._rich_text_repo.create(db, obj_in=data)
         db.commit()
         db.refresh(db_obj)
@@ -166,6 +173,7 @@ class MetadataManager:
 
     # --- Link ---
     def create_link(self, db: Session, *, data: LinkCreate, user_email: Optional[str]) -> Link:
+        _refuse_shared_scope_create(data.is_shared, data.entity_id)
         db_obj = self._link_repo.create(db, obj_in=data)
         db.commit()
         db.refresh(db_obj)
@@ -200,6 +208,7 @@ class MetadataManager:
 
     # --- Document ---
     def create_document_record(self, db: Session, *, data: DocumentCreate, filename: str, content_type: Optional[str], size_bytes: Optional[int], storage_path: str, user_email: Optional[str]) -> Document:
+        _refuse_shared_scope_create(data.is_shared, data.entity_id)
         # DocumentCreate has base fields; other metadata supplied by upload logic
         from src.db_models.metadata import DocumentMetadataDb
         db_obj = DocumentMetadataDb(

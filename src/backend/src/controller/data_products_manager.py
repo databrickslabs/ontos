@@ -764,7 +764,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Extract tags (handled separately)
             tags_data = product_data_dict.pop('tags', None)
             if tags_data and self._tags_manager:
-                self._tags_manager.check_assigned_values(db_session, tags_data)
+                self._tags_manager.check_assigned_values(
+                    db_session, tags_data, entity_id=str(product_id), entity_type="data_product",
+                )
 
             # Prepare update payload
             update_payload = product_data_dict.copy()

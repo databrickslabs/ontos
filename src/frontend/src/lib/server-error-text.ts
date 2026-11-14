@@ -45,10 +45,30 @@ export function userTokenRequiredText(body: unknown): string | null {
   return String(i18n.t('errors:userTokenRequired', { defaultValue: english }));
 }
 
+/** Code of a value outside the tag's possible_values (422, `params: {tag, value, allowed}`). */
+export const TAG_VALUE_NOT_ALLOWED_CODE = 'tag_value_not_allowed';
+
 /**
- * An app-wide server error (an unexpected error, a missing user token) in the
- * user's language, or `null` for any other error.
+ * The text of a tag value the tag doesn't allow (`{detail: {code, message, params}}`)
+ * in the user's language, or `null` for any other error. Takes the parsed JSON body or its raw text.
+ */
+export function tagValueNotAllowedText(body: unknown): string | null {
+  const error = parsed(body);
+  const detail = error && typeof error === 'object' ? error.detail : null;
+  if (!detail || typeof detail !== 'object' || detail.code !== TAG_VALUE_NOT_ALLOWED_CODE) {
+    return null;
+  }
+  const english = typeof detail.message === 'string' ? detail.message : '';
+  if (!i18n.isInitialized) return english || null;
+  const params = detail.params && typeof detail.params === 'object' ? detail.params : {};
+  const allowed = Array.isArray(params.allowed) ? params.allowed.join(', ') : '';
+  return String(i18n.t('errors:tagValueNotAllowed', { ...params, allowed, defaultValue: english }));
+}
+
+/**
+ * An app-wide server error (an unexpected error, a missing user token) or a refused
+ * tag value, in the user's language, or `null` for any other error.
  */
 export function serverErrorText(body: unknown): string | null {
-  return internalErrorText(body) ?? userTokenRequiredText(body);
+  return internalErrorText(body) ?? userTokenRequiredText(body) ?? tagValueNotAllowedText(body);
 }

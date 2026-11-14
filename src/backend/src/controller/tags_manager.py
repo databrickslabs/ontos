@@ -173,12 +173,25 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         if value and allowed and value not in allowed:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Value '{value}' is not one of the possible values of tag '{tag_db.name}'.",
+                detail={
+                    "code": "tag_value_not_allowed",
+                    "message": f"Value '{value}' is not one of the possible values of tag '{tag_db.name}'.",
+                    "params": {"tag": tag_db.name, "value": value, "allowed": list(allowed)},
+                },
             )
 
-    def check_assigned_values(self, db: Session, tags: List[Any]) -> None:
+    def check_assigned_values(
+        self, db: Session, tags: List[Any], *, entity_id: Optional[str] = None, entity_type: Optional[str] = None,
+    ) -> None:
         """Refuse out-of-list values before anything is written. Takes FQN strings, dicts
-        or AssignedTagCreate; entries that don't parse are left to the caller's own handling."""
+        or AssignedTagCreate; entries that don't parse are left to the caller's own handling.
+        With an entity, a value the entity already stores is not checked again (#1421)."""
+        stored: Dict[UUID, Optional[str]] = {}
+        if entity_id is not None and entity_type is not None:
+            stored = {
+                t.tag_id: t.assigned_value
+                for t in self.list_assigned_tags(db, entity_id=str(entity_id), entity_type=entity_type)
+            }
         for tag_in in tags:
             try:
                 if isinstance(tag_in, str):
@@ -194,7 +207,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
                 else self._tag_repo.get_by_fully_qualified_name(db, fqn=tag_in.tag_fqn) if tag_in.tag_fqn
                 else None
             )
-            if tag_db:
+            if tag_db and stored.get(tag_db.id) != tag_in.assigned_value:
                 self._check_possible_value(tag_db, tag_in.assigned_value)
 
     def list_assigned_tags(self, db: Session, *, entity_id: str, entity_type: str) -> List[AssignedTag]:
@@ -212,7 +225,8 @@ class TagsManager(DeliveryMixin, SearchableAsset):
     ) -> List[AssignedTag]:
         """Replace the tags of an entity. With ``commit=False`` (a batch import,
         inside the savepoint of the entity) the change is only flushed."""
-        self.check_assigned_values(db, tags)
+        self.check_assigned_values(db, tags, entity_id=str(entity_id), entity_type=entity_type)
+        before = {t.tag_id: t.assigned_value for t in self.list_assigned_tags(db, entity_id=str(entity_id), entity_type=entity_type)}
         ns_repo = self._namespace_repo
         assigned = self._entity_assoc_repo.set_tags_for_entity(
             db,
@@ -224,8 +238,9 @@ class TagsManager(DeliveryMixin, SearchableAsset):
             ns_repo=ns_repo,
         )
         
-        # Log to change log for timeline
-        if tags:
+        # Log to change log for timeline, only when the set of tags or values changed
+        changed = before != {t.tag_id: t.assigned_value for t in assigned}
+        if tags and changed:
             try:
                 from src.controller.change_log_manager import change_log_manager
                 tag_names = [t.tag_fqn if hasattr(t, 'tag_fqn') else str(t) for t in tags[:5]]

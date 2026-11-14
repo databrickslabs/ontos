@@ -28,5 +28,6 @@
   "userTokenRequired": "このリクエストには Databricks のアクセストークンが必要ですが、受信されませんでした。ページを再読み込みしてください。解決しない場合は、管理者にアプリのユーザー認可を有効にするよう依頼してください。",
   "subscription": {
     "productNotSubscribable": "「{{productName}}」を購読できません。ステータスは「{{status}}」です。新規の購読を受け付けるのは、アクティブなプロダクトのみです。"
-  }
+  },
+  "tagValueNotAllowed": "\"{{value}}\" はタグ \"{{tag}}\" に設定できる値ではありません。設定可能な値: {{allowed}}"
 }

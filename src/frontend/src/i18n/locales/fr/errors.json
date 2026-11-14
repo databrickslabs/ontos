@@ -28,5 +28,6 @@
   "userTokenRequired": "Cette requête nécessite votre jeton d'accès Databricks, et aucun n'a été reçu. Rechargez la page ; si le problème persiste, demandez à un administrateur d'activer l'autorisation utilisateur pour l'application.",
   "subscription": {
     "productNotSubscribable": "Impossible de s'abonner à « {{productName}} » : son statut est « {{status}} ». Seuls les produits actifs acceptent de nouveaux abonnements."
-  }
+  },
+  "tagValueNotAllowed": "\"{{value}}\" n'est pas une valeur autorisée pour l'étiquette \"{{tag}}\". Valeurs autorisées : {{allowed}}."
 }

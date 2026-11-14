@@ -28,5 +28,6 @@
   "userTokenRequired": "This request needs your Databricks access token, and none was received. Reload the page; if this persists, ask an administrator to enable user authorization for the app.",
   "subscription": {
     "productNotSubscribable": "Cannot subscribe to '{{productName}}': its status is '{{status}}'. Only active products accept new subscriptions."
-  }
+  },
+  "tagValueNotAllowed": "\"{{value}}\" is not an allowed value of tag \"{{tag}}\". Allowed: {{allowed}}."
 }

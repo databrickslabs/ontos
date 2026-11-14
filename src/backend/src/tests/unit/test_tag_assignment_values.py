@@ -284,6 +284,11 @@ class TestPossibleValues:
             )
 
         assert err.value.status_code == 422
+        assert err.value.detail == {
+            'code': 'tag_value_not_allowed',
+            'message': f"Value 'secret' is not one of the possible values of tag '{classified.name}'.",
+            'params': {'tag': classified.name, 'value': 'secret', 'allowed': ['public', 'confidential']},
+        }
         assert db_session.query(EntityTagAssociationDb).filter_by(**ENTITY).count() == 0
 
     def test_refused_save_leaves_existing_values_alone(self, manager, db_session, classified):

@@ -227,6 +227,14 @@ def tag_values(tags: List[Any]) -> Dict[str, Any]:
     return values
 
 
+def tags_load_error(entity_type: str) -> EntityLoadError:
+    """The error of a failed tag lookup of compliance entities (a code the UI translates)."""
+    logger.exception("Failed to load tags of %s entities for compliance", entity_type)
+    error = EntityLoadError(f"Could not load the tags of {entity_type} entities")
+    error.error_code, error.error_params = 'tags_load_failed', {'entityType': entity_type}
+    return error
+
+
 class AppEntityLoader(EntityLoader):
     """Load entities from application database."""
 
@@ -260,11 +268,7 @@ class AppEntityLoader(EntityLoader):
                     self.db, entity_ids=entity_ids, entity_type=entity_type
                 )
         except Exception as e:
-            logger.exception("Failed to load tags of %s entities for compliance", entity_type)
-            error = EntityLoadError(f"Could not load the tags of {entity_type} entities")
-            # A code the UI translates; the message stays the fallback
-            error.error_code, error.error_params = 'tags_load_failed', {'entityType': entity_type}
-            raise error from e
+            raise tags_load_error(entity_type) from e
         return {str(entity_id): tag_values(tags) for entity_id, tags in assigned.items()}
 
     def _load(self, entity_type: str, query):
@@ -278,6 +282,9 @@ class AppEntityLoader(EntityLoader):
         try:
             with self.db.begin_nested():
                 return query()
+        except EntityLoadError:
+            # Already coded (e.g. a failed tag lookup inside the builder)
+            raise
         except Exception as e:
             logger.exception("Failed to load %s entities for compliance", entity_type)
             error = EntityLoadError(f"Could not load the {entity_type} entities")
@@ -312,70 +319,44 @@ class AppEntityLoader(EntityLoader):
         can't be loaded raises EntityLoadError (see _load). With ``entity_id``
         only that entity is read (a workflow policy check, see load_entity).
         """
-        # Data Products
+        # Data Products and Data Contracts: the dicts the workflow rules see
+        # (entity_dict_builder), so ``has_owner``, counts and ``domain`` mean the same in both
         if 'data_product' in entity_types:
             from src.repositories.data_products_repository import data_product_repo
-            from src.repositories.entity_domain_association_repository import entity_domain_repo
+            from src.controller.entity_dict_builder import build_data_product_dicts
 
-            def products_and_domains():
+            def products():
                 # is_admin: the products repo is fail-closed per caller scope;
                 # compliance evaluates system-wide and its route is already
                 # permission-checked, so it must see every product.
-                products = self._rows(data_product_repo, entity_id, is_admin=True)
-                # Domain moved to the entity_domain_associations junction; batch-load the
-                # primary domain name per product (the legacy `domain` column was dropped).
-                domains = entity_domain_repo.get_domains_for_entities(
-                    self.db, entity_type="data_product", entity_ids=[str(p.id) for p in products]
-                ) if products else {}
-                return products, domains
+                rows = self._rows(data_product_repo, entity_id, is_admin=True)
+                built = build_data_product_dicts(self.db, [p.id for p in rows]) if rows else {}
+                return [built[str(p.id)] for p in rows if str(p.id) in built]
 
-            products, domains_map = self._load('data_product', products_and_domains)
-            tags_map = self._tags_by_entity('data_product', [str(p.id) for p in products])
-            for product in products:
-                assigned = domains_map.get(str(product.id), [])
-                primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
-                yield {
-                    'type': 'data_product',
-                    'id': product.id,
-                    'name': product.name,
-                    # As for contracts, the purpose text (description is the
-                    # ODPS description row, None when the product has none)
-                    'description': getattr(product.description, 'purpose', None),
-                    'domain': primary_domain,
-                    'status': product.status,
-                    'version': getattr(product, 'version', None),
-                    'owner': getattr(product, 'owner_team_id', None),
-                    'tags': tags_map.get(str(product.id), {}),
-                    'created_at': getattr(product, 'created_at', None),
-                    'updated_at': getattr(product, 'updated_at', None),
-                }
+            yield from self._load('data_product', products)
 
-        # Data Contracts
         if 'data_contract' in entity_types:
             from src.repositories.data_contracts_repository import data_contract_repo
-            contracts = self._load(
-                'data_contract', lambda: self._rows(data_contract_repo, entity_id)
-            )
-            tags_map = self._tags_by_entity('data_contract', [str(c.id) for c in contracts])
-            for contract in contracts:
-                yield {
-                    'type': 'data_contract',
-                    'id': contract.id,
-                    'name': contract.name,
-                    'description': getattr(contract, 'description_purpose', None),
-                    'status': contract.status,
-                    'version': getattr(contract, 'version', None),
-                    'owner': getattr(contract, 'owner_team_id', None),
-                    'domain': getattr(contract, 'domain_id', None),
-                    'tags': tags_map.get(str(contract.id), {}),
-                    'created_at': getattr(contract, 'created_at', None),
-                    'updated_at': getattr(contract, 'updated_at', None),
-                }
+            from src.controller.entity_dict_builder import build_data_contract_dicts
+
+            def contracts():
+                rows = self._rows(data_contract_repo, entity_id)
+                built = build_data_contract_dicts(self.db, [c.id for c in rows]) if rows else {}
+                return [built[str(c.id)] for c in rows if str(c.id) in built]
+
+            yield from self._load('data_contract', contracts)
 
         # Domains
         if 'domain' in entity_types:
             from src.repositories.data_domain_repository import data_domain_repo
-            domains = self._load('domain', lambda: self._rows(data_domain_repo, entity_id))
+            from src.controller.entity_dict_builder import concept_fields_by_entity
+
+            def domains_and_concepts():
+                domains = self._rows(data_domain_repo, entity_id)
+                concepts = concept_fields_by_entity(self.db, 'domain', [d.id for d in domains])
+                return domains, concepts
+
+            domains, concepts = self._load('domain', domains_and_concepts)
             tags_map = self._tags_by_entity('data_domain', [str(d.id) for d in domains])
             for domain in domains:
                 yield {
@@ -385,6 +366,7 @@ class AppEntityLoader(EntityLoader):
                     'description': getattr(domain, 'description', None),
                     'owner': getattr(domain, 'owner_team_id', None),
                     'tags': tags_map.get(str(domain.id), {}),
+                    **concepts[str(domain.id)],
                     'created_at': getattr(domain, 'created_at', None),
                     'updated_at': getattr(domain, 'updated_at', None),
                 }

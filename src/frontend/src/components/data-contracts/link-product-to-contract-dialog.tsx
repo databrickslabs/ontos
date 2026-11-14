@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
 import type { DataProduct, OutputPort } from '@/types/data-product';
+import { omitTags } from '@/lib/tag-payload';
 
 type LinkProductToContractDialogProps = {
   isOpen: boolean;
@@ -169,18 +170,12 @@ export default function LinkProductToContractDialog({
         updatedPorts = [...(selectedProduct.outputPorts || []), newPort];
       }
 
-      // Normalize tags to FQN strings or tag_id objects for backend compatibility
-      const normalizedTags = selectedProduct.tags?.map((tag: any) =>
-        typeof tag === 'string' ? tag : (tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value })
-      );
-
       // Update product
       const updateResponse = await fetch(`/api/data-products/${selectedProductId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...selectedProduct,
-          tags: normalizedTags,
+          ...omitTags(selectedProduct),
           outputPorts: updatedPorts
         })
       });

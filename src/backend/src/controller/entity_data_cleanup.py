@@ -7,6 +7,20 @@ metadata or cost panels, or can be tagged, calls ``remove_entity_data`` (or
 ``remove_entities_data`` for many ids) from its delete, inside the delete's
 transaction. Shared library records are stored under the shared id, not the
 entity's, and stay.
+
+Not covered here, so a new entity kind knows what is left (#1483): comments
+(ratings are comment rows too), entity subscriptions, entity semantic links,
+quality items, maturity snapshots, access grant requests and grants, agreements
+and agreement wizard sessions, term mapping suggestions and entity relationships
+(source and target). Domain assignments are removed by the managers with
+``remove_all_for_entity``. The change log is kept on purpose: it is the history.
+MDM source links point at contracts by a foreign key, not by this key.
+
+``ws`` is the client for the volume file deletes. The product deletes pass their
+manager's client. The contract, domain, policy, concept and collection deletes
+pass none: those managers don't hold a workspace client, so the helper uses the
+app's service client from ``get_workspace_client()``, the same one the product
+manager is built with at startup.
 """
 from typing import Dict, Iterable, List, Optional, Tuple
 

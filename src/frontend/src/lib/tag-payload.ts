@@ -45,3 +45,14 @@ export function tagsForCreate(current: TagSelection[] | undefined | null): TagPa
   const normalized = normalizeTagsForPayload(current);
   return normalized.length > 0 ? normalized : undefined;
 }
+
+/**
+ * A whole-entity update body without `tags`. A loaded entity carries its tags, and
+ * sending them back would replace the stored set with a stale copy (a tag added while
+ * the page was open would go), or remove them all when the loaded list is `[]` (#1435).
+ */
+export function omitTags<T extends { tags?: unknown }>(entity: T): Omit<T, 'tags'> {
+  const body: Partial<T> = { ...entity };
+  delete body.tags;
+  return body as Omit<T, 'tags'>;
+}

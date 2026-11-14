@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeTagsForPayload, tagsForCreate, tagsForUpdate } from './tag-payload';
+import { normalizeTagsForPayload, omitTags, tagsForCreate, tagsForUpdate } from './tag-payload';
 
 const loaded = (fqn: string, value: string | null = null) => ({
   tag_id: `id-${fqn}`, fully_qualified_name: fqn, assigned_value: value,
@@ -49,5 +49,23 @@ describe('tagsForCreate', () => {
   it('omits an empty selection on create', () => {
     expect(tagsForCreate([])).toBeUndefined();
     expect(tagsForCreate(['ns/a'])).toEqual(['ns/a']);
+  });
+});
+
+describe('omitTags', () => {
+  it('drops tags so a whole-entity PUT keeps the stored tags (#1435)', () => {
+    const body = omitTags({ id: 'p1', name: 'Port', tags: [loaded('ns/a', 'x')] });
+    expect(body).not.toHaveProperty('tags');
+    expect(body).toEqual({ id: 'p1', name: 'Port' });
+  });
+
+  it('does not drop an empty tag list into the body', () => {
+    expect(omitTags({ id: 'p1', tags: [] })).not.toHaveProperty('tags');
+  });
+
+  it('leaves the entity it was given unchanged', () => {
+    const entity = { id: 'p1', tags: ['ns/a'] };
+    omitTags(entity);
+    expect(entity.tags).toEqual(['ns/a']);
   });
 });

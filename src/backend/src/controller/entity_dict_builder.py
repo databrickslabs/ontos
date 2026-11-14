@@ -253,17 +253,20 @@ def _quality_counts(db: Session, entity_type: str, ids: List[str]) -> Dict[str, 
         return {}
     try:
         from src.db_models.quality import QualityItemDb
-        rows = (
-            db.query(QualityItemDb.entity_id, func.count(QualityItemDb.id))
-            .filter(
-                and_(
-                    QualityItemDb.entity_type == entity_type,
-                    QualityItemDb.entity_id.in_(ids),
+        # In a savepoint: a failed query must not abort the transaction the
+        # lookups after it run in
+        with db.begin_nested():
+            rows = (
+                db.query(QualityItemDb.entity_id, func.count(QualityItemDb.id))
+                .filter(
+                    and_(
+                        QualityItemDb.entity_type == entity_type,
+                        QualityItemDb.entity_id.in_(ids),
+                    )
                 )
+                .group_by(QualityItemDb.entity_id)
+                .all()
             )
-            .group_by(QualityItemDb.entity_id)
-            .all()
-        )
         return {entity_id: count for entity_id, count in rows}
     except Exception:
         return {}

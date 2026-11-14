@@ -381,7 +381,7 @@ in both. A workflow rule also sees the trigger payload: on `before_create`, `bef
 - `id`, `name`, `version`, `created_at`, `updated_at` - As stored
 - `status` - Lifecycle status (draft, active, deprecated, retired...)
 - `description` - Purpose text; null when there is none
-- `has_description`, `has_purpose`, `has_usage` (products) - Booleans over the description
+- `has_description`, `has_purpose` (both types), `has_usage` (products) - Booleans over the description
 - `owner` - Id of the owning team. It is an id, not an email: use `owner_emails` for addresses
 - `owner_team_id` - The same id as `owner`
 - `owner_team_name` - Name of the owning team, or null

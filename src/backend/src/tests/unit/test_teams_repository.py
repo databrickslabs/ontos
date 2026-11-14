@@ -254,10 +254,10 @@ class TestTeamMemberRemoval:
             id=str(uuid.uuid4()), name="Twins", created_by="t", updated_by="t", extra_metadata="{}",
         )
         db_session.add(team)
-        for override in ("Admin", None):
+        for member_type in ("user", "group"):
             db_session.add(TeamMemberDb(
-                team_id=team.id, member_type="user", member_identifier="u@example.com",
-                app_role_override=override, added_by="t",
+                team_id=team.id, member_type=member_type, member_identifier="u@example.com",
+                added_by="t",
             ))
         db_session.add(TeamMemberDb(
             team_id=team.id, member_type="user", member_identifier="U@example.com", added_by="t",

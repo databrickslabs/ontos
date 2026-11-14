@@ -204,8 +204,11 @@ class TeamMemberRepository(CRUDBase[TeamMemberDb, TeamMemberCreate, TeamMemberUp
     ) -> Optional[TeamMemberDb]:
         """Removes every entry of a team with exactly this member identifier.
 
-        Legacy data can hold twin rows for one identifier; the authorization checks
-        count all of them, so all of them go. Returns the first removed entry, or None.
+        Legacy data can hold twin rows for one identifier. The removal route checks
+        the overrides of every row with this exact identifier, so exactly those rows
+        go. A row that differs in case or spacing is a separate entry: it wasn't
+        checked, so it stays and is removed through its own identifier.
+        Returns the first removed entry, or None.
         """
         logger.debug(f"Removing team member for team {team_id} and member {member_identifier}")
         try:

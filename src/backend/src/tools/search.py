@@ -77,20 +77,29 @@ class GlobalSearchTool(BaseTool):
 
         try:
             # Products and contracts the caller can't read, or outside the
-            # visibility, are dropped before pagination and facets.
+            # visibility, and projects the project list hides (as /api/search),
+            # are dropped before pagination and facets (the REST read rules,
+            # src.tools.read_access).
             data = ctx.search_manager.query_index(
                 query,
                 type_filter=type,
                 limit=limit,
                 offset=offset,
-                allowed_ids_by_type=vis.allowed_ids_by_type(
-                    ctx, type, visibility=applied,
-                    min_certification_level=min_certification_level,
-                    include_history=include_history, query=query,
-                ),
+                allowed_ids_by_type={
+                    **vis.allowed_ids_by_type(
+                        ctx, type, visibility=applied,
+                        min_certification_level=min_certification_level,
+                        include_history=include_history, query=query,
+                    ),
+                    **read_access.allowed_project_ids_by_type(ctx, type),
+                },
                 # Rows of features without the caller's Read-only level are
-                # dropped too, as /api/search does by feature_id.
-                allowed_features=read_access.allowed_features(ctx),
+                # dropped too, as /api/search does by feature_id; and a user
+                # with no groups gets nothing, as there.
+                allowed_features=(
+                    [] if read_access.is_user_without_groups(ctx)
+                    else read_access.allowed_features(ctx)
+                ),
             )
             vis.annotate(ctx, data["results"])
             data["visibility"] = applied

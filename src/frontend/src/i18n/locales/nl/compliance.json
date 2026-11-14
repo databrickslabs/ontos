@@ -213,7 +213,8 @@
       "notify_recipient_disabled": "Ontvanger '{{recipient}}' is uitgeschakeld",
       "notify_recipient_not_allowed": "De auteur van het beleid mag ontvanger '{{recipient}}' niet gebruiken",
       "notify_recipient_not_found": "Ontvanger '{{recipient}}' bestaat niet",
-      "notify_target_not_allowed": "De auteur van het beleid mag '{{target}}' niet informeren"
+      "notify_target_not_allowed": "De auteur van het beleid mag '{{target}}' niet informeren",
+      "notify_unknown_recipient": "{{recipient}} is geen bekende ontvanger: gebruik een e-mailadres, group:<naam>, een app-rol of een ontvanger-trefwoord"
     }
   }
 }

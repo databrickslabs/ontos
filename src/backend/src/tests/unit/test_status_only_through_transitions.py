@@ -325,7 +325,12 @@ class TestMcpUpdateTools:
     def test_a_blocking_gate_stops_a_contract_status_change(self, contract_manager, db_session, monkeypatch):
         import asyncio
         from src.common import workflow_triggers
+        from src.controller import audit_manager
         from src.tools.data_contracts import UpdateDataContractTool
+
+        # The tool's audit entry is written in its own session, whose commit
+        # would commit this test's rows on the shared in-memory connection.
+        monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
 
         cid = _contract(db_session, status='draft')
         registry = MagicMock()

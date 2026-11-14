@@ -126,6 +126,7 @@ import type {
   ProcessWorkflow,
   ProcessWorkflowCreate,
   ProcessWorkflowUpdate,
+  WorkflowValidationResult,
   // WorkflowStep - unused
   WorkflowStepCreate,
   StepType,
@@ -150,6 +151,8 @@ import {
 import { TriggerPicker, type TriggerTypeOption } from './trigger-picker';
 import { EntityTypeMultiselect } from './entity-type-multiselect';
 import { UnknownEntityTypesNotice } from './unknown-entity-types-notice';
+import { workflowIssueNodeIds, workflowWarningText } from './workflow-warnings';
+import { WorkflowWarningsPanel, type WorkflowIssueItem } from './workflow-warnings-panel';
 import {
   TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
 } from './workflow-entry-step';
@@ -871,6 +874,13 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [_stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
   // Step whose config blocked the last save; its form shows the missing field.
   const [invalidStepId, setInvalidStepId] = useState<string | null>(null);
+  // Errors and warnings of the last Check, with the draft (draftKey) it checked
+  const [checkResult, setCheckResult] = useState<{
+    key: string;
+    errors: WorkflowValidationIssue[];
+    warnings: WorkflowValidationIssue[];
+  } | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
   const [compliancePolicies, setCompliancePolicies] = useState<CompliancePolicyRef[]>([]);
   // False until the policy list loads: Policy Check nodes flag unknown ids only then
   const [compliancePoliciesLoaded, setCompliancePoliciesLoaded] = useState(false);
@@ -1562,6 +1572,90 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     return null;
   };
 
+  // The workflow as the backend validates and saves it, with these steps
+  const buildWorkflowData = (draftSteps: WorkflowStepCreate[]): ProcessWorkflowCreate => ({
+    name,
+    description,
+    trigger: {
+      type: triggerType,
+      entity_types: entityTypes,
+      ...(unknownEntityTypes.length > 0 ? { unknown_entity_types: unknownEntityTypes } : {}),
+      ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
+      ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
+      ...(triggerType === 'before_status_change' ? { on_error: triggerOnError, disabled_for: triggerDisabledFor } : {}),
+    },
+    workflow_type: workflowType || 'process',
+    is_active: isActive,
+    steps: draftSteps,
+  });
+
+  // Identifies the draft a Check ran on. Node positions don't change what is checked, so they are left out.
+  const draftKey = JSON.stringify(buildWorkflowData(steps.map((s, i) => ({ ...s, order: i, position: undefined }))));
+
+  // Check the draft for problems without saving it. Warnings don't block a save.
+  const handleCheck = async () => {
+    const key = draftKey;
+    setIsChecking(true);
+    try {
+      // A stored workflow is checked as its update (its stored trigger is kept, as PUT does)
+      const query = isNew || !id ? '' : `?workflow_id=${encodeURIComponent(id)}`;
+      const response = await post<WorkflowValidationResult>(
+        `/api/workflows/validate${query}`,
+        buildWorkflowData(steps.map((s, i) => ({ ...s, order: i }))),
+      );
+      if (response.error || !response.data) {
+        toast({
+          title: t('common:toast.error'),
+          description: response.error || t('common:errors.unknownError'),
+          variant: 'destructive',
+        });
+        return;
+      }
+      setCheckResult({
+        key,
+        errors: response.data.issues ?? [],
+        warnings: response.data.warning_issues ?? [],
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : t('common:errors.unknownError');
+      toast({ title: t('common:toast.error'), description: errorMessage, variant: 'destructive' });
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  // Problems of the last Check while it still describes the draft, and the stored trigger warnings
+  const activeCheck = checkResult && checkResult.key === draftKey ? checkResult : null;
+  const issueItems: WorkflowIssueItem[] = (() => {
+    const stepIds = steps.map(s => s.step_id);
+    return [
+      ...(activeCheck?.errors ?? []).map((issue, i) => ({
+        key: `error-${i}`,
+        tone: 'error' as const,
+        text: workflowValidationIssueText(issue, t),
+        nodeIds: workflowIssueNodeIds(issue, stepIds),
+      })),
+      ...[...(workflow?.trigger_warnings ?? []), ...(activeCheck?.warnings ?? [])].map((issue, i) => ({
+        key: `warning-${i}`,
+        tone: 'warning' as const,
+        text: workflowWarningText(issue, t),
+        nodeIds: workflowIssueNodeIds(issue, stepIds),
+      })),
+    ];
+  })();
+
+  // Nodes a warning is about get an amber ring (the canvas state keeps its positions as they are)
+  const flowNodes = useMemo(() => {
+    const stepIds = steps.map(s => s.step_id);
+    const warned = new Set(
+      [...(workflow?.trigger_warnings ?? []), ...(activeCheck?.warnings ?? [])]
+        .flatMap(issue => workflowIssueNodeIds(issue, stepIds)),
+    );
+    return nodes.map(node => (warned.has(node.id)
+      ? { ...node, className: `${node.className ?? ''} ring-2 ring-amber-500 rounded-lg` }
+      : node));
+  }, [nodes, steps, workflow?.trigger_warnings, activeCheck]);
+
   // Save workflow
   const handleSave = async (confirmOverlap = false) => {
     if (!workflowType) {
@@ -1621,22 +1715,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
     setIsSaving(true);
     try {
-      const workflowData: ProcessWorkflowCreate = {
-        name,
-        description,
-        trigger: {
-          type: triggerType,
-          entity_types: entityTypes,
-          ...(unknownEntityTypes.length > 0 ? { unknown_entity_types: unknownEntityTypes } : {}),
-          ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
-          ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
-          ...(triggerType === 'before_status_change' ? { on_error: triggerOnError, disabled_for: triggerDisabledFor } : {}),
-        },
-        workflow_type: workflowType || 'process',
-        is_active: isActive,
-        // The canvas is the source of truth for positions (also after an auto-arrange on load).
-        steps: withNodePositions(steps, nodes).map((s, i) => ({ ...s, order: i })),
-      };
+      // The canvas is the source of truth for positions (also after an auto-arrange on load).
+      const workflowData: ProcessWorkflowCreate = buildWorkflowData(
+        withNodePositions(steps, nodes).map((s, i) => ({ ...s, order: i })),
+      );
 
       let response;
       const overlapQuery = confirmOverlap ? '?confirm_overlap=true' : '';
@@ -1782,6 +1864,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             <Switch checked={isActive} onCheckedChange={setIsActive} />
             <span className="text-sm">{isActive ? t('common:labels.active') : t('common:labels.inactive')}</span>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCheck}
+            disabled={isChecking || isSaving || !workflowType}
+            title={t('workflows:designer.checks.buttonHint')}
+          >
+            {isChecking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ListChecks className="h-4 w-4 mr-2" />}
+            {t('workflows:designer.checks.button')}
+          </Button>
           <Button onClick={() => handleSave()} disabled={isSaving} size="sm" className={isDirty ? 'ring-2 ring-amber-500/50' : ''}>
             {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
             {t('common:actions.save')}{isDirty ? ' *' : ''}
@@ -1822,7 +1914,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         <div className="flex-1">
           <CompliancePolicyIdsContext.Provider value={compliancePolicyIds}>
           <ReactFlow
-            nodes={nodes}
+            nodes={flowNodes}
             edges={edgesWithDelete}
             onNodesChange={handleNodesChange}
             onNodeDragStop={onNodeDragStop}
@@ -1865,6 +1957,15 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                   <XCircle className="h-4 w-4 mr-2 text-red-500" /> {t('common:workflows.stepTypes.fail')}
                 </Button>
               </div>
+            </Panel>
+
+            {/* Errors and warnings of the last Check, and the stored trigger warnings */}
+            <Panel position="top-center">
+              <WorkflowWarningsPanel
+                items={issueItems}
+                clean={!!activeCheck && issueItems.length === 0}
+                onSelectNode={setSelectedNodeId}
+              />
             </Panel>
 
             {/* Layout tools */}

@@ -213,7 +213,8 @@
       "notify_recipient_disabled": "Empfänger '{{recipient}}' ist deaktiviert",
       "notify_recipient_not_allowed": "Der Autor der Richtlinie darf den Empfänger '{{recipient}}' nicht verwenden",
       "notify_recipient_not_found": "Empfänger '{{recipient}}' existiert nicht",
-      "notify_target_not_allowed": "Der Autor der Richtlinie darf '{{target}}' nicht benachrichtigen"
+      "notify_target_not_allowed": "Der Autor der Richtlinie darf '{{target}}' nicht benachrichtigen",
+      "notify_unknown_recipient": "{{recipient}} ist kein bekannter Empfänger: Verwenden Sie eine E-Mail-Adresse, group:<Name>, eine App-Rolle oder ein Empfänger-Schlüsselwort"
     }
   }
 }

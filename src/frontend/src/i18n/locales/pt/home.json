@@ -123,6 +123,10 @@
     "unknownProduct": "Produto desconhecido",
     "viewAllSubscribed": "Ver todos os assinados"
   },
+  "discoveryDomainGraph": {
+    "unavailable": "A hierarquia de domínios não está disponível para o seu perfil.",
+    "error": "Falha ao carregar a hierarquia de domínios"
+  },
   "dataCurationSection": {
     "title": "Curadoria de dados",
     "createDataProduct": {

@@ -19,7 +19,7 @@ from src.common.compliance_actions import (
     APP_ENTITY_TYPES, ActionContext, ActionError, ActionExecutor, get_action_registry,
 )
 from src.common.compliance_notifications import ComplianceRunNotifier
-from src.common.notification_audience import audience_for
+from src.common.notification_audience import NotifyAudience, audience_for
 from src.repositories.notification_recipient_repository import json_list
 from src.common.compliance_entities import (
     create_entity_iterator,
@@ -48,6 +48,12 @@ def _rule_actions(rule: Optional[str]) -> List[dict]:
     except Exception:
         return []
     return (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
+
+
+def notify_targets_of(parsed: Optional[dict]) -> List[str]:
+    """The recipients of each NOTIFY action of an already parsed rule."""
+    actions = ((parsed or {}).get('on_pass_actions') or []) + ((parsed or {}).get('on_fail_actions') or [])
+    return [action.get('recipients') or '' for action in actions if action.get('type') == 'NOTIFY']
 
 
 def rule_notify_targets(rule: Optional[str]) -> List[str]:
@@ -772,16 +778,23 @@ class ComplianceManager:
         # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context;
         # NOTIFY collects per recipient and sends one notification when the run ends
         tag_manager = TagsManagerTagAdapter(db, user_email=current_user)
-        # NOTIFY is checked against the policy's author, not the user who runs it (#1450)
-        audience = audience_for(db, policy.rule_author_email, json_list(policy.rule_author_groups))
+        # NOTIFY is checked against the policy's author, not the user who runs it (#1450).
+        # Until the rule is parsed (below) the notifier has no audience, so it refuses every target.
         notifier = ComplianceRunNotifier(
-            db, policy_id=policy.id, policy_name=policy.name, run_id=run.id, audience=audience,
+            db, policy_id=policy.id, policy_name=policy.name, run_id=run.id,
+            audience=NotifyAudience(email=None, is_admin=False, role_ids=frozenset()),
             run_user=current_user,
         )
 
         try:
             # Parse the rule using enhanced DSL
             parsed_rule = parse_rule(policy.rule, source=f"policy '{policy.name}' ({policy.id})")
+            if notify_targets_of(parsed_rule):
+                # getattr: a policy object without the author columns (a run from a bare policy) has no author
+                notifier.set_audience(audience_for(
+                    db, getattr(policy, 'rule_author_email', None),
+                    json_list(getattr(policy, 'rule_author_groups', None)),
+                ))
 
             # Parse entity filter
             entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)

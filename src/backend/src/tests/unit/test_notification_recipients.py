@@ -182,6 +182,11 @@ class TestAudience:
     def test_self_is_matched_without_case(self, db_session, roles):
         assert violations(db_session, "Self", _steward(db_session)) == []
 
+    @pytest.mark.parametrize('spelling', ['Entity Owner', 'entity_owner', 'ENTITY OWNER', 'Owner', 'owner', 'SELF', 'Self', 's_e_l_f'])
+    def test_owner_and_self_spellings_are_one_token(self, db_session, roles, spelling):
+        # The same spellings are resolved by the notifier (test_compliance_notify_followups)
+        assert violations(db_session, spelling, _steward(db_session)) == []
+
     def test_role_by_email_assignment_counts(self, db_session, roles):
         roles['steward'].assigned_groups = json.dumps([])
         roles['steward'].assigned_users = json.dumps(['by-email@example.com'])
@@ -250,7 +255,7 @@ class TestRunTime:
         assert json.loads(results[0].details_json)['actions'][0]['code'] == 'notify_target_not_allowed'
 
     def test_an_admin_author_may_notify_any_target(self, db_session, roles):
-        policy = _policy(db_session, _rule("Anyone Else"), author_email='boss@example.com', author_groups=(ADMIN_GROUP,))
+        policy = _policy(db_session, _rule("group:Anyone Else"), author_email='boss@example.com', author_groups=(ADMIN_GROUP,))
         _run(db_session, policy)
 
         assert db_session.query(NotificationDb).filter_by(recipient='Anyone Else').count() == 1
@@ -350,7 +355,8 @@ class TestRoutes:
     def test_writer_cannot_retarget_a_policy_to_a_disallowed_target(self, http, db_session, roles):
         pid = str(uuid.uuid4())
         http.manager.get_policy.return_value = SimpleNamespace(
-            id=pid, name='P', rule=_rule("Admin Only Group"), rule_author_email='boss@example.com', rule_author_groups='[]',
+            id=pid, name='P', description='d', rule=_rule("Admin Only Group"), rule_author_email='boss@example.com',
+            rule_author_groups='[]', failure_message=None, is_active=True, severity='low', category='Governance',
         )
         response = http.client.put(f'/api/compliance/policies/{pid}', json={
             **_payload(_rule("Someone Else")), 'id': pid,
@@ -359,11 +365,44 @@ class TestRoutes:
         assert response.status_code == 400
         http.manager.update_policy.assert_not_called()
 
-    def test_writer_can_rename_a_policy_without_changing_its_rule(self, http, db_session, roles):
+    def test_writer_cannot_rename_an_admin_notify_policy(self, http, db_session, roles):
+        """The reviewer's scenario: the name titles the notifications, so a rename re-checks the editor."""
         pid = str(uuid.uuid4())
-        rule = _rule("Admin Only Group")
+        rule = _rule("all-staff")
         http.manager.get_policy.return_value = SimpleNamespace(
-            id=pid, name='P', rule=rule, rule_author_email='boss@example.com', rule_author_groups='[]',
+            id=pid, name='P', description='d', rule=rule, rule_author_email='boss@example.com', rule_author_groups='[]',
+            failure_message=None, is_active=True, severity='low', category='Governance',
+        )
+        response = http.client.put(f'/api/compliance/policies/{pid}', json={
+            **_payload(rule, name='URGENT reset your password at evil.example'), 'id': pid,
+        })
+
+        assert response.status_code == 400
+        detail = response.json()['detail']
+        assert detail['code'] == 'notify_target_not_allowed'
+        assert detail['params'] == {'target': 'all-staff'}
+        http.manager.update_policy.assert_not_called()
+
+    def test_writer_cannot_edit_the_description_of_an_admin_notify_policy(self, http, db_session, roles):
+        pid = str(uuid.uuid4())
+        rule = _rule("all-staff")
+        http.manager.get_policy.return_value = SimpleNamespace(
+            id=pid, name='P', description='d', rule=rule, rule_author_email='boss@example.com', rule_author_groups='[]',
+            failure_message=None, is_active=True, severity='low', category='Governance',
+        )
+        response = http.client.put(f'/api/compliance/policies/{pid}', json={
+            **_payload(rule), 'id': pid, 'description': 'changed',
+        })
+
+        assert response.status_code == 400
+        http.manager.update_policy.assert_not_called()
+
+    def test_writer_renaming_a_policy_they_may_notify_becomes_its_author(self, http, db_session, roles):
+        pid = str(uuid.uuid4())
+        rule = _rule("self")
+        http.manager.get_policy.return_value = SimpleNamespace(
+            id=pid, name='P', description='d', rule=rule, rule_author_email='boss@example.com', rule_author_groups='[]',
+            failure_message=None, is_active=True, severity='low', category='Governance',
         )
         http.manager.update_policy.return_value = CompliancePolicyDb(
             id=pid, name='Renamed', description='d', rule=rule, category='Governance', severity='low',
@@ -372,7 +411,22 @@ class TestRoutes:
         response = http.client.put(f'/api/compliance/policies/{pid}', json={**_payload(rule, name='Renamed'), 'id': pid})
 
         assert response.status_code == 200, response.text
-        # The author stays the admin who wrote the rule
+        assert http.manager.update_policy.call_args.kwargs['author'] == (STEWARD_EMAIL, [STEWARD_GROUP])
+
+    def test_writer_renaming_a_policy_without_notify_keeps_the_author(self, http, db_session, roles):
+        pid = str(uuid.uuid4())
+        rule = "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL FAIL 'x'"
+        http.manager.get_policy.return_value = SimpleNamespace(
+            id=pid, name='P', description='d', rule=rule, rule_author_email='boss@example.com', rule_author_groups='[]',
+            failure_message=None, is_active=True, severity='low', category='Governance',
+        )
+        http.manager.update_policy.return_value = CompliancePolicyDb(
+            id=pid, name='Renamed', description='d', rule=rule, category='Governance', severity='low',
+            is_active=True, created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        response = http.client.put(f'/api/compliance/policies/{pid}', json={**_payload(rule, name='Renamed'), 'id': pid})
+
+        assert response.status_code == 200, response.text
         assert http.manager.update_policy.call_args.kwargs['author'] is None
 
     def test_admin_may_save_any_target_and_becomes_the_author(self, http, db_session, roles):

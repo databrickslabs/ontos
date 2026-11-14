@@ -213,7 +213,8 @@
       "notify_recipient_disabled": "通知先 '{{recipient}}' は無効です",
       "notify_recipient_not_allowed": "ポリシーの作成者は通知先 '{{recipient}}' を使用できません",
       "notify_recipient_not_found": "通知先 '{{recipient}}' は存在しません",
-      "notify_target_not_allowed": "ポリシーの作成者は '{{target}}' に通知できません"
+      "notify_target_not_allowed": "ポリシーの作成者は '{{target}}' に通知できません",
+      "notify_unknown_recipient": "{{recipient}} は既知の受信者ではありません。メールアドレス、group:<名前>、アプリロール、または受信者キーワードを使用してください"
     }
   }
 }

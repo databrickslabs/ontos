@@ -213,7 +213,8 @@
       "notify_recipient_disabled": "El destinatario '{{recipient}}' está desactivado",
       "notify_recipient_not_allowed": "El autor de la política no puede usar el destinatario '{{recipient}}'",
       "notify_recipient_not_found": "El destinatario '{{recipient}}' no existe",
-      "notify_target_not_allowed": "El autor de la política no puede notificar a '{{target}}'"
+      "notify_target_not_allowed": "El autor de la política no puede notificar a '{{target}}'",
+      "notify_unknown_recipient": "{{recipient}} no es un destinatario conocido: use un correo electrónico, group:<nombre>, un rol de la aplicación o una palabra clave de destinatario"
     }
   }
 }

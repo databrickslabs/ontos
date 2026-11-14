@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import or_
 
+from src.common.ontology_type_names import canonical_type_name
 from src.common.repository import CRUDBase
 from src.db_models.entity_relationships import EntityRelationshipDb
 from src.models.entity_relationships import EntityRelationshipCreate
@@ -89,7 +90,7 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             return (
                 db.query(self.model)
                 .filter(
-                    self.model.source_type == source_type,
+                    self.model.source_type == canonical_type_name(source_type),
                     self.model.source_id == source_id,
                 )
                 .order_by(self.model.relationship_type, self.model.created_at)
@@ -107,7 +108,7 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             return (
                 db.query(self.model)
                 .filter(
-                    self.model.target_type == target_type,
+                    self.model.target_type == canonical_type_name(target_type),
                     self.model.target_id == target_id,
                 )
                 .order_by(self.model.relationship_type, self.model.created_at)
@@ -125,7 +126,7 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             return (
                 db.query(self.model)
                 .filter(
-                    self.model.source_type == source_type,
+                    self.model.source_type == canonical_type_name(source_type),
                     self.model.source_id == source_id,
                     self.model.relationship_type == relationship_type,
                 )
@@ -144,7 +145,7 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             return (
                 db.query(self.model)
                 .filter(
-                    self.model.target_type == target_type,
+                    self.model.target_type == canonical_type_name(target_type),
                     self.model.target_id == target_id,
                     self.model.relationship_type == relationship_type,
                 )
@@ -165,8 +166,8 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
                 db.query(self.model)
                 .filter(
                     or_(
-                        (self.model.source_type == entity_type) & (self.model.source_id == entity_id),
-                        (self.model.target_type == entity_type) & (self.model.target_id == entity_id),
+                        (self.model.source_type == canonical_type_name(entity_type)) & (self.model.source_id == entity_id),
+                        (self.model.target_type == canonical_type_name(entity_type)) & (self.model.target_id == entity_id),
                     )
                 )
                 .order_by(self.model.relationship_type, self.model.created_at)
@@ -187,9 +188,9 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
             return (
                 db.query(self.model)
                 .filter(
-                    self.model.source_type == source_type,
+                    self.model.source_type == canonical_type_name(source_type),
                     self.model.source_id == source_id,
-                    self.model.target_type == target_type,
+                    self.model.target_type == canonical_type_name(target_type),
                     self.model.target_id == target_id,
                     self.model.relationship_type == relationship_type,
                 )
@@ -210,11 +211,11 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
         try:
             q = db.query(self.model)
             if source_type:
-                q = q.filter(self.model.source_type == source_type)
+                q = q.filter(self.model.source_type == canonical_type_name(source_type))
             if source_id:
                 q = q.filter(self.model.source_id == source_id)
             if target_type:
-                q = q.filter(self.model.target_type == target_type)
+                q = q.filter(self.model.target_type == canonical_type_name(target_type))
             if target_id:
                 q = q.filter(self.model.target_id == target_id)
             if relationship_type:

@@ -184,13 +184,19 @@ class TestTagKeys:
 
 # --- NOTIFY -----------------------------------------------------------------
 
+@pytest.fixture
+def readable():
+    """The recipients can read every entity (read checks: test_compliance_notify_followups)."""
+    with patch('src.common.compliance_notifications._ReadChecks.can_read', return_value=True):
+        yield
+
 class TestNotifyAction:
     def test_without_a_notifier_is_a_coded_failure(self):
         result = NotifyAction('a@example.com').execute(_context())
 
         assert (result.success, result.code) == (False, 'notification_manager_unavailable')
 
-    def test_notifier_collects_one_notification_per_recipient_per_run(self, db_session):
+    def test_notifier_collects_one_notification_per_recipient_per_run(self, db_session, readable):
         notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='Classified products', run_id='run-1', audience=ADMIN_AUDIENCE)
 
         for i in range(25):
@@ -229,7 +235,7 @@ class TestNotifyAction:
         assert notifier.flush(failed=1, passed=0) == 1
         assert notifier.flush(failed=1, passed=0) == 0
 
-    def test_an_entity_reached_by_several_notify_actions_is_listed_once(self, db_session):
+    def test_an_entity_reached_by_several_notify_actions_is_listed_once(self, db_session, readable):
         notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=ADMIN_AUDIENCE)
         context = _context(notification_manager=notifier)
 
@@ -286,9 +292,12 @@ class TestNotifyAction:
 
     def test_entity_independent_recipients_are_resolved_once(self, db_session):
         notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=ADMIN_AUDIENCE)
-        with patch('src.common.workflow_executor._resolve_role_to_users', return_value=[('a@example.com', None)]) as resolve:
+        found = [('Readers', 'role-1')]  # an app role; emails don't need the resolver
+        resolver = 'src.common.workflow_executor._resolve_role_to_users'
+        with patch(resolver, return_value=found) as resolve:
             for i in range(5):
-                NotifyAction('a@example.com').execute(_context(notification_manager=notifier, entity_id=f'p{i}'))
+                context = _context(notification_manager=notifier, entity_id=f'p{i}')
+                NotifyAction('Readers').execute(context)
 
         assert resolve.call_count == 1
 

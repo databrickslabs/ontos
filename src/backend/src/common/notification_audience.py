@@ -31,16 +31,22 @@ logger = get_logger(__name__)
 
 RECIPIENT_PREFIX = 'recipient:'
 SELF_TOKEN = 'self'
+
+
 def normalized(token: str) -> str:
-    """A token compared without case, spaces and underscores."""
+    """A token compared without case, spaces and underscores (``Entity Owner`` -> ``entityowner``).
+
+    The notifier resolves tokens with the same function, so every spelling means the same.
+    """
     return token.strip().lower().replace(' ', '').replace('_', '')
 
 
-# Entity-dependent owner tokens (normalized)
+# The entity's owners (normalized): what a non-admin author may notify without a recipient
 OWNER_TOKENS = {'entityowner', 'owner'}
 # Tokens whose users depend on the entity or the run; a Notification Recipient can't name them
 ENTITY_DEPENDENT_TOKENS = OWNER_TOKENS | {
     'self', 'requester', 'triggeruser', 'reviewer', 'domainowner', 'domainowners', 'contractapprover',
+    'assetowner', 'assetowners',
 }
 
 

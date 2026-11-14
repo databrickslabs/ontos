@@ -213,7 +213,8 @@
       "notify_recipient_disabled": "Notification recipient '{{recipient}}' is disabled",
       "notify_recipient_not_allowed": "The policy's author may not use recipient '{{recipient}}'",
       "notify_recipient_not_found": "Notification recipient '{{recipient}}' does not exist",
-      "notify_target_not_allowed": "The policy's author may not notify '{{target}}'"
+      "notify_target_not_allowed": "The policy's author may not notify '{{target}}'",
+      "notify_unknown_recipient": "{{recipient}} is not a known recipient: use an email, group:<name>, an app role or a recipient keyword"
     }
   }
 }

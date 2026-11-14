@@ -1,7 +1,7 @@
 """Add notification_recipients and the policy rule author
 
-Revision ID: u3_notification_recipients
-Revises: s1_workflow_is_customized
+Revision ID: s3_notification_recipients
+Revises: r2_canonical_relationship_types
 Create Date: 2026-11-12
 
 Notification Recipients (#1450): named NOTIFY targets an admin defines in Settings,
@@ -18,8 +18,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = 'u3_notification_recipients'
-down_revision: Union[str, None] = 's1_workflow_is_customized'
+revision: str = 's3_notification_recipients'
+down_revision: Union[str, None] = 'r2_canonical_relationship_types'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

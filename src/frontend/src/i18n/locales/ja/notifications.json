@@ -271,5 +271,8 @@
   "metricViewChangeFailed": {
     "title": "メトリックビューの変更を配信できませんでした",
     "description": "メトリックビュー {{fqn}} の承認済み変更リクエストを配信できませんでした。"
+  },
+  "complianceRunVisibility": {
+    "notShown": "閲覧できないもの {{count}} 件"
   }
 }

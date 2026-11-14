@@ -109,6 +109,15 @@ def _author(current_user) -> tuple:
     return (current_user.email if current_user else None, list(current_user.groups or []) if current_user else [])
 
 
+# The fields a saved policy shows or sends: a NOTIFY policy's notifications title it by its
+# name, so any of these changing re-checks the NOTIFY targets against the editor (#1450)
+_POLICY_FIELDS = ('name', 'description', 'failure_message', 'rule', 'is_active', 'severity', 'category')
+
+
+def _policy_changed(existing, policy: CompliancePolicy) -> bool:
+    return any(getattr(existing, field) != getattr(policy, field) for field in _POLICY_FIELDS)
+
+
 @router.post("/compliance/policies")
 async def create_policy(
     request: Request,
@@ -174,19 +183,24 @@ async def update_policy(
     rule_changed = existing is None or existing.rule != policy.rule
     warnings = _check_rule(policy.rule) if rule_changed else []
     author = _author(current_user)
-    # The audience is only needed for NOTIFY rules, or to let an admin claim a policy with no author
+    changed = existing is None or _policy_changed(existing, policy)
+    # A change to a policy with NOTIFY (before or after the change) is checked against the editor,
+    # who becomes the recorded author. A rename alone counts: the name titles the notifications.
+    notify_involved = bool(rule_notify_targets(policy.rule)) or (
+        existing is not None and bool(rule_notify_targets(existing.rule)))
+    # The audience is also needed to let an admin claim a policy with no recorded author
     unclaimed = existing is not None and existing.rule_author_email is None
     audience = None
-    if rule_changed and rule_notify_targets(policy.rule) or unclaimed:
+    if (changed and notify_involved) or unclaimed:
         audience = audience_for(db, author[0], author[1])
     author_to_record = None
     if rule_changed:
         require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
-        if audience is not None:
-            require_notify_audience(db, policy.rule, audience)
+    if changed and notify_involved:
+        require_notify_audience(db, policy.rule, audience)
         author_to_record = author
     elif unclaimed and audience is not None and audience.is_admin:
-        # A policy saved before authors were recorded: an admin's save (rule unchanged) claims it
+        # A policy saved before authors were recorded: an admin's save (nothing NOTIFY-related changed) claims it
         author_to_record = author
     updated = manager.update_policy(
         db, 

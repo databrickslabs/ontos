@@ -18,9 +18,9 @@ MDM source links point at contracts by a foreign key, not by this key.
 
 ``ws`` is the client for the volume file deletes. The product deletes pass their
 manager's client. The contract, domain, policy, concept and collection deletes
-pass none: those managers don't hold a workspace client, so the helper uses the
-app's service client from ``get_workspace_client()``, the same one the product
-manager is built with at startup.
+pass none: those managers don't hold a workspace client. ``MetadataManager``
+then falls back to the app's service client from ``get_workspace_client()``,
+the same one the product manager is built with at startup.
 """
 from typing import Dict, Iterable, List, Optional, Tuple
 

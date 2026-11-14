@@ -19,7 +19,8 @@ export default function RequiredActionsSection() {
   const { notifications, isLoading, fetchNotifications, markAsRead } = useNotificationsStore();
   const [approvals, setApprovals] = useState<ApprovalsQueue>({ contracts: [], products: [] });
   const [loadingApprovals, setLoadingApprovals] = useState<boolean>(true);
-  const [approvalsError, setApprovalsError] = useState<string | null>(null);
+  // A flag, translated at render: the fetch runs once, a language switch must still apply
+  const [approvalsError, setApprovalsError] = useState<boolean>(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogPayload, setDialogPayload] = useState<Record<string, any> | null>(null);
   const [roleRequestPage, setRoleRequestPage] = useState(0);
@@ -33,18 +34,23 @@ export default function RequiredActionsSection() {
   useEffect(() => {
     const fetchApprovals = async () => {
       setLoadingApprovals(true);
-      setApprovalsError(null);
+      setApprovalsError(false);
       try {
         const res = await fetch('/api/approvals/queue', { cache: 'no-store' });
+        // 403: the role reads neither data contracts nor data products: an empty queue.
+        if (res.status === 403) {
+          setApprovals({ contracts: [], products: [] });
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         setApprovals({
           contracts: Array.isArray(data?.contracts) ? data.contracts : [],
           products: Array.isArray(data?.products) ? data.products : [],
         });
-      } catch (e: any) {
+      } catch {
         setApprovals({ contracts: [], products: [] });
-        setApprovalsError(e?.message || t('requiredActionsSection.loadError'));
+        setApprovalsError(true);
       } finally {
         setLoadingApprovals(false);
       }
@@ -194,7 +200,9 @@ export default function RequiredActionsSection() {
           <ListItemSkeleton count={4} height="h-12" className="space-y-2" />
         </div>
       ) : approvalsError ? (
-        <div className="text-sm text-destructive p-6">{approvalsError}</div>
+        <div className="text-sm text-destructive p-6">
+          {t('requiredActionsSection.loadError')}
+        </div>
       ) : unifiedApprovals.length === 0 && actionItems.length === 0 ? (
         <p className="text-center text-muted-foreground p-12">{t('requiredActionsSection.noActions')}</p>
       ) : (

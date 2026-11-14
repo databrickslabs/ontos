@@ -59,7 +59,7 @@ from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
 from src.common.features import FeatureAccessLevel
 from src.common.lifecycle_status import check_status_unchanged
-from src.controller.lifecycle_fields import LIFECYCLE_AUDIT_ACTIONS, LifecycleFieldError
+from src.controller.lifecycle_fields import contract_status_audit, LifecycleFieldError
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.models.data_products import DeprecationPayload
@@ -472,20 +472,17 @@ async def change_contract_status(
         )
         
         # Audit
-        lifecycle_audit = {
-            'deprecation_reason': updated.deprecation_reason,
-            'sunset_date': updated.sunset_date.isoformat() if updated.sunset_date else None,
-            'replacement_contract_id': updated.replacement_contract_id,
-        } if new_status == 'deprecated' else {}
+        audit_action, audit_details = contract_status_audit(
+            updated, contract_id, from_status, new_status
+        )
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'anonymous',
             ip_address=request.client.host if request.client else None,
             feature='data-contracts',
-            action=LIFECYCLE_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
+            action=audit_action,
             success=True,
-            details={'contract_id': contract_id, 'from': from_status, 'to': updated.status,
-                     **lifecycle_audit},
+            details=audit_details,
         )
         return {'status': updated.status, 'from': from_status, 'to': updated.status}
     except ValueError as e:
@@ -1414,17 +1411,8 @@ async def create_contract(
         success = True
         created_contract_id = created.id
 
-        # Fire on_create workflow trigger
-        from src.common.workflow_triggers import fire_trigger_safe
-        from src.models.process_workflows import EntityType
-        fire_trigger_safe(
-            db, "on_create",
-            entity_type=EntityType.DATA_CONTRACT,
-            entity_id=str(created.id),
-            entity_name=created.name,
-            entity_data={"contract_id": str(created.id), "name": created.name, "status": getattr(created, 'status', 'draft')},
-            user_email=current_user.email if current_user else None,
-        )
+        # Fire on_create workflow trigger (shared with the assistant tools)
+        manager.fire_create_trigger(db, created, current_user.email if current_user else None)
 
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
@@ -1548,33 +1536,22 @@ async def update_contract(
                         )
                         # Continue with update - admin override in effect
 
-        # Run before_update workflow validation
-        try:
-            from src.common.workflow_triggers import get_trigger_registry
-            from src.models.process_workflows import EntityType
-            trigger_registry = get_trigger_registry(db)
-            pre_passed, pre_executions = trigger_registry.before_update(
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=contract_id,
-                entity_name=getattr(db_obj, 'name', None),
-                entity_data=contract_data.model_dump(exclude_unset=True),
-                user_email=current_user.email if current_user else None,
+        # Run before_update workflow validation (shared with the assistant tools)
+        pre_passed, pre_executions = manager.run_update_gates(
+            db, db_obj, contract_data.model_dump(exclude_unset=True),
+            current_user.email if current_user else None,
+        )
+        if not pre_passed:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    'message': 'Pre-update validation failed',
+                    'workflows': [
+                        {'workflow_name': exe.workflow_name, 'status': exe.status.value}
+                        for exe in pre_executions
+                    ],
+                }
             )
-            if not pre_passed:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        'message': 'Pre-update validation failed',
-                        'workflows': [
-                            {'workflow_name': exe.workflow_name, 'status': exe.status.value}
-                            for exe in pre_executions
-                        ],
-                    }
-                )
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning(f"before_update trigger failed for contract {contract_id}: {e}")
 
         # Business logic now in manager (delivery handled via DeliveryMixin)
         updated = manager.update_contract_with_relations(
@@ -1587,16 +1564,10 @@ async def update_contract(
 
         success = True
 
-        # Fire on_update workflow trigger
-        from src.common.workflow_triggers import fire_trigger_safe
-        from src.models.process_workflows import EntityType
-        fire_trigger_safe(
-            db, "on_update",
-            entity_type=EntityType.DATA_CONTRACT,
-            entity_id=contract_id,
-            entity_name=getattr(updated, 'name', None),
-            entity_data=contract_data.model_dump(exclude_unset=True),
-            user_email=current_user.email if current_user else None,
+        # Fire on_update workflow trigger (shared with the assistant tools)
+        manager.fire_update_trigger(
+            db, contract_id, updated, contract_data.model_dump(exclude_unset=True),
+            current_user.email if current_user else None,
         )
 
         # Load with relationships for full response
@@ -1660,16 +1631,8 @@ async def delete_contract(
         success = True
         response_status_code = 204
 
-        # Fire on_delete workflow trigger
-        from src.common.workflow_triggers import fire_trigger_safe
-        from src.models.process_workflows import EntityType
-        fire_trigger_safe(
-            db, "on_delete",
-            entity_type=EntityType.DATA_CONTRACT,
-            entity_id=contract_id,
-            entity_data={"contract_id": contract_id},
-            user_email=current_user.email if current_user else None,
-        )
+        # Fire on_delete workflow trigger (shared with the assistant tools)
+        manager.fire_delete_trigger(db, contract_id, current_user.email if current_user else None)
 
         return None
     except ValueError as e:

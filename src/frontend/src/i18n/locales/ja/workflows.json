@@ -347,6 +347,22 @@
       "fail": "失敗",
       "true": "真",
       "false": "偽"
+    },
+    "checks": {
+      "button": "チェック",
+      "buttonHint": "ワークフローに問題がないか確認します。警告があっても保存できます。",
+      "clean": "問題は見つかりませんでした。",
+      "errorsCount_one": "{{count}} 件のエラー",
+      "warningsCount_one": "{{count}} 件の警告",
+      "errorsCount_other": "{{count}} 件のエラー",
+      "warningsCount_other": "{{count}} 件の警告"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "ステップ「{{step}}」はワークフローを終了するため、「{{target}}」へのリンクは無視され、保存時に削除されます。",
+      "conditionalBranchMissing": "条件「{{step}}」の{{branch}}の分岐にステップがありません。条件が{{branch}}のとき、ワークフローは成功として終了します。",
+      "unreachableSteps": "最初のステップからたどれないステップがあります: {{steps}}。",
+      "storedEntityTypeUnknown": "トリガーには、もう存在しないエンティティタイプ「{{entityType}}」が含まれています。このタイプでは一度も起動しません。",
+      "storedEntityTypeUnsupported": "{{trigger}} トリガーは {{entity}} では一度も起動しません。"
     }
   },
   "approvalResponse": {
@@ -713,7 +729,9 @@
     "badges": {
       "default": "デフォルト",
       "approval": "承認",
-      "process": "プロセス"
+      "process": "プロセス",
+      "triggerWarnings": "トリガーの警告",
+      "triggerWarningsHint": "トリガーに、どのイベントにも一致しないエンティティタイプが含まれています。ワークフローを開いて確認してください。"
     },
     "columns": {
       "steps": "ステップ",

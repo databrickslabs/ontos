@@ -276,6 +276,27 @@ class EntityTagAssociationRepository(CRUDBase[EntityTagAssociationDb, BaseModel,
         # db.refresh(assoc)
         return assoc
 
+    def copy_tags_for_entity(
+        self, db: Session, *, source_id: str, target_id: str, entity_type: str, assigned_by: Optional[str] = None
+    ) -> None:
+        """Copy a source entity's tag assignments, with their values, onto a new entity (#1489).
+
+        Writes in the caller's transaction and does not commit; a failure raises,
+        so the caller's rollback also drops the copy.
+        """
+        source = db.query(EntityTagAssociationDb).filter_by(
+            entity_id=str(source_id), entity_type=entity_type,
+        ).all()
+        for assoc in source:
+            self.add_tag_to_entity(
+                db,
+                entity_id=str(target_id),
+                entity_type=entity_type,
+                tag_id=assoc.tag_id,
+                assigned_value=assoc.assigned_value,
+                assigned_by=assigned_by,
+            )
+
     def remove_tag_from_entity(self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID) -> bool:
         assoc = db.query(EntityTagAssociationDb).filter_by(
             entity_id=entity_id, 

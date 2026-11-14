@@ -123,6 +123,10 @@
     "unknownProduct": "Unknown product",
     "viewAllSubscribed": "View all subscribed"
   },
+  "discoveryDomainGraph": {
+    "unavailable": "The domain hierarchy is not available for your role.",
+    "error": "Failed to load the domain hierarchy"
+  },
   "dataCurationSection": {
     "title": "Data Curation",
     "createDataProduct": {

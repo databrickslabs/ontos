@@ -9,7 +9,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import create_engine, text
 
-_NAME = 'u3_asset_tags_to_shared_store'
+_NAME = 's4_asset_tags_shared_store'
 
 
 @pytest.fixture
@@ -53,7 +53,7 @@ def _assigned(conn, entity_id):
 
 
 def test_upgrade_moves_entries_onto_associations_and_drops_the_column(tmp_path, migration):
-    assert migration.down_revision == 's1_workflow_is_customized'
+    assert migration.down_revision == 'r2_canonical_relationship_types'
     engine = create_engine(f"sqlite:///{tmp_path / 'u3.db'}")
     with engine.begin() as conn:
         _create_schema(conn)

@@ -1,7 +1,7 @@
 """Move asset tags onto the shared tag store and drop assets.tags
 
-Revision ID: u3_asset_tags_to_shared_store
-Revises: s1_workflow_is_customized
+Revision ID: s4_asset_tags_shared_store
+Revises: r2_canonical_relationship_types
 Create Date: 2026-11-12
 
 #1422: assets kept their tags in ``assets.tags``, a JSON list of plain strings
@@ -27,8 +27,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = 'u3_asset_tags_to_shared_store'
-down_revision: Union[str, None] = 's1_workflow_is_customized'
+revision: str = 's4_asset_tags_shared_store'
+down_revision: Union[str, None] = 'r2_canonical_relationship_types'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -251,5 +251,16 @@
     "goToDetails": "Aller aux détails",
     "alreadySubscribed": "Déjà abonné",
     "subscribe": "S'abonner"
+  },
+  "inherited": {
+    "title": "Hérité",
+    "description": "Métadonnées en lecture seule héritées des contrats et des actifs de cette entité. Modifiez-les à la source.",
+    "refresh": "Actualiser les métadonnées héritées",
+    "fromContract": "du contrat {{name}}",
+    "fromAsset": "de l'actif {{name}}",
+    "shared": "partagé",
+    "table": {
+      "source": "Source"
+    }
   }
 }

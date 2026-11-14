@@ -70,6 +70,8 @@ export interface MergedMetadataResponse {
   links: LinkItem[];
   documents: DocumentItem[];
   sources: Record<string, string>;
+  /** Display names of inheritance sources, keyed like `sources` values (`contract:<id>`, `asset:<id>`). */
+  source_names?: Record<string, string>;
 }
 
 export interface UseEntityMetadataResult {
@@ -87,6 +89,7 @@ export interface UseMergedMetadataResult {
   links: LinkItem[];
   documents: DocumentItem[];
   sources: Record<string, string>;
+  sourceNames: Record<string, string>;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -158,18 +161,22 @@ export function useEntityMetadata(entityType: EntityKind, entityId: string | nul
 }
 
 /**
- * Hook to fetch merged metadata with inheritance from contracts.
+ * Hook to fetch merged metadata with inheritance. The server resolves the
+ * sources (a contract's assets; a product's port contracts and assets);
+ * `contractIds` adds further contracts. Without `maxLevel` the server uses
+ * the product's max_level_inheritance.
  */
 export function useMergedMetadata(
   entityType: EntityKind, 
   entityId: string | null | undefined,
   contractIds?: string[],
-  maxLevel: number = 99
+  maxLevel?: number
 ): UseMergedMetadataResult {
   const [richTexts, setRichTexts] = useState<RichTextItem[]>([]);
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [sources, setSources] = useState<Record<string, string>>({});
+  const [sourceNames, setSourceNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -183,7 +190,9 @@ export function useMergedMetadata(
       if (contractIds && contractIds.length > 0) {
         params.set('contract_ids', contractIds.join(','));
       }
-      params.set('max_level', String(maxLevel));
+      if (maxLevel !== undefined) {
+        params.set('max_level', String(maxLevel));
+      }
       params.set('entity_id', entityId);
       
       const resp = await fetch(`/api/entities/${entityType}/metadata/merged?${params.toString()}`);
@@ -194,12 +203,14 @@ export function useMergedMetadata(
       setLinks(data.links || []);
       setDocuments(data.documents || []);
       setSources(data.sources || {});
+      setSourceNames(data.source_names || {});
     } catch (e: any) {
       setError(e?.message || 'Failed to load merged metadata');
       setRichTexts([]);
       setLinks([]);
       setDocuments([]);
       setSources({});
+      setSourceNames({});
     } finally {
       setLoading(false);
     }
@@ -212,10 +223,11 @@ export function useMergedMetadata(
     links,
     documents,
     sources,
+    sourceNames,
     loading,
     error,
     refresh,
-  }), [richTexts, links, documents, sources, loading, error, refresh]);
+  }), [richTexts, links, documents, sources, sourceNames, loading, error, refresh]);
 }
 
 /**

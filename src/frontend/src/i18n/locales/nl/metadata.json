@@ -251,5 +251,16 @@
     "goToDetails": "Ga naar details",
     "alreadySubscribed": "Al geabonneerd",
     "subscribe": "Abonneren"
+  },
+  "inherited": {
+    "title": "Overgenomen",
+    "description": "Alleen-lezen metadata overgenomen van de contracten en assets van deze entiteit. Bewerk ze bij de bron.",
+    "refresh": "Overgenomen metadata vernieuwen",
+    "fromContract": "van contract {{name}}",
+    "fromAsset": "van asset {{name}}",
+    "shared": "gedeeld",
+    "table": {
+      "source": "Bron"
+    }
   }
 }

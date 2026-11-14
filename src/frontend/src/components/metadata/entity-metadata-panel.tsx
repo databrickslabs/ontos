@@ -17,7 +17,8 @@ import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
 import { useTranslation } from 'react-i18next';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { useSharedAssets, attachSharedAsset, RichTextItem, LinkItem, DocumentItem, MetadataAttachment } from '@/hooks/use-entity-metadata';
+import { useSharedAssets, useMergedMetadata, attachSharedAsset, RichTextItem, LinkItem, DocumentItem, MetadataAttachment } from '@/hooks/use-entity-metadata';
+import { rewriteImageLinks } from '@/lib/metadata-image-links';
 
 export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'concept' | 'collection' | 'compliance_policy' | 'asset';
 
@@ -68,6 +69,24 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
   // Shared assets picker dialog
   const [showSharedPicker, setShowSharedPicker] = React.useState<'rich_text' | 'link' | 'document' | null>(null);
   const sharedAssets = useSharedAssets();
+
+  // Products and contracts show what they inherit from their contracts and assets (read-only)
+  const inheritsMetadata = entityType === 'data_product' || entityType === 'data_contract';
+  const merged = useMergedMetadata(entityType, inheritsMetadata ? entityId : undefined);
+  const isInherited = (id: string) => {
+    const source = merged.sources[id];
+    return !!source && (source.startsWith('contract:') || source.startsWith('asset:'));
+  };
+  const inheritedNotes = merged.richTexts.filter(n => isInherited(n.id));
+  const inheritedLinks = merged.links.filter(l => isInherited(l.id));
+  const inheritedDocs = merged.documents.filter(d => isInherited(d.id));
+  const inheritedSourceLabel = (id: string) => {
+    const source = merged.sources[id] ?? '';
+    const name = merged.sourceNames[source] ?? '';
+    return source.startsWith('contract:')
+      ? t('inherited.fromContract', { name })
+      : t('inherited.fromAsset', { name });
+  };
 
   // Editing states for notes
   const [editingNote, setEditingNote] = React.useState<RichTextItem | null>(null);
@@ -575,6 +594,73 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
           )}
         </div>
 
+        {/* Inherited (read-only) */}
+        {inheritsMetadata && inheritedNotes.length + inheritedLinks.length + inheritedDocs.length > 0 && (
+          <>
+            <Separator />
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="text-base font-medium flex items-center"><ArrowDownToLine className="mr-2 h-5 w-5 text-primary" />{t('inherited.title')}</div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" onClick={merged.refresh}>
+                        <RefreshCcw className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('inherited.refresh')}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="text-sm text-muted-foreground mb-2">{t('inherited.description')}</div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16">{t('notes.table.level') || 'Level'}</TableHead>
+                    <TableHead>{t('notes.table.title')}</TableHead>
+                    <TableHead>{t('inherited.table.source')}</TableHead>
+                    <TableHead className="w-24">{t('notes.table.actions')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inheritedNotes.map(n => (
+                    <TableRow key={`rt-${n.id}`}>
+                      <TableCell className="text-xs text-muted-foreground font-mono">{n.level ?? 50}</TableCell>
+                      <TableCell className="font-medium"><span className="flex items-center gap-2"><FileText className="h-4 w-4 text-muted-foreground" />{n.title}</span></TableCell>
+                      <TableCell><Badge variant="outline" className="text-xs">{inheritedSourceLabel(n.id)}</Badge></TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" onClick={() => setPreviewNote(n)} aria-label={t('notes.preview')}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {inheritedLinks.map(l => (
+                    <TableRow key={`link-${l.id}`}>
+                      <TableCell className="text-xs text-muted-foreground font-mono">{l.level ?? 50}</TableCell>
+                      <TableCell className="font-medium"><span className="flex items-center gap-2"><LinkIcon className="h-4 w-4 text-muted-foreground" /><a href={l.url} target="_blank" rel="noreferrer" className="hover:underline">{l.title}</a></span></TableCell>
+                      <TableCell><Badge variant="outline" className="text-xs">{inheritedSourceLabel(l.id)}</Badge></TableCell>
+                      <TableCell />
+                    </TableRow>
+                  ))}
+                  {inheritedDocs.map(d => (
+                    <TableRow key={`doc-${d.id}`}>
+                      <TableCell className="text-xs text-muted-foreground font-mono">{d.level ?? 50}</TableCell>
+                      <TableCell className="font-medium"><span className="flex items-center gap-2"><Paperclip className="h-4 w-4 text-muted-foreground" />{d.title}</span></TableCell>
+                      <TableCell><Badge variant="outline" className="text-xs">{inheritedSourceLabel(d.id)}</Badge></TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" onClick={() => setPreviewDoc(d)} aria-label={t('documents.preview')}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+
         <FilePreviewDialog
           open={!!previewDoc}
           onOpenChange={(open) => { if (!open) setPreviewDoc(null); }}
@@ -603,7 +689,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
             {previewNote && (
               <div className="space-y-2">
                 {previewNote.short_description && <div className="text-sm text-muted-foreground">{previewNote.short_description}</div>}
-                <MarkdownViewer markdown={previewNote.content_markdown} />
+                <MarkdownViewer markdown={rewriteImageLinks(previewNote.content_markdown, [...documents, ...merged.documents])} />
               </div>
             )}
           </DialogContent>

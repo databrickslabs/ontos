@@ -1,6 +1,6 @@
 import json
 from types import SimpleNamespace
-from typing import List, Optional
+from typing import Dict, Iterable, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -22,6 +22,7 @@ from src.db_models.teams import TeamDb, TeamMemberDb
 from src.common.errors import ConflictError, NotFoundError
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.team_role_override import team_role_overrides
+from src.db_models.settings import AppRoleDb
 from src.common.database import get_session_factory
 
 from src.common.logging import get_logger
@@ -313,15 +314,15 @@ class TeamsManager(SearchableAsset):
         db_teams = self.team_repo.get_teams_for_user(db, user_identifier, user_groups)
         return self._convert_many_to_read_models(db, db_teams)
 
-    def get_team_rows_for_user(
+    def get_role_override_members_for_user(
         self, db: Session, user_identifier: str, user_groups: Optional[List[str]] = None
-    ) -> List[TeamDb]:
-        """Team rows (members loaded) where the user is a member directly or via a group.
+    ) -> List[TeamMemberDb]:
+        """Member entries with a role override that could apply to the user (#1453).
 
-        For permission resolution, which only reads the members' role overrides: no
-        read-model conversion, so no per-team tag or domain queries.
+        For permission resolution: one indexed query, no teams and no read-model
+        conversion. ``team_role_overrides`` decides which of them apply.
         """
-        return self.team_repo.get_teams_for_user(db, user_identifier, user_groups)
+        return self.team_member_repo.get_role_overrides_for_user(db, user_identifier, user_groups)
 
     def group_role_override_entries(self, db: Session) -> List[tuple]:
         """``(team name, group, role)`` for every group entry that carries a role override."""
@@ -337,14 +338,14 @@ class TeamsManager(SearchableAsset):
 
     def _role_override_entries(self, db: Session, member_type: str) -> List[tuple]:
         rows = (
-            db.query(TeamDb.name, TeamMemberDb.member_identifier, TeamMemberDb.app_role_override)
+            db.query(TeamDb.name, TeamMemberDb.member_identifier, AppRoleDb.name)
             .join(TeamMemberDb, TeamMemberDb.team_id == TeamDb.id)
+            .join(AppRoleDb, AppRoleDb.id == TeamMemberDb.app_role_override_id)
             .filter(TeamMemberDb.member_type == member_type)
-            .filter(TeamMemberDb.app_role_override.isnot(None))
             .order_by(TeamDb.name, TeamMemberDb.member_identifier)
             .all()
         )
-        return [(name, ident, role.strip()) for name, ident, role in rows if (role or "").strip()]
+        return [(name, ident, role) for name, ident, role in rows]
 
     def update_team(self, db: Session, team_id: str, team_in: TeamUpdate, current_user_id: str) -> Optional[TeamRead]:
         """Updates an existing team."""
@@ -454,9 +455,12 @@ class TeamsManager(SearchableAsset):
         ):
             raise ConflictError(f"Member '{member_in.member_identifier}' is already in team '{db_team.name}'.")
 
-        db_obj_data = member_in.model_dump()
+        db_obj_data = member_in.model_dump(exclude={'app_role_override'})
+        db_obj_data['member_identifier'] = (member_in.member_identifier or "").strip()
         db_obj_data['team_id'] = team_id
         db_obj_data['added_by'] = current_user_id
+        role_name = (member_in.app_role_override or "").strip() or None
+        db_obj_data['app_role_override_id'] = self._role_id(self._role_ids_by_name(db, [role_name]), role_name)
 
         db_member = TeamMemberDb(**db_obj_data)
 
@@ -480,6 +484,9 @@ class TeamsManager(SearchableAsset):
             raise NotFoundError(f"Team member with id '{member_id}' not found in team '{team_id}'.")
 
         update_data = member_in.model_dump(exclude_unset=True)
+        if 'app_role_override' in update_data:
+            name = (update_data.pop('app_role_override') or '').strip() or None
+            update_data['app_role_override_id'] = self._role_id(self._role_ids_by_name(db, [name]), name)
 
         try:
             updated_db_member = self.team_member_repo.update(db=db, db_obj=db_member, obj_in=update_data)
@@ -557,6 +564,7 @@ class TeamsManager(SearchableAsset):
             raise NotFoundError(f"Team with id '{team_id}' not found.")
 
         desired = {m.member_identifier.lower(): m for m in self.validate_member_set(members_in)}
+        role_ids = self._role_ids_by_name(db, [m.app_role_override for m in desired.values()])
         existing: dict = {}
         for db_member in self.team_member_repo.get_members_by_team(db, team_id):
             key = db_member.member_identifier.lower()
@@ -578,13 +586,15 @@ class TeamsManager(SearchableAsset):
                     team_id=team_id,
                     member_type=member.member_type.value,
                     member_identifier=member.member_identifier,
-                    app_role_override=member.app_role_override,
+                    app_role_override_id=self._role_id(role_ids, member.app_role_override),
                     added_by=current_user_id,
                 ))
                 continue
             db_member.member_identifier = member.member_identifier
             db_member.member_type = member.member_type.value
-            db_member.app_role_override = member.app_role_override
+            db_member.app_role_override_id = self._role_id(role_ids, member.app_role_override)
+            # The name is read through the relationship: reload it with the new id
+            db.expire(db_member, ["app_role"])
 
         db.flush()
         logger.info(
@@ -604,25 +614,47 @@ class TeamsManager(SearchableAsset):
         user_identifier: str,
         user_groups: Optional[List[str]] = None,
     ) -> List[str]:
-        """The team role overrides that would apply to the user if ``team_id`` had ``members``.
+        """The role ids of the team role overrides that would apply to the user if ``team_id`` had ``members``.
 
-        Mirrors request authorization (``lookup_user_team_roles``): the teams the user
-        belongs to directly or through a group, with ``team_id``'s members swapped in
-        (or added, when the user isn't in it yet).
+        Mirrors request authorization (``lookup_user_team_roles``): the entries of the
+        user's teams, with ``team_id``'s members swapped in (or added, when the user
+        isn't in it yet). Names that match no role grant nothing.
         """
         groups = list(user_groups or [])
-        teams = []
-        replaced = False
-        for team in self.team_repo.get_teams_for_user(db, user_identifier, groups):
-            if team.id == team_id:
-                replaced = True
-                teams.append(SimpleNamespace(members=members))
-            else:
-                teams.append(team)
-        if not replaced:
-            teams.append(SimpleNamespace(members=members))
-        return team_role_overrides(teams, user_identifier, groups)
+        role_ids = self._role_ids_by_name(db, [m.app_role_override for m in members])
+        others = [
+            m for m in self.team_member_repo.get_role_overrides_for_user(db, user_identifier, groups)
+            if m.team_id != team_id
+        ]
+        swapped = [
+            SimpleNamespace(
+                member_type=m.member_type,
+                member_identifier=m.member_identifier,
+                app_role_override_id=role_ids.get(m.app_role_override) if m.app_role_override else None,
+            )
+            for m in members
+        ]
+        return team_role_overrides(others + swapped, user_identifier, groups)
 
+    @staticmethod
+    def _role_ids_by_name(db: Session, names: Iterable[Optional[str]]) -> Dict[str, str]:
+        """Role id by exact role name, for the names given. The first role wins if names repeat."""
+        wanted = {n for n in names if n}
+        if not wanted:
+            return {}
+        ids: Dict[str, str] = {}
+        for role_id, name in db.query(AppRoleDb.id, AppRoleDb.name).filter(AppRoleDb.name.in_(wanted)).order_by(AppRoleDb.id).all():
+            ids.setdefault(name, role_id)
+        return ids
+
+    @staticmethod
+    def _role_id(role_ids: Dict[str, str], name: Optional[str]) -> Optional[str]:
+        """The stored id for an override name: None for no override, refused for a name matching no role."""
+        if not name:
+            return None
+        if name not in role_ids:
+            raise InvalidMemberSetError(f"Role override '{name}' matches no app role.")
+        return role_ids[name]
 
 
 # Singleton instance

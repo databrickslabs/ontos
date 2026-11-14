@@ -462,7 +462,7 @@ class TestRoleAudienceParity:
         result = manager._resolve_viewer_role_ids(["data-producers"], None)
         assert result == {ROLE_UUID}
         mock_auth_manager.get_user_effective_role_ids.assert_called_once_with(
-            ["data-producers"], None
+            ["data-producers"], None, team_role_ids=None
         )
 
     def test_resolve_viewer_role_ids_override(self, manager, mock_auth_manager):
@@ -471,7 +471,7 @@ class TestRoleAudienceParity:
         result = manager._resolve_viewer_role_ids(["some-group"], ROLE_UUID_2)
         assert result == {ROLE_UUID_2}
         mock_auth_manager.get_user_effective_role_ids.assert_called_once_with(
-            ["some-group"], ROLE_UUID_2
+            ["some-group"], ROLE_UUID_2, team_role_ids=None
         )
 
     def test_resolve_viewer_role_ids_no_auth_manager(self, mock_repo):
@@ -607,7 +607,7 @@ class TestRoleAudienceParity:
 
         assert result.visible_count == 1
         mock_auth_manager.get_user_effective_role_ids.assert_called_once_with(
-            None, ROLE_UUID
+            None, ROLE_UUID, team_role_ids=None
         )
 
     # ------------------------------------------------------------------
@@ -633,3 +633,41 @@ class TestRoleAudienceParity:
         visible_call_kwargs = calls[1].kwargs
         assert visible_call_kwargs.get("user_role_ids") == {ROLE_UUID}
 
+    # ------------------------------------------------------------------
+    # Team role overrides (#1453): role-ID and role:<name> tokens match every team role
+    # ------------------------------------------------------------------
+
+    def test_team_role_ids_reach_the_viewer_resolution(self, manager, mock_repo, mock_auth_manager):
+        """Team role ids are resolved with the viewer's roles, so role_id tokens match them."""
+        comment = _make_comment_db(audience_json=json.dumps([f"role_id:{ROLE_UUID_2}"]))
+        mock_auth_manager.get_user_effective_role_ids.return_value = {ROLE_UUID_2}
+        mock_repo.list_for_entity.side_effect = [[comment], [comment]]
+
+        result = manager.list_comments(
+            Mock(), entity_type="data_product", entity_id="e-1",
+            user_groups=["data-producers"], user_team_role_ids=[ROLE_UUID_2],
+        )
+
+        assert result.visible_count == 1
+        mock_auth_manager.get_user_effective_role_ids.assert_called_once_with(
+            ["data-producers"], None, team_role_ids=[ROLE_UUID_2]
+        )
+
+    def test_role_name_token_matches_a_team_role_that_is_not_the_first(
+        self, manager, mock_repo, mock_auth_manager, mock_settings_manager
+    ):
+        """role:<name> matches any team role the viewer holds, not only the first."""
+        comment = _make_comment_db(audience_json=json.dumps(["role:Data Steward"]))
+        mock_auth_manager.get_user_effective_role_ids.return_value = {ROLE_UUID_2}
+        mock_repo.list_for_entity.side_effect = [[comment], []]
+        steward = Mock()
+        steward.id = UUID(ROLE_UUID_2)
+        mock_settings_manager.get_app_role_by_name.return_value = steward
+
+        result = manager.list_comments(
+            Mock(), entity_type="data_product", entity_id="e-1",
+            user_groups=[], user_team_role_ids=[ROLE_UUID, ROLE_UUID_2],
+        )
+
+        assert result.visible_count == 1
+        mock_settings_manager.get_app_role_by_name.assert_called_once_with("Data Steward")

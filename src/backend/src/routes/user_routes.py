@@ -206,7 +206,7 @@ async def get_current_user_navigation(
             applied_role_override_id=applied_role_id,
             user_email=user_details.email,
             # An applied override pins one role, so team roles only matter without it
-            team_role_names=(
+            team_role_ids=(
                 [] if applied_role_id
                 else lookup_user_team_roles(request, user_details.email, user_details.groups or [])
             ),

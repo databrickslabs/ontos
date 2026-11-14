@@ -1,6 +1,6 @@
 from __future__ import annotations # Ensure forward references work
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Iterable, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Iterable, Sequence, TYPE_CHECKING
 import re
 
 # Import Search Interfaces
@@ -166,7 +166,7 @@ class SearchManager:
         query: str, 
         auth_manager: AuthorizationManager, 
         user: UserInfo, 
-        team_role_override: Optional[str] = None,
+        team_role_ids: Optional[Sequence[str]] = None,
         effective_permissions: Optional[Dict[str, FeatureAccessLevel]] = None,
     ) -> List[SearchIndexItem]:
         """
@@ -187,10 +187,10 @@ class SearchManager:
             query: The search query string
             auth_manager: AuthorizationManager for permission checking
             user: Current user info
-            team_role_override: Optional team role override
+            team_role_ids: Optional team role override ids
             effective_permissions: The user's resolved permissions
                 (``resolve_effective_permissions``). When given, they're used as
-                they are and ``team_role_override`` is ignored.
+                they are and ``team_role_ids`` is ignored.
             
         Returns:
             List of matching SearchIndexItem, sorted by relevance
@@ -206,7 +206,7 @@ class SearchManager:
         # per-item permission check is applied in Python — no auth logic in SQL.
         if self._uses_postgres():
             return self._search_postgres(
-                query_stripped, auth_manager, user, team_role_override, effective_permissions,
+                query_stripped, auth_manager, user, team_role_ids, effective_permissions,
             )
 
         config = self.config
@@ -237,7 +237,7 @@ class SearchManager:
         filtered_matches: List[SearchMatch] = []
         try:
              if effective_permissions is None:
-                 effective_permissions = auth_manager.get_user_effective_permissions(user.groups, team_role_override)
+                 effective_permissions = auth_manager.get_user_effective_permissions(user.groups, team_role_ids)
              for match in matches:
                  if auth_manager.has_permission(effective_permissions, match.item.feature_id, FeatureAccessLevel.READ_ONLY):
                      filtered_matches.append(match)
@@ -267,7 +267,7 @@ class SearchManager:
         query: str,
         auth_manager: AuthorizationManager,
         user: UserInfo,
-        team_role_override: Optional[str],
+        team_role_ids: Optional[Sequence[str]],
         effective_permissions: Optional[Dict[str, FeatureAccessLevel]] = None,
     ) -> List[SearchIndexItem]:
         """REST search via the Postgres backend: DB-ranked candidates, then the
@@ -281,7 +281,7 @@ class SearchManager:
         try:
             if effective_permissions is None:
                 effective_permissions = auth_manager.get_user_effective_permissions(
-                    user.groups, team_role_override
+                    user.groups, team_role_ids
                 )
         except Exception as e:
             logger.error(f"Error checking permissions during search for user {user.username}: {e}", exc_info=True)

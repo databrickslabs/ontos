@@ -337,11 +337,11 @@ class TestSearchManager:
         }
         mock_auth_manager.has_permission.return_value = True
 
-        results = manager.search("Alpha", mock_auth_manager, sample_user, team_role_override="admin")
+        results = manager.search("Alpha", mock_auth_manager, sample_user, team_role_ids=["admin"])
 
-        # Verify team_role_override was passed to auth_manager
+        # Verify team_role_ids was passed to auth_manager
         mock_auth_manager.get_user_effective_permissions.assert_called_once_with(
-            sample_user.groups, "admin"
+            sample_user.groups, ["admin"]
         )
         assert len(results) >= 1
 

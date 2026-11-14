@@ -81,20 +81,22 @@ class CommentsManager:
         self,
         user_groups: Optional[List[str]],
         applied_role_override_id: Optional[str] = None,
+        team_role_ids: Optional[List[str]] = None,
     ) -> Set[str]:
-        """Return the set of AppRole UUIDs the viewer holds.
+        """Return the set of AppRole UUIDs the viewer holds, team role overrides included.
 
         Delegates to ``AuthorizationManager.get_user_effective_role_ids`` when
         the authorization manager is available; falls back to an empty set so
         callers that don't inject the manager degrade gracefully (unfiltered
-        audience is already handled upstream).
+        audience is already handled upstream). An applied role override pins the
+        viewer to that role, so team roles don't count then.
         """
         if self._authorization_manager is None:
             logger.debug("_resolve_viewer_role_ids: no authorization_manager; returning empty set")
             return set()
         try:
             return self._authorization_manager.get_user_effective_role_ids(
-                user_groups, applied_role_override_id
+                user_groups, applied_role_override_id, team_role_ids=team_role_ids,
             )
         except Exception:
             logger.exception("_resolve_viewer_role_ids: unexpected error; returning empty set")
@@ -161,7 +163,7 @@ class CommentsManager:
         project_id: Optional[str] = None,
         user_groups: Optional[List[str]] = None,
         user_teams: Optional[List[str]] = None,
-        user_app_role: Optional[str] = None,
+        user_team_role_ids: Optional[List[str]] = None,
         user_email: Optional[str] = None,
         applied_role_override_id: Optional[str] = None,
         include_deleted: bool = False
@@ -175,8 +177,7 @@ class CommentsManager:
             project_id: Filter by project context
             user_groups: User's group memberships
             user_teams: User's team memberships (IDs)
-            user_app_role: User's app role name (legacy team-override path; kept for
-                backward-compat but superseded by group-derived role resolution)
+            user_team_role_ids: Ids of the team role overrides that apply to the user (#1453)
             user_email: User's email (for direct targeting)
             applied_role_override_id: UUID of the role the viewer has pinned via the
                 role-switcher (from SettingsManager.get_applied_role_override_for_user).
@@ -189,7 +190,7 @@ class CommentsManager:
         # group-membership + override logic that AuthorizationManager uses for
         # feature-permission checks.
         viewer_role_ids: Set[str] = self._resolve_viewer_role_ids(
-            user_groups, applied_role_override_id
+            user_groups, applied_role_override_id, user_team_role_ids
         )
 
         # Get all comments (for total count) - without project filter for admin view
@@ -200,15 +201,14 @@ class CommentsManager:
             project_id=None,  # Get all for count
             user_groups=None,
             user_teams=None,
-            user_app_role=None,
             user_role_ids=None,
             include_deleted=include_deleted
         )
         total_count = len(all_comments)
 
         # Get visible comments filtered by project and audience.
-        # Pass both the legacy user_app_role (team-override name) and the new
-        # viewer_role_ids so the repository can match both token formats.
+        # The repository matches role-ID tokens against the viewer's role ids; role:<name>
+        # tokens are matched below, by resolving the name to its id.
         visible_comments = self._comments_repo.list_for_entity(
             db,
             entity_type=entity_type,
@@ -216,7 +216,6 @@ class CommentsManager:
             project_id=project_id,
             user_groups=user_groups,
             user_teams=user_teams,
-            user_app_role=user_app_role,
             user_role_ids=viewer_role_ids if viewer_role_ids else None,
             include_deleted=include_deleted
         )

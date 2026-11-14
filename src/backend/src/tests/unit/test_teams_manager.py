@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from src.controller.teams_manager import TeamsManager
 from src.models.teams import TeamCreate, TeamUpdate, TeamMemberCreate, TeamMemberUpdate
+from src.db_models.settings import AppRoleDb
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.models.data_domains import DataDomainCreate
 from src.repositories.data_domain_repository import data_domain_repo
@@ -351,6 +352,9 @@ class TestTeamsManager:
         db_session.add(member_db)
         db_session.commit()
 
+        role = AppRoleDb(id=str(uuid.uuid4()), name="role-123")
+        db_session.add(role)
+        db_session.commit()
         member_update = TeamMemberUpdate(app_role_override="role-123")
 
         # Act
@@ -361,6 +365,7 @@ class TestTeamsManager:
         # Assert
         assert result is not None
         assert result.app_role_override == "role-123"
+        assert result.app_role_override_id == role.id
 
     def test_remove_team_member_success(self, manager, db_session, sample_team_db):
         """Test removing a team member."""

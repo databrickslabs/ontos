@@ -160,3 +160,111 @@ def test_explicit_contract_ids_still_inherit(manager, db_session, stack):
         db_session, entity_type="data_domain", entity_id="d-1", contract_ids=[extra.id],
     )
     assert [rt.title for rt in merged.rich_texts] == ["Extra terms"]
+
+
+def _schema_object(db_session, contract, physical_name):
+    db_session.add(SchemaObjectDb(
+        id=str(uuid4()), contract_id=contract.id, name=physical_name.split(".")[-1],
+        logical_type="object", physical_name=physical_name,
+    ))
+    db_session.flush()
+
+
+def test_unqualified_physical_name_does_not_match_other_schemas(manager, db_session, stack):
+    _schema_object(db_session, stack.contract, "customers")
+
+    sources = manager.resolve_inheritance_sources(
+        db_session, entity_type="data_contract", entity_id=stack.contract.id,
+    )
+
+    assert ("asset", str(stack.unrelated.id)) not in sources
+
+
+def test_qualified_physical_name_matches_by_suffix_or_full_name(manager, db_session, stack):
+    other = DataContractDb(
+        id=str(uuid4()), name="crm", version="1.0.0", version_family_id=str(uuid4()),
+    )
+    db_session.add(other)
+    db_session.flush()
+    _schema_object(db_session, other, "crm.customers")
+    _schema_object(db_session, other, "prod.sales.order_lines")
+
+    sources = manager.resolve_inheritance_sources(
+        db_session, entity_type="data_contract", entity_id=other.id,
+    )
+
+    assert set(sources) == {
+        ("asset", str(stack.unrelated.id)),
+        ("asset", str(stack.linked_table.id)),
+    }
+
+
+def test_retired_contract_and_asset_are_not_sources(manager, db_session, stack):
+    stack.contract.status = "retired"
+    stack.dashboard.status = "retired"
+    stack.table.status = "retired"
+    db_session.add_all([
+        _note("data_contract", stack.contract.id, "Contract terms"),
+        _note("asset", stack.dashboard.id, "Dashboard preview"),
+        _note("asset", stack.table.id, "Table notes"),
+        _note("asset", stack.linked_table.id, "Linked notes"),
+    ])
+    db_session.flush()
+
+    product = manager.get_merged_metadata(
+        db_session, entity_type="data_product", entity_id=stack.product.id,
+    )
+    contract = manager.get_merged_metadata(
+        db_session, entity_type="data_contract", entity_id=stack.contract.id,
+    )
+
+    assert product.rich_texts == []
+    assert product.source_names == {}
+    # The contract's own note stays; of its assets only the non-retired one counts
+    assert [rt.title for rt in contract.rich_texts] == ["Contract terms", "Linked notes"]
+
+
+def test_unreadable_contract_source_is_skipped(manager, db_session, stack):
+    db_session.add_all([
+        _note("data_contract", stack.contract.id, "Contract terms"),
+        _note("asset", stack.dashboard.id, "Dashboard preview"),
+    ])
+    db_session.flush()
+
+    merged = manager.get_merged_metadata(
+        db_session, entity_type="data_product", entity_id=stack.product.id,
+        can_read_source=lambda kind, row: kind != "data_contract",
+    )
+
+    assert [rt.title for rt in merged.rich_texts] == ["Dashboard preview"]
+    assert f"contract:{stack.contract.id}" not in merged.source_names
+
+
+def test_unreadable_asset_source_is_skipped(manager, db_session, stack):
+    db_session.add_all([
+        _note("data_contract", stack.contract.id, "Contract terms"),
+        _note("asset", stack.dashboard.id, "Dashboard preview"),
+    ])
+    db_session.flush()
+
+    merged = manager.get_merged_metadata(
+        db_session, entity_type="data_product", entity_id=stack.product.id,
+        can_read_source=lambda kind, row: kind != "asset",
+    )
+
+    assert [rt.title for rt in merged.rich_texts] == ["Contract terms"]
+    assert f"asset:{stack.dashboard.id}" not in merged.source_names
+
+
+def test_failing_read_check_hides_the_source(manager, db_session, stack):
+    db_session.add(_note("asset", stack.dashboard.id, "Dashboard preview"))
+    db_session.flush()
+
+    def boom(kind, row):
+        raise RuntimeError("lookup failed")
+
+    merged = manager.get_merged_metadata(
+        db_session, entity_type="data_product", entity_id=stack.product.id, can_read_source=boom,
+    )
+
+    assert merged.rich_texts == []

@@ -754,7 +754,9 @@ class MetadataManager(SearchableAsset):
 
         - Data contract: the assets that implement it, i.e. stored ``implementsContract``
           relationships plus Table/View assets whose location matches a schema
-          object's physical name (the same rule business lineage uses).
+          object's physical name. A qualified name (``schema.table`` or longer)
+          matches locations ending with it; an unqualified one only an equal
+          location, so ``customers`` does not pull in every ``*.customers`` table.
         - Data product: each output port's contract and the asset at the port's
           ``asset_identifier`` (exact location match, any asset type, so dashboard
           ports work too). Inheritance is one hop; a product does not pick up
@@ -790,7 +792,8 @@ class MetadataManager(SearchableAsset):
             for (physical_name,) in physical_names:
                 pn = physical_name.strip().lower()
                 if pn:
-                    for asset in ModelLineageResolver._query_physical_assets(db, pn, exact=False):
+                    exact = "." not in pn
+                    for asset in ModelLineageResolver._query_physical_assets(db, pn, exact=exact):
                         add("asset", asset.id)
 
         elif entity_type == "data_product":
@@ -810,6 +813,52 @@ class MetadataManager(SearchableAsset):
                         add("asset", asset.id)
 
         return found
+
+    def _readable_sources(
+        self,
+        db: Session,
+        sources: List[Tuple[str, str]],
+        can_read_source: Optional[Callable[[str, Any], bool]],
+    ) -> List[Tuple[str, str]]:
+        """Drop retired or missing sources and those ``can_read_source`` rejects.
+
+        ``can_read_source(kind, row)`` gets the contract or asset row; ``None``
+        skips the caller check (internal use). Fails closed on errors.
+        """
+        from uuid import UUID
+        from src.db_models.assets import AssetDb
+        from src.db_models.data_contracts import DataContractDb
+
+        contract_ids = [ident for kind, ident in sources if kind == "data_contract"]
+        asset_ids = []
+        for kind, ident in sources:
+            if kind == "asset":
+                try:
+                    asset_ids.append(UUID(ident))
+                except (ValueError, TypeError):
+                    continue
+        rows: Dict[Tuple[str, str], Any] = {}
+        if contract_ids:
+            for c in db.query(DataContractDb).filter(DataContractDb.id.in_(contract_ids)).all():
+                rows[("data_contract", str(c.id))] = c
+        if asset_ids:
+            for a in db.query(AssetDb).filter(AssetDb.id.in_(asset_ids)).all():
+                rows[("asset", str(a.id))] = a
+
+        kept: List[Tuple[str, str]] = []
+        for source in sources:
+            row = rows.get(source)
+            if row is None or (getattr(row, "status", "") or "").strip().lower() == "retired":
+                continue
+            if can_read_source is not None:
+                try:
+                    if not can_read_source(source[0], row):
+                        continue
+                except Exception:
+                    logger.exception("Inheritance source read check failed; skipping source")
+                    continue
+            kept.append(source)
+        return kept
 
     def _source_names(self, db: Session, sources: List[Tuple[str, str]]) -> Dict[str, str]:
         """Display names for inheritance sources, keyed like ``sources`` values."""
@@ -847,7 +896,8 @@ class MetadataManager(SearchableAsset):
         entity_type: str, entity_id: str,
         can_read_row: Optional[Callable[[str, str], bool]] = None,
         contract_ids: Optional[List[str]] = None,
-        max_level_inheritance: Optional[int] = None
+        max_level_inheritance: Optional[int] = None,
+        can_read_source: Optional[Callable[[str, Any], bool]] = None,
     ) -> MergedMetadataResponse:
         """
         Get merged metadata for an entity, including inherited metadata.
@@ -855,7 +905,9 @@ class MetadataManager(SearchableAsset):
         - Direct metadata attached to the entity
         - Attached shared assets
         - Inherited metadata from the sources found by ``resolve_inheritance_sources``
-          (contracts and assets), plus any explicitly passed ``contract_ids``
+          (contracts and assets), plus any explicitly passed ``contract_ids``.
+          Retired sources are skipped, and so are sources ``can_read_source``
+          rejects (the route passes the caller's contract/asset read rules).
         
         Merging logic:
         - All items are sorted by level (ascending)
@@ -914,6 +966,7 @@ class MetadataManager(SearchableAsset):
         for contract_id in contract_ids or []:
             if ("data_contract", contract_id) not in inherit_from:
                 inherit_from.append(("data_contract", contract_id))
+        inherit_from = self._readable_sources(db, inherit_from, can_read_source)
 
         for source_type, source_id in inherit_from:
             source_key = f"contract:{source_id}" if source_type == "data_contract" else f"asset:{source_id}"

@@ -23,13 +23,17 @@ from src.tools.tags import AssignTagToEntityTool, RemoveTagFromEntityTool
 
 
 class _Index:
-    """Stands in for the wired SearchManager: records what was upserted."""
+    """Stands in for the wired SearchManager: records what was upserted and removed."""
 
     def __init__(self):
         self.calls = []
+        self.removed = []
 
     def upsert_items(self, items):
         self.calls.append(list(items))
+
+    def remove_item(self, item_id):
+        self.removed.append(item_id)
 
     @property
     def items(self):
@@ -217,11 +221,11 @@ class TestMcpAssetTargets:
         assert 'assets' in result.error
         assert index.calls == []
 
-    def test_assign_to_an_asset_runs_with_both_permissions_and_refreshes(self, db_session, asset, pii, index, manager, monkeypatch):
+    def test_assign_to_an_asset_runs_with_both_permissions_and_refreshes(self, db_session, asset, pii, index, monkeypatch):
+        """The tool builds a fresh TagsManager; the refresh finds the SearchManager registered at startup."""
         import asyncio
-        from src.controller import tags_manager as tags_module
-        # The tool builds its own TagsManager; wire it to the recording index
-        monkeypatch.setattr(tags_module.TagsManager, '_search_manager', index, raising=False)
+        from src.common import app_state
+        monkeypatch.setitem(app_state._managers_registry, 'search_manager', index)
         ctx = _Tools.context(db_session, self.BOTH)
 
         result = asyncio.run(AssignTagToEntityTool().execute(
@@ -241,3 +245,18 @@ class TestMcpAssetTargets:
 
         assert result.success is False
         assert 'assets' in result.error
+
+
+class TestRetiredAssets:
+    def test_a_retired_asset_loses_its_index_entry(self, manager, db_session, asset, pii, index):
+        from src.db_models.assets import AssetDb
+        db_session.query(AssetDb).filter_by(id=asset.id).update({'status': 'retired'})
+        db_session.flush()
+
+        manager.add_tag_to_entity(
+            db_session, entity_id=str(asset.id), entity_type='asset', tag_id=pii.id,
+            assigned_value=None, user_email='alice@example.com',
+        )
+
+        assert index.removed == [f'asset::{asset.id}']
+        assert index.items == []

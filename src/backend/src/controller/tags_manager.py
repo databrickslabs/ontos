@@ -20,6 +20,7 @@ from src.models.tags import (
 from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
 from src.db_models.assets import AssetDb
 from src.common.asset_search_item import build_asset_search_item
+from src.common.app_state import get_app_state_manager
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -394,31 +395,48 @@ class TagsManager(DeliveryMixin, SearchableAsset):
             self._refresh_asset_search(db, [str(entity_id)])
 
     def _asset_ids_for_tag(self, db: Session, tag_id: UUID) -> List[str]:
-        return [a["entity_id"] for a in self.get_entities_for_tag(db, tag_id=tag_id, entity_type="asset")]
+        return [
+            row[0] for row in db.query(EntityTagAssociationDb.entity_id).filter(
+                EntityTagAssociationDb.tag_id == tag_id, EntityTagAssociationDb.entity_type == "asset",
+            ).all()
+        ]
 
     def _refresh_asset_search(self, db: Session, asset_ids: List[str]) -> None:
         """Re-index assets in one batch: one query each for the assets, their tags and their
         domains per chunk of 500, then one upsert. Call after the write is committed; a failure
-        is logged, never raised, because the tag change itself already stands."""
-        if not asset_ids or self._search_manager is None:
+        is logged, never raised, because the tag change itself already stands.
+
+        The SearchManager is the wired one: this instance's, or the one registered at startup,
+        since the MCP tools and the workflow steps build their own TagsManager. An asset that
+        is not indexed any more (retired) has its entry removed.
+        """
+        search = self._search_manager or get_app_state_manager("search_manager")
+        if not asset_ids or search is None:
             return
         try:
             items: List[SearchIndexItem] = []
-            for start in range(0, len(asset_ids), 500):
-                chunk = [UUID(str(asset_id)) for asset_id in asset_ids[start:start + 500]]
-                rows = db.query(AssetDb).options(joinedload(AssetDb.asset_type)).filter(AssetDb.id.in_(chunk)).all()
-                ids = [str(asset.id) for asset in rows]
-                tags_map = self.list_assigned_tags_for_entities(db, entity_ids=ids, entity_type="asset")
-                domains_map = entity_domain_repo.get_domains_for_entities(db, entity_type="asset", entity_ids=ids)
-                for asset in rows:
-                    item = build_asset_search_item(
-                        asset, self,
-                        preloaded_domains=domains_map.get(str(asset.id), []),
-                        preloaded_tags=tags_map.get(str(asset.id), []),
-                    )
-                    if item is not None:
-                        items.append(item)
-            self._search_manager.upsert_items(items)
+            removals: List[str] = []
+            # A savepoint: a failed read must not abort the caller's transaction (Postgres)
+            with db.begin_nested():
+                for start in range(0, len(asset_ids), 500):
+                    chunk = [UUID(str(asset_id)) for asset_id in asset_ids[start:start + 500]]
+                    rows = db.query(AssetDb).options(joinedload(AssetDb.asset_type)).filter(AssetDb.id.in_(chunk)).all()
+                    ids = [str(asset.id) for asset in rows]
+                    tags_map = self.list_assigned_tags_for_entities(db, entity_ids=ids, entity_type="asset")
+                    domains_map = entity_domain_repo.get_domains_for_entities(db, entity_type="asset", entity_ids=ids)
+                    for asset in rows:
+                        item = build_asset_search_item(
+                            asset, self,
+                            preloaded_domains=domains_map.get(str(asset.id), []),
+                            preloaded_tags=tags_map.get(str(asset.id), []),
+                        )
+                        if item is None:
+                            removals.append(f"asset::{asset.id}")
+                        else:
+                            items.append(item)
+            for item_id in removals:
+                search.remove_item(item_id)
+            search.upsert_items(items)
         except Exception as e:
             logger.warning(f"Search refresh failed for {len(asset_ids)} asset(s): {e}")
 

@@ -241,3 +241,47 @@ class TestTeamRepository:
         # Assert
         assert count == 5
 
+
+
+class TestTeamMemberRemoval:
+    """Removing a member deletes every row with that exact identifier."""
+
+    def test_removes_legacy_twin_rows(self, db_session):
+        from src.db_models.teams import TeamMemberDb
+        from src.repositories.teams_repository import TeamMemberRepository
+
+        team = TeamDb(
+            id=str(uuid.uuid4()), name="Twins", created_by="t", updated_by="t", extra_metadata="{}",
+        )
+        db_session.add(team)
+        for override in ("Admin", None):
+            db_session.add(TeamMemberDb(
+                team_id=team.id, member_type="user", member_identifier="u@example.com",
+                app_role_override=override, added_by="t",
+            ))
+        db_session.add(TeamMemberDb(
+            team_id=team.id, member_type="user", member_identifier="U@example.com", added_by="t",
+        ))
+        db_session.commit()
+
+        removed = TeamMemberRepository().remove_by_team_and_member(
+            db_session, team_id=team.id, member_identifier="u@example.com",
+        )
+        db_session.commit()
+
+        assert removed
+        left = db_session.query(TeamMemberDb).filter(TeamMemberDb.team_id == team.id).all()
+        assert [m.member_identifier for m in left] == ["U@example.com"]
+
+    def test_missing_member_removes_nothing(self, db_session):
+        from src.repositories.teams_repository import TeamMemberRepository
+
+        team = TeamDb(
+            id=str(uuid.uuid4()), name="Empty", created_by="t", updated_by="t", extra_metadata="{}",
+        )
+        db_session.add(team)
+        db_session.commit()
+
+        assert not TeamMemberRepository().remove_by_team_and_member(
+            db_session, team_id=team.id, member_identifier="nobody@example.com",
+        )

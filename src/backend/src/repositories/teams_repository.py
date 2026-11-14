@@ -202,18 +202,32 @@ class TeamMemberRepository(CRUDBase[TeamMemberDb, TeamMemberCreate, TeamMemberUp
     def remove_by_team_and_member(
         self, db: Session, *, team_id: str, member_identifier: str
     ) -> Optional[TeamMemberDb]:
-        """Removes a team member by team ID and member identifier."""
+        """Removes every entry of a team with exactly this member identifier.
+
+        Legacy data can hold twin rows for one identifier; the authorization checks
+        count all of them, so all of them go. Returns the first removed entry, or None.
+        """
         logger.debug(f"Removing team member for team {team_id} and member {member_identifier}")
         try:
-            member = self.get_by_team_and_member(db, team_id=team_id, member_identifier=member_identifier)
-            if member:
-                db.delete(member)
-                db.flush()
-                logger.info(f"Successfully removed team member {member_identifier} from team {team_id}")
-                return member
-            else:
+            members = (
+                db.query(self.model)
+                .filter(
+                    self.model.team_id == team_id,
+                    self.model.member_identifier == member_identifier,
+                )
+                .all()
+            )
+            if not members:
                 logger.warning(f"Attempted to remove non-existent team member {member_identifier} from team {team_id}")
                 return None
+            for member in members:
+                db.delete(member)
+            db.flush()
+            logger.info(
+                f"Successfully removed team member {member_identifier} from team {team_id} "
+                f"({len(members)} entries)"
+            )
+            return members[0]
         except SQLAlchemyError as e:
             logger.error(f"Database error removing team member: {e}", exc_info=True)
             db.rollback()

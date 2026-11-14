@@ -50,7 +50,7 @@ def _assignments(conn):
 
 
 def test_upgrade_assigns_the_odcs_tags(tmp_path, migration):
-    assert migration.down_revision == 's1_workflow_is_customized'
+    assert migration.down_revision == 'r2_canonical_relationship_types'
     assert len(migration.revision) <= 32  # alembic_version.version_num is varchar(32) on Postgres
     engine = create_engine(f"sqlite:///{tmp_path / 't1.db'}")
     with engine.begin() as conn:
@@ -80,6 +80,24 @@ def test_upgrade_assigns_the_odcs_tags(tmp_path, migration):
 
         _apply(conn, migration.upgrade)  # re-running changes nothing
         assert len(_assignments(conn)) == 4
+
+
+def test_upgrade_skips_names_the_api_would_reject(tmp_path, migration):
+    # TagBase only accepts [a-zA-Z0-9_-]; the ODCS export keeps these rows (#1488).
+    engine = create_engine(f"sqlite:///{tmp_path / 't1d.db'}")
+    with engine.begin() as conn:
+        _schema(conn)
+        conn.execute(text(
+            "INSERT INTO data_contract_tags VALUES "
+            "('r1', 'c1', 'customer data'), ('r2', 'c1', 'domain:sales'), ('r3', 'c1', 'governance/bad name'), "
+            "('r4', 'c1', 'dots.not.ok'), ('r5', 'c1', 'ok-name_1')"
+        ))
+
+        _apply(conn, migration.upgrade)
+
+        assert _assignments(conn) == [('c1', 'default', 'ok-name_1', None, 'system')]
+        assert sorted(conn.execute(text("SELECT name FROM tags")).scalars()) == ['ok-name_1']
+        assert conn.execute(text("SELECT COUNT(*) FROM data_contract_tags")).scalar() == 5
 
 
 def test_upgrade_creates_a_missing_default_namespace(tmp_path, migration):

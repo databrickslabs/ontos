@@ -142,6 +142,22 @@ class TestCreateWithRelations:
 
         assert set(_assigned(db_session, created.id)) == {classification.name, region.name}
 
+    def test_a_non_conforming_name_is_skipped_and_the_others_are_assigned(self, db_session: Session, tags):
+        # ODCS tags are free text; TagBase only accepts [a-zA-Z0-9_-]. The reviewer's example (#1488).
+        classification, region = tags
+
+        created = _manager().create_contract_with_relations(
+            db=db_session,
+            contract_data={
+                "name": _name(),
+                "tags": [_fqn(classification), "customer data", "domain:sales", _fqn(region)],
+            },
+            current_user="alice@example.com",
+        )
+
+        assert set(_assigned(db_session, created.id)) == {classification.name, region.name}
+        assert db_session.query(TagDb).filter(TagDb.name.in_(["customer data", "domain:sales"])).count() == 0
+
     def test_a_missing_default_namespace_is_created_in_the_create(self, db_session: Session):
         assert tag_namespace_repo.get_by_name(db_session, name=DEFAULT_NAMESPACE_NAME) is None
         name = f"brand_new_{uuid.uuid4().hex[:6]}"
@@ -177,19 +193,19 @@ class TestCreateWithRelations:
 
         assert _assigned(db_session, created.id) == {}
 
-    def test_a_tag_failure_does_not_fail_the_create(self, db_session: Session, tags):
-        manager = _manager()
-        with patch.object(manager._tags_manager, "set_tags_for_entity", side_effect=SQLAlchemyError("boom")):
-            created = manager.create_contract_with_relations(
+    def test_a_database_error_on_a_tag_fails_the_create(self, db_session: Session, tags):
+        # Only unassignable names are skipped; a database error propagates, as on new versions (#1490).
+        with patch(
+            "src.repositories.tags_repository.entity_tag_repo.add_tag_to_entity",
+            side_effect=SQLAlchemyError("boom"),
+        ), pytest.raises(SQLAlchemyError):
+            _manager().create_contract_with_relations(
                 db=db_session,
                 contract_data={"name": _name(), "tags": [_fqn(tags[0])]},
                 current_user="alice@example.com",
             )
 
-        assert db_session.get(DataContractDb, created.id) is not None
-        assert _assigned(db_session, created.id) == {}
-
-    def test_without_a_tags_manager_the_create_still_works(self, db_session: Session, tags):
+    def test_without_a_tags_manager_the_create_still_assigns_its_tags(self, db_session: Session, tags):
         manager = DataContractsManager(data_dir=Path("/tmp"))
         manager._queue_delivery = lambda *a, **k: None
         manager._update_search_index = lambda *a, **k: None
@@ -198,7 +214,7 @@ class TestCreateWithRelations:
             db=db_session, contract_data={"name": _name(), "tags": [_fqn(tags[0])]}, current_user="alice@example.com",
         )
 
-        assert db_session.get(DataContractDb, created.id) is not None
+        assert _assigned(db_session, created.id) == {tags[0].name: None}
 
 
 class TestOdcsCreatePaths:
@@ -331,6 +347,38 @@ class TestExportAndSearch:
 
         assert odcs["tags"] == [classification.name, unassignable]
 
+    def test_export_keeps_a_non_conforming_file_tag_with_the_others(self, db_session: Session, tags):
+        classification, region = tags
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft",
+            "tags": [classification.name, "customer data", "domain:sales", region.name],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert sorted(odcs["tags"]) == sorted([classification.name, "customer data", "domain:sales", region.name])
+        assert _assigned(db_session, created.id) == {classification.name: None, region.name: None}
+
+    def test_export_does_not_repeat_a_padded_or_leading_slash_file_tag(self, db_session: Session):
+        # The import strips a padded name and reads "/x" as the default namespace; the
+        # export must not emit the legacy row again next to the assigned tag.
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft",
+            "tags": ["padded_one ", "/slashed_two"],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert sorted(odcs["tags"]) == ["padded_one", "slashed_two"]
+
     def test_export_drops_a_tag_removed_on_the_page(self, db_session: Session, tags):
         classification, region = tags
         manager = _manager()
@@ -455,16 +503,17 @@ class TestNewVersions:
         assert _assigned(db_session, new.id) == expected
 
     @pytest.mark.parametrize("method", ["create_new_version", "clone_contract_for_new_version"])
-    def test_a_tag_copy_failure_still_creates_the_version(self, db_session: Session, tagged_contract, method):
+    def test_a_tag_copy_failure_fails_the_version(self, db_session: Session, tagged_contract, method):
+        # Copy failures propagate, as for products (#1490); the version isn't left half-made.
         manager, cid, _ = tagged_contract
         with patch(
             "src.repositories.tags_repository.entity_tag_repo.add_tag_to_entity",
             side_effect=SQLAlchemyError("boom"),
-        ):
-            new = getattr(manager, method)(db_session, cid, "2.0.0", current_user="bob")
+        ), pytest.raises(SQLAlchemyError):
+            getattr(manager, method)(db_session, cid, "2.0.0", current_user="bob")
 
-        assert db_session.get(DataContractDb, new.id) is not None
-        assert _assigned(db_session, new.id) == {}
+        db_session.rollback()
+        assert db_session.query(DataContractDb).filter_by(version="2.0.0").count() == 0
 
     def test_a_new_version_records_who_copied_the_tags(self, db_session: Session, tagged_contract):
         manager, cid, _ = tagged_contract

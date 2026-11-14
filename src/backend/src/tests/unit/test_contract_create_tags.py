@@ -1,0 +1,529 @@
+"""Tags given when a contract is created are assigned (#1484).
+
+`DataContractCreate` accepts `tags` and the Create Contract dialog sends them, but
+`create_contract_with_relations` never read them, so a new contract had no tags.
+ODCS uploads wrote the file's tags only to the legacy ODCS tag table, which the
+contract page doesn't show, and new versions didn't copy the tags the page shows.
+"""
+import uuid
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from src.controller.data_contracts_manager import DataContractsManager
+from src.controller.tags_manager import TagsManager
+from src.db_models.data_contracts import DataContractDb, DataContractTagDb
+from src.db_models.tags import EntityTagAssociationDb, TagDb
+from src.models.data_contracts_api import DataContractCreate
+from src.models.tags import DEFAULT_NAMESPACE_NAME, AssignedTagCreate
+from src.repositories.tags_repository import tag_namespace_repo
+
+
+@pytest.fixture(autouse=True)
+def _remove_what_the_test_committed(db_session: Session):
+    """The managers commit, which the session fixture's rollback doesn't undo, so
+    remove the contracts, tags and namespaces a test added: other suites count
+    contracts and tags."""
+    from src.db_models.tags import TagNamespaceDb
+
+    contracts = {c for (c,) in db_session.query(DataContractDb.id)}
+    tag_ids = {t for (t,) in db_session.query(TagDb.id)}
+    namespaces = {n for (n,) in db_session.query(TagNamespaceDb.id)}
+    yield
+    db_session.rollback()
+    new_contracts = [c for (c,) in db_session.query(DataContractDb.id) if c not in contracts]
+    if new_contracts:
+        db_session.query(EntityTagAssociationDb).filter(
+            EntityTagAssociationDb.entity_type == "data_contract",
+            EntityTagAssociationDb.entity_id.in_([str(c) for c in new_contracts]),
+        ).delete(synchronize_session=False)
+        db_session.query(DataContractTagDb).filter(
+            DataContractTagDb.contract_id.in_(new_contracts)
+        ).delete(synchronize_session=False)
+        for contract in db_session.query(DataContractDb).filter(DataContractDb.id.in_(new_contracts)):
+            db_session.delete(contract)
+    db_session.query(EntityTagAssociationDb).filter(
+        ~EntityTagAssociationDb.tag_id.in_(tag_ids)
+    ).delete(synchronize_session=False)
+    db_session.query(TagDb).filter(~TagDb.id.in_(tag_ids)).delete(synchronize_session=False)
+    db_session.query(TagNamespaceDb).filter(~TagNamespaceDb.id.in_(namespaces)).delete(synchronize_session=False)
+    db_session.commit()
+
+
+def _manager(tags_manager=None):
+    mgr = DataContractsManager(data_dir=Path("/tmp"), tags_manager=tags_manager or TagsManager())
+    mgr._queue_delivery = lambda *a, **k: None
+    mgr._update_search_index = lambda *a, **k: None
+    return mgr
+
+
+@pytest.fixture
+def tags(db_session: Session):
+    namespace = tag_namespace_repo.get_or_create_default_namespace(db_session, user_email="admin@example.com")
+    made = []
+    for prefix in ("classification", "region"):
+        tag = TagDb(name=f"{prefix}_{uuid.uuid4().hex[:8]}", namespace_id=namespace.id, status="active")
+        db_session.add(tag)
+        made.append(tag)
+    db_session.commit()
+    return made
+
+
+def _fqn(tag: TagDb) -> str:
+    return f"{tag.namespace.name}/{tag.name}"
+
+
+def _assigned(db_session: Session, contract_id: str) -> dict:
+    rows = (
+        db_session.query(TagDb.name, EntityTagAssociationDb.assigned_value)
+        .join(EntityTagAssociationDb, EntityTagAssociationDb.tag_id == TagDb.id)
+        .filter(
+            EntityTagAssociationDb.entity_type == "data_contract",
+            EntityTagAssociationDb.entity_id == str(contract_id),
+        )
+        .all()
+    )
+    return {name: value for name, value in rows}
+
+
+def _name() -> str:
+    return f"Contract {uuid.uuid4().hex[:8]}"
+
+
+class TestCreateWithRelations:
+    def test_tags_from_the_payload_are_assigned(self, db_session: Session, tags):
+        classification, region = tags
+
+        created = _manager().create_contract_with_relations(
+            db=db_session,
+            contract_data={
+                "name": _name(),
+                "tags": [_fqn(classification), {"tag_fqn": _fqn(region), "assigned_value": "eu"}],
+            },
+            current_user="alice@example.com",
+        )
+
+        assert _assigned(db_session, created.id) == {classification.name: None, region.name: "eu"}
+
+    def test_the_dialog_payload_assigns_its_tags(self, db_session: Session, tags):
+        # The dialog sends FQN strings; the route passes the validated model.
+        classification, region = tags
+        payload = DataContractCreate(name=_name(), tags=[_fqn(classification), _fqn(region)])
+
+        created = _manager().create_contract_with_relations(
+            db=db_session, contract_data=payload, current_user="alice@example.com",
+        )
+
+        assert set(_assigned(db_session, created.id)) == {classification.name, region.name}
+
+    def test_an_unknown_tag_name_is_created_as_on_update(self, db_session: Session):
+        name = f"new_{uuid.uuid4().hex[:8]}"
+
+        created = _manager().create_contract_with_relations(
+            db=db_session, contract_data={"name": _name(), "tags": [name]}, current_user="alice@example.com",
+        )
+
+        assert _assigned(db_session, created.id) == {name: None}
+
+    def test_a_tag_in_an_unknown_namespace_is_skipped_alone(self, db_session: Session, tags):
+        classification, region = tags
+
+        created = _manager().create_contract_with_relations(
+            db=db_session,
+            contract_data={
+                "name": _name(),
+                "tags": [_fqn(classification), f"nowhere_{uuid.uuid4().hex[:6]}/x", _fqn(region)],
+            },
+            current_user="alice@example.com",
+        )
+
+        assert set(_assigned(db_session, created.id)) == {classification.name, region.name}
+
+    def test_a_non_conforming_name_is_skipped_and_the_others_are_assigned(self, db_session: Session, tags):
+        # ODCS tags are free text; TagBase only accepts [a-zA-Z0-9_-]. The reviewer's example (#1488).
+        classification, region = tags
+
+        created = _manager().create_contract_with_relations(
+            db=db_session,
+            contract_data={
+                "name": _name(),
+                "tags": [_fqn(classification), "customer data", "domain:sales", _fqn(region)],
+            },
+            current_user="alice@example.com",
+        )
+
+        assert set(_assigned(db_session, created.id)) == {classification.name, region.name}
+        assert db_session.query(TagDb).filter(TagDb.name.in_(["customer data", "domain:sales"])).count() == 0
+
+    def test_a_missing_default_namespace_is_created_in_the_create(self, db_session: Session):
+        assert tag_namespace_repo.get_by_name(db_session, name=DEFAULT_NAMESPACE_NAME) is None
+        name = f"brand_new_{uuid.uuid4().hex[:6]}"
+
+        created = _manager().create_contract_with_relations(
+            db=db_session, contract_data={"name": _name(), "tags": [name]}, current_user="alice@example.com",
+        )
+
+        assert db_session.get(DataContractDb, created.id) is not None
+        assert tag_namespace_repo.get_by_name(db_session, name=DEFAULT_NAMESPACE_NAME) is not None
+        assert _assigned(db_session, created.id) == {name: None}
+
+    def test_an_unknown_tag_id_is_skipped(self, db_session: Session, tags):
+        classification, _ = tags
+
+        created = _manager().create_contract_with_relations(
+            db=db_session,
+            contract_data={"name": _name(), "tags": [{"tag_id": str(uuid.uuid4())}, _fqn(classification)]},
+            current_user="alice@example.com",
+        )
+
+        assert _assigned(db_session, created.id) == {classification.name: None}
+
+    @pytest.mark.parametrize("tags_value", [None, []])
+    def test_no_tags_is_fine(self, db_session: Session, tags_value):
+        data = {"name": _name()}
+        if tags_value is not None:
+            data["tags"] = tags_value
+
+        created = _manager().create_contract_with_relations(
+            db=db_session, contract_data=data, current_user="alice@example.com",
+        )
+
+        assert _assigned(db_session, created.id) == {}
+
+    def test_a_database_error_on_a_tag_fails_the_create(self, db_session: Session, tags):
+        # Only unassignable names are skipped; a database error propagates, as on new versions (#1490).
+        with patch(
+            "src.repositories.tags_repository.entity_tag_repo.add_tag_to_entity",
+            side_effect=SQLAlchemyError("boom"),
+        ), pytest.raises(SQLAlchemyError):
+            _manager().create_contract_with_relations(
+                db=db_session,
+                contract_data={"name": _name(), "tags": [_fqn(tags[0])]},
+                current_user="alice@example.com",
+            )
+
+    def test_without_a_tags_manager_the_create_still_assigns_its_tags(self, db_session: Session, tags):
+        manager = DataContractsManager(data_dir=Path("/tmp"))
+        manager._queue_delivery = lambda *a, **k: None
+        manager._update_search_index = lambda *a, **k: None
+
+        created = manager.create_contract_with_relations(
+            db=db_session, contract_data={"name": _name(), "tags": [_fqn(tags[0])]}, current_user="alice@example.com",
+        )
+
+        assert _assigned(db_session, created.id) == {tags[0].name: None}
+
+
+class TestOdcsCreatePaths:
+    def _doc(self, tag_names):
+        return {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft", "tags": tag_names,
+        }
+
+    def test_upload_assigns_the_files_tags(self, db_session: Session, tags):
+        classification, _ = tags
+        new_name = f"imported_{uuid.uuid4().hex[:8]}"
+
+        created = _manager().create_from_upload(
+            db_session, self._doc([classification.name, new_name]), current_user="alice",
+        )
+        db_session.commit()
+
+        assert set(_assigned(db_session, created.id)) == {classification.name, new_name}
+        # ODCS export still reads the file's tags from the ODCS tag table.
+        legacy = {t.name for t in db_session.query(DataContractTagDb).filter_by(contract_id=created.id)}
+        assert legacy == {classification.name, new_name}
+
+    def test_create_from_odcs_dict_assigns_the_tags(self, db_session: Session, tags):
+        classification, _ = tags
+
+        created = _manager().create_from_odcs_dict(db_session, self._doc([classification.name]), "alice")
+        db_session.commit()
+
+        assert _assigned(db_session, created.id) == {classification.name: None}
+
+
+    def test_a_batch_import_assigns_each_files_tags(self, db_session: Session, tags):
+        import json
+
+        classification, region = tags
+        files = [
+            ("a.json", json.dumps(self._doc([classification.name])), "application/json"),
+            ("b.json", json.dumps(self._doc([region.name])), "application/json"),
+        ]
+
+        result = _manager().create_contracts_from_files(db=db_session, files=files, current_user="alice")
+
+        assert (result.created, result.failed) == (2, 0)
+        assigned = [_assigned(db_session, cid) for cid in result.created_ids]
+        assert sorted(next(iter(a)) for a in assigned) == sorted([classification.name, region.name])
+
+
+class TestExportAndSearch:
+    def test_export_lists_the_tags_of_a_dialog_created_contract(self, db_session: Session, tags):
+        classification, _ = tags
+        manager = _manager()
+        created = manager.create_contract_with_relations(
+            db=db_session, contract_data={"name": _name(), "tags": [_fqn(classification)]},
+            current_user="alice@example.com",
+        )
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert odcs["tags"] == [classification.name]
+
+    def test_export_writes_other_namespaces_with_their_name(self, db_session: Session):
+        from src.db_models.tags import TagNamespaceDb
+
+        ns = TagNamespaceDb(name=f"gov_{uuid.uuid4().hex[:6]}")
+        db_session.add(ns)
+        db_session.commit()
+        manager = _manager()
+        created = manager.create_contract_with_relations(
+            db=db_session, contract_data={"name": _name(), "tags": [f"{ns.name}/restricted"]},
+            current_user="alice@example.com",
+        )
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert odcs["tags"] == [f"{ns.name}/restricted"]
+
+    def test_export_of_an_upload_keeps_the_file_tags(self, db_session: Session, tags):
+        classification, _ = tags
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft", "tags": [classification.name],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert odcs["tags"] == [classification.name]
+
+    def test_export_without_a_session_reads_the_odcs_tag_rows(self, db_session: Session):
+        cid = str(uuid.uuid4())
+        db_session.add(DataContractDb(id=cid, name=_name(), version="1.0.0", status="draft"))
+        db_session.add(DataContractTagDb(contract_id=cid, name="legacy"))
+        db_session.commit()
+
+        assert _manager().build_odcs_from_db(db_session.get(DataContractDb, cid))["tags"] == ["legacy"]
+
+    def test_export_after_clearing_every_tag_on_the_page_has_none(self, db_session: Session, tags):
+        classification, _ = tags
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft", "tags": [classification.name],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+        manager._tags_manager.set_tags_for_entity(
+            db_session, entity_id=str(created.id), entity_type="data_contract", tags=[], user_email="bob",
+        )
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert "tags" not in odcs
+
+    def test_export_keeps_a_file_tag_that_could_not_be_assigned(self, db_session: Session, tags):
+        classification, _ = tags
+        unassignable = f"nowhere_{uuid.uuid4().hex[:6]}/restricted"
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft",
+            "tags": [classification.name, unassignable],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert odcs["tags"] == [classification.name, unassignable]
+
+    def test_export_keeps_a_non_conforming_file_tag_with_the_others(self, db_session: Session, tags):
+        classification, region = tags
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft",
+            "tags": [classification.name, "customer data", "domain:sales", region.name],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert sorted(odcs["tags"]) == sorted([classification.name, "customer data", "domain:sales", region.name])
+        assert _assigned(db_session, created.id) == {classification.name: None, region.name: None}
+
+    def test_export_does_not_repeat_a_padded_or_leading_slash_file_tag(self, db_session: Session):
+        # The import strips a padded name and reads "/x" as the default namespace; the
+        # export must not emit the legacy row again next to the assigned tag.
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft",
+            "tags": ["padded_one ", "/slashed_two"],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert sorted(odcs["tags"]) == ["padded_one", "slashed_two"]
+
+    def test_export_drops_a_tag_removed_on_the_page(self, db_session: Session, tags):
+        classification, region = tags
+        manager = _manager()
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft",
+            "tags": [classification.name, region.name],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+        manager._tags_manager.set_tags_for_entity(
+            db_session, entity_id=str(created.id), entity_type="data_contract",
+            tags=[AssignedTagCreate(tag_fqn=_fqn(classification))], user_email="bob",
+        )
+
+        odcs = manager.build_odcs_from_db(db_session.get(DataContractDb, created.id), db_session)
+
+        assert odcs["tags"] == [classification.name]
+
+    def test_search_lists_an_uploaded_tag_once(self, db_session: Session, tags):
+        classification, _ = tags
+        manager = DataContractsManager(data_dir=Path("/tmp"), tags_manager=TagsManager())
+        manager._queue_delivery = lambda *a, **k: None
+        doc = {
+            "apiVersion": "v3.1.0", "kind": "DataContract", "id": str(uuid.uuid4()),
+            "name": _name(), "version": "1.0.0", "status": "draft", "tags": [classification.name],
+        }
+        created = manager.create_from_upload(db_session, doc, current_user="alice")
+        db_session.commit()
+
+        item = manager._build_search_index_item(db_session.get(DataContractDb, created.id), db_session)
+
+        assert item.tags == [_fqn(classification)]
+
+
+class TestOdcsTagRoutesMirror:
+    """The ODCS tag routes keep the tag assignments the page shows in step."""
+
+    @pytest.fixture
+    def contract(self, db_session: Session, tags):
+        _, region = tags
+        manager = _manager()
+        created = manager.create_contract_with_relations(
+            db=db_session,
+            contract_data={"name": _name(), "tags": [{"tag_fqn": _fqn(region), "assigned_value": "eu"}]},
+            current_user="alice@example.com",
+        )
+        return manager, created.id
+
+    def test_adding_keeps_the_other_tags_and_their_values(self, db_session: Session, tags, contract):
+        classification, region = tags
+        manager, cid = contract
+
+        manager.add_odcs_tag_assignment(db_session, cid, classification.name, "bob")
+        db_session.commit()
+
+        assert _assigned(db_session, cid) == {classification.name: None, region.name: "eu"}
+
+    def test_a_name_in_a_missing_namespace_is_not_assigned(self, db_session: Session, tags, contract):
+        _, region = tags
+        manager, cid = contract
+
+        manager.add_odcs_tag_assignment(db_session, cid, f"nowhere_{uuid.uuid4().hex[:6]}/x", "bob")
+        db_session.commit()
+
+        assert _assigned(db_session, cid) == {region.name: "eu"}
+
+    def test_removing_drops_only_that_assignment(self, db_session: Session, tags, contract):
+        classification, region = tags
+        manager, cid = contract
+        manager.add_odcs_tag_assignment(db_session, cid, classification.name, "bob")
+        db_session.commit()
+
+        manager.remove_odcs_tag_assignment(db_session, cid, classification.name)
+        db_session.commit()
+
+        assert _assigned(db_session, cid) == {region.name: "eu"}
+
+
+    def test_a_rename_moves_the_assignment(self, db_session: Session, tags, contract):
+        _, region = tags
+        manager, cid = contract
+        old, new = f"old_{uuid.uuid4().hex[:6]}", f"new_{uuid.uuid4().hex[:6]}"
+        manager.add_odcs_tag_assignment(db_session, cid, old, "bob")
+        db_session.commit()
+
+        manager.remove_odcs_tag_assignment(db_session, cid, old)
+        manager.add_odcs_tag_assignment(db_session, cid, new, "bob")
+        db_session.commit()
+
+        assert _assigned(db_session, cid) == {new: None, region.name: "eu"}
+
+
+class TestNewVersions:
+    @pytest.fixture
+    def tagged_contract(self, db_session: Session, tags):
+        classification, region = tags
+        manager = _manager()
+        created = manager.create_contract_with_relations(
+            db=db_session,
+            contract_data={
+                "name": _name(), "version": "1.0.0",
+                "tags": [_fqn(classification), {"tag_fqn": _fqn(region), "assigned_value": "eu"}],
+            },
+            current_user="alice@example.com",
+        )
+        return manager, created.id, {classification.name: None, region.name: "eu"}
+
+    def test_a_deep_clone_keeps_the_tags_and_values(self, db_session: Session, tagged_contract):
+        manager, cid, expected = tagged_contract
+
+        new = manager.clone_contract_for_new_version(db_session, cid, "2.0.0", current_user="bob")
+
+        assert _assigned(db_session, new.id) == expected
+        assert _assigned(db_session, cid) == expected
+
+    def test_a_lightweight_new_version_keeps_the_tags_and_values(self, db_session: Session, tagged_contract):
+        manager, cid, expected = tagged_contract
+
+        new = manager.create_new_version(db_session, cid, "2.0.0", current_user="bob")
+
+        assert _assigned(db_session, new.id) == expected
+
+    @pytest.mark.parametrize("method", ["create_new_version", "clone_contract_for_new_version"])
+    def test_a_tag_copy_failure_fails_the_version(self, db_session: Session, tagged_contract, method):
+        # Copy failures propagate, as for products (#1490); the version isn't left half-made.
+        manager, cid, _ = tagged_contract
+        with patch(
+            "src.repositories.tags_repository.entity_tag_repo.add_tag_to_entity",
+            side_effect=SQLAlchemyError("boom"),
+        ), pytest.raises(SQLAlchemyError):
+            getattr(manager, method)(db_session, cid, "2.0.0", current_user="bob")
+
+        db_session.rollback()
+        assert db_session.query(DataContractDb).filter_by(version="2.0.0").count() == 0
+
+    def test_a_new_version_records_who_copied_the_tags(self, db_session: Session, tagged_contract):
+        manager, cid, _ = tagged_contract
+
+        new = manager.create_new_version(db_session, cid, "2.0.0", current_user="bob")
+
+        assigned_by = {
+            a.assigned_by
+            for a in db_session.query(EntityTagAssociationDb).filter_by(
+                entity_type="data_contract", entity_id=str(new.id)
+            )
+        }
+        assert assigned_by == {"bob"}

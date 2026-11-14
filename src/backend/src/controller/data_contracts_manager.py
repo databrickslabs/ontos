@@ -64,6 +64,7 @@ from sqlalchemy.orm import Session
 
 from src.common.ontology_type_names import canonical_type_name
 from src.models.import_results import BatchImportResult, ImportItemResult
+from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
 from src.common.lifecycle_status import (
@@ -492,13 +493,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         description = str(description_usage) if description_usage else ""
 
         tag_names: List[str] = []
+        legacy_names: List[str] = []
 
-        # 1. Legacy ODCS tags (DataContractTagDb) -- still uses selectin, lightweight
+        # 1. Legacy ODCS tags (DataContractTagDb) -- still uses selectin, lightweight.
+        # Added after the unified tags, skipping names those already cover (#1484:
+        # an upload writes each file tag to both stores).
         try:
             if getattr(contract_db_obj, 'tags', None):
                 for t in contract_db_obj.tags:
                     if getattr(t, 'name', None):
-                        tag_names.append(t.name)
+                        legacy_names.append(t.name)
         except Exception:
             pass
 
@@ -518,6 +522,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         tag_names.append(tag.fully_qualified_name)
             except Exception as tag_err:
                 logger.debug(f"Could not load unified tags for contract {contract_id}: {tag_err}")
+        covered = set(tag_names) | {n.split(TAG_NAMESPACE_SEPARATOR, 1)[-1] for n in tag_names}
+        tag_names.extend(n for n in legacy_names if n not in covered)
 
         # Owner/team: resolve the native owning team, then fall back to the ODCS-supplied team
         # (team-object name + member names) so a contract whose owner_team_id is unset is still
@@ -698,12 +704,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         created = data_contract_repo.create(db=db, obj_in=db_obj)  # type: ignore[arg-type]
 
-        # tags
+        # tags: the ODCS tag rows (read by the ODCS export) and the tag
+        # assignments the contract page shows (#1484)
         tags = odcs.get('tags') or []
         if isinstance(tags, list):
             for t in tags:
                 if isinstance(t, str):
                     db.add(DataContractTagDb(contract_id=created.id, name=t))
+            self._assign_tags_on_create(
+                db, created.id, [t for t in tags if isinstance(t, str)], current_username,
+            )
         # roles
         for r in odcs.get('roles', []) or []:
             if isinstance(r, dict) and r.get('role'):
@@ -1502,9 +1512,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 auth_defs.append(ad_item)
             odcs['authoritativeDefinitions'] = auth_defs
 
-        # Legacy support for tags and roles
-        if hasattr(db_obj, 'tags') and db_obj.tags:
-            odcs['tags'] = [t.name for t in db_obj.tags]
+        # Tags: the tag assignments the contract page shows (#1484), a name in the
+        # default namespace written without it, plus the ODCS tag rows that couldn't
+        # be assigned (a name the tag pattern rejects, or a namespace that doesn't
+        # exist). The other ODCS rows aren't used: imports, the ODCS tag routes and
+        # migration t1 mirror them onto the assignments, and a tag removed on the page
+        # keeps its row. Without a session only the ODCS rows can be read.
+        legacy_tag_names = [t.name.strip() for t in (getattr(db_obj, 'tags', None) or []) if t.name and t.name.strip()]
+        if db_session is not None:
+            exported_tags = self._odcs_tag_names(db_session, db_obj.id)
+            for name in legacy_tag_names:
+                if name not in exported_tags and not self._is_assignable_tag_name(db_session, name):
+                    exported_tags.append(name)
+            if exported_tags:
+                odcs['tags'] = exported_tags
+        elif legacy_tag_names:
+            odcs['tags'] = legacy_tag_names
             
         if hasattr(db_obj, 'roles') and db_obj.roles:
             roles = []
@@ -2288,6 +2311,192 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         )
                         db.add(prop_db)
     
+    @staticmethod
+    def _tag_creates(tags_data) -> list:
+        """Tag assignments from a payload's or an ODCS file's ``tags`` (FQN strings or dicts)."""
+        from src.models.tags import AssignedTagCreate
+
+        tag_creates = []
+        for tag in tags_data or []:
+            try:
+                if isinstance(tag, str):
+                    if tag.strip():
+                        tag_creates.append(AssignedTagCreate(tag_fqn=tag.strip()))
+                elif isinstance(tag, dict):
+                    tag_creates.append(AssignedTagCreate(**tag))
+                elif hasattr(tag, 'model_dump'):
+                    tag_creates.append(AssignedTagCreate(**tag.model_dump()))
+            except (ValueError, TypeError) as e:  # pydantic's ValidationError is a ValueError
+                logger.warning("Skipping unreadable tag %r: %s", tag, e)
+        return tag_creates
+
+    def _assign_tags_on_create(self, db, contract_id: str, tags_data, current_user: Optional[str]) -> None:
+        """Assign the tags a contract is created or imported with, in the caller's transaction (#1484).
+
+        Tags resolve as on update: an unknown name is created, an unknown id is
+        skipped. Each tag has its own savepoint, so one that can't be assigned
+        doesn't stop the others: a name the tag pattern rejects (ODCS tags are free
+        text, see _is_assignable_tag_name) or in a namespace that doesn't exist is
+        skipped and logged. A database error propagates, as in the version copy (#1490),
+        so it fails the create; the tag that caused it is not skipped.
+        """
+        tag_creates = self._tag_creates(tags_data)
+        if not tag_creates:
+            return
+
+        # Flush the create's own rows first, so their errors surface as themselves
+        # and not as a tag failure (begin_nested flushes before its SAVEPOINT).
+        db.flush()
+        assigned: List[str] = []
+        for tag in tag_creates:
+            try:
+                with db.begin_nested():
+                    assigned.append(self._assign_one_tag(db, contract_id, tag, current_user))
+            except ValueError as e:  # pydantic's ValidationError, an unknown id or namespace
+                logger.warning("Skipping tag %r of contract %s: %s", tag.tag_fqn or tag.tag_id, contract_id, e)
+        if not assigned:
+            return
+
+        # One TAGS_SET entry for the timeline, as the tag write of an update logs. In a
+        # savepoint, so a failed log can't abort the create (see TagsManager.set_tags_for_entity).
+        from src.controller.change_log_manager import change_log_manager
+        summary = ", ".join(assigned[:5]) + (f", ... ({len(assigned)} total)" if len(assigned) > 5 else "")
+        try:
+            with db.begin_nested():
+                change_log_manager.log_change_with_details(
+                    db, entity_type="data_contract", entity_id=str(contract_id), action="TAGS_SET",
+                    username=current_user,
+                    details={
+                        "tag_count": len(assigned),
+                        "tags": summary,
+                        "summary": f"Tags updated: {summary}" + (f" by {current_user}" if current_user else ""),
+                    },
+                    commit=False,
+                )
+        except Exception as log_err:
+            logger.warning("Failed to log change for tags of new contract %s: %s", contract_id, log_err)
+
+    @staticmethod
+    def _default_namespace(db, current_user: Optional[str]):
+        """The default tag namespace, created with a flush if missing.
+
+        Startup seeds it. get_or_create_default_namespace commits, which would end the
+        create's transaction, so a missing one is created here.
+        """
+        from src.models.tags import TagNamespaceCreate
+        from src.repositories.tags_repository import tag_namespace_repo
+
+        namespace = tag_namespace_repo.get_by_name(db, name=DEFAULT_NAMESPACE_NAME)
+        if namespace is None:
+            namespace = tag_namespace_repo.create(
+                db,
+                obj_in=TagNamespaceCreate(name=DEFAULT_NAMESPACE_NAME, description="Default system namespace"),
+                user_email=current_user,
+            )
+            db.flush()
+        return namespace
+
+    @staticmethod
+    def _assign_one_tag(db, contract_id: str, tag, current_user: Optional[str]) -> str:
+        """Assign one tag to a contract and return its fully qualified name.
+
+        Raises ValueError for a tag that can't be assigned (an unknown id, a namespace
+        that doesn't exist, a name the tag pattern rejects).
+        """
+        from src.repositories.tags_repository import entity_tag_repo, tag_repo
+
+        if tag.tag_id:
+            tag_db = tag_repo.get(db, id=tag.tag_id)
+            if tag_db is None:
+                raise ValueError(f"no tag with id {tag.tag_id}")
+        elif tag.tag_fqn:
+            parts = tag.tag_fqn.split(TAG_NAMESPACE_SEPARATOR, 1)
+            tag_db = tag_repo.find_or_create_tag(
+                db,
+                tag_name=parts[-1],
+                namespace_name=parts[0] if len(parts) > 1 else None,
+                user_email=current_user,
+                default_namespace_id=DataContractsManager._default_namespace(db, current_user).id,
+            )
+            db.flush()
+        else:
+            raise ValueError("the tag has neither an id nor a name")
+
+        entity_tag_repo.add_tag_to_entity(
+            db,
+            entity_id=str(contract_id),
+            entity_type="data_contract",
+            tag_id=tag_db.id,
+            assigned_value=tag.assigned_value,
+            assigned_by=current_user,
+        )
+        db.flush()
+        namespace_name = tag_db.namespace.name if getattr(tag_db, "namespace", None) else DEFAULT_NAMESPACE_NAME
+        return f"{namespace_name}{TAG_NAMESPACE_SEPARATOR}{tag_db.name}"
+
+    def add_odcs_tag_assignment(self, db, contract_id: str, name: str, current_user: Optional[str]) -> None:
+        """Mirror an ODCS tag row onto the tag assignments the page shows (#1484).
+
+        Used by the ODCS tag routes, so a tag added there is shown on the page and
+        exported. A name that can't be assigned is skipped, as on import.
+        """
+        if name and name.strip():
+            self._assign_tags_on_create(db, contract_id, [name.strip()], current_user)
+
+    def remove_odcs_tag_assignment(self, db, contract_id: str, name: str) -> None:
+        """Remove the tag assignment an ODCS tag row was mirrored to (see add_odcs_tag_assignment)."""
+        from src.repositories.tags_repository import entity_tag_repo, tag_repo
+
+        if not name or not name.strip():
+            return
+        fqn = name.strip() if TAG_NAMESPACE_SEPARATOR in name else f"{DEFAULT_NAMESPACE_NAME}{TAG_NAMESPACE_SEPARATOR}{name.strip()}"
+        tag = tag_repo.get_by_fully_qualified_name(db, fqn=fqn)
+        if tag is not None:
+            entity_tag_repo.remove_tag_from_entity(
+                db, entity_id=str(contract_id), entity_type="data_contract", tag_id=tag.id,
+            )
+            # Sessions don't autoflush: a later read of the contract's tags (a rename
+            # adds the new name next) must not see the removed one.
+            db.flush()
+
+    @staticmethod
+    def _is_assignable_tag_name(db, name: str) -> bool:
+        """True when an ODCS tag name can be assigned (#1484): its namespace exists (a bare
+        name is in the default namespace) and its tag name passes TagBase's pattern.
+
+        The import, the ODCS export and the ODCS tag routes use this one test. Migration
+        t1 applies the same pattern to the rows it backfills.
+        """
+        from src.models.tags import TagBase
+        from src.repositories.tags_repository import tag_namespace_repo
+
+        namespace, tag_name = (
+            name.split(TAG_NAMESPACE_SEPARATOR, 1) if TAG_NAMESPACE_SEPARATOR in name else ("", name)
+        )
+        # An empty namespace is the default one, as on import; the default one is seeded at startup.
+        if namespace not in ("", DEFAULT_NAMESPACE_NAME) and tag_namespace_repo.get_by_name(db, name=namespace) is None:
+            return False
+        try:
+            TagBase(name=tag_name)
+        except ValueError:
+            return False
+        return True
+
+    @staticmethod
+    def _odcs_tag_names(db, contract_id: str) -> List[str]:
+        """ODCS ``tags`` strings from a contract's tag assignments (default-namespace names bare)."""
+        from src.repositories.tags_repository import entity_tag_repo
+
+        names = []
+        for tag in entity_tag_repo.get_assigned_tags_for_entity(
+            db, entity_id=str(contract_id), entity_type="data_contract",
+        ):
+            if tag.namespace_name == DEFAULT_NAMESPACE_NAME:
+                names.append(tag.tag_name)
+            else:
+                names.append(tag.fully_qualified_name)
+        return names
+
     def _create_tags(self, db, contract_id: str, tags: List[str]):
         """Create tags from ODCS tags array."""
         for tag in tags:
@@ -2518,6 +2727,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if team_data:
                 self._create_team_members(db, created.id, team_data)
             self._create_team_metadata(db, created.id, team_raw)
+
+            self._assign_tags_on_create(db, created.id, data_dict.get('tags'), current_user)
 
             db.commit()
             db.refresh(created)
@@ -3241,10 +3452,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if isinstance(servers_data, list) and servers_data:
                 self._create_servers(db, created.id, servers_data)
             
-            # Create tags if present
+            # Create tags if present: the ODCS tag rows (read by the ODCS export)
+            # and the tag assignments the contract page shows (#1484)
             tags = parsed_odcs.get('tags', [])
             if isinstance(tags, list) and tags:
                 self._create_tags(db, created.id, tags)
+                self._assign_tags_on_create(db, created.id, tags, current_user)
             
             # Create roles if present
             roles = parsed_odcs.get('roles', [])
@@ -5047,11 +5260,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 )
 
             # Clone all nested entities
-            # Tags
+            # Tags: the ODCS tag rows, and the tag assignments the page shows
+            # with their values (#1484)
             if source_contract.tags:
                 cloned_tags = cloner.clone_tags(source_contract.tags, new_contract.id)
                 for tag_data in cloned_tags:
                     db.add(DataContractTagDb(**tag_data))
+            from src.repositories.tags_repository import entity_tag_repo
+            entity_tag_repo.copy_tags_for_entity(
+                db, source_id=str(source_contract.id), target_id=str(new_contract.id),
+                entity_type="data_contract", assigned_by=current_user or "system",
+            )
             
             # Servers
             if source_contract.servers:
@@ -5536,8 +5755,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     ) -> DataContractDb:
         """Create a new version of a contract with basic metadata cloning.
         
-        This is a lightweight version creation that only clones core metadata
-        without nested entities. For a complete deep clone, use clone_contract_for_new_version().
+        This is a lightweight version creation that clones core metadata, the
+        domain assignments and the tag assignments, without nested entities.
+        For a complete deep clone, use clone_contract_for_new_version().
         
         Args:
             db: Database session
@@ -5595,6 +5815,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 primary_domain_id=next((d.domain_id for d in original_domains if d.is_primary), None),
                 assigned_by=current_user,
             )
+        # Copy the tags the page shows, with their values, as for domains (#1484).
+        from src.repositories.tags_repository import entity_tag_repo
+        entity_tag_repo.copy_tags_for_entity(
+            db, source_id=str(original.id), target_id=str(clone.id),
+            entity_type="data_contract", assigned_by=current_user,
+        )
 
         db.commit()
         db.refresh(clone)

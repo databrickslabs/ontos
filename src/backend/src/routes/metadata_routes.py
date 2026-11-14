@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, Callable, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body, Request, Query
 from fastapi.responses import StreamingResponse
@@ -14,6 +14,7 @@ from src.common.logging import get_logger
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header, is_safe_path_component
 from src.controller.metadata_manager import MetadataManager, SHARED_ENTITY_ID
 from src.common.manager_dependencies import get_metadata_manager
+from src.routes.business_lineage_routes import contracts_feature_admin
 from src.models.metadata import (
     RichText, RichTextCreate, RichTextUpdate,
     Link, LinkCreate, LinkUpdate,
@@ -613,13 +614,61 @@ async def detach_shared_asset(
 # Merged Metadata Endpoint (with inheritance)
 # =========================================================================
 
+def build_inheritance_source_access(
+    request: Request, db, current_user, contracts_admin: bool,
+) -> Callable[[str, Any], bool]:
+    """Read check for inheritance sources, mirroring the source's own read route.
+
+    Contracts use the lineage contract gate (PRD #442: published, or elevated
+    for the version family; never another user's personal draft). Assets use
+    the ``GET /api/assets/{id}`` rule: ``assets`` READ_WRITE reads every asset,
+    others only assets linked to an accessible Data Product (issue #347).
+    The accessible asset set is resolved once per request. Fails closed.
+    """
+    from src.routes.assets_routes import _get_data_products_manager, _user_has_assets_feature
+    from src.routes.business_lineage_routes import build_lineage_access
+
+    contract_access = build_lineage_access(request, db, current_user, contracts_admin)
+    asset_ids: List[Optional[set]] = []  # [None] = unrestricted; resolved lazily
+
+    def accessible_asset_ids() -> Optional[set]:
+        if not asset_ids:
+            ids: Optional[set] = set()
+            if current_user is not None:
+                if _user_has_assets_feature(request, current_user, FeatureAccessLevel.READ_WRITE):
+                    ids = None
+                else:
+                    assets_mgr = getattr(request.app.state, "assets_manager", None)
+                    dpm = _get_data_products_manager(request)
+                    if assets_mgr is not None and dpm is not None:
+                        found = assets_mgr.resolve_accessible_asset_ids(
+                            db, data_products_manager=dpm, is_admin=False,
+                        )
+                        ids = None if found is None else {str(i) for i in found}
+            asset_ids.append(ids)
+        return asset_ids[0]
+
+    def can_read(kind: str, row: Any) -> bool:
+        if kind == "data_contract":
+            return bool(contract_access.can_read_contract(row))
+        if kind == "asset":
+            allowed = accessible_asset_ids()
+            return allowed is None or str(row.id) in allowed
+        return False
+
+    return can_read
+
+
 @router.get("/entities/{entity_type}/metadata/merged", response_model=MergedMetadataResponse)
 async def get_merged_metadata(
     entity_type: str,
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     contract_ids: Optional[str] = Query(None, description="Comma-separated contract IDs for inheritance"),
     max_level: Optional[int] = Query(None, ge=0, le=999, description="Maximum inheritance level (defaults to the product's max_level_inheritance, else 99)"),
+    request: Request = None,
     db: DBSessionDep = None,
+    current_user: CurrentUserDep = None,
+    contracts_admin: bool = Depends(contracts_feature_admin),
     manager: MetadataManager = Depends(get_metadata_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
@@ -629,12 +678,14 @@ async def get_merged_metadata(
     Inheritance sources are resolved server-side: a contract inherits from the
     assets that implement it, a product from its output ports' contracts and
     assets. ``contract_ids`` adds further contracts.
-    Only metadata with level <= max_level and inheritable=True will be inherited.
+    Only metadata with level <= max_level and inheritable=True will be inherited,
+    and only from sources the caller may read (retired sources never count).
     """
     contract_id_list = [cid.strip() for cid in contract_ids.split(",")] if contract_ids else None
     return manager.get_merged_metadata(
         db, entity_type=entity_type, entity_id=entity_id,
-        contract_ids=contract_id_list, max_level_inheritance=max_level
+        contract_ids=contract_id_list, max_level_inheritance=max_level,
+        can_read_source=build_inheritance_source_access(request, db, current_user, contracts_admin),
     )
 
 

@@ -723,7 +723,9 @@
     "selectedOfMax": "{{count}} von {{max}} Tags ausgewählt",
     "valueLabel": "Wert",
     "valuePlaceholder": "Wert eingeben",
-    "noValue": "Kein Wert"
+    "noValue": "Kein Wert",
+    "valueLoading": "Tag-Werte werden geladen...",
+    "valueUnavailable": "Werte nicht verfügbar: Die Tag-Definitionen konnten nicht geladen werden."
   },
   "userInfo": {
     "actingAs": "Agiert als {{label}} (Testmodus)",

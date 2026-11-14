@@ -727,7 +727,9 @@
     "selectedOfMax": "{{count}} van {{max}} tags geselecteerd",
     "valueLabel": "Waarde",
     "valuePlaceholder": "Voer een waarde in",
-    "noValue": "Geen waarde"
+    "noValue": "Geen waarde",
+    "valueLoading": "Tagwaarden laden...",
+    "valueUnavailable": "Waarden niet beschikbaar: de tagdefinities konden niet worden geladen."
   },
   "userInfo": {
     "actingAs": "Actief als {{label}} (testmodus)",

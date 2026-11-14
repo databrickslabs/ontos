@@ -727,7 +727,9 @@
     "selectedOfMax": "{{count}} of {{max}} tags selected",
     "valueLabel": "Value",
     "valuePlaceholder": "Enter a value",
-    "noValue": "No value"
+    "noValue": "No value",
+    "valueLoading": "Loading the tag's values...",
+    "valueUnavailable": "Values unavailable: the tag definitions could not be loaded."
   },
   "userInfo": {
     "actingAs": "Acting as {{label}} (test mode)",

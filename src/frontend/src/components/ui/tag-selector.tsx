@@ -109,6 +109,9 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   const [searchValue, setSearchValue] = useState('');
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
+  // Whether the tag definitions (possible_values) are known. A value editor waits for
+  // them: a tag may have a list, and free text would let an out-of-list value through.
+  const [definitions, setDefinitions] = useState<'loading' | 'ready' | 'failed'>('loading');
   const { get } = useApi();
 
   // Escape should close only this popover, not the surrounding modal Dialog.
@@ -142,13 +145,19 @@ const TagSelector: React.FC<TagSelectorProps> = ({
       if (!open && !needsDefinitions) return;
 
       setLoading(true);
+      setDefinitions(prev => (prev === 'ready' ? prev : 'loading'));
       try {
         const response = await get<Tag[]>('/api/tags');
-        if (response.data) {
+        // A denied request answers with an error and no list
+        if (response.error || !Array.isArray(response.data)) {
+          setDefinitions('failed');
+        } else {
           setAvailableTags(response.data);
+          setDefinitions('ready');
         }
       } catch (error) {
         console.error('Failed to fetch tags:', error);
+        setDefinitions('failed');
       } finally {
         setLoading(false);
       }
@@ -239,7 +248,15 @@ const TagSelector: React.FC<TagSelectorProps> = ({
                   onRemove={() => removeTag(tag.fqn)}
                   size="sm"
                 />
-                {editValues && (possibleValues.length > 0 ? (
+                {editValues && (definitions !== 'ready' ? (
+                  <Input
+                    className="h-7 w-48 text-xs"
+                    aria-label={valueLabel}
+                    placeholder={definitions === 'failed' ? t('common:tagSelector.valueUnavailable') : t('common:tagSelector.valueLoading')}
+                    value={current}
+                    disabled
+                  />
+                ) : possibleValues.length > 0 ? (
                   <Select
                     value={current || NO_VALUE}
                     onValueChange={next => setTagValue(tag.fqn, next === NO_VALUE ? '' : next)}

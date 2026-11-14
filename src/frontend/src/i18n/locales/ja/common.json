@@ -723,7 +723,9 @@
     "selectedOfMax": "{{max}} 件中 {{count}} 件のタグを選択中",
     "valueLabel": "値",
     "valuePlaceholder": "値を入力...",
-    "noValue": "値なし"
+    "noValue": "値なし",
+    "valueLoading": "タグの値を読み込んでいます...",
+    "valueUnavailable": "値を利用できません: タグの定義を読み込めませんでした。"
   },
   "userInfo": {
     "actingAs": "{{label}} として操作中（テストモード）",

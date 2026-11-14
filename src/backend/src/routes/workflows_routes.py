@@ -2344,6 +2344,7 @@ async def get_execution(
             'passed': se.passed,
             'result_data': json.loads(se.result_data) if se.result_data else None,
             'error_message': se.error_message,
+            'message': se.message,
             'duration_ms': se.duration_ms,
             'started_at': se.started_at.isoformat() if se.started_at else None,
             'finished_at': se.finished_at.isoformat() if se.finished_at else None,

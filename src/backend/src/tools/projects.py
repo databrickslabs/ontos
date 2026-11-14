@@ -298,7 +298,12 @@ class UpdateProjectTool(BaseTool):
     ) -> ToolResult:
         """Update a project."""
         logger.info(f"[update_project] Starting - project_id={project_id}")
-        
+
+        # The REST PUT answers 404 for a project the list hides; so does this tool.
+        if not read_access.visible_project_ids(ctx, [project_id]):
+            not_found = ToolResult(success=False, error=f"Project '{project_id}' not found")
+            return read_access.denied(ctx, self.name, not_found, [str(project_id)])
+
         try:
             from src.controller.projects_manager import projects_manager
             from src.models.projects import ProjectUpdate
@@ -376,7 +381,12 @@ class DeleteProjectTool(BaseTool):
     ) -> ToolResult:
         """Delete a project."""
         logger.info(f"[delete_project] Starting - project_id={project_id}")
-        
+
+        # The REST DELETE answers 404 for a project the list hides; so does this tool.
+        if not read_access.visible_project_ids(ctx, [project_id]):
+            not_found = ToolResult(success=False, error=f"Project '{project_id}' not found")
+            return read_access.denied(ctx, self.name, not_found, [str(project_id)])
+
         try:
             from src.controller.projects_manager import projects_manager
             

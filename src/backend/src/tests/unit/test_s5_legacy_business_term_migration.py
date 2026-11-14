@@ -1,4 +1,4 @@
-"""Migration u5 archives BusinessTerm assets as Legacy Business Term without losing any (#970)."""
+"""Migration s5 archives BusinessTerm assets as Legacy Business Term without losing any (#970)."""
 import importlib.util
 from pathlib import Path
 
@@ -8,7 +8,7 @@ from alembic.operations import Operations
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
-PATH = Path(__file__).resolve().parents[3] / "alembic" / "versions" / "u5_legacy_business_term.py"
+PATH = Path(__file__).resolve().parents[3] / "alembic" / "versions" / "s5_legacy_business_term.py"
 
 BT = "bt-type"
 LE = "le-type"
@@ -18,7 +18,7 @@ SCHEMA = '{"name": {"type": "string"}}'
 
 @pytest.fixture
 def migration():
-    spec = importlib.util.spec_from_file_location("u5_legacy_business_term", PATH)
+    spec = importlib.util.spec_from_file_location("s5_legacy_business_term", PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -230,3 +230,111 @@ def test_pruning_is_a_no_op_without_a_triple_store(engine, migration):
     _seed(engine)
     _run(engine, migration)
     assert _legacy_type(engine) is not None
+
+
+def _downgrade(engine, migration):
+    with engine.begin() as conn:
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.downgrade()
+
+
+def _type_id(engine, name):
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT id FROM asset_types WHERE name = :n"), {"n": name}).first()
+    return row.id if row else None
+
+
+def _drop_business_term_type(engine):
+    """The startup sync deletes the stale system type once no asset uses it."""
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM asset_types WHERE name = 'Business Term'"))
+
+
+def test_downgrade_restores_every_asset_row_and_its_type(engine, migration):
+    _seed(engine)
+    before = _assets(engine)
+    _run(engine, migration)
+    _drop_business_term_type(engine)
+
+    _downgrade(engine, migration)
+
+    after = _assets(engine)
+    assert set(after) == set(before)
+    # The recreated type has a new id, so compare everything but asset_type_id here
+    strip = lambda rows: {k: v[0:1] + v[2:] for k, v in rows.items()}  # noqa: E731
+    assert strip(after) == strip(before)
+    term_id = _type_id(engine, "Business Term")
+    assert term_id is not None
+    assert {after[aid][1] for aid in ("a-customer", "a-transaction")} == {term_id}
+    assert after["a-entity"][1] == LE
+
+
+def test_downgrade_recreates_business_term_from_the_legacy_schema(engine, migration):
+    _seed(engine)
+    _run(engine, migration)
+    _drop_business_term_type(engine)
+
+    _downgrade(engine, migration)
+
+    with engine.connect() as conn:
+        term = conn.execute(text(
+            "SELECT is_system, status, required_fields FROM asset_types WHERE name = 'Business Term'"
+        )).first()
+    assert term.is_system
+    assert term.status == "active"
+    assert term.required_fields == SCHEMA
+    assert _legacy_type(engine) is None
+
+
+def test_downgrade_renames_relationship_rows_back(engine, migration):
+    _seed(engine)
+    _run(engine, migration)
+    _drop_business_term_type(engine)
+
+    _downgrade(engine, migration)
+
+    rels = _relationships(engine)
+    assert rels["r1"] == ("BusinessTerm", "a-customer", "LogicalEntity", "a-entity", "relatesTo")
+    assert rels["r2"] == ("DataProduct", "dp-1", "BusinessTerm", "a-transaction", "hasTerm")
+    assert rels["r3"] == ("DataProduct", "dp-1", "LogicalEntity", "a-entity", "hasLogicalEntity")
+    assert len(rels) == 3
+
+
+def test_downgrade_reuses_a_business_term_type_that_still_exists(engine, migration):
+    _seed(engine)
+    _run(engine, migration)
+    # BusinessTerm row still present (no startup sync yet)
+    term_id = _type_id(engine, "Business Term")
+
+    _downgrade(engine, migration)
+
+    assert _type_id(engine, "Business Term") == term_id
+    assert _type_id(engine, "Legacy Business Term") is None
+    assert _assets(engine)["a-customer"][1] == term_id
+
+
+def test_downgrade_without_legacy_type_is_a_no_op(engine, migration):
+    _seed(engine)
+    before_assets = _assets(engine)
+    before_rels = _relationships(engine)
+
+    _downgrade(engine, migration)
+
+    assert _assets(engine) == before_assets
+    assert _relationships(engine) == before_rels
+
+
+def test_upgrade_downgrade_upgrade_round_trip(engine, migration):
+    _seed(engine)
+    before = _assets(engine)
+    _run(engine, migration)
+    _drop_business_term_type(engine)
+    _downgrade(engine, migration)
+    _run(engine, migration)
+
+    after = _assets(engine)
+    assert set(after) == set(before)
+    legacy = _legacy_type(engine)
+    assert {after["a-customer"][1], after["a-transaction"][1]} == {legacy.id}
+    assert _relationships(engine)["r1"][0] == "LegacyBusinessTerm"
+

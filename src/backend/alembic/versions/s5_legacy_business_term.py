@@ -11,7 +11,14 @@ relationships stay attached. Their entity_relationships rows carry the type name
 Installs without BusinessTerm assets get no moved assets; the ontology sync creates the
 (empty, hidden) legacy type on every install.
 
-Revision ID: u5_legacy_business_term
+Downgrade restores the older state for the assets: the 'Business Term' type is recreated
+from the legacy type's schema, the assets and their relationship rows move back, and the
+emptied legacy type is removed. The pruned ontology triples are not restored here. The
+bundled TTL is imported on every startup of an older build (ON CONFLICT DO NOTHING), which
+re-adds BusinessTerm, its links and its domains before the asset-type sync runs. The
+type's category, icon and description also come back from that sync, not from this file.
+
+Revision ID: s5_legacy_business_term
 Revises: r2_canonical_relationship_types
 Create Date: 2026-11-12
 """
@@ -22,7 +29,7 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "u5_legacy_business_term"
+revision: str = "s5_legacy_business_term"
 down_revision: Union[str, Sequence[str], None] = "r2_canonical_relationship_types"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -104,5 +111,49 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Assets stay in the legacy type; reverting the type name would re-expose them to pickers.
-    pass
+    """Move the archived terms back to 'Business Term' so older builds keep them.
+
+    Older builds delete system asset types the ontology no longer defines, and that
+    delete cascades to their assets. Left in 'Legacy Business Term', every archived term
+    would be lost at the first older-build startup.
+    """
+    conn = op.get_bind()
+    legacy = conn.execute(
+        sa.text("SELECT id FROM asset_types WHERE name = :name"), {"name": LEGACY}
+    ).first()
+    if legacy is None:
+        return
+    legacy_id = str(legacy.id)
+
+    term_type = conn.execute(
+        sa.text("SELECT id FROM asset_types WHERE name = :name"), {"name": BUSINESS_TERM}
+    ).first()
+    if term_type is None:
+        term_id = str(uuid.uuid4())
+        conn.execute(sa.text(
+            "INSERT INTO asset_types (id, name, description, category, icon, required_fields, "
+            "optional_fields, allowed_relationships, is_system, status, created_by, created_at, updated_at) "
+            "SELECT :new_id, :name, NULL, category, icon, required_fields, optional_fields, "
+            "allowed_relationships, TRUE, 'active', 'system@migration', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP "
+            "FROM asset_types WHERE id = :legacy_id"
+        ), {"new_id": term_id, "name": BUSINESS_TERM, "legacy_id": legacy_id})
+    else:
+        term_id = str(term_type.id)
+
+    conn.execute(sa.text(
+        "UPDATE entity_relationships SET source_type = :new WHERE source_type = :old "
+        "AND source_id IN (SELECT CAST(id AS TEXT) FROM assets WHERE asset_type_id = :legacy_id)"
+    ), {"new": OLD_LOCAL_NAME, "old": NEW_LOCAL_NAME, "legacy_id": legacy_id})
+    conn.execute(sa.text(
+        "UPDATE entity_relationships SET target_type = :new WHERE target_type = :old "
+        "AND target_id IN (SELECT CAST(id AS TEXT) FROM assets WHERE asset_type_id = :legacy_id)"
+    ), {"new": OLD_LOCAL_NAME, "old": NEW_LOCAL_NAME, "legacy_id": legacy_id})
+    conn.execute(
+        sa.text("UPDATE assets SET asset_type_id = :new_id WHERE asset_type_id = :old_id"),
+        {"new_id": term_id, "old_id": legacy_id},
+    )
+    # Only the type this migration archived into goes; it is empty now, so no cascade.
+    conn.execute(sa.text(
+        "DELETE FROM asset_types WHERE id = :legacy_id "
+        "AND NOT EXISTS (SELECT 1 FROM assets WHERE asset_type_id = :legacy_id)"
+    ), {"legacy_id": legacy_id})

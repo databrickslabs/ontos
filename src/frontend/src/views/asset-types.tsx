@@ -48,9 +48,17 @@ export default function AssetTypesView() {
     }
     setComponentError(null);
     try {
-      const response = await apiGet<AssetTypeRead[]>('/api/asset-types');
+      // Retired types (#970) are left out of the default list; fetch them too so admins can inspect them.
+      const [response, retiredResponse] = await Promise.all([
+        apiGet<AssetTypeRead[]>('/api/asset-types'),
+        apiGet<AssetTypeRead[]>('/api/asset-types?status=retired'),
+      ]);
       if (response.error) throw new Error(response.error);
-      setAssetTypes(Array.isArray(response.data) ? response.data : []);
+      if (retiredResponse.error) throw new Error(retiredResponse.error);
+      setAssetTypes([
+        ...(Array.isArray(response.data) ? response.data : []),
+        ...(Array.isArray(retiredResponse.data) ? retiredResponse.data : []),
+      ]);
     } catch (err: any) {
       setComponentError(err.message || t('messages.loadFailed'));
       setAssetTypes([]);
@@ -159,7 +167,12 @@ export default function AssetTypesView() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>{t('table.actions')}</DropdownMenuLabel>
-            <DropdownMenuItem disabled={!canWrite} onClick={() => { setEditingAssetType(row.original); setIsFormOpen(true); }}>{t('editAssetType')}</DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!canWrite || row.original.status === 'retired'}
+              onClick={() => { setEditingAssetType(row.original); setIsFormOpen(true); }}
+            >
+              {t('editAssetType')}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => openDeleteDialog(row.original.id)}

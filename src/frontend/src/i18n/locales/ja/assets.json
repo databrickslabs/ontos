@@ -299,6 +299,11 @@
       "integration": "統合",
       "system": "システム",
       "custom": "カスタム"
-    }
+    },
+    "retiredBadge": "廃止",
+    "retiredHint": "廃止されたタイプです。閲覧と確認はできますが、新しいアセットには使用できません。"
+  },
+  "errors": {
+    "assetTypeRetired": "アセットタイプ '{{name}}' は廃止されています。有効なアセットタイプを選択してください。"
   }
 }

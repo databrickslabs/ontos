@@ -299,6 +299,11 @@
       "integration": "Integration",
       "system": "Systems",
       "custom": "Custom"
-    }
+    },
+    "retiredBadge": "Retired",
+    "retiredHint": "Retired type: kept to read and inspect, not offered for new assets."
+  },
+  "errors": {
+    "assetTypeRetired": "Asset type '{{name}}' is retired. Choose an active asset type."
   }
 }

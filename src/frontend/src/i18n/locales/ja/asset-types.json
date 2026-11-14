@@ -24,7 +24,8 @@
   },
   "statuses": {
     "active": "有効",
-    "deprecated": "非推奨"
+    "deprecated": "非推奨",
+    "retired": "廃止"
   },
   "permissions": {
     "deniedView": "アセットタイプを表示する権限がありません。",

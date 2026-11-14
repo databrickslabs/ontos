@@ -30,6 +30,15 @@ logger = get_logger(__name__)
 ONTOS_NS = "http://ontos.app/ontology#"
 
 
+def _retired_type_detail(type_name: str, used_for: str) -> Dict[str, Any]:
+    """422 detail for a retired asset type; the UI translates ``code`` (#970)."""
+    return {
+        "code": "asset_type_retired",
+        "message": f"Asset type '{type_name}' is retired and cannot be used for {used_for}.",
+        "params": {"name": type_name},
+    }
+
+
 class AssetsManager(SearchableAsset):
     def __init__(self, ontology_schema_manager=None):
         self._type_repo = asset_type_repo
@@ -218,7 +227,7 @@ class AssetsManager(SearchableAsset):
         if not db_type:
             raise NotFoundError(f"Asset type '{asset_in.asset_type_id}' not found.")
         if db_type.status == "retired":
-            raise ValidationError(f"Asset type '{db_type.name}' is retired and cannot be used for new assets.")
+            raise ValidationError(_retired_type_detail(db_type.name, "new assets"))
 
         self._validate_properties(db, asset_in.asset_type_id, asset_in.properties)
 
@@ -384,7 +393,7 @@ class AssetsManager(SearchableAsset):
             if not db_type:
                 raise NotFoundError(f"Asset type '{asset_in.asset_type_id}' not found.")
             if db_type.status == "retired":
-                raise ValidationError(f"Asset type '{db_type.name}' is retired and cannot be used for assets.")
+                raise ValidationError(_retired_type_detail(db_type.name, "assets"))
 
         effective_type_id = asset_in.asset_type_id or db_asset.asset_type_id
         if asset_in.properties is not None:

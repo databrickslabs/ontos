@@ -61,7 +61,8 @@ export function AssetTypeFormDialog({
           description: assetType.description || '',
           category: assetType.category || 'none',
           icon: assetType.icon || '',
-          status: assetType.status,
+          // A retired type is not edited here (Settings disables Edit for it, #970).
+          status: assetType.status === 'deprecated' ? 'deprecated' : 'active',
         });
       } else {
         form.reset({ name: '', description: '', category: 'none', icon: '', status: 'active' });

@@ -299,6 +299,11 @@
       "integration": "Integration",
       "system": "Systeme",
       "custom": "Benutzerdefiniert"
-    }
+    },
+    "retiredBadge": "Außer Gebrauch",
+    "retiredHint": "Außer Gebrauch: zum Lesen und Prüfen, nicht für neue Assets angeboten."
+  },
+  "errors": {
+    "assetTypeRetired": "Der Asset-Typ '{{name}}' ist außer Gebrauch. Wähle einen aktiven Asset-Typ."
   }
 }

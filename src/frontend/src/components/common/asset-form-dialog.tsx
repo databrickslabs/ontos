@@ -23,6 +23,7 @@ import { EntityFieldDefinition, EntityTypeSchema } from '@/types/ontology-schema
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { assetTypeErrorText } from '@/lib/asset-type-error';
 import { useFormatLabel } from '@/lib/format-label';
 
 interface AssetFormDialogProps {
@@ -186,7 +187,7 @@ export function AssetFormDialog({
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
         const response = await apiPut<AssetRead>(`/api/assets/${asset.id}`, payload);
-        if (response.error) throw new Error(response.error);
+        if (response.error) throw new Error(assetTypeErrorText(response, t));
         toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });
         onSuccess(response.data!);
       } else {
@@ -202,7 +203,7 @@ export function AssetFormDialog({
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
         const response = await apiPost<AssetRead>('/api/assets', payload);
-        if (response.error) throw new Error(response.error);
+        if (response.error) throw new Error(assetTypeErrorText(response, t));
         toast({ title: t('common:assetForm.createdToast', { name: assetTypeName }) });
         onSuccess(response.data!);
       }

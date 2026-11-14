@@ -118,10 +118,36 @@ def test_new_assets_cannot_use_a_retired_type(db_session, osm):
     osm.sync_asset_types(db_session)
     legacy = asset_type_repo.get_by_name(db_session, name=LEGACY)
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc:
         AssetsManager().create_asset(db_session, asset_in=AssetCreate(
             name="new legacy term", asset_type_id=legacy.id,
         ), current_user_id="u@x.com")
+    assert exc.value.status_code == 422
+    assert exc.value.detail == {
+        "code": "asset_type_retired",
+        "message": f"Asset type '{LEGACY}' is retired and cannot be used for new assets.",
+        "params": {"name": LEGACY},
+    }
+
+
+def test_moving_an_asset_to_a_retired_type_is_refused_with_a_code(db_session, osm):
+    from src.common.errors import ValidationError
+    from src.controller.assets_manager import AssetsManager
+    from src.models.assets import AssetCreate, AssetUpdate
+
+    osm.sync_asset_types(db_session)
+    legacy = asset_type_repo.get_by_name(db_session, name=LEGACY)
+    scratch = _system_type(db_session, "Scratch Type")
+    asset = AssetsManager().create_asset(db_session, asset_in=AssetCreate(
+        name="orders", asset_type_id=scratch.id,
+    ), current_user_id="u@x.com")
+
+    with pytest.raises(ValidationError) as exc:
+        AssetsManager().update_asset(db_session, asset_id=asset.id, asset_in=AssetUpdate(
+            asset_type_id=legacy.id,
+        ), current_user_id="u@x.com")
+    assert exc.value.detail["code"] == "asset_type_retired"
+    assert exc.value.detail["params"] == {"name": LEGACY}
 
 
 def test_retired_is_a_readable_asset_type_status():

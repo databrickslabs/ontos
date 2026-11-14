@@ -24,7 +24,8 @@
   },
   "statuses": {
     "active": "Attivo",
-    "deprecated": "Deprecato"
+    "deprecated": "Deprecato",
+    "retired": "Ritirato"
   },
   "permissions": {
     "deniedView": "Non disponi dell'autorizzazione per visualizzare i tipi di asset.",

@@ -24,7 +24,8 @@
   },
   "statuses": {
     "active": "Actief",
-    "deprecated": "Verouderd"
+    "deprecated": "Verouderd",
+    "retired": "Buiten gebruik"
   },
   "permissions": {
     "deniedView": "U hebt geen toestemming om asset-types te bekijken.",

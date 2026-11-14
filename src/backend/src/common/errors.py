@@ -19,8 +19,9 @@ class NotFoundError(AppError):
         super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 class ValidationError(AppError):
-    """Raised when input validation fails"""
-    def __init__(self, detail: str = "Validation error") -> None:
+    """Raised when input validation fails. ``detail`` is a message, or a coded
+    ``{code, message, params}`` dict the frontend translates."""
+    def __init__(self, detail: Any = "Validation error") -> None:
         super().__init__(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
 
 class ConflictError(AppError):

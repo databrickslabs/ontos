@@ -312,7 +312,10 @@ def create_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         details["exception"] = {"type": "ValidationError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.detail if isinstance(e.detail, dict) else str(e),
+        )
     except ConflictError as e:
         details["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -448,7 +451,10 @@ def update_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         details["exception"] = {"type": "ValidationError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.detail if isinstance(e.detail, dict) else str(e),
+        )
     except ConflictError as e:
         details["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

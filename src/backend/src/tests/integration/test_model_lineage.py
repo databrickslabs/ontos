@@ -357,27 +357,27 @@ def _rel(db_session, st, sid, tt, tid, rel):
 
 
 def test_impact_bridges_hidden_logical_types(manager, db_session, stack):
-    """BusinessTerm → LogicalEntity → LogicalAttribute → Dataset: the hidden middle is
+    """LegacyBusinessTerm → LogicalEntity → LogicalAttribute → Dataset: the hidden middle is
     walked through, the term still reaches the dataset (Impact tab, retail demo)."""
-    term = _asset(db_session, "BusinessTerm", "Transaction")
+    term = _asset(db_session, "Legacy Business Term", "Transaction")
     entity = _asset(db_session, "LogicalEntity", "Transaction")
     attr = _asset(db_session, "LogicalAttribute", "Transaction.Id")
     ds = _asset(db_session, "Dataset", "Sales Analytics")
-    _rel(db_session, "BusinessTerm", term.id, "LogicalEntity", entity.id, "relatesTo")
+    _rel(db_session, "LegacyBusinessTerm", term.id, "LogicalEntity", entity.id, "relatesTo")
     _rel(db_session, "LogicalEntity", entity.id, "LogicalAttribute", attr.id, "hasLogicalAttribute")
     _rel(db_session, "LogicalAttribute", attr.id, "Dataset", ds.id, "implementedBy")
 
-    graph = manager.get_business_lineage(db_session, "BusinessTerm", str(term.id), 4, "downstream")
+    graph = manager.get_business_lineage(db_session, "LegacyBusinessTerm", str(term.id), 4, "downstream")
     keys = _keys(graph)
     assert f"Dataset:{ds.id}" in keys
     assert f"LogicalEntity:{entity.id}" not in keys and f"LogicalAttribute:{attr.id}" not in keys
-    bridged = [e for e in graph.edges if e.source == f"BusinessTerm:{term.id}" and e.target == f"Dataset:{ds.id}"]
+    bridged = [e for e in graph.edges if e.source == f"LegacyBusinessTerm:{term.id}" and e.target == f"Dataset:{ds.id}"]
     assert bridged and bridged[0].derived and not bridged[0].reversed
 
     # Entering hidden nodes is free: still reached at depth 1
-    assert f"Dataset:{ds.id}" in _keys(manager.get_business_lineage(db_session, "BusinessTerm", str(term.id), 1, "downstream"))
+    assert f"Dataset:{ds.id}" in _keys(manager.get_business_lineage(db_session, "LegacyBusinessTerm", str(term.id), 1, "downstream"))
     # And from the dataset back upstream
-    assert f"BusinessTerm:{term.id}" in _keys(manager.get_business_lineage(db_session, "Dataset", str(ds.id), 1, "upstream"))
+    assert f"LegacyBusinessTerm:{term.id}" in _keys(manager.get_business_lineage(db_session, "Dataset", str(ds.id), 1, "upstream"))
 
 
 def _access(products=lambda row: True, contracts=lambda row: True):
@@ -526,12 +526,12 @@ def test_access_check_errors_fail_closed(manager, db_session, stack):
 
 def test_each_anchor_gets_its_own_bridge(manager, db_session, stack):
     """Two terms relating to the same hidden LogicalEntity both bridge to the dataset."""
-    t1 = _asset(db_session, "BusinessTerm", "Order")
-    t2 = _asset(db_session, "BusinessTerm", "Purchase")
+    t1 = _asset(db_session, "Legacy Business Term", "Order")
+    t2 = _asset(db_session, "Legacy Business Term", "Purchase")
     entity = _asset(db_session, "LogicalEntity", "Order")
     ds = _asset(db_session, "Dataset", "Orders")
     for t in (t1, t2):
-        _rel(db_session, "BusinessTerm", t.id, "LogicalEntity", entity.id, "relatesTo")
+        _rel(db_session, "LegacyBusinessTerm", t.id, "LogicalEntity", entity.id, "relatesTo")
     _rel(db_session, "LogicalEntity", entity.id, "Dataset", ds.id, "implementedBy")
 
     # Both terms are visible nodes reaching the same hidden entity (via a concept)
@@ -542,5 +542,5 @@ def test_each_anchor_gets_its_own_bridge(manager, db_session, stack):
 
     graph = manager.get_business_lineage(db_session, "Concept", iri, 3, "downstream")
     edges = {(e.source, e.target) for e in graph.edges}
-    assert (f"BusinessTerm:{t1.id}", f"Dataset:{ds.id}") in edges
-    assert (f"BusinessTerm:{t2.id}", f"Dataset:{ds.id}") in edges
+    assert (f"LegacyBusinessTerm:{t1.id}", f"Dataset:{ds.id}") in edges
+    assert (f"LegacyBusinessTerm:{t2.id}", f"Dataset:{ds.id}") in edges

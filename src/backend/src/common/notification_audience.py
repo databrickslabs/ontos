@@ -23,11 +23,8 @@ from typing import Dict, FrozenSet, Iterable, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from src.common.features import FeatureAccessLevel
-from src.common.logging import get_logger
 from src.db_models.settings import AppRoleDb
 from src.repositories.notification_recipient_repository import json_list, notification_recipient_repo
-
-logger = get_logger(__name__)
 
 RECIPIENT_PREFIX = 'recipient:'
 SELF_TOKEN = 'self'

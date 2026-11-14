@@ -8,6 +8,7 @@ import json
 import re
 from typing import List, Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.common.api_errors import CodedValueError
@@ -102,7 +103,7 @@ class NotificationRecipientsManager:
     def create(self, db: Session, data: NotificationRecipientCreate, *, username: Optional[str]) -> NotificationRecipientDb:
         name = _clean_name(data.name)
         self._check_name(db, name)
-        created = notification_recipient_repo.create(db, obj_in={
+        obj_in = {
             'name': name,
             'description': data.description,
             'targets': _dump(_clean_targets(data.targets)),
@@ -110,10 +111,21 @@ class NotificationRecipientsManager:
             'is_active': data.is_active,
             'created_by': username,
             'updated_by': username,
-        })
-        db.commit()
+        }
+        created = notification_recipient_repo.create(db, obj_in=obj_in)
+        self._commit(db)
         db.refresh(created)
         return created
+
+    @staticmethod
+    def _commit(db: Session) -> None:
+        # Two concurrent creates of one name both pass _check_name; the case-insensitive unique index
+        # keeps one, and the other is the coded name-taken error, not a 500
+        try:
+            db.commit()
+        except IntegrityError as e:
+            db.rollback()
+            raise NotificationRecipientNameTakenError('A notification recipient with this name already exists') from e
 
     def update(
         self, db: Session, recipient_id: str, data: NotificationRecipientUpdate, *, username: Optional[str],
@@ -121,15 +133,18 @@ class NotificationRecipientsManager:
         existing = self.get(db, recipient_id)
         if existing is None:
             return None
+        # Validate everything before touching the row, so a rejected edit leaves nothing half-applied
         name = _clean_name(data.name)
         self._check_name(db, name, exclude_id=recipient_id)
+        targets = _dump(_clean_targets(data.targets))
+        allowed_role_ids = _dump(_clean_role_ids(db, data.allowed_role_ids))
         existing.name = name
         existing.description = data.description
-        existing.targets = _dump(_clean_targets(data.targets))
-        existing.allowed_role_ids = _dump(_clean_role_ids(db, data.allowed_role_ids))
+        existing.targets = targets
+        existing.allowed_role_ids = allowed_role_ids
         existing.is_active = data.is_active
         existing.updated_by = username
-        db.commit()
+        self._commit(db)
         db.refresh(existing)
         return existing
 

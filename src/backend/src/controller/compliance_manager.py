@@ -40,13 +40,17 @@ def _author_columns(author: Optional[Tuple[Optional[str], List[str]]]) -> dict:
     return {'rule_author_email': email, 'rule_author_groups': json.dumps(list(groups or []))}
 
 
-def _rule_actions(rule: Optional[str]) -> List[dict]:
+def _parse_or_none(rule: Optional[str]) -> Optional[dict]:
     if not rule:
-        return []
+        return None
     try:
-        parsed = parse_rule(rule)
+        return parse_rule(rule)
     except Exception:
-        return []
+        return None
+
+
+def _rule_actions(rule: Optional[str]) -> List[dict]:
+    parsed = _parse_or_none(rule) or {}
     return (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
 
 
@@ -58,7 +62,7 @@ def notify_targets_of(parsed: Optional[dict]) -> List[str]:
 
 def rule_notify_targets(rule: Optional[str]) -> List[str]:
     """The recipients of each NOTIFY action of a rule (empty if it doesn't parse)."""
-    return [action.get('recipients') or '' for action in _rule_actions(rule) if action.get('type') == 'NOTIFY']
+    return notify_targets_of(_parse_or_none(rule))
 
 
 def rule_changes_tags(rule: Optional[str]) -> bool:

@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from src.common.compliance_actions import ActionContext, ActionError
 from src.common.compliance_dsl import parse_rule
@@ -489,3 +490,22 @@ class TestRecipientRoutes:
         )
         assert updated.is_active is False
         assert manager.get(db_session, created.id) is not None
+
+    def test_a_rejected_edit_changes_nothing(self, db_session):
+        manager = NotificationRecipientsManager()
+        created = manager.create(db_session, NotificationRecipientCreate(name='Privacy', targets=['x@example.com']), username='a')
+        with pytest.raises(NotificationRecipientTargetError):
+            manager.update(
+                db_session, created.id, NotificationRecipientUpdate(name='Renamed', targets=['owner'], is_active=False),
+                username='b',
+            )
+        # Validation runs before any attribute is set, so the row is untouched even before a rollback
+        row = manager.get(db_session, created.id)
+        assert (row.name, row.is_active, row.updated_by) == ('Privacy', True, 'a')
+
+    def test_a_name_taken_at_commit_is_the_coded_error(self, db_session):
+        manager = NotificationRecipientsManager()
+        manager.create(db_session, NotificationRecipientCreate(name='Taken', targets=['x@example.com']), username='a')
+        with patch.object(db_session, 'commit', side_effect=IntegrityError('insert', {}, Exception('uq'))):
+            with pytest.raises(NotificationRecipientNameTakenError):
+                manager.create(db_session, NotificationRecipientCreate(name='Other', targets=['y@example.com']), username='a')

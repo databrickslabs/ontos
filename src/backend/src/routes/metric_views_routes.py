@@ -95,7 +95,7 @@ async def get_consistency(
             )
 
     assets_routes._ensure_asset_readable(
-        request, db, current_user, assets_routes.get_assets_manager(), asset_id,
+        request, db, current_user, assets_routes.get_assets_manager(request), asset_id,
     )
     try:
         return manager.for_asset(asset_id, _readable_as_user(request))

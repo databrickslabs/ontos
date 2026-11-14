@@ -172,9 +172,11 @@ class AssetsManager(SearchableAsset):
 
     def get_all_asset_types(
         self, db: Session, *, skip: int = 0, limit: Optional[int] = None,
-        category: Optional[str] = None, status: Optional[str] = None
+        category: Optional[str] = None, status: Optional[str] = None, include_retired: bool = False,
     ) -> List[AssetTypeRead]:
-        db_types = self._type_repo.get_multi_filtered(db, skip=skip, limit=limit, category=category, status=status)
+        db_types = self._type_repo.get_multi_filtered(
+            db, skip=skip, limit=limit, category=category, status=status, include_retired=include_retired,
+        )
         return [self._type_to_read(db, t) for t in db_types]
 
     def get_asset_types_summary(self, db: Session) -> List[AssetTypeSummary]:

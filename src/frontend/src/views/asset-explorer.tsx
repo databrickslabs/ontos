@@ -120,17 +120,10 @@ export default function AssetExplorerView() {
   const fetchAssetTypes = useCallback(async () => {
     if (!canRead && !permissionsLoading) return;
     try {
-      // Retired types (#970) are left out of the default list; fetch them too so they can be browsed.
-      const [response, retiredResponse] = await Promise.all([
-        apiGet<AssetTypeRead[]>('/api/asset-types'),
-        apiGet<AssetTypeRead[]>('/api/asset-types?status=retired'),
-      ]);
+      // Retired types (#970) are browsable here, marked with a badge.
+      const response = await apiGet<AssetTypeRead[]>('/api/asset-types?include_retired=true');
       if (response.error) throw new Error(response.error);
-      if (retiredResponse.error) throw new Error(retiredResponse.error);
-      const types = [
-        ...(Array.isArray(response.data) ? response.data : []),
-        ...(Array.isArray(retiredResponse.data) ? retiredResponse.data : []),
-      ];
+      const types = Array.isArray(response.data) ? response.data : [];
       setAssetTypes(types);
       if (selectedTypeId === null && types.length > 0) {
         const urlType = searchParams.get('type');

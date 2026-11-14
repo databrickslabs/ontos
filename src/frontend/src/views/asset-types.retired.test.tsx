@@ -48,16 +48,13 @@ const RETIRED = {
 describe('AssetTypesView retired types', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getMock.mockImplementation(async (url: string) => (
-      url.endsWith('status=retired') ? { data: [RETIRED] } : { data: [ACTIVE] }
-    ));
+    getMock.mockResolvedValue({ data: [ACTIVE, RETIRED] });
   });
 
   it('fetches active and retired types and lists both', async () => {
     render(<AssetTypesView />);
     await waitFor(() => expect(screen.getByTestId('row-Legacy Business Term')).toBeTruthy());
-    expect(getMock).toHaveBeenCalledWith('/api/asset-types');
-    expect(getMock).toHaveBeenCalledWith('/api/asset-types?status=retired');
+    expect(getMock).toHaveBeenCalledWith('/api/asset-types?include_retired=true');
     expect(screen.getByTestId('row-Table')).toBeTruthy();
   });
 

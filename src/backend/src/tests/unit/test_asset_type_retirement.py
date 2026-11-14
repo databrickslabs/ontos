@@ -110,6 +110,17 @@ def test_retired_types_are_hidden_from_asset_type_lists_by_default(db_session, o
     assert legacy.id in {t.id for t in asset_type_repo.get_multi_filtered(db_session, status="retired")}
 
 
+def test_manager_lists_retired_types_only_when_asked(db_session, osm):
+    from src.controller.assets_manager import AssetsManager
+
+    osm.sync_asset_types(db_session)
+    default_names = {t.name for t in AssetsManager().get_all_asset_types(db_session)}
+    with_retired = {t.name for t in AssetsManager().get_all_asset_types(db_session, include_retired=True)}
+
+    assert LEGACY not in default_names
+    assert LEGACY in with_retired
+
+
 def test_new_assets_cannot_use_a_retired_type(db_session, osm):
     from src.common.errors import ValidationError
     from src.controller.assets_manager import AssetsManager

@@ -48,17 +48,10 @@ export default function AssetTypesView() {
     }
     setComponentError(null);
     try {
-      // Retired types (#970) are left out of the default list; fetch them too so admins can inspect them.
-      const [response, retiredResponse] = await Promise.all([
-        apiGet<AssetTypeRead[]>('/api/asset-types'),
-        apiGet<AssetTypeRead[]>('/api/asset-types?status=retired'),
-      ]);
+      // Retired types (#970) are listed too, marked retired, so admins can inspect them.
+      const response = await apiGet<AssetTypeRead[]>('/api/asset-types?include_retired=true');
       if (response.error) throw new Error(response.error);
-      if (retiredResponse.error) throw new Error(retiredResponse.error);
-      setAssetTypes([
-        ...(Array.isArray(response.data) ? response.data : []),
-        ...(Array.isArray(retiredResponse.data) ? retiredResponse.data : []),
-      ]);
+      setAssetTypes(Array.isArray(response.data) ? response.data : []);
     } catch (err: any) {
       setComponentError(err.message || t('messages.loadFailed'));
       setAssetTypes([]);

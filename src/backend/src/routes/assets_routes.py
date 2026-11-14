@@ -166,9 +166,12 @@ def get_all_asset_types(
     limit: Optional[int] = None,
     category: Optional[str] = Query(None),
     type_status: Optional[str] = Query(None, alias="status"),
+    include_retired: bool = Query(False),
 ):
-    """Lists all asset types."""
-    return manager.get_all_asset_types(db=db, skip=skip, limit=limit, category=category, status=type_status)
+    """Lists all asset types. Retired types (#970) only with include_retired or status."""
+    return manager.get_all_asset_types(
+        db=db, skip=skip, limit=limit, category=category, status=type_status, include_retired=include_retired,
+    )
 
 
 @asset_types_router.get(

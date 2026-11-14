@@ -533,8 +533,10 @@ def effective_permissions_for_request(
     if auth_manager is None:
         raise RuntimeError("AuthorizationManager not found in app state")
 
+    # The email stays as given: the applied-override lookup is exact, so two casings
+    # can resolve differently and must not share an entry.
     key = (
-        (user_email or "").strip().lower(),
+        user_email or "",
         tuple(sorted({(g or "").lower() for g in user_groups or []})),
         apply_role_override,
         id(auth_manager),
@@ -732,7 +734,8 @@ def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
 
 
 def user_has_feature_level(
-    auth_manager, user, feature_id: str, required_level: FeatureAccessLevel, request: Request,
+    auth_manager, user, feature_id: str, required_level: FeatureAccessLevel,
+    request: Optional[Request] = None,
 ) -> bool:
     """Imperative permission check for conditional in-handler gates.
 
@@ -744,8 +747,13 @@ def user_has_feature_level(
 
     **Fails closed.** Any exception during resolution is caught and ``False`` is
     returned (with a warning log), so a transient error denies the extra capability
-    rather than silently granting it.
+    rather than silently granting it. A call without ``request`` denies too.
     """
+    if request is None:
+        logger.warning(
+            "user_has_feature_level called without a request for '%s'; denying.", feature_id,
+        )
+        return False
     try:
         effective = effective_permissions_for_request(
             request, getattr(user, "email", None), getattr(user, "groups", None) or [], auth_manager,

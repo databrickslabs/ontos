@@ -263,6 +263,30 @@ class TestDataDomainsRoutes:
     # PUT /api/data-domains/{domain_id} - Update Domain
     # =================================================================
 
+    def test_create_domain_refuses_a_value_outside_the_tag_list_with_a_coded_422(self, client, db_session):
+        """A tag value outside possible_values answers 422 with a code, not a 500 (#1494)."""
+        from src.db_models.tags import TagDb
+        from src.repositories.tags_repository import tag_namespace_repo
+
+        namespace = tag_namespace_repo.get_or_create_default_namespace(db_session, user_email="test@example.com")
+        suffix = uuid.uuid4().hex[:8]
+        db_session.add(TagDb(
+            name=f"classification_{suffix}", namespace_id=namespace.id, status="active",
+            possible_values=["public", "confidential"],
+        ))
+        db_session.commit()
+
+        response = client.post("/api/data-domains", json={
+            "name": f"Refused {suffix}",
+            "tags": [{"tag_fqn": f"default/classification_{suffix}", "assigned_value": "secret"}],
+        })
+
+        assert response.status_code == 422
+        detail = response.json()["detail"]
+        assert detail["code"] == "tag_value_not_allowed"
+        assert detail["params"]["value"] == "secret"
+        assert detail["params"]["allowed"] == ["public", "confidential"]
+
     def test_update_domain_success(
         self, client, db_session, sample_domain_data, verify_audit_log
     ):

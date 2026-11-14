@@ -1,24 +1,41 @@
 """Team role override resolution, shared by request authorization and the teams self-lockout guard."""
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 
 
-def pick_team_role_override(teams: Iterable, user_identifier: str, user_groups: List[str]) -> Optional[str]:
-    """Pick the team role override for a user from the teams they are a direct member of.
+def member_type_of(member) -> str:
+    """``"user"`` or ``"group"`` for a team entry (DB row, request model or enum value)."""
+    value = getattr(member, "member_type", None)
+    value = getattr(value, "value", value)
+    return "group" if str(value or "").strip().lower() == "group" else "user"
 
-    Direct entries win over the user's group entries in those same teams; within each kind the
-    first match in team order wins (there is no role hierarchy yet).
+
+def team_role_overrides(teams: Iterable, user_identifier: str, user_groups: List[str]) -> List[str]:
+    """Every app role override from team entries that apply to the user, once each.
+
+    A user entry applies when its identifier is the user's (case-insensitive); a
+    group entry applies when it names one of the user's groups. The user's own
+    entries come first. For permissions the roles are combined by highest level per
+    feature, so the order doesn't change the result.
     """
-    user_groups_lower = {g.lower() for g in user_groups or []}
-    teams = list(teams)
-    direct = [
-        member.app_role_override
-        for team in teams for member in team.members
-        if member.app_role_override and member.member_identifier == user_identifier
-    ]
-    via_group = [
-        member.app_role_override
-        for team in teams for member in team.members
-        if member.app_role_override and member.member_identifier.lower() in user_groups_lower
-    ]
-    overrides = direct + via_group
-    return overrides[0] if overrides else None
+    identifier = (user_identifier or "").strip().lower()
+    groups = {g.strip().lower() for g in user_groups or [] if g}
+    direct: List[str] = []
+    via_group: List[str] = []
+    for team in teams:
+        for member in team.members:
+            role = (member.app_role_override or "").strip()
+            if not role:
+                continue
+            member_identifier = (member.member_identifier or "").strip().lower()
+            if member_type_of(member) == "group":
+                if member_identifier in groups:
+                    via_group.append(role)
+            elif identifier and member_identifier == identifier:
+                direct.append(role)
+    # The user's own entries first, as before #1245: callers that need one role name
+    # (comment audiences) keep getting the user's own override.
+    roles: List[str] = []
+    for role in direct + via_group:
+        if role not in roles:
+            roles.append(role)
+    return roles

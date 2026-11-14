@@ -403,16 +403,16 @@ class TestNotifyPermission:
         rule = "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL NOTIFY 'a@example.com'"
         with patch('src.routes.compliance_routes.user_has_feature_level', return_value=False) as check:
             with pytest.raises(HTTPException) as exc:
-                require_compliance_admin_for_notify(rule, MagicMock(), self._user())
+                require_compliance_admin_for_notify(rule, MagicMock(), self._user(), MagicMock())
         assert exc.value.status_code == 403
-        assert check.call_args.args[2:] == ('compliance', FeatureAccessLevel.ADMIN)
+        assert check.call_args.args[2:4] == ('compliance', FeatureAccessLevel.ADMIN)
 
     def test_rules_without_notify_are_not_checked(self):
         from src.routes.compliance_routes import require_compliance_admin_for_notify
 
         with patch('src.routes.compliance_routes.user_has_feature_level') as check:
             require_compliance_admin_for_notify(
-                "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL ASSIGN_TAG 'x'", MagicMock(), self._user(),
+                "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL ASSIGN_TAG 'x'", MagicMock(), self._user(), MagicMock(),
             )
         check.assert_not_called()
 
@@ -467,7 +467,7 @@ class TestNotifyGateOnRoutes:
         app.dependency_overrides[get_db] = _db
         app.dependency_overrides[get_audit_manager] = lambda: MagicMock()
         # Write access, but not admin: the NOTIFY gate refuses
-        level = lambda auth_manager, u, feature, required: required != FeatureAccessLevel.ADMIN  # noqa: E731
+        level = lambda auth_manager, u, feature, required, request=None: required != FeatureAccessLevel.ADMIN  # noqa: E731
         with patch.object(compliance_routes, 'user_has_feature_level', side_effect=level), \
              patch.object(compliance_routes, 'manager') as manager:
             yield TestClient(app), manager

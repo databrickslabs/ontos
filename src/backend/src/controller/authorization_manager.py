@@ -1,5 +1,5 @@
 import json
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Sequence, Set, Union
 from collections import defaultdict
 
 from src.controller.settings_manager import SettingsManager
@@ -17,14 +17,17 @@ class AuthorizationManager:
     def get_user_effective_permissions(
         self,
         user_groups: Optional[List[str]],
-        team_role_override: Optional[str] = None,
+        team_role_override: Optional[Union[str, Sequence[str]]] = None,
         user_email: Optional[str] = None,
     ) -> Dict[str, FeatureAccessLevel]:
         """
         Calculates the effective permission level for each feature based on the user's groups,
         their direct user-by-email assignment, and team role overrides.
         Permissions are merged by taking the highest level granted by any matching role.
-        Team role overrides take precedence over group-based roles.
+        Team role overrides are roles like any other: they add to the group and email
+        roles, per feature by the highest level, and never lower a level (#1245). An
+        applied role override ("act as role") is resolved by the caller and replaces
+        everything; see ``common.authorization.resolve_effective_permissions``.
 
         Role matching (#196/#760): a role matches the user if EITHER
           - the user's groups intersect with `role.assigned_groups` (case-insensitive), OR
@@ -32,7 +35,8 @@ class AuthorizationManager:
 
         Args:
             user_groups: A list of group names the user belongs to.
-            team_role_override: Optional team role that overrides group-based permissions.
+            team_role_override: Optional team role name, or names, granted to the user by
+                        team membership. Unknown names are ignored.
             user_email: Optional user email for direct-assignment matching against
                         `role.assigned_users`. When provided, OR-combined with group matching.
 
@@ -61,29 +65,10 @@ class AuthorizationManager:
 
         feature_config = get_feature_config()
 
-        # If team role override is provided, prioritize it
-        if team_role_override:
-            logger.debug(f"Processing team role override: {team_role_override}")
-            team_role = next((role for role in all_roles if role.name == team_role_override), None)
-            if team_role:
-                logger.debug(f"Found team role '{team_role_override}' in roles, applying as override")
-                for feature_id, assigned_level in team_role.feature_permissions.items():
-                    if feature_id in feature_config:
-                        effective_permissions[feature_id] = assigned_level
-                        logger.debug(f"Applied team role override for '{feature_id}': {assigned_level.value}")
-                    else:
-                        logger.warning(f"Team role '{team_role_override}' contains permission for unknown feature ID '{feature_id}'. Skipping.")
-
-                # Return team role permissions (team override takes full precedence)
-                for feature_id in feature_config:
-                    if feature_id not in effective_permissions:
-                        effective_permissions[feature_id] = FeatureAccessLevel.NONE
-
-                final_perms_str = {k: v.value for k, v in effective_permissions.items()}
-                logger.debug(f"Final permissions using team role override '{team_role_override}': {final_perms_str}")
-                return dict(effective_permissions)
-            else:
-                logger.warning(f"Team role override '{team_role_override}' not found in available roles. Falling back to group-based permissions.")
+        if isinstance(team_role_override, str):
+            team_role_names = [team_role_override] if team_role_override.strip() else []
+        else:
+            team_role_names = [n for n in (team_role_override or []) if n]
 
         matching_roles = []
         logger.debug("Identifying matching roles based on group intersection OR email assignment...")
@@ -101,6 +86,15 @@ class AuthorizationManager:
                 matching_roles.append(role)
                 reason = "groups+email" if (group_match and email_match) else ("groups" if group_match else "email")
                 logger.debug(f"  MATCH FOUND ({reason}): role '{role.name}'")
+
+        roles_by_name = {role.name: role for role in all_roles}
+        for name in team_role_names:
+            team_role = roles_by_name.get(name)
+            if team_role is None:
+                logger.warning("Team role override '%s' not found in available roles. Ignoring it.", name)
+            elif team_role not in matching_roles:
+                matching_roles.append(team_role)
+                logger.debug("  MATCH FOUND (team): role '%s'", name)
 
         if not matching_roles:
             logger.warning(f"No matching roles for groups={user_groups}, email={user_email_norm}. Returning NONE access for all features.")
@@ -217,11 +211,24 @@ class AuthorizationManager:
                 return True
         return False
 
+    def get_role_permissions_by_name(self, role_names: Sequence[str]) -> Dict[str, Optional[Dict[str, FeatureAccessLevel]]]:
+        """Feature levels each named role grants (None for a name no role has), in one role read."""
+        roles = {r.name: r for r in self._settings_manager.list_app_roles()}
+        feature_config = get_feature_config()
+        result: Dict[str, Optional[Dict[str, FeatureAccessLevel]]] = {}
+        for name in role_names:
+            role = roles.get(name)
+            result[name] = None if role is None else {
+                f: lvl for f, lvl in (role.feature_permissions or {}).items() if f in feature_config
+            }
+        return result
+
     def get_user_effective_role_ids(
         self,
         user_groups: Optional[List[str]],
         applied_role_override_id: Optional[str] = None,
         user_email: Optional[str] = None,
+        team_role_names: Optional[Sequence[str]] = None,
     ) -> Set[str]:
         """Return the set of AppRole UUIDs the viewer currently holds.
 
@@ -230,7 +237,8 @@ class AuthorizationManager:
            that one role (same as the impersonation override path).
         2. Otherwise, every AppRole whose ``assigned_groups`` intersects the
            viewer's *user_groups* OR whose ``assigned_users`` contains the
-           viewer's *user_email* is included (case-insensitive) (#196/#760).
+           viewer's *user_email* is included (case-insensitive) (#196/#760),
+           plus the roles named in *team_role_names* (team overrides, #1245).
 
         Args:
             user_groups: Workspace/IdP groups for the viewing user.
@@ -255,10 +263,11 @@ class AuthorizationManager:
 
         user_group_set = set(g.lower() for g in (user_groups or []))
         user_email_norm = (user_email or "").strip().lower() or None
-        if not user_group_set and not user_email_norm:
+        team_names = {n for n in (team_role_names or []) if n}
+        if not user_group_set and not user_email_norm and not team_names:
             return set()
 
-        role_ids: Set[str] = set()
+        role_ids: Set[str] = {str(r.id) for r in all_roles if r.name in team_names}
         for role in all_roles:
             # `(x or '')` guards against None entries in dirty data.
             role_groups = set((g or '').lower() for g in (role.assigned_groups or []))
@@ -272,6 +281,7 @@ class AuthorizationManager:
         user_groups: Optional[List[str]],
         applied_role_override_id: Optional[str] = None,
         user_email: Optional[str] = None,
+        team_role_names: Optional[Sequence[str]] = None,
     ) -> List[str]:
         """Feature ids the viewer's menus hide (sidebar, home quick actions, About) (#1325).
 
@@ -285,6 +295,7 @@ class AuthorizationManager:
             user_groups,
             applied_role_override_id=applied_role_override_id,
             user_email=user_email,
+            team_role_names=team_role_names,
         )
         if not role_ids:
             return []

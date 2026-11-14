@@ -32,9 +32,15 @@ class TeamMemberUpdate(BaseModel):
     app_role_override: Optional[str] = Field(None, description="Updated app role override")
 
 
+# Upper bound for one PUT /teams/{id}/members. The set is diffed and its role
+# overrides checked in one request and one transaction, so it's kept bounded. 1000 is
+# well above a team of named people; a larger audience belongs in a group entry.
+MAX_TEAM_MEMBERS = 1000
+
+
 class TeamMembersReplace(BaseModel):
     """Desired full member set for a team; applied atomically as a diff."""
-    members: List[TeamMemberCreate] = Field(default_factory=list)
+    members: List[TeamMemberCreate] = Field(default_factory=list, max_length=MAX_TEAM_MEMBERS)
 
 
 class TeamMemberRead(TeamMemberBase):

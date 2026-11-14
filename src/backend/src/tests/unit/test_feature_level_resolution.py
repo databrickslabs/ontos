@@ -32,7 +32,7 @@ class _Auth:
     direct@example.com assigned by email -> Admin."""
 
     def get_user_effective_permissions(self, groups, team_role_override=None, user_email=None):
-        if team_role_override == 'Team Admin':
+        if 'Team Admin' in (team_role_override or []):
             return {FEATURE: ADMIN}
         if 'producers' in (groups or []):
             return {FEATURE: RW}
@@ -69,10 +69,10 @@ def _run(coro):
 
 @pytest.mark.parametrize('email, groups, team_role, expected', CASES)
 def test_the_three_checks_agree(monkeypatch, email, groups, team_role, expected):
-    async def _team(user_identifier, user_groups, request):
-        return team_role
+    def _team_roles(request, user_identifier, user_groups):
+        return [team_role] if team_role else []
 
-    monkeypatch.setattr(authorization, 'get_user_team_role_overrides', _team)
+    monkeypatch.setattr(authorization, 'lookup_user_team_roles', _team_roles)
     auth = _Auth()
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
         authorization_manager=auth, settings_manager=_Settings())))

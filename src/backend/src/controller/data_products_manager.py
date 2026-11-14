@@ -13,6 +13,7 @@ from typing import Dict, Iterable, List, Optional, Any, Set
 from uuid import UUID
 from pathlib import Path
 
+from src.controller.entity_data_cleanup import remove_entity_data
 from src.common.timestamps import utc_now
 from src.common.api_errors import CodedValueError
 from src.common.notification_i18n import notification_i18n_data
@@ -1032,15 +1033,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         try:
             # Get product info and subscribers before deletion
             product_db = self._repo.get(db=self._db, id=product_id)
-            product_name = product_db.name if product_db else None
-            deletion_notice = (
-                self._collect_deletion_notice(
-                    product_id=product_id, product_name=product_name, deleted_by=user
-                )
-                if product_db else None
+            if not product_db:
+                # Nothing to delete: touch nothing on the shared session.
+                return False
+            product_name = product_db.name
+            deletion_notice = self._collect_deletion_notice(
+                product_id=product_id, product_name=product_name, deleted_by=user
             )
 
             entity_domain_repo.remove_all_for_entity(self._db, entity_type="data_product", entity_id=product_id)
+            remove_entity_data(self._db, entity_type="data_product", entity_id=product_id, ws=self._ws_client)
             deleted_obj = self._repo.remove(db=self._db, id=product_id)
 
             if deleted_obj:
@@ -3000,6 +3002,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise PermissionError("Not owner of this draft")
         
         try:
+            entity_domain_repo.remove_all_for_entity(db, entity_type="data_product", entity_id=draft_id)
+            remove_entity_data(db, entity_type="data_product", entity_id=draft_id, ws=self._ws_client)
             data_product_repo.remove(db, id=draft_id)
             db.commit()
             logger.info(f"Discarded personal draft {draft_id}")
@@ -3600,7 +3604,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     except Exception as e:
                         logger.warning(f"Failed to create AssignedTagCreate from string {tag_data}: {e}")
 
-            if not assigned_tags:
+            # An explicit empty list removes every tag (#1435). A list whose entries
+            # couldn't be read is not taken as "no tags", so it keeps the current ones.
+            if not assigned_tags and tags_data:
                 logger.debug(f"No valid tags to assign to ODPS product {product_id}")
                 return
 

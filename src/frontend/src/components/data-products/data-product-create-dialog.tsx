@@ -33,6 +33,7 @@ import { ConsumerPrincipal, DataProduct, DataProductStatus } from '@/types/data-
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { useTeams } from '@/hooks/use-teams';
 import TagSelector from '@/components/ui/tag-selector';
+import { tagsForCreate, tagsForUpdate } from '@/lib/tag-payload';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 import { useProjectContext } from '@/stores/project-store';
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error';
@@ -188,13 +189,6 @@ export default function DataProductCreateDialog({
 
       if (mode === 'edit' && product) {
         // Edit mode - prepare update payload
-        // Normalize tags to FQNs (strings) for backend compatibility
-        // Use fully_qualified_name so backend can look up existing tags by FQN
-        const normalizedTags = (data.tags || []).map((tag: any) => {
-          if (typeof tag === 'string') return tag;
-          // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-          return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-        });
 
         const updateData: Partial<DataProduct> = {
           ...product,
@@ -206,7 +200,9 @@ export default function DataProductCreateDialog({
           tenant: data.tenant || undefined,
           owner_team_id: data.ownerTeamId || undefined,
           project_id: data.projectId || undefined,
-          tags: normalizedTags, // Use normalized tags from form
+          // Only a changed selection is sent ([] removes every tag, #1435); the
+          // spread product's loaded tags must not be sent back as they are.
+          tags: tagsForUpdate(data.tags, product.tags) as any,
           consumer_principals: data.consumer_principals || [],
           description: {
             purpose: data.purpose || undefined,
@@ -253,13 +249,6 @@ export default function DataProductCreateDialog({
         onSuccess(updatedProduct);
       } else {
         // Create mode - construct new product
-        // Normalize tags to FQNs (strings) for backend compatibility
-        // Use fully_qualified_name so backend can look up existing tags by FQN
-        const normalizedTags = (data.tags || []).map((tag: any) => {
-          if (typeof tag === 'string') return tag;
-          // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-          return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-        });
 
         const productData: Partial<DataProduct> = {
           apiVersion: 'v1.0.0',
@@ -272,7 +261,7 @@ export default function DataProductCreateDialog({
           tenant: data.tenant || undefined,
           owner_team_id: data.ownerTeamId || undefined,
           project_id: data.projectId || undefined,
-          tags: normalizedTags.length > 0 ? normalizedTags : undefined,
+          tags: tagsForCreate(data.tags) as any,
           consumer_principals: (data.consumer_principals && data.consumer_principals.length > 0)
             ? data.consumer_principals
             : undefined,

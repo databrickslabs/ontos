@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast'
 import type { DataContractCreate } from '@/types/data-contract'
 import type { TeamSummary } from '@/types/team'
 import TagSelector from '@/components/ui/tag-selector'
+import { tagsForCreate, tagsForUpdate } from '@/lib/tag-payload'
 import type { AssignedTag } from '@/components/ui/tag-chip'
 import { useProjectContext } from '@/stores/project-store'
 
@@ -150,11 +151,6 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const isFormDirty = useMemo(() => {
     if (!initialFormValues) return false
     
-    // Normalize tags for comparison
-    const normalizeTag = (tag: any) => typeof tag === 'string' ? tag : (tag.fully_qualified_name || tag.tag_id || tag.tag_name || tag)
-    const currentTagsNormalized = tags.map(normalizeTag).sort().join(',')
-    const initialTagsNormalized = initialFormValues.tags.map(normalizeTag).sort().join(',')
-    
     return (
       name !== initialFormValues.name ||
       version !== initialFormValues.version ||
@@ -167,7 +163,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       descriptionUsage !== initialFormValues.descriptionUsage ||
       descriptionPurpose !== initialFormValues.descriptionPurpose ||
       descriptionLimitations !== initialFormValues.descriptionLimitations ||
-      currentTagsNormalized !== initialTagsNormalized
+      // The same comparison decides whether Save sends the tags
+      tagsForUpdate(tags, initialFormValues.tags) !== undefined
     )
   }, [initialFormValues, name, version, status, ownerTeamId, projectId, domainIds, primaryDomainId, tenant, descriptionUsage, descriptionPurpose, descriptionLimitations, tags])
 
@@ -196,16 +193,11 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     console.log('  - domainIds:', domainIds)
     console.log('  - ownerTeamId:', ownerTeamId)
     
+    const domainsChanged = !initialFormValues
+      || [...domainIds].sort().join(',') !== [...(initialFormValues.domainIds || [])].sort().join(',')
+      || (primaryDomainId || '') !== (initialFormValues.primaryDomainId || '')
     setIsSubmitting(true)
     try {
-      // Normalize tags to FQNs (strings) for backend compatibility
-      // Use fully_qualified_name so backend can look up existing tags by FQN
-      const normalizedTags = tags.map((tag: any) => {
-        if (typeof tag === 'string') return tag;
-        // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-        return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-      });
-
       const payload: DataContractCreate = {
         name: name.trim(),
         version: version.trim() || '0.0.1',
@@ -214,10 +206,12 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         project_id: projectId && projectId !== '__none__' ? projectId : undefined,
         kind: 'DataContract',
         apiVersion: 'v3.1.0',
-        domainIds: domainIds,
-        primaryDomainId: primaryDomainId,
+        // On edit, the domain assignment is sent only when it was changed, so a
+        // dialog opened with a partial assignment can't overwrite the stored one.
+        ...(!isEdit || domainsChanged ? { domainIds, primaryDomainId } : {}),
         tenant: tenant.trim() || undefined,
-        tags: normalizedTags.length > 0 ? normalizedTags as any : undefined,
+        // On edit, only a changed selection is sent ([] removes every tag, #1435).
+        tags: (isEdit ? tagsForUpdate(tags, initialFormValues?.tags) : tagsForCreate(tags)) as any,
         description: {
           usage: descriptionUsage.trim() || undefined,
           purpose: descriptionPurpose.trim() || undefined,

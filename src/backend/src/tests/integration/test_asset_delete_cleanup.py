@@ -78,7 +78,7 @@ NONE_LEFT = {model.__name__: 0 for model in MODELS}
 ONE_EACH = {model.__name__: 1 for model in MODELS}
 REMOVED = {
     'domains': 1, 'rich_texts': 1, 'links': 1, 'documents': 1, 'attachments': 1,
-    'cost_items': 1,
+    'cost_items': 1, 'tags': 0,  # tag assignments are removed too (#1431); none seeded here
 }
 
 
@@ -207,22 +207,23 @@ def test_a_cascade_that_rolls_back_a_later_asset_keeps_its_files(
 
 def test_a_cascade_asset_whose_removal_fails_midway_keeps_everything(
         client, db_session, make_asset, files, monkeypatch):
-    """Its notes, links and documents were already deleted when its cost items failed:
-    the savepoint brings them back, and the next asset's commit doesn't keep the
-    partial delete."""
-    from src.controller.costs_manager import CostsManager
+    """Its notes, links, documents and cost items were already deleted when the
+    removal failed: the savepoint brings them back, and the next asset's commit
+    doesn't keep the partial delete."""
+    from src.controller import assets_manager as assets_module
 
     broken, other = make_asset('broken'), make_asset('other')
     _seed(db_session, 'asset', str(broken.id))
     other_path = _seed(db_session, 'asset', str(other.id))
-    real = CostsManager.remove_all_for_entity
+    real = assets_module.remove_entity_rows
 
-    def remove_all_for_entity(self, db, *, entity_type, entity_id):
+    def remove_entity_rows(db, *, entity_type, entity_id):
+        result = real(db, entity_type=entity_type, entity_id=entity_id)
         if entity_id == str(broken.id):
-            raise RuntimeError('cost items unavailable')
-        return real(self, db, entity_type=entity_type, entity_id=entity_id)
+            raise RuntimeError('removal failed after the rows were deleted')
+        return result
 
-    monkeypatch.setattr(CostsManager, 'remove_all_for_entity', remove_all_for_entity)
+    monkeypatch.setattr(assets_module, 'remove_entity_rows', remove_entity_rows)
 
     response = client.post('/api/assets/cascade-delete',
                            json={'asset_ids': [str(broken.id), str(other.id)]})

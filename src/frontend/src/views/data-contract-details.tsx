@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { buildContractMetadataUpdate } from '@/lib/contract-metadata-payload'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import DeprecationNotice from '@/components/common/deprecation-notice'
 import { useTranslation } from 'react-i18next'
@@ -934,19 +935,7 @@ export default function DataContractDetails() {
     console.log('[DEBUG] handleUpdateMetadata called with payload.owner_team_id:', payload.owner_team_id)
     console.log('[DEBUG] Full payload:', JSON.stringify(payload, null, 2))
     try {
-      const updatePayload = {
-        name: payload.name,
-        version: payload.version,
-        status: payload.status,
-        owner_team_id: payload.owner_team_id,
-        project_id: payload.project_id,
-        tenant: payload.tenant,
-        domainId: payload.domainId,
-        descriptionUsage: payload.description?.usage,
-        descriptionPurpose: payload.description?.purpose,
-        descriptionLimitations: payload.description?.limitations,
-        tags: payload.tags || [],
-      }
+      const updatePayload = buildContractMetadataUpdate(payload)
       console.log('[DEBUG] Update payload owner_team_id:', updatePayload.owner_team_id)
       console.log('[DEBUG] Sending update request:', JSON.stringify(updatePayload, null, 2))
       
@@ -3202,6 +3191,9 @@ export default function DataContractDetails() {
           owner_team_id: contract.owner_team_id,
           project_id: (contract as any).project_id,
           domain: contract.domainId,
+          // The full assignment, so a metadata edit keeps the additional domains
+          domainIds: contract.domainIds,
+          primaryDomainId: contract.primaryDomainId ?? contract.domainId ?? null,
           tenant: contract.tenant,
           descriptionUsage: contract.description?.usage,
           descriptionPurpose: contract.description?.purpose,

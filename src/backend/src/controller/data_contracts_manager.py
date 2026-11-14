@@ -62,6 +62,7 @@ def _upsert_custom_property(data: dict, prop: str, value) -> None:
 import yaml
 from sqlalchemy.orm import Session
 
+from src.controller.entity_data_cleanup import remove_entity_data
 from src.common.timestamps import utc_now
 from src.common.ontology_type_names import canonical_type_name
 from src.models.import_results import BatchImportResult, ImportItemResult
@@ -2794,15 +2795,20 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         elif isinstance(tag, dict):
                             tag_creates.append(AssignedTagCreate(**tag))
                     
-                    # Set tags for the contract entity
-                    self._tags_manager.set_tags_for_entity(
-                        db,
-                        entity_id=contract_id,
-                        entity_type="data_contract",
-                        tags=tag_creates,
-                        user_email=current_user
-                    )
-                    logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
+                    # An explicit [] removes every tag (#1435); a list whose entries
+                    # couldn't be read keeps the current ones, as for products.
+                    if tags_data and not tag_creates:
+                        logger.warning("No readable tag in the update of contract %s; its tags are kept", contract_id)
+                    else:
+                        # Set tags for the contract entity
+                        self._tags_manager.set_tags_for_entity(
+                            db,
+                            entity_id=contract_id,
+                            entity_type="data_contract",
+                            tags=tag_creates,
+                            user_email=current_user
+                        )
+                        logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
                 except Exception as e:
                     logger.error(f"Failed to update tags for contract {contract_id}: {e}")
                     # Don't fail the entire update if tags fail
@@ -2931,6 +2937,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         # Remove domain assignments, then perform deletion
         entity_domain_repo.remove_all_for_entity(db, entity_type="data_contract", entity_id=contract_id)
+        remove_entity_data(db, entity_type="data_contract", entity_id=contract_id)
         data_contract_repo.remove(db=db, id=contract_id)
         
         # Log to change log for timeline

@@ -294,6 +294,19 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
             RdfTripleDb.subject_uri == subject_uri
         ).all()
 
+    def subjects_without_triples(self, db: Session, subject_uris: List[str]) -> List[str]:
+        """The subjects, of those given, that have no triples left in any context."""
+        subjects = list(dict.fromkeys(subject_uris))
+        remaining = set()
+        for start in range(0, len(subjects), 500):
+            chunk = subjects[start:start + 500]
+            remaining.update(
+                uri for (uri,) in db.query(RdfTripleDb.subject_uri).filter(
+                    RdfTripleDb.subject_uri.in_(chunk),
+                ).distinct().all()
+            )
+        return [uri for uri in subjects if uri not in remaining]
+
     def list_current_by_subject(self, db: Session, subject_uri: str) -> List[RdfTripleDb]:
         """Triples for a subject that belong in the SERVED (current) graph.
 

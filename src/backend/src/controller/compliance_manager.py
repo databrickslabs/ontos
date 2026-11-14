@@ -6,6 +6,7 @@ import uuid
 import yaml
 from sqlalchemy.orm import Session
 
+from src.controller.entity_data_cleanup import remove_entity_data
 from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
@@ -455,6 +456,7 @@ class ComplianceManager:
         except Exception as log_err:
             logger.warning(f"Failed to log change for policy deletion: {log_err}")
         
+        remove_entity_data(db, entity_type='compliance_policy', entity_id=policy_id)
         db.delete(existing)
         db.commit()
         return True

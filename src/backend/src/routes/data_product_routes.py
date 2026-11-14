@@ -1207,8 +1207,12 @@ async def get_product_linked_assets(
 
             user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
             caller_team_ids = [t.id for t in user_teams if getattr(t, "id", None)]
+            from src.common.authorization import is_user_admin
+            from src.common.config import get_settings
+
             user_projects = projects_manager.get_user_projects(
-                db, caller_email, user_groups
+                db, caller_email, user_groups,
+                is_admin=is_user_admin(user_groups, get_settings()),
             )
             caller_project_ids = [
                 p.id for p in user_projects.projects if getattr(p, "id", None)
@@ -1659,8 +1663,12 @@ async def get_data_products(
                 )
                 caller_team_ids = [t.id for t in user_teams if getattr(t, "id", None)]
 
+                from src.common.authorization import is_user_admin
+                from src.common.config import get_settings
+
                 user_projects = projects_manager.get_user_projects(
-                    db, caller_email, user_groups
+                    db, caller_email, user_groups,
+                    is_admin=is_user_admin(user_groups, get_settings()),
                 )
                 caller_project_ids = [
                     p.id for p in user_projects.projects if getattr(p, "id", None)

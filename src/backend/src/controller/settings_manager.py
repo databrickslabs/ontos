@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy import func
 
+from src.common.timestamps import utc_now
 from src.common.instance_identity import (
     INSTANCE_ID_SETTING_KEY,
     INSTANCE_NAME_SETTING_KEY,
@@ -2545,7 +2546,6 @@ class SettingsManager:
             Exception: For notification/database errors
         """
         from uuid import uuid4
-        from datetime import datetime
         from ..models.notifications import Notification, NotificationType
 
         # 1. Get Role Name (for notification)
@@ -2646,7 +2646,7 @@ class SettingsManager:
 
             # Provide placeholder ID and created_at for Pydantic validation
             placeholder_id = str(uuid4())
-            now = datetime.utcnow()
+            now = utc_now()
 
             requester_notification = Notification(
                 id=placeholder_id,

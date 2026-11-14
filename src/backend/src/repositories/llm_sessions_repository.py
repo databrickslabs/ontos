@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 
+from src.common.timestamps import utc_now
 from src.db_models.llm_sessions import LLMSessionDb, LLMMessageDb
 from src.common.logging import get_logger
 
@@ -58,7 +59,7 @@ class LLMSessionsRepository:
     def update_session_title(self, db: Session, session: LLMSessionDb, title: str) -> LLMSessionDb:
         """Update session title."""
         session.title = title
-        session.updated_at = datetime.utcnow()
+        session.updated_at = utc_now()
         db.flush()
         db.refresh(session)
         return session
@@ -111,7 +112,7 @@ class LLMSessionsRepository:
         db.add(message)
         
         # Update session timestamp
-        session.updated_at = datetime.utcnow()
+        session.updated_at = utc_now()
         
         # Auto-generate title from first user message if not set
         if not session.title and role == 'user' and content:
@@ -135,7 +136,7 @@ class LLMSessionsRepository:
     ) -> int:
         """Clean up old sessions. Returns number deleted."""
         deleted_count = 0
-        cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+        cutoff = utc_now() - timedelta(hours=max_age_hours)
 
         # Delete expired sessions
         expired = db.query(LLMSessionDb).filter(LLMSessionDb.updated_at < cutoff).all()

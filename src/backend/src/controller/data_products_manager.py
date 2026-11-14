@@ -13,6 +13,7 @@ from typing import Dict, Iterable, List, Optional, Any, Set
 from uuid import UUID
 from pathlib import Path
 
+from src.common.timestamps import utc_now
 from src.common.api_errors import CodedValueError
 from src.common.notification_i18n import notification_i18n_data
 
@@ -1811,7 +1812,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If product not found or invalid transition
         """
-        from datetime import datetime
         from uuid import uuid4
         from src.common.workflow_triggers import (
             get_trigger_registry, request_submitted_message, request_workflow_outcome,
@@ -1843,7 +1843,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             requested_deprecation = requested_deprecation_data(db, 'data_product', details)
 
-        now = datetime.utcnow()
+        now = utc_now()
         request_id = str(uuid4())
         
         # Fire the ON_REQUEST_STATUS_CHANGE trigger
@@ -1926,7 +1926,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If product not found or invalid decision
         """
-        from datetime import datetime
         from uuid import uuid4
         from src.models.notifications import NotificationType, Notification
         from src.controller.change_log_manager import change_log_manager
@@ -1939,7 +1938,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if decision not in ('approve', 'deny', 'clarify'):
             raise ValueError("Decision must be 'approve', 'deny', or 'clarify'")
         
-        now = datetime.utcnow()
+        now = utc_now()
         notification_title = ""
         notification_desc = ""
         
@@ -5090,7 +5089,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             try:
                 notification = Notification(
                     id=str(uuid.uuid4()),
-                    created_at=datetime.utcnow(),
+                    created_at=utc_now(),
                     type=notif_type,
                     title=title,
                     description=description,

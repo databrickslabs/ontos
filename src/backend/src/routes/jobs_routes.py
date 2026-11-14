@@ -1,10 +1,10 @@
 import uuid
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.common.authorization import PermissionChecker
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep, CurrentUserDep
 from src.common.features import FeatureAccessLevel
@@ -794,7 +794,7 @@ async def request_workflow_enablement(
 
         notification = Notification(
             id=str(uuid.uuid4()),
-            created_at=datetime.utcnow(),
+            created_at=utc_now(),
             type=NotificationType.ACTION_REQUIRED,
             title="Background job enablement requested",
             subtitle=f"Job: {display_name}",

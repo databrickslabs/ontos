@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 import json
@@ -6,6 +6,7 @@ import uuid
 import yaml
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.repositories.compliance_repository import (
@@ -234,7 +235,7 @@ class ComplianceManager:
                     existing.category = model.category
                     existing.severity = model.severity
                     existing.is_active = model.is_active
-                    existing.updated_at = datetime.utcnow()
+                    existing.updated_at = utc_now()
                     policy_db = existing
                 else:
                     policy_db = CompliancePolicyDb(
@@ -263,9 +264,11 @@ class ComplianceManager:
                                 if not val:
                                     return None
                                 try:
-                                    return datetime.fromisoformat(val.replace('Z', '+00:00'))
+                                    parsed = datetime.fromisoformat(val.replace('Z', '+00:00'))
                                 except Exception:
-                                    return datetime.utcnow()
+                                    return utc_now()
+                                # Seeded times without an offset are UTC
+                                return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
                             results_defs = rdef.get('results') or []
                             success_count = rdef.get('success_count')
                             failure_count = rdef.get('failure_count')
@@ -283,7 +286,7 @@ class ComplianceManager:
                                 id=run_id,
                                 policy_id=policy_db.id,
                                 status=str(rdef.get('status') or 'succeeded'),
-                                started_at=_parse_dt(rdef.get('started_at')) or datetime.utcnow(),
+                                started_at=_parse_dt(rdef.get('started_at')) or utc_now(),
                                 finished_at=_parse_dt(rdef.get('finished_at')),
                                 success_count=int(success_count or 0),
                                 failure_count=int(failure_count or 0),
@@ -408,7 +411,7 @@ class ComplianceManager:
         existing.category = policy.category
         existing.severity = policy.severity
         existing.is_active = policy.is_active
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utc_now()
         
         # Log to change log for timeline
         try:
@@ -608,7 +611,7 @@ class ComplianceManager:
             id=str(uuid.uuid4()),
             policy_id=policy_id,
             status='running',
-            started_at=datetime.utcnow(),
+            started_at=utc_now(),
         )
         db.add(run)
         db.commit()
@@ -624,7 +627,7 @@ class ComplianceManager:
         run.success_count = success_count
         run.failure_count = failure_count
         run.score = score
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utc_now()
         run.status = 'succeeded' if error_message is None else 'failed'
         run.error_message = error_message
         # A code the UI translates (see common/compliance_errors.py); the message is the fallback

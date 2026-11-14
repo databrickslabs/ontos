@@ -28,7 +28,11 @@
     "rulePlaceholder": "Insira a regra de conformidade no formato DSL de conformidade",
     "failureMessage": "Mensagem de falha",
     "failureMessagePlaceholder": "ex.: Nomes devem usar snake_case (minúsculas com sublinhados)",
-    "failureMessageHint": "Mensagem legível exibida aos usuários quando esta política falha. Ajuda a explicar o que deu errado e como corrigir."
+    "failureMessageHint": "Mensagem legível exibida aos usuários quando esta política falha. Ajuda a explicar o que deu errado e como corrigir.",
+    "notifyRecipients": "Destinatários de notificações",
+    "insertNotifyRecipient": "Inserir um NOTIFY para um destinatário",
+    "notifyRecipientsHint": "Insere NOTIFY recipient:'Nome' na posição do cursor. Pode usar os destinatários que as suas funções permitem.",
+    "noNotifyRecipients": "Não há destinatários de notificação disponíveis para as suas funções. Os administradores definem-nos nas Definições."
   },
   "categories": {
     "security": "Segurança",
@@ -178,7 +182,10 @@
     "tags_load_failed": "Não foi possível carregar as tags das entidades {{entityType}}, por isso a regra não pôde ser avaliada."
   },
   "saveErrors": {
-    "rule_trailing_input": "A regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Tudo a partir dali seria ignorado, e a regra verificaria menos do que diz. Remova o trecho ou corrija a sintaxe."
+    "rule_trailing_input": "A regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Tudo a partir dali seria ignorado, e a regra verificaria menos do que diz. Remova o trecho ou corrija a sintaxe.",
+    "notify_target_not_allowed": "Esta política não pode notificar '{{target}}'. Os administradores podem notificar qualquer pessoa. Os outros podem notificar-se a si próprios, aos proprietários da entidade e aos destinatários que as suas funções permitem.",
+    "notify_recipient_not_allowed": "As suas funções não podem usar o destinatário '{{recipient}}'",
+    "notify_recipient_not_found": "O destinatário '{{recipient}}' não existe"
   },
   "runWarnings": {
     "rule_trailing_input": "Esta regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Ele é ignorado quando a regra é executada, então a regra pode verificar menos do que diz. Edite a regra para corrigir.",
@@ -202,8 +209,12 @@
       "tag_entity_without_id": "A entidade não tem id",
       "notification_manager_unavailable": "As notificações não estão disponíveis nesta execução",
       "notify_no_recipients": "{{recipients}} não corresponde a nenhum destinatário",
-      "notify_unknown_recipient": "{{recipient}} não é um destinatário conhecido: use um e-mail, group:<nome>, um papel do app ou uma palavra-chave de destinatário",
-      "action_failed": "A ação falhou"
+      "action_failed": "A ação falhou",
+      "notify_recipient_disabled": "O destinatário '{{recipient}}' está desativado",
+      "notify_recipient_not_allowed": "O autor da política não pode usar o destinatário '{{recipient}}'",
+      "notify_recipient_not_found": "O destinatário '{{recipient}}' não existe",
+      "notify_target_not_allowed": "O autor da política não pode notificar '{{target}}'",
+      "notify_unknown_recipient": "{{recipient}} não é um destinatário conhecido: use um e-mail, group:<nome>, um papel do app ou uma palavra-chave de destinatário"
     }
   }
 }

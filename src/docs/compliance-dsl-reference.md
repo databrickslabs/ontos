@@ -212,6 +212,8 @@ Send an in-app notification:
 ON_FAIL NOTIFY 'security-team@example.com'
 ON_FAIL NOTIFY 'compliance-alerts@example.com,data-governance@example.com'
 ON_FAIL NOTIFY 'entity_owner'
+ON_FAIL NOTIFY 'self'
+ON_FAIL NOTIFY recipient:'Data Stewards'
 ```
 
 - **Recipients** resolve as in workflow notification steps:
@@ -219,11 +221,21 @@ ON_FAIL NOTIFY 'entity_owner'
   - app role names or ids;
   - `entity_owner` (or `owner`), `domain_owners`, `business:<role id>`, resolved for each entity; on Unity Catalog objects `owner` is the object's UC owner;
     `domain_owners` (or `DomainOwner`) and `ContractApprover` and `AssetOwner` are the owners of the entity's domain / of the entity, the user who started the run included; unlike workflow approvals, nobody else is notified when there are none;
+  - `self`: the policy's author (see below), not the user who runs it;
+  - `recipient:'<name>'`: a Notification Recipient defined in Settings (see below);
   - a comma-separated list of these.
 
-  Keywords such as `owner`, `entity_owner` or `requester` match without case, spaces and underscores (`Owner`, `Entity Owner`). Any other name that is not an app role fails the action (*not a known recipient*); it doesn't become a recipient that no user matches.
+  Keywords such as `owner`, `entity_owner`, `self` or `requester` match without case, spaces and underscores (`Owner`, `Entity Owner`, `SELF`). Any other name that is not an email, a group or an app role fails the action (*not a known recipient*); it doesn't become a recipient that no user matches.
 
   `requester` / `trigger_user` is the user who started the run, so scheduled runs of the compliance-checks job have none. A recipient list that resolves to nobody for an entity fails the action for that entity.
+- **Who may notify whom.** The policy's author decides. An admin (compliance ADMIN, the feature level the app resolves for the user; a role's `is_admin` flag doesn't count) may notify any target. Anyone else may notify:
+  - `self`, which is the author, by their own email too;
+  - `entity_owner` / `owner`;
+  - a Notification Recipient whose allowed roles include one of the author's roles.
+
+  Any other target is refused. A save with such a target fails with a message per target (code `notify_target_not_allowed`, or `notify_recipient_not_allowed` / `notify_recipient_not_found` for a recipient). The check runs again at each run, against the author and the author's groups as they were when they last changed the policy. A scheduled run has no user, so it uses the author too. A target that is refused at run time fails its NOTIFY action with a reason (the other actions still run). The rule is kept, so an admin can fix the target or the recipient's allowed roles. Only the entity's owners are allowed by default for non-admins; `domain_owners` and `business:` targets need an admin or a recipient.
+- **Notification Recipients.** Admins define them in **Settings > Notification Recipients**: a name, the users, groups and app roles to notify (groups as `group:<name>`), the app roles allowed to use the recipient, and an active flag. Rules refer to a recipient by name, as `recipient:'Name'` (or `recipient:Name` when the name has no spaces). The name must be unique (case-insensitive), and must not contain commas or quotes.
+- **Authors.** A policy records who last saved a change to it, and that user's groups. Saving any change to a policy with `NOTIFY` (its name included, since the name titles the notifications) checks its NOTIFY targets against the editor, who becomes the author; a refused target fails the save. A policy saved before authors were recorded has none, so only the entity's owners are allowed for it until an admin saves it again.
 - **One notification per recipient per run.** A run can match many entities, so NOTIFY doesn't send one notification each. When the run ends, each recipient gets one notification:
   - it gives the run's totals of failed and passed entities;
   - it names up to 10 of the entities its NOTIFY actions ran for (each once), and counts the rest. It only names entities the recipient can read: a user is told the names of the data products and contracts they could open (the same checks as the product page and the contract list), a role or group only those every reader sees (published ones), and the names of Unity Catalog objects go only to their owner. The others are only counted;
@@ -231,7 +243,7 @@ ON_FAIL NOTIFY 'entity_owner'
 
   The notification is created even if the run is a scheduled job, and also for the entities evaluated before a run that stops with an error.
 - **Done** on a NOTIFY action means the recipient was queued for the run's notification. If the notifications can't be created when the run ends, the run reports the warning *notifications could not be sent*.
-- **Permission.** NOTIFY can reach any user, group or role, so saving, renaming (the name is the notifications' title) or running a policy that uses it needs **admin** access to compliance (Data Governance Officers and Admins by default). Scheduled runs use the rules as saved.
+
 - Notifications use the in-app channel.
 
 ### Action outcomes in run results

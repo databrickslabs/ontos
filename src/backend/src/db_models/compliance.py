@@ -20,6 +20,10 @@ class CompliancePolicyDb(Base):
     category = Column(String, nullable=True)
     severity = Column(String, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    # Who last changed the rule, and their groups then: NOTIFY recipients are checked against
+    # this author's roles at save and at run time (a scheduled run has no user to check)
+    rule_author_email = Column(String, nullable=True)
+    rule_author_groups = Column(Text, nullable=True)  # JSON list
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

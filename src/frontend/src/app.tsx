@@ -96,6 +96,7 @@ import SettingsGitView from './views/settings-git';
 import SettingsDeliveryView from './views/settings-delivery';
 import SettingsJobsView from './views/settings-jobs';
 import SettingsRolesView from './views/settings-roles';
+import SettingsNotificationRecipientsView from './views/settings-notification-recipients';
 import SettingsTagsView from './views/settings-tags';
 import SettingsSearchView from './views/settings-search';
 import SettingsMcpView from './views/settings-mcp';
@@ -262,6 +263,7 @@ export default function App() {
                 <Route path="delivery" element={<SettingsDeliveryView />} />
                 <Route path="jobs" element={<SettingsJobsView />} />
                 <Route path="roles" element={<SettingsRolesView />} />
+                <Route path="notification-recipients" element={<SettingsNotificationRecipientsView />} />
                 <Route path="tags" element={<SettingsTagsView />} />
                 <Route path="search" element={<SettingsSearchView />} />
                 <Route path="mcp" element={<SettingsMcpView />} />

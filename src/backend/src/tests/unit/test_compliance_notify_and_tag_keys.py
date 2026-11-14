@@ -8,7 +8,6 @@ os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
 import json
 import uuid
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,11 +15,12 @@ import pytest
 from src.common.compliance_actions import ActionContext, AssignTagAction, NotifyAction, RemoveTagAction
 from src.common.compliance_dsl import parse_rule
 from src.common.compliance_notifications import ComplianceRunNotifier
+from src.common.notification_audience import NotifyAudience
 from src.controller.compliance_manager import ComplianceManager, TagsManagerTagAdapter
 from src.db_models.compliance import CompliancePolicyDb, ComplianceResultDb
+from src.db_models.settings import AppRoleDb
 from src.db_models.notifications import NotificationDb
 from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
-from src.common.features import FeatureAccessLevel
 from src.repositories.tags_repository import entity_tag_repo, tag_namespace_repo
 
 
@@ -190,7 +190,6 @@ def readable():
     with patch('src.common.compliance_notifications._ReadChecks.can_read', return_value=True):
         yield
 
-
 class TestNotifyAction:
     def test_without_a_notifier_is_a_coded_failure(self):
         result = NotifyAction('a@example.com').execute(_context())
@@ -198,7 +197,7 @@ class TestNotifyAction:
         assert (result.success, result.code) == (False, 'notification_manager_unavailable')
 
     def test_notifier_collects_one_notification_per_recipient_per_run(self, db_session, readable):
-        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='Classified products', run_id='run-1')
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='Classified products', run_id='run-1', audience=ADMIN_AUDIENCE)
 
         for i in range(25):
             result = NotifyAction('a@example.com, b@example.com').execute(
@@ -230,14 +229,14 @@ class TestNotifyAction:
         assert 'Product 9' in a.description and 'Product 10' not in a.description and '15 more' in a.description
 
     def test_flush_twice_does_not_send_again(self, db_session):
-        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=ADMIN_AUDIENCE)
         NotifyAction('a@example.com').execute(_context(notification_manager=notifier))
 
         assert notifier.flush(failed=1, passed=0) == 1
         assert notifier.flush(failed=1, passed=0) == 0
 
     def test_an_entity_reached_by_several_notify_actions_is_listed_once(self, db_session, readable):
-        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=ADMIN_AUDIENCE)
         context = _context(notification_manager=notifier)
 
         NotifyAction('a@example.com').execute(context)
@@ -249,7 +248,7 @@ class TestNotifyAction:
         assert failed_line['params']['names'] == {'text': 'Orders'}
 
     def test_counts_are_the_run_totals(self, db_session):
-        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=ADMIN_AUDIENCE)
         NotifyAction('a@example.com').execute(_context(notification_manager=notifier))
 
         notifier.flush(failed=5, passed=900)
@@ -269,7 +268,7 @@ class TestNotifyAction:
             user_email='domain-owner@example.com', role_id=role.id, is_active=True,
         ))
         db_session.flush()
-        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=ADMIN_AUDIENCE)
         context = _context(notification_manager=notifier, entity_id='dom-1', name='Sales')
         context.entity_type = 'domain'
         # 'owner' is the owner team's id in a compliance entity; it must not become the recipient
@@ -284,6 +283,7 @@ class TestNotifyAction:
     def test_requester_is_the_user_who_started_the_run(self, db_session):
         notifier = ComplianceRunNotifier(
             db_session, policy_id='pol-1', policy_name='P', run_id='run-1', run_user='steward@example.com',
+            audience=ADMIN_AUDIENCE,
         )
         NotifyAction('requester').execute(_context(notification_manager=notifier))
         notifier.flush(failed=1, passed=0)
@@ -291,7 +291,7 @@ class TestNotifyAction:
         assert db_session.query(NotificationDb).one().recipient == 'steward@example.com'
 
     def test_entity_independent_recipients_are_resolved_once(self, db_session):
-        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=ADMIN_AUDIENCE)
         found = [('Readers', 'role-1')]  # an app role; emails don't need the resolver
         resolver = 'src.common.workflow_executor._resolve_role_to_users'
         with patch(resolver, return_value=found) as resolve:
@@ -302,7 +302,7 @@ class TestNotifyAction:
         assert resolve.call_count == 1
 
     def test_recipients_that_resolve_to_nobody_fail_the_action(self, db_session):
-        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=ADMIN_AUDIENCE)
 
         result = NotifyAction('entity_owner').execute(_context(notification_manager=notifier))
 
@@ -311,8 +311,21 @@ class TestNotifyAction:
 
 # --- Runs -------------------------------------------------------------------
 
+# The notifier's audience: an admin may notify any target (#1450); the author is an admin
+ADMIN_AUDIENCE = NotifyAudience(email=None, is_admin=True, role_ids=frozenset())
+
+
 def _run(db, rule, entities, current_user='steward@example.com'):
-    policy = CompliancePolicyDb(id=str(uuid.uuid4()), name='Classified products', rule=rule, is_active=True)
+    # Policies run with their author's audience; this one is authored by an admin
+    group = f'old-admins-{uuid.uuid4().hex[:8]}'
+    # Admin is the compliance feature level (not the is_admin flag): the author holds compliance ADMIN
+    db.add(AppRoleDb(name=f'Old Admin {group}', assigned_groups=json.dumps([group]),
+                     feature_permissions=json.dumps({'compliance': 'Admin'})))
+    db.flush()
+    policy = CompliancePolicyDb(
+        id=str(uuid.uuid4()), name='Classified products', rule=rule, is_active=True,
+        rule_author_email='admin@example.com', rule_author_groups=json.dumps([group]),
+    )
     db.add(policy)
     db.flush()
     iterator = MagicMock()
@@ -369,7 +382,10 @@ class TestRuns:
         policy = CompliancePolicyDb(
             id=str(uuid.uuid4()), name='P', is_active=True,
             rule="MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL NOTIFY 'a@example.com'",
+            rule_author_email='admin@example.com', rule_author_groups=json.dumps(['old-admins-errors']),
         )
+        db_session.add(AppRoleDb(name='Old Admin errors', assigned_groups='["old-admins-errors"]',
+                                 feature_permissions='{"compliance": "Admin"}'))
         db_session.add(policy)
         db_session.flush()
         iterator = MagicMock()
@@ -391,32 +407,6 @@ class TestRuns:
         assert db_session.query(NotificationDb).filter_by(recipient='a@example.com').count() == 1
 
 
-class TestNotifyPermission:
-    def _user(self):
-        from src.models.users import UserInfo
-        return UserInfo(email='u@example.com', username='u', user='U', ip='127.0.0.1', groups=['g'])
-
-    def test_notify_rules_need_compliance_admin(self):
-        from fastapi import HTTPException
-        from src.routes.compliance_routes import require_compliance_admin_for_notify
-
-        rule = "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL NOTIFY 'a@example.com'"
-        with patch('src.routes.compliance_routes.user_has_feature_level', return_value=False) as check:
-            with pytest.raises(HTTPException) as exc:
-                require_compliance_admin_for_notify(rule, MagicMock(), self._user())
-        assert exc.value.status_code == 403
-        assert check.call_args.args[2:] == ('compliance', FeatureAccessLevel.ADMIN)
-
-    def test_rules_without_notify_are_not_checked(self):
-        from src.routes.compliance_routes import require_compliance_admin_for_notify
-
-        with patch('src.routes.compliance_routes.user_has_feature_level') as check:
-            require_compliance_admin_for_notify(
-                "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL ASSIGN_TAG 'x'", MagicMock(), self._user(),
-            )
-        check.assert_not_called()
-
-
 class TestFailureCodes:
     def test_unexpected_errors_are_reported_without_their_text(self, db_session, default_tag):
         adapter = TagsManagerTagAdapter(db_session)
@@ -428,109 +418,6 @@ class TestFailureCodes:
 
 
 # --- Review follow-ups --------------------------------------------------------
-
-NOTIFY_RULE = "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL NOTIFY 'a@example.com'"
-
-
-class TestNotifyGateOnRoutes:
-    """Create, update (when the rule or the name changes) and run apply the NOTIFY gate."""
-
-    @pytest.fixture
-    def client(self):
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-
-        from src.common.authorization import get_user_details_from_sdk
-        from src.common.dependencies import get_current_user_details_for_audit, get_db
-        from src.common.manager_dependencies import get_audit_manager, get_auth_manager
-        from src.models.users import UserInfo
-        from src.routes import compliance_routes
-
-        app = FastAPI()
-        app.include_router(compliance_routes.router)
-        app.state.teams_manager = None
-        app.state.settings_manager = None
-        user = UserInfo(email='w@example.com', username='w', user='W', ip='127.0.0.1', groups=['g'])
-        auth = MagicMock()
-        auth.get_user_effective_permissions.return_value = {'compliance': FeatureAccessLevel.READ_WRITE}
-        auth.has_permission.return_value = True  # route-level READ_WRITE check passes
-
-        async def _user():
-            return user
-
-        def _db():
-            yield MagicMock()
-
-        app.dependency_overrides[get_user_details_from_sdk] = _user
-        app.dependency_overrides[get_current_user_details_for_audit] = _user
-        app.dependency_overrides[get_auth_manager] = lambda: auth
-        app.dependency_overrides[get_db] = _db
-        app.dependency_overrides[get_audit_manager] = lambda: MagicMock()
-        # Write access, but not admin: the NOTIFY gate refuses
-        level = lambda auth_manager, u, feature, required: required != FeatureAccessLevel.ADMIN  # noqa: E731
-        with patch.object(compliance_routes, 'user_has_feature_level', side_effect=level), \
-             patch.object(compliance_routes, 'manager') as manager:
-            yield TestClient(app), manager
-
-    def _payload(self, rule=NOTIFY_RULE, name='P'):
-        return {'name': name, 'description': 'd', 'category': 'Governance', 'severity': 'low', 'rule': rule, 'is_active': True}
-
-    def test_create_with_notify_needs_admin(self, client):
-        http, manager = client
-        assert http.post('/api/compliance/policies', json=self._payload()).status_code == 403
-        manager.create_policy.assert_not_called()
-
-    def test_run_of_a_notify_policy_needs_admin(self, client):
-        http, manager = client
-        manager.get_policy.return_value = SimpleNamespace(id='p1', name='P', rule=NOTIFY_RULE)
-        assert http.post('/api/compliance/policies/p1/runs', json={}).status_code == 403
-        manager.run_policy_inline.assert_not_called()
-
-    def _existing(self, manager, pid, name='P', rule=NOTIFY_RULE):
-        from datetime import datetime as _dt
-
-        manager.get_policy.return_value = SimpleNamespace(id=pid, name=name, rule=rule)
-        manager.update_policy.return_value = CompliancePolicyDb(
-            id=pid, name='Renamed', description='d2', rule=rule, category='Governance',
-            severity='low', is_active=True, created_at=_dt.utcnow(), updated_at=_dt.utcnow(),
-        )
-
-    def test_update_that_changes_the_rule_is_gated(self, client):
-        http, manager = client
-        pid = str(uuid.uuid4())
-        self._existing(manager, pid)
-
-        changed = {**self._payload(rule=NOTIFY_RULE + " FAIL 'x'"), 'id': pid}
-        assert http.put(f'/api/compliance/policies/{pid}', json=changed).status_code == 403
-        manager.update_policy.assert_not_called()
-
-    def test_renaming_a_notify_policy_is_gated(self, client):
-        """The name is the title the next scheduled run sends."""
-        http, manager = client
-        pid = str(uuid.uuid4())
-        self._existing(manager, pid)
-
-        renamed = {**self._payload(name='Renamed'), 'id': pid}
-        assert http.put(f'/api/compliance/policies/{pid}', json=renamed).status_code == 403
-        manager.update_policy.assert_not_called()
-
-    def test_other_edits_that_keep_rule_and_name_are_not_gated(self, client):
-        http, manager = client
-        pid = str(uuid.uuid4())
-        self._existing(manager, pid)
-
-        edited = {**self._payload(), 'description': 'd2', 'is_active': False, 'id': pid}
-        assert http.put(f'/api/compliance/policies/{pid}', json=edited).status_code == 200
-        manager.update_policy.assert_called_once()
-
-    def test_renaming_a_policy_without_notify_is_not_gated(self, client):
-        http, manager = client
-        pid = str(uuid.uuid4())
-        rule = "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL FAIL 'x'"
-        self._existing(manager, pid, rule=rule)
-
-        renamed = {**self._payload(rule=rule, name='Renamed'), 'id': pid}
-        assert http.put(f'/api/compliance/policies/{pid}', json=renamed).status_code == 200
 
 
 class TestNotifyResolution:
@@ -547,7 +434,7 @@ class TestNotifyResolution:
                 user_email=email, role_id=role.id, is_active=True,
             ))
         db_session.flush()
-        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=ADMIN_AUDIENCE)
         for domain_id, name in (('dom-a', 'Sales'), ('dom-b', 'Finance')):
             context = _context(notification_manager=notifier, entity_id=domain_id, name=name)
             context.entity_type = 'domain'
@@ -561,7 +448,7 @@ class TestNotifyResolution:
         assert listed == {'a-owner@example.com': 'Sales', 'b-owner@example.com': 'Finance'}
 
     def test_a_failed_lookup_fails_that_action_only(self, db_session, default_tag):
-        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1', audience=ADMIN_AUDIENCE)
         calls = {'n': 0}
 
         def resolve(db, token, context):

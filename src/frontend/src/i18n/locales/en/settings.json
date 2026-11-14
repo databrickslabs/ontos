@@ -112,7 +112,8 @@
     "connectors": "Connectors",
     "schemaImporter": "Schema Importer",
     "certificationLevels": "Certification Levels",
-    "maturityLevels": "Maturity Levels"
+    "maturityLevels": "Maturity Levels",
+    "notificationRecipients": "Notification Recipients"
   },
   "accessDenied": {
     "title": "Access Denied",
@@ -1377,6 +1378,48 @@
       "saveError": "Failed to save",
       "clearTitleError": "Failed to clear title",
       "clearError": "Failed to clear"
+    }
+  },
+  "notificationRecipients": {
+    "description": "Named targets for the NOTIFY action of compliance policies. A policy names one as recipient:'Name'. Only members of the roles you allow can use a recipient in their policies; admins always can.",
+    "add": "Add recipient",
+    "edit": "Edit recipient",
+    "delete": "Delete",
+    "deleteConfirm": "Delete notification recipient '{{name}}'? Policies that name it will fail their NOTIFY actions.",
+    "dialogDescription": "Users, groups and roles that receive the notification, and the roles allowed to name this recipient in their policies.",
+    "empty": "No notification recipients yet.",
+    "noAllowedRoles": "Admins only",
+    "saved": "Notification recipient saved",
+    "deleted": "Notification recipient deleted",
+    "saveFailed": "Could not save the notification recipient",
+    "columns": {
+      "name": "Name",
+      "targets": "Notifies",
+      "allowedRoles": "May be used by",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Active",
+      "disabled": "Disabled"
+    },
+    "fields": {
+      "name": "Name",
+      "nameHint": "Used in rules as recipient:'Name'. No commas or quotes.",
+      "namePlaceholder": "e.g. Data Stewards",
+      "description": "Description",
+      "principals": "Users and groups",
+      "principalsPlaceholder": "Add users or groups",
+      "roleTargets": "App roles to notify",
+      "allowedRoles": "Roles allowed to use it",
+      "allowedRolesHint": "Members of these roles can name this recipient in their compliance policies. Admins always can.",
+      "active": "Active",
+      "activeHint": "A disabled recipient fails the NOTIFY actions that name it, with a reason."
+    },
+    "errors": {
+      "notification_recipient_name_taken": "A notification recipient with this name already exists",
+      "notification_recipient_name_invalid": "The name must not be empty, and must not contain commas, quotes or control characters",
+      "notification_recipient_target_invalid": "'{{target}}' can't be a target: targets are fixed emails, groups or roles",
+      "notification_recipient_role_unknown": "App role '{{role}}' does not exist"
     }
   }
 }

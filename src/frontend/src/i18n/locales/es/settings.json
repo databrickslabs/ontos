@@ -112,7 +112,8 @@
     "connectors": "Conectores",
     "schemaImporter": "Importador de esquemas",
     "certificationLevels": "Niveles de certificación",
-    "maturityLevels": "Niveles de madurez"
+    "maturityLevels": "Niveles de madurez",
+    "notificationRecipients": "Destinatarios de notificación"
   },
   "accessDenied": {
     "title": "Acceso denegado",
@@ -1359,6 +1360,48 @@
       "saveError": "No se pudo guardar",
       "clearTitleError": "No se pudo borrar el título",
       "clearError": "No se pudo borrar"
+    }
+  },
+  "notificationRecipients": {
+    "description": "Destinatarios con nombre para la acción NOTIFY de las políticas de cumplimiento. Una política lo referencia como recipient:'Nombre'. Solo los miembros de los roles permitidos pueden usar un destinatario en sus políticas; los administradores siempre pueden.",
+    "add": "Añadir destinatario",
+    "edit": "Editar destinatario",
+    "delete": "Eliminar",
+    "deleteConfirm": "¿Eliminar el destinatario '{{name}}'? Las políticas que lo mencionan fallarán en sus acciones NOTIFY.",
+    "dialogDescription": "Usuarios, grupos y roles que reciben la notificación, y los roles autorizados a usar este destinatario en sus políticas.",
+    "empty": "Todavía no hay destinatarios.",
+    "noAllowedRoles": "Solo administradores",
+    "saved": "Destinatario guardado",
+    "deleted": "Destinatario eliminado",
+    "saveFailed": "No se pudo guardar el destinatario",
+    "columns": {
+      "name": "Nombre",
+      "targets": "Notifica a",
+      "allowedRoles": "Usable por",
+      "status": "Estado"
+    },
+    "status": {
+      "active": "Activo",
+      "disabled": "Desactivado"
+    },
+    "fields": {
+      "name": "Nombre",
+      "nameHint": "Se usa en las reglas como recipient:'Nombre'. Sin comas ni comillas.",
+      "namePlaceholder": "p. ej. Data Stewards",
+      "description": "Descripción",
+      "principals": "Usuarios y grupos",
+      "principalsPlaceholder": "Añadir usuarios o grupos",
+      "roleTargets": "Roles de la app a notificar",
+      "allowedRoles": "Roles autorizados a usarlo",
+      "allowedRolesHint": "Los miembros de estos roles pueden usar este destinatario en sus políticas de cumplimiento. Los administradores siempre pueden.",
+      "active": "Activo",
+      "activeHint": "Un destinatario desactivado hace fallar, indicando el motivo, las acciones NOTIFY que lo mencionan."
+    },
+    "errors": {
+      "notification_recipient_name_taken": "Ya existe un destinatario con este nombre",
+      "notification_recipient_name_invalid": "El nombre no puede estar vacío ni contener comas, comillas o caracteres de control",
+      "notification_recipient_target_invalid": "'{{target}}' no puede ser un destino: los destinos son correos, grupos o roles fijos",
+      "notification_recipient_role_unknown": "El rol de la app '{{role}}' no existe"
     }
   }
 }

@@ -28,7 +28,11 @@
     "rulePlaceholder": "Compliance-Regel im DSL-Format eingeben",
     "failureMessage": "Fehlermeldung",
     "failureMessagePlaceholder": "z.B. Namen müssen snake_case verwenden (Kleinbuchstaben mit Unterstrichen)",
-    "failureMessageHint": "Benutzerfreundliche Nachricht, die angezeigt wird, wenn diese Richtlinie fehlschlägt. Erklärt, was falsch ist und wie es behoben werden kann."
+    "failureMessageHint": "Benutzerfreundliche Nachricht, die angezeigt wird, wenn diese Richtlinie fehlschlägt. Erklärt, was falsch ist und wie es behoben werden kann.",
+    "notifyRecipients": "Benachrichtigungsempfänger",
+    "insertNotifyRecipient": "NOTIFY für einen Empfänger einfügen",
+    "notifyRecipientsHint": "Fügt NOTIFY recipient:'Name' an der Cursorposition ein. Verwendbar sind die Empfänger, die die Rollen erlauben.",
+    "noNotifyRecipients": "Den Rollen stehen keine Benachrichtigungsempfänger zur Verfügung. Admins legen sie in den Einstellungen fest."
   },
   "categories": {
     "security": "Sicherheit",
@@ -178,7 +182,10 @@
     "tags_load_failed": "Die Tags der {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden."
   },
   "saveErrors": {
-    "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax."
+    "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax.",
+    "notify_target_not_allowed": "Diese Richtlinie darf '{{target}}' nicht benachrichtigen. Admins dürfen jeden benachrichtigen. Andere dürfen sich selbst, die Eigentümer der Entität und die Empfänger ihrer Rollen benachrichtigen.",
+    "notify_recipient_not_allowed": "Die Rollen dieses Benutzers dürfen den Empfänger '{{recipient}}' nicht verwenden",
+    "notify_recipient_not_found": "Der Empfänger '{{recipient}}' existiert nicht"
   },
   "runWarnings": {
     "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren.",
@@ -202,8 +209,12 @@
       "tag_entity_without_id": "Das Objekt hat keine ID",
       "notification_manager_unavailable": "Benachrichtigungen sind in diesem Lauf nicht verfügbar",
       "notify_no_recipients": "{{recipients}} ergibt keinen Empfänger",
-      "notify_unknown_recipient": "{{recipient}} ist kein bekannter Empfänger: Verwenden Sie eine E-Mail-Adresse, group:<Name>, eine App-Rolle oder ein Empfänger-Schlüsselwort",
-      "action_failed": "Die Aktion ist fehlgeschlagen"
+      "action_failed": "Die Aktion ist fehlgeschlagen",
+      "notify_recipient_disabled": "Empfänger '{{recipient}}' ist deaktiviert",
+      "notify_recipient_not_allowed": "Der Autor der Richtlinie darf den Empfänger '{{recipient}}' nicht verwenden",
+      "notify_recipient_not_found": "Empfänger '{{recipient}}' existiert nicht",
+      "notify_target_not_allowed": "Der Autor der Richtlinie darf '{{target}}' nicht benachrichtigen",
+      "notify_unknown_recipient": "{{recipient}} ist kein bekannter Empfänger: Verwenden Sie eine E-Mail-Adresse, group:<Name>, eine App-Rolle oder ein Empfänger-Schlüsselwort"
     }
   }
 }

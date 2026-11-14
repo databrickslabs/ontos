@@ -18,7 +18,7 @@ Actions:
     FAIL <message>
     ASSIGN_TAG <key>: <value>
     REMOVE_TAG <key>
-    NOTIFY <recipients>
+    NOTIFY <recipients>          e.g. NOTIFY 'self, entity_owner' or NOTIFY recipient:'Data Stewards'
 
 Example:
     MATCH (obj:Object)
@@ -859,6 +859,28 @@ def _tag_key(parser: Parser) -> str:
     return parser.expect(TokenType.IDENTIFIER).value
 
 
+RECIPIENT_REFERENCE = 'recipient'
+
+
+def _notify_recipients(parser: Parser) -> str:
+    """A NOTIFY action's recipients: a string, or ``recipient:name`` / ``recipient:'name'``.
+
+    A reference is returned as ``recipient:<name>``, the same text as the quoted form.
+    """
+    current = parser.current()
+    if current.type == TokenType.IDENTIFIER and current.value.lower() == RECIPIENT_REFERENCE:
+        parser.advance()
+        parser.expect(TokenType.COLON)
+        if parser.current().type == TokenType.STRING:
+            name = parser.advance().value
+        else:
+            name = parser.expect(TokenType.IDENTIFIER).value
+        if not name.strip():
+            raise parser.error("Recipient name must not be empty")
+        return f'recipient:{name.strip()}'
+    return parser.expect(TokenType.STRING).value
+
+
 def parse_actions(parser: Parser) -> List[Dict[str, Any]]:
     """Parse action list from current parser position."""
     actions = []
@@ -895,8 +917,8 @@ def parse_actions(parser: Parser) -> List[Dict[str, Any]]:
             actions.append({'type': 'REMOVE_TAG', 'key': key})
 
         elif action_type == TokenType.NOTIFY:
-            # NOTIFY recipients
-            recipients = parser.expect(TokenType.STRING).value
+            # NOTIFY 'recipients', or NOTIFY recipient:'name' for a Notification Recipient
+            recipients = _notify_recipients(parser)
             actions.append({'type': 'NOTIFY', 'recipients': recipients})
 
     return actions

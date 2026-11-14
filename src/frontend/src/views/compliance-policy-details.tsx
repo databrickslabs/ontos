@@ -23,6 +23,7 @@ import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warni
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
 import { complianceRunWarningText } from '@/lib/compliance-run-warning';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
+import { NotifyRecipientInsert } from '@/components/compliance/notify-recipient-insert';
 
 type Policy = {
   id: string; // UUID
@@ -518,6 +519,7 @@ export default function CompliancePolicyDetails() {
                 required
                 placeholder={t('compliance:form.rulePlaceholder')}
               />
+              <NotifyRecipientInsert textareaId="edit-rule" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-failure-message">{t('compliance:form.failureMessage')}</Label>

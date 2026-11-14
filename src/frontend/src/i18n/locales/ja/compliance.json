@@ -28,7 +28,11 @@
     "rulePlaceholder": "コンプライアンスDSL形式でルールを入力",
     "failureMessage": "失敗メッセージ",
     "failureMessagePlaceholder": "例: 名前はスネークケース（小文字とアンダースコア）を使用する必要があります",
-    "failureMessageHint": "このポリシーが失敗した場合にユーザーに表示される分かりやすいメッセージ。問題点と修正方法を説明します。"
+    "failureMessageHint": "このポリシーが失敗した場合にユーザーに表示される分かりやすいメッセージ。問題点と修正方法を説明します。",
+    "notifyRecipients": "通知先",
+    "insertNotifyRecipient": "通知先への NOTIFY を挿入",
+    "notifyRecipientsHint": "カーソル位置に NOTIFY recipient:'名前' を挿入します。ロールで許可された通知先を使用できます。",
+    "noNotifyRecipients": "ロールで利用できる通知先はありません。管理者が設定画面で定義します。"
   },
   "categories": {
     "security": "セキュリティ",
@@ -178,7 +182,10 @@
     "tags_load_failed": "{{entityType}} エンティティのタグを読み込めなかったため、ルールを評価できませんでした。"
   },
   "saveErrors": {
-    "rule_trailing_input": "ルールに無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。それ以降は無視されるため、ルールは記述より少ない内容しか検査しません。削除するか、構文を修正してください。"
+    "rule_trailing_input": "ルールに無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。それ以降は無視されるため、ルールは記述より少ない内容しか検査しません。削除するか、構文を修正してください。",
+    "notify_target_not_allowed": "このポリシーは '{{target}}' に通知できません。管理者は誰にでも通知できます。その他のユーザーは、自分、エンティティの所有者、ロールで許可された通知先に通知できます。",
+    "notify_recipient_not_allowed": "あなたのロールは通知先 '{{recipient}}' を使用できません",
+    "notify_recipient_not_found": "通知先 '{{recipient}}' は存在しません"
   },
   "runWarnings": {
     "rule_trailing_input": "このルールには無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。実行時には無視されるため、ルールは記述より少ない内容しか検査しない可能性があります。ルールを編集して修正してください。",
@@ -202,8 +209,12 @@
       "tag_entity_without_id": "エンティティに ID がありません",
       "notification_manager_unavailable": "この実行では通知を利用できません",
       "notify_no_recipients": "{{recipients}} に該当する受信者がいません",
-      "notify_unknown_recipient": "{{recipient}} は既知の受信者ではありません。メールアドレス、group:<名前>、アプリロール、または受信者キーワードを使用してください",
-      "action_failed": "アクションに失敗しました"
+      "action_failed": "アクションに失敗しました",
+      "notify_recipient_disabled": "通知先 '{{recipient}}' は無効です",
+      "notify_recipient_not_allowed": "ポリシーの作成者は通知先 '{{recipient}}' を使用できません",
+      "notify_recipient_not_found": "通知先 '{{recipient}}' は存在しません",
+      "notify_target_not_allowed": "ポリシーの作成者は '{{target}}' に通知できません",
+      "notify_unknown_recipient": "{{recipient}} は既知の受信者ではありません。メールアドレス、group:<名前>、アプリロール、または受信者キーワードを使用してください"
     }
   }
 }

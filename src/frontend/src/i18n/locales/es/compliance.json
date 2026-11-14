@@ -28,7 +28,11 @@
     "rulePlaceholder": "Ingrese la regla de cumplimiento en formato DSL",
     "failureMessage": "Mensaje de Error",
     "failureMessagePlaceholder": "ej. Los nombres deben usar snake_case (minúsculas con guiones bajos)",
-    "failureMessageHint": "Mensaje legible mostrado a los usuarios cuando esta política falla. Ayuda a explicar qué salió mal y cómo solucionarlo."
+    "failureMessageHint": "Mensaje legible mostrado a los usuarios cuando esta política falla. Ayuda a explicar qué salió mal y cómo solucionarlo.",
+    "notifyRecipients": "Destinatarios de notificación",
+    "insertNotifyRecipient": "Insertar un NOTIFY para un destinatario",
+    "notifyRecipientsHint": "Inserta NOTIFY recipient:'Nombre' en el cursor. Puedes usar los destinatarios que permiten tus roles.",
+    "noNotifyRecipients": "Tus roles no tienen destinatarios de notificación disponibles. Los administradores los definen en Ajustes."
   },
   "categories": {
     "security": "Seguridad",
@@ -178,7 +182,10 @@
     "tags_load_failed": "No se pudieron cargar las etiquetas de las entidades {{entityType}}, por lo que no se pudo evaluar la regla."
   },
   "saveErrors": {
-    "rule_trailing_input": "La regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Todo lo que sigue se ignoraría, y la regla comprobaría menos de lo que dice. Elimínelo o corrija la sintaxis."
+    "rule_trailing_input": "La regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Todo lo que sigue se ignoraría, y la regla comprobaría menos de lo que dice. Elimínelo o corrija la sintaxis.",
+    "notify_target_not_allowed": "Esta política no puede notificar a '{{target}}'. Los administradores pueden notificar a cualquiera. Los demás pueden notificarse a sí mismos, a los propietarios de la entidad y a los destinatarios permitidos por sus roles.",
+    "notify_recipient_not_allowed": "Tus roles no pueden usar el destinatario '{{recipient}}'",
+    "notify_recipient_not_found": "El destinatario '{{recipient}}' no existe"
   },
   "runWarnings": {
     "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo.",
@@ -202,8 +209,12 @@
       "tag_entity_without_id": "La entidad no tiene id",
       "notification_manager_unavailable": "Las notificaciones no están disponibles en esta ejecución",
       "notify_no_recipients": "{{recipients}} no corresponde a ningún destinatario",
-      "notify_unknown_recipient": "{{recipient}} no es un destinatario conocido: use un correo electrónico, group:<nombre>, un rol de la aplicación o una palabra clave de destinatario",
-      "action_failed": "La acción falló"
+      "action_failed": "La acción falló",
+      "notify_recipient_disabled": "El destinatario '{{recipient}}' está desactivado",
+      "notify_recipient_not_allowed": "El autor de la política no puede usar el destinatario '{{recipient}}'",
+      "notify_recipient_not_found": "El destinatario '{{recipient}}' no existe",
+      "notify_target_not_allowed": "El autor de la política no puede notificar a '{{target}}'",
+      "notify_unknown_recipient": "{{recipient}} no es un destinatario conocido: use un correo electrónico, group:<nombre>, un rol de la aplicación o una palabra clave de destinatario"
     }
   }
 }

@@ -45,6 +45,7 @@ from src.routes import (
     mdm_routes,
     metadata_routes,
     notifications_routes,
+    notification_recipients_routes,
     search_routes,
     security_features_routes,
     self_service_routes,
@@ -518,6 +519,7 @@ mcp_tokens_routes.register_routes(app)
 self_service_routes.register_routes(app)
 workflows_routes.register_routes(app)
 settings_routes.register_routes(app)
+notification_recipients_routes.register_routes(app)
 directory_routes.register_routes(app)
 connection_routes.register_routes(app)
 schema_import_routes.register_routes(app)

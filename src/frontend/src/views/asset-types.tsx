@@ -48,7 +48,8 @@ export default function AssetTypesView() {
     }
     setComponentError(null);
     try {
-      const response = await apiGet<AssetTypeRead[]>('/api/asset-types');
+      // Retired types (#970) are listed too, marked retired, so admins can inspect them.
+      const response = await apiGet<AssetTypeRead[]>('/api/asset-types?include_retired=true');
       if (response.error) throw new Error(response.error);
       setAssetTypes(Array.isArray(response.data) ? response.data : []);
     } catch (err: any) {
@@ -159,7 +160,12 @@ export default function AssetTypesView() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>{t('table.actions')}</DropdownMenuLabel>
-            <DropdownMenuItem disabled={!canWrite} onClick={() => { setEditingAssetType(row.original); setIsFormOpen(true); }}>{t('editAssetType')}</DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!canWrite || row.original.status === 'retired'}
+              onClick={() => { setEditingAssetType(row.original); setIsFormOpen(true); }}
+            >
+              {t('editAssetType')}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => openDeleteDialog(row.original.id)}

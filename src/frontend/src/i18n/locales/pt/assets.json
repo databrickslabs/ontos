@@ -299,6 +299,11 @@
       "integration": "Integração",
       "system": "Sistemas",
       "custom": "Personalizado"
-    }
+    },
+    "retiredBadge": "Desativado",
+    "retiredHint": "Tipo desativado: pode ser consultado e inspecionado, mas não é oferecido para novos ativos."
+  },
+  "errors": {
+    "assetTypeRetired": "O tipo de ativo '{{name}}' foi desativado. Escolha um tipo de ativo ativo."
   }
 }

@@ -2680,27 +2680,27 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 -- 25b. BUSINESS TERM ASSETS (type=0f7)
 -- ============================================================================
--- BusinessTerm assets for business lineage CUJ.
+-- Legacy Business Term assets (BusinessTerm retired, #970) for the business lineage CUJ.
 
 INSERT INTO assets (id, name, description, asset_type_id, platform, location, properties, tags, status, created_by, created_at, updated_at) VALUES
 ('0f700001-0000-4000-8000-000000000001',
  'Customer', 'A party who has purchased or is eligible to purchase goods or services from the company.',
- COALESCE((SELECT id FROM asset_types WHERE name = 'Business Term' LIMIT 1), '00000000-0000-0000-0000-000000000000'), NULL, NULL,
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Legacy Business Term' LIMIT 1), '00000000-0000-0000-0000-000000000000'), NULL, NULL,
  '{"definition": "A party who has purchased or is eligible to purchase goods or services from the company. Includes both B2C end-consumers and B2B accounts.", "synonyms": "Client, Account, Buyer", "examples": "Retail customer with loyalty card, Enterprise account with MSA"}',
  '["customer", "core-entity", "pii"]', 'active', 'system@demo', NOW(), NOW()),
 ('0f700002-0000-4000-8000-000000000002',
  'Customer Lifetime Value', 'Predicted total net profit attributed to the entire future relationship with a customer.',
- COALESCE((SELECT id FROM asset_types WHERE name = 'Business Term' LIMIT 1), '00000000-0000-0000-0000-000000000000'), NULL, NULL,
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Legacy Business Term' LIMIT 1), '00000000-0000-0000-0000-000000000000'), NULL, NULL,
  '{"definition": "Predicted total net profit attributed to the entire future relationship with a customer. Calculated using RFM model and historical purchase data.", "synonyms": "CLV, CLTV, LTV", "examples": "A customer with CLV of $2,500 is a high-value segment target"}',
  '["customer", "analytics", "kpi"]', 'active', 'system@demo', NOW(), NOW()),
 ('0f700003-0000-4000-8000-000000000003',
  'Active Customer', 'A customer who has completed at least one transaction within the last 12 months.',
- COALESCE((SELECT id FROM asset_types WHERE name = 'Business Term' LIMIT 1), '00000000-0000-0000-0000-000000000000'), NULL, NULL,
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Legacy Business Term' LIMIT 1), '00000000-0000-0000-0000-000000000000'), NULL, NULL,
  '{"definition": "A customer who has completed at least one purchase transaction within the trailing 12-month window.", "synonyms": "Current Customer, Engaged Customer", "examples": "Customers in the active segment for marketing campaigns"}',
  '["customer", "segmentation"]', 'active', 'system@demo', NOW(), NOW()),
 ('0f700004-0000-4000-8000-000000000004',
  'Transaction', 'A financial exchange event recording the purchase of goods or services.',
- COALESCE((SELECT id FROM asset_types WHERE name = 'Business Term' LIMIT 1), '00000000-0000-0000-0000-000000000000'), NULL, NULL,
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Legacy Business Term' LIMIT 1), '00000000-0000-0000-0000-000000000000'), NULL, NULL,
  '{"definition": "A financial exchange event recording the purchase of goods or services at a point of sale or online.", "synonyms": "Purchase, Sale, Order", "examples": "POS receipt #12345, Online order #ORD-67890"}',
  '["retail", "financial", "core-entity"]', 'active', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
@@ -2934,11 +2934,11 @@ INSERT INTO entity_relationships (id, source_type, source_id, target_type, targe
 -- ============================================================================
 
 -- BusinessTerm "Customer" relates to LogicalEntity "Customer"
-('0fa00001-0000-4000-8000-000000000001', 'BusinessTerm', '0f700001-0000-4000-8000-000000000001', 'LogicalEntity', '0f800001-0000-4000-8000-000000000001', 'relatesTo', NULL, 'system@demo', NOW()),
+('0fa00001-0000-4000-8000-000000000001', 'LegacyBusinessTerm', '0f700001-0000-4000-8000-000000000001', 'LogicalEntity', '0f800001-0000-4000-8000-000000000001', 'relatesTo', NULL, 'system@demo', NOW()),
 -- BusinessTerm "Transaction" relates to LogicalEntity "Transaction"
-('0fa00002-0000-4000-8000-000000000002', 'BusinessTerm', '0f700004-0000-4000-8000-000000000004', 'LogicalEntity', '0f800002-0000-4000-8000-000000000002', 'relatesTo', NULL, 'system@demo', NOW()),
+('0fa00002-0000-4000-8000-000000000002', 'LegacyBusinessTerm', '0f700004-0000-4000-8000-000000000004', 'LogicalEntity', '0f800002-0000-4000-8000-000000000002', 'relatesTo', NULL, 'system@demo', NOW()),
 -- BusinessTerm "Customer Lifetime Value" relates to LogicalEntity "Customer"
-('0fa00003-0000-4000-8000-000000000003', 'BusinessTerm', '0f700002-0000-4000-8000-000000000002', 'LogicalEntity', '0f800001-0000-4000-8000-000000000001', 'relatesTo', NULL, 'system@demo', NOW()),
+('0fa00003-0000-4000-8000-000000000003', 'LegacyBusinessTerm', '0f700002-0000-4000-8000-000000000002', 'LogicalEntity', '0f800001-0000-4000-8000-000000000001', 'relatesTo', NULL, 'system@demo', NOW()),
 
 -- LogicalEntity "Customer" has attributes
 ('0fa00010-0000-4000-8000-000000000010', 'LogicalEntity', '0f800001-0000-4000-8000-000000000001', 'LogicalAttribute', '0f810001-0000-4000-8000-000000000001', 'hasLogicalAttribute', NULL, 'system@demo', NOW()),
@@ -2976,7 +2976,7 @@ INSERT INTO entity_relationships (id, source_type, source_id, target_type, targe
 ('0fa00042-0000-4000-8000-000000000042', 'DataProduct', '00700004-0000-4000-8000-000000000004', 'DataProduct', '00700005-0000-4000-8000-000000000005', 'dependsOn', NULL, 'system@demo', NOW()),
 
 -- Policy "Customer PII Policy" applies to BusinessTerm "Customer" and LogicalAttributes
-('0fa00050-0000-4000-8000-000000000050', 'Policy', '0f100001-0000-4000-8000-000000000001', 'BusinessTerm', '0f700001-0000-4000-8000-000000000001', 'appliesTo', NULL, 'system@demo', NOW()),
+('0fa00050-0000-4000-8000-000000000050', 'Policy', '0f100001-0000-4000-8000-000000000001', 'LegacyBusinessTerm', '0f700001-0000-4000-8000-000000000001', 'appliesTo', NULL, 'system@demo', NOW()),
 ('0fa00051-0000-4000-8000-000000000051', 'Policy', '0f100001-0000-4000-8000-000000000001', 'LogicalAttribute', '0f810003-0000-4000-8000-000000000003', 'appliesTo', NULL, 'system@demo', NOW()),
 ('0fa00052-0000-4000-8000-000000000052', 'Policy', '0f100001-0000-4000-8000-000000000001', 'LogicalAttribute', '0f810004-0000-4000-8000-000000000004', 'appliesTo', NULL, 'system@demo', NOW()),
 

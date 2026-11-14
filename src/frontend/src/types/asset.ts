@@ -3,7 +3,7 @@ import { AssignedDomain } from '@/types/data-domain';
 // --- Asset Types ---
 export type AssetTypeCategory = 'data' | 'analytics' | 'integration' | 'system' | 'custom';
 // Must match backend AssetTypeCategory enum: data, analytics, integration, system, custom
-export type AssetTypeStatus = 'active' | 'deprecated';
+export type AssetTypeStatus = 'active' | 'deprecated' | 'retired';
 
 export interface AssetTypeRead {
   id: string;

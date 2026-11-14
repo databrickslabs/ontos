@@ -120,7 +120,8 @@ export default function AssetExplorerView() {
   const fetchAssetTypes = useCallback(async () => {
     if (!canRead && !permissionsLoading) return;
     try {
-      const response = await apiGet<AssetTypeRead[]>('/api/asset-types');
+      // Retired types (#970) are browsable here, marked with a badge.
+      const response = await apiGet<AssetTypeRead[]>('/api/asset-types?include_retired=true');
       if (response.error) throw new Error(response.error);
       const types = Array.isArray(response.data) ? response.data : [];
       setAssetTypes(types);
@@ -542,6 +543,11 @@ export default function AssetExplorerView() {
                               >
                                 <TypeIcon className="h-4 w-4 flex-shrink-0" />
                                 <span className="flex-1 text-left truncate">{assetType.name}</span>
+                                {assetType.status === 'retired' && (
+                                  <Badge variant="outline" className="text-xs" title={t('assets:explorer.retiredHint')}>
+                                    {t('assets:explorer.retiredBadge')}
+                                  </Badge>
+                                )}
                                 <Badge
                                   variant={isSelected ? 'secondary' : 'outline'}
                                   className="text-xs ml-auto"
@@ -571,8 +577,13 @@ export default function AssetExplorerView() {
                     return <Icon className="h-5 w-5 text-muted-foreground" />;
                   })()}
                   <div>
-                    <CardTitle className="text-lg">
+                    <CardTitle className="text-lg flex items-center gap-2">
                       {selectedType ? selectedType.name : t('assets:explorer.allAssets')}
+                      {selectedType?.status === 'retired' && (
+                        <Badge variant="secondary" className="text-xs" title={t('assets:explorer.retiredHint')}>
+                          {t('assets:explorer.retiredBadge')}
+                        </Badge>
+                      )}
                     </CardTitle>
                     {selectedType?.description && (
                       <CardDescription className="text-xs mt-0.5">
@@ -631,7 +642,7 @@ export default function AssetExplorerView() {
                           {hasSelection ? t('assets:explorer.exportSelected', { count: selectedAssetIds.length }) : t('assets:explorer.importExport')}
                         </Button>
                       )}
-                      {canWrite && selectedType && (
+                      {canWrite && selectedType && selectedType.status !== 'retired' && (
                         <Button
                           size="sm"
                           className="h-9"

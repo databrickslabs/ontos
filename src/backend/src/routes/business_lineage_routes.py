@@ -153,7 +153,7 @@ def get_impact_analysis(
     max_depth: int = Query(4, ge=1, le=10),
     manager: EntityRelationshipsManager = Depends(get_entity_relationships_manager),
 ):
-    """Get downstream impact graph from an entity (e.g. Policy or BusinessTerm).
+    """Get downstream impact graph from an entity (e.g. Policy or Concept).
 
     Traverses only downstream/outgoing relationships to find affected entities.
     """

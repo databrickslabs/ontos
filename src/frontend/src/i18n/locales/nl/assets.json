@@ -299,6 +299,11 @@
       "integration": "Integratie",
       "system": "Systemen",
       "custom": "Aangepast"
-    }
+    },
+    "retiredBadge": "Buiten gebruik",
+    "retiredHint": "Buiten gebruik: alleen lezen en inzien, niet aangeboden voor nieuwe assets."
+  },
+  "errors": {
+    "assetTypeRetired": "Het asset-type '{{name}}' is buiten gebruik. Kies een actief asset-type."
   }
 }

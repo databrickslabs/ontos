@@ -99,12 +99,13 @@ def get_readiness_report(
         detail=f"{logical_attr_count} logical attribute mapping(s) across {dataset_count} dataset(s)",
     ))
 
-    # 4. Linked to Business Terms
-    term_rels = [r for r in rels if r.relationship_type == "hasTerm" and r.source_id == product_id]
-    term_count = len(term_rels)
+    # 4. Linked to concepts (semantic links, #970); legacy term rows still count
+    from src.controller.entity_dict_builder import concept_iris_for
+    concepts = concept_iris_for(db, "DataProduct", product_id, rels)
+    term_count = len([r for r in rels if r.relationship_type == "hasTerm" and r.source_id == product_id])
     bt_incoming = [r for r in rels
                    if r.relationship_type in ("relatesTo", "hasTerm") and r.target_id == product_id]
-    total_bt = term_count + len(bt_incoming)
+    total_bt = len(concepts) + term_count + len(bt_incoming)
     checks.append(ReadinessCheck(
         name="Linked to business terms",
         status="pass" if total_bt > 0 else "warn",

@@ -56,6 +56,12 @@ JSON_SCHEMA_TYPE_MAP: Dict[str, str] = {
     "uri": "string",
 }
 
+# Built-in asset types the ontology does not define. Retired: hidden from pickers and
+# create, still readable, never removed by the sync (#970).
+RETIRED_ASSET_TYPES: Dict[str, str] = {
+    "Legacy Business Term": "Business terms archived when BusinessTerm left the ontology (#970).",
+}
+
 
 def _local_name(iri: str) -> str:
     """Extract local name from an IRI (fragment or last path segment)."""
@@ -584,7 +590,10 @@ class OntologySchemaManager:
                         optional_fields=optional_fields or None,
                         is_system=True,
                     )
-                    asset_type_repo.update(db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True))
+                    update_fields = update_data.model_dump(exclude_unset=True)
+                    if existing.status == "retired":
+                        update_fields["status"] = "active"  # the ontology defines it again (#970)
+                    asset_type_repo.update(db, db_obj=existing, obj_in=update_fields)
                     db.flush()
                     result.updated.append(display_name)
                     logger.debug(f"Updated asset type: {display_name}")
@@ -611,19 +620,56 @@ class OntologySchemaManager:
                 result.errors.append(f"{at.label}: {str(e)}")
                 db.rollback()
 
-        # Remove stale system asset types no longer in ontology
-        ontology_names = {at.label or at.local_name for at in asset_types}
+        from src.db_models.assets import AssetTypeDb  # local: the loop above imports it too
+        for retired_name, retired_description in RETIRED_ASSET_TYPES.items():
+            try:
+                retired = asset_type_repo.get_by_name(db, name=retired_name)
+                if retired is None:
+                    db.add(AssetTypeDb(
+                        name=retired_name,
+                        description=retired_description,
+                        category="system",
+                        icon="Archive",
+                        is_system=True,
+                        status="retired",
+                        created_by="system@ontology-sync",
+                    ))
+                    db.flush()
+                    result.created.append(retired_name)
+                elif retired.status != "retired":
+                    retired.status = "retired"
+                    db.flush()
+            except Exception as e:
+                logger.error(f"Error ensuring retired asset type {retired_name}: {e}", exc_info=True)
+                result.errors.append(f"{retired_name}: {str(e)}")
+                db.rollback()
+
+        # Remove stale system asset types no longer in ontology. The delete cascades to
+        # their assets, so a type that still has assets is kept and retired instead (#970).
+        ontology_names = {at.label or at.local_name for at in asset_types} | set(RETIRED_ASSET_TYPES)
         try:
-            from src.db_models.assets import AssetTypeDb
-            stale = db.query(AssetTypeDb).filter(
+            from src.db_models.assets import AssetDb, AssetTypeDb
+            # An empty ontology means the graph did not load: sweep nothing rather than retire every type.
+            stale = [] if not asset_types else db.query(AssetTypeDb).filter(
                 AssetTypeDb.is_system == True,
                 AssetTypeDb.name.notin_(ontology_names),
             ).all()
+            removed = 0
             for s in stale:
+                in_use = db.query(AssetDb.id).filter(AssetDb.asset_type_id == s.id).first() is not None
+                if in_use:
+                    if s.status != "retired":
+                        logger.warning(
+                            f"Ontology no longer defines asset type '{s.name}' but it still has assets; "
+                            "keeping it as retired"
+                        )
+                        s.status = "retired"
+                    continue
                 logger.info(f"Removing stale system asset type: {s.name}")
                 db.delete(s)
-            if stale:
-                result.updated.append(f"removed {len(stale)} stale system types")
+                removed += 1
+            if removed:
+                result.updated.append(f"removed {removed} stale system types")
         except Exception as e:
             logger.warning(f"Error cleaning stale asset types: {e}")
 

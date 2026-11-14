@@ -166,9 +166,12 @@ def get_all_asset_types(
     limit: Optional[int] = None,
     category: Optional[str] = Query(None),
     type_status: Optional[str] = Query(None, alias="status"),
+    include_retired: bool = Query(False),
 ):
-    """Lists all asset types."""
-    return manager.get_all_asset_types(db=db, skip=skip, limit=limit, category=category, status=type_status)
+    """Lists all asset types. Retired types (#970) only with include_retired or status."""
+    return manager.get_all_asset_types(
+        db=db, skip=skip, limit=limit, category=category, status=type_status, include_retired=include_retired,
+    )
 
 
 @asset_types_router.get(
@@ -312,7 +315,10 @@ def create_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         details["exception"] = {"type": "ValidationError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.detail if isinstance(e.detail, dict) else str(e),
+        )
     except ConflictError as e:
         details["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -448,7 +454,10 @@ def update_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         details["exception"] = {"type": "ValidationError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.detail if isinstance(e.detail, dict) else str(e),
+        )
     except ConflictError as e:
         details["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

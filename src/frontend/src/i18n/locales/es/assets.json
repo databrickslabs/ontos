@@ -299,6 +299,11 @@
       "integration": "Integración",
       "system": "Sistemas",
       "custom": "Personalizado"
-    }
+    },
+    "retiredBadge": "Retirado",
+    "retiredHint": "Tipo retirado: se puede consultar y revisar, pero no se ofrece para nuevos activos."
+  },
+  "errors": {
+    "assetTypeRetired": "El tipo de activo '{{name}}' está retirado. Elige un tipo de activo activo."
   }
 }

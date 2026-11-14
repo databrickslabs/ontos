@@ -13,7 +13,7 @@ import type React from 'react';
 // ─── Entity type colors ──────────────────────────────────────────────────
 
 export const TYPE_COLOR: Record<string, { bg: string; border: string; text: string; minimap: string; hex: string }> = {
-  BusinessTerm:     { bg: 'bg-indigo-500/10',   border: 'border-indigo-500/50',  text: 'text-indigo-600 dark:text-indigo-400',   minimap: '#6366f1', hex: '#6366f1' },
+  LegacyBusinessTerm: { bg: 'bg-indigo-500/10',   border: 'border-indigo-500/50',  text: 'text-indigo-600 dark:text-indigo-400',   minimap: '#6366f1', hex: '#6366f1' },
   LogicalEntity:    { bg: 'bg-violet-500/10',   border: 'border-violet-500/40',  text: 'text-violet-600 dark:text-violet-400',   minimap: '#8b5cf6', hex: '#8b5cf6' },
   LogicalAttribute: { bg: 'bg-fuchsia-500/10',  border: 'border-fuchsia-500/40', text: 'text-fuchsia-600 dark:text-fuchsia-400', minimap: '#d946ef', hex: '#d946ef' },
   System:           { bg: 'bg-blue-500/10',     border: 'border-blue-500/40',    text: 'text-blue-600 dark:text-blue-400',       minimap: '#3b82f6', hex: '#3b82f6' },

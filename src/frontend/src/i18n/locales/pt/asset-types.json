@@ -24,7 +24,8 @@
   },
   "statuses": {
     "active": "Ativo",
-    "deprecated": "Obsoleto"
+    "deprecated": "Obsoleto",
+    "retired": "Desativado"
   },
   "permissions": {
     "deniedView": "Você não tem permissão para visualizar tipos de ativos.",

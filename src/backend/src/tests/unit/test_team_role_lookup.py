@@ -210,3 +210,20 @@ def test_updating_to_a_role_name_that_matches_no_role_is_refused(db_session, rol
             TeamMemberUpdate(app_role_override="  Retired  "),
             current_user_id="admin@example.com",
         )
+
+
+def test_adding_a_member_trims_the_role_name_and_identifier(db_session, roles):
+    team = _team(db_session, "eng")
+    db_session.commit()
+
+    TeamsManager().add_team_member(
+        db_session, team.id,
+        TeamMemberCreate(member_type="user", member_identifier=" alice@example.com ", app_role_override=" Data Steward "),
+        current_user_id="admin@example.com",
+    )
+
+    stored = db_session.query(TeamMemberDb).filter_by(team_id=team.id).one()
+    assert stored.member_identifier == "alice@example.com"
+    assert stored.app_role_override_id == roles.steward.id
+    assert [m.app_role_override_id for m in TeamsManager().get_role_override_members_for_user(
+        db_session, "alice@example.com", [])] == [roles.steward.id]

@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.controller.assets_manager import AssetsManager
+from src.controller.tags_manager import TagsManager
 from src.db_models.assets import AssetDb, AssetRelationshipDb
 from src.models.assets import (
     AssetCreate,
@@ -28,6 +29,12 @@ from src.models.assets import (
     AssetUpdate,
     public_properties,
     with_internal_properties,
+)
+from src.models.tags import (
+    DEFAULT_NAMESPACE_NAME,
+    TAG_NAMESPACE_SEPARATOR,
+    AssignedTag,
+    AssignedTagCreate,
 )
 from src.repositories.assets_repository import (
     asset_repo,
@@ -118,16 +125,33 @@ class ImportResult(BaseModel):
     error_messages: List[str] = Field(default_factory=list)
 
 
-def _parse_tags(raw: Optional[str]) -> Optional[List[str]]:
+def _parse_tags(raw: Optional[str]) -> List[AssignedTagCreate]:
+    """Tag cell: ``;``-separated entries, each ``name`` or ``namespace/name``, optionally
+    ``=value``. An entry without ``=`` keeps the value stored on the asset (#1420)."""
     if not raw or not raw.strip():
-        return None
-    return [t.strip() for t in raw.split(";") if t.strip()]
+        return []
+    tags: List[AssignedTagCreate] = []
+    for entry in raw.split(";"):
+        fqn, has_value, value = entry.partition("=")
+        fqn = fqn.strip()
+        if not fqn:
+            continue
+        if fqn.startswith(TAG_NAMESPACE_SEPARATOR) or fqn.endswith(TAG_NAMESPACE_SEPARATOR):
+            raise ValueError(f"Invalid tag '{fqn}': give both the namespace and the name around '/'.")
+        tags.append(AssignedTagCreate(
+            tag_fqn=fqn,
+            assigned_value=value.strip() if has_value else None,
+        ))
+    return tags
 
 
-def _format_tags(tags: Optional[list]) -> str:
-    if not tags:
-        return ""
-    return ";".join(str(t) for t in tags)
+def _format_tags(tags: Optional[List[AssignedTag]]) -> str:
+    """The inverse of ``_parse_tags``: a default-namespace tag by name, others as FQN."""
+    parts = []
+    for tag in tags or []:
+        name = tag.tag_name if tag.namespace_name == DEFAULT_NAMESPACE_NAME else tag.fully_qualified_name
+        parts.append(name if tag.assigned_value is None else f"{name}={tag.assigned_value}")
+    return ";".join(parts)
 
 
 def _parse_properties(raw: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -152,6 +176,7 @@ class AssetBulkManager:
         self._type_repo = asset_type_repo
         self._asset_repo = asset_repo
         self._rel_repo = asset_relationship_repo
+        self._tags_manager = TagsManager()
         logger.debug("AssetBulkManager initialized.")
 
     def _set_asset_domains(self, db, asset_id, domain_ids, primary_domain_id, user):
@@ -167,6 +192,13 @@ class AssetBulkManager:
         except ValueError as e:
             # Unknown domain IDs in the CSV — log and skip rather than fail the whole import.
             logger.warning(f"Bulk import: domain assignment skipped for asset {asset_id}: {e}")
+
+    def _set_asset_tags(self, db, asset_id, tags, user):
+        """Replace an asset's tags from a bulk-import row, in the import's transaction."""
+        self._tags_manager.set_tags_for_entity(
+            db, entity_id=str(asset_id), entity_type="asset",
+            tags=tags, user_email=user, commit=False,
+        )
 
     # ------------------------------------------------------------------
     # Export
@@ -258,6 +290,9 @@ class AssetBulkManager:
         domains_map = entity_domain_repo.get_domains_for_entities(
             _session, entity_type="asset", entity_ids=[str(a.id) for a in assets]
         ) if _session is not None and assets else {}
+        tags_map = self._tags_manager.list_assigned_tags_for_entities(
+            _session, entity_ids=[str(a.id) for a in assets], entity_type="asset"
+        ) if _session is not None and assets else {}
 
         rows = []
         for a in assets:
@@ -273,7 +308,7 @@ class AssetBulkManager:
                 "location": a.location or "",
                 "domain_ids": domain_ids_str,
                 "status": a.status or "",
-                "tags": _format_tags(a.tags),
+                "tags": _format_tags(tags_map.get(str(a.id), [])),
                 "properties": _format_properties(a.properties),
                 "parent_asset": "",
                 "parent_relationship_type": "",
@@ -618,7 +653,27 @@ class AssetBulkManager:
                 result.items.append(item)
                 continue
 
-            tags = _parse_tags(row.get("tags", ""))
+            try:
+                tags = _parse_tags(row.get("tags", ""))
+            except ValueError as e:
+                item.message = str(e)
+                result.errors += 1
+                result.items.append(item)
+                continue
+            unknown_namespaces = self._tags_manager.unknown_tag_namespaces(db, tags)
+            if unknown_namespaces:
+                item.message = f"Unknown tag namespace: '{unknown_namespaces[0]}'"
+                result.errors += 1
+                result.items.append(item)
+                continue
+            # Refuse a value outside the tag's possible values before this row writes anything
+            try:
+                self._tags_manager.check_assigned_values(db, tags)
+            except Exception as e:
+                item.message = f"Invalid tag value: {getattr(e, 'detail', str(e))}"
+                result.errors += 1
+                result.items.append(item)
+                continue
             description = row.get("description", "").strip() or None
             platform_val = row.get("platform", "").strip() or None
             location_val = row.get("location", "").strip() or None
@@ -656,10 +711,11 @@ class AssetBulkManager:
                         status=status_val,
                     )
                     updated = self._asset_repo.update(
-                        db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
+                        db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True, exclude={"tags"})
                     )
                     db.flush()
                     self._set_asset_domains(db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
+                    self._set_asset_tags(db, updated.id, tags, current_user_id)
                     item.action = ImportAction.UPDATE
                     item.asset_id = str(updated.id)
                     result.updated += 1
@@ -677,10 +733,11 @@ class AssetBulkManager:
                             status=status_val,
                         )
                         updated = self._asset_repo.update(
-                            db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
+                            db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True, exclude={"tags"})
                         )
                         db.flush()
                         self._set_asset_domains(db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
+                        self._set_asset_tags(db, updated.id, tags, current_user_id)
                         item.action = ImportAction.UPDATE
                         item.asset_id = str(updated.id)
                         result.updated += 1
@@ -693,7 +750,6 @@ class AssetBulkManager:
                             "platform": platform_val,
                             "location": location_val,
                             "properties": properties,
-                            "tags": tags,
                             "status": status_val.value,
                             "created_by": current_user_id,
                         }
@@ -702,6 +758,7 @@ class AssetBulkManager:
                         db.flush()
                         db.refresh(db_asset)
                         self._set_asset_domains(db, db_asset.id, domain_ids_val, primary_domain_val, current_user_id)
+                        self._set_asset_tags(db, db_asset.id, tags, current_user_id)
                         item.action = ImportAction.CREATE
                         item.asset_id = str(db_asset.id)
                         result.created += 1

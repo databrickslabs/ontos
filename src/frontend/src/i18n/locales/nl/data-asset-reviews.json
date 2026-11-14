@@ -138,6 +138,10 @@
     "runAiAnalysis": "AI-analyse uitvoeren",
     "aiAnalysisSummary": "Samenvatting AI-analyse",
     "securityWarning": "Beveiligingswaarschuwing",
+    "aiNotices": {
+      "analysisRefused": "Het model weigerde deze inhoud te analyseren. Het antwoord staat hieronder als platte tekst.",
+      "safetyCheckRefused": "Het model weigerde de beveiligingscontrole van deze inhoud uit te voeren, dus de AI-analyse is geblokkeerd. Controleer de inhoud handmatig."
+    },
     "modelLabel": "Model",
     "generatedLabel": "Gegenereerd",
     "modelReviewNotImplemented": "Modelbeoordelingsdetails nog niet geïmplementeerd.",

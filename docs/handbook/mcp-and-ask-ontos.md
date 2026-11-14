@@ -225,7 +225,10 @@ Read-only level and the read rules for data products and contracts; a data
 product's fields only for its owners or a data-products admin). Each product
 change is audited under `data-products` and fires the same workflow triggers
 (`on_create`, `on_update`, `on_delete`, and the status change gates and
-`on_status_change`), as through the REST API. With only
+`on_status_change`), as through the REST API. Each contract change likewise is
+audited under `data-contracts` and fires the triggers of its route; a failing
+`before_update` workflow refuses a contract update (`update_blocked`) and
+nothing is written, as `PUT /api/data-contracts/{id}` answers 400. With only
 an API key there is no user: the tools get Read-only on the features the
 token's scopes name, read published products and contracts only, and refuse
 every change.

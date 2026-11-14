@@ -18,6 +18,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
+import TagSelector, { TagSelection, toTagPayload, toTagSelections } from '@/components/ui/tag-selector';
 import { AssetRead, AssetCreate, AssetUpdate } from '@/types/asset';
 import { EntityFieldDefinition, EntityTypeSchema } from '@/types/ontology-schema';
 import { useTranslation } from 'react-i18next';
@@ -128,6 +129,7 @@ export function AssetFormDialog({
       defaults.primary_domain_id = asset.primary_domain_id
         ?? asset.domains?.find(d => d.is_primary)?.domain_id
         ?? asset.domain_id ?? null;
+      defaults.tags = toTagSelections(asset.tags || []);
       const props = asset.properties || {};
       if (schema?.fields) {
         for (const f of schema.fields) {
@@ -143,6 +145,7 @@ export function AssetFormDialog({
       defaults.location = '';
       defaults.domain_ids = [];
       defaults.primary_domain_id = null;
+      defaults.tags = [];
       if (schema?.fields) {
         for (const f of schema.fields) {
           if (TOP_LEVEL_FIELDS.has(f.name) || SYSTEM_FIELDS.has(f.name)) continue;
@@ -183,6 +186,7 @@ export function AssetFormDialog({
           location: values.location || null,
           domain_ids: values.domain_ids || [],
           primary_domain_id: values.primary_domain_id ?? null,
+          tags: toTagPayload((values.tags || []) as TagSelection[]),
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
         const response = await apiPut<AssetRead>(`/api/assets/${asset.id}`, payload);
@@ -199,6 +203,7 @@ export function AssetFormDialog({
           location: values.location || null,
           domain_ids: values.domain_ids || [],
           primary_domain_id: values.primary_domain_id ?? null,
+          tags: toTagPayload((values.tags || []) as TagSelection[]),
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
         const response = await apiPost<AssetRead>('/api/assets', payload);
@@ -334,6 +339,22 @@ export function AssetFormDialog({
                             form.setValue('primary_domain_id', primaryDomainId);
                           }}
                           placeholder={t('common:assetForm.domainsPlaceholder')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="tags"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('common:labels.tags')}</FormLabel>
+                      <FormControl>
+                        <TagSelector
+                          value={(field.value || []) as TagSelection[]}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />

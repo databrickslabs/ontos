@@ -24,6 +24,10 @@ from src.common.database import get_session_factory
 from src.controller.change_log_manager import change_log_manager
 from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
+from src.controller.tags_manager import TagsManager
+from src.common.asset_search_item import build_asset_search_item
+from src.models.tags import AssignedTagCreate, TAG_NAMESPACE_SEPARATOR
+from src.repositories.tags_repository import entity_tag_repo
 
 logger = get_logger(__name__)
 
@@ -38,6 +42,7 @@ class AssetsManager(SearchableAsset):
         self._ontology = ontology_schema_manager
         self._metadata_manager = MetadataManager()
         self._costs_manager = CostsManager()
+        self._tags_manager = TagsManager()
         logger.debug("AssetsManager initialized (ontology validation=%s).", self._ontology is not None)
 
     # --- Helpers ---
@@ -71,7 +76,21 @@ class AssetsManager(SearchableAsset):
             read.domains = assigned
             read.domain_ids = [d.domain_id for d in assigned]
             read.primary_domain_id = next((d.domain_id for d in assigned if d.is_primary), None)
+            read.tags = self._tags_manager.list_assigned_tags(
+                session, entity_id=str(db_asset.id), entity_type="asset"
+            )
         return read
+
+    def _check_tag_namespaces(self, db: Session, tags: Optional[List[AssignedTagCreate]]) -> None:
+        """Refuse tags whose namespace doesn't exist, or whose name is empty (422), before
+        anything is written."""
+        for tag in tags or []:
+            fqn = tag.tag_fqn or ""
+            if fqn.startswith(TAG_NAMESPACE_SEPARATOR) or fqn.endswith(TAG_NAMESPACE_SEPARATOR):
+                raise ValidationError(f"Invalid tag '{fqn}': give both the namespace and the name around '/'.")
+        missing = self._tags_manager.unknown_tag_namespaces(db, tags or [])
+        if missing:
+            raise ValidationError(f"Tag namespace '{missing[0]}' not found.")
 
     # Hierarchical relationship types where source = parent, target = child
     _HIERARCHICAL_RELS = {"hasColumn", "hasTable", "hasView", "hasDataset", "hasPart", "contains"}
@@ -220,7 +239,8 @@ class AssetsManager(SearchableAsset):
 
         self._validate_properties(db, asset_in.asset_type_id, asset_in.properties)
 
-        data = asset_in.model_dump()
+        self._check_tag_namespaces(db, asset_in.tags)
+        data = asset_in.model_dump(exclude={"tags"})
         domain_ids = data.pop("domain_ids", None) or []
         primary_domain_id = data.pop("primary_domain_id", None)
         data["created_by"] = current_user_id
@@ -237,6 +257,8 @@ class AssetsManager(SearchableAsset):
                     domain_ids=domain_ids, primary_domain_id=primary_domain_id,
                     assigned_by=current_user_id,
                 )
+            if asset_in.tags is not None:
+                self._set_asset_tags(db, db_asset.id, asset_in.tags, current_user_id)
             # Reload with relationships
             db_asset = self._asset_repo.get_with_relationships(db, db_asset.id)
             logger.info(f"Created asset '{db_asset.name}' (id: {db_asset.id})")
@@ -354,6 +376,12 @@ class AssetsManager(SearchableAsset):
         )
         total = self._asset_repo.count_filtered(db, **filter_kwargs)
         summaries = [self._asset_to_summary(a) for a in db_assets]
+        if summaries:
+            tags_map = self._tags_manager.list_assigned_tags_for_entities(
+                db, entity_ids=[str(s.id) for s in summaries], entity_type="asset"
+            )
+            for s in summaries:
+                s.tags = tags_map.get(str(s.id), [])
         # Batch-load domain assignments for the page (avoids N+1) and attach to summaries
         # so list rows show domain badges and edit dialogs preserve domains on save (#520).
         if summaries:
@@ -385,8 +413,9 @@ class AssetsManager(SearchableAsset):
         effective_type_id = asset_in.asset_type_id or db_asset.asset_type_id
         if asset_in.properties is not None:
             self._validate_properties(db, effective_type_id, asset_in.properties)
+        self._check_tag_namespaces(db, asset_in.tags)
 
-        update_data = asset_in.model_dump(exclude_unset=True)
+        update_data = asset_in.model_dump(exclude_unset=True, exclude={"tags"})
         if update_data.get('properties') is not None:
             # Clients never see the internal keys, so they can't send them back
             update_data['properties'] = with_internal_properties(
@@ -405,6 +434,8 @@ class AssetsManager(SearchableAsset):
                     domain_ids=domain_ids, primary_domain_id=primary_domain_id,
                     assigned_by=current_user_id,
                 )
+            if asset_in.tags is not None:
+                self._set_asset_tags(db, updated.id, asset_in.tags, current_user_id)
             updated = self._asset_repo.get_with_relationships(db, updated.id)
             logger.info(f"Updated asset '{updated.name}' (id: {asset_id})")
             try:
@@ -505,6 +536,9 @@ class AssetsManager(SearchableAsset):
         with db.begin_nested():
             removed: Dict[str, int] = {
                 "domains": entity_domain_repo.remove_all_for_entity(
+                    db, entity_type="asset", entity_id=entity_id,
+                ),
+                "tags": entity_tag_repo.remove_all_for_entity(
                     db, entity_type="asset", entity_id=entity_id,
                 ),
             }
@@ -694,44 +728,25 @@ class AssetsManager(SearchableAsset):
     # SearchableAsset implementation
     # ------------------------------------------------------------------
 
-    def _build_search_index_item(self, asset_db_obj: AssetDb, preloaded_domains=None) -> Optional[SearchIndexItem]:
-        """Convert a single asset DB object to a SearchIndexItem. Returns None for retired assets.
-
-        ``preloaded_domains`` (a list of AssignedDomain) lets the bulk indexer batch the
-        junction lookup once instead of querying per asset (avoids N+1); when omitted the
-        single-item path queries via the object's session.
-        """
-        if asset_db_obj.status == 'retired':
-            return None
-        type_name = asset_db_obj.asset_type.name if asset_db_obj.asset_type else 'Asset'
-        tags = list(asset_db_obj.tags) if isinstance(asset_db_obj.tags, list) else []
-        primary_domain_id = None
-        assigned = preloaded_domains
-        if assigned is None:
-            _session = object_session(asset_db_obj)
-            assigned = entity_domain_repo.get_domains_for_entity(
-                _session, entity_type="asset", entity_id=str(asset_db_obj.id)
-            ) if _session is not None else []
-        if assigned:
-            # Index every assigned domain NAME so domain-keyed search matches by any of
-            # an entity's domains (primary or additional) — issue #520 story 14.
-            primary_domain_id = next((d.domain_id for d in assigned if d.is_primary), None)
-            tags = tags + [d.domain_name for d in assigned if d.domain_name]
-        return SearchIndexItem(
-            id=f"asset::{asset_db_obj.id}",
-            type=f"asset-{type_name.lower().replace(' ', '-')}",
-            title=asset_db_obj.name,
-            description=asset_db_obj.description or '',
-            link=f"/assets/{asset_db_obj.id}",
-            tags=tags,
-            feature_id="assets",
-            extra_data={
-                "asset_type": type_name,
-                "platform": asset_db_obj.platform or '',
-                "status": asset_db_obj.status or '',
-                "domain_id": primary_domain_id or '',
-            },
+    def _set_asset_tags(self, db: Session, asset_id: UUID, tags: List[AssignedTagCreate], user_email: Optional[str]) -> None:
+        """Replace an asset's tags on the shared store, in the caller's transaction."""
+        self._tags_manager.set_tags_for_entity(
+            db, entity_id=str(asset_id), entity_type="asset",
+            tags=tags, user_email=user_email, commit=False,
         )
+
+    def _build_search_index_item(self, asset_db_obj: AssetDb, preloaded_domains=None, preloaded_tags=None) -> Optional[SearchIndexItem]:
+        """Convert a single asset DB object to a SearchIndexItem. Returns None for retired assets."""
+        return build_asset_search_item(
+            asset_db_obj, self._tags_manager,
+            preloaded_domains=preloaded_domains, preloaded_tags=preloaded_tags,
+        )
+
+    def refresh_search_entry(self, db: Session, asset_id: UUID) -> None:
+        """Re-index one asset: its tags are edited on the shared store, not on the asset row."""
+        db_asset = self._asset_repo.get_with_relationships(db, asset_id)
+        if db_asset is not None:
+            self._update_search_index(db_asset)
 
     def _update_search_index(self, asset_db_obj: AssetDb) -> None:
         """Upsert a single asset in the search index."""
@@ -755,8 +770,14 @@ class AssetsManager(SearchableAsset):
                 domains_map = entity_domain_repo.get_domains_for_entities(
                     db, entity_type="asset", entity_ids=[str(a.id) for a in all_assets]
                 ) if all_assets else {}
+                tags_map = self._tags_manager.list_assigned_tags_for_entities(
+                    db, entity_ids=[str(a.id) for a in all_assets], entity_type="asset"
+                ) if all_assets else {}
                 for a in all_assets:
-                    item = self._build_search_index_item(a, preloaded_domains=domains_map.get(str(a.id), []))
+                    item = self._build_search_index_item(
+                        a, preloaded_domains=domains_map.get(str(a.id), []),
+                        preloaded_tags=tags_map.get(str(a.id), []),
+                    )
                     if item is not None:
                         items.append(item)
 

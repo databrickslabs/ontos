@@ -2501,13 +2501,27 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             new_product_api_model = DataProductCreate(**new_product_data)
             created_db_obj = self._repo.create(db=self._db, obj_in=new_product_api_model)
 
-            # Carry the source product's domain assignments onto the new version.
-            d_ids, d_primary = self._resolve_product_domain_assignment(new_product_data)
-            if d_ids:
-                entity_domain_repo.set_domains_for_entity(
-                    self._db, entity_type="data_product", entity_id=created_db_obj.id,
-                    domain_ids=d_ids, primary_domain_id=d_primary, assigned_by="system",
+            # The version's rows (product, domains, tags) are committed together here,
+            # on the manager's startup session, not the request's, so nothing else
+            # commits them. Any failure from the product flush on rolls all of them back.
+            try:
+                # Carry the source product's domain assignments onto the new version.
+                d_ids, d_primary = self._resolve_product_domain_assignment(new_product_data)
+                if d_ids:
+                    entity_domain_repo.set_domains_for_entity(
+                        self._db, entity_type="data_product", entity_id=created_db_obj.id,
+                        domain_ids=d_ids, primary_domain_id=d_primary, assigned_by="system",
+                    )
+
+                # Copy the tag assignments with their values (#1489).
+                entity_tag_repo.copy_tags_for_entity(
+                    self._db, source_id=original_product_id, target_id=created_db_obj.id,
+                    entity_type="data_product", assigned_by="system",
                 )
+                self._db.commit()
+            except Exception:
+                self._db.rollback()
+                raise
 
             logger.info(f"Successfully created new version {request.new_version} (ID: {created_db_obj.id})")
             result = self._attach_domains(DataProductApi.model_validate(created_db_obj))
@@ -2846,21 +2860,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         )
                         db.add(new_member)
             
-            # Clone tags via entity_tag_repo
-            try:
-                source_tags = entity_tag_repo.get_tags_for_entity(
-                    db, entity_type='data_product', entity_id=product_id
-                )
-                for tag_assignment in source_tags:
-                    entity_tag_repo.assign_tag_to_entity(
-                        db,
-                        obj_in=AssignedTagCreate(tag_id=tag_assignment.tag_id),
-                        entity_type='data_product',
-                        entity_id=new_id
-                    )
-            except Exception as e:
-                logger.warning(f"Could not clone tags: {e}")
-            
+            # Copy the tag assignments with their values (#1489). A failure
+            # propagates: the handler below rolls the new version back.
+            entity_tag_repo.copy_tags_for_entity(
+                db, source_id=product_id, target_id=new_id,
+                entity_type='data_product', assigned_by=current_user,
+            )
+
             db.commit()
             db.refresh(new_product)
             
@@ -3986,7 +3992,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     "description": asset.description,
                     "status": asset.status,
                     "properties": public_properties(asset.properties) or {},
-                    "tags": asset.tags or [],
+                    "tags": [t.tag_name for t in entity_tag_repo.get_assigned_tags_for_entity(
+                        session, entity_id=str(asset.id), entity_type="asset")],
                     "created_at": asset.created_at.isoformat() if asset.created_at else None,
                 })
         return results

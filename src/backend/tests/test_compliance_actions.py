@@ -334,6 +334,8 @@ class TestActionExecutor:
         assert len(results) == 1
         assert results[0].success is False
         assert results[0].error is not None
+        assert results[0].code == 'action_failed'
+        assert 'UNKNOWN' not in results[0].error
 
 
 class TestGlobalRegistry:

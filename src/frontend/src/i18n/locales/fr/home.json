@@ -123,6 +123,10 @@
     "unknownProduct": "Produit inconnu",
     "viewAllSubscribed": "Voir tous les abonnements"
   },
+  "discoveryDomainGraph": {
+    "unavailable": "La hiérarchie des domaines n'est pas disponible pour votre rôle.",
+    "error": "Échec du chargement de la hiérarchie des domaines"
+  },
   "dataCurationSection": {
     "title": "Curation de données",
     "createDataProduct": {

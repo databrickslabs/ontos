@@ -1,4 +1,5 @@
 import { AssignedDomain } from '@/types/data-domain';
+import type { AssignedTag } from '@/components/ui/tag-chip';
 
 // --- Asset Types ---
 export type AssetTypeCategory = 'data' | 'analytics' | 'integration' | 'system' | 'custom';
@@ -72,7 +73,7 @@ export interface AssetRead {
   primary_domain_id?: string | null;
   domains?: AssignedDomain[]; // Assigned domains with names + primary flag
   properties?: Record<string, any> | null;
-  tags?: string[] | null;
+  tags?: AssignedTag[]; // Shared tag store (entity_type 'asset'), with values
   status: AssetStatus;
   certification_level?: number | null;
   inherited_certification_level?: number | null;
@@ -88,6 +89,13 @@ export interface AssetRead {
   updated_at: string;
 }
 
+/** A tag assignment as sent to the backend: by FQN or id; `assigned_value` only when edited. */
+export interface AssetTagPayload {
+  tag_fqn?: string;
+  tag_id?: string;
+  assigned_value?: string;
+}
+
 export interface AssetCreate {
   name: string;
   description?: string | null;
@@ -97,7 +105,7 @@ export interface AssetCreate {
   domain_ids?: string[]; // Multi-domain assignment (primary included)
   primary_domain_id?: string | null;
   properties?: Record<string, any> | null;
-  tags?: string[] | null;
+  tags?: AssetTagPayload[] | null; // Replace-all on the shared tag store
   status?: AssetStatus;
 }
 
@@ -110,6 +118,6 @@ export interface AssetUpdate {
   domain_ids?: string[]; // Replace-all; omit to leave unchanged
   primary_domain_id?: string | null;
   properties?: Record<string, any> | null;
-  tags?: string[] | null;
+  tags?: AssetTagPayload[] | null; // Replace-all; omit to leave unchanged
   status?: AssetStatus | null;
 }

@@ -77,6 +77,8 @@ class SearchTagsTool(BaseTool):
                 filters={"category": namespace},
                 limit=limit,
                 offset=offset,
+                # No tags without Read-only on tags, as GET /api/tags.
+                allowed_features=read_access.allowed_features(ctx),
             )
             logger.info(
                 f"[search_tags] SUCCESS: returned {data['returned']} of {data['total_count']} matching tags"
@@ -132,7 +134,13 @@ class GetTagTool(BaseTool):
                 success=False,
                 error="Either tag_id or fqn must be provided"
             )
-        
+        hidden = read_access.without_read_level(
+            ctx, self.name, read_access.TAGS_FEATURE,
+            ToolResult(success=False, error="Tag not found"), tag_id or fqn,
+        )
+        if hidden:
+            return hidden
+
         try:
             from src.controller.tags_manager import TagsManager
             
@@ -462,8 +470,12 @@ class ListEntityTagsTool(BaseTool):
             
             tags_manager = TagsManager()
             
-            # An entity the caller can't read is answered like a missing one (no tags).
-            unreadable = read_access.entity_is_unreadable(ctx, entity_type, entity_id)
+            # Without Read-only on tags (as the REST GET), or for an entity the
+            # caller can't read, the answer is the one for a missing entity (no tags).
+            unreadable = (
+                not read_access.has_feature_read_level(ctx, read_access.TAGS_FEATURE)
+                or read_access.entity_is_unreadable(ctx, entity_type, entity_id)
+            )
             assigned_tags = [] if unreadable else tags_manager.list_assigned_tags(
                 ctx.db,
                 entity_id=entity_id,
@@ -537,6 +549,11 @@ class AssignTagToEntityTool(BaseTool):
     ) -> ToolResult:
         """Assign a tag to an entity."""
         logger.info(f"[assign_tag_to_entity] Starting - entity_type={entity_type}, entity_id={entity_id}, tag_id={tag_id}")
+        # Asset tags are also written by the asset routes, which require assets READ_WRITE
+        if entity_type == "asset":
+            refusal = permission_refusal(ctx, "assets", FeatureAccessLevel.READ_WRITE, self.name)
+            if refusal:
+                return refusal
         # An entity of a product or contract the caller can't read is answered
         # like a missing one.
         refusal = read_access.unreadable_target(
@@ -611,6 +628,10 @@ class RemoveTagFromEntityTool(BaseTool):
     ) -> ToolResult:
         """Remove a tag from an entity."""
         logger.info(f"[remove_tag_from_entity] Starting - entity_type={entity_type}, entity_id={entity_id}, tag_id={tag_id}")
+        if entity_type == "asset":
+            refusal = permission_refusal(ctx, "assets", FeatureAccessLevel.READ_WRITE, self.name)
+            if refusal:
+                return refusal
         # An entity of a product or contract the caller can't read is answered
         # like a missing one.
         refusal = read_access.unreadable_target(

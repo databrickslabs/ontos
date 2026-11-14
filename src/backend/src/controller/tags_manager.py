@@ -2,7 +2,7 @@ from typing import Dict, List, Optional, Union
 from uuid import UUID
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
 
 from src.common.logging import get_logger
@@ -18,6 +18,10 @@ from src.models.tags import (
     DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR
 )
 from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
+from src.db_models.assets import AssetDb
+from src.common.asset_search_item import build_asset_search_item
+from src.common.app_state import get_app_state_manager
+from src.repositories.entity_domain_association_repository import entity_domain_repo
 
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
@@ -210,6 +214,24 @@ class TagsManager(DeliveryMixin, SearchableAsset):
             if tag_db and stored.get(tag_db.id) != tag_in.assigned_value:
                 self._check_possible_value(tag_db, tag_in.assigned_value)
 
+    def unknown_tag_namespaces(self, db: Session, tags: List[Any]) -> List[str]:
+        """Namespaces named by the FQNs of ``tags`` that don't exist. ``set_tags_for_entity``
+        would raise for them; callers check first to refuse the request (422) or the
+        import row before anything is written. ``default`` is always there."""
+        missing: List[str] = []
+        for tag_in in tags or []:
+            fqn = tag_in.tag_fqn if isinstance(tag_in, AssignedTagCreate) else (
+                tag_in.get('tag_fqn') if isinstance(tag_in, dict) else tag_in if isinstance(tag_in, str) else None
+            )
+            if not fqn or TAG_NAMESPACE_SEPARATOR not in fqn:
+                continue
+            namespace_name = fqn.split(TAG_NAMESPACE_SEPARATOR, 1)[0]
+            if namespace_name == DEFAULT_NAMESPACE_NAME or namespace_name in missing:
+                continue
+            if self._namespace_repo.get_by_name(db, name=namespace_name) is None:
+                missing.append(namespace_name)
+        return missing
+
     def list_assigned_tags(self, db: Session, *, entity_id: str, entity_type: str) -> List[AssignedTag]:
         return self._entity_assoc_repo.get_assigned_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type)
 
@@ -271,6 +293,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
 
         if commit:
             db.commit()
+            self._after_asset_tag_write(db, entity_type, entity_id)
         else:
             db.flush()
         return assigned
@@ -320,6 +343,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
                 logger.warning(f"Failed to log change for tag assign: {log_err}")
         
         db.commit()
+        self._after_asset_tag_write(db, entity_type, entity_id)
         
         return AssignedTag(
             tag_id=tag_db.id,
@@ -360,7 +384,61 @@ class TagsManager(DeliveryMixin, SearchableAsset):
             except Exception as log_err:
                 logger.warning(f"Failed to log change for tag removal: {log_err}")
             db.commit()
+            self._after_asset_tag_write(db, entity_type, entity_id)
         return ok
+
+    # --- Asset search entries: an asset's index entry carries its tag names and FQNs ---
+    def _after_asset_tag_write(self, db: Session, entity_type: str, entity_id: str) -> None:
+        """Shared hook for every committed tag write on an asset (routes, MCP tools, workflow steps).
+        Writes that defer their commit (``commit=False``) refresh the entry after their own commit."""
+        if entity_type == "asset":
+            self._refresh_asset_search(db, [str(entity_id)])
+
+    def _asset_ids_for_tag(self, db: Session, tag_id: UUID) -> List[str]:
+        return [
+            row[0] for row in db.query(EntityTagAssociationDb.entity_id).filter(
+                EntityTagAssociationDb.tag_id == tag_id, EntityTagAssociationDb.entity_type == "asset",
+            ).all()
+        ]
+
+    def _refresh_asset_search(self, db: Session, asset_ids: List[str]) -> None:
+        """Re-index assets in one batch: one query each for the assets, their tags and their
+        domains per chunk of 500, then one upsert. Call after the write is committed; a failure
+        is logged, never raised, because the tag change itself already stands.
+
+        The SearchManager is the wired one: this instance's, or the one registered at startup,
+        since the MCP tools and the workflow steps build their own TagsManager. An asset that
+        is not indexed any more (retired) has its entry removed.
+        """
+        search = self._search_manager or get_app_state_manager("search_manager")
+        if not asset_ids or search is None:
+            return
+        try:
+            items: List[SearchIndexItem] = []
+            removals: List[str] = []
+            # A savepoint: a failed read must not abort the caller's transaction (Postgres)
+            with db.begin_nested():
+                for start in range(0, len(asset_ids), 500):
+                    chunk = [UUID(str(asset_id)) for asset_id in asset_ids[start:start + 500]]
+                    rows = db.query(AssetDb).options(joinedload(AssetDb.asset_type)).filter(AssetDb.id.in_(chunk)).all()
+                    ids = [str(asset.id) for asset in rows]
+                    tags_map = self.list_assigned_tags_for_entities(db, entity_ids=ids, entity_type="asset")
+                    domains_map = entity_domain_repo.get_domains_for_entities(db, entity_type="asset", entity_ids=ids)
+                    for asset in rows:
+                        item = build_asset_search_item(
+                            asset, self,
+                            preloaded_domains=domains_map.get(str(asset.id), []),
+                            preloaded_tags=tags_map.get(str(asset.id), []),
+                        )
+                        if item is None:
+                            removals.append(f"asset::{asset.id}")
+                        else:
+                            items.append(item)
+            for item_id in removals:
+                search.remove_item(item_id)
+            search.upsert_items(items)
+        except Exception as e:
+            logger.warning(f"Search refresh failed for {len(asset_ids)} asset(s): {e}")
 
     def get_or_create_default_namespace(self, db: Session, *, user_email: Optional[str]) -> TagNamespaceDb:
         """Ensures the default namespace exists, creating it if necessary."""
@@ -437,6 +515,9 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         db_tag = self._tag_repo.get(db, id=tag_id)
         if not db_tag:
             return None
+        # A rename changes the tag names in the search entries of the assets that carry it
+        renamed = bool(tag_in.name) and tag_in.name != db_tag.name
+        carrying_assets = self._asset_ids_for_tag(db, tag_id) if renamed else []
         
         # If name is being changed, check for conflict within the same namespace
         if tag_in.name and tag_in.name != db_tag.name:
@@ -461,6 +542,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         db.refresh(updated_db_tag)
         db.refresh(updated_db_tag, attribute_names=['namespace']) # Ensure namespace is loaded for FQN
         self._update_search_index(updated_db_tag)
+        self._refresh_asset_search(db, carrying_assets)
         return Tag.from_orm(updated_db_tag)
 
     def delete_tag(self, db: Session, *, tag_id: UUID) -> bool:
@@ -475,10 +557,12 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         # if assoc_count > 0:
         #     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Tag is associated with {assoc_count} entities. Remove associations first.")
 
+        carrying_assets = self._asset_ids_for_tag(db, tag_id)
         deleted_count = self._tag_repo.remove(db, id=tag_id)
         if deleted_count:
             self._notify_index_remove(f"tag::{tag_id}")
             db.commit()
+            self._refresh_asset_search(db, carrying_assets)
             return True
         return False
 

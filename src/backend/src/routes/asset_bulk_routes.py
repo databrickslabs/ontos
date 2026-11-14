@@ -167,6 +167,15 @@ async def execute_import(
         result = manager.execute_import(
             db, file_bytes=contents, filename=filename, current_user_id=current_user.email,
         )
+        # Tags of imported assets are indexed for search: refresh each touched asset's entry
+        assets_manager = getattr(request.app.state, "assets_manager", None)
+        if assets_manager is not None:
+            for item in result.items:
+                if item.asset_id:
+                    try:
+                        assets_manager.refresh_search_entry(db, UUID(item.asset_id))
+                    except Exception as e:
+                        logger.warning(f"Search refresh failed for imported asset {item.asset_id}: {e}")
         success = result.errors == 0
         details["result"] = {
             "created": result.created,

@@ -994,3 +994,37 @@ class TestChangeGroupSideEffects:
         item = search.upsert_item.call_args.args[0]
         assert item.id == f'asset::{asset.id}'
         assert requests == [('asset', str(asset.id), 'deprecated', 'draft')]
+
+
+class TestCreateInAGroupWithoutDraft:
+    def test_a_product_created_without_a_status_starts_in_the_default_groups_first_stage(
+        self, db_session, product_manager,
+    ):
+        default = _intake_group()
+        default['is_default_for_type'] = True
+        lifecycle_service.save_group(db_session, default, 'admin')
+        created = product_manager.create_product({
+            'id': str(uuid.uuid4()), 'name': 'Intake by default', 'version': '1.0.0',
+        }, db=db_session)
+        assert created.status == 'intake'
+
+    def test_a_contract_created_without_a_status_starts_in_its_groups_first_stage(
+        self, db_session,
+    ):
+        from pathlib import Path
+
+        from src.controller.data_contracts_manager import DataContractsManager
+        from src.models.data_contracts_api import DataContractCreate
+
+        group = lifecycle_service.save_group(
+            db_session, _intake_group('data_contract'), 'admin',
+        )
+        mgr = DataContractsManager(data_dir=Path('/tmp'))
+        mgr._queue_delivery = lambda *a, **k: None
+        mgr._update_search_index = lambda *a, **k: None
+        payload = DataContractCreate(name='Intake contract', version='1.0.0',
+                                     lifecycle_stage_group_id=group.id)
+        created = mgr.create_contract_with_relations(
+            db=db_session, contract_data=payload, current_user='alice@example.com',
+        )
+        assert (created.lifecycle_stage_group_id, created.status) == (group.id, 'intake')

@@ -4,6 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app import app
+from src.common import authorization
+from src.common.features import FeatureAccessLevel
 from src.common.manager_dependencies import get_audit_manager
 
 # test_settings fixture is not directly used here, but the client fixture uses it.
@@ -255,3 +257,64 @@ def test_rejected_branding_save_leaves_earlier_keys_unchanged(client: TestClient
     })
     assert bad.status_code == 400
     assert client.get("/api/settings/ui-customization").json() == before
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/settings is gated per feature: UI keys need settings-ui,
+# every other key settings-general
+# ---------------------------------------------------------------------------
+
+_RW = FeatureAccessLevel.READ_WRITE
+_RO = FeatureAccessLevel.READ_ONLY
+
+
+@pytest.fixture
+def with_levels(client: TestClient, monkeypatch):
+    """Run the client as a user whose effective feature levels are exactly ``levels``."""
+
+    def _set(levels):
+        async def _resolve(*_args, **_kwargs):
+            return levels
+
+        monkeypatch.setattr(authorization, "resolve_effective_permissions", _resolve)
+        return client
+
+    return _set
+
+
+_BRANDING = {"ui_app_display_name": "Acme Catalog", "ui_theme_primary": "#2563eb"}
+_GENERAL = {"allow_job_enablement_requests": True}
+
+
+def test_settings_ui_alone_saves_branding(with_levels):
+    client = with_levels({"settings-ui": _RW})
+    assert client.put("/api/settings", json=_BRANDING).status_code == 200
+    assert client.get("/api/settings/ui-customization").json()["app_display_name"] == "Acme Catalog"
+
+
+def test_settings_ui_alone_cannot_save_general_settings(with_levels):
+    client = with_levels({"settings-ui": _RW})
+    assert client.put("/api/settings", json=_GENERAL).status_code == 403
+    assert client.put("/api/settings", json={**_GENERAL, **_BRANDING}).status_code == 403
+
+
+def test_settings_general_alone_saves_general_settings(with_levels):
+    client = with_levels({"settings-general": _RW})
+    assert client.put("/api/settings", json=_GENERAL).status_code == 200
+
+
+def test_settings_general_alone_cannot_save_branding(with_levels):
+    client = with_levels({"settings-general": _RW})
+    assert client.put("/api/settings", json=_BRANDING).status_code == 403
+    assert client.put("/api/settings", json={**_GENERAL, **_BRANDING}).status_code == 403
+
+
+def test_both_features_save_a_mixed_payload(with_levels):
+    client = with_levels({"settings-general": _RW, "settings-ui": _RW})
+    assert client.put("/api/settings", json={**_GENERAL, **_BRANDING}).status_code == 200
+
+
+def test_read_only_levels_cannot_write(with_levels):
+    client = with_levels({"settings-general": _RO, "settings-ui": _RO})
+    assert client.put("/api/settings", json=_BRANDING).status_code == 403
+    assert client.put("/api/settings", json=_GENERAL).status_code == 403

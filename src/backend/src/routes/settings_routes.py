@@ -31,7 +31,11 @@ from ..controller.notifications_manager import NotificationsManager
 from ..common.config import get_settings
 from ..common.sanitization import coerce_hex_color, sanitize_markdown_input
 from ..common.search_config_loader import get_search_config_loader
-from ..common.authorization import PermissionChecker, require_demo_admin_or_setup_token
+from ..common.authorization import (
+    PermissionChecker,
+    enforce_feature_permission,
+    require_demo_admin_or_setup_token,
+)
 from ..common.features import FeatureAccessLevel
 from ..common.api_errors import CodedValueError
 
@@ -44,6 +48,33 @@ router = APIRouter(prefix="/api", tags=["Settings"])
 
 SETTINGS_FEATURE_ID = "settings" # Define a feature ID for settings
 ROLE_NOT_FOUND = "Role not found"
+UI_SETTINGS_KEY_PREFIX = "ui_"
+
+
+async def require_settings_write(
+    request: Request,
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+) -> None:
+    """Gate ``PUT /api/settings`` per key: ``ui_*`` keys (UI customization and branding)
+    need ``settings-ui`` READ_WRITE, every other key ``settings-general`` READ_WRITE.
+
+    A payload with both kinds needs both; one with no keys needs ``settings-general``.
+    """
+    payload = await request.json()
+    keys = list(payload) if isinstance(payload, dict) else []
+    needs_ui = any(str(k).startswith(UI_SETTINGS_KEY_PREFIX) for k in keys)
+    needs_general = not keys or any(
+        not str(k).startswith(UI_SETTINGS_KEY_PREFIX) for k in keys
+    )
+    if needs_general:
+        await enforce_feature_permission(
+            'settings-general', FeatureAccessLevel.READ_WRITE, user_details, request
+        )
+    if needs_ui:
+        await enforce_feature_permission(
+            'settings-ui', FeatureAccessLevel.READ_WRITE, user_details, request
+        )
+
 
 @router.get('/settings')
 async def get_settings_route(
@@ -67,11 +98,11 @@ async def update_settings(
     current_user: AuditCurrentUserDep,
     settings_payload: dict, # Renamed to avoid conflict with module
     manager: SettingsManager = Depends(get_settings_manager),
-    _: bool = Depends(PermissionChecker('settings-general', FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(require_settings_write),
     user_details: UserInfo = Depends(get_user_details_from_sdk),
     auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
-    """Update settings"""
+    """Update settings (UI customization keys need settings-ui, the rest settings-general)"""
     # Turning on the Unity Catalog description write-back changes what every user's
     # save writes to Unity Catalog, so only an admin may turn it on. (Turning it off,
     # or saving it unchanged, needs only READ_WRITE: the form always sends the value.)

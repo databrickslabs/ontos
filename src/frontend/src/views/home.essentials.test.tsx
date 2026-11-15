@@ -1,6 +1,6 @@
 /** The home page by role home section: Full is unchanged, JOURNEY replaces it (#1347). */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 import { FeatureAccessLevel, HomeSection } from '@/types/settings';
 import { ACCESS_LEVEL_ORDER } from '@/lib/permissions';
@@ -48,7 +48,9 @@ vi.mock('@/stores/permissions-store', () => {
 });
 // Sections with their own data and tests; stubbed to keep this test on the layout.
 vi.mock('@/components/home/required-actions-section', () => ({
-  default: () => <div data-testid="required-actions" />,
+  default: ({ fetchQueue }: { fetchQueue?: boolean }) => (
+    <div data-testid="required-actions" data-fetch-queue={String(fetchQueue)} />
+  ),
 }));
 vi.mock('@/components/home/recent-activity', () => ({
   default: () => <div data-testid="recent-activity" />,
@@ -216,6 +218,24 @@ describe('Home by role home section', () => {
     expect(state.calls.some((u) => u.startsWith('/api/data-asset-reviews'))).toBe(false);
     expect(state.calls.some((u) => u.includes('owned_by_me'))).toBe(false);
     expect(state.calls).not.toContain('/api/access-grants/my-requests');
+  });
+
+  it('the approvals card is hidden, and its queue not fetched, without contracts or products read', () => {
+    applyJourneyRole();
+    const { unmount } = renderWithProviders(<Home />);
+    expect(screen.getByTestId('required-actions')).toHaveAttribute('data-fetch-queue', 'true');
+    unmount();
+    state.perms = { ...ALL_PERMS, 'data-contracts': FeatureAccessLevel.NONE };
+    renderWithProviders(<Home />);
+    expect(screen.getByTestId('required-actions')).toBeInTheDocument();
+    cleanup();
+    state.perms = {
+      ...ALL_PERMS, 'data-contracts': FeatureAccessLevel.NONE,
+      'data-products': FeatureAccessLevel.NONE,
+    };
+    renderWithProviders(<Home />);
+    expect(screen.queryByTestId('essentials-approvals')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('required-actions')).not.toBeInTheDocument();
   });
 
   it('Publish lists owned assets with gaps and offers a review request', async () => {

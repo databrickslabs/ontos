@@ -131,6 +131,11 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
   const reviews = feature('data-asset-reviews');
   const reviewsWrite = feature('data-asset-reviews', FeatureAccessLevel.READ_WRITE);
   // My Requests has no feature permission of its own; its API needs access-grants read.
+  // The approvals queue route answers 403 unless the user reads data contracts or data
+  // products; without either the card is not shown and the request is not made.
+  const approvals =
+    hasPermission('data-contracts', FeatureAccessLevel.READ_ONLY) ||
+    hasPermission('data-products', FeatureAccessLevel.READ_ONLY);
   const myRequests = hasPermission('access-grants', FeatureAccessLevel.READ_ONLY)
     ? shown('my-requests')
     : null;
@@ -417,14 +422,16 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
           </JourneyCard>
         </div>
 
+        {approvals && (
         <Card className="mt-4" data-testid="essentials-approvals">
           <div className="px-6 py-4 border-b bg-muted/30">
             <h3 className="font-semibold text-sm">{t('home:myActions.approvals')}</h3>
           </div>
           <CardContent className="p-0 max-h-[400px] overflow-auto">
-            <RequiredActionsSection />
+            <RequiredActionsSection fetchQueue={approvals} />
           </CardContent>
         </Card>
+        )}
       </section>
 
       {reviewDialogOpen && (

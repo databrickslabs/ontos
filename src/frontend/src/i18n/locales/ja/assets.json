@@ -49,7 +49,9 @@
       "uc_description_existing_comment": "{{object}} には Unity Catalog に別のコメントが既にあるため、説明はそこに書き込まれませんでした。説明をそのコメントに合わせるか、Unity Catalog でコメントを変更してから、もう一度保存してください。",
       "uc_description_unsupported_text": "{{object}} の説明に Unity Catalog が保存できない文字が含まれているため、そこには書き込まれませんでした。",
       "uc_description_import_time_budget": "このインポートは Unity Catalog への書き込みに割り当てられた時間を使い切ったため、{{object}} の説明はそこに書き込まれませんでした。",
-      "uc_description_import_writes_uc": "{{object}} の説明は Unity Catalog に書き込まれます。そこに別のコメントが既にある場合、そのコメントは保持され、その行に警告が表示されます。"
+      "uc_description_import_writes_uc": "{{object}} の説明は Unity Catalog に書き込まれます。そこに別のコメントが既にある場合、そのコメントは保持され、その行に警告が表示されます。",
+      "uc_description_import_replaces_uc": "{{object}} の説明は Unity Catalog のコメントを置き換えます。そのコメントは Ontos の以前の説明です。",
+      "uc_description_import_keeps_uc": "{{object}} には Unity Catalog に別のコメントがあるため、インポートはそれを保持し、説明をそこに書き込みません。"
     }
   },
   "deleteDialog": {

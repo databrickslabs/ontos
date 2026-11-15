@@ -23,7 +23,7 @@ from src.common.errors import ValidationError
 from src.common.logging import get_logger
 from src.controller.assets_manager import AssetsManager
 from src.controller.uc_description_sync_manager import (
-    import_writes_uc_warning, uc_comment_target_for,
+    preview_import_warning, uc_comment_target_for,
 )
 from src.db_models.assets import AssetDb, AssetRelationshipDb
 from src.models.assets import (
@@ -461,12 +461,18 @@ class AssetBulkManager:
 
     def preview_import(
         self, db: Session, *, file_bytes: bytes, filename: str, write_to_uc: bool = False,
+        read_uc_comment: Optional[
+            Callable[[str, Optional[str]], Optional[Tuple[Optional[str], Optional[str]]]]
+        ] = None,
     ) -> ImportPreviewResult:
         """Parse and validate file, return preview of what would happen.
 
         With ``write_to_uc`` (the Unity Catalog description setting), a row whose
-        description would be written to Unity Catalog gets a warning. The preview
-        doesn't read Unity Catalog: the import keeps a different existing comment.
+        import would change a Unity Catalog comment gets a warning: written, replaced,
+        or kept because Unity Catalog has another comment. ``read_uc_comment(table_fqn,
+        column_name)`` reads the comment as the user (``(table_type, comment)``, or None
+        once the preview read enough); without it, or when it fails, the row only says
+        its description will be written. Metric views get no warning.
         """
         result = ImportPreviewResult()
 
@@ -599,7 +605,7 @@ class AssetBulkManager:
                     result.will_create += 1
 
             if write_to_uc and item.action != ImportAction.ERROR:
-                self._preview_uc_write(item, row, asset_type_raw, existing)
+                self._preview_uc_write(item, row, asset_type_raw, existing, read_uc_comment)
 
             result.items.append(item)
 
@@ -824,15 +830,16 @@ class AssetBulkManager:
 
     @staticmethod
     def _preview_uc_write(item: ImportPreviewItem, row: Dict[str, str], asset_type_raw: str,
-                          existing: Optional[AssetDb]) -> None:
+                          existing: Optional[AssetDb], read_uc_comment) -> None:
         target = uc_comment_target_for(
             row.get("platform", ""), asset_type_raw, row.get("location", ""))
-        if target is None:
+        if target is None or "description" not in row:
+            # A file without a description column leaves the descriptions alone
             return
         description = row.get("description", "").strip() or None
-        if description != ((existing.description if existing else None) or None):
-            item.warnings.append(import_writes_uc_warning(
-                f"{target[0]}.{target[1]}" if target[1] else target[0]))
+        warning = preview_import_warning(target, description, existing, read_uc_comment)
+        if warning is not None:
+            item.warnings.append(warning)
 
     def _wire_parent_relationships(
         self,

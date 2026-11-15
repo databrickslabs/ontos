@@ -57,8 +57,12 @@ CODE_EXISTING_COMMENT = 'uc_description_existing_comment'
 CODE_IMPORT_WRITE_LIMIT = 'uc_description_import_write_limit'
 CODE_IMPORT_TIME_BUDGET = 'uc_description_import_time_budget'
 CODE_IMPORT_WRITES_FAILED = 'uc_description_import_writes_failed'
-# Import preview only: the row's description is written to Unity Catalog on import
+# Import preview only (params: object): the row's description is written to Unity
+# Catalog on import; it replaces the comment there (the description Ontos had before);
+# Unity Catalog has another comment, which the import keeps
 CODE_IMPORT_WRITES_UC = 'uc_description_import_writes_uc'
+CODE_IMPORT_REPLACES_UC = 'uc_description_import_replaces_uc'
+CODE_IMPORT_KEEPS_UC = 'uc_description_import_keeps_uc'
 
 _MESSAGES = {
     CODE_PERMISSION_DENIED: (
@@ -102,6 +106,14 @@ _MESSAGES = {
     CODE_IMPORT_WRITES_UC: (
         "The description of {object} will be written to Unity Catalog. If it already has a "
         "different comment there, that comment is kept and the row gets a warning."
+    ),
+    CODE_IMPORT_REPLACES_UC: (
+        "The description of {object} will replace its Unity Catalog comment, which is the "
+        "description Ontos had before."
+    ),
+    CODE_IMPORT_KEEPS_UC: (
+        "Unity Catalog has another comment on {object}, so the import keeps it and does not "
+        "write the description there."
     ),
 }
 
@@ -187,8 +199,67 @@ def import_writes_failed_warning() -> CodedWarning:
                         message=_MESSAGES[CODE_IMPORT_WRITES_FAILED])
 
 
-def import_writes_uc_warning(target: str) -> CodedWarning:
-    return _warning(CODE_IMPORT_WRITES_UC, target)
+# What the guard does with the Unity Catalog comment (``guard_decision``)
+GUARD_UNCHANGED = 'unchanged'  # it already is the description
+GUARD_KEEP = 'keep'  # someone else's comment: kept, not written
+GUARD_WRITE = 'write'  # empty, or the comment Ontos agreed to: replaced
+
+
+def guard_decision(uc_comment: Optional[str], text: Optional[str],
+                   previous_description: Optional[str], agreed: Optional[str]) -> str:
+    """Whether a description ``text`` may replace the Unity Catalog comment ``uc_comment``.
+
+    It may when the comment is empty, the description before the save, or the
+    comment Ontos agreed to (``agreed``, stored on the asset).
+    """
+    if uc_comment == text:
+        return GUARD_UNCHANGED
+    if uc_comment is not None and uc_comment not in ((previous_description or None), agreed):
+        return GUARD_KEEP
+    return GUARD_WRITE
+
+
+def _agreed(asset: Optional[AssetDb]) -> Optional[str]:
+    """The comment Ontos agreed to that is stored on the asset (an earlier save's), if any."""
+    stored = ((asset.properties if asset is not None else None) or {}).get(
+        DESCRIPTION_SYNC_PROPERTY)
+    return stored.get('agreed') if isinstance(stored, dict) else None
+
+
+def preview_import_warning(
+    target: Tuple[str, Optional[str]], text: Optional[str], existing: Optional[AssetDb],
+    read: Optional[Callable[[str, Optional[str]], Optional[Tuple[Optional[str], Optional[str]]]]],
+) -> Optional[CodedWarning]:
+    """What importing ``text`` will do to the Unity Catalog comment of ``target``, or None.
+
+    ``read(table_fqn, column_name)`` reads the comment as the user: ``(table_type,
+    comment)``, or None when the preview read enough already; it may raise. Without
+    a read, the row only says its description will be written. A metric view, or a
+    comment already equal to the description, gets no warning.
+    """
+    table_fqn, column_name = target
+    label = f'{table_fqn}.{column_name}' if column_name else table_fqn
+    previous = (existing.description if existing is not None else None) or None
+    if text == previous and description_sync_state(
+            existing.properties if existing is not None else None) is None:
+        return None
+    try:
+        read_result = read(table_fqn, column_name) if read is not None else None
+    except Exception as e:
+        reason = getattr(e, 'reason', type(e).__name__)
+        logger.info("The import preview could not read the comment of %s: %s", label, reason)
+        read_result = None
+    if read_result is None:
+        return _warning(CODE_IMPORT_WRITES_UC, label)
+    table_type, uc_comment = read_result
+    if table_type == METRIC_VIEW_TABLE_TYPE:
+        return None
+    decision = guard_decision(uc_comment, text, previous, _agreed(existing))
+    if decision == GUARD_UNCHANGED:
+        return None
+    if decision == GUARD_KEEP:
+        return _warning(CODE_IMPORT_KEEPS_UC, label)
+    return _warning(CODE_IMPORT_REPLACES_UC if uc_comment else CODE_IMPORT_WRITES_UC, label)
 
 
 @dataclass
@@ -303,14 +374,11 @@ class UcDescriptionSyncManager:
             return SyncOutcome(state=current_state)
 
         audit = {'before': uc_comment, 'after': text, 'outcome': None}
-        # The comment Ontos agreed to on an earlier failed write (still in Unity Catalog)
-        stored = (asset.properties or {}).get(DESCRIPTION_SYNC_PROPERTY)
-        agreed = stored.get('agreed') if isinstance(stored, dict) else None
-        if uc_comment == text:
+        decision = guard_decision(uc_comment, text, previous_description, _agreed(asset))
+        if decision == GUARD_UNCHANGED:
             audit['outcome'] = 'unchanged'
             return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
-        if (uc_comment is not None and uc_comment != (previous_description or None)
-                and uc_comment != agreed):
+        if decision == GUARD_KEEP:
             # Not the comment Ontos agreed to before: a comment someone else wrote is kept
             logger.info("Kept the Unity Catalog comment of %s: it differs from the Ontos one "
                         "(asset %s)", label, asset.id)

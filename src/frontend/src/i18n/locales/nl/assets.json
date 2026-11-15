@@ -49,7 +49,9 @@
       "uc_description_existing_comment": "Unity Catalog heeft al een andere opmerking bij {{object}}, dus de beschrijving is daar niet geschreven. Zet de beschrijving op die opmerking, of wijzig de opmerking in Unity Catalog, en sla opnieuw op.",
       "uc_description_unsupported_text": "De beschrijving van {{object}} bevat een teken dat Unity Catalog niet kan opslaan, dus is die daar niet geschreven.",
       "uc_description_import_time_budget": "Deze import heeft zijn tijd voor schrijfacties naar Unity Catalog opgebruikt, dus de beschrijving van {{object}} is daar niet geschreven.",
-      "uc_description_import_writes_uc": "De beschrijving van {{object}} wordt naar Unity Catalog geschreven. Staat er al een andere opmerking, dan blijft die behouden en krijgt de rij een waarschuwing."
+      "uc_description_import_writes_uc": "De beschrijving van {{object}} wordt naar Unity Catalog geschreven. Staat er al een andere opmerking, dan blijft die behouden en krijgt de rij een waarschuwing.",
+      "uc_description_import_replaces_uc": "De beschrijving van {{object}} vervangt de opmerking in Unity Catalog, die de vorige Ontos-beschrijving is.",
+      "uc_description_import_keeps_uc": "Unity Catalog heeft een andere opmerking bij {{object}}, dus de import behoudt die en schrijft de beschrijving daar niet."
     }
   },
   "deleteDialog": {

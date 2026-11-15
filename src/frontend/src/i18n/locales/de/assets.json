@@ -49,7 +49,9 @@
       "uc_description_existing_comment": "Unity Catalog hat bereits einen anderen Kommentar zu {{object}}, daher wurde die Beschreibung dort nicht geschrieben. Setzen Sie die Beschreibung auf diesen Kommentar oder ändern Sie den Kommentar in Unity Catalog und speichern Sie erneut.",
       "uc_description_unsupported_text": "Die Beschreibung von {{object}} enthält ein Zeichen, das Unity Catalog nicht speichern kann, daher wurde sie dort nicht geschrieben.",
       "uc_description_import_time_budget": "Dieser Import hat seine Zeit für Schreibvorgänge in Unity Catalog aufgebraucht, daher wurde die Beschreibung von {{object}} dort nicht geschrieben.",
-      "uc_description_import_writes_uc": "Die Beschreibung von {{object}} wird in Unity Catalog geschrieben. Gibt es dort bereits einen anderen Kommentar, bleibt er erhalten und die Zeile erhält eine Warnung."
+      "uc_description_import_writes_uc": "Die Beschreibung von {{object}} wird in Unity Catalog geschrieben. Gibt es dort bereits einen anderen Kommentar, bleibt er erhalten und die Zeile erhält eine Warnung.",
+      "uc_description_import_replaces_uc": "Die Beschreibung von {{object}} ersetzt ihren Kommentar in Unity Catalog, der die vorherige Ontos-Beschreibung ist.",
+      "uc_description_import_keeps_uc": "Unity Catalog hat einen anderen Kommentar zu {{object}}, daher behält der Import ihn und schreibt die Beschreibung dort nicht."
     }
   },
   "deleteDialog": {

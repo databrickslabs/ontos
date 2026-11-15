@@ -520,6 +520,60 @@ class TestBulkImportWriteback:
         flagged = {i['name']: [w['code'] for w in i['warnings']] for i in response.json()['items']}
         assert flagged == {'orders': ['uc_description_import_writes_uc'], 'notes': []}
 
+    def _preview_codes(self, client, csv_text=None):
+        response = client.post(
+            '/api/assets/bulk/import/preview', headers=TOKEN,
+            files={'file': ('assets.csv', (csv_text or self.CSV).encode('utf-8'), 'text/csv')})
+        assert response.status_code == 200, response.text
+        return {i['name']: [w['code'] for w in i['warnings']] for i in response.json()['items']}
+
+    def test_the_preview_reads_unity_catalog_to_flag_a_replaced_comment(self, client, settings,
+                                                                        table, user_ws):
+        user_ws.tables.get.return_value.comment = 'Old'  # the description Ontos had
+
+        assert self._preview_codes(client) == {
+            'orders': ['uc_description_import_replaces_uc'], 'notes': []}
+        user_ws.tables.get.assert_called_once_with(full_name='main.sales.orders')
+        user_ws.statement_execution.execute_statement.assert_not_called()
+
+    def test_the_preview_flags_a_comment_the_import_keeps(self, client, settings, table,
+                                                         user_ws):
+        user_ws.tables.get.return_value.comment = 'Customer comment'
+
+        assert self._preview_codes(client) == {
+            'orders': ['uc_description_import_keeps_uc'], 'notes': []}
+
+    def test_the_preview_does_not_flag_a_metric_view(self, client, settings, table, user_ws):
+        user_ws.tables.get.return_value.table_type = SimpleNamespace(value='METRIC_VIEW')
+
+        assert self._preview_codes(client) == {'orders': [], 'notes': []}
+
+    def test_the_preview_does_not_flag_a_comment_already_equal(self, client, settings, table,
+                                                              user_ws):
+        user_ws.tables.get.return_value.comment = 'Orders placed online'
+
+        assert self._preview_codes(client) == {'orders': [], 'notes': []}
+
+    def test_the_preview_reads_no_more_rows_than_the_import_tries(self, client, settings,
+                                                                  user_ws):
+        settings.UC_DESCRIPTION_IMPORT_WRITE_LIMIT = 1
+
+        codes = self._preview_codes(client, 'name,asset_type,platform,location,description\n'
+                                            'a,Table,databricks,main.s.a,About a\n'
+                                            'b,Table,databricks,main.s.b,About b\n')
+
+        assert codes == {'a': ['uc_description_import_writes_uc'],
+                         'b': ['uc_description_import_writes_uc']}
+        assert user_ws.tables.get.call_count == 1
+
+    def test_the_preview_of_a_file_without_descriptions_flags_nothing(self, client, settings,
+                                                                     table, user_ws):
+        codes = self._preview_codes(client, 'name,asset_type,platform,location\n'
+                                            'orders,Table,databricks,main.sales.orders\n')
+
+        assert codes == {'orders': []}
+        user_ws.tables.get.assert_not_called()
+
     def test_a_failing_write_step_never_fails_the_row(self, client, settings, table, user_ws,
                                                       monkeypatch):
         from src.controller.asset_bulk_manager import AssetBulkManager

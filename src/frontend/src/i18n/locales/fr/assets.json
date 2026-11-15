@@ -49,7 +49,9 @@
       "uc_description_existing_comment": "Unity Catalog a déjà un autre commentaire sur {{object}}, la description n'y a donc pas été écrite. Définissez la description sur ce commentaire ou modifiez le commentaire dans Unity Catalog, puis enregistrez à nouveau.",
       "uc_description_unsupported_text": "La description de {{object}} contient un caractère qu'Unity Catalog ne peut pas stocker, elle n'y a donc pas été écrite.",
       "uc_description_import_time_budget": "Cet import a épuisé son temps pour les écritures dans Unity Catalog, la description de {{object}} n'y a donc pas été écrite.",
-      "uc_description_import_writes_uc": "La description de {{object}} sera écrite dans Unity Catalog. Si un autre commentaire s'y trouve déjà, il est conservé et la ligne reçoit un avertissement."
+      "uc_description_import_writes_uc": "La description de {{object}} sera écrite dans Unity Catalog. Si un autre commentaire s'y trouve déjà, il est conservé et la ligne reçoit un avertissement.",
+      "uc_description_import_replaces_uc": "La description de {{object}} remplacera son commentaire dans Unity Catalog, qui est la description qu'Ontos avait avant.",
+      "uc_description_import_keeps_uc": "Unity Catalog a un autre commentaire sur {{object}}, l'import le conserve donc et n'y écrit pas la description."
     }
   },
   "deleteDialog": {

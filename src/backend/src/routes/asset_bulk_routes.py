@@ -33,6 +33,7 @@ from src.controller.uc_description_sync_manager import (
     ImportTimeBudgetError, ImportWriteLimitError, SyncOutcome, UcDescriptionSyncManager,
     import_writes_failed_warning, write_failed_warning,
 )
+from src.common.uc_comments import read_comment
 from src.db_models.assets import AssetDb
 
 logger = get_logger(__name__)
@@ -145,6 +146,7 @@ def export_template(
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
 )
 async def preview_import(
+    request: Request,
     settings: SettingsDep,
     db: DBSessionDep,
     file: UploadFile = File(..., description="CSV or XLSX file to preview"),
@@ -152,14 +154,19 @@ async def preview_import(
 ):
     """Upload a file and preview what will be created, updated, or skipped.
 
-    A row whose description would be written to Unity Catalog is flagged.
+    With the Unity Catalog description setting on, a row whose import would change
+    a Unity Catalog comment is flagged; the comments are read as the user, within
+    the import's limits on rows and time.
     """
     try:
         contents = await file.read()
         filename = file.filename or "upload.csv"
-        result = manager.preview_import(
-            db, file_bytes=contents, filename=filename,
-            write_to_uc=UcDescriptionSyncManager(settings).enabled,
+        write_to_uc = UcDescriptionSyncManager(settings).enabled
+        # Sync database and Unity Catalog work stays off the event loop
+        result = await run_in_threadpool(
+            manager.preview_import, db, file_bytes=contents, filename=filename,
+            write_to_uc=write_to_uc,
+            read_uc_comment=_preview_comment_reader(settings, request) if write_to_uc else None,
         )
         return result
     except Exception as e:
@@ -233,6 +240,36 @@ async def execute_import(
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="IMPORT_ASSETS", success=success, details=details,
         )
+
+
+def _preview_comment_reader(settings, request: Request):
+    """``read(table_fqn, column_name)`` of Unity Catalog comments for an import preview.
+
+    Reads as the user, at most as many rows as the import would try and within the
+    import's time budget; past either, and without a user client, it returns None
+    (the row is then flagged as written, unread). Its errors are the caller's.
+    """
+    from src.routes.assets_routes import _user_workspace_client
+
+    limit = int(getattr(settings, 'UC_DESCRIPTION_IMPORT_WRITE_LIMIT', 100) or 0)
+    deadline = time.monotonic() + UC_IMPORT_WRITE_BUDGET_SECONDS
+    state: dict = {'reads': 0}
+
+    def read(table_fqn: str, column_name: Optional[str]):
+        time_left = deadline - time.monotonic()
+        if time_left <= 0 or state['reads'] >= limit or 'unavailable' in state:
+            return None
+        if 'ws' not in state:
+            try:
+                state['ws'] = _user_workspace_client(request)
+            except Exception as e:
+                logger.info("The import preview has no user client: %s", type(e).__name__)
+                state['unavailable'] = True
+                return None
+        state['reads'] += 1
+        return read_comment(state['ws'], table_fqn, column_name, timeout_seconds=time_left)
+
+    return read
 
 
 def _write_imported_descriptions(

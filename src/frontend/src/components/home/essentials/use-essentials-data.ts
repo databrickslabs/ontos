@@ -17,7 +17,8 @@ import {
  * - GET /api/assets?limit=1            total assets (Understand)
  * - GET /api/data-asset-reviews        review requests (Trust, Publish, Maintain)
  * - GET /api/assets?owned_by_me=true   the user's assets, one page at a time (Publish)
- * - GET /api/access-grants/my-requests the user's access requests (Maintain)
+ * - GET /api/access-grants/my-requests?status=pending  the user's pending access requests
+ *   (Maintain); `total` is the server-side count, whatever the page size
  */
 
 /** Review requests read to compute statuses (the endpoint pages at 100 by default). */
@@ -29,6 +30,10 @@ export const REVIEWS_LIMIT = 500;
  */
 export const reviewsTruncated = (reviews: DataAssetReviewRequest[]) =>
   reviews.length >= REVIEWS_LIMIT;
+
+/** Pending requests listed; their count comes from the response's `total`. */
+const MY_REQUESTS_LIMIT = 20;
+const PENDING_REQUEST_STATUS = 'pending';
 
 const OPEN_REVIEW_STATUSES: string[] = [
   ReviewRequestStatus.QUEUED,
@@ -150,12 +155,18 @@ export function useReviewRequests(enabled: boolean): Loadable<DataAssetReviewReq
   return { data, loading: res.loading };
 }
 
-export function useMyAccessRequests(enabled: boolean): Loadable<AccessRequestItem[]> {
-  const res = useJson<{ requests?: AccessRequestItem[] }>(
-    enabled ? '/api/access-grants/my-requests' : null,
-    { requests: EMPTY_REQUESTS },
+/** The user's pending access requests: the newest page, and how many there are in all. */
+export function useMyPendingRequests(
+  enabled: boolean,
+): Loadable<AccessRequestItem[]> & { total: number } {
+  const res = useJson<{ requests?: AccessRequestItem[]; total?: number }>(
+    enabled
+      ? `/api/access-grants/my-requests?status=${PENDING_REQUEST_STATUS}&limit=${MY_REQUESTS_LIMIT}`
+      : null,
+    { requests: EMPTY_REQUESTS, total: 0 },
   );
-  return { data: res.data?.requests ?? EMPTY_REQUESTS, loading: res.loading };
+  const items = res.data?.requests ?? EMPTY_REQUESTS;
+  return { data: items, total: res.data?.total ?? items.length, loading: res.loading };
 }
 
 interface AssetPage {

@@ -48,7 +48,7 @@ import {
   REVIEWS_LIMIT,
   useAssetTotal,
   useEssentialsFeature,
-  useMyAccessRequests,
+  useMyPendingRequests,
   useOwnedAssets,
   useReviewRequests,
   type OwnedAsset,
@@ -147,7 +147,7 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
   const pageSize = useEssentialsHomePreferencesStore((s) => s.publishPageSize);
   const setPageSize = useEssentialsHomePreferencesStore((s) => s.setPublishPageSize);
   const owned = useOwnedAssets(!!assetsWrite, pageSize);
-  const accessRequests = useMyAccessRequests(!!myRequests);
+  const accessRequests = useMyPendingRequests(!!myRequests);
 
   const counts = useMemo(() => reviewStatusCounts(reviewList.data), [reviewList.data]);
   const latest = useMemo(
@@ -161,9 +161,6 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
   );
   const openReviews = useMemo(
     () => myOpenReviews(reviewList.data, email), [reviewList.data, email],
-  );
-  const pendingRequests = useMemo(
-    () => accessRequests.data.filter((r) => r.status === 'pending'), [accessRequests.data],
   );
 
   const conceptsTile = concepts ? tileRegistry['semantic-models'] : null;
@@ -390,13 +387,13 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
             {myRequests && (
               <div data-testid="essentials-maintain-requests">
                 <h3 className="text-sm font-semibold mb-1">
-                  {t('home:essentials.maintain.myRequests', { count: pendingRequests.length })}
+                  {t('home:essentials.maintain.myRequests', { count: accessRequests.total })}
                 </h3>
-                {!accessRequests.loading && pendingRequests.length === 0 ? (
+                {!accessRequests.loading && accessRequests.total === 0 ? (
                   <Empty>{t('home:essentials.maintain.noRequests')}</Empty>
                 ) : (
                   <ul className="space-y-1 text-sm">
-                    {pendingRequests.slice(0, LIST_LIMIT).map((r) => (
+                    {accessRequests.data.slice(0, LIST_LIMIT).map((r) => (
                       <li key={r.id} className="truncate">{r.entity_name || r.entity_id}</li>
                     ))}
                   </ul>

@@ -118,12 +118,17 @@ function setRoutes() {
     '/api/assets?limit=1': { items: [], total: 42, skip: 0, limit: 1 },
     '/api/assets?owned_by_me=true': ownedPage,
     '/api/data-asset-reviews': REVIEWS,
-    '/api/access-grants/my-requests': { requests: [
-      { id: 'g1', entity_name: 'Sales tables', entity_id: 'e1', entity_type: 'asset',
-        status: 'pending', created_at: '2026-03-01' },
-      { id: 'g2', entity_name: 'Old', entity_id: 'e2', entity_type: 'asset',
-        status: 'approved', created_at: '2026-01-01' },
-    ], total: 2 },
+    '/api/access-grants/my-requests': (url: string) => {
+      const all = [
+        { id: 'g1', entity_name: 'Sales tables', entity_id: 'e1', entity_type: 'asset',
+          status: 'pending', created_at: '2026-03-01' },
+        { id: 'g2', entity_name: 'Old', entity_id: 'e2', entity_type: 'asset',
+          status: 'approved', created_at: '2026-01-01' },
+      ];
+      const status = new URL(url, 'http://x').searchParams.get('status');
+      const requests = status ? all.filter((r) => r.status === status) : all;
+      return { requests, total: requests.length };
+    },
     '/api/semantic-models/stats': { stats: { taxonomies: [], total_concepts: 7,
       total_properties: 0 } },
   };
@@ -315,6 +320,17 @@ describe('Home by role home section', () => {
     expect(state.calls).toContain('/api/data-asset-reviews?limit=500');
   });
 
+  it('the pending count is the server total, not the size of the page read', async () => {
+    state.routes['/api/access-grants/my-requests'] = {
+      requests: [{ id: 'g1', entity_name: 'Sales tables', entity_id: 'e1',
+        entity_type: 'asset', status: 'pending', created_at: '2026-03-01' }],
+      total: 37,
+    };
+    applyJourneyRole();
+    renderWithProviders(<Home />);
+    expect(await screen.findByText('My pending requests (37)')).toBeInTheDocument();
+  });
+
   it('Maintain shows my pending requests and my open reviews', async () => {
     applyJourneyRole();
     renderWithProviders(<Home />);
@@ -322,6 +338,7 @@ describe('Home by role home section', () => {
     await waitFor(() => expect(within(requests).getByText('Sales tables')).toBeInTheDocument());
     expect(within(requests).queryByText('Old')).not.toBeInTheDocument();
     expect(within(requests).getByText('My pending requests (1)')).toBeInTheDocument();
+    expect(state.calls).toContain('/api/access-grants/my-requests?status=pending&limit=20');
     const reviews = screen.getByTestId('essentials-maintain-reviews');
     await waitFor(() => expect(within(reviews).getByText('Review r1')).toBeInTheDocument());
     expect(within(reviews).getByText('Review r1')).toHaveAttribute(

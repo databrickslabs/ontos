@@ -618,18 +618,69 @@ def _proposed_primary_domain(db: Session, payload: Dict[str, Any]) -> Optional[s
     return str(row[0]) if row else None
 
 
+# Derived fields of a contract an update can change (see _future_contract_fields)
+_FUTURE_CONTRACT_FIELDS = ('has_owner', 'has_purpose', 'has_description', 'schema_object_count')
+
+
+def _future_contract_fields(
+    db: Session, context: 'StepContext', payload: Dict[str, Any],
+    stored: Optional[Dict[str, Any]], proposed: Dict[str, Any],
+) -> Dict[str, Any]:
+    """A data contract's derived fields (``build_data_contract_dict``) after an update.
+
+    What the rules of the other triggers see (``_rule_object``): the
+    relationship and quality item counts, certification and publication flags
+    stay as stored (a contract update doesn't write them); ``has_owner``,
+    ``has_purpose`` / ``has_description`` and ``schema_object_count`` are
+    computed from the update when it sends the field (a ``contract_schema``
+    list replaces the schema objects), else from the stored row. Empty for
+    other types and without a stored contract.
+    """
+    if (context.entity_type or '').lower() != 'data_contract' or not stored:
+        return {}
+    from src.controller.entity_dict_builder import build_data_contract_dict
+    from src.db_models.data_contracts import DataContractDb
+
+    row = build_data_contract_dict(db, context.entity_id)
+    if not row:
+        return {}
+    columns = set(DataContractDb.__table__.columns.keys())
+    derived = {
+        key: value for key, value in row.items()
+        if key not in columns and key not in ('entity_type', 'tags', 'tag_count', 'has_tags')
+    }
+    owner = proposed.get('owner', stored.get('owner'))
+    purpose = proposed.get('description', stored.get('description'))
+    description = payload.get('description')
+    usage = payload.get('descriptionUsage') or (
+        description.get('usage') if isinstance(description, dict) else None
+    ) or row.get('description_usage')
+    derived['has_owner'] = bool(owner)
+    derived['has_purpose'] = bool(purpose)
+    derived['has_description'] = bool(purpose or usage)
+    if payload.get('contract_schema') is not None or payload.get('schema') is not None:
+        # As the manager picks the list it writes
+        schema = payload.get('contract_schema') or payload.get('schema') or []
+        derived['schema_object_count'] = len(schema) if isinstance(schema, list) else 0
+    return derived
+
+
 def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     """The entity as it will be after a before_update gate's update.
 
     What both WHERE and ASSERT of its policy check see: the stored entity as
     AppEntityLoader gives it, with the update's fields over it (also under the
     loader's keys), and the future tags (``_future_tags``) with their
-    ``tag_count`` / ``has_tags``, so ``HAS_TAG`` and the count agree. Fields
-    derived from the stored row that the update could change (``has_owner``,
-    relationship counts) are left out, as decided in #1019: they would
-    describe the entity before the update. A type the loader doesn't read, or
-    a step without an entity id, gets the payload with the update's values; a
-    stored entity that isn't found fails the step (``_compliance_entity``).
+    ``tag_count`` / ``has_tags``, so ``HAS_TAG`` and the count agree. A data
+    contract also gets the derived fields the other triggers' rules see
+    (``_future_contract_fields``: ``has_owner``, ``schema_object_count``...),
+    for the entity after the update. A type the loader doesn't read, or a step
+    without an entity id, gets the payload with the update's values; a stored
+    entity that isn't found fails the step (``_compliance_entity``).
+
+    Other request fields (``contract_schema``, ``servers``, ``team``, ``sla``...)
+    are overlaid in the request's shape, which isn't the shape other triggers
+    see: rules should read the loader's keys and the derived fields.
     """
     payload = context.entity if isinstance(context.entity, dict) else {}
     stored = _compliance_entity(db, context)
@@ -638,6 +689,7 @@ def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]
         with db.begin_nested():
             tags = _future_tags(db, payload, stored, _deferred_removals(context))
             proposed = _proposed_values(db, payload)
+            derived = _future_contract_fields(db, context, payload, stored, proposed)
     except Exception as e:
         raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
     stored = stored or {}
@@ -647,7 +699,9 @@ def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]
         key: value for key, value in payload.items()
         if key not in stored or (value is not None and key != 'description')
     }
-    state = {**stored, **sent, **proposed}
+    state = {**derived, **stored, **sent, **proposed}
+    # The derived fields describe the entity after the update, not the request
+    state.update({key: derived[key] for key in _FUTURE_CONTRACT_FIELDS if key in derived})
     if state.get('tags') is None:
         state.pop('tags', None)  # a null, with no stored tags to keep: none known
     if tags is not None:

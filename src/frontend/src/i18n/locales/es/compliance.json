@@ -186,7 +186,9 @@
       "no_access": "sin acceso a la tabla del sistema",
       "query_failed": "la consulta falló",
       "timed_out": "la consulta seguía en ejecución al alcanzar el límite de tiempo",
-      "budget_exceeded": "la ejecución alcanzó su límite de consultas en el SQL warehouse"
+      "budget_exceeded": "la ejecución alcanzó su límite de consultas en el SQL warehouse",
+      "transient": "el SQL warehouse no estuvo disponible temporalmente, ni siquiera tras los reintentos",
+      "not_found": "no se encontró la tabla del sistema (¿está habilitado el esquema del sistema?)"
     }
   },
   "saveErrors": {

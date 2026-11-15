@@ -58,6 +58,8 @@ REASON_NO_WAREHOUSE = 'no_warehouse'
 REASON_NO_ACCESS = 'no_access'
 REASON_QUERY_FAILED = 'query_failed'
 REASON_TIMED_OUT = 'timed_out'
+REASON_TRANSIENT = 'transient'
+REASON_NOT_FOUND = 'not_found'
 REASON_BUDGET_EXCEEDED = 'budget_exceeded'
 
 # Statements a run may send. A run is one policy run started by a user, or a
@@ -419,6 +421,8 @@ class WarehouseSqlRunner:
     WAIT_TIMEOUT = '50s'
     DEADLINE_SECONDS = 300
     POLL_SECONDS = 5
+    # A transient error (429, 503, a timeout) is retried after these waits
+    RETRY_BACKOFF_SECONDS = (2, 8)
 
     def __init__(
         self, workspace_client: Any, warehouse_id: str, *,
@@ -431,6 +435,19 @@ class WarehouseSqlRunner:
         self._sleep = sleep
 
     def rows(self, statement: str, parameters: Dict[str, str]) -> List[Dict[str, Any]]:
+        """Rows of the statement; a transient error is retried with backoff, and
+        is reported as ``transient`` when every attempt failed."""
+        for wait in self.RETRY_BACKOFF_SECONDS:
+            try:
+                return self._rows_once(statement, parameters)
+            except SourceUnavailable as e:
+                if e.reason != REASON_TRANSIENT:
+                    raise
+                logger.info("Transient error on the SQL warehouse, retrying in %ss: %s", wait, e)
+                self._sleep(wait)
+        return self._rows_once(statement, parameters)
+
+    def _rows_once(self, statement: str, parameters: Dict[str, str]) -> List[Dict[str, Any]]:
         from databricks.sdk.service.sql import (
             ExecuteStatementRequestOnWaitTimeout, StatementParameterListItem,
         )
@@ -450,8 +467,9 @@ class WarehouseSqlRunner:
             state = _state(response)
             if state != 'SUCCEEDED':
                 error = getattr(response.status, 'error', None)
+                code = getattr(getattr(error, 'error_code', None), 'value', None)
                 raise SourceUnavailable(
-                    _reason(getattr(error, 'message', '') or ''),
+                    _reason(getattr(error, 'message', '') or '', code),
                     f"statement {state}: {getattr(error, 'message', '')}",
                 )
             columns = [c.name for c in response.manifest.schema.columns]
@@ -466,7 +484,7 @@ class WarehouseSqlRunner:
         except SourceUnavailable:
             raise
         except Exception as e:
-            raise SourceUnavailable(_reason(str(e)), str(e)) from e
+            raise SourceUnavailable(_reason(str(e), error=e), str(e)) from e
         return [dict(zip(columns, row)) for row in data]
 
     def _wait(self, response: Any, deadline: float) -> Any:
@@ -492,8 +510,46 @@ def _state(response: Any) -> Optional[str]:
     return getattr(getattr(getattr(response, 'status', None), 'state', None), 'value', None)
 
 
-def _reason(message: str) -> str:
+# Statement error codes and SQL error classes, by reason
+_TRANSIENT_CODES = {
+    'TEMPORARILY_UNAVAILABLE', 'WORKSPACE_TEMPORARILY_UNAVAILABLE', 'SERVICE_UNDER_MAINTENANCE',
+    'RESOURCE_EXHAUSTED', 'DEADLINE_EXCEEDED', 'IO_ERROR',
+}
+_TRANSIENT_MARKERS = (
+    'TEMPORARILY_UNAVAILABLE', 'TOO_MANY_REQUESTS', 'RESOURCE_EXHAUSTED', 'DEADLINE_EXCEEDED',
+    'SERVICE_UNDER_MAINTENANCE', 'TIMED OUT', 'TIMEOUT',
+)
+_NOT_FOUND_MARKERS = ('TABLE_OR_VIEW_NOT_FOUND', 'SCHEMA_NOT_FOUND', 'CATALOG_NOT_FOUND')
+_NO_ACCESS_MARKERS = ('PERMISSION', 'NOT AUTHORIZED', 'INSUFFICIENT')
+
+
+def _reason(
+    message: str, error_code: Optional[str] = None, error: Optional[BaseException] = None,
+) -> str:
+    """The REASON_* code of a failed statement or SDK call."""
+    from databricks.sdk import errors as sdk_errors
+
     upper = message.upper()
-    if 'PERMISSION' in upper or 'NOT AUTHORIZED' in upper or 'INSUFFICIENT' in upper:
+    if isinstance(error, (sdk_errors.PermissionDenied, sdk_errors.Unauthenticated)) or any(
+        m in upper for m in _NO_ACCESS_MARKERS
+    ):
         return REASON_NO_ACCESS
+    # The system schema not enabled, or a system table not there
+    if (isinstance(error, sdk_errors.NotFound) or error_code == 'NOT_FOUND'
+            or any(m in upper for m in _NOT_FOUND_MARKERS)):
+        return REASON_NOT_FOUND
+    if (isinstance(error, (
+            sdk_errors.TooManyRequests, sdk_errors.TemporarilyUnavailable,
+            sdk_errors.DeadlineExceeded, ConnectionError, TimeoutError,
+    )) or _is_network_error(error) or error_code in _TRANSIENT_CODES
+            or any(m in upper for m in _TRANSIENT_MARKERS)):
+        return REASON_TRANSIENT
     return REASON_QUERY_FAILED
+
+
+def _is_network_error(error: Optional[BaseException]) -> bool:
+    try:
+        from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout
+    except ImportError:  # pragma: no cover - requests comes with the SDK
+        return False
+    return isinstance(error, (RequestsConnectionError, Timeout))

@@ -201,7 +201,9 @@ class TestDocumentUploadInvalidVolume:
         assert detail["code"] == "volume_invalid"
         assert detail["params"]["value"] == "a.b"
 
-    def test_a_cleared_volume_answers_a_coded_400_not_a_500(self, client: TestClient, test_settings):
+    def test_a_cleared_volume_answers_a_coded_400_not_a_500(
+        self, client: TestClient, test_settings
+    ):
         test_settings.DATABRICKS_VOLUME = None
         for url, extra in (
             ("/api/entities/asset/documents", {"params": {"entity_id": "asset-1"}}),

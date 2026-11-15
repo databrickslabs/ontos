@@ -43,7 +43,7 @@ def test_an_invalid_volume_is_rejected_with_a_code_and_params(manager, volume):
     assert raised.value.params["value"] == volume
 
 
-@pytest.mark.parametrize("volume", ["/Users/me/ontos-vol", "/tmp/ontos", "/data/vol"])
+@pytest.mark.parametrize("volume", ["/home/me/ontos-vol", "/tmp/ontos", "/data/vol"])
 def test_a_local_directory_is_saved_as_the_git_export_uses_it(manager, volume):
     # resolve_git_paths treats an absolute path outside /Volumes as a local directory
     _save(manager, {"databricks_volume": volume})
@@ -65,7 +65,7 @@ def test_the_bare_volumes_root_is_rejected(manager, volume):
     ("/Volumes/cat/sch/vol/", "/Volumes/cat/sch/vol"),
     ("  /Volumes/cat/sch/vol  ", "/Volumes/cat/sch/vol"),
     ("  cat.sch.vol ", "cat.sch.vol"),
-    ("//Users//me/vol/", "/Users/me/vol"),
+    ("//home//me/vol/", "/home/me/vol"),
 ])
 def test_the_volume_is_stored_in_its_canonical_form(manager, raw, canonical):
     _save(manager, {"databricks_volume": raw})

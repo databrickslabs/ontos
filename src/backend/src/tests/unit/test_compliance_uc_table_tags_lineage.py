@@ -414,7 +414,9 @@ def test_runner_passes_parameters_and_reads_every_chunk():
 
 @pytest.mark.parametrize('response, reason', [
     (_response('FAILED', error='PERMISSION_DENIED: User does not have USE SCHEMA'), 'no_access'),
-    (_response('FAILED', error='[TABLE_OR_VIEW_NOT_FOUND]'), 'query_failed'),
+    (_response('FAILED', error='[TABLE_OR_VIEW_NOT_FOUND] system.access.table_lineage'),
+     'not_found'),
+    (_response('FAILED', error='[DIVIDE_BY_ZERO]'), 'query_failed'),
     (_response('CANCELED'), 'query_failed'),
 ])
 def test_runner_turns_a_failed_statement_into_source_unavailable(response, reason):
@@ -422,9 +424,68 @@ def test_runner_turns_a_failed_statement_into_source_unavailable(response, reaso
     ws.statement_execution.execute_statement.return_value = response
 
     with pytest.raises(SourceUnavailable) as raised:
-        WarehouseSqlRunner(ws, 'wh-1').rows('SELECT 1', {})
+        _runner(ws, FakeClock()).rows('SELECT 1', {})
 
     assert raised.value.reason == reason
+    # Not transient: sent once
+    assert ws.statement_execution.execute_statement.call_count == 1
+
+
+def _sdk_error(cls, message):
+    from databricks.sdk import errors
+    return getattr(errors, cls)(message)
+
+
+@pytest.mark.parametrize('error', [
+    _sdk_error('TooManyRequests', 'rate limited'),
+    _sdk_error('TemporarilyUnavailable', 'warehouse starting'),
+    _sdk_error('DeadlineExceeded', 'deadline'),
+    TimeoutError('read timed out'),
+])
+def test_runner_retries_a_transient_error_and_then_succeeds(error):
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.side_effect = [
+        error, _response('SUCCEEDED', rows=[['1', 'x']]),
+    ]
+    clock = FakeClock()
+
+    rows = _runner(ws, clock).rows('SELECT 1', {})
+
+    assert rows == [{'a': '1', 'b': 'x'}]
+    assert clock.sleeps == [WarehouseSqlRunner.RETRY_BACKOFF_SECONDS[0]]
+
+
+def test_runner_reports_transient_when_every_attempt_fails():
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.return_value = SimpleNamespace(
+        statement_id='st-1',
+        status=SimpleNamespace(
+            state=SimpleNamespace(value='FAILED'),
+            error=SimpleNamespace(message='busy', error_code=SimpleNamespace(
+                value='TEMPORARILY_UNAVAILABLE')),
+        ),
+    )
+    clock = FakeClock()
+
+    with pytest.raises(SourceUnavailable) as raised:
+        _runner(ws, clock).rows('SELECT 1', {})
+
+    assert raised.value.reason == 'transient'
+    attempts = len(WarehouseSqlRunner.RETRY_BACKOFF_SECONDS) + 1
+    assert ws.statement_execution.execute_statement.call_count == attempts
+    assert clock.sleeps == list(WarehouseSqlRunner.RETRY_BACKOFF_SECONDS)
+
+
+def test_runner_reports_not_found_for_the_sdk_not_found_error():
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.side_effect = _sdk_error(
+        'NotFound', 'schema system.access does not exist',
+    )
+
+    with pytest.raises(SourceUnavailable) as raised:
+        _runner(ws, FakeClock()).rows('SELECT 1', {})
+
+    assert raised.value.reason == 'not_found'
 
 
 def test_runner_turns_an_sdk_error_into_source_unavailable():

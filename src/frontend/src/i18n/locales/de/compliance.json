@@ -186,7 +186,9 @@
       "no_access": "kein Zugriff auf die Systemtabelle",
       "query_failed": "die Abfrage ist fehlgeschlagen",
       "timed_out": "die Abfrage lief beim Zeitlimit noch",
-      "budget_exceeded": "der Lauf hat sein Limit an Abfragen auf dem SQL-Warehouse erreicht"
+      "budget_exceeded": "der Lauf hat sein Limit an Abfragen auf dem SQL-Warehouse erreicht",
+      "transient": "das SQL-Warehouse war vorübergehend nicht verfügbar, auch nach erneuten Versuchen",
+      "not_found": "die Systemtabelle wurde nicht gefunden (ist das Systemschema aktiviert?)"
     }
   },
   "saveErrors": {

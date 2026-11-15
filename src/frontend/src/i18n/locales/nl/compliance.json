@@ -186,7 +186,9 @@
       "no_access": "geen toegang tot de systeemtabel",
       "query_failed": "de query is mislukt",
       "timed_out": "de query liep nog bij de tijdslimiet",
-      "budget_exceeded": "de uitvoering heeft haar limiet aan query's op het SQL-warehouse bereikt"
+      "budget_exceeded": "de uitvoering heeft haar limiet aan query's op het SQL-warehouse bereikt",
+      "transient": "het SQL-warehouse was tijdelijk niet beschikbaar, ook na nieuwe pogingen",
+      "not_found": "de systeemtabel is niet gevonden (is het systeemschema ingeschakeld?)"
     }
   },
   "saveErrors": {

@@ -186,7 +186,9 @@
       "no_access": "no access to the system table",
       "query_failed": "the query failed",
       "timed_out": "the query was still running at the time limit",
-      "budget_exceeded": "the run reached its limit of statements on the SQL warehouse"
+      "budget_exceeded": "the run reached its limit of statements on the SQL warehouse",
+      "transient": "the SQL warehouse was temporarily unavailable, also after retries",
+      "not_found": "the system table was not found (is the system schema enabled?)"
     }
   },
   "saveErrors": {

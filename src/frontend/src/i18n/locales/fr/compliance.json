@@ -186,7 +186,9 @@
       "no_access": "pas d'accès à la table système",
       "query_failed": "la requête a échoué",
       "timed_out": "la requête était encore en cours à la limite de temps",
-      "budget_exceeded": "l'exécution a atteint sa limite de requêtes sur le SQL warehouse"
+      "budget_exceeded": "l'exécution a atteint sa limite de requêtes sur le SQL warehouse",
+      "transient": "le SQL warehouse était temporairement indisponible, même après de nouvelles tentatives",
+      "not_found": "la table système est introuvable (le schéma système est-il activé ?)"
     }
   },
   "saveErrors": {

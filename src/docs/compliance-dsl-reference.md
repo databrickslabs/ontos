@@ -397,6 +397,10 @@ MATCH (v:view) ASSERT v.downstream_count > 0 OR HAS_TAG('deprecated')
 A statement that is still running after 50 seconds keeps running and is polled; one still
 running after 5 minutes is cancelled (reason `timed_out`).
 
+A transient error (the warehouse busy or starting, a rate limit, a network timeout) is
+retried twice with backoff before the source is reported as unavailable (reason
+`transient`); a missing system table or schema has the reason `not_found`.
+
 If a source can't be read (no SQL warehouse configured, no access to the system table, the
 statement fails or times out), its fields are left out and every entity whose rule reads them gets a failed
 result marked *not evaluated* with the field, the source and the reason; its `ON_PASS` /

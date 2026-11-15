@@ -792,3 +792,35 @@ class TestCacheMiss:
         row = SimpleNamespace(status='draft', lifecycle_stage_group_id='no-such-group')
         with pytest.raises(LifecycleGroupNotFoundError):
             lifecycle_service.check_transition(db_session, 'data_product', row, 'sandbox')
+
+
+class TestCategoryChangeInUse:
+    def test_a_stage_with_entities_cant_leave_the_active_category(self, db_session):
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        _product(db_session, 'active', group.id, publication_scope='organization')
+        changed = _looping_group()
+        changed['stages'][1]['category'] = 'draft'
+        changed['stages'][2]['category'] = 'active'  # keep one active stage
+        with pytest.raises(LifecycleGroupConflictError) as err:
+            lifecycle_service.save_group(db_session, changed, 'admin', group_id=group.id)
+        assert err.value.code == 'lifecycle_stage_category_in_use'
+        assert err.value.params == {
+            'key': 'active', 'fromCategory': 'active', 'toCategory': 'draft', 'count': 1,
+        }
+
+    def test_a_stage_in_use_may_move_between_draft_and_review(self, db_session):
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        _product(db_session, 'needs_review', group.id)
+        changed = _looping_group()
+        changed['stages'][2]['category'] = 'draft'
+        saved = lifecycle_service.save_group(db_session, changed, 'admin', group_id=group.id)
+        assert {s.key: s.category for s in saved.stages}['needs_review'] == 'draft'
+
+    def test_an_empty_stage_may_leave_the_active_category(self, db_session):
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        _product(db_session, 'draft', group.id)
+        changed = _looping_group()
+        changed['stages'][1]['category'] = 'review'
+        changed['stages'][2]['category'] = 'active'
+        saved = lifecycle_service.save_group(db_session, changed, 'admin', group_id=group.id)
+        assert {s.key: s.category for s in saved.stages}['active'] == 'review'

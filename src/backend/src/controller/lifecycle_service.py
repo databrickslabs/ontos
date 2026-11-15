@@ -43,7 +43,11 @@ _CACHE_SECONDS = 30.0
 
 ONTOS_LIFECYCLE_STAGE_PROPERTY = 'ontosLifecycleStage'
 ONTOS_LIFECYCLE_STAGE_GROUP_PROPERTY = 'ontosLifecycleStageGroup'
-LIFECYCLE_PROPERTIES = (ONTOS_LIFECYCLE_STAGE_PROPERTY, ONTOS_LIFECYCLE_STAGE_GROUP_PROPERTY)
+ONTOS_LIFECYCLE_STAGE_GROUP_ID_PROPERTY = 'ontosLifecycleStageGroupId'
+LIFECYCLE_PROPERTIES = (
+    ONTOS_LIFECYCLE_STAGE_PROPERTY, ONTOS_LIFECYCLE_STAGE_GROUP_PROPERTY,
+    ONTOS_LIFECYCLE_STAGE_GROUP_ID_PROPERTY,
+)
 
 # Named actions: (seeded stage key, Stage Categories of the target, tried in order).
 # A group with the seeded stage uses it; one without it, the categories.
@@ -642,7 +646,8 @@ class LifecycleService:
         self, db: Optional[Session], entity_type: str, entity: Any,
     ) -> Tuple[str, Dict[str, str]]:
         """The ODCS / ODPS ``status`` (the category's standard value) and the
-        ``ontosLifecycleStage`` / ``ontosLifecycleStageGroup`` custom properties."""
+        ``ontosLifecycleStage`` / ``ontosLifecycleStageGroup`` /
+        ``ontosLifecycleStageGroupId`` custom properties (the id survives a rename)."""
         group = self.group_for(db, entity_type, entity)
         key = _normalized(getattr(entity, 'status', None)) or 'draft'
         # A status that isn't a stage of the group (stored before the clean-up):
@@ -652,6 +657,7 @@ class LifecycleService:
         return status, {
             ONTOS_LIFECYCLE_STAGE_PROPERTY: key,
             ONTOS_LIFECYCLE_STAGE_GROUP_PROPERTY: group.name,
+            ONTOS_LIFECYCLE_STAGE_GROUP_ID_PROPERTY: group.id or DEFAULT_GROUP_IDS[entity_type],
         }
 
     def import_stage(
@@ -659,10 +665,12 @@ class LifecycleService:
     ) -> Tuple[Optional[str], Optional[str], Optional[Dict[str, Any]]]:
         """``(group_id, stage key, note)`` of an imported entity.
 
-        Pops ``ontosLifecycleStage`` / ``ontosLifecycleStageGroup`` from
-        ``customProperties`` (list or dict form). The stage and group are
-        restored when this install has a group of that name with that stage
-        (the default group when no group is named or it is unknown here).
+        Pops ``ontosLifecycleStage`` / ``ontosLifecycleStageGroup`` /
+        ``ontosLifecycleStageGroupId`` from ``customProperties`` (list or dict
+        form). The stage and group are restored when this install has a group of
+        that id (of that name when the id is unknown here, e.g. another install)
+        with that stage (the default group when no group is named or it is
+        unknown here).
         Otherwise the status is kept when it is a stage key of the default
         group, or mapped by Stage Category to the first stage of its category
         (``proposed`` -> the first review stage). ``stage key`` None = let the
@@ -671,9 +679,17 @@ class LifecycleService:
         props = pop_lifecycle_properties(custom_props)
         stage_key = _normalized(props.get(ONTOS_LIFECYCLE_STAGE_PROPERTY))
         group_name = str(props.get(ONTOS_LIFECYCLE_STAGE_GROUP_PROPERTY) or '').strip()
+        group_id = str(props.get(ONTOS_LIFECYCLE_STAGE_GROUP_ID_PROPERTY) or '').strip()
         default = self.default_group(db, entity_type)
         named = None
-        if group_name:
+        if group_id:
+            self._ensure(db)
+            by_id = self._groups.get(group_id)
+            if by_id is None and group_id == DEFAULT_GROUP_IDS[entity_type]:
+                by_id = default
+            if by_id is not None and by_id.entity_type == entity_type:
+                named = by_id
+        if named is None and group_name:
             named = next(
                 (g for g in self.groups(db, entity_type) if g.name.lower() == group_name.lower()),
                 None,
@@ -681,7 +697,7 @@ class LifecycleService:
                                       else None)
         group = named or default
         note = None
-        if group_name and named is None:
+        if (group_name or group_id) and named is None:
             note = {
                 'code': 'imported_lifecycle_group_unknown',
                 'params': {'group': group_name, 'mappedTo': default.name},

@@ -157,7 +157,16 @@ ASSERT LLM_CHECK(t.comment, 'states the grain of the table')
 
 MATCH (d:domain)
 ASSERT LLM_CHECK(d.description, 'says who uses the data and for what')
+
+MATCH (t:table)
+ASSERT LENGTH(t.comment) >= 40 AND LLM_CHECK(t.comment, 'states the grain of the table')
 ```
+
+Put a deterministic floor next to the check, as in the last example: the
+model's verdict is a judgment, and a text written to steer it (prompt
+injection) is only caught by the safety scan and the prompt, not by code. A
+rule that also requires a minimum length fails short or empty texts without a
+call, whatever the model answers, and saves calls.
 
 The criterion must be a string literal: an expression such as `t.name` is
 rejected when the rule is saved (`llm_check_criterion_not_literal`), because it

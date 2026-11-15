@@ -228,3 +228,43 @@ class TestOutputPortChanges:
         new = _with_ports("outputPorts", [_out()])
 
         assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.NONE
+
+
+class TestPortIdentity:
+    """The repository keeps an output port by id, the analyzer matches by name."""
+
+    def test_same_name_with_a_new_id_is_breaking(self):
+        old = _with_ports("outputPorts", [_out(id="p1")])
+        new = _with_ports("outputPorts", [_out(id="p2")])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert any("Recreated" in c for c in result.breaking_changes)
+
+    def test_same_name_without_an_id_is_breaking(self):
+        old = _with_ports("outputPorts", [_out(id="p1")])
+        new = _with_ports("outputPorts", [_out()])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.BREAKING
+
+    def test_same_id_is_not_a_change(self):
+        old = _with_ports("outputPorts", [_out(id="p1")])
+        new = _with_ports("outputPorts", [_out(id="p1")])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.NONE
+
+    def test_ids_are_ignored_when_the_old_side_has_none(self):
+        old = _with_ports("outputPorts", [_out()])
+        new = _with_ports("outputPorts", [_out(id="p1")])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.NONE
+
+    def test_dropping_one_of_two_same_named_ports_is_seen(self):
+        old = _with_ports("outputPorts", [_out(id="p1"), _out(id="p2")])
+        new = _with_ports("outputPorts", [_out(id="p1")])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert any("Removed" in c for c in result.breaking_changes)

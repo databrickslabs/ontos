@@ -218,6 +218,8 @@ class TestDataProductRoutes:
         ]
         response = client.post("/api/data-products", json=sample_product_data)
         assert response.status_code == 201, response.text
+        # Ports as stored (with their ids), as a client reading them back sends them
+        sample_product_data["outputPorts"] = response.json()["outputPorts"]
         return response.json()["id"]
 
     def test_update_active_product_removing_output_port_requires_new_version(
@@ -249,6 +251,19 @@ class TestDataProductRoutes:
 
         assert response.status_code == 200, response.text
         assert len(response.json()["outputPorts"]) == 2
+
+    def test_update_active_product_recreating_an_output_port_requires_new_version(
+        self, client, sample_product_data
+    ):
+        """A same-named port sent without its id is a new port: consumers lose the old one."""
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a"])
+        port = {k: v for k, v in sample_product_data["outputPorts"][0].items() if k != "id"}
+        update = {**sample_product_data, "id": product_id, "outputPorts": [port]}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["requires_versioning"] is True
 
     def test_update_active_product_without_ports_in_body_keeps_ports(
         self, client, sample_product_data

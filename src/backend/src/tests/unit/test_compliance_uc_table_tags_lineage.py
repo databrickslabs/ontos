@@ -98,8 +98,20 @@ def test_tags_statement_is_scoped_by_catalog_and_schemas_with_parameters():
     statement, params = enr.tags_statement('Main', {'sales', 'Ops'})
 
     assert enr.TABLE_TAGS_SOURCE in statement and enr.COLUMN_TAGS_SOURCE in statement
-    assert statement.count('catalog_name = :catalog AND schema_name IN (:s0, :s1)') == 2
+    assert statement.count(
+        'lower(catalog_name) = :catalog AND lower(schema_name) IN (:s0, :s1)') == 2
     assert params == {'catalog': 'main', 's0': 'ops', 's1': 'sales'}
+
+
+def test_tags_statement_matches_mixed_case_names_and_rows_map_without_case():
+    statement, params = enr.tags_statement('Main', ['Sales'])
+
+    assert params == {'catalog': 'main', 's0': 'sales'}
+    assert statement.count('lower(catalog_name) = :catalog') == 2
+    assert statement.count('lower(schema_name) IN (:s0)') == 2
+    entity = enr.table_entity(_table('Orders', schema='Sales', catalog='Main'))
+    enr.apply_tag_rows([entity], [_tag('ORDERS', 'pii', schema='SALES')])
+    assert entity['tags'] == {'pii': True}
 
 
 def test_lineage_statement_has_a_bounded_window_and_counts_distinct_tables():

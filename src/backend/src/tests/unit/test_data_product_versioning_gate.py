@@ -99,3 +99,13 @@ def test_a_refused_caller_gets_a_permission_error_not_the_versioning_error(
         manager.update_product_with_auth(
             row.id, _keep_first(row), 'carl@example.com', [], db=db_session
         )
+
+
+def test_product_dict_uses_field_names_the_analyzer_reads(manager, db_session):
+    """GET .../diff-from-parent and the edit check both build this dict."""
+    row = _product(db_session)
+
+    product = manager._product_db_to_dict(row)
+
+    assert [p['name'] for p in product['outputPorts']] == ['a', 'b']
+    assert 'output_ports' not in product

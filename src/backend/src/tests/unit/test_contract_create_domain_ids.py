@@ -7,6 +7,7 @@ choice was dropped silently.
 import uuid
 from pathlib import Path
 
+import pytest
 from sqlalchemy.orm import Session
 
 from src.controller.data_contracts_manager import DataContractsManager
@@ -67,3 +68,34 @@ def test_create_assigns_the_picked_domains(db_session: Session):
     )
     assert {d.domain_id for d in domains} == {first, second}
     assert [d.domain_id for d in domains if d.is_primary] == [second]
+
+
+def _create(db: Session, **fields):
+    payload = DataContractCreate.model_validate(
+        {"name": f"Orders {uuid.uuid4().hex[:6]}", "version": "1.0.0", **fields}
+    )
+    return _manager().create_contract_with_relations(
+        db=db, contract_data=payload, current_user="alice@example.com",
+    )
+
+
+def test_create_stores_the_other_fields_sent_by_name(db_session: Session):
+    """populate_by_name makes every aliased field of DataContractBase readable by
+    name, not only the domains: the ones the create path stores are kept."""
+    created = _create(db_session, dataProduct="orders-dp", apiVersion="v3.0.2")
+
+    assert (created.data_product, created.api_version) == ("orders-dp", "v3.0.2")
+
+
+def test_create_still_stores_the_other_fields_sent_by_alias(db_session: Session):
+    created = _create(db_session, data_product="orders-dp", api_version="v3.0.2")
+
+    assert (created.data_product, created.api_version) == ("orders-dp", "v3.0.2")
+
+
+@pytest.mark.parametrize("key", ["domainIds", "domain_ids"])
+def test_create_refuses_an_unknown_domain_id(db_session: Session, key):
+    """An unknown domain id is refused (the route answers 400), not dropped."""
+    with pytest.raises(ValueError, match="not found"):
+        _create(db_session, **{key: [str(uuid.uuid4())]})
+

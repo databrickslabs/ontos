@@ -306,7 +306,8 @@
       "markdown_import_path_not_found": "「{{path}}」には何も見つかりませんでした。",
       "markdown_import_access_denied": "「{{path}}」を読み取る権限がありません。ボリュームの READ VOLUME 権限を依頼してください。",
       "markdown_import_too_many_files": "「{{path}}」には {{max}} 個を超える Markdown ファイルがあります。より小さいフォルダーをインポートしてください。",
-      "failed": "インポートに失敗しました。"
+      "failed": "インポートに失敗しました。",
+      "markdown_import_in_progress": "別の Markdown インポートを実行中です。終了してから再試行してください。"
     },
     "warnings": {
       "empty_folder": "ここに Markdown ファイルが見つからなかったため、このフォルダーから以前インポートしたドキュメントは保持されました。"

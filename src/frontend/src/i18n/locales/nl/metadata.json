@@ -306,7 +306,8 @@
       "markdown_import_path_not_found": "Er is niets gevonden op \"{{path}}\".",
       "markdown_import_access_denied": "U kunt \"{{path}}\" niet lezen. Vraag READ VOLUME aan op het volume.",
       "markdown_import_too_many_files": "\"{{path}}\" bevat meer dan {{max}} Markdown-bestanden. Importeer een kleinere map.",
-      "failed": "Het importeren is mislukt."
+      "failed": "Het importeren is mislukt.",
+      "markdown_import_in_progress": "Er loopt al een andere Markdown-import. Probeer het opnieuw wanneer die klaar is."
     },
     "warnings": {
       "empty_folder": "Hier zijn geen Markdown-bestanden gevonden, dus de eerder uit deze map geïmporteerde documenten zijn behouden."

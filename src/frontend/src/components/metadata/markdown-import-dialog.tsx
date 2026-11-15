@@ -50,6 +50,7 @@ const ERROR_CODES = new Set([
   'markdown_import_path_not_found',
   'markdown_import_access_denied',
   'markdown_import_too_many_files',
+  'markdown_import_in_progress',
 ]);
 
 const UNRESOLVED_KEYS: Record<string, string> = {

@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy import Column, String, Text, Integer, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
-from sqlalchemy import TIMESTAMP, Index
+from sqlalchemy import TIMESTAMP, Index, text
 
 from src.common.database import Base
 
@@ -119,7 +119,16 @@ class DocumentMetadataDb(Base):
     __table_args__ = (
         Index("ix_document_entity", "entity_type", "entity_id"),
         Index("ix_document_shared", "is_shared"),
-        Index("ix_document_source_path", "source_path"),
+        # One imported document per (source file, entity): two overlapping
+        # imports can't both add it. Leads with source_path, so it also serves
+        # the lookups by source file.
+        Index(
+            "uq_document_imported_target",
+            "source_path", "entity_type", "entity_id",
+            unique=True,
+            postgresql_where=text("source_path IS NOT NULL"),
+            sqlite_where=text("source_path IS NOT NULL"),
+        ),
     )
 
 

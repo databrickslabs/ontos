@@ -212,6 +212,30 @@ class TestListing:
         assert raised.value.params == {'path': '/Volumes/c/s/v', 'max': 2}
 
 
+class TestImportLock:
+    @staticmethod
+    def _db(dialect, locked=True):
+        db = MagicMock()
+        db.get_bind.return_value.dialect.name = dialect
+        db.execute.return_value.scalar.return_value = locked
+        return db
+
+    def test_a_running_import_refuses_the_next_one_on_postgres(self):
+        db = self._db('postgresql', locked=False)
+        with pytest.raises(mim.MarkdownImportInProgressError) as raised:
+            mim.acquire_import_lock(db, '/Volumes/c/s/v')
+        assert raised.value.code == 'markdown_import_in_progress'
+        assert 'pg_try_advisory_xact_lock' in str(db.execute.call_args.args[0])
+
+    def test_a_free_lock_lets_it_run(self):
+        mim.acquire_import_lock(self._db('postgresql', locked=True), '/Volumes/c/s/v')
+
+    def test_other_databases_rely_on_the_unique_index(self):
+        db = self._db('sqlite')
+        mim.acquire_import_lock(db, '/Volumes/c/s/v')
+        db.execute.assert_not_called()
+
+
 class TestFileFailures:
     @pytest.mark.parametrize('content, size, reason', [
         (b'\xff\xfe\x00bad', None, 'not_utf8'),

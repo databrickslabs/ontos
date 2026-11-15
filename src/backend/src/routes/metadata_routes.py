@@ -692,6 +692,7 @@ def import_markdown_from_volume(
         status_code = {
             'markdown_import_path_not_found': 404,
             'markdown_import_access_denied': 403,
+            'markdown_import_in_progress': 409,
         }.get(e.code, 400)
         raise HTTPException(status_code=status_code, detail=str(e)) from e
     except Exception:

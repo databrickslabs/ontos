@@ -9,7 +9,9 @@ entities their front matter names. ``source_path`` is the file they came from,
 ``content_hash`` (SHA-256 of the file) tells a re-run whether the file changed,
 and ``content_text`` keeps the Markdown, so search can index it and the document
 opens without reading the source volume again. Uploaded documents leave the
-three columns empty.
+three columns empty. A partial unique index on (source_path, entity_type,
+entity_id) keeps one imported document per file and entity, also when two
+imports overlap.
 """
 from typing import Sequence, Union
 
@@ -28,11 +30,16 @@ def upgrade() -> None:
     op.add_column('document_metadata',
                   sa.Column('content_hash', sa.String(length=64), nullable=True))
     op.add_column('document_metadata', sa.Column('content_text', sa.Text(), nullable=True))
-    op.create_index('ix_document_source_path', 'document_metadata', ['source_path'])
+    op.create_index(
+        'uq_document_imported_target', 'document_metadata',
+        ['source_path', 'entity_type', 'entity_id'], unique=True,
+        postgresql_where=sa.text('source_path IS NOT NULL'),
+        sqlite_where=sa.text('source_path IS NOT NULL'),
+    )
 
 
 def downgrade() -> None:
-    op.drop_index('ix_document_source_path', table_name='document_metadata')
+    op.drop_index('uq_document_imported_target', table_name='document_metadata')
     op.drop_column('document_metadata', 'content_text')
     op.drop_column('document_metadata', 'content_hash')
     op.drop_column('document_metadata', 'source_path')

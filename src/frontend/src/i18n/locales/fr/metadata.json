@@ -306,7 +306,8 @@
       "markdown_import_path_not_found": "Rien n’a été trouvé à « {{path}} ».",
       "markdown_import_access_denied": "Vous ne pouvez pas lire « {{path}} ». Demandez READ VOLUME sur le volume.",
       "markdown_import_too_many_files": "« {{path}} » contient plus de {{max}} fichiers Markdown. Importez un dossier plus petit.",
-      "failed": "L’importation a échoué."
+      "failed": "L’importation a échoué.",
+      "markdown_import_in_progress": "Une autre importation Markdown est en cours. Réessayez lorsqu'elle sera terminée."
     },
     "warnings": {
       "empty_folder": "Aucun fichier Markdown trouvé ici : les documents importés auparavant depuis ce dossier ont été conservés."

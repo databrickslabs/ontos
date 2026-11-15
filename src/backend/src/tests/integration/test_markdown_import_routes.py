@@ -552,6 +552,35 @@ def test_an_error_on_one_file_rolls_back_only_that_file(
         hit.get('extra_data', {}).get('source_path') for hit in hits if hit['type'] == 'document'}
 
 
+def test_a_second_document_for_the_same_file_and_entity_is_refused(db_session, domain):
+    import sqlalchemy as sa
+
+    def imported():
+        return DocumentMetadataDb(
+            entity_type='data_domain', entity_id=domain.id, title='Twice',
+            original_filename='t.md', storage_path=f'{ROOT}/t.md', source_path=f'{ROOT}/t.md',
+            content_hash='h', content_text='x')
+    db_session.add(imported())
+    db_session.flush()
+
+    with pytest.raises(sa.exc.IntegrityError):
+        with db_session.begin_nested():
+            db_session.add(imported())
+
+
+def test_a_concurrent_import_answers_409(client, volume, monkeypatch):
+    from src.controller import markdown_import_manager as mim
+
+    def busy(db, root):
+        raise mim.MarkdownImportInProgressError('busy', path=root)
+    monkeypatch.setattr(mim, 'acquire_import_lock', busy)
+
+    response = _import(client)
+
+    assert response.status_code == 409, response.text
+    assert response.json()['detail']['code'] == 'markdown_import_in_progress'
+
+
 def test_an_empty_listing_removes_nothing_and_warns(client, db_session, domain, asset, volume):
     assert _import(client).status_code == 200
     before = _sources(db_session)

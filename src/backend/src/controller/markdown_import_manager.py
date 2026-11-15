@@ -25,13 +25,14 @@ import hashlib
 import json
 import posixpath
 import re
+import zlib
 from typing import Any, Collection, Dict, List, Optional, Tuple
 from uuid import UUID
 
 import yaml
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import BadRequest, NotFound, PermissionDenied, Unauthenticated
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from src.common.api_errors import CodedValueError
@@ -95,6 +96,36 @@ class MarkdownImportTooManyFilesError(CodedValueError):
     """The folder holds more Markdown files than one import takes."""
 
     code = 'markdown_import_too_many_files'
+
+
+class MarkdownImportInProgressError(CodedValueError):
+    """Another Markdown import is running; this one would race it."""
+
+    code = 'markdown_import_in_progress'
+
+
+# Key of the Postgres advisory lock that serializes imports (held until commit).
+_IMPORT_LOCK_KEY = zlib.crc32(b'ontos.markdown_import')
+
+
+def acquire_import_lock(db: Session, root: str) -> None:
+    """Take the import lock for this transaction, or refuse at once.
+
+    Two runs at the same time (a double click, two users) would both find no
+    document for a file and both add one; the unique index catches the
+    duplicate, the lock keeps the second run from failing file by file.
+    Postgres only (an advisory lock); elsewhere the unique index alone guards.
+
+    Raises:
+        MarkdownImportInProgressError: Another import holds the lock.
+    """
+    if db.get_bind().dialect.name != 'postgresql':
+        return
+    locked = db.execute(text("SELECT pg_try_advisory_xact_lock(:key)"),
+                        {'key': _IMPORT_LOCK_KEY}).scalar()
+    if not locked:
+        raise MarkdownImportInProgressError(
+            f"Another Markdown import is running; retry {root} when it ends", path=root)
 
 
 class FrontMatterError(ValueError):
@@ -301,9 +332,11 @@ class MarkdownImportManager:
 
         Raises:
             MarkdownImportPathInvalidError, MarkdownImportPathNotFoundError,
-            MarkdownImportAccessDeniedError, MarkdownImportTooManyFilesError
+            MarkdownImportAccessDeniedError, MarkdownImportTooManyFilesError,
+            MarkdownImportInProgressError
         """
         root = normalize_volume_path(path)
+        acquire_import_lock(db, root)
         unread: List[str] = []
         files = self._list_markdown_files(ws, root, unread)
         resolver = _TargetResolver(db, self._semantic, writable_kinds)

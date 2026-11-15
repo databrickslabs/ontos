@@ -18,7 +18,8 @@ needs them gets. The query building and row mapping are pure; the only I/O is
 the ``SqlRunner`` passed in, so assets pointing to a UC table can reuse this.
 """
 
-from typing import Any, Dict, Iterable, List, Optional, Protocol, Set, Tuple
+import time
+from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Set, Tuple
 
 from src.common.compliance_dsl import (
     BinaryOp, CaseExpression, FunctionCall, ListLiteral, PropertyAccess, TokenType, UnaryOp,
@@ -56,6 +57,7 @@ UNAVAILABLE_KEY = '_unavailable'
 REASON_NO_WAREHOUSE = 'no_warehouse'
 REASON_NO_ACCESS = 'no_access'
 REASON_QUERY_FAILED = 'query_failed'
+REASON_TIMED_OUT = 'timed_out'
 
 
 class SourceUnavailable(Exception):
@@ -280,13 +282,26 @@ def enrich_catalog_tables(
 
 
 class WarehouseSqlRunner:
-    """Runs statements on a SQL warehouse through the Statement Execution API."""
+    """Runs statements on a SQL warehouse through the Statement Execution API.
+
+    A statement still running after the first wait is not cancelled: it is
+    polled until it ends or ``DEADLINE_SECONDS`` have passed since it was
+    sent, and only then cancelled (reason ``timed_out``).
+    """
 
     WAIT_TIMEOUT = '50s'
+    DEADLINE_SECONDS = 300
+    POLL_SECONDS = 5
 
-    def __init__(self, workspace_client: Any, warehouse_id: str):
+    def __init__(
+        self, workspace_client: Any, warehouse_id: str, *,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ):
         self.ws = workspace_client
         self.warehouse_id = warehouse_id
+        self._clock = clock
+        self._sleep = sleep
 
     def rows(self, statement: str, parameters: Dict[str, str]) -> List[Dict[str, Any]]:
         from databricks.sdk.service.sql import (
@@ -294,6 +309,7 @@ class WarehouseSqlRunner:
         )
 
         try:
+            deadline = self._clock() + self.DEADLINE_SECONDS
             response = self.ws.statement_execution.execute_statement(
                 statement=statement,
                 warehouse_id=self.warehouse_id,
@@ -301,9 +317,10 @@ class WarehouseSqlRunner:
                     StatementParameterListItem(name=k, value=v) for k, v in parameters.items()
                 ],
                 wait_timeout=self.WAIT_TIMEOUT,
-                on_wait_timeout=ExecuteStatementRequestOnWaitTimeout.CANCEL,
+                on_wait_timeout=ExecuteStatementRequestOnWaitTimeout.CONTINUE,
             )
-            state = getattr(getattr(response.status, 'state', None), 'value', None)
+            response = self._wait(response, deadline)
+            state = _state(response)
             if state != 'SUCCEEDED':
                 error = getattr(response.status, 'error', None)
                 raise SourceUnavailable(
@@ -324,6 +341,28 @@ class WarehouseSqlRunner:
         except Exception as e:
             raise SourceUnavailable(_reason(str(e)), str(e)) from e
         return [dict(zip(columns, row)) for row in data]
+
+    def _wait(self, response: Any, deadline: float) -> Any:
+        """Poll a statement still pending or running until it ends or the deadline."""
+        while _state(response) in _RUNNING_STATES:
+            if self._clock() >= deadline:
+                try:
+                    self.ws.statement_execution.cancel_execution(response.statement_id)
+                except Exception:
+                    logger.warning("Could not cancel statement %s", response.statement_id)
+                raise SourceUnavailable(
+                    REASON_TIMED_OUT, f"statement still running after {self.DEADLINE_SECONDS}s",
+                )
+            self._sleep(self.POLL_SECONDS)
+            response = self.ws.statement_execution.get_statement(response.statement_id)
+        return response
+
+
+_RUNNING_STATES = ('PENDING', 'RUNNING')
+
+
+def _state(response: Any) -> Optional[str]:
+    return getattr(getattr(getattr(response, 'status', None), 'state', None), 'value', None)
 
 
 def _reason(message: str) -> str:

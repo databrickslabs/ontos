@@ -184,7 +184,8 @@
     "reasons": {
       "no_warehouse": "nenhum SQL warehouse configurado",
       "no_access": "sem acesso à tabela de sistema",
-      "query_failed": "a consulta falhou"
+      "query_failed": "a consulta falhou",
+      "timed_out": "a consulta ainda estava em execução no limite de tempo"
     }
   },
   "saveErrors": {

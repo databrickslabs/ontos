@@ -158,3 +158,23 @@ def test_an_update_with_only_an_unrelated_primary_domain_id_is_refused(db_sessio
 
     with pytest.raises(ValueError, match="not one of the contract's domains"):
         _update(db_session, created.id, primaryDomainId=other)
+
+
+@pytest.mark.parametrize("ids_key", ["domainIds", "domain_ids"])
+def test_an_update_with_domain_ids_and_primary_replaces_them(db_session: Session, ids_key):
+    """domainIds with primaryDomainId replaces the domains (the lone-primary path is
+    only for primaryDomainId alone): the new primary isn't a stored domain."""
+    first, second, third = _domain(db_session), _domain(db_session), _domain(db_session)
+    created = _create(db_session, domainIds=[first])
+
+    fields = {ids_key: [second, third], "primaryDomainId": third}
+    assert _update(db_session, created.id, **fields) == {second, third}
+    assert _primary(db_session, created.id) == [third]
+
+
+def test_an_update_with_domain_id_and_primary_replaces_them(db_session: Session):
+    first, second = _domain(db_session), _domain(db_session)
+    created = _create(db_session, domainIds=[first])
+
+    assert _update(db_session, created.id, domainId=second, primaryDomainId=second) == {second}
+    assert _primary(db_session, created.id) == [second]

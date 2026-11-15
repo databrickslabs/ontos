@@ -26,17 +26,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The PR merge commit and its base parent, to list the PR's files.
-          fetch-depth: 2
+          # Full history, so the PR's files can be listed against its base commit
+          # whether or not GitHub could build a merge commit (it cannot when the PR
+          # has conflicts, and then the checkout is the PR head itself).
+          fetch-depth: 0
 
       - name: Check release notes fragments
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           NO_RELEASE_NOTES: ${{ contains(github.event.pull_request.labels.*.name, 'no-release-notes') }}
         run: |
           set -euo pipefail
           dir=src/docs/release-notes/unreleased
-          changed=$(git diff --name-only --diff-filter=ACMR HEAD^1 HEAD)
+          changed=$(git diff --name-only --diff-filter=ACMR "${BASE_SHA}...HEAD")
 
           # Fragments added or changed by this PR.
           fragments=()

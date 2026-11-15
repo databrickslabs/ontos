@@ -43,7 +43,7 @@ def test_an_invalid_volume_is_rejected_with_a_code_and_params(manager, volume):
     assert raised.value.params["value"] == volume
 
 
-@pytest.mark.parametrize("volume", ["/Users/me/ontos-vol", "/tmp/ontos", "/data/vol/"])
+@pytest.mark.parametrize("volume", ["/Users/me/ontos-vol", "/tmp/ontos", "/data/vol"])
 def test_a_local_directory_is_saved_as_the_git_export_uses_it(manager, volume):
     # resolve_git_paths treats an absolute path outside /Volumes as a local directory
     _save(manager, {"databricks_volume": volume})
@@ -57,6 +57,22 @@ def test_a_local_directory_is_saved_as_the_git_export_uses_it(manager, volume):
 def test_the_bare_volumes_root_is_rejected(manager, volume):
     with pytest.raises(VolumeInvalidError):
         _save(manager, {"databricks_volume": volume})
+
+
+@pytest.mark.parametrize("raw, canonical", [
+    ("//Volumes/cat/sch/vol", "/Volumes/cat/sch/vol"),
+    ("/Volumes//cat/sch/vol", "/Volumes/cat/sch/vol"),
+    ("/Volumes/cat/sch/vol/", "/Volumes/cat/sch/vol"),
+    ("  /Volumes/cat/sch/vol  ", "/Volumes/cat/sch/vol"),
+    ("  cat.sch.vol ", "cat.sch.vol"),
+    ("//Users//me/vol/", "/Users/me/vol"),
+])
+def test_the_volume_is_stored_in_its_canonical_form(manager, raw, canonical):
+    _save(manager, {"databricks_volume": raw})
+
+    assert manager._settings.DATABRICKS_VOLUME == canonical
+    stored = manager._db.query(AppSettingDb).filter(AppSettingDb.key == "DATABRICKS_VOLUME").one()
+    assert stored.value == canonical
 
 
 def test_a_rejected_save_stores_nothing(manager):

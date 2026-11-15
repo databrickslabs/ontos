@@ -232,6 +232,17 @@ class TestBrandingAssetPath:
         with pytest.raises(ValueError):
             validate_branding_url(value)
 
+    @pytest.mark.parametrize("value", [
+        "/api/settings", "/api/branding/logo", "/logo.svg", "/brandingx/logo.svg",
+        "/Static/logo.svg", "/static", "/static/../api/x",
+    ])
+    def test_rejects_paths_outside_branding_and_static(self, value):
+        with pytest.raises(ValueError):
+            validate_branding_url(value)
+
+    def test_static_path_allowed(self):
+        assert validate_branding_url("/static/logo.svg") == "/static/logo.svg"
+
     def test_dots_inside_a_file_name_are_fine(self):
         assert validate_branding_url("/branding/logo..v2.svg") == "/branding/logo..v2.svg"
 

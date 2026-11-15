@@ -17,6 +17,7 @@ from src.common.api_errors import CodedValueError
 APP_DISPLAY_NAME_MAX_LEN = 64
 APP_SHORT_NAME_MAX_LEN = 16
 BRANDING_URL_SCHEMES = ('http', 'https')
+BRANDING_ASSET_PREFIXES = ('/branding/', '/static/')
 APP_TAGLINE_MAX_LEN = 80
 _HEX_COLOR_RE = re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
 
@@ -88,7 +89,10 @@ def validate_branding_url(value: Optional[str], *, field: str = 'URL') -> Option
     """Validate a branding image URL (custom logo, favicon).
 
     Returns ``None`` for empty input. Accepts a root-relative path to an asset
-    served by the app itself (``/branding/acme/logo.svg``), or an http/https URL
+    served by the app itself under ``/branding/`` or ``/static/``
+    (``/branding/acme/logo.svg``; other root-relative paths such as ``/api/...``
+    are refused, since an ``<img>`` would fetch them from every viewer's browser
+    with the viewer's session), or an http/https URL
     with a host (rejecting ``javascript:``, ``data:``, ``file:``, etc.). Raises
     ``ValueError`` on invalid input; the settings route maps this to a 400.
     """
@@ -107,6 +111,10 @@ def validate_branding_url(value: Optional[str], *, field: str = 'URL') -> Option
         if _climbs_out_of_folder(cleaned):
             raise BrandingPathTraversalError(
                 f"{field} must not contain '..' path segments", field=field
+            )
+        if not cleaned.startswith(BRANDING_ASSET_PREFIXES):
+            raise ValueError(
+                f"{field} must start with /branding/ or /static/ when it is a path"
             )
         return cleaned
     try:

@@ -68,7 +68,7 @@ class ComplianceLlmCheckCacheRepository(
         """Store a verdict, in a savepoint: a row another run wrote first is kept.
 
         A row past its max age (asked again) is overwritten with the new verdict.
-        Nothing is committed here; the run commits once when it completes.
+        Not committed here (``DbLlmCheckCache.put`` commits each verdict).
         """
         existing = db.get(ComplianceLlmCheckCacheDb, key)
         if existing is not None:

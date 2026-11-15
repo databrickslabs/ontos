@@ -267,8 +267,10 @@ class MemoryLlmCheckCache:
 class DbLlmCheckCache(MemoryLlmCheckCache):
     """Verdicts in ``compliance_llm_check_cache``, read through a memory layer.
 
-    Writes join the caller's transaction (a compliance run commits once at the end).
-    Rows older than ``max_age_days`` are not used (see ``purge_expired``).
+    Each verdict is committed as soon as it is paid for, with the caller's
+    session (a run's results stored so far are committed with it), so a run that
+    fails or crashes later keeps the verdicts it bought. Rows older than
+    ``max_age_days`` are not used (see ``purge_expired``).
     """
 
     def __init__(self, db, max_age_days: int = LLM_CHECK_CACHE_MAX_AGE_DAYS):
@@ -309,6 +311,7 @@ class DbLlmCheckCache(MemoryLlmCheckCache):
             self._db, key=key, model=model, passed=passed, reason=reason,
             response_model=response_model,
         )
+        self._db.commit()
 
 
 def seconds_to_next_utc_day(now: Optional[datetime] = None) -> int:

@@ -555,3 +555,20 @@ def test_served_model_of_reads_the_endpoint_config():
 
     broken = SimpleNamespace(serving_endpoints=SimpleNamespace(get=failing))
     assert llm.served_model_of('ep', broken) == ''
+
+
+def test_a_verdict_is_kept_when_the_run_fails_later(db_session):
+    """Each paid verdict is committed at once: a later rollback doesn't discard it."""
+    from src.db_models.compliance import ComplianceLlmCheckCacheDb
+
+    _checker(FakeLlm(_reply('PASS: daily grain')), cache=llm.DbLlmCheckCache(db_session)).check(
+        'Daily grain', GRAIN,
+    )
+    db_session.rollback()  # the run fails after the check
+
+    assert db_session.query(ComplianceLlmCheckCacheDb).count() == 1
+    again = FakeLlm(_reply('FAIL: x'))
+    assert _checker(again, cache=llm.DbLlmCheckCache(db_session)).check(
+        'Daily grain', GRAIN,
+    ).cached
+    assert again.calls == []

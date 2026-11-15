@@ -23,8 +23,10 @@ from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.metadata import DocumentMetadataDb
-from src.models.costs import CostItemCreate
-from src.models.metadata import LinkCreate, MetadataAttachmentCreate, RichTextCreate
+from src.models.costs import CostItem, CostItemCreate
+from src.models.metadata import (
+    LinkCreate, MetadataAttachmentCreate, RichText, RichTextCreate,
+)
 from src.models.settings import AppRoleCreate
 
 ASSETS_ONLY = 'Assets only (#1342)'
@@ -480,10 +482,10 @@ def test_a_row_that_cannot_be_loaded_is_not_attached_to_another_entity(
         client, db_session, asset, ws, act_as, monkeypatch):
     ids = _seed(db_session, 'asset', str(asset.id))
 
-    def broken(self, db, *, id):
+    def broken(self, db, id):
         raise RuntimeError('database unavailable')
 
-    monkeypatch.setattr(MetadataManager, 'get_rich_text', broken)
+    monkeypatch.setattr(type(MetadataManager()._rich_text_repo), 'get', broken)
     act_as('Data Steward')
 
     response = client.post('/api/entities/data_product/attachments',
@@ -538,20 +540,37 @@ def test_an_unknown_row_gets_the_data_domains_check_then_404(client, act_as, rol
         _assert_data_domains_refusal(response)
 
 
-@pytest.mark.parametrize('role, expected', [('Data Steward', 404), ('Data Consumer', 403)])
-def test_a_row_that_cannot_be_loaded_gets_the_data_domains_check(
-        client, act_as, monkeypatch, role, expected):
-    def broken(self, db, *, id):
+def test_a_failing_row_lookup_fails_the_request(client, act_as, monkeypatch):
+    """No fallback to the data-domains check: the request fails instead (500)."""
+    def broken(self, db, id):
         raise RuntimeError('database unavailable')
 
-    monkeypatch.setattr(MetadataManager, 'get_rich_text', broken)
-    act_as(role)
+    monkeypatch.setattr(type(MetadataManager()._rich_text_repo), 'get', broken)
+    act_as('Data Steward')
 
     response = client.delete(f'/api/rich-texts/{uuid.uuid4()}')
 
-    assert response.status_code == expected, response.text
-    if expected == 403:
-        _assert_data_domains_refusal(response)
+    assert response.status_code == 500, response.text
+
+
+@pytest.mark.parametrize('row', ['note', 'cost'])
+def test_a_steward_cannot_delete_an_asset_row_its_response_model_cannot_load(
+        client, db_session, asset, act_as, monkeypatch, row):
+    """The check reads the stored row's entity, not the converted response model."""
+    ids = _seed(db_session, 'asset', str(asset.id))
+
+    def unloadable(*args, **kwargs):
+        raise ValueError('created_at is missing')
+
+    monkeypatch.setattr(RichText, 'from_orm', unloadable)
+    monkeypatch.setattr(CostItem, 'model_validate', unloadable)
+    act_as('Data Steward')
+    url = f"/api/rich-texts/{ids['note']}" if row == 'note' else f"/api/cost-items/{ids['cost']}"
+
+    response = client.delete(url)
+
+    assert response.status_code == 403, response.text
+    assert _code(response) == 'asset_write_denied'
 
 
 @pytest.mark.parametrize('method', ['PUT', 'DELETE'])
@@ -565,3 +584,4 @@ def test_a_steward_cannot_change_an_asset_note_by_id(
 
     assert response.status_code == 403, response.text
     assert _code(response) == 'asset_write_denied'
+

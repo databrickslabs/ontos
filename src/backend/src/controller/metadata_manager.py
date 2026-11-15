@@ -1,4 +1,5 @@
 from typing import List, Optional, Dict, Any, Tuple
+from uuid import UUID
 
 from sqlalchemy import event
 from sqlalchemy.orm import Session
@@ -230,6 +231,25 @@ class MetadataManager:
             self._log_change(db, entity_type=f"{entity_type}:document", entity_id=entity_id, action="DELETE", username=user_email)
             return True
         return False
+
+    def get_row_owner(self, db: Session, *, kind: str, id: str) -> Optional[Tuple[str, str]]:
+        """``(entity_type, entity_id)`` of a note, link or document, from the stored row.
+
+        ``kind`` is ``rich_text``, ``link`` or ``document``. The row isn't converted
+        to its response model, so a row that model can't load still has an owner
+        (access checks rely on it). ``None`` when no row has this id; an id that
+        isn't a UUID can't be one.
+        """
+        repo = {
+            'rich_text': self._rich_text_repo, 'link': self._link_repo,
+            'document': self._document_repo,
+        }[kind]
+        try:
+            UUID(str(id))
+        except ValueError:
+            return None
+        db_obj = repo.get(db, id=id)
+        return (db_obj.entity_type, db_obj.entity_id) if db_obj else None
 
     def get_document(self, db: Session, *, id: str) -> Optional[Document]:
         db_obj = self._document_repo.get(db, id=id)

@@ -56,12 +56,12 @@ class ProductChangeAnalyzer:
     Rules for semantic versioning (ODPS v1.0.0):
     - MAJOR (X.0.0): Breaking changes
       - Removed output ports
-      - Removed required input ports
+      - Removed input ports (every ODPS input port names a required contract)
       - Changed port contract IDs (incompatible)
       - Removed team members with critical roles
     - MINOR (0.X.0): New features (backward compatible)
       - New output ports
-      - New optional input ports
+      - New input ports
       - New management ports
       - New support channels
     - PATCH (0.0.X): Bug fixes, documentation
@@ -175,14 +175,10 @@ class ProductChangeAnalyzer:
                 self.breaking_changes.append(f"Removed {port_type} port: {removed_name}")
                 severity = ChangeSeverity.CRITICAL
             elif port_type == 'input':
-                # Removing input port might be breaking if it was required
-                old_port = old_port_map[removed_name]
-                if old_port.get('required', False):
-                    self.breaking_changes.append(f"Removed required {port_type} port: {removed_name}")
-                    severity = ChangeSeverity.CRITICAL
-                else:
-                    self.fixes.append(f"Removed optional {port_type} port: {removed_name}")
-                    severity = ChangeSeverity.MINOR
+                # An input port names a contract the product consumes (contractId
+                # is required in ODPS), so removing one drops a dependency.
+                self.breaking_changes.append(f"Removed {port_type} port: {removed_name}")
+                severity = ChangeSeverity.CRITICAL
             else:
                 # Management port removal is minor
                 self.fixes.append(f"Removed {port_type} port: {removed_name}")
@@ -202,15 +198,9 @@ class ProductChangeAnalyzer:
                 self.new_features.append(f"Added {port_type} port: {added_name}")
                 severity = ChangeSeverity.MODERATE
             else:
-                # New input port
-                new_port = new_port_map[added_name]
-                if new_port.get('required', False):
-                    # Adding required input is BREAKING (producers must provide it)
-                    self.breaking_changes.append(f"Added required {port_type} port: {added_name}")
-                    severity = ChangeSeverity.CRITICAL
-                else:
-                    self.new_features.append(f"Added optional {port_type} port: {added_name}")
-                    severity = ChangeSeverity.MODERATE
+                # New input port: an added dependency, backward compatible
+                self.new_features.append(f"Added {port_type} port: {added_name}")
+                severity = ChangeSeverity.MODERATE
 
             self.port_changes.append(PortChange(
                 change_type="added",

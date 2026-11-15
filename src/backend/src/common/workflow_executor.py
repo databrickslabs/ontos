@@ -381,10 +381,11 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     other field passed vacuously. For data products and data contracts the
     entity is loaded with ``entity_dict_builder`` (the fields maturity gates
     use); payload keys win, so request fields such as ``current_status`` keep
-    their meaning. Other entity types get the payload unchanged, and so do
-    ``before_update`` gates: their payload is the proposed change, and values
-    derived from the stored row (``has_owner``, counts) would describe the
-    entity before it.
+    their meaning. Other entity types get the payload unchanged.
+    ``before_update`` gates see the entity as it will be after the update
+    (``_before_update_object``), as their policy checks do: the payload alone
+    is only the proposed change, so ``HAS_TAG`` or the owner of a stored
+    entity whose update doesn't resend them would read as missing.
 
     Raises when the stored entity can't be loaded, or doesn't exist (deleted
     while a workflow waited, or a wrong id): evaluating the rule on the payload
@@ -400,8 +401,10 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     )
 
     payload = context.entity if isinstance(context.entity, dict) else {}
-    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
-    if getattr(trigger_type, 'value', trigger_type) in ('before_update', 'before_create', 'on_delete'):
+    trigger_type = _trigger_type(context)
+    if trigger_type == 'before_update':
+        return _before_update_object(db, context)
+    if trigger_type in ('before_create', 'on_delete'):
         return payload
     builder = {
         'data_product': build_data_product_dict,

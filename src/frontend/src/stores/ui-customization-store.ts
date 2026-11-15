@@ -91,6 +91,9 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
         } else {
           localStorage.removeItem('i18n-disabled');
         }
+      } else {
+        // The layout waits for this flag; a refused request keeps the defaults
+        set({ isLoaded: true });
       }
     } catch (error) {
       console.error('Failed to fetch UI customization settings:', error);

@@ -56,4 +56,15 @@ describe('ui-customization store: fetchSettings', () => {
     expect(state.showPoweredBy).toBe(true);
     expect(document.getElementById('branding-theme')).toBeNull();
   });
+
+  it.each([
+    ['a refused request', () => vi.fn().mockResolvedValue({ ok: false, status: 500 })],
+    ['a failed request', () => vi.fn().mockRejectedValue(new Error('offline'))],
+  ])('opens the first-paint gate after %s', async (_name, makeFetch) => {
+    useUICustomizationStore.setState({ isLoaded: false });
+    vi.stubGlobal('fetch', makeFetch());
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await useUICustomizationStore.getState().fetchSettings();
+    expect(useUICustomizationStore.getState().isLoaded).toBe(true);
+  });
 });

@@ -574,9 +574,7 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
     )
 
     parsed = parse_rule(rule, strict=True)
-    for call in _function_calls(parsed.get('where_clause'), 'LLM_CHECK') + _function_calls(
-        parsed.get('assert_clause'), 'LLM_CHECK'
-    ):
+    for call in llm_check_calls(parsed):
         if llm_check_criterion(call) is None:
             raise LlmCheckCriterionError(
                 "LLM_CHECK takes a text and a criterion written as a string literal, "
@@ -610,6 +608,22 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
                        "skips every entity. Move it to ASSERT.",
         })
     return warnings
+
+
+def llm_check_calls(parsed: Dict[str, Any]) -> list:
+    """The LLM_CHECK calls of a parsed rule, in WHERE and ASSERT."""
+    return _function_calls(parsed.get('where_clause'), 'LLM_CHECK') + _function_calls(
+        parsed.get('assert_clause'), 'LLM_CHECK'
+    )
+
+
+# The app entity types a rule can match, and the feature whose read access shows them
+APP_ENTITY_FEATURES = {
+    'data_product': 'data-products',
+    'data_contract': 'data-contracts',
+    'domain': 'data-domains',
+    'review': 'data-asset-reviews',
+}
 
 
 def _function_calls(node: Any, name: str) -> list:

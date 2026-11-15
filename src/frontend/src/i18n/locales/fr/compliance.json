@@ -242,7 +242,8 @@
     },
     "errors": {
       "sample_entity_not_found": "Aucune entité à laquelle la règle s'applique n'a été trouvée. Vérifiez le nom, ou laissez-le vide pour utiliser la première correspondance.",
-      "llm_check_test_rate_limited": "Trop de tests en peu de temps. Réessayez dans {{retryAfter}} secondes."
+      "llm_check_test_rate_limited": "Trop de tests en peu de temps. Réessayez dans {{retryAfter}} secondes.",
+      "llm_check_entity_read_required": "Cette règle utilise LLM_CHECK sur des entités {{entityType}}. L’exécuter ou la tester nécessite un accès en lecture à celles-ci."
     }
   }
 }

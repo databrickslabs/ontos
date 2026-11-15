@@ -29,3 +29,31 @@ export function llmCheckText(t: TFunction, check: LlmCheck): string {
   if (!check.code) return check.reason ?? '';
   return t(`compliance:llmCheck.codes.${check.code}`, { defaultValue: check.code }) as string;
 }
+
+/** The error fields of an API response (see `useApi`). */
+interface CodedErrorResponse {
+  error?: string | null;
+  errorCode?: string | null;
+  errorParams?: Record<string, unknown> | null;
+}
+
+/**
+ * Why a rule test or a run of an LLM_CHECK rule was refused, in the user's
+ * language when the backend sent a code for it (`compliance:llmCheck.errors.<code>`,
+ * then `compliance:saveErrors.<code>`); otherwise the API's message, else `fallback`.
+ */
+export function llmCheckErrorText(
+  t: TFunction,
+  response: CodedErrorResponse,
+  fallback = '',
+): string {
+  const defaultValue = response.error || fallback;
+  if (!response.errorCode) return defaultValue;
+  return t(
+    [
+      `compliance:llmCheck.errors.${response.errorCode}`,
+      `compliance:saveErrors.${response.errorCode}`,
+    ],
+    { ...(response.errorParams ?? {}), defaultValue },
+  ) as string;
+}

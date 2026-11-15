@@ -17,6 +17,7 @@ from src.controller.compliance_manager import (
     SampleEntityNotFoundError,
     rule_changes_tags,
     rule_sends_notifications,
+    rule_uses_llm_check,
 )
 from src.models.compliance import (
     CompliancePolicy,
@@ -30,7 +31,10 @@ from src.models.compliance import (
 )
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
-from src.common.compliance_entities import validate_rule
+from src.common.compliance_entities import (
+    APP_ENTITY_FEATURES, UnityCatalogLoader, parse_entity_filter, validate_rule,
+)
+from src.common.workspace_client import get_obo_workspace_client
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -109,6 +113,46 @@ def require_compliance_admin_for_notify(rule: Optional[str], auth_manager, curre
             detail="This policy sends notifications (NOTIFY); saving or running it "
                    "requires admin access to compliance",
         )
+
+
+class LlmCheckReadRequiredError(CodedValueError):
+    """A user ran an LLM_CHECK rule over app entities they can't read."""
+
+    code = 'llm_check_entity_read_required'
+
+
+def llm_check_reader(request: Request, rule: Optional[str], auth_manager, current_user):
+    """The client a run or test that a user starts reads Unity Catalog with, for LLM_CHECK.
+
+    The model's reasons can quote the text it judged, so a user only gets them
+    for what they can read: Unity Catalog objects are read with the user's own
+    (on-behalf-of) client (403 ``user_token_required`` without the token, except
+    where the app's client is allowed in its place, see
+    ``get_obo_workspace_client``), and the app entity types the rule matches
+    need read access to their feature (403 ``llm_check_entity_read_required``).
+    None for a rule without LLM_CHECK or without Unity Catalog types: the run
+    then uses the app's client as before. Scheduled runs use the app's client.
+    """
+    if not rule_uses_llm_check(rule):
+        return None
+    try:
+        entity_types = parse_entity_filter(rule).entity_types
+    except Exception:
+        return None  # rejected by the run or the rule check
+    for entity_type in entity_types:
+        feature = APP_ENTITY_FEATURES.get(entity_type)
+        if feature and not user_has_feature_level(
+            auth_manager, current_user, feature, FeatureAccessLevel.READ_ONLY, request
+        ):
+            error = LlmCheckReadRequiredError(
+                f"This rule uses LLM_CHECK on {entity_type} entities; running or testing "
+                f"it requires read access to them",
+                entityType=entity_type,
+            )
+            raise HTTPException(status_code=403, detail=str(error)) from error
+    if any(t in UnityCatalogLoader.SUPPORTED_TYPES for t in entity_types):
+        return get_obo_workspace_client(request)
+    return None
 
 
 @router.post("/compliance/policies")
@@ -283,6 +327,7 @@ async def run_policy(
         raise HTTPException(status_code=404, detail="Policy not found")
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
+    reader = llm_check_reader(request, policy.rule, auth_manager, current_user)
 
     # For now, implement inline only; async can be backed by Databricks job later.
     # Off the event loop: LLM_CHECK rules call the serving endpoint per entity.
@@ -292,6 +337,7 @@ async def run_policy(
         policy=policy,
         limit=payload.limit,
         current_user=current_user.username if current_user else None,
+        workspace_client=reader,
     )
     
     audit_manager.log_action(
@@ -425,9 +471,11 @@ def _throttle_rule_test(user: str) -> None:
 
 @router.post("/compliance/llm-check/test", response_model=LlmCheckTestResponse)
 async def test_llm_check(
+    request: Request,
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
     payload: LlmCheckTestRequest = Body(...),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Try a rule (and its LLM_CHECK criteria) on one entity before saving it.
@@ -437,6 +485,7 @@ async def test_llm_check(
     cached verdicts is written.
     """
     _check_rule(payload.rule)
+    reader = llm_check_reader(request, payload.rule, auth_manager, current_user)
     try:
         _throttle_rule_test(current_user.username if current_user else 'unknown')
     except RuleTestRateLimitedError as e:
@@ -448,6 +497,7 @@ async def test_llm_check(
         # The model calls block: run them off the event loop
         return await run_in_threadpool(
             manager.test_rule_on_sample, db, rule=payload.rule, entity=payload.entity,
+            workspace_client=reader,
         )
     except SampleEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 
 import i18n from '@/i18n/config';
-import { llmCheckText, parseLlmChecks } from './compliance-llm-checks';
+import { llmCheckErrorText, llmCheckText, parseLlmChecks } from './compliance-llm-checks';
 
 describe('compliance LLM checks', () => {
   afterEach(async () => {
@@ -35,5 +35,21 @@ describe('compliance LLM checks', () => {
       .toBe('Nicht geprüft: Der Lauf hat sein Budget an Modellaufrufen erreicht.');
     expect(llmCheckText(t, { criterion: 'c', passed: false, code: 'llm_check_new' }))
       .toBe('llm_check_new');
+  });
+
+  it('translates a coded refusal and falls back to the message', async () => {
+    await i18n.changeLanguage('pt');
+    const t = i18n.t.bind(i18n);
+
+    expect(llmCheckErrorText(t, {
+      error: 'english',
+      errorCode: 'llm_check_entity_read_required',
+      errorParams: { entityType: 'data_product' },
+    })).toBe(
+      'Esta regra usa LLM_CHECK em entidades data_product. '
+      + 'Executá-la ou testá-la exige acesso de leitura a elas.',
+    );
+    expect(llmCheckErrorText(t, { error: 'english', errorCode: 'unknown_code' })).toBe('english');
+    expect(llmCheckErrorText(t, { error: null }, 'fallback')).toBe('fallback');
   });
 });

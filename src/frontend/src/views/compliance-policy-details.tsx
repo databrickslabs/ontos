@@ -23,6 +23,7 @@ import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warni
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
 import { complianceRunWarningText } from '@/lib/compliance-run-warning';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
+import { llmCheckErrorText } from '@/lib/compliance-llm-checks';
 
 type Policy = {
   id: string; // UUID
@@ -165,11 +166,12 @@ export default function CompliancePolicyDetails() {
     try {
       const res = await post<Run>(`/api/compliance/policies/${policyId}/runs`, { mode: 'inline' });
       if (res.error) {
-        // e.g. 403 when the rule changes tags and the user can't write tags
+        // e.g. 403 when the rule changes tags and the user can't write tags; coded
+        // refusals (LLM_CHECK access, quota) are translated
         toast({
           variant: 'destructive',
           title: t('compliance:errors.runningPolicy'),
-          description: res.error,
+          description: llmCheckErrorText(t, res),
         });
         return;
       }

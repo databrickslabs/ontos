@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 import json
+import re
 import uuid
 import yaml
 from sqlalchemy.orm import Session
@@ -34,6 +35,7 @@ from src.common.compliance_llm_check import (
 )
 from src.common.compliance_entities import (
     create_entity_iterator,
+    llm_check_calls,
     parse_entity_filter,
     EntityFilter,
 )
@@ -81,6 +83,20 @@ def _rule_actions(rule: Optional[str]) -> List[dict]:
 def rule_sends_notifications(rule: Optional[str]) -> bool:
     """Whether a rule has NOTIFY actions (False if it doesn't parse)."""
     return any(action.get('type') == 'NOTIFY' for action in _rule_actions(rule))
+
+
+def rule_uses_llm_check(rule: Optional[str]) -> bool:
+    """Whether a rule calls LLM_CHECK.
+
+    A rule that doesn't parse counts when its text names LLM_CHECK, so the gates
+    that use this err on the safe side.
+    """
+    if not rule:
+        return False
+    try:
+        return bool(llm_check_calls(parse_rule(rule)))
+    except Exception:
+        return re.search(r'\bLLM_CHECK\s*\(', rule, re.IGNORECASE) is not None
 
 
 def rule_changes_tags(rule: Optional[str]) -> bool:
@@ -752,6 +768,7 @@ class ComplianceManager:
 
     def test_rule_on_sample(
         self, db: Session, *, rule: str, entity: Optional[str] = None,
+        workspace_client=None,
     ) -> LlmCheckTestResponse:
         """Evaluate a rule's ASSERT on one entity it matches, LLM_CHECKs included.
 
@@ -759,6 +776,8 @@ class ComplianceManager:
         run, result or action is written, only the verdicts to the cache. The
         entity is the one named ``entity`` (name, id or full name) among the
         first ``SAMPLE_SCAN_LIMIT`` the rule matches, else the first match.
+        ``workspace_client``: the client to read Unity Catalog entities with (the
+        caller's own, see ``run_policy_inline``); default: the app's.
 
         Raises:
             ValueError: the rule doesn't parse.
@@ -769,7 +788,9 @@ class ComplianceManager:
         parsed = parse_rule(rule)
         entity_filter = parse_entity_filter(rule, parsed=parsed)
         source = SimpleNamespace(name='rule test', id='unsaved')
-        ws = self._workspace_client_for(entity_filter.entity_types, source)
+        ws = workspace_client
+        if ws is None:
+            ws = self._workspace_client_for(entity_filter.entity_types, source)
         iterator = create_entity_iterator(db=db, workspace_client=ws)
         wanted = (entity or '').strip()
         sample = None
@@ -864,11 +885,17 @@ class ComplianceManager:
         limit: Optional[int] = None,
         current_user: Optional[str] = None,
         llm_checker: Optional[LlmChecker] = None,
+        workspace_client=None,
     ) -> ComplianceRunDb:
         """Run a compliance policy with enhanced DSL support.
 
         This method supports both the old simple DSL syntax and the new enhanced syntax
         with MATCH, WHERE, ASSERT, ON_PASS, and ON_FAIL clauses.
+
+        ``workspace_client``: the client to read Unity Catalog entities with;
+        default: the app's. A run a user starts of an ``LLM_CHECK`` rule passes the
+        user's own (on-behalf-of) client, so its results and the model's reasons
+        only cover the objects that user can read; scheduled runs use the app's.
         """
         run = self.create_run(db, policy_id=policy.id)
         success = 0
@@ -893,7 +920,9 @@ class ComplianceManager:
             entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)
 
             # Create entity iterator
-            ws = self._workspace_client_for(entity_filter.entity_types, policy)
+            ws = workspace_client
+            if ws is None:
+                ws = self._workspace_client_for(entity_filter.entity_types, policy)
             entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
 
             # Iterate over entities

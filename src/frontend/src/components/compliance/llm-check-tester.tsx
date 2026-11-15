@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useApi } from '@/hooks/use-api';
-import { llmCheckText, type LlmCheck } from '@/lib/compliance-llm-checks';
+import { llmCheckErrorText, llmCheckText, type LlmCheck } from '@/lib/compliance-llm-checks';
 
 /** Response of POST /api/compliance/llm-check/test. */
 export interface LlmCheckTestResult {
@@ -49,16 +49,7 @@ export function LlmCheckTester({ getRule }: LlmCheckTesterProps) {
         entity: entity.trim() || null,
       });
       if (response.error || !response.data?.entity_type) {
-        const fallback = response.error || t('compliance:llmCheck.test.failed');
-        setError(response.errorCode
-          ? t([
-              `compliance:llmCheck.errors.${response.errorCode}`,
-              `compliance:saveErrors.${response.errorCode}`,
-            ], {
-              ...(response.errorParams ?? {}),
-              defaultValue: fallback,
-            }) as string
-          : fallback);
+        setError(llmCheckErrorText(t, response, t('compliance:llmCheck.test.failed')));
         return;
       }
       setResult(response.data);

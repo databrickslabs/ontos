@@ -339,13 +339,14 @@ def create_asset(
             db, settings, request, result.id,
             description_sent=True, previous_description=None, label=result.location,
         )
-        success = True
-        created_id = str(result.id)
         result = AssetUpdateResult(**result.model_dump(), warnings=_warnings_of(outcome))
         result.description_sync = outcome.state
         if outcome.audit:
             details["uc_comment"] = outcome.audit
+        # Commits: the audit says success only once the asset is stored
         _schedule_maturity_evaluation(db, background_tasks, request, result.id, current_user.email)
+        success = True
+        created_id = str(result.id)
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}
@@ -518,8 +519,9 @@ def update_asset(
             details["uc_description_warning"] = outcome.warning.code
         if outcome.audit:
             details["uc_comment"] = outcome.audit
-        success = True
+        # Commits: the audit says success only once the change is stored
         _schedule_maturity_evaluation(db, background_tasks, request, asset_id, current_user.email)
+        success = True
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}

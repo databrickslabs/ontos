@@ -9,7 +9,8 @@ and ``lifecycle_stage_transitions`` (from -> to), and the column
 ``from_status`` / ``to_status`` keep matching.
 
 Seed: one default group per entity type reproducing the transition maps of the
-code before this revision (categories: sandbox -> draft; proposed,
+code before this revision (assets had none: every move between their four
+stages is allowed; categories: sandbox -> draft; proposed,
 under_review, approved -> review). Backfill: every existing row gets its
 type's default group. Downgrade drops the column and the tables (the stage keys
 stay in ``status``).
@@ -77,11 +78,12 @@ TRANSITIONS = {
         "deprecated": ["retired", "active"],
         "retired": [],
     },
+    # No transition check for assets before this revision: every move stays allowed
     "asset": {
-        "draft": ["active", "deprecated"],
-        "active": ["deprecated"],
-        "deprecated": ["retired", "active"],
-        "retired": [],
+        "draft": ["active", "deprecated", "retired"],
+        "active": ["draft", "deprecated", "retired"],
+        "deprecated": ["draft", "active", "retired"],
+        "retired": ["draft", "active", "deprecated"],
     },
 }
 

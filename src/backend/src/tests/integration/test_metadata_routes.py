@@ -275,3 +275,17 @@ class TestMergedMetadataSourceAccess:
     def test_privileged_caller_inherits_all_sources(self, client: TestClient, product, access):
         access(contracts_admin=True, assets_rw=True)
         assert sorted(self._titles(client, product)) == ["Dashboard notes", "Draft terms"]
+
+    def test_explicit_contract_ids_go_through_the_read_check(
+        self, client: TestClient, db_session: Session, product, access,
+    ):
+        from src.db_models.data_contracts import DataContractDb
+
+        draft = db_session.query(DataContractDb).filter(DataContractDb.name == "team-b-draft").one()
+        access(contracts_admin=False, assets_rw=False)
+        response = client.get(
+            "/api/entities/data_domain/metadata/merged",
+            params={"entity_id": "d-1", "contract_ids": draft.id},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["rich_texts"] == []

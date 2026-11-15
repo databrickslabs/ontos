@@ -401,3 +401,19 @@ def test_a_tag_written_before_the_object_goes_missing_is_recorded(tag_sync):
     assert any(f"SET TAGS ('{key_a}'" in s for s in spark.sets())
     assert result.delivered["TABLE"]["main.a.t"] == {"ontos_semantic_old": "x",
                                                      key_a: PII}
+
+
+def test_a_tag_key_creation_failure_is_warned_once_per_key(tag_sync, capsys):
+    ws = _ws_creating_tag_keys_fails("[PERMISSION_DENIED] cannot create tag key")
+    result = _run_ws(tag_sync, ws, ["main.a.one", "main.a.three"])
+
+    assert result.errors == []
+    assert len(result.warnings) == 1
+    assert "main.a.one" in result.warnings[0]
+    assert capsys.readouterr().out.count("could not be created") == 1
+
+
+def _run_ws(tag_sync, ws, fqns):
+    direct = tag_sync.build_direct_link_infos([], None, None)
+    return tag_sync.sync_tags(ws, FakeSpark(), [_dataset(tag_sync, f) for f in fqns],
+                              direct, CFG, tag_sync.TagOwnership(), previous=None)

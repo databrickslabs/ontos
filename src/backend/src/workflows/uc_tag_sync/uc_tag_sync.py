@@ -1349,11 +1349,15 @@ def reconcile_tags(
                 updated += 1
                 ours[k] = v
                 if key_error is not None:
-                    # The tag is on the object: a warning, without the SDK text.
-                    msg = f"{object_type} {object_name}: tag key {k} could not be created"
-                    print(f"[WARN] {msg}")
-                    if warnings is not None:
-                        warnings.append(msg)
+                    # The tag is on the object: a warning, without the SDK text, once
+                    # per key and run (a job without CREATE TAG hits it on every object).
+                    head = f"Tag key {k} could not be created"
+                    if warnings is None or not any(w.startswith(head) for w in warnings):
+                        msg = (f"{head}; tags with it were still set (first on "
+                               f"{object_type} {object_name})")
+                        print(f"[WARN] {msg}")
+                        if warnings is not None:
+                            warnings.append(msg)
             except Exception as e:
                 if is_missing_object_error(e, column_alter=object_type == "COLUMN"):
                     raise UcObjectMissing(object_type, object_name) from None

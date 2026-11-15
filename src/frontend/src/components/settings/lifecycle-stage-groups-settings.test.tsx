@@ -34,7 +34,7 @@ const PRODUCT_GROUPS: LifecycleStageGroup[] = [
   },
   {
     id: 'g-loop', name: 'Authority resolution', entity_type: 'data_product',
-    is_default_for_type: false,
+    is_default_for_type: false, updated_at: '2026-11-15T10:00:00+00:00',
     stages: [
       stage('draft', 'Draft', 'draft', 0),
       stage('active', 'Active', 'active', 1, 'green'),
@@ -123,7 +123,8 @@ describe('LifecycleStageGroupsSettings', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Make default' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      '/api/lifecycle-stage-groups/g-loop', expect.objectContaining({ method: 'PUT' }),
+      '/api/lifecycle-stage-groups/g-loop?expected_updated_at=2026-11-15T10%3A00%3A00%2B00%3A00',
+      expect.objectContaining({ method: 'PUT' }),
     ));
     const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')!;
     const body = JSON.parse(put[1].body);

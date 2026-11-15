@@ -289,17 +289,36 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _repeats_wall_clock(run: datetime, zone: ZoneInfo) -> bool:
+    """True if ``run`` is the second occurrence of a local time the DST fall-back repeats.
+
+    A schedule runs once per local wall-clock time: ``0 30 1 * * ?`` in
+    America/New_York runs at the first 01:30 of the fall-back night, not again an
+    hour later.
+    """
+    wall = run.astimezone(zone).replace(tzinfo=None)
+    first = wall.replace(tzinfo=zone, fold=0).astimezone(timezone.utc)
+    second = wall.replace(tzinfo=zone, fold=1).astimezone(timezone.utc)
+    # Ambiguous times have the earlier instant at fold 0; in a spring-forward gap
+    # (a time that doesn't exist) it is the other way round.
+    return first < second and _as_utc(run) == second
+
+
 def _distinct_runs(cron: str, start: datetime) -> Iterator[datetime]:
     """Runs after ``start`` as UTC instants, each once and increasing.
 
     Around a DST change several wall-clock runs can map to one instant (or an
     earlier one); those are dropped, so a DST shift never reads as a 0-minute gap.
+    A local time the fall-back repeats runs only at its first occurrence.
     """
+    zone = start.tzinfo if isinstance(start.tzinfo, ZoneInfo) else None
     iterator = _iterator(cron, start)
     last: Optional[datetime] = None
     try:
         while True:
             run = _as_utc(iterator.get_next(datetime))
+            if zone is not None and _repeats_wall_clock(run, zone):
+                continue
             if last is None or run > last:
                 last = run
                 yield run
@@ -323,8 +342,13 @@ def previous_run(expr: str, tz: Optional[str], at: datetime) -> Optional[datetim
     zone = resolve_timezone(tz)
     # croniter's get_prev is strictly before its start: start one second later.
     start = (_as_utc(at) + timedelta(seconds=1)).astimezone(zone)
+    iterator = _iterator(cron, start)
     try:
-        return _as_utc(_iterator(cron, start).get_prev(datetime))
+        run = _as_utc(iterator.get_prev(datetime))
+        # The repeat of a local time after the fall-back isn't a run (``_distinct_runs``)
+        while _repeats_wall_clock(run, zone):
+            run = _as_utc(iterator.get_prev(datetime))
+        return run
     except CroniterError:
         return None
 

@@ -472,6 +472,26 @@ def test_the_schedule_timezone_decides_the_slot(db_session, sessions):
     assert claim.slot.replace(tzinfo=UTC) == _at(hour=12)
 
 
+@pytest.mark.parametrize('cron, tz, first, repeat', [
+    # 01:30 New York and 02:30 Berlin happen twice on the fall-back night.
+    ('0 30 1 * * ?', 'America/New_York', datetime(2026, 11, 1, 5, 30, tzinfo=UTC),
+     datetime(2026, 11, 1, 6, 30, tzinfo=UTC)),
+    ('0 30 2 * * ?', 'Europe/Berlin', datetime(2026, 10, 25, 0, 30, tzinfo=UTC),
+     datetime(2026, 10, 25, 1, 30, tzinfo=UTC)),
+])
+def test_a_daily_run_fires_once_on_the_dst_fall_back_night(
+        db_session, sessions, cron, tz, first, repeat):
+    from datetime import timedelta
+
+    workflow = _create(db_session, schedule=cron, tz=tz, changed=first - timedelta(days=1))
+    scheduler = _scheduler(sessions)
+    scheduler.run_once(first + timedelta(seconds=1))
+    scheduler.run_once(repeat + timedelta(seconds=1))
+    scheduler.run_once(repeat + timedelta(minutes=30))
+    assert [c.slot.replace(tzinfo=UTC) for c in _claims(db_session, workflow.id)] == [first]
+    assert len(_executions(db_session, workflow.id)) == 1
+
+
 # --- stop firing -------------------------------------------------------------------
 
 def test_an_inactive_or_deleted_workflow_stops_firing(db_session, sessions):

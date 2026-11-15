@@ -255,14 +255,34 @@ def test_a_run_in_the_skipped_dst_hour_moves_to_the_first_valid_time():
     ]
 
 
-def test_a_run_in_the_repeated_dst_hour_runs_in_both_occurrences():
-    # New York repeats 01:00-02:00 on 2026-11-01: 01:30 EDT (05:30Z) and 01:30 EST (06:30Z).
-    after = datetime(2026, 10, 31, 12, tzinfo=UTC)
-    runs = next_runs('0 30 1 * * ?', 'America/New_York', after=after)
-    assert runs == [
-        datetime(2026, 11, 1, 5, 30, tzinfo=UTC), datetime(2026, 11, 1, 6, 30, tzinfo=UTC),
-        datetime(2026, 11, 2, 6, 30, tzinfo=UTC),
-    ]
+@pytest.mark.parametrize('expr, tz, after, expected', [
+    # New York repeats 01:00-02:00 on 2026-11-01: 01:30 runs at 01:30 EDT (05:30Z) only.
+    ('0 30 1 * * ?', 'America/New_York', datetime(2026, 10, 31, 12, tzinfo=UTC), [
+        datetime(2026, 11, 1, 5, 30, tzinfo=UTC), datetime(2026, 11, 2, 6, 30, tzinfo=UTC),
+        datetime(2026, 11, 3, 6, 30, tzinfo=UTC),
+    ]),
+    # Berlin repeats 02:00-03:00 on 2026-10-25: 02:30 runs at 02:30 CEST (00:30Z) only.
+    ('0 30 2 * * ?', 'Europe/Berlin', datetime(2026, 10, 24, 12, tzinfo=UTC), [
+        datetime(2026, 10, 25, 0, 30, tzinfo=UTC), datetime(2026, 10, 26, 1, 30, tzinfo=UTC),
+        datetime(2026, 10, 27, 1, 30, tzinfo=UTC),
+    ]),
+    # Every 30 minutes in the repeated hour: each local time once, then 02:00 EST.
+    ('0 0/30 1,2 * * ?', 'America/New_York', datetime(2026, 11, 1, 4, tzinfo=UTC), [
+        datetime(2026, 11, 1, 5, tzinfo=UTC), datetime(2026, 11, 1, 5, 30, tzinfo=UTC),
+        datetime(2026, 11, 1, 7, tzinfo=UTC),
+    ]),
+])
+def test_a_local_time_the_dst_fall_back_repeats_runs_once(expr, tz, after, expected):
+    assert next_runs(expr, tz, after=after) == expected
+    assert count_runs(expr, tz, after, expected[-1], limit=100) == 3
+
+
+def test_the_previous_run_skips_the_repeat_of_a_local_time():
+    # 06:45Z is after the repeated 01:30 EST (06:30Z): the run is still the 01:30 EDT one.
+    at = datetime(2026, 11, 1, 6, 45, tzinfo=UTC)
+    assert previous_run('0 30 1 * * ?', 'America/New_York', at) == datetime(
+        2026, 11, 1, 5, 30, tzinfo=UTC,
+    )
 
 
 def test_previous_run_and_count_runs():

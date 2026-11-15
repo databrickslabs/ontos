@@ -132,3 +132,28 @@ def test_rejected_save_changes_nothing(manager, db_session, tmp_path):
     assert fresh.UI_APP_TAGLINE == "Before"
     assert fresh.UI_CUSTOM_LOGO_URL is None
     assert fresh.UI_APP_DISPLAY_NAME is None
+
+
+@pytest.mark.parametrize("key, value", [
+    ("UI_CUSTOM_LOGO_URL", "/logo.svg"),
+    ("UI_CUSTOM_LOGO_DARK_URL", "/api/branding/dark"),
+    ("UI_FAVICON_URL", "/favicon-acme.ico"),
+])
+def test_a_stored_image_path_the_checks_refuse_is_ignored_at_startup(
+    db_session, tmp_path, key, value
+):
+    from src.repositories.app_settings_repository import app_settings_repo
+
+    app_settings_repo.set(db_session, key, value)
+
+    fresh = _restart(db_session, tmp_path)
+
+    assert getattr(fresh, key) is None
+
+
+def test_a_stored_branding_path_under_branding_is_still_loaded(db_session, tmp_path):
+    from src.repositories.app_settings_repository import app_settings_repo
+
+    app_settings_repo.set(db_session, "UI_CUSTOM_LOGO_URL", "/branding/acme/logo.svg")
+
+    assert _restart(db_session, tmp_path).UI_CUSTOM_LOGO_URL == "/branding/acme/logo.svg"

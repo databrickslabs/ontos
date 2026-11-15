@@ -83,7 +83,8 @@ describe('branding assets and theme colors', () => {
     expect(resolveBrandingAssetUrl(null)).toBeNull();
     // Vitest runs in dev mode, where public assets are served from the root
     expect(resolveBrandingAssetUrl('/branding/acme/mark.svg')).toBe('/branding/acme/mark.svg');
-    expect(resolveBrandingAssetUrl('/api/branding/logo')).toBe('/api/branding/logo');
+    expect(resolveBrandingAssetUrl('/static/branding/mark.svg')).toBe('/static/branding/mark.svg');
+    expect(resolveBrandingAssetUrl('/api/branding/logo')).toBeNull();
     expect(resolveBrandingAssetUrl('https://cdn.example/x.svg')).toBe('https://cdn.example/x.svg');
   });
 
@@ -94,6 +95,7 @@ describe('branding assets and theme colors', () => {
     for (const bad of [
       'javascript:alert(1)', 'data:image/svg+xml,<svg/>', '//evil.example/x.svg',
       '/a b.svg', '/a\\b.svg', '/../x.svg', '/branding/%2E%2e/x.svg',
+      '/api/settings', '/logo.svg', '/brandingx/logo.svg',
     ]) {
       expect(isValidImageUrl(bad)).toBe(false);
     }

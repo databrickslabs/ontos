@@ -94,8 +94,8 @@ function ensureFaviconLink(): HTMLLinkElement | null {
  *
  * A root-relative path such as `/branding/acme/logo.svg` names a file shipped
  * in the frontend `public/` dir, so it goes through `getAssetPath` (prod serves
- * those under `/static`). `/api/...` and `/static/...` paths and absolute URLs
- * are used as given. Returns null for blank input.
+ * those under `/static`). `/static/...` paths and absolute URLs are used as
+ * given. Returns null for blank input.
  */
 export function resolveBrandingAssetUrl(url?: string | null): string | null {
   if (typeof url !== 'string') return null;
@@ -103,7 +103,7 @@ export function resolveBrandingAssetUrl(url?: string | null): string | null {
   if (!trimmed) return null;
   if (!isValidImageUrl(trimmed)) return null;
   const isAppAsset = trimmed.startsWith('/') && !trimmed.startsWith('//');
-  if (!isAppAsset || /^\/(api|static)\//.test(trimmed)) return trimmed;
+  if (!isAppAsset || /^\/static\//.test(trimmed)) return trimmed;
   return getAssetPath(trimmed);
 }
 
@@ -111,13 +111,15 @@ export function resolveBrandingAssetUrl(url?: string | null): string | null {
  * Image URL the backend accepts for branding images (same rule as
  * `validate_branding_url`): after trimming, no whitespace, control characters
  * or backslashes; then either a root-relative app asset path (no `//host`, no
- * `..` segments) or an `http(s)://host...` URL. Empty input is valid (unset).
+ * `..` segments, and only under `/branding/` or `/static/`) or an
+ * `http(s)://host...` URL. Empty input is valid (unset).
  */
 export function isValidImageUrl(raw: string): boolean {
   const url = raw.trim();
   if (!url) return true;
   if (/[\s\\\u0000-\u001f\u007f-\u009f]/.test(url)) return false;
   if (url.startsWith('/') && !url.startsWith('//')) {
+    if (!/^\/(branding|static)\//.test(url)) return false;
     const path = url.split(/[?#]/, 1)[0];
     return !path.split('/').some((seg) => /^(\.\.|%2e%2e|\.%2e|%2e\.)$/i.test(seg));
   }

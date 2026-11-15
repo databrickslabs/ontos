@@ -402,8 +402,11 @@ class SettingsManager:
                 logger.debug(f"Loaded UI_I18N_ENABLED from database: {self._settings.UI_I18N_ENABLED}")
             
             if 'UI_CUSTOM_LOGO_URL' in all_settings and all_settings['UI_CUSTOM_LOGO_URL'] is not None:
-                self._settings.UI_CUSTOM_LOGO_URL = all_settings['UI_CUSTOM_LOGO_URL']
-                logger.debug("Loaded UI_CUSTOM_LOGO_URL from database")
+                if self._usable_stored_image(
+                    'UI_CUSTOM_LOGO_URL', all_settings['UI_CUSTOM_LOGO_URL']
+                ):
+                    self._settings.UI_CUSTOM_LOGO_URL = all_settings['UI_CUSTOM_LOGO_URL']
+                    logger.debug("Loaded UI_CUSTOM_LOGO_URL from database")
             
             if 'UI_ABOUT_CONTENT' in all_settings and all_settings['UI_ABOUT_CONTENT'] is not None:
                 self._settings.UI_ABOUT_CONTENT = all_settings['UI_ABOUT_CONTENT']
@@ -423,13 +426,19 @@ class SettingsManager:
                 logger.debug("Loaded UI_APP_SHORT_NAME from database")
 
             if 'UI_FAVICON_URL' in all_settings and all_settings['UI_FAVICON_URL'] is not None:
-                self._settings.UI_FAVICON_URL = all_settings['UI_FAVICON_URL']
-                logger.debug("Loaded UI_FAVICON_URL from database")
+                if self._usable_stored_image('UI_FAVICON_URL', all_settings['UI_FAVICON_URL']):
+                    self._settings.UI_FAVICON_URL = all_settings['UI_FAVICON_URL']
+                    logger.debug("Loaded UI_FAVICON_URL from database")
 
             for key in self._BRANDING_EXTRA_KEYS:
-                if all_settings.get(key) is not None:
-                    setattr(self._settings, key, all_settings[key])
-                    logger.debug("Loaded %s from database", key)
+                if all_settings.get(key) is None:
+                    continue
+                if key == 'UI_CUSTOM_LOGO_DARK_URL' and not self._usable_stored_image(
+                    key, all_settings[key]
+                ):
+                    continue
+                setattr(self._settings, key, all_settings[key])
+                logger.debug("Loaded %s from database", key)
 
             if all_settings.get('UI_SHOW_POWERED_BY') is not None:
                 self._settings.UI_SHOW_POWERED_BY = (
@@ -1419,6 +1428,23 @@ class SettingsManager:
             **{key.lower(): getattr(self._settings, key) for key in self._BRANDING_EXTRA_KEYS},
             'ui_show_powered_by': self._settings.UI_SHOW_POWERED_BY,
         }
+
+    @staticmethod
+    def _usable_stored_image(key: str, value: str) -> bool:
+        """False (with a warning) for a stored branding image the checks now refuse.
+
+        A value saved before the checks was loaded as it was, and the Settings form sends
+        it back on every save, so one the checks refuse would block every UI save.
+        """
+        try:
+            validate_branding_url(value, field=key.lower())
+        except ValueError:
+            logger.warning(
+                "Ignoring the stored %s: it is not an http(s) URL or a /branding/ or "
+                "/static/ path; set it again in Settings > UI", key,
+            )
+            return False
+        return True
 
     # Branding keys stored like the other UI_* settings (env default, DB override).
     _BRANDING_EXTRA_KEYS = (

@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session, object_session
 from src.common.api_errors import CodedValueError, InvalidStatusTransitionError
 from src.common.lifecycle_defaults import (
     ACTIVE, DEFAULT_GROUP_IDS, DEFAULT_STAGE_CATEGORIES, LIFECYCLE_ENTITY_TYPES, STAGE_CATEGORIES,
-    STANDARD_STATUS_BY_CATEGORY, default_group_definition,
+    RETIRED, STANDARD_STATUS_BY_CATEGORY, default_group_definition,
 )
 from src.common.logging import get_logger
 
@@ -833,8 +833,9 @@ class LifecycleService:
 
         Stage keys are lowercase ``[a-z0-9_]`` and unique; categories are Stage
         Categories; transitions join two stages of the group; exactly one stage
-        is initial, every stage is reachable from it, and at least one stage is
-        in the active category.
+        is initial, every stage is reachable from it, at least one stage is in
+        the active category, and every stage but a retired-category one has a
+        move out.
         """
         stages = data.get('stages') or []
         keys: List[str] = []
@@ -905,6 +906,15 @@ class LifecycleService:
         if not any(s['category'] == ACTIVE for s in stages):
             raise LifecycleGroupInvalidError(
                 'lifecycle_group_no_active_stage', "A group needs at least one active stage",
+            )
+        # Only a retired-category stage may end the lifecycle
+        dead_ends = [s['key'] for s in stages
+                     if s['category'] != RETIRED and not nexts.get(s['key'])]
+        if dead_ends:
+            raise LifecycleGroupInvalidError(
+                'lifecycle_group_dead_end_stages',
+                f"Stages with no move out that aren't retired: {', '.join(dead_ends)}",
+                stages=dead_ends,
             )
 
     def _check_stage_changes(self, db: Session, row, new_stages: List[Dict[str, Any]]) -> None:

@@ -377,13 +377,18 @@ policies); past that, the fields are not read (reason `budget_exceeded`):
 
 - `tags` - The table's governed tags as `{key: value}`, read with `HAS_TAG` / `TAG`. Source:
   `system.information_schema.table_tags`. Column tags are not read
-- `upstream_count` - Distinct tables this table was written from, in
+- `upstream_count` - Distinct tables this table was written from in the last 90 days, in
   `system.access.table_lineage`
-- `downstream_count` - Distinct tables written from this table
+- `downstream_count` - Distinct tables written from this table in the last 90 days
 
 Lineage counts only events of the last 90 days and only table-to-table lineage (rows whose
 source or target is a path, a notebook or a dashboard are not counted); a table with no event
 in that window has `0`.
+
+> **Stale tables read `0`.** A valid table that was last written more than 90 days ago (a
+> yearly load, a frozen reference table) has `upstream_count = 0`, so `t.upstream_count > 0`
+> fails it. Exclude such tables in the `WHERE` (by schema, or with a tag such as
+> `NOT HAS_TAG('static')`), or check lineage only where pipelines run at least quarterly.
 
 ```
 MATCH (t:table) ASSERT HAS_TAG('data_classification')

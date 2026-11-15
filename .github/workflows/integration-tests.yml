@@ -147,12 +147,21 @@ jobs:
             echo "::error::Shard ${SHARD_INDEX} has no test files"
             exit 1
           fi
+          rc=0
           hatch -e dev run pytest "${files[@]}" \
             -o addopts="--import-mode=importlib" \
             -o faulthandler_timeout=300 \
             -n 3 \
             -q -rs \
-            --junitxml="junit-${SHARD_INDEX}.xml"
+            --junitxml="junit-${SHARD_INDEX}.xml" || rc=$?
+          # Exit 5 = nothing collected: a shard whose files all have no tests
+          # is fine. The aggregator still fails if a file that has tests (by
+          # its own count) produced no result.
+          if [ "$rc" -eq 5 ]; then
+            echo "::notice::Shard ${SHARD_INDEX} collected no tests"
+            exit 0
+          fi
+          exit "$rc"
 
       - name: Upload JUnit results
         if: always()

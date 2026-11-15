@@ -38,6 +38,7 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           NO_RELEASE_NOTES: ${{ contains(github.event.pull_request.labels.*.name, 'no-release-notes') }}
         run: |
           set -euo pipefail
@@ -51,7 +52,14 @@ jobs:
             text=${text//$'\n'/'%0A'}
             printf '%s' "$text"
           }
-          changed=$(git diff --name-only --diff-filter=ACMR "${BASE_SHA}...HEAD")
+          if [ "$(git rev-parse --verify -q 'HEAD^2^{commit}' || true)" = "$HEAD_SHA" ]; then
+            # Checkout is the merge commit GitHub built: its first parent is the current
+            # base tip (the event's base sha can be older when the base moved since).
+            changed=$(git diff --name-only --diff-filter=ACMR HEAD^1 HEAD)
+          else
+            # No merge commit (the PR has conflicts): the checkout is the PR head.
+            changed=$(git diff --name-only --diff-filter=ACMR "${BASE_SHA}...HEAD")
+          fi
 
           # Fragments added or changed by this PR.
           fragments=()

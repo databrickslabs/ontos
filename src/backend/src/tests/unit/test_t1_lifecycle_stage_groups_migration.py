@@ -97,3 +97,27 @@ def test_upgrade_seeds_and_backfills_and_downgrade_removes_everything(tmp_path, 
                 c['name'] for c in inspector.get_columns(table)
             }
         assert conn.execute(text("SELECT status FROM data_contracts")).scalar() == 'under_review'
+
+
+def test_upgrade_retires_archived_contracts_and_logs_statuses_without_stage(
+    tmp_path, migration, caplog,
+):
+    engine = create_engine(f"sqlite:///{tmp_path / 't1.db'}")
+    with engine.begin() as conn:
+        for table in ('data_products', 'data_contracts', 'assets'):
+            conn.execute(text(f"CREATE TABLE {table} (id VARCHAR PRIMARY KEY, status VARCHAR)"))
+        conn.execute(text("INSERT INTO data_contracts VALUES ('c1', 'archived'), "
+                          "('c2', ' Archived'), ('c3', 'active'), ('c4', 'obsolete')"))
+        conn.execute(text("INSERT INTO data_products VALUES ('p1', 'certified'), ('p2', NULL)"))
+        conn.execute(text("INSERT INTO assets VALUES ('a1', 'in_use'), ('a2', 'active')"))
+
+        with caplog.at_level('WARNING', logger='alembic.runtime.migration'):
+            _apply(conn, migration.upgrade)
+
+        assert dict(conn.execute(text("SELECT id, status FROM data_contracts")).all()) == {
+            'c1': 'retired', 'c2': 'retired', 'c3': 'active', 'c4': 'obsolete',
+        }
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("1 rows in data_contracts" in m and "'obsolete' x1" in m for m in messages)
+    assert any("2 rows in data_products" in m and "'certified' x1" in m for m in messages)
+    assert any("1 rows in assets" in m and "'in_use' x1" in m for m in messages)

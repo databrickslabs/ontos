@@ -168,3 +168,22 @@ def test_a_blocked_update_keeps_the_tag_a_remove_tag_step_removes(client, db_ses
     assert blocked.status_code == 400
     # Before, the step removed (and committed) it before the policy check blocked
     assert tag_writes == []
+
+
+def test_an_update_that_passes_the_gate_loses_the_tag_its_remove_tag_step_removes(
+    client, db_session, tag_writes,
+):
+    tag_id = _tag_then_check_gate(
+        db_session, "MATCH (c:data_contract) ASSERT c.name = 'Renamed'", step_type='remove_tag',
+    )
+    contract_id = _new_contract(client)
+    db_session.add(EntityTagAssociationDb(
+        tag_id=tag_id, entity_id=contract_id, entity_type='data_contract',
+    ))
+    db_session.flush()
+
+    passed = client.put(f'/api/data-contracts/{contract_id}', json={'name': 'Renamed'})
+
+    assert passed.status_code == 200, passed.text
+    assert tag_writes == [(contract_id, 'removed')]
+    assert _contract_tags(db_session, contract_id, tag_id) == []

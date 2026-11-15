@@ -346,6 +346,10 @@ class TriggerRegistry:
             
         Returns:
             Tuple of (all_passed, executions)
+
+        The tags the gates' assign-tag steps set are written only when every
+        gate passed (``apply_deferred_tag_writes``): a blocked update leaves
+        no tag behind.
         """
         event = TriggerEvent(
             trigger_type=TriggerType.BEFORE_UPDATE,
@@ -363,7 +367,10 @@ class TriggerRegistry:
             exe.status == ExecutionStatus.SUCCEEDED 
             for exe in executions
         ) if executions else True
-        
+        if all_passed and executions:
+            from src.common.workflow_executor import apply_deferred_tag_writes
+            apply_deferred_tag_writes(self._db, executions, user_email)
+
         return all_passed, executions
 
     def before_status_change(

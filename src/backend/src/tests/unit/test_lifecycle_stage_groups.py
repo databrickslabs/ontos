@@ -905,3 +905,30 @@ class TestRoundTripByGroupId:
         row = SimpleNamespace(status='draft', lifecycle_stage_group_id=None)
         _status, props = lifecycle_service.export_status(db_session, 'data_contract', row)
         assert props['ontosLifecycleStageGroupId'] == DEFAULT_GROUP_IDS['data_contract']
+
+
+class TestChangeGroupSideEffects:
+    def test_an_asset_is_reindexed_and_a_tag_sync_is_requested(self, db_session, monkeypatch):
+        from src.common import app_state, uc_tag_sync_trigger
+        from src.db_models.assets import AssetTypeDb
+
+        search = MagicMock()
+        monkeypatch.setitem(app_state._managers_registry, 'search_manager', search)
+        requests = []
+        monkeypatch.setattr(uc_tag_sync_trigger, 'request_uc_tag_sync_after_transition',
+                            lambda *args: requests.append(args))
+        group = lifecycle_service.save_group(
+            db_session, _looping_group(entity_type='asset'), 'admin',
+        )
+        asset_type = AssetTypeDb(id=uuid.uuid4(), name=f'Type {uuid.uuid4().hex[:6]}')
+        db_session.add(asset_type)
+        asset = AssetDb(id=uuid.uuid4(), name='Orders', asset_type_id=asset_type.id,
+                        status='deprecated')
+        db_session.add(asset)
+        db_session.commit()
+
+        lifecycle_service.change_group(db_session, 'asset', str(asset.id), group.id, 'bob')
+
+        item = search.upsert_item.call_args.args[0]
+        assert item.id == f'asset::{asset.id}'
+        assert requests == [('asset', str(asset.id), 'deprecated', 'draft')]

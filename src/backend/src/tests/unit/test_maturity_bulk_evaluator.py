@@ -279,3 +279,43 @@ def test_a_failure_of_the_run_itself_stops_it_with_a_code(db_session):
     assert final["finished_at"] is not None
     assert final["errors"] == [{"asset_id": "", "code": "maturity_bulk_run_failed", "params": {}}]
     assert "connection string leaked" not in json.dumps(final)
+
+
+def test_a_run_reads_the_uc_tables_with_the_given_identity(db_session):
+    # An admin-started run passes the admin's identity; the app's client is not used
+    from unittest.mock import MagicMock, patch
+
+    from databricks.sdk.service.catalog import ColumnInfo, TableInfo
+    from src.common.run_identity import RunIdentity
+    from src.db_models.compliance import CompliancePolicyDb
+    from src.repositories.maturity_repository import maturity_repo
+
+    _level(db_session, 1, "Has columns")
+    level = db_session.query(MaturityLevelDb).filter_by(entity_type="Asset").one()
+    policy = CompliancePolicyDb(id=str(uuid.uuid4()), name="Columns",
+                                rule="ASSERT obj.column_count > 0", is_active=True)
+    db_session.add(policy)
+    db_session.flush()
+    maturity_repo.add_gate(db_session, maturity_level_id=level.id,
+                           compliance_policy_id=policy.id)
+    db_session.flush()
+    asset_id = _asset(db_session, "bulkid.sales.orders")
+    user_ws = MagicMock()
+    user_ws.tables.get.return_value = TableInfo(
+        full_name="bulkid.sales.orders",
+        columns=[ColumnInfo(name="id", comment="Id", type_text="bigint")],
+    )
+    identity = RunIdentity(lambda: user_ws, on_behalf_of_user=True)
+    scope = _bulk_scope(catalog="bulkid")
+
+    with patch("src.common.workspace_client.get_workspace_client",
+               side_effect=AssertionError("the app's client must not be used")):
+        snapshot = bulk.start_run(scope, started_by="admin@example.com")
+        bulk.execute_run(snapshot["id"], scope, evaluated_by="admin@example.com",
+                         session_factory=lambda: _same_session(db_session),
+                         run_identity=identity)
+
+    user_ws.tables.get.assert_called_once_with(full_name="bulkid.sales.orders")
+    stored = maturity_repo.list_snapshots(db_session, entity_type="Asset",
+                                          entity_id=asset_id, limit=1)
+    assert [s.achieved_level_order for s in stored] == [1]

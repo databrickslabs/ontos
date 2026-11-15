@@ -107,3 +107,49 @@ class TestBulkAssetMaturityAccessLevels:
     ):
         assert client.get(LATEST).status_code == 200
         assert client.post(START, json={}).status_code == 403
+
+
+class TestBulkRunReadsAsTheCaller:
+    """An admin-started bulk run reads the UC tables with the admin's token, not the app's."""
+
+    def test_the_run_reads_with_the_callers_token(
+            self, client, db_session, monkeypatch, mock_workspace_client):
+        from unittest.mock import MagicMock
+
+        from databricks.sdk.errors import PermissionDenied
+        from databricks.sdk.service.catalog import ColumnInfo, TableInfo
+        from src.common import workspace_client as workspace_client_module
+        from src.db_models.compliance import CompliancePolicyDb
+        from src.db_models.maturity import MaturitySnapshotDb
+        from src.repositories.maturity_repository import maturity_repo
+
+        mock_workspace_client.tables.get.side_effect = PermissionDenied('app has no grant')
+        user_ws = MagicMock()
+        user_ws.tables.get.return_value = TableInfo(full_name='bulku.sales.orders', columns=[
+            ColumnInfo(name='id', comment='Id', type_text='bigint'),
+        ])
+        monkeypatch.setattr(workspace_client_module, 'get_obo_workspace_client',
+                            lambda *a, **k: user_ws)
+        level = MaturityLevelDb(level_order=1, name='Has columns', entity_type='Asset')
+        policy = CompliancePolicyDb(id=str(uuid.uuid4()), name='Columns',
+                                    rule='ASSERT obj.column_count > 0', is_active=True)
+        db_session.add_all([level, policy])
+        db_session.flush()
+        maturity_repo.add_gate(db_session, maturity_level_id=level.id,
+                               compliance_policy_id=policy.id)
+        asset_type = db_session.query(AssetTypeDb).filter_by(name='Table').first()
+        if asset_type is None:
+            asset_type = AssetTypeDb(name='Table')
+            db_session.add(asset_type)
+            db_session.flush()
+        row = AssetDb(name=f'a-{uuid.uuid4().hex[:6]}', asset_type_id=asset_type.id,
+                      platform='databricks', location='bulku.sales.orders', status='active')
+        db_session.add(row)
+        db_session.flush()
+
+        response = client.post(START, json={'catalog': 'bulku'})
+
+        assert response.status_code == 202, response.text
+        user_ws.tables.get.assert_called_with(full_name='bulku.sales.orders')
+        snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(row.id)).all()
+        assert [s.achieved_level_order for s in snapshots] == [1]

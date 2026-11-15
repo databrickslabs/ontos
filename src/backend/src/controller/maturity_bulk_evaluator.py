@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from src.common.api_errors import CodedValueError
 from src.common.database import get_db_session
 from src.common.logging import get_logger
+from src.common.run_identity import RunIdentity
 from src.controller.entity_dict_builder import (
     MATURITY_ASSET_TYPES,
     UnsupportedMaturityAssetTypeError,
@@ -296,9 +297,17 @@ def execute_run(
     evaluated_by: Optional[str] = None,
     session_factory: SessionFactory = get_db_session,
     evaluator_factory: Optional[Callable[[], MaturityEvaluator]] = None,
+    run_identity: Optional[RunIdentity] = None,
 ) -> None:
-    """Evaluate every asset of the scope for a run registered with start_run."""
-    make_evaluator = evaluator_factory or MaturityEvaluator
+    """Evaluate every asset of the scope for a run registered with start_run.
+
+    ``run_identity``: whose permissions the UC tables are read with. A run an
+    admin starts passes theirs (a table they can't read stays unreadable for
+    them); the default, the app's, is for runs no user started.
+    """
+    make_evaluator = evaluator_factory or (
+        lambda: MaturityEvaluator(run_identity=run_identity)
+    )
     with _lock:
         if _current is None or _current["id"] != run_id:
             return

@@ -899,3 +899,38 @@ def test_report_says_whether_it_was_stored(db_session):
     # An unreadable table keeps the stored level and stores nothing
     kept = run(_ws(error=NotFound('gone')), True)
     assert kept.achieved_level_order == 2 and kept.stored is False
+
+
+def test_evaluator_reads_the_table_with_the_given_run_identity(db_session):
+    from src.common.run_identity import RunIdentity
+
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Has columns', ['ASSERT obj.column_count > 0'])
+    user_ws, app_ws = _ws(_table([('id', 'Id')])), _ws(error=PermissionDenied('no grant'))
+    identity = RunIdentity(lambda: user_ws, on_behalf_of_user=True)
+
+    report = MaturityEvaluator(app_ws, run_identity=identity).evaluate(
+        db_session, entity_type='Asset', entity_id=str(asset.id), persist=False,
+    )
+
+    assert report.achieved_level_order == 1 and report.notices == []
+    user_ws.tables.get.assert_called_once_with(full_name=FQN)
+    app_ws.tables.get.assert_not_called()
+
+
+def test_user_without_a_token_gets_the_client_unavailable_code(db_session):
+    # The user's identity never falls back to the app's client
+    from src.common.api_errors import UserTokenRequiredError
+    from src.common.run_identity import RunIdentity
+
+    def no_token():
+        raise UserTokenRequiredError('no user token')
+
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Has columns', ['ASSERT obj.column_count > 0'])
+
+    report = MaturityEvaluator(
+        run_identity=RunIdentity(no_token, on_behalf_of_user=True),
+    ).evaluate(db_session, entity_type='Asset', entity_id=str(asset.id), persist=False)
+
+    assert [n.code for n in report.notices] == ['maturity_uc_table_client_unavailable']

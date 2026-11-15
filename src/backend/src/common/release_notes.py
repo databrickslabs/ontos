@@ -33,6 +33,7 @@ SECTIONS: List[Tuple[str, str]] = [
 ]
 SECTION_HEADINGS: Dict[str, str] = dict(SECTIONS)
 
+VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 FILE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*\.md$")
 _TOP_LEVEL_BULLET_RE = re.compile(r"^[-*+]\s")
 _HEADING_RE = re.compile(r"^#{1,6}\s")
@@ -187,9 +188,18 @@ def merge_into_unreleased(notes: str, fragments: List[Fragment]) -> str:
     return "\n".join(lines[: start + 1] + block + lines[end:])
 
 
+def normalize_version(version: str) -> str:
+    """Return ``X.Y.Z`` for ``X.Y.Z`` or ``vX.Y.Z``; raise ValueError otherwise."""
+    bare = version[1:] if version.startswith("v") else version
+    if not VERSION_RE.match(bare):
+        raise ValueError(f"invalid version '{version}': expected X.Y.Z")
+    return bare
+
+
 def assemble(notes: str, fragments: List[Fragment], version: str, date: str) -> str:
     """Write the fragments into the Unreleased block, name it after the release
     and add a fresh empty Unreleased heading above it."""
+    version = normalize_version(version)
     merged = merge_into_unreleased(notes, fragments)
     lines = merged.split("\n")
     start = next((i for i, line in enumerate(lines) if line.strip() == UNRELEASED_HEADING), None)

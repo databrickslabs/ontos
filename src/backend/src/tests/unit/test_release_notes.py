@@ -1,4 +1,6 @@
 """Release-note fragments: validation, merge, assemble, and the docs viewer."""
+import importlib.util
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -182,6 +184,19 @@ def test_assemble_without_fragments_releases_entries_already_in_the_block():
     assert "# Release Notes - v1.2.0 (2026-12-01)\n\n\n## ⚠️ Upgrade Notes" in result
 
 
+@pytest.mark.parametrize("given", ["1.2.0", "v1.2.0"])
+def test_assemble_accepts_a_version_with_or_without_v(given):
+    result = assemble(NOTES, [], given, "2026-12-01")
+    assert "# Release Notes - v1.2.0 (2026-12-01)" in result
+    assert "vv1.2.0" not in result
+
+
+@pytest.mark.parametrize("bad", ["1.2", "1.2.0-rc1", "vv1.2.0", "", "V1.2.0", "1.2.x"])
+def test_assemble_rejects_a_malformed_version(bad):
+    with pytest.raises(ValueError, match="invalid version"):
+        assemble(NOTES, [], bad, "2026-12-01")
+
+
 def test_sections_match_the_headings_in_the_release_notes_file():
     notes = (Path(__file__).resolve().parents[4] / "docs" / "RELEASE_NOTES.md").read_text(
         encoding="utf-8"
@@ -226,3 +241,44 @@ def test_docs_viewer_merges_fragments_without_touching_the_file(tmp_path, monkey
 def test_docs_viewer_without_fragments_serves_the_file_as_is(tmp_path, monkeypatch):
     manager = _manager(tmp_path, monkeypatch)
     assert manager.get_documentation_content("release-notes")["content"] == NOTES
+
+
+SCRIPT = Path(__file__).resolve().parents[4] / "scripts" / "assemble_release_notes.py"
+
+
+@pytest.fixture
+def cli(tmp_path, monkeypatch):
+    """The assembler CLI module, pointed at a temporary notes file and fragment folder."""
+    spec = importlib.util.spec_from_file_location("assemble_release_notes_cli", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    notes = tmp_path / "RELEASE_NOTES.md"
+    notes.write_text(NOTES, encoding="utf-8")
+    unreleased = tmp_path / "unreleased"
+    unreleased.mkdir()
+    monkeypatch.setattr(module, "NOTES_PATH", notes)
+    monkeypatch.setattr(module, "UNRELEASED_DIR", unreleased)
+
+    def run(*args: str) -> int:
+        monkeypatch.setattr(sys, "argv", ["assemble_release_notes.py", *args])
+        return module.main()
+
+    run.notes = notes
+    run.unreleased = unreleased
+    return run
+
+
+@pytest.mark.parametrize("bad", ["1.2", "1.2.0-rc1", "vv1.2.0"])
+def test_cli_rejects_a_malformed_version(cli, bad, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        cli("--version", bad)
+    assert exit_info.value.code == 2
+    assert "invalid version" in capsys.readouterr().err
+    assert cli.notes.read_text(encoding="utf-8") == NOTES
+
+
+def test_cli_strips_a_leading_v(cli):
+    _write(cli.unreleased, "features", "f.md", "- **f**: new")
+    assert cli("--version", "v1.2.0", "--date", "2026-12-01") == 0
+    text = cli.notes.read_text(encoding="utf-8")
+    assert "# Release Notes - v1.2.0 (2026-12-01)" in text and "vv1.2.0" not in text

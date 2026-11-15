@@ -35,6 +35,13 @@ def _load_module():
 rn = _load_module()
 
 
+def _version(value: str) -> str:
+    try:
+        return rn.normalize_version(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
 def check(files) -> int:
     if files:
         problems = [
@@ -55,7 +62,9 @@ def check(files) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--version", help="release version, X.Y.Z")
+    parser.add_argument(
+        "--version", type=_version, help="release version, X.Y.Z (a leading v is accepted)"
+    )
     parser.add_argument("--date", help="release date, YYYY-MM-DD (default: today)")
     parser.add_argument("--preview", action="store_true", help="print the result, write nothing")
     parser.add_argument(

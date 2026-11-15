@@ -1149,21 +1149,31 @@ TAG_SQL_ATTEMPTS = 3
 TAG_SQL_BACKOFFS: Tuple[float, ...] = (2.0, 10.0)
 TAG_SQL_SLEEP = time.sleep
 
-# The table, view or column (or its schema / catalog) doesn't exist: the object is
-# skipped, not failed (see UcObjectMissing).
+# The table or view (or its schema / catalog) doesn't exist: the object is skipped, not
+# failed (see UcObjectMissing). Checked on a workspace: ALTER ... SET / UNSET TAGS on a
+# missing table, schema or catalog, and a read of `<catalog>`.information_schema for a
+# catalog that doesn't exist, raise TABLE_OR_VIEW_NOT_FOUND (SQLSTATE 42P01). A read
+# without USE CATALOG raises INSUFFICIENT_PERMISSIONS (42501): not missing, it fails.
 _MISSING_OBJECT_ERRORS = (
     "TABLE_OR_VIEW_NOT_FOUND",
     "SCHEMA_NOT_FOUND",
     "CATALOG_NOT_FOUND",
-    "UNRESOLVED_COLUMN",
 )
 
+# The column doesn't exist on a table that does. Checked on a workspace: ALTER TABLE t
+# ALTER COLUMN <missing> SET / UNSET TAGS raises COLUMN_NOT_FOUND_IN_TABLE (42703), not
+# UNRESOLVED_COLUMN. Matched only on a column's ALTER statement: elsewhere (e.g. the
+# information_schema reads) a column error is a bug in the job's own query.
+_MISSING_COLUMN_ERRORS = ("COLUMN_NOT_FOUND_IN_TABLE",)
+
 # Errors a retry can't fix, matched against the Spark error class and message:
-_NON_RETRYABLE_TAG_ERRORS = _MISSING_OBJECT_ERRORS + (
+_NON_RETRYABLE_TAG_ERRORS = _MISSING_OBJECT_ERRORS + _MISSING_COLUMN_ERRORS + (
     # The job's identity lacks a privilege on the object, e.g. APPLY TAG.
     "PERMISSION_DENIED",
     "INSUFFICIENT_PERMISSIONS",
     "APPLY TAG",
+    # A column the statement names can't be resolved: the query is wrong.
+    "UNRESOLVED_COLUMN",
 )
 
 
@@ -1178,10 +1188,15 @@ def _is_retryable_tag_error(error: Exception) -> bool:
     return not any(marker in text for marker in _NON_RETRYABLE_TAG_ERRORS)
 
 
-def is_missing_object_error(error: Exception) -> bool:
-    """True when Unity Catalog says the object (or its schema / catalog) is gone."""
+def is_missing_object_error(error: Exception, column_alter: bool = False) -> bool:
+    """True when Unity Catalog says the object (or its schema / catalog) is gone.
+
+    ``column_alter``: the error comes from an ALTER statement on a column, so a missing
+    column also counts.
+    """
     text = _error_text(error)
-    return any(marker in text for marker in _MISSING_OBJECT_ERRORS)
+    markers = _MISSING_OBJECT_ERRORS + (_MISSING_COLUMN_ERRORS if column_alter else ())
+    return any(marker in text for marker in markers)
 
 
 class UcObjectMissing(Exception):
@@ -1303,7 +1318,7 @@ def reconcile_tags(
             unassign_tag(spark, object_type, object_name, k)
             removed += 1
         except Exception as e:
-            if is_missing_object_error(e):
+            if is_missing_object_error(e, column_alter=object_type == "COLUMN"):
                 raise UcObjectMissing(object_type, object_name) from None
             msg = f"Failed to remove tag {k} from {object_type} {object_name}: {e}"
             print(f"[WARN] {msg}")
@@ -1332,7 +1347,7 @@ def reconcile_tags(
                 if warnings is not None:
                     warnings.append(msg)
         except Exception as e:
-            if is_missing_object_error(e):
+            if is_missing_object_error(e, column_alter=object_type == "COLUMN"):
                 raise UcObjectMissing(object_type, object_name) from None
             if key_error is not None:
                 print(f"[WARN] {key_error}")
@@ -1530,7 +1545,7 @@ def remove_delivered_tags(
             unassign_tag(spark, object_type, object_name, k)
             removed += 1
         except Exception as e:
-            if is_missing_object_error(e):
+            if is_missing_object_error(e, column_alter=object_type == "COLUMN"):
                 raise UcObjectMissing(object_type, object_name) from None
             msg = f"Failed to remove tag {k} from {object_type} {object_name}: {e}"
             print(f"[WARN] {msg}")

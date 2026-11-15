@@ -125,24 +125,72 @@ def test_object_dropped_between_read_and_write_is_skipped(tag_sync):
     assert any("TABLE gone.crm.customers" in item for item in result.skipped)
 
 
-def test_missing_column_is_skipped(tag_sync):
-    spark = FakeSpark({"ALTER COLUMN `nope`": "[UNRESOLVED_COLUMN.WITH_SUGGESTION] nope"})
-    direct = tag_sync.build_direct_link_infos(
-        [
-            {"entity_type": "uc_column", "entity_id": "main.a.t.nope", "iri": PII,
-             "label": None},
-            {"entity_type": "uc_column", "entity_id": "main.a.t.ok", "iri": PII,
-             "label": None},
-        ],
+# What Unity Catalog raised on a workspace for ALTER TABLE t ALTER COLUMN <missing>
+# SET TAGS (SQLSTATE 42703).
+MISSING_COLUMN_ERROR = (
+    "[COLUMN_NOT_FOUND_IN_TABLE] Column `nope` not found in table `main`.`a`.`t`. "
+    "SQLSTATE: 42703"
+)
+
+
+def _columns(tag_sync, *names):
+    return tag_sync.build_direct_link_infos(
+        [{"entity_type": "uc_column", "entity_id": f"main.a.t.{n}", "iri": PII,
+          "label": None} for n in names],
         None, None,
     )
-    result = tag_sync.sync_tags(MagicMock(), spark, [], direct, CFG,
-                                tag_sync.TagOwnership(), previous=None)
+
+
+def test_missing_column_is_skipped(tag_sync):
+    spark = FakeSpark({"ALTER COLUMN `nope`": MISSING_COLUMN_ERROR})
+    result = tag_sync.sync_tags(MagicMock(), spark, [], _columns(tag_sync, "nope", "ok"),
+                                CFG, tag_sync.TagOwnership(), previous=None)
 
     assert result.errors == []
     assert result.updated == 1
     assert len(result.skipped) == 1 and "COLUMN main.a.t.nope" in result.skipped[0]
     assert "main.a.t.nope" not in result.delivered["COLUMN"]
+
+
+def test_missing_column_is_not_retried(tag_sync, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(tag_sync, "TAG_SQL_SLEEP", sleeps.append)
+    spark = FakeSpark({"ALTER COLUMN `nope`": MISSING_COLUMN_ERROR})
+    tag_sync.sync_tags(MagicMock(), spark, [], _columns(tag_sync, "nope"), CFG,
+                       tag_sync.TagOwnership(), previous=None)
+
+    assert len([s for s in spark.statements if "ALTER COLUMN `nope`" in s]) == 1
+    assert sleeps == []
+
+
+def test_unresolved_column_in_a_tag_read_fails_the_object(tag_sync):
+    """A column error in the job's own information_schema query is not a missing
+    object: skipping it would hide a broken query behind a green run."""
+    spark = FakeSpark({"table_name = 'customers'":
+                       "[UNRESOLVED_COLUMN.WITH_SUGGESTION] `tag_name` cannot be resolved"})
+    result = _run(tag_sync, spark, TABLES)
+
+    assert result.skipped == []
+    assert result.failed_objects == ["TABLE gone.crm.customers"]
+
+
+def test_column_not_found_outside_a_column_alter_fails_the_object(tag_sync):
+    spark = FakeSpark({"ALTER TABLE gone.crm.customers SET": MISSING_COLUMN_ERROR})
+    result = _run(tag_sync, spark, TABLES)
+
+    assert result.skipped == []
+    assert result.failed_objects == ["TABLE gone.crm.customers"]
+
+
+def test_unresolved_column_is_not_retried(tag_sync, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(tag_sync, "TAG_SQL_SLEEP", sleeps.append)
+    spark = FakeSpark({"ALTER COLUMN `nope`": "[UNRESOLVED_COLUMN] nope"})
+    result = tag_sync.sync_tags(MagicMock(), spark, [], _columns(tag_sync, "nope"), CFG,
+                                tag_sync.TagOwnership(), previous=None)
+
+    assert result.failed_objects == ["COLUMN main.a.t.nope"]
+    assert sleeps == []
 
 
 def test_missing_object_is_not_retried(tag_sync):

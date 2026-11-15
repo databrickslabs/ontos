@@ -12,7 +12,7 @@ import re
 import argparse
 import traceback
 from typing import List, Dict, Any, Optional, Set, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -498,7 +498,7 @@ def create_contracts(
                 stats[outcome] += 1
                 continue
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             added = 0
             # One transaction: a contract whose schema objects failed would be
             # skipped by every later run.
@@ -628,7 +628,7 @@ def create_products(
                 stats[outcome] += 1
                 continue
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             added = 0
             # One transaction: a product whose ports failed would be skipped
             # by every later run.
@@ -732,7 +732,7 @@ def create_domains(
                 stats[outcome] += 1
                 continue
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             with engine.begin() as conn:
                 if existing_id:
                     conn.execute(touch_sql, {"id": existing_id, "updated_at": now})

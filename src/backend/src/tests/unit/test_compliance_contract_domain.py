@@ -25,12 +25,17 @@ from src.models.data_contracts_api import DataContractUpdate
 from src.models.process_workflows import TriggerContext, TriggerType
 
 
+# domain id -> name, so a test writes a rule with the name an author would
+_NAMES = {}
+
+
 def _domain(db, name):
     domain = DataDomain(
         id=str(uuid.uuid4()), name=f'{name}-{uuid.uuid4().hex[:6]}', created_by='u@example.com',
     )
     db.add(domain)
     db.flush()
+    _NAMES[domain.id] = domain.name
     return domain.id
 
 
@@ -76,7 +81,8 @@ def test_a_stored_contract_has_its_primary_domain(db_session):
 
     loaded = AppEntityLoader(db_session).load_entity('data_contract', contract.id)
 
-    assert loaded['domain'] == primary
+    assert loaded['domain'] == _NAMES[primary]
+    assert loaded['domain_id'] == primary
 
 
 def test_a_contract_without_a_primary_domain_has_none(db_session):
@@ -85,8 +91,32 @@ def test_a_contract_without_a_primary_domain_has_none(db_session):
 
     loader = AppEntityLoader(db_session)
 
-    assert loader.load_entity('data_contract', unassigned.id)['domain'] is None
-    assert loader.load_entity('data_contract', only_additional.id)['domain'] is None
+    for contract in (unassigned, only_additional):
+        loaded = loader.load_entity('data_contract', contract.id)
+        assert loaded['domain'] is None
+        assert loaded['domain_id'] is None
+
+
+def test_a_contract_and_a_product_expose_the_domain_the_same_way(db_session):
+    from src.db_models.data_products import DataProductDb
+    domain = _domain(db_session, 'sales')
+    contract = _contract(db_session, domain, primary=domain)
+    product = DataProductDb(
+        id=str(uuid.uuid4()), name='p', status='active', version='1.0.0'
+    )
+    db_session.add(product)
+    db_session.flush()
+    db_session.add(EntityDomainAssociationDb(
+        domain_id=domain, entity_type='data_product', entity_id=product.id, is_primary=True,
+    ))
+    db_session.flush()
+    loader = AppEntityLoader(db_session)
+
+    loaded_contract = loader.load_entity('data_contract', contract.id)
+    loaded_product = loader.load_entity('data_product', product.id)
+
+    assert loaded_contract['domain'] == loaded_product['domain'] == _NAMES[domain]
+    assert loaded_contract['domain_id'] == loaded_product['domain_id'] == domain
 
 
 def test_a_run_selects_contracts_by_domain(db_session):
@@ -95,7 +125,7 @@ def test_a_run_selects_contracts_by_domain(db_session):
     elsewhere = _contract(db_session, _domain(db_session, 'finance'), primary=None)
     policy = _policy(
         db_session,
-        f"MATCH (c:data_contract) WHERE c.domain = '{domain}' ASSERT c.status = 'active'",
+        f"MATCH (c:data_contract) WHERE c.domain = '{_NAMES[domain]}' ASSERT c.status = 'active'",
     )
 
     with patch('src.common.workspace_client.get_workspace_client', return_value=MagicMock()):
@@ -112,7 +142,7 @@ def test_a_run_selects_contracts_by_domain(db_session):
 def test_a_policy_check_on_a_stored_contract_sees_its_domain(db_session):
     domain = _domain(db_session, 'sales')
     contract = _contract(db_session, domain, primary=domain)
-    policy = _policy(db_session, f"MATCH (c:data_contract) ASSERT c.domain = '{domain}'")
+    policy = _policy(db_session, f"MATCH (c:data_contract) ASSERT c.domain = '{_NAMES[domain]}'")
 
     result = _step(
         db_session, policy, contract, {'contract_id': contract.id, 'name': contract.name},
@@ -128,7 +158,7 @@ def test_a_before_update_gate_on_the_domain_applies_when_the_domain_is_kept(db_s
     contract = _contract(db_session, domain, primary=domain)
     policy = _policy(
         db_session,
-        f"MATCH (c:data_contract) WHERE c.domain = '{domain}' ASSERT c.status = 'active'",
+        f"MATCH (c:data_contract) WHERE c.domain = '{_NAMES[domain]}' ASSERT c.status = 'active'",
     )
 
     result = _step(

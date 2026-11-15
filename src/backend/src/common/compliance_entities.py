@@ -333,7 +333,7 @@ class AppEntityLoader(EntityLoader):
             tags_map = self._tags_by_entity('data_product', [str(p.id) for p in products])
             for product in products:
                 assigned = domains_map.get(str(product.id), [])
-                primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
+                primary_domain = next((a for a in assigned if a.is_primary), None)
                 yield {
                     'type': 'data_product',
                     'id': product.id,
@@ -341,7 +341,8 @@ class AppEntityLoader(EntityLoader):
                     # As for contracts, the purpose text (description is the
                     # ODPS description row, None when the product has none)
                     'description': getattr(product.description, 'purpose', None),
-                    'domain': primary_domain,
+                    'domain': primary_domain.domain_name if primary_domain else None,
+                    'domain_id': primary_domain.domain_id if primary_domain else None,
                     'status': product.status,
                     'version': getattr(product, 'version', None),
                     'owner': getattr(product, 'owner_team_id', None),
@@ -368,8 +369,8 @@ class AppEntityLoader(EntityLoader):
             tags_map = self._tags_by_entity('data_contract', [str(c.id) for c in contracts])
             for contract in contracts:
                 assigned = domains_map.get(str(contract.id), [])
-                # The primary domain's id, as the dropped column held it
-                primary_domain = next((a.domain_id for a in assigned if a.is_primary), None)
+                # As for products: `domain` is the primary domain's name, `domain_id` its id
+                primary_domain = next((a for a in assigned if a.is_primary), None)
                 yield {
                     'type': 'data_contract',
                     'id': contract.id,
@@ -378,7 +379,8 @@ class AppEntityLoader(EntityLoader):
                     'status': contract.status,
                     'version': getattr(contract, 'version', None),
                     'owner': getattr(contract, 'owner_team_id', None),
-                    'domain': primary_domain,
+                    'domain': primary_domain.domain_name if primary_domain else None,
+                    'domain_id': primary_domain.domain_id if primary_domain else None,
                     'tags': tags_map.get(str(contract.id), {}),
                     'created_at': getattr(contract, 'created_at', None),
                     'updated_at': getattr(contract, 'updated_at', None),

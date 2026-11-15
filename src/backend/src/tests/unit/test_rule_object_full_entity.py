@@ -258,7 +258,7 @@ def test_other_rule_step_errors_have_no_code(db_session):
     assert not (result.data or {}).get('error_code')
 
 
-def test_before_update_gates_see_only_the_proposed_change(db_session):
+def test_before_update_gates_see_the_entity_after_the_update(db_session):
     from src.models.process_workflows import TriggerContext, TriggerType
 
     contract = _contract(db_session, owner_team_id='team-1')
@@ -268,5 +268,5 @@ def test_before_update_gates_see_only_the_proposed_change(db_session):
         trigger_type=TriggerType.BEFORE_UPDATE,
     )
 
-    # The stored row's has_owner=True would contradict the proposed change.
-    assert _rule_object(db_session, context) == {'owner_team_id': None}
+    # As the policy checks see it: a null leaves the stored owner, as the manager does
+    assert _rule_object(db_session, context)['owner'] == 'team-1'

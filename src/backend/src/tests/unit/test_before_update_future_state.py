@@ -18,8 +18,10 @@ import uuid
 
 from src.common.workflow_executor import (
     AssignTagStepHandler,
+    ConditionalStepHandler,
     PolicyCheckStepHandler,
     StepContext,
+    ValidationStepHandler,
     _policy_rule_object,
 )
 from src.db_models.compliance import CompliancePolicyDb
@@ -381,3 +383,32 @@ def test_where_and_assert_see_the_same_tags(db_session):
     assert 'not_applicable' not in untouched.data
     assert with_gdpr.passed is True
     assert 'not_applicable' not in with_gdpr.data
+
+
+# 5. Validation and conditional steps see the same object
+
+def test_a_validation_step_sees_the_stored_tags_an_update_does_not_resend(db_session):
+    # The default "Check Owner Tag" rule, on a before_update trigger
+    contract = _contract(db_session)
+    _tag(db_session, contract, ['owner'])
+    rule = "MATCH (obj:Object) ASSERT HAS_TAG('owner')"
+
+    renamed = ValidationStepHandler(db_session, {'rule': rule}).execute(
+        _context(contract, _payload(name='Renamed')),
+    )
+    cleared = ValidationStepHandler(db_session, {'rule': rule}).execute(
+        _context(contract, _payload(tags=[])),
+    )
+
+    assert renamed.passed is True
+    assert cleared.passed is False
+
+
+def test_a_conditional_step_sees_the_stored_fields_an_update_does_not_resend(db_session):
+    contract = _contract(db_session, owner='team-1')
+
+    result = ConditionalStepHandler(
+        db_session, {'condition': "obj.owner = 'team-1'"},
+    ).execute(_context(contract, _payload(name='Renamed')))
+
+    assert result.branch is True

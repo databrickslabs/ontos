@@ -389,10 +389,15 @@ def apply_deferred_tag_writes(
     tags_mgr = TagsManager()
     written = 0
     for execution in executions:
-        for step in execution.step_executions or []:
-            write = (step.result_data or {}).get('deferred_tag_write')
-            if not isinstance(write, dict) or not step.passed:
-                continue
+        writes = [
+            (step.result_data or {}).get('deferred_tag_write')
+            for step in execution.step_executions or [] if step.passed
+        ]
+        # In step order (``seq``): stored timestamps may tie
+        writes = sorted(
+            (w for w in writes if isinstance(w, dict)), key=lambda w: w.get('seq', 0),
+        )
+        for write in writes:
             target = {
                 'db': db, 'entity_id': write['entity_id'], 'entity_type': write['entity_type'],
                 'tag_id': UUID(write['tag_id']), 'user_email': user_email,
@@ -1699,7 +1704,10 @@ class AssignTagStepHandler(StepHandler):
                     tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
                     if tag:
                         existing = None
-                        if resolved_value is None:
+                        # A tag an earlier remove-tag step of this gate removes isn't there
+                        # any more: assign it again (recorded after the removal)
+                        removed = tag.fully_qualified_name in _deferred_removals(context)
+                        if resolved_value is None and not removed:
                             existing = next(
                                 (t for t in tags_mgr.list_assigned_tags(
                                     self._db, entity_id=context.entity_id,
@@ -1713,6 +1721,7 @@ class AssignTagStepHandler(StepHandler):
                         elif _trigger_type(context) == 'before_update':
                             deferred = {
                                 'action': 'assign',
+                                'seq': len(context.step_results or {}),
                                 'entity_type': context.entity_type,
                                 'entity_id': str(context.entity_id),
                                 'tag_id': str(tag.id),
@@ -1803,6 +1812,7 @@ class RemoveTagStepHandler(StepHandler):
                     if tag and _trigger_type(context) == 'before_update':
                         deferred = {
                             'action': 'remove',
+                            'seq': len(context.step_results or {}),
                             'entity_type': context.entity_type,
                             'entity_id': str(context.entity_id),
                             'tag_id': str(tag.id),

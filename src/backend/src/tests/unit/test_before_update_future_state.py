@@ -176,6 +176,42 @@ def test_a_tag_a_remove_tag_step_removes_is_gone_but_stays_stored_until_the_gate
     assert stored == 2
 
 
+def test_a_tag_removed_then_assigned_again_by_the_gate_is_assigned_after_it(db_session):
+    from src.common.workflow_executor import apply_deferred_tag_writes
+    from src.models.process_workflows import (
+        ExecutionStatus, StepExecutionStatus, WorkflowExecution, WorkflowStepExecutionResult,
+    )
+
+    contract = _contract(db_session)
+    _tag(db_session, contract, ['reviewed'], namespace='again')
+    context = _context(contract, _payload(name='Renamed'))
+    steps = []
+    for step_id, handler in (
+        ('remove', RemoveTagStepHandler(db_session, {'key': 'again/reviewed'})),
+        ('assign', AssignTagStepHandler(db_session, {'key': 'again/reviewed'})),
+    ):
+        result = handler.execute(context)
+        context.step_results[step_id] = result.context_entry()
+        steps.append(result)
+    policy = _policy(db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('reviewed')")
+    gate = PolicyCheckStepHandler(db_session, {'policy_id': policy.id}).execute(context)
+    # Stored in reverse order: the writes follow the steps, not the timestamps
+    execution = WorkflowExecution(
+        workflow_id='w', status=ExecutionStatus.SUCCEEDED, step_executions=[
+            WorkflowStepExecutionResult(
+                status=StepExecutionStatus.SUCCEEDED, passed=True, result_data=result.data,
+            ) for result in reversed(steps)
+        ],
+    )
+
+    apply_deferred_tag_writes(db_session, [execution], 'u@example.com')
+
+    assert gate.passed is True
+    assert steps[1].data['deferred_tag_write']['action'] == 'assign'
+    stored = db_session.query(EntityTagAssociationDb).filter_by(entity_id=contract.id).count()
+    assert stored == 1
+
+
 def test_tags_sent_as_names_are_read_like_assignments(db_session):
     # A raw payload with FQN strings (the shape DataProduct tags have) instead of
     # AssignedTagCreate dicts: the manager accepts both

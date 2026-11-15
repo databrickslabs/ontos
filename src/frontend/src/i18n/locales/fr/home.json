@@ -206,9 +206,9 @@
     },
     "products": {
       "available": "{{count}} produit disponible",
-      "available_plural": "{{count}} produits disponibles",
+      "available_other": "{{count}} produits disponibles",
       "subscribed": "{{count}} produit abonné",
-      "subscribed_plural": "{{count}} produits abonnés",
+      "subscribed_other": "{{count}} produits abonnés",
       "noProducts": "Aucun produit de données trouvé.",
       "adjustFilters": "Essayez d'ajuster votre recherche ou filtre.",
       "noSubscriptions": "Vous n'êtes encore abonné à aucun produit de données.",
@@ -221,9 +221,9 @@
     },
     "datasets": {
       "available": "{{count}} dataset disponible",
-      "available_plural": "{{count}} datasets disponibles",
+      "available_other": "{{count}} datasets disponibles",
       "subscribed": "{{count}} dataset abonné",
-      "subscribed_plural": "{{count}} datasets abonnés",
+      "subscribed_other": "{{count}} datasets abonnés",
       "noDatasets": "Aucun dataset trouvé.",
       "adjustFilters": "Essayez d'ajuster votre recherche.",
       "noSubscriptions": "Vous n'êtes encore abonné à aucun dataset.",
@@ -244,7 +244,7 @@
     "domainInfo": {
       "parentDomain": "Parent",
       "childDomains": "{{count}} domaine enfant",
-      "childDomains_plural": "{{count}} domaines enfants"
+      "childDomains_other": "{{count}} domaines enfants"
     },
     "tilesPerRow": {
       "placeholder": "Tuiles",

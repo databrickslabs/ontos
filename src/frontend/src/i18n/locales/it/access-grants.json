@@ -20,11 +20,11 @@
       "helpText": "L'accesso scadrà dopo la durata selezionata. Puoi richiedere il rinnovo prima della scadenza.",
       "help": "Il tuo accesso scadrà automaticamente al termine di questo periodo.",
       "days": "{{count}} giorno",
-      "days_plural": "{{count}} giorni",
+      "days_other": "{{count}} giorni",
       "months": "{{count}} mese",
-      "months_plural": "{{count}} mesi",
+      "months_other": "{{count}} mesi",
       "years": "{{count}} anno",
-      "years_plural": "{{count}} anni"
+      "years_other": "{{count}} anni"
     },
     "submit": "Invia Richiesta",
     "submitting": "Invio della richiesta...",

@@ -206,9 +206,9 @@
     },
     "products": {
       "available": "{{count}} producto disponible",
-      "available_plural": "{{count}} productos disponibles",
+      "available_other": "{{count}} productos disponibles",
       "subscribed": "{{count}} producto suscrito",
-      "subscribed_plural": "{{count}} productos suscritos",
+      "subscribed_other": "{{count}} productos suscritos",
       "noProducts": "No se encontraron productos de datos.",
       "adjustFilters": "Intenta ajustar tu búsqueda o filtro.",
       "noSubscriptions": "Aún no te has suscrito a ningún producto de datos.",
@@ -221,9 +221,9 @@
     },
     "datasets": {
       "available": "{{count}} dataset disponible",
-      "available_plural": "{{count}} datasets disponibles",
+      "available_other": "{{count}} datasets disponibles",
       "subscribed": "{{count}} dataset suscrito",
-      "subscribed_plural": "{{count}} datasets suscritos",
+      "subscribed_other": "{{count}} datasets suscritos",
       "noDatasets": "No se encontraron datasets.",
       "adjustFilters": "Intenta ajustar tu búsqueda.",
       "noSubscriptions": "Aún no te has suscrito a ningún dataset.",
@@ -244,7 +244,7 @@
     "domainInfo": {
       "parentDomain": "Padre",
       "childDomains": "{{count}} dominio hijo",
-      "childDomains_plural": "{{count}} dominios hijos"
+      "childDomains_other": "{{count}} dominios hijos"
     },
     "tilesPerRow": {
       "placeholder": "Mosaicos",

@@ -538,10 +538,15 @@ def infer_schema_from_asset(
     asset_id: UUID,
     db: DBSessionDep,
     manager=Depends(get_assets_manager),
+    api_version: Optional[str] = Query(
+        None,
+        description="ODCS apiVersion of the target contract; below v3.1.0, timestamp "
+        "columns are inferred as date and time columns as string. Default: v3.1.0.",
+    ),
 ):
     """Extract ODCS-compatible schema objects from an asset and its children."""
     try:
-        return manager.infer_schema_from_asset(db=db, asset_id=asset_id)
+        return manager.infer_schema_from_asset(db=db, asset_id=asset_id, api_version=api_version)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:

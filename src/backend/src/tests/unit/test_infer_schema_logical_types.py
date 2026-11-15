@@ -3,9 +3,11 @@
 Before, every inferred column got ``logicalType: string`` unless the column
 asset stored a ``logical_type``.
 """
+import uuid
+
 import pytest
 
-from src.common.odcs_logical_types import odcs_logical_type
+from src.common.odcs_logical_types import has_v31_logical_types, odcs_logical_type
 from src.controller.assets_manager import AssetsManager
 from src.db_models.assets import AssetDb, AssetRelationshipDb, AssetTypeDb
 
@@ -131,3 +133,60 @@ def test_connector_logical_types_are_not_taken_as_odcs(db_session):
         "order_id": "integer", "amount": "number", "ts": "timestamp", "city": "string",
         "qty": "integer", "n": "integer", "code": "string",
     }
+
+
+@pytest.mark.parametrize("api_version, expected", [
+    (None, True), ("v3.1.0", True), ("3.1.0", True), ("v3.2.0", True), ("not-a-version", True),
+    ("v3.0.2", False), ("3.0.0", False), ("v2.2.2", False),
+])
+def test_has_v31_logical_types(api_version, expected):
+    assert has_v31_logical_types(api_version) is expected
+
+
+def _events_table(db):
+    return _table_with_columns(db, [
+        ("event_ts", {"data_type": "TIMESTAMP"}),
+        ("event_time", {"data_type": "TIME"}),
+        # A stored v3.1 type is not valid below v3.1 either
+        ("loaded_at", {"data_type": "STRING", "logical_type": "timestamp"}),
+        ("event_date", {"data_type": "DATE"}),
+    ])
+
+
+def _logical_types(db, table, api_version):
+    [schema] = AssetsManager().infer_schema_from_asset(db, table.id, api_version=api_version)
+    return {p["name"]: p["logicalType"] for p in schema["properties"]}
+
+
+@pytest.mark.parametrize("api_version", ["v3.0.2", "v2.2.2"])
+def test_infer_schema_below_v31_uses_the_types_of_that_version(db_session, api_version):
+    """ODCS v3.0.x and v2.2.x list no timestamp / time logical type."""
+    table = _events_table(db_session)
+
+    assert _logical_types(db_session, table, api_version) == {
+        "event_ts": "date", "event_time": "string", "loaded_at": "date", "event_date": "date",
+    }
+
+
+@pytest.mark.parametrize("api_version", [None, "v3.1.0"])
+def test_infer_schema_from_v31_keeps_timestamp_and_time(db_session, api_version):
+    table = _events_table(db_session)
+
+    assert _logical_types(db_session, table, api_version) == {
+        "event_ts": "timestamp", "event_time": "time", "loaded_at": "timestamp",
+        "event_date": "date",
+    }
+
+
+def test_infer_schema_route_passes_the_api_version():
+    from src.routes import assets_routes
+
+    class _Manager:
+        def infer_schema_from_asset(self, db, asset_id, api_version=None):
+            return [{"api_version": api_version}]
+
+    asset_id = uuid.uuid4()
+    result = assets_routes.infer_schema_from_asset(
+        asset_id=asset_id, db=None, manager=_Manager(), api_version="v3.0.2",
+    )
+    assert result == [{"api_version": "v3.0.2"}]

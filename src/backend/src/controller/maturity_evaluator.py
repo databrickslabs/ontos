@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Optional
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
+from src.common.run_identity import RunIdentity
 from src.controller.entity_dict_builder import (
     UC_TABLE_FIELDS,
     build_asset_dict,
@@ -63,10 +64,18 @@ class MaturityEvaluator:
     ``workspace_client`` (a client, or a callable returning one) reads the
     Unity Catalog table behind an asset; by default the app's client is used,
     only when an evaluated asset points to a UC table.
+
+    ``run_identity``: whose permissions that table is read with. An evaluation
+    a user starts (the asset maturity routes, an asset write) passes theirs, so
+    a table they can't read stays unreadable for them; the default, the app's,
+    is for runs no user started.
     """
 
-    def __init__(self, workspace_client: Any = None):
-        if workspace_client is None:
+    def __init__(self, workspace_client: Any = None, *,
+                 run_identity: Optional[RunIdentity] = None):
+        if run_identity is not None:
+            self._get_client = run_identity.workspace_client
+        elif workspace_client is None:
             self._get_client: Callable[[], Any] = _default_workspace_client
         elif callable(workspace_client) and not hasattr(workspace_client, "tables"):
             self._get_client = workspace_client
@@ -512,8 +521,11 @@ def evaluate_asset_maturity_on_change(
     *,
     evaluated_by: Optional[str] = None,
     workspace_client: Any = None,
+    run_identity: Optional[RunIdentity] = None,
 ) -> Optional[MaturityReport]:
     """Re-evaluate an asset after it changed (run as a background task).
+
+    ``run_identity``: the identity of the user whose write triggered it.
 
     Opens its own session. Does nothing for asset types other than tables and
     views, or when no ``Asset`` maturity level exists, so most asset changes
@@ -532,7 +544,7 @@ def evaluate_asset_maturity_on_change(
             type_name = asset.asset_type.name if asset and asset.asset_type else None
             if type_name not in MATURITY_ASSET_TYPES:
                 return None
-            return MaturityEvaluator(workspace_client).evaluate(
+            return MaturityEvaluator(workspace_client, run_identity=run_identity).evaluate(
                 db, entity_type="Asset", entity_id=str(asset_id),
                 persist=True, evaluated_by=evaluated_by,
             )

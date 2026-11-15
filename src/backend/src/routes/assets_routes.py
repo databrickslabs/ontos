@@ -80,11 +80,13 @@ def _schedule_maturity_evaluation(
     Commits the request's changes first: the background task opens its own session
     and must see the asset as it is now, whatever the dependency teardown order.
     """
+    from src.common.run_identity import RunIdentity
     from src.controller.maturity_evaluator import evaluate_asset_maturity_on_change
     db.commit()
+    # The user's write: their own token reads the UC table, not the app's
     background_tasks.add_task(
         evaluate_asset_maturity_on_change, str(asset_id), evaluated_by=user_email,
-        workspace_client=getattr(request.app.state, "workspace_client", None),
+        run_identity=RunIdentity.for_request(request),
     )
 
 

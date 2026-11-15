@@ -131,6 +131,9 @@ class MaturityReport(BaseModel):
     evaluated_at: datetime = Field(default_factory=datetime.utcnow)
     evaluated_by: Optional[str] = None
     notices: List[MaturityNotice] = Field(default_factory=list)
+    # True when this result was stored as a snapshot (it is in the history); a GET
+    # of an asset's maturity computes it live and stores nothing
+    stored: bool = False
 
 
 class MaturitySnapshotRead(BaseModel):

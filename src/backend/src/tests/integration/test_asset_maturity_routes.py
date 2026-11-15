@@ -137,6 +137,17 @@ class TestAssetMaturityRoutes:
         assert db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).count() == 0
         assert fired == []
 
+    def test_get_says_it_is_not_stored_and_evaluate_says_it_is(
+            self, client, db_session, uc_table, fired):
+        _asset_ladder(client, db_session)
+        asset = _asset(db_session, description='Orders')
+
+        live = client.get(f'/api/assets/{asset.id}/maturity').json()
+        stored = client.post(f'/api/assets/{asset.id}/maturity/evaluate').json()
+
+        assert live['stored'] is False
+        assert stored['stored'] is True
+
     def test_moving_a_level_to_assets_checks_the_order(self, client, db_session):
         _asset_ladder(client, db_session)
         response = client.post('/api/maturity-levels', json={

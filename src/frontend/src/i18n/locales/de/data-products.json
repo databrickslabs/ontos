@@ -1019,6 +1019,7 @@
     "maturity_gate_error": "Das Gate {{gateName}} konnte nicht ausgewertet werden. Die Details stehen im Serverprotokoll."
   },
   "maturityResult": {
+    "notStored": "Jetzt berechnet und nicht gespeichert: Der Verlauf zeigt die gespeicherten Auswertungen. Neu auswerten, um dieses Ergebnis zu speichern.",
     "notEvaluated": "Nicht ausgewertet"
   },
   "createDialog": {

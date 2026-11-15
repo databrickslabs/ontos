@@ -1019,6 +1019,7 @@
     "maturity_gate_error": "Le gate {{gateName}} n'a pas pu être évalué. Les détails figurent dans le journal du serveur."
   },
   "maturityResult": {
+    "notStored": "Calculé maintenant et non enregistré : l'historique montre les évaluations enregistrées. Réévaluez pour enregistrer ce résultat.",
     "notEvaluated": "Non évalué"
   },
   "createDialog": {

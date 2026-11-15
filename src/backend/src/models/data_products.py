@@ -233,8 +233,8 @@ class OutputPort(BaseModel):
     @field_validator('containsPii', 'autoApprove', mode='before')
     @classmethod
     def _null_flag_is_false(cls, value):
-        # Both columns are nullable; rows written by raw SQL (e.g. older UC Bulk
-        # Import runs) can hold NULL, which must read as the False default.
+        # Both columns are nullable: read NULL as the False default on every reader,
+        # whatever wrote the row.
         return False if value is None else value
 
     @model_validator(mode='before')

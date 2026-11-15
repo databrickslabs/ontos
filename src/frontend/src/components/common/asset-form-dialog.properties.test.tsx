@@ -197,4 +197,37 @@ describe('AssetFormDialog edit', () => {
     expect(screen.getByRole('button', { name: 'common:actions.saveChanges' })).toBeDisabled();
     expect(mockPut).not.toHaveBeenCalled();
   });
+
+  it('ignores a late read of the previous row when the dialog moves to another one', async () => {
+    const { properties: _omit, ...row1 } = column as unknown as Record<string, unknown>;
+    const row2 = { ...row1, id: 'col-2', name: 'order_id' };
+    let resolveFirst: (value: unknown) => void = () => {};
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/api/assets/col-1') return new Promise((resolve) => { resolveFirst = resolve; });
+      if (url === '/api/assets/col-2') {
+        return Promise.resolve({ data: { ...row2, properties: { data_type: 'BIGINT' } } });
+      }
+      return Promise.resolve({ data: COLUMN_SCHEMA });
+    });
+    const props = {
+      isOpen: true, onOpenChange: vi.fn(), onSuccess: vi.fn(),
+      assetTypeId: 'type-column', assetTypeName: 'Column',
+      assetTypeIri: 'http://ontos.app/ontology#Column',
+    };
+    const { rerender } = render(
+      <AssetFormDialog {...props} asset={row1 as unknown as AssetRead} />,
+    );
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/assets/col-1'));
+
+    rerender(<AssetFormDialog {...props} asset={row2 as unknown as AssetRead} />);
+    const primaryKey = await screen.findByRole('checkbox', { name: /primary key/i });
+    resolveFirst({ data: column });
+    await userEvent.click(primaryKey);
+    await userEvent.click(screen.getByRole('button', { name: 'common:actions.saveChanges' }));
+
+    await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(1));
+    const [url, payload] = mockPut.mock.calls[0];
+    expect(url).toBe('/api/assets/col-2');
+    expect(payload.properties).toEqual({ data_type: 'BIGINT', isPrimaryKey: true });
+  });
 });

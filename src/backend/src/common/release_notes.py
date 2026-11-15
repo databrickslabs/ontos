@@ -33,6 +33,7 @@ SECTIONS: List[Tuple[str, str]] = [
 ]
 SECTION_HEADINGS: Dict[str, str] = dict(SECTIONS)
 
+UPGRADE_CHECK_MARKER = "What to check:"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 FILE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*\.md$")
 _TOP_LEVEL_BULLET_RE = re.compile(r"^[-*+]\s")
@@ -73,6 +74,10 @@ def validate_fragment(section: str, name: str, text: str) -> List[str]:
             problems.append(f"line {number}: only one entry per fragment (second top-level bullet)")
     if _HEADING_RE.match(lines[0]):
         problems.append("line 1: headings are not allowed in a fragment")
+    if section == "upgrade-notes" and UPGRADE_CHECK_MARKER not in text:
+        problems.append(
+            f"an upgrade note must say what to do: add a '{UPGRADE_CHECK_MARKER}' line"
+        )
     return problems
 
 

@@ -16,7 +16,7 @@ Add `unreleased/<section>/<slug>.md` with exactly one bullet entry:
 - Content: one entry starting with `- ` (style `- **area**: text`). Continuation lines are
   fine; no headings, no blank lines and no second top-level bullet.
 - A change that needs an upgrade note gets a second fragment in `upgrade-notes`, ending
-  with a "What to check:" line.
+  with a "What to check:" line (the check requires it).
 - PRs with no user-visible change use the `no-release-notes` label.
 
 Check your files: `python3 src/scripts/assemble_release_notes.py --check`.

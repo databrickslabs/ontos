@@ -51,6 +51,8 @@ def _write(root: Path, section: str, name: str, text: str) -> None:
         ("features", "ok.md", "- a\n## Heading", "headings"),
         ("features", "ok.md", "# Title\n- a", "headings"),
         ("features", "ok.md", "- a\n\n  b", "blank lines"),
+        ("upgrade-notes", "ok.md", "- **a**: text", "What to check:"),
+        ("upgrade-notes", "ok.md", "- **a**: text\n  What to check: the setting", None),
     ],
 )
 def test_validate_fragment(section, name, text, expected):
@@ -85,13 +87,13 @@ def test_empty_fragment_set_changes_nothing():
 
 
 def test_merge_appends_to_existing_section_and_inserts_new_in_order(tmp_path):
-    _write(tmp_path, "upgrade-notes", "u.md", "- **u**: new upgrade note")
+    _write(tmp_path, "upgrade-notes", "u.md", "- **u**: new upgrade note. What to check: x")
     _write(tmp_path, "features", "f.md", "- **f**: new feature")
     _write(tmp_path, "other", "o.md", "- **o**: other")
     fragments, _ = load_fragments(tmp_path)
     merged = merge_into_unreleased(NOTES, fragments)
     block = merged.split("# Release Notes - v1.0.0")[0]
-    assert "- **a**: old upgrade note\n- **u**: new upgrade note" in block
+    assert "- **a**: old upgrade note\n- **u**: new upgrade note. What to check: x" in block
     headings = [line for line in block.splitlines() if line.startswith("## ")]
     assert headings == ["## ⚠️ Upgrade Notes", "## ✨ Features", "## 🔄 Other"]
     # The released block below is untouched.
@@ -120,7 +122,7 @@ def test_merge_appends_before_the_next_section(tmp_path):
 
 
 def test_merge_inserts_a_new_section_before_a_later_existing_one(tmp_path):
-    _write(tmp_path, "upgrade-notes", "u.md", "- **u**: note")
+    _write(tmp_path, "upgrade-notes", "u.md", "- **u**: note. What to check: x")
     _write(tmp_path, "documentation", "d.md", "- **d**: docs")
     fragments, _ = load_fragments(tmp_path)
     merged = merge_into_unreleased(MIXED, fragments)
@@ -132,7 +134,10 @@ def test_merge_inserts_a_new_section_before_a_later_existing_one(tmp_path):
         "## 🐛 Bug Fixes",
         "## 📚 Documentation",
     ]
-    assert "## ⚠️ Upgrade Notes\n\n- **u**: note\n\n## ✨ Features\n\n- old f" in merged
+    assert (
+        "## ⚠️ Upgrade Notes\n\n- **u**: note. What to check: x\n\n## ✨ Features\n\n- old f"
+        in merged
+    )
     assert "- old b\n\n## 📚 Documentation\n\n- **d**: docs\n\n# Release Notes - v1" in merged
 
 

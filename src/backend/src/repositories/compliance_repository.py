@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy.orm import Session
@@ -6,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from src.common.repository import CRUDBase
+from src.common.timestamps import utc_now
 from src.db_models.compliance import (
     ComplianceLlmCheckCacheDb,
     CompliancePolicyDb,
@@ -69,7 +69,7 @@ class ComplianceLlmCheckCacheRepository(
         existing = db.get(ComplianceLlmCheckCacheDb, key)
         if existing is not None:
             existing.model, existing.passed, existing.reason = model, passed, reason
-            existing.created_at = datetime.utcnow()
+            existing.created_at = utc_now()
             return
         try:
             with db.begin_nested():

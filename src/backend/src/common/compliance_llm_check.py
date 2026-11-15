@@ -38,6 +38,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from src.common.api_errors import CodedValueError
 from src.common.llm_content import block_types, coerce_message_text
 from src.common.logging import get_logger
+from src.common.timestamps import utc_now
 
 logger = get_logger(__name__)
 
@@ -191,10 +192,11 @@ def _refusal(message: Any) -> str:
     return ""
 
 
-def _naive_utc(value: datetime) -> datetime:
-    if value.tzinfo is not None:
-        value = value.astimezone(timezone.utc).replace(tzinfo=None)
-    return value
+def _aware_utc(value: datetime) -> datetime:
+    """``value`` as an aware UTC time (a naive one, as SQLite returns it, is UTC)."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 class MemoryLlmCheckCache:
@@ -223,7 +225,7 @@ class DbLlmCheckCache(MemoryLlmCheckCache):
         self._max_age = timedelta(days=max(1, int(max_age_days)))
 
     def _cutoff(self) -> datetime:
-        return datetime.utcnow() - self._max_age
+        return utc_now() - self._max_age
 
     def purge_expired(self) -> int:
         """Delete the rows older than the max age; how many were deleted."""
@@ -238,7 +240,7 @@ class DbLlmCheckCache(MemoryLlmCheckCache):
         from src.repositories.compliance_repository import compliance_llm_check_cache_repo
 
         row = compliance_llm_check_cache_repo.get_verdict(self._db, key)
-        if row is None or _naive_utc(row.created_at) < self._cutoff():
+        if row is None or _aware_utc(row.created_at) < self._cutoff():
             return None
         verdict = (bool(row.passed), row.reason or '')
         super().put(key, row.model, *verdict)

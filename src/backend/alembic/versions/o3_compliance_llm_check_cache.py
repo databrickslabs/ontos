@@ -1,7 +1,7 @@
 """Add compliance_llm_check_cache
 
-Revision ID: s2_compliance_llm_check_cache
-Revises: r2_canonical_relationship_types
+Revision ID: o3_compliance_llm_check_cache
+Revises: o2_step_execution_message
 Create Date: 2026-11-12
 
 Verdicts of the LLM_CHECK compliance DSL function, keyed by a sha256 of the
@@ -14,8 +14,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = 's2_compliance_llm_check_cache'
-down_revision: Union[str, None] = 'r2_canonical_relationship_types'
+revision: str = 'o3_compliance_llm_check_cache'
+down_revision: Union[str, None] = 'o2_step_execution_message'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

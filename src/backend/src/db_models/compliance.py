@@ -5,6 +5,7 @@ from sqlalchemy import Column, String, DateTime, Text, Boolean, ForeignKey, Inte
 from sqlalchemy.orm import relationship
 
 from src.common.database import Base
+from src.common.timestamps import utc_now
 
 
 class CompliancePolicyDb(Base):
@@ -83,4 +84,4 @@ class ComplianceLlmCheckCacheDb(Base):
     model = Column(String, nullable=False)
     passed = Column(Boolean, nullable=False)
     reason = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)

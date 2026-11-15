@@ -411,14 +411,15 @@ def test_cache_key_covers_both_prompts(monkeypatch):
 
 
 def test_old_verdicts_are_not_used_and_are_purged(db_session):
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
+    from src.common.timestamps import utc_now
     from src.db_models.compliance import ComplianceLlmCheckCacheDb
 
     first = FakeLlm(_reply('PASS: daily grain'))
     _checker(first, cache=llm.DbLlmCheckCache(db_session)).check('Daily grain', GRAIN)
     row = db_session.query(ComplianceLlmCheckCacheDb).one()
-    row.created_at = datetime.utcnow() - timedelta(days=31)
+    row.created_at = utc_now() - timedelta(days=31)
     db_session.flush()
 
     cache = llm.DbLlmCheckCache(db_session, max_age_days=30)
@@ -428,7 +429,7 @@ def test_old_verdicts_are_not_used_and_are_purged(db_session):
 
     assert llm.DbLlmCheckCache(db_session, max_age_days=30).purge_expired() == 0
     row = db_session.query(ComplianceLlmCheckCacheDb).one()
-    row.created_at = datetime.utcnow() - timedelta(days=31)
+    row.created_at = utc_now() - timedelta(days=31)
     db_session.flush()
     assert llm.DbLlmCheckCache(db_session, max_age_days=30).purge_expired() == 1
     assert db_session.query(ComplianceLlmCheckCacheDb).count() == 0

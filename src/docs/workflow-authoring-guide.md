@@ -134,7 +134,8 @@ Each step ends with a pass or a fail, which picks the next step. A step that rai
 Validation, conditional and policy check steps evaluate their rule on `obj`:
 
 - For data products and data contracts, `obj` is the **stored entity** (the fields maturity gates use, such as `status`, `has_owner`, `has_description`, `output_port_contract_count`, `certification_level`, `is_published`) merged with the trigger payload; payload fields win.
-- For other entity types, and for `before_update` gates (whose payload is the proposed change), `obj` is the trigger payload only.
+- For `before_update` gates, `obj` is the contract **as it will be after the update**: the stored contract with the update's fields over it (a field the update leaves out or sends as `null` keeps its stored value), the tags it will have (a `tags` list replaces the stored ones, tag steps of the gate go on top), and the derived fields (`has_owner`, `schema_object_count`, the counts) for that future state. `c.domain` is the primary domain's id, also when the update names the domain. Other request fields (`contract_schema`, `servers`, `team`, `sla`, ...) appear in the request's shape, which differs from what the other triggers see, so write rules on the fields above.
+- For other entity types, `obj` is the trigger payload only.
 - If the stored entity can't be loaded, the step fails with the code `rule_entity_load_failed` instead of evaluating the rule on the payload alone.
 
 A field that doesn't exist on `obj` makes comparisons like `obj.field != ''` true. Check fields that exist; the defaults use `obj.output_port_contract_count > 0`, `obj.schema_object_count > 0` and `obj.has_owner = true`.
@@ -300,6 +301,10 @@ Each reason is the Fail step's `message` (or the failing step's message), so wri
 **A gate that errors.** A gate whose evaluation raises an error (an exception, not a Fail step) is logged and the change goes ahead (#1103). A `PUT /api/data-products/{id}` or `PUT /api/data-contracts/{id}` that changes `status` doesn't run gates at all. STATUS_PR changes both: the trigger's `on_error` decides what a gate error does (`fail_open`, the default, lets the change through with a `GATE_ERROR` audit entry; `fail_closed` refuses it with `status_change_gate_error`), `disabled_for: {domains, data_products, data_contracts}` switches a gate off for those entities (audited as `GATE_SKIPPED`), and a `PUT` with a different `status` is refused with `status_change_requires_transition`.
 
 **Don't put an approval in a gate.** A gate with an approval step pauses, which is not `succeeded`, so the change is refused with "waiting for approval", and approving later doesn't apply the change. To require an approval for a status change, use a status change request (`on_request_status_change`), which applies the change when it is approved.
+
+For a `before_update` gate this means: the `PUT` answers 400 "Pre-update validation failed" with the gate `paused`. Approving it runs the gate's remaining steps on the update as it was sent then, but nothing writes the update afterwards (and their tag steps write no tags). The user has to send the update again, which runs the gate again and starts a new approval round. A `before_update` gate with an approval step therefore never lets an update through.
+
+**Tag steps in a `before_update` gate** write their tags only once every gate passed, so a refused update leaves no tag assigned or removed. Later steps of the same gate already see the tag change.
 
 ## Failures, Retries and Cancellation
 

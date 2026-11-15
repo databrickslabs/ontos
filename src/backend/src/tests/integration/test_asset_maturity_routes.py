@@ -342,3 +342,45 @@ class TestAssetMaturityAccess:
         response = getattr(client, method)(path.format(id=asset.id))
 
         assert response.status_code == 200, response.text
+
+
+class TestAssetWriteAudit:
+    """The audit row says success only once the asset write is committed."""
+
+    @pytest.fixture
+    def audited(self, client, monkeypatch):
+        calls = []
+        audit_manager = client.app.state.audit_manager
+        monkeypatch.setattr(audit_manager, 'log_action', lambda **kw: calls.append(kw))
+        return calls
+
+    @pytest.fixture
+    def failing_commit(self, monkeypatch):
+        from src.routes import assets_routes
+
+        def fail(*args, **kwargs):
+            raise RuntimeError('commit failed')
+
+        monkeypatch.setattr(assets_routes, '_schedule_maturity_evaluation', fail)
+
+    def test_a_failed_update_commit_is_audited_as_a_failure(
+            self, client, db_session, audited, failing_commit):
+        asset = _asset(db_session)
+
+        response = client.put(f'/api/assets/{asset.id}', json={'description': 'Orders'})
+
+        assert response.status_code == 500
+        assert [(c['action'], c['success']) for c in audited] == [('UPDATE_ASSET', False)]
+        assert 'updated_resource_id' not in audited[0]['details']
+
+    def test_a_failed_create_commit_is_audited_as_a_failure(
+            self, client, db_session, audited, failing_commit):
+        response = client.post('/api/assets', json={
+            'name': f'orders-{uuid.uuid4().hex[:6]}',
+            'asset_type_id': _asset_type_id(db_session, 'Table'),
+            'platform': 'databricks', 'location': FQN,
+        })
+
+        assert response.status_code == 500
+        assert [(c['action'], c['success']) for c in audited] == [('CREATE_ASSET', False)]
+        assert 'created_resource_id' not in audited[0]['details']

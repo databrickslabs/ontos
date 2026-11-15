@@ -116,3 +116,49 @@ def test_a_stored_value_the_schema_refuses_does_not_block_other_edits(db_session
             asset_in=AssetUpdate(properties={"isPrimaryKey": "yes", "isNullable": "no"}),
             current_user_id="alice@example.com",
         )
+
+
+def _metric_view(db):
+    found = db.query(AssetTypeDb).filter(AssetTypeDb.name == "Metric View").first()
+    if not found:
+        found = AssetTypeDb(name="Metric View")
+        db.add(found)
+        db.flush()
+    view = AssetDb(
+        name="revenue", asset_type_id=found.id,
+        properties={"owner_note": "x", METRIC_VIEW_PROPERTY: {"source": "sales"}},
+    )
+    db.add(view)
+    db.flush()
+    return view
+
+
+def test_a_put_with_null_properties_keeps_the_internal_keys(db_session, osm):
+    """PUT /api/assets/{id} with {"properties": null} clears the public properties
+    like {} and keeps a metric view's definition (before, it stored NULL)."""
+    view = _metric_view(db_session)
+    body = AssetUpdate.model_validate_json('{"properties": null}')
+
+    updated = AssetsManager(ontology_schema_manager=osm).update_asset(
+        db_session, asset_id=view.id, asset_in=body, current_user_id="alice@example.com",
+    )
+
+    assert not updated.properties
+    db_session.expire_all()
+    assert db_session.get(AssetDb, view.id).properties == {
+        METRIC_VIEW_PROPERTY: {"source": "sales"},
+    }
+
+
+def test_a_put_without_properties_keeps_them(db_session, osm):
+    view = _metric_view(db_session)
+
+    AssetsManager(ontology_schema_manager=osm).update_asset(
+        db_session, asset_id=view.id, asset_in=AssetUpdate.model_validate_json('{"name": "rev"}'),
+        current_user_id="alice@example.com",
+    )
+
+    db_session.expire_all()
+    assert db_session.get(AssetDb, view.id).properties == {
+        "owner_note": "x", METRIC_VIEW_PROPERTY: {"source": "sales"},
+    }

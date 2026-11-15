@@ -193,11 +193,47 @@ def test_unresolved_column_is_not_retried(tag_sync, monkeypatch):
     assert sleeps == []
 
 
-def test_missing_object_is_not_retried(tag_sync):
+def test_missing_object_is_not_retried(tag_sync, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(tag_sync, "TAG_SQL_SLEEP", sleeps.append)
     spark = FakeSpark({"ALTER TABLE gone.crm.customers": "[TABLE_OR_VIEW_NOT_FOUND] x"})
     _run(tag_sync, spark, TABLES)
     attempts = [s for s in spark.statements if "ALTER TABLE gone.crm.customers" in s]
     assert len(attempts) == 1
+    assert sleeps == []
+
+
+# What a workspace returned for a read of <catalog>.information_schema without USE
+# CATALOG (SQLSTATE 42501): not zero rows and not a not-found class.
+NO_USE_CATALOG_ERROR = (
+    "[INSUFFICIENT_PERMISSIONS] Insufficient privileges: User does not have USE CATALOG "
+    "on Catalog 'gone'. SQLSTATE: 42501"
+)
+
+
+@pytest.mark.parametrize("previous", [None, "recorded"])
+def test_permission_denied_on_the_tag_read_fails_the_object(tag_sync, previous):
+    """The job can't read the catalog's information_schema: the object fails (the run
+    goes red) instead of being skipped as missing, and keeps its record."""
+    spark = FakeSpark({"FROM `gone`.information_schema": NO_USE_CATALOG_ERROR})
+    prev = _previous("gone.crm.customers") if previous else None
+    result = _run(tag_sync, spark, TABLES, previous=prev)
+
+    assert result.skipped == []
+    # The table and the schema / catalog its tags roll up to.
+    assert result.failed_objects == [
+        "TABLE gone.crm.customers", "SCHEMA gone.crm", "CATALOG gone"]
+    assert any("TABLE main.a.three SET" in s for s in spark.sets())
+    if previous:
+        assert result.delivered["TABLE"]["gone.crm.customers"] == {KEY: PII}
+
+
+def test_permission_denied_on_an_unlinked_object_keeps_its_record(tag_sync):
+    spark = FakeSpark({"FROM `gone`.information_schema": NO_USE_CATALOG_ERROR})
+    result = _run(tag_sync, spark, ["main.a.one"], previous=_previous("gone.crm.old"))
+
+    assert result.skipped == []
+    assert result.delivered["TABLE"]["gone.crm.old"] == {KEY: PII}
 
 
 def test_other_errors_still_fail_the_object(tag_sync):

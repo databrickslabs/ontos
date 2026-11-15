@@ -15,7 +15,7 @@ from src.controller.uc_description_sync_manager import (
 )
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.models.assets import DESCRIPTION_SYNC_PROPERTY
-from src.tests.helpers import reads_back_comment_writes
+from src.tests.uc_comment_fakes import reads_back_comment_writes
 
 
 def _settings(enabled=True, warehouse='wh-1'):

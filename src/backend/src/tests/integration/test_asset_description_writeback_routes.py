@@ -13,7 +13,7 @@ from databricks.sdk.service.sql import StatementState
 from src.app import app
 from src.common.dependencies import get_settings
 from src.db_models.assets import AssetDb, AssetTypeDb
-from src.tests.helpers import reads_back_comment_writes
+from src.tests.uc_comment_fakes import reads_back_comment_writes
 
 TOKEN = {'x-forwarded-access-token': 'user-token', 'X-Forwarded-Email': 'user@example.com'}
 
@@ -535,6 +535,15 @@ class TestBulkImportWriteback:
             'orders': ['uc_description_import_replaces_uc'], 'notes': []}
         user_ws.tables.get.assert_called_once_with(full_name='main.sales.orders')
         user_ws.statement_execution.execute_statement.assert_not_called()
+
+    def test_the_preview_flags_a_row_whose_comment_cannot_be_read(self, client, settings,
+                                                                  table, user_ws):
+        from databricks.sdk.errors import PermissionDenied
+
+        user_ws.tables.get.side_effect = PermissionDenied('no')
+
+        assert self._preview_codes(client) == {
+            'orders': ['uc_description_import_writes_uc'], 'notes': []}
 
     def test_the_preview_flags_a_comment_the_import_keeps(self, client, settings, table,
                                                          user_ws):

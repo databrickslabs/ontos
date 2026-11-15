@@ -8,7 +8,9 @@ import {
   ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { MaturityBadge } from '@/components/common/maturity-badge';
-import type { MaturityReport, LevelResult, MaturitySnapshot } from '@/types/maturity';
+import type {
+  MaturityReport, LevelResult, MaturitySnapshot, GateResult,
+} from '@/types/maturity';
 
 interface MaturityPanelProps {
   entityType: 'DataProduct' | 'DataContract';
@@ -124,8 +126,10 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
         {/* Level progression */}
         {report.levels.map((level: LevelResult) => {
           const isExpanded = expandedLevel === level.level_order;
-          const hasWarnings = level.gates.some(g => !g.passed && !g.required);
-          const hasFails = level.gates.some(g => !g.passed && g.required);
+          // A gate that couldn't be evaluated is a warning, not a failure
+          const isFail = (g: GateResult) => !g.passed && g.required && g.evaluated !== false;
+          const hasWarnings = level.gates.some(g => !g.passed && !isFail(g));
+          const hasFails = level.gates.some(isFail);
 
           let levelStatus: 'pass' | 'fail' | 'warn' = 'pass';
           if (hasFails) levelStatus = 'fail';
@@ -152,7 +156,9 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
               {isExpanded && level.gates.length > 0 && (
                 <div className="px-3 py-2 space-y-1 bg-background">
                   {level.gates.map((gate, gi) => {
-                    const gStatus = gate.passed ? 'pass' : (gate.required ? 'fail' : 'warn');
+                    const notEvaluated = gate.evaluated === false;
+                    const gStatus = gate.passed ? 'pass'
+                      : (gate.required && !notEvaluated ? 'fail' : 'warn');
                     const gCfg = STATUS_CONFIG[gStatus];
                     const GateIcon = gCfg.icon;
                     return (
@@ -171,6 +177,11 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
                             </p>
                           )}
                         </div>
+                        {notEvaluated && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {t('data-products:maturityResult.notEvaluated')}
+                          </Badge>
+                        )}
                         <Badge variant="outline" className="text-[10px]">
                           {gate.required ? t('data-products:maturity.required') : t('data-products:maturity.advisory')}
                         </Badge>

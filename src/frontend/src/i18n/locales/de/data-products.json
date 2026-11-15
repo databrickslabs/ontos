@@ -1018,6 +1018,9 @@
     "maturity_uc_table_read_failed": "Die Tabelle {{tableName}} konnte nicht aus Unity Catalog gelesen werden, daher fehlen ihre Felder.",
     "maturity_gate_error": "Das Gate {{gateName}} konnte nicht ausgewertet werden. Die Details stehen im Serverprotokoll."
   },
+  "maturityResult": {
+    "notEvaluated": "Nicht ausgewertet"
+  },
   "createDialog": {
     "editTitle": "Datenprodukt-Metadaten bearbeiten",
     "createTitle": "Datenprodukt erstellen (ODPS v1.0.0)",

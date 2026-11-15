@@ -168,6 +168,9 @@ class MaturityEvaluator:
                 uses_uc_fields = bool(uc_notice) and bool(
                     _UC_FIELD_IN_RULE.search(policy.rule or "")
                 )
+                if uses_uc_fields:
+                    # Its result was computed on missing fields: not evaluated, not passed
+                    passed, errored = False, False
                 uc_gate_ran = uc_gate_ran or (uses_uc_fields and gate.required)
                 level_uses_uc = level_uses_uc or (uses_uc_fields and gate.required)
                 if passed:
@@ -176,9 +179,9 @@ class MaturityEvaluator:
                     all_required_pass = False
                     level_certain_failure = level_certain_failure or not uses_uc_fields
 
-                # A gate that failed on UC fields the table couldn't provide
-                # says so with a code, instead of a plain "value is null".
-                notice = uc_notice if (uses_uc_fields and not passed) else None
+                # A gate on UC fields the table couldn't provide says so with a
+                # code, instead of a plain "value is null".
+                notice = uc_notice if uses_uc_fields else None
                 if notice is None and errored:
                     # The error itself stays in the server log
                     notice = MaturityNotice(
@@ -195,6 +198,7 @@ class MaturityEvaluator:
                     message=(notice.message if notice else message) if not passed else None,
                     message_code=notice.code if notice else None,
                     message_params=notice.params if notice else None,
+                    evaluated=not uses_uc_fields,
                 ))
 
             level_results.append(LevelResult(
@@ -359,6 +363,7 @@ class MaturityEvaluator:
                     "message": gr.message,
                     **({"message_code": gr.message_code,
                         "message_params": gr.message_params} if gr.message_code else {}),
+                    **({} if gr.evaluated else {"evaluated": False}),
                 })
 
         maturity_repo.create_snapshot(

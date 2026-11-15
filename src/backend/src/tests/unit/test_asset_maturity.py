@@ -855,3 +855,30 @@ def test_row_lock_is_taken_after_the_uc_read_and_before_the_snapshot_read(db_ses
             db_session, entity_type='Asset', entity_id=str(asset.id), persist=False,
         )
         assert 'lock' not in calls
+
+
+def test_uc_gates_of_the_blocker_level_are_marked_not_evaluated(db_session):
+    # ``column_count != 5`` passes on a missing field (None != 5): it must not show as passed
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
+    _level(db_session, 2, 'Documented', [
+        'ASSERT obj.column_count != 5',
+        'ASSERT obj.has_owner = True',
+    ])
+
+    report = MaturityEvaluator(_ws(error=NotFound('gone'))).evaluate(
+        db_session, entity_type='Asset', entity_id=str(asset.id), persist=True,
+    )
+
+    assert report.achieved_level_order == 1
+    named_gate = report.levels[0].gates[0]
+    uc_gate, owner_gate = report.levels[1].gates
+    assert named_gate.evaluated is True and named_gate.passed is True
+    assert uc_gate.evaluated is False and uc_gate.passed is False
+    assert uc_gate.message_code == 'maturity_uc_table_unreadable'
+    assert owner_gate.evaluated is True and owner_gate.passed is False
+    assert report.gates_passed == 1 and report.gates_total == 3
+    snapshot = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).one()
+    stored = {g['policy_name']: g for g in json.loads(snapshot.gate_results_json)}
+    assert stored[uc_gate.policy_name]['evaluated'] is False
+    assert 'evaluated' not in stored[owner_gate.policy_name]

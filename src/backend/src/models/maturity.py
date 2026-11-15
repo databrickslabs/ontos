@@ -95,6 +95,9 @@ class GateResult(BaseModel):
     # (e.g. the asset's Unity Catalog table couldn't be read)
     message_code: Optional[str] = None
     message_params: Optional[Dict[str, Any]] = None
+    # False when the gate's rule reads fields that couldn't be loaded (an asset's
+    # unreadable UC table): ``passed`` is then False and says nothing about the rule
+    evaluated: bool = True
 
 
 class MaturityNotice(BaseModel):

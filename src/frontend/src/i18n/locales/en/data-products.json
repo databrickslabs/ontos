@@ -1018,6 +1018,9 @@
     "maturity_uc_table_read_failed": "Table {{tableName}} could not be read from Unity Catalog, so its fields are missing.",
     "maturity_gate_error": "Gate {{gateName}} could not be evaluated. The details are in the server log."
   },
+  "maturityResult": {
+    "notEvaluated": "Not evaluated"
+  },
   "createDialog": {
     "editTitle": "Edit Data Product Metadata",
     "createTitle": "Create Data Product (ODPS v1.0.0)",

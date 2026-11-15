@@ -300,6 +300,21 @@ describe('Home by role home section', () => {
     expect(await screen.findByText('No gaps in the assets loaded so far.')).toBeInTheDocument();
   });
 
+  it('says the review data is partial when the review list fills its cap', async () => {
+    const many = Array.from({ length: 500 }, (_, i) => review(
+      `m${i}`, 'approved', 'a@x.com', 'b@x.com',
+      [{ fqn: `main.s.t${i}`, status: 'approved', at: '2026-01-01' }],
+    ));
+    state.routes['/api/data-asset-reviews'] = many;
+    applyJourneyRole();
+    renderWithProviders(<Home />);
+    expect(await screen.findByTestId('essentials-trust-truncated')).toHaveTextContent('500');
+    // The review of an owned asset may be in the part not read: no "No review request" badge.
+    const list = await screen.findByTestId('essentials-publish-gaps');
+    expect(within(list).queryByText('No review request')).not.toBeInTheDocument();
+    expect(state.calls).toContain('/api/data-asset-reviews?limit=500');
+  });
+
   it('Maintain shows my pending requests and my open reviews', async () => {
     applyJourneyRole();
     renderWithProviders(<Home />);

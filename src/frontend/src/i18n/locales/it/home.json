@@ -51,6 +51,9 @@
       "myReviews": "Le mie revisioni di asset aperte ({{count}})",
       "noReviews": "Nessuna revisione di asset aperta.",
       "nothing": "Niente da seguire."
+    },
+    "notices": {
+      "reviewsTruncated": "Vengono lette solo le {{count}} richieste di revisione create più di recente, quindi questi conteggi e lacune potrebbero essere incompleti."
     }
   },
   "search": {

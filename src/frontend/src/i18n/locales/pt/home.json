@@ -51,6 +51,9 @@
       "myReviews": "Minhas revisões de ativos em aberto ({{count}})",
       "noReviews": "Nenhuma revisão de ativo em aberto.",
       "nothing": "Nada para acompanhar."
+    },
+    "notices": {
+      "reviewsTruncated": "Apenas os {{count}} pedidos de revisão criados mais recentemente são lidos, então estas contagens e lacunas podem estar incompletas."
     }
   },
   "search": {

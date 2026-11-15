@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, ArrowLeft, PlayCircle, Scale, Pencil } from 'lucide-react';
 import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import { useApi } from '@/hooks/use-api';
+import { ResultStatusBadge } from '@/components/compliance/result-status-badge';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { CommentSidebar } from '@/components/comments';
@@ -56,6 +57,7 @@ type Run = {
   warning_params?: Record<string, unknown> | null;
   llm_calls?: number | null;
   llm_cache_hits?: number | null;
+  not_evaluated_count?: number | null;
 };
 
 type Result = {
@@ -65,6 +67,7 @@ type Result = {
   object_id: string;
   object_name?: string;
   passed: boolean;
+  not_evaluated?: boolean;
   message?: string;
   details_json?: string;
   created_at: string;
@@ -96,9 +99,7 @@ export default function CompliancePolicyDetails() {
       <code className="text-xs bg-muted px-2 py-1 rounded">{row.original.object_name || row.original.object_id}</code>
     ) },
     { accessorKey: 'passed', header: t('common:labels.status'), cell: ({ row }) => (
-      <Badge variant={row.original.passed ? 'secondary' : 'destructive'}>
-        {row.original.passed ? t('compliance:results.passed') : t('compliance:results.failed')}
-      </Badge>
+      <ResultStatusBadge passed={row.original.passed} notEvaluated={row.original.not_evaluated} />
     ) },
     { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (
       <span className="text-sm text-muted-foreground break-words">{row.original.message || t('compliance:results.empty')}</span>
@@ -350,6 +351,13 @@ export default function CompliancePolicyDetails() {
             {activeRun.status !== 'failed' && activeRun.warning_code && (
               <div className="text-sm text-amber-600" data-testid="run-warning">
                 {complianceRunWarningText(t, activeRun)}
+              </div>
+            )}
+            {!!activeRun.not_evaluated_count && (
+              <div className="text-sm text-muted-foreground" data-testid="run-not-evaluated">
+                {t('compliance:llmCheck.notEvaluatedCount', {
+                  count: activeRun.not_evaluated_count,
+                })}
               </div>
             )}
             {llmUsageText(t, activeRun) && (

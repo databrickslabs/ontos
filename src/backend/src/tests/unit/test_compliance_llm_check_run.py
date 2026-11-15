@@ -109,9 +109,11 @@ def test_no_endpoint_fails_every_entity_with_a_code(db_session):
         settings=_settings(LLM_ENDPOINT=None),
     )
 
-    assert (run.status, run.success_count, run.failure_count) == ('succeeded', 0, 1)
+    # No verdict: neither passed nor failed, and left out of the score
+    assert (run.status, run.success_count, run.failure_count) == ('succeeded', 0, 0)
+    assert (run.not_evaluated_count, run.score) == (1, 0.0)
     result = _results(db_session, run)['d1']
-    assert result.passed is False
+    assert (result.passed, result.not_evaluated) == (False, True)
     assert json.loads(result.details_json)['llm_checks'][0]['code'] == 'llm_check_no_endpoint'
     assert fake.calls == []
 
@@ -132,6 +134,9 @@ def test_actions_do_not_run_without_a_verdict(db_session):
     assert results['d2'].message == (
         'Evaluation error: LLM_CHECK was not run: the text is empty'
     )
+    # An empty text has nothing to judge: it fails, it isn't "not evaluated"
+    assert results['d2'].not_evaluated is False
+    assert (run.failure_count, run.not_evaluated_count) == (2, 0)
 
 
 def test_budget_exceeded_is_counted_in_the_run(db_session):
@@ -147,8 +152,10 @@ def test_budget_exceeded_is_counted_in_the_run(db_session):
     )
 
     assert len(fake.calls) == 2
-    # NOT does not turn a check that was not run into a pass
-    assert (run.success_count, run.failure_count) == (2, 3)
+    # NOT does not turn a check that was not run into a pass, and the checks that
+    # were not run are not failures: the score covers the 2 judged entities
+    assert (run.success_count, run.failure_count, run.not_evaluated_count) == (2, 0, 3)
+    assert run.score == 100.0
     assert run.warning_code == 'llm_check_budget_exceeded'
     assert json.loads(run.warning_params) == {'count': 3, 'budget': 4}
     codes = [

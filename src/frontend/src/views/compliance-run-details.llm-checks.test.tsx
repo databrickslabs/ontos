@@ -102,4 +102,25 @@ describe('ComplianceRunDetails LLM check reasons', () => {
     await screen.findByText(/Run run-1/);
     expect(screen.queryByTestId('run-llm-usage')).not.toBeInTheDocument();
   });
+
+  it('marks a result without a verdict as not evaluated and counts them', async () => {
+    get.mockResolvedValue({
+      data: {
+        run: { ...RUN, failure_count: 0, not_evaluated_count: 1 },
+        results: [{
+          ...result('d3', 'big', false, [{
+            criterion: 'states the grain', passed: false, reason: '',
+            code: 'llm_check_budget_exceeded',
+          }]),
+          not_evaluated: true,
+        }],
+      },
+    });
+    renderRun();
+
+    expect(await screen.findByTestId('result-not-evaluated')).toHaveTextContent('Not evaluated');
+    expect(screen.getByTestId('run-not-evaluated')).toHaveTextContent('Not evaluated: 1');
+    // The reason is still listed
+    expect(screen.getByTestId('llm-check-reasons')).toHaveTextContent('budget of model calls');
+  });
 });

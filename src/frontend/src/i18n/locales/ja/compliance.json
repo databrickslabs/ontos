@@ -251,6 +251,8 @@
       "llm_check_daily_quota_exceeded": "本日の LLM_CHECK のモデル呼び出し {{limit}} 回を使い切りました。{{retryAfter}} 秒後にもう一度お試しください (カウントは UTC の午前 0 時にリセットされます)。",
       "llm_check_policy_in_use": "このポリシーは {{workflowSteps}} 件のワークフローのポリシーチェックと {{maturityGates}} 件の成熟度ゲートで使用されています。それらは LLM_CHECK を評価できないため、そこではすべてのエンティティが不合格になります。先にそれらからポリシーを外すか、別のポリシーで LLM_CHECK を使用してください。"
     },
-    "usage": "LLM_CHECK: モデル呼び出し {{calls}} 回、キャッシュからの判定 {{cached}} 件。"
+    "usage": "LLM_CHECK: モデル呼び出し {{calls}} 回、キャッシュからの判定 {{cached}} 件。",
+    "notEvaluated": "未評価",
+    "notEvaluatedCount": "未評価: {{count}} 件 (LLM_CHECK を実行できませんでした。不合格にもスコアにも含まれません)。"
   }
 }

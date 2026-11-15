@@ -251,6 +251,8 @@
       "llm_check_daily_quota_exceeded": "Hai usato le tue {{limit}} chiamate al modello di LLM_CHECK di oggi. Riprova tra {{retryAfter}} secondi (il conteggio riparte a mezzanotte UTC).",
       "llm_check_policy_in_use": "Questa policy è usata da {{workflowSteps}} verifiche di policy dei workflow e {{maturityGates}} gate di maturità. Non possono valutare LLM_CHECK, quindi lì ogni entità fallirebbe. Rimuovi prima la policy da essi, oppure usa LLM_CHECK in una policy separata."
     },
-    "usage": "LLM_CHECK: {{calls}} chiamate al modello, {{cached}} verdetti dalla cache."
+    "usage": "LLM_CHECK: {{calls}} chiamate al modello, {{cached}} verdetti dalla cache.",
+    "notEvaluated": "Non valutato",
+    "notEvaluatedCount": "Non valutati: {{count}} (un LLM_CHECK non è stato eseguito; non contano come falliti né nel punteggio)."
   }
 }

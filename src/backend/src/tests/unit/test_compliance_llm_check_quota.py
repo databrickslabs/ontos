@@ -123,7 +123,7 @@ def test_a_user_run_past_the_quota_warns_and_counts_the_checks(db_session):
             patch('src.common.llm_client.create_openai_client', return_value=fake):
         run = ComplianceManager().run_policy_inline(db_session, policy=policy, quota_user='w')
 
-    assert (run.success_count, run.failure_count) == (2, 1)
+    assert (run.success_count, run.failure_count, run.not_evaluated_count) == (2, 0, 1)
     assert run.warning_code == 'llm_check_daily_quota_exceeded'
     assert json.loads(run.warning_params) == {'count': 1, 'limit': 4}
     row = db_session.query(ComplianceLlmCheckUsageDb).filter_by(username='w').one()

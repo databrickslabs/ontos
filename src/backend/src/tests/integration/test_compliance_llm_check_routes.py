@@ -85,9 +85,11 @@ def test_run_without_endpoint_fails_closed(client, domains, test_settings):
             patch('src.common.llm_client.create_openai_client', return_value=fake):
         run = _run(client, policy_id)
 
-    assert (run['success_count'], run['failure_count']) == (0, 2)
+    # No verdict: not evaluated, so neither passed nor failed
+    assert (run['success_count'], run['failure_count'], run['not_evaluated_count']) == (0, 0, 2)
     assert fake.calls == []
     results = client.get(f"/api/compliance/runs/{run['id']}/results").json()['results']
+    assert all(r['not_evaluated'] and not r['passed'] for r in results)
     codes = {json.loads(r['details_json'])['llm_checks'][0]['code'] for r in results}
     assert codes == {'llm_check_no_endpoint'}
 

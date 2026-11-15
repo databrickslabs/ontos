@@ -9,7 +9,9 @@ text, the criterion and the serving endpoint, so a rule run again over
 unchanged text makes no model call. compliance_runs.llm_calls and
 llm_cache_hits count a run's model calls and cached verdicts.
 compliance_llm_check_usage counts the calls each user started per day
-(UTC), for the daily quota.
+(UTC), for the daily quota. compliance_results.not_evaluated marks the
+entities an LLM_CHECK couldn't judge (compliance_runs.not_evaluated_count),
+which the run's counts and score leave out.
 """
 from typing import Sequence, Union
 
@@ -35,6 +37,12 @@ def upgrade() -> None:
     )
     op.add_column('compliance_runs', sa.Column('llm_calls', sa.Integer(), nullable=True))
     op.add_column('compliance_runs', sa.Column('llm_cache_hits', sa.Integer(), nullable=True))
+    op.add_column(
+        'compliance_runs', sa.Column('not_evaluated_count', sa.Integer(), nullable=True),
+    )
+    op.add_column('compliance_results', sa.Column(
+        'not_evaluated', sa.Boolean(), nullable=False, server_default=sa.false(),
+    ))
     op.create_table(
         'compliance_llm_check_usage',
         sa.Column('username', sa.String(), nullable=False),
@@ -46,6 +54,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table('compliance_llm_check_usage')
+    op.drop_column('compliance_results', 'not_evaluated')
+    op.drop_column('compliance_runs', 'not_evaluated_count')
     op.drop_column('compliance_runs', 'llm_cache_hits')
     op.drop_column('compliance_runs', 'llm_calls')
     op.drop_table('compliance_llm_check_cache')

@@ -32,7 +32,8 @@ from src.common.compliance_notifications import ComplianceRunNotifier
 from src.common.api_errors import CodedValueError
 from src.common.compliance_llm_check import (
     BUDGET_EXCEEDED, CALLS_PER_CHECK, QUOTA_EXCEEDED, DbLlmCallQuota, DbLlmCheckCache,
-    LlmCheckError, LlmChecker, LlmCheckQuotaExceededError, seconds_to_next_utc_day,
+    LlmCheckError, LlmChecker, LlmCheckQuotaExceededError, counts_as_failure,
+    seconds_to_next_utc_day,
 )
 from src.common.compliance_entities import (
     create_entity_iterator,
@@ -676,10 +677,11 @@ class ComplianceManager:
         score: float, error_message: Optional[str] = None, error_code: Optional[str] = None,
         error_params: Optional[dict] = None, warning_code: Optional[str] = None,
         warning_params: Optional[dict] = None, llm_calls: Optional[int] = None,
-        llm_cache_hits: Optional[int] = None,
+        llm_cache_hits: Optional[int] = None, not_evaluated_count: Optional[int] = None,
     ) -> ComplianceRunDb:
         run.success_count = success_count
         run.llm_calls, run.llm_cache_hits = llm_calls, llm_cache_hits
+        run.not_evaluated_count = not_evaluated_count
         run.failure_count = failure_count
         run.score = score
         run.finished_at = utc_now()
@@ -963,6 +965,7 @@ class ComplianceManager:
         run = self.create_run(db, policy_id=policy.id)
         success = 0
         failure = 0
+        skipped = 0  # not evaluated: an LLM_CHECK without a verdict
         # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context;
         # NOTIFY collects per recipient and sends one notification when the run ends
         tag_manager = TagsManagerTagAdapter(db, user_email=current_user)
@@ -982,6 +985,7 @@ class ComplianceManager:
             return {
                 'llm_calls': llm_checker.calls - calls_before,
                 'llm_cache_hits': llm_checker.cache_hits - hits_before,
+                'not_evaluated_count': skipped,
             }
 
         try:
@@ -1004,7 +1008,7 @@ class ComplianceManager:
                 # Evaluate ASSERT clause
                 ok = True
                 msg = None
-                no_verdict = False
+                no_verdict = not_evaluated = False
                 evaluator = Evaluator(obj, llm_checker=llm_checker)
 
                 if parsed_rule.get('assert_clause'):
@@ -1015,8 +1019,11 @@ class ComplianceManager:
                             msg = f"Assertion failed for {obj.get('type')} {obj.get('name')}"
                     except LlmCheckError as e:
                         # Failed closed without a model verdict (no endpoint,
-                        # budget, refusal...): the entity fails, its actions don't run
+                        # budget, refusal...): the entity doesn't pass, its actions
+                        # don't run, and unless the text was empty it is not evaluated
+                        # (left out of the counts and the score)
                         ok, no_verdict = False, True
+                        not_evaluated = not counts_as_failure(e.code)
                         msg = f"Evaluation error: {str(e)}"
                     except Exception as e:
                         ok = False
@@ -1058,6 +1065,7 @@ class ComplianceManager:
                     object_id=obj.get('id') or obj.get('full_name') or obj.get('name') or 'unknown',
                     object_name=obj.get('name'),
                     passed=bool(ok),
+                    not_evaluated=not_evaluated,
                     message=msg,
                     # The actions' outcomes, and the outcome of each LLM_CHECK: the model's
                     # reason, or the code of why there is no verdict (the UI shows them by
@@ -1066,7 +1074,9 @@ class ComplianceManager:
                 )
                 db.add(res)
 
-                if ok:
+                if not_evaluated:
+                    skipped += 1
+                elif ok:
                     success += 1
                 else:
                     failure += 1

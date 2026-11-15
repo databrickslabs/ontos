@@ -9,6 +9,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
+import { ResultStatusBadge } from '@/components/compliance/result-status-badge';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import {
   CardSkeleton,
@@ -40,6 +41,7 @@ interface Run {
   warning_params?: Record<string, unknown> | null;
   llm_calls?: number | null;
   llm_cache_hits?: number | null;
+  not_evaluated_count?: number | null;
 }
 
 interface Result {
@@ -49,6 +51,7 @@ interface Result {
   object_id: string;
   object_name?: string;
   passed: boolean;
+  not_evaluated?: boolean;
   message?: string;
   details_json?: string;
   created_at: string;
@@ -74,9 +77,7 @@ export default function ComplianceRunDetails() {
       <code className="text-xs bg-muted px-2 py-1 rounded">{row.original.object_name || row.original.object_id}</code>
     ) },
     { accessorKey: 'passed', header: t('common:labels.status'), cell: ({ row }) => (
-      <Badge variant={row.original.passed ? 'secondary' : 'destructive'}>
-        {row.original.passed ? t('compliance:results.passed') : t('compliance:results.failed')}
-      </Badge>
+      <ResultStatusBadge passed={row.original.passed} notEvaluated={row.original.not_evaluated} />
     ) },
     { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => {
       // The LLM_CHECKs that failed, with the model's reason or the translated code
@@ -201,6 +202,11 @@ export default function ComplianceRunDetails() {
           {run.status !== 'failed' && run.warning_code && (
             <div className="text-sm text-amber-600" data-testid="run-warning">
               {complianceRunWarningText(t, run)}
+            </div>
+          )}
+          {!!run.not_evaluated_count && (
+            <div className="text-sm text-muted-foreground" data-testid="run-not-evaluated">
+              {t('compliance:llmCheck.notEvaluatedCount', { count: run.not_evaluated_count })}
             </div>
           )}
           {llmUsageText(t, run) && (

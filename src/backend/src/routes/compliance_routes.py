@@ -391,6 +391,7 @@ def _run_llm_usage(run) -> dict:
     return {
         'llm_calls': getattr(run, 'llm_calls', None),
         'llm_cache_hits': getattr(run, 'llm_cache_hits', None),
+        'not_evaluated_count': getattr(run, 'not_evaluated_count', None),
     }
 
 
@@ -511,6 +512,7 @@ async def get_run_results(
                 'object_id': r.object_id,
                 'object_name': r.object_name,
                 'passed': r.passed,
+                'not_evaluated': bool(getattr(r, 'not_evaluated', False)),
                 'message': r.message,
                 'details_json': r.details_json,
                 'created_at': r.created_at,

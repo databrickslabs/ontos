@@ -48,6 +48,8 @@ class ComplianceRun(BaseModel):
     # LLM_CHECK model calls of the run, and verdicts read from the cache (None: not counted)
     llm_calls: Optional[int] = None
     llm_cache_hits: Optional[int] = None
+    # Entities an LLM_CHECK couldn't judge: in neither count nor the score
+    not_evaluated_count: Optional[int] = None
 
 
 class ComplianceResult(BaseModel):
@@ -57,6 +59,7 @@ class ComplianceResult(BaseModel):
     object_id: str
     object_name: Optional[str] = None
     passed: bool
+    not_evaluated: bool = False  # no verdict (LLM_CHECK couldn't run); passed is False
     message: Optional[str] = None
     details_json: Optional[str] = None
     created_at: datetime

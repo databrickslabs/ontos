@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text,
+    Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, false,
 )
 from sqlalchemy.orm import relationship
 
@@ -53,6 +53,9 @@ class ComplianceRunDb(Base):
     # (None: a run from before they were counted)
     llm_calls = Column(Integer, nullable=True)
     llm_cache_hits = Column(Integer, nullable=True)
+    # Entities without a verdict (an LLM_CHECK that couldn't run: budget, quota, no
+    # endpoint...): neither passed nor failed, and not part of the score
+    not_evaluated_count = Column(Integer, nullable=True)
 
     policy = relationship("CompliancePolicyDb", back_populates="runs")
     results = relationship("ComplianceResultDb", back_populates="run", cascade="all, delete-orphan", lazy="selectin")
@@ -68,6 +71,9 @@ class ComplianceResultDb(Base):
     object_id = Column(String, nullable=False)
     object_name = Column(String, nullable=True)
     passed = Column(Boolean, default=False, nullable=False)
+    # No verdict: an LLM_CHECK couldn't run (passed is False, the run's counts and
+    # score leave it out)
+    not_evaluated = Column(Boolean, default=False, nullable=False, server_default=false())
     message = Column(Text, nullable=True)
     details_json = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

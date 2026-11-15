@@ -251,6 +251,8 @@
       "llm_check_daily_quota_exceeded": "Sie haben Ihre {{limit}} LLM_CHECK-Modellaufrufe für heute aufgebraucht. Versuchen Sie es in {{retryAfter}} Sekunden erneut (die Zählung beginnt um Mitternacht UTC neu).",
       "llm_check_policy_in_use": "Diese Richtlinie wird von {{workflowSteps}} Workflow-Richtlinienprüfungen und {{maturityGates}} Reifegrad-Gates verwendet. Diese können LLM_CHECK nicht auswerten, daher würde dort jede Entität abgelehnt. Entfernen Sie die Richtlinie zuerst dort, oder verwenden Sie LLM_CHECK in einer eigenen Richtlinie."
     },
-    "usage": "LLM_CHECK: {{calls}} Modellaufrufe, {{cached}} Urteile aus dem Cache."
+    "usage": "LLM_CHECK: {{calls}} Modellaufrufe, {{cached}} Urteile aus dem Cache.",
+    "notEvaluated": "Nicht ausgewertet",
+    "notEvaluatedCount": "Nicht ausgewertet: {{count}} (ein LLM_CHECK konnte nicht ausgeführt werden; zählt weder als fehlgeschlagen noch für die Bewertung)."
   }
 }

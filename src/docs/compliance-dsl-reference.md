@@ -196,8 +196,12 @@ rule editor to try a criterion on one entity (at most 10 tests a minute per user
 - Fails closed: with an empty text (no call), LLM features off
   (`llm_check_disabled`), no endpoint (`llm_check_no_endpoint`), a refusal, an
   empty or unfinished reply, or a reply whose first line is not `PASS: <reason>`
-  or `FAIL: <reason>`, the rule fails for that entity, also under `NOT`, and its
+  or `FAIL: <reason>`, the entity doesn't pass, also under `NOT`, and its
   `ON_PASS` / `ON_FAIL` actions don't run for it. Each call times out after 60 s.
+  Such an entity is **not evaluated**: it counts neither as passed nor as
+  failed, and the run's score covers only the judged entities (the run shows
+  how many were not evaluated). An empty text is the exception: there is
+  nothing to judge, so the entity fails.
 - Cached: a verdict is stored per text, criterion, endpoint and prompts, so a run
   over unchanged text makes no call. Verdicts older than
   `COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS` (default 30) are asked again, and

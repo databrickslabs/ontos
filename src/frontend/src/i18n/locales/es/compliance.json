@@ -251,6 +251,8 @@
       "llm_check_daily_quota_exceeded": "Usaste tus {{limit}} llamadas al modelo de LLM_CHECK de hoy. Inténtalo de nuevo en {{retryAfter}} segundos (el recuento se reinicia a medianoche UTC).",
       "llm_check_policy_in_use": "Esta política la usan {{workflowSteps}} comprobaciones de política de flujos de trabajo y {{maturityGates}} puertas de madurez. No pueden evaluar LLM_CHECK, así que allí fallarían todas las entidades. Quita primero la política de ellas o usa LLM_CHECK en una política aparte."
     },
-    "usage": "LLM_CHECK: {{calls}} llamadas al modelo, {{cached}} veredictos de la caché."
+    "usage": "LLM_CHECK: {{calls}} llamadas al modelo, {{cached}} veredictos de la caché.",
+    "notEvaluated": "No evaluado",
+    "notEvaluatedCount": "No evaluados: {{count}} (un LLM_CHECK no se pudo ejecutar; no cuentan como fallidos ni en la puntuación)."
   }
 }

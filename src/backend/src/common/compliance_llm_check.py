@@ -119,6 +119,16 @@ FAIL: <short reason>
 Keep the reason under 200 characters. If you cannot tell, answer FAIL."""
 
 
+def counts_as_failure(code: Optional[str]) -> bool:
+    """Whether a check without a verdict still fails the entity in the run's score.
+
+    An empty text has nothing to judge, so it fails (missing documentation). Any
+    other code (budget, quota, no endpoint, refusal, call failure...) says nothing
+    about the entity: it is not evaluated, and left out of the score.
+    """
+    return code == EMPTY_TEXT
+
+
 @dataclass(frozen=True)
 class LlmCheckResult:
     """The outcome of one LLM_CHECK: a verdict (``code`` None) or a coded failure."""

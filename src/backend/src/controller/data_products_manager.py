@@ -399,17 +399,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # unless the payload names one).
             requested_group = (product_data.get('lifecycle_stage_group_id')
                                or product_data.get('lifecycleStageGroupId'))
-            requested_status = product_data.get('status')
-            # The create model defaults status to 'draft': in a named group without
-            # that stage it means "no status", i.e. the group's first stage
-            if requested_group and (requested_status or '').lower() == 'draft':
-                named = lifecycle_service.require_group(
-                    db_session, 'data_product', requested_group,
-                )
-                if 'draft' not in named.stages:
-                    requested_status = None
+            # The create model defaults status to 'draft': in a group (named or the
+            # default) without that stage it means "no status", the first stage
             group_id, stage_key = lifecycle_service.stage_for_new(
-                db_session, 'data_product', requested_group, requested_status,
+                db_session, 'data_product', requested_group, product_data.get('status'),
+                model_default='draft',
             )
             product_data['status'] = stage_key
             product_data['lifecycle_stage_group_id'] = group_id

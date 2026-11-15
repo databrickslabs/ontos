@@ -2491,9 +2491,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # is certification_level, set by the certify action.
             # It starts in a stage of its lifecycle stage group (the default one
             # unless the payload names one).
+            # The model's default 'draft' means "no status" in a group without it
             group_id, status_value = lifecycle_service.stage_for_new(
                 db, 'data_contract', data_dict.get('lifecycle_stage_group_id'),
-                data_dict.get('status'),
+                data_dict.get('status'), model_default='draft',
             )
             draft_owner_id = (
                 current_user

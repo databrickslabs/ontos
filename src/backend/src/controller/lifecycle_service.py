@@ -823,6 +823,7 @@ class LifecycleService:
         db.commit()
         db.refresh(entity)
         _refresh_search_index(entity_type, entity, db)
+        _request_tag_sync(entity_type, str(entity.id), from_status, initial.key)
         return self.entity_lifecycle(db, entity_type, entity)
 
     # ---- group writes (Settings)
@@ -1070,15 +1071,44 @@ def _model_id(model: Any, entity_id: str) -> Any:
 
 
 def _refresh_search_index(entity_type: str, entity: Any, db: Session) -> None:
-    """Best effort: the search index shows a contract's new status (products and
-    assets are re-indexed by their next write)."""
+    """Best effort: the search index shows the entity's new status (an asset reset
+    to a retired-category stage leaves it)."""
+    from src.common.app_state import get_app_state_manager
+
     try:
         if entity_type == 'data_contract':
             from src.controller.data_contracts_manager import reindex_contract_in_search_index
             reindex_contract_in_search_index(entity, db)
+            return
+        search_manager = get_app_state_manager('search_manager')
+        if search_manager is None:
+            return
+        if entity_type == 'asset':
+            from src.controller.assets_manager import AssetsManager
+            manager = AssetsManager()
+            manager.set_search_manager(search_manager)
+            manager._update_search_index(entity)
+        elif entity_type == 'data_product':
+            from src.controller.data_products_manager import DataProductsManager
+            manager = DataProductsManager(
+                db=db, notifications_manager=get_app_state_manager('notifications_manager'),
+            )
+            manager.set_search_manager(search_manager)
+            product = manager.get_product(str(entity.id))
+            if product is not None:
+                manager._update_search_index(product)
     except Exception as e:
         logger.warning("Search index not refreshed after a lifecycle change of %s %s: %s",
                        entity_type, getattr(entity, 'id', None), e)
+
+
+def _request_tag_sync(entity_type: str, entity_id: str, from_status: str,
+                      to_status: str) -> None:
+    """A group change resets the status: request a uc_tag_sync run as a transition
+    into or out of a deprecated / retired stage does (never raises)."""
+    from src.common.uc_tag_sync_trigger import request_uc_tag_sync_after_transition
+
+    request_uc_tag_sync_after_transition(entity_type, entity_id, from_status, to_status)
 
 
 def pop_lifecycle_properties(custom_props: Any) -> Dict[str, Any]:

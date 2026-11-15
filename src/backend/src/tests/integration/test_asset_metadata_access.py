@@ -216,6 +216,25 @@ def test_without_assets_every_route_is_403(client, db_session, asset, ws, act_as
     ws.files.upload.assert_not_called()
 
 
+def test_the_checks_use_the_startup_wired_assets_manager(
+        client, db_session, asset, act_as, monkeypatch):
+    """Not the module-level singleton: the checks see the manager the app wired."""
+    calls = []
+
+    class Wired(AssetsManager):
+        def asset_exists(self, db, asset_id):
+            calls.append(asset_id)
+            return super().asset_exists(db, asset_id)
+
+    monkeypatch.setattr(app.state, 'assets_manager', Wired())
+    act_as('Admin')
+
+    response = client.get('/api/entities/asset/rich-texts', params={'entity_id': str(asset.id)})
+
+    assert response.status_code == 200, response.text
+    assert calls == [asset.id]
+
+
 @pytest.fixture
 def linked_to_an_accessible_product(monkeypatch, asset):
     """The #347 rule answers yes for this asset (its own tests cover how it decides)."""

@@ -308,9 +308,10 @@ class AppEntityLoader(EntityLoader):
 
         NOTE: repositories expose get_multi() (CRUDBase), not list(); the Db
         models carry owner_team_id rather than owner, and their domains and
-        tags are in association tables. Only the types a rule matches are loaded; a type that
-        can't be loaded raises EntityLoadError (see _load). With ``entity_id``
-        only that entity is read (a workflow policy check, see load_entity).
+        tags are in association tables. Only the types a rule matches are
+        loaded; a type that can't be loaded raises EntityLoadError (see
+        _load). With ``entity_id`` only that entity is read (a workflow
+        policy check, see load_entity).
         """
         # Data Products
         if 'data_product' in entity_types:

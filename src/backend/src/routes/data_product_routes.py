@@ -2070,6 +2070,9 @@ async def update_data_product(
     try:
         body_dict = await request.json()
         logger.info(f"Received raw payload for update (ID: {product_id}): {body_dict}")
+        if isinstance(body_dict, dict) and body_dict.get('tags') is None:
+            # `tags: null` is "not sent" (only `[]` clears); the model would read it as [].
+            body_dict.pop('tags', None)
         product_update = DataProduct(**body_dict)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON body.")

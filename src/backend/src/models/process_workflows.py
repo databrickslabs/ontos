@@ -186,7 +186,7 @@ class StepExecutionStatus(str, Enum):
 # --- Trigger Configuration ---
 
 class GateErrorMode(str, Enum):
-    """What a ``before_status_change`` gate does when evaluating it raises."""
+    """What a ``before_status_change`` or ``before_update`` gate does when evaluating it raises."""
     FAIL_OPEN = "fail_open"  # The transition proceeds (the error is logged and audited)
     FAIL_CLOSED = "fail_closed"  # The transition is refused
 
@@ -235,13 +235,13 @@ class WorkflowTrigger(BaseModel):
         None, description="scheduled only: IANA timezone of the schedule; empty means UTC",
     )
 
-    # For before_status_change
+    # For before_status_change and before_update
     on_error: GateErrorMode = Field(
         GateErrorMode.FAIL_OPEN,
         description=(
-            "before_status_change only: what happens when evaluating this gate raises. "
-            "fail_open lets the transition proceed, fail_closed refuses it. "
-            "A gate that fails normally blocks in both modes."
+            "before_status_change and before_update: what happens when evaluating this "
+            "gate raises. fail_open lets the transition or update proceed, fail_closed "
+            "refuses it. A gate that fails normally blocks in both modes."
         ),
     )
     disabled_for: GateExemptions = Field(

@@ -115,6 +115,10 @@
       "descriptionPlaceholder": "Description du workflow",
       "failClosed": "Refuser la transition si cette porte ne peut pas être évaluée",
       "failClosedHint": "Fail closed : si l'évaluation de cette porte lève une erreur (et non un échec normal), le changement de statut est refusé. Désactivé (fail open), le changement a lieu et l'erreur est journalisée et auditée.",
+      "updateGate": {
+        "failClosed": "Refuser la mise à jour si cette porte ne peut pas être évaluée",
+        "failClosedHint": "Fail closed : si l'évaluation de cette porte lève une erreur (et non un échec normal), la mise à jour est refusée. Désactivé (fail open), la mise à jour a lieu et l'erreur est journalisée et auditée."
+      },
       "disabledFor": {
         "title": "Désactivé pour",
         "hint": "Cette porte ne s'exécute pas pour les domaines, produits de données et contrats de données listés ici (un domaine couvre ses produits et contrats). Chaque contournement est journalisé et audité.",

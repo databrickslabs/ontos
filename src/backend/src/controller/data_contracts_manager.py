@@ -4635,22 +4635,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     ) -> tuple[bool, List[Any]]:
         """Run the before_update gates of an update; ``(passed, executions)``.
 
-        ``changes`` are the fields sent. A gate that raises is logged and lets
-        the update proceed (``(True, [])``).
+        ``changes`` are the fields sent. A gate that raises is logged and
+        audited; it refuses the update when it is ``on_error: fail_closed``
+        (``UpdateGateEvaluationError``), else the update proceeds
+        (``workflow_triggers.run_update_gates``).
         """
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common import workflow_triggers
         from src.models.process_workflows import EntityType
-        try:
-            return get_trigger_registry(db).before_update(
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=str(contract.id),
-                entity_name=getattr(contract, 'name', None),
-                entity_data=changes,
-                user_email=user_email,
-            )
-        except Exception as e:
-            logger.warning(f"before_update trigger failed for contract {contract.id}: {e}")
-            return True, []
+        return workflow_triggers.run_update_gates(
+            db,
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=str(contract.id),
+            entity_name=getattr(contract, 'name', None),
+            entity_data=changes,
+            user_email=user_email,
+        )
 
     @staticmethod
     def fire_create_trigger(db: Session, contract: Any, user_email: Optional[str]) -> None:

@@ -98,14 +98,15 @@ class MaturityEvaluator:
             logger.warning("No entity dict builder for type: %s", entity_type)
             return None
 
-        if persist and entity_type == "Asset":
-            # Two evaluations of one asset (two quick edits) run one after the other:
-            # the second reads the snapshot the first stored, so it can't fire the same change
-            _lock_asset_row(db, entity_id)
-
         entity_dict = self._build_entity_dict(db, entity_type, entity_id)
         if entity_dict is None:
             return None
+
+        if persist and entity_type == "Asset":
+            # Two evaluations of one asset (two quick edits) run one after the other:
+            # the second reads the snapshot the first stored, so it can't fire the same
+            # change. Taken after the dict is built, so the lock doesn't span the UC read.
+            _lock_asset_row(db, entity_id)
 
         entity_name = entity_dict.get("name")
         uc_notice = _uc_notice(entity_dict)

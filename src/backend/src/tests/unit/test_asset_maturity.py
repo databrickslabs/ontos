@@ -672,6 +672,29 @@ def test_asset_without_owner_fails_an_owner_not_empty_gate(db_session):
     assert evaluate_rule_on_object("ASSERT obj.location != ''", d)[0] is True
 
 
+def test_asset_without_description_fails_a_description_not_empty_gate(db_session):
+    # Every nullable text column reads as '' (None != '' is true in the DSL)
+    asset = _asset(db_session)
+    d = build_asset_dict(db_session, str(asset.id), get_workspace_client=lambda: _ws())
+
+    for key in ('description', 'certified_by', 'certification_notes', 'created_by'):
+        assert d[key] == '', key
+        assert evaluate_rule_on_object(f"ASSERT obj.{key} != ''", d)[0] is False, key
+    assert d['has_certified_at'] is False and d['has_certification_expires_at'] is False
+    assert evaluate_rule_on_object('ASSERT obj.has_certified_at = True', d)[0] is False
+
+
+def test_certification_dates_are_tested_with_has_fields(db_session):
+    now = datetime.now(timezone.utc)
+    asset = _asset(db_session, description='Orders', certified_by='a@example.com',
+                   certified_at=now, certification_expires_at=now + timedelta(days=1))
+    d = build_asset_dict(db_session, str(asset.id), get_workspace_client=lambda: _ws())
+
+    assert d['description'] == 'Orders' and d['certified_by'] == 'a@example.com'
+    assert d['has_certified_at'] is True and d['has_certification_expires_at'] is True
+    assert evaluate_rule_on_object("ASSERT obj.description != ''", d)[0] is True
+
+
 def test_custom_property_presence_is_has_prop(db_session):
     asset = _asset(db_session, properties={'tier': 'gold', 'empty': ''})
     d = build_asset_dict(db_session, str(asset.id), get_workspace_client=lambda: _ws())

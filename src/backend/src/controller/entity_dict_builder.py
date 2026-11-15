@@ -156,7 +156,10 @@ def build_asset_dict(
     and its dates, custom properties (``properties`` plus one ``prop_<key>``
     per top-level key, because rules read one level: ``obj.prop_tier``),
     linked business terms (``hasTerm`` relationships) and concept links,
-    tags and quality items.
+    tags and quality items. Missing text fields (description, owner, domain,
+    ``certified_by``, ...) are ``''``, not null, so ``!= ''`` gates fail on them;
+    dates stay null and are tested with ``has_certified_at`` /
+    ``has_certification_expires_at``.
 
     When the asset points to a Unity Catalog table (platform Databricks and a
     ``catalog.schema.table`` location) the table is read with one
@@ -193,8 +196,11 @@ def build_asset_dict(
     base["has_description"] = bool(asset.description and asset.description.strip())
     # Missing strings are '' not null: in the DSL ``None != ''`` is true, so a gate
     # like ``obj.owner != ''`` would pass for an asset without an owner.
-    for key in ("platform", "location"):
+    for key in _nullable_string_columns(AssetDb):
         base[key] = base.get(key) or ""
+    # Dates stay null (or a datetime); gates test their presence with ``has_<date>``
+    base["has_certified_at"] = asset.certified_at is not None
+    base["has_certification_expires_at"] = asset.certification_expires_at is not None
 
     _add_asset_owners(db, base, entity_id)
     _add_asset_domains(db, base, entity_id)
@@ -382,6 +388,16 @@ def _add_semantic_link_count(db: Session, d: Dict[str, Any],
     ) or 0
     d["semantic_link_count"] = count
     d["has_semantic_links"] = count > 0
+
+
+def _nullable_string_columns(model) -> List[str]:
+    """The nullable text columns of a model (``String``, ``Text``)."""
+    from sqlalchemy import String
+
+    return [
+        col.name for col in model.__table__.columns
+        if col.nullable and isinstance(col.type, String)
+    ]
 
 
 def _extract_base_fields(db_obj) -> Dict[str, Any]:

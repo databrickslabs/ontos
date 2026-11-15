@@ -738,13 +738,17 @@ const FIT_VIEW_OPTIONS = { maxZoom: 1, padding: 0.2 };
 // Fits the view after a confirmed Rearrange, so a layout taller than the view isn't left
 // partly off-screen. Rendered inside ReactFlow (the hook needs its context). Deferred one
 // tick so the store has the new node positions first.
-function FitAfterRearrange({ version }: { version: number }) {
+export function FitAfterRearrange({ version }: { version: number }) {
   const { fitView } = useReactFlow();
   const handled = useRef(version);
   useEffect(() => {
     if (version === handled.current) return undefined;
-    handled.current = version;
-    const timer = setTimeout(() => fitView(FIT_VIEW_OPTIONS), 0);
+    // Marked handled when the fit runs, not when it is scheduled: if fitView's identity
+    // changes first, the cleanup cancels the timer and the re-run must schedule it again.
+    const timer = setTimeout(() => {
+      handled.current = version;
+      fitView(FIT_VIEW_OPTIONS);
+    }, 0);
     return () => clearTimeout(timer);
   }, [version, fitView]);
   return null;

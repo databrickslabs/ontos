@@ -274,12 +274,13 @@ async def remove_gate(
 # ===================================================================
 
 def _get_evaluator(request: Request):
+    from src.common.run_identity import RunIdentity
     from src.controller.maturity_evaluator import MaturityEvaluator
     evaluator = getattr(request.app.state, "maturity_evaluator", None)
     if not evaluator:
-        # The app's client reads the UC table behind an asset (snapshots are
-        # shared, so they don't depend on who looked); None = resolve lazily.
-        evaluator = MaturityEvaluator(getattr(request.app.state, "workspace_client", None))
+        # The requesting user's token reads the UC table behind an asset, so an
+        # evaluation shows (and stores) only what they can read. Built lazily.
+        evaluator = MaturityEvaluator(run_identity=RunIdentity.for_request(request))
     return evaluator
 
 

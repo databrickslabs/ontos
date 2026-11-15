@@ -395,3 +395,47 @@ class TestAssetWriteAudit:
         assert response.status_code == 500
         assert [(c['action'], c['success']) for c in audited] == [('CREATE_ASSET', False)]
         assert 'created_resource_id' not in audited[0]['details']
+
+
+class TestAssetMaturityReadsAsTheUser:
+    """User-started evaluations read the UC table with the user's token, not the app's."""
+
+    @pytest.fixture
+    def user_client(self, monkeypatch, mock_workspace_client):
+        from unittest.mock import MagicMock
+
+        from databricks.sdk.errors import PermissionDenied
+        from src.common import workspace_client as workspace_client_module
+
+        # The app could not read the table; the user can
+        mock_workspace_client.tables.get.side_effect = PermissionDenied('app has no grant')
+        user_ws = MagicMock()
+        user_ws.tables.get.return_value = TableInfo(full_name=FQN, columns=[
+            ColumnInfo(name='id', comment='Order id', type_text='bigint'),
+        ])
+        monkeypatch.setattr(workspace_client_module, 'get_obo_workspace_client',
+                            lambda *a, **k: user_ws)
+        return user_ws
+
+    def test_evaluate_reads_the_table_as_the_user(self, client, db_session, user_client, fired):
+        _asset_ladder(client, db_session)
+        asset = _asset(db_session, description='Orders')
+
+        response = client.post(f'/api/assets/{asset.id}/maturity/evaluate')
+
+        assert response.status_code == 200, response.text
+        assert response.json()['achieved_level_order'] == 2
+        assert response.json()['notices'] == []
+        user_client.tables.get.assert_called_with(full_name=FQN)
+
+    def test_an_asset_write_re_evaluates_as_the_user(
+            self, client, db_session, user_client, fired):
+        _asset_ladder(client, db_session)
+        asset = _asset(db_session)
+
+        response = client.put(f'/api/assets/{asset.id}', json={'description': 'Orders'})
+
+        assert response.status_code == 200, response.text
+        snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).all()
+        assert [s.achieved_level_order for s in snapshots] == [2]
+        user_client.tables.get.assert_called_with(full_name=FQN)

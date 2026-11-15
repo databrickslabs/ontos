@@ -306,11 +306,11 @@ class UpdateDataContractTool(BaseTool):
         "status": {
             "type": "string",
             "description": (
-                "New status (draft, active, deprecated, retired). Applied as a lifecycle "
-                "transition: only an allowed transition, and status change workflows can "
-                "block it."
+                "New status: a stage key of the contract's lifecycle stage group (draft, "
+                "active, deprecated, retired, ... by default; a custom group has its own "
+                "stages). Applied as a lifecycle transition: only an allowed transition, "
+                "and status change workflows can block it."
             ),
-            "enum": ["draft", "active", "deprecated", "retired"]
         },
         "deprecation_reason": {
             "type": "string",
@@ -522,8 +522,10 @@ class SearchDataContractsTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "enum": ["draft", "active", "deprecated"],
-            "description": "Optional filter by status."
+            "description": (
+                "Optional filter by status: a stage key (draft, active, deprecated, ... "
+                "by default, or a custom stage)."
+            )
         },
         "limit": {
             "type": "integer",
@@ -804,8 +806,10 @@ class ListDataContractsTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "enum": ["draft", "active", "deprecated"],
-            "description": "Optional filter by status",
+            "description": (
+                "Optional filter by status: a stage key (draft, active, deprecated, ... "
+                "by default, or a custom stage)."
+            ),
         },
         "limit": {
             "type": "integer",

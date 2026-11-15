@@ -161,8 +161,10 @@ class SearchDataProductsTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "enum": ["active", "draft", "deprecated", "retired"],
-            "description": "Optional filter by product status."
+            "description": (
+                "Optional filter by product status: a stage key (draft, active, deprecated, ... "
+                "by default, or a custom stage)."
+            )
         },
         "limit": {
             "type": "integer",
@@ -504,11 +506,11 @@ class UpdateDataProductTool(BaseTool):
         "status": {
             "type": "string",
             "description": (
-                "New status (draft, active, deprecated, retired). Applied as a lifecycle "
-                "transition: only an allowed transition, and status change workflows can "
-                "block it."
+                "New status: a stage key of the product's lifecycle stage group (draft, "
+                "active, deprecated, retired, ... by default; a custom group has its own "
+                "stages). Applied as a lifecycle transition: only an allowed transition, "
+                "and status change workflows can block it."
             ),
-            "enum": ["draft", "active", "deprecated", "retired"]
         },
         "deprecation_reason": {
             "type": "string",
@@ -812,8 +814,10 @@ class ListDataProductsTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "enum": ["active", "draft", "deprecated", "retired"],
-            "description": "Optional filter by status",
+            "description": (
+                "Optional filter by status: a stage key (draft, active, deprecated, ... "
+                "by default, or a custom stage)."
+            ),
         },
         "limit": {
             "type": "integer",

@@ -70,7 +70,12 @@
     "lifecycle_group_is_default": "The default lifecycle of an entity type can’t be deleted.",
     "lifecycle_group_in_use_one": "This lifecycle is used by {{count}} entity and can’t be deleted.",
     "lifecycle_group_in_use_other": "This lifecycle is used by {{count}} entities and can’t be deleted.",
-    "lifecycle_transition_self": "Stage “{{key}}” can’t move to itself."
+    "lifecycle_transition_self": "Stage “{{key}}” can’t move to itself.",
+    "lifecycle_group_changed": "This lifecycle was changed by someone else since you opened it. Close it and open it again to see their changes.",
+    "lifecycle_group_dead_end_stages": "These stages have no move out and aren’t in the Retired category: {{stages}}.",
+    "lifecycle_group_name_required": "A lifecycle needs a name.",
+    "lifecycle_stage_category_in_use_one": "Stage “{{key}}” can’t move from {{fromCategory}} to {{toCategory}}: {{count}} entity is in it.",
+    "lifecycle_stage_category_in_use_other": "Stage “{{key}}” can’t move from {{fromCategory}} to {{toCategory}}: {{count}} entities are in it."
   },
   "defaultGroupDescription": "Seeded lifecycle; reproduces the built-in transitions.",
   "editor": {

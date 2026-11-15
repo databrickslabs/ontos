@@ -70,7 +70,12 @@
     "lifecycle_group_is_default": "エンティティタイプの既定のライフサイクルは削除できません。",
     "lifecycle_group_in_use_one": "このライフサイクルは {{count}} 件のエンティティが使用しているため削除できません。",
     "lifecycle_group_in_use_other": "このライフサイクルは {{count}} 件のエンティティが使用しているため削除できません。",
-    "lifecycle_transition_self": "ステージ「{{key}}」は自分自身へ移行できません。"
+    "lifecycle_transition_self": "ステージ「{{key}}」は自分自身へ移行できません。",
+    "lifecycle_group_changed": "このライフサイクルは、開いた後に別のユーザーが変更しました。閉じて開き直し、変更内容を確認してください。",
+    "lifecycle_group_dead_end_stages": "次のステージには出ていく移行がなく、廃止カテゴリでもありません: {{stages}}。",
+    "lifecycle_group_name_required": "ライフサイクルには名前が必要です。",
+    "lifecycle_stage_category_in_use_one": "ステージ「{{key}}」は {{fromCategory}} から {{toCategory}} へ変更できません: {{count}} 件のエンティティがあります。",
+    "lifecycle_stage_category_in_use_other": "ステージ「{{key}}」は {{fromCategory}} から {{toCategory}} へ変更できません: {{count}} 件のエンティティがあります。"
   },
   "defaultGroupDescription": "初期設定のライフサイクル。組み込みの移行を再現します。",
   "editor": {

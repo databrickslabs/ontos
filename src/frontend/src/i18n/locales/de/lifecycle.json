@@ -70,7 +70,12 @@
     "lifecycle_group_is_default": "Der Standard-Lebenszyklus eines Entitätstyps kann nicht gelöscht werden.",
     "lifecycle_group_in_use_one": "Dieser Lebenszyklus wird von {{count}} Entität verwendet und kann nicht gelöscht werden.",
     "lifecycle_group_in_use_other": "Dieser Lebenszyklus wird von {{count}} Entitäten verwendet und kann nicht gelöscht werden.",
-    "lifecycle_transition_self": "Die Phase „{{key}}“ kann nicht zu sich selbst wechseln."
+    "lifecycle_transition_self": "Die Phase „{{key}}“ kann nicht zu sich selbst wechseln.",
+    "lifecycle_group_changed": "Dieser Lebenszyklus wurde seit dem Öffnen von jemand anderem geändert. Schließen Sie ihn und öffnen Sie ihn erneut, um die Änderungen zu sehen.",
+    "lifecycle_group_dead_end_stages": "Diese Phasen haben keinen Übergang nach außen und gehören nicht zur Kategorie Stillgelegt: {{stages}}.",
+    "lifecycle_group_name_required": "Ein Lebenszyklus braucht einen Namen.",
+    "lifecycle_stage_category_in_use_one": "Die Phase „{{key}}“ kann nicht von {{fromCategory}} zu {{toCategory}} wechseln: {{count}} Entität ist darin.",
+    "lifecycle_stage_category_in_use_other": "Die Phase „{{key}}“ kann nicht von {{fromCategory}} zu {{toCategory}} wechseln: {{count}} Entitäten sind darin."
   },
   "defaultGroupDescription": "Vorgegebener Lebenszyklus; entspricht den eingebauten Übergängen.",
   "editor": {

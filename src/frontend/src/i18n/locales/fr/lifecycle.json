@@ -70,7 +70,12 @@
     "lifecycle_group_is_default": "Le cycle de vie par défaut d’un type d’entité ne peut pas être supprimé.",
     "lifecycle_group_in_use_one": "Ce cycle de vie est utilisé par {{count}} entité et ne peut pas être supprimé.",
     "lifecycle_group_in_use_other": "Ce cycle de vie est utilisé par {{count}} entités et ne peut pas être supprimé.",
-    "lifecycle_transition_self": "L’étape « {{key}} » ne peut pas passer à elle-même."
+    "lifecycle_transition_self": "L’étape « {{key}} » ne peut pas passer à elle-même.",
+    "lifecycle_group_changed": "Quelqu’un d’autre a modifié ce cycle de vie depuis que vous l’avez ouvert. Fermez-le et rouvrez-le pour voir ses modifications.",
+    "lifecycle_group_dead_end_stages": "Ces étapes n’ont aucune transition sortante et ne sont pas dans la catégorie Retiré : {{stages}}.",
+    "lifecycle_group_name_required": "Un cycle de vie doit avoir un nom.",
+    "lifecycle_stage_category_in_use_one": "L’étape « {{key}} » ne peut pas passer de {{fromCategory}} à {{toCategory}} : {{count}} entité s’y trouve.",
+    "lifecycle_stage_category_in_use_other": "L’étape « {{key}} » ne peut pas passer de {{fromCategory}} à {{toCategory}} : {{count}} entités s’y trouvent."
   },
   "defaultGroupDescription": "Cycle de vie initial ; reproduit les transitions intégrées.",
   "editor": {

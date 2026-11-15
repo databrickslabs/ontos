@@ -1,7 +1,7 @@
 """Add the source of imported Markdown documents to document_metadata
 
 Revision ID: s2_document_markdown_import
-Revises: s1_workflow_is_customized
+Revises: o2_step_execution_message
 Create Date: 2026-11-12
 
 Markdown files imported from a Unity Catalog volume become documents on the
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 
 
 revision: str = 's2_document_markdown_import'
-down_revision: Union[str, None] = 's1_workflow_is_customized'
+down_revision: Union[str, None] = 'o2_step_execution_message'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

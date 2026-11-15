@@ -179,7 +179,8 @@
     "tags_load_failed": "Non è stato possibile caricare i tag delle entità {{entityType}}, quindi non è stato possibile valutare la regola."
   },
   "tableSources": {
-    "runWarning": "Oggetti non valutati: {{count}}. La regola legge campi da {{sources}}, che non è stato possibile leggere ({{reasons}}). I loro risultati contano come non superati.",
+    "notEvaluatedStatus": "Non valutato",
+    "runWarning": "Oggetti non valutati: {{count}}. La regola legge campi da {{sources}}, che non è stato possibile leggere ({{reasons}}). Non contano né come superati né come non superati, né nel punteggio.",
     "notEvaluated": "Non valutato: impossibile leggere {{fields}} da {{sources}} ({{reason}}).",
     "reasons": {
       "no_warehouse": "nessun SQL warehouse configurato",

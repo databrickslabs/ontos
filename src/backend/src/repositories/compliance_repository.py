@@ -1,9 +1,10 @@
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from src.common.repository import CRUDBase
+from src.common.uc_table_enrichment import NOT_EVALUATED_CODE
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 
 
@@ -38,6 +39,12 @@ class ComplianceResultRepository(CRUDBase[ComplianceResultDb, Dict[str, Any], Di
         stmt = select(ComplianceResultDb).where(ComplianceResultDb.run_id == run_id)
         if only_failed:
             stmt = stmt.where(ComplianceResultDb.passed == False)  # noqa: E712
+            # A result not evaluated (a field the rule reads could not be loaded)
+            # is stored as not passed, but it is not a failure
+            stmt = stmt.where(or_(
+                ComplianceResultDb.details_json.is_(None),
+                ~ComplianceResultDb.details_json.like(f'%"code": "{NOT_EVALUATED_CODE}"%'),
+            ))
         stmt = stmt.order_by(ComplianceResultDb.created_at.desc()).limit(limit)
         return list(db.execute(stmt).scalars().all())
 

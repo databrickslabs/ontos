@@ -52,6 +52,8 @@ FIELD_GROUP = {field: group for group, fields in GROUP_FIELDS.items() for field 
 
 # Entity key with the fields that could not be loaded: {field: {source, reason}}
 UNAVAILABLE_KEY = '_unavailable'
+# details_json code of a result not evaluated because a field could not be loaded
+NOT_EVALUATED_CODE = 'rule_field_unavailable'
 
 # Why a source could not be read (codes, also shown in run warnings)
 REASON_NO_WAREHOUSE = 'no_warehouse'

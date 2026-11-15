@@ -179,7 +179,8 @@
     "tags_load_failed": "The tags of the {{entityType}} entities could not be loaded, so the rule could not be evaluated."
   },
   "tableSources": {
-    "runWarning": "Objects not evaluated: {{count}}. The rule reads fields from {{sources}}, which could not be read ({{reasons}}). Their results count as failed.",
+    "notEvaluatedStatus": "Not evaluated",
+    "runWarning": "Objects not evaluated: {{count}}. The rule reads fields from {{sources}}, which could not be read ({{reasons}}). They are not counted as passed or failed, nor in the score.",
     "notEvaluated": "Not evaluated: {{fields}} could not be read from {{sources}} ({{reason}}).",
     "reasons": {
       "no_warehouse": "no SQL warehouse is configured",

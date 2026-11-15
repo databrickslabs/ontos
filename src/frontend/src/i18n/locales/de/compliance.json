@@ -179,7 +179,8 @@
     "tags_load_failed": "Die Tags der {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden."
   },
   "tableSources": {
-    "runWarning": "Nicht ausgewertete Objekte: {{count}}. Die Regel liest Felder aus {{sources}}, die nicht gelesen werden konnten ({{reasons}}). Ihre Ergebnisse zählen als fehlgeschlagen.",
+    "notEvaluatedStatus": "Nicht ausgewertet",
+    "runWarning": "Nicht ausgewertete Objekte: {{count}}. Die Regel liest Felder aus {{sources}}, die nicht gelesen werden konnten ({{reasons}}). Sie zählen weder als bestanden noch als fehlgeschlagen und nicht für die Bewertung.",
     "notEvaluated": "Nicht ausgewertet: {{fields}} konnte nicht aus {{sources}} gelesen werden ({{reason}}).",
     "reasons": {
       "no_warehouse": "kein SQL-Warehouse konfiguriert",

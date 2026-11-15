@@ -31,6 +31,7 @@ from src.common.api_errors import UserTokenRequiredError
 from src.common.run_identity import RunIdentity
 from src.common.uc_table_enrichment import (
     FIELD_GROUP,
+    NOT_EVALUATED_CODE,
     StatementCache,
     WarehouseSqlRunner,
     conditions_without,
@@ -864,7 +865,7 @@ class ComplianceManager:
                     msg = (f"Not evaluated: {fields} could not be read from {sources} "
                            f"({reasons})")
                     details = json.dumps({
-                        'code': 'rule_field_unavailable',
+                        'code': NOT_EVALUATED_CODE,
                         'params': {'fields': fields, 'sources': sources, 'reason': reasons},
                     })
                 elif parsed_rule.get('assert_clause'):
@@ -925,7 +926,8 @@ class ComplianceManager:
 
                 if ok:
                     success += 1
-                else:
+                elif not missing:
+                    # Not evaluated is neither: out of the counts and the score
                     failure += 1
 
             notified = self._flush_notifications(db, notifier, policy, failed=failure, passed=success)
@@ -941,7 +943,7 @@ class ComplianceManager:
             if trailing:
                 warning_code, warning_params = 'rule_trailing_input', trailing
             elif not_evaluated:
-                # Counted as failures; the warning says how many and which source
+                # Not in the counts or the score; the warning says how many and which source
                 warning_code = 'rule_fields_unavailable'
                 warning_params = {
                     'count': not_evaluated,

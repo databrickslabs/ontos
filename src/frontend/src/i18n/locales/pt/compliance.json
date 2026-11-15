@@ -179,7 +179,8 @@
     "tags_load_failed": "Não foi possível carregar as tags das entidades {{entityType}}, por isso a regra não pôde ser avaliada."
   },
   "tableSources": {
-    "runWarning": "Objetos não avaliados: {{count}}. A regra lê campos de {{sources}}, que não puderam ser lidos ({{reasons}}). Os resultados deles contam como reprovados.",
+    "notEvaluatedStatus": "Não avaliado",
+    "runWarning": "Objetos não avaliados: {{count}}. A regra lê campos de {{sources}}, que não puderam ser lidos ({{reasons}}). Eles não contam como aprovados nem reprovados, nem na pontuação.",
     "notEvaluated": "Não avaliado: não foi possível ler {{fields}} de {{sources}} ({{reason}}).",
     "reasons": {
       "no_warehouse": "nenhum SQL warehouse configurado",

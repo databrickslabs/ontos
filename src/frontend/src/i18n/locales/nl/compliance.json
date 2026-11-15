@@ -179,7 +179,8 @@
     "tags_load_failed": "De tags van de {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd."
   },
   "tableSources": {
-    "runWarning": "Niet geëvalueerde objecten: {{count}}. De regel leest velden uit {{sources}}, die niet gelezen konden worden ({{reasons}}). Hun resultaten tellen als mislukt.",
+    "notEvaluatedStatus": "Niet geëvalueerd",
+    "runWarning": "Niet geëvalueerde objecten: {{count}}. De regel leest velden uit {{sources}}, die niet gelezen konden worden ({{reasons}}). Ze tellen niet als geslaagd of mislukt, en niet mee in de score.",
     "notEvaluated": "Niet geëvalueerd: {{fields}} kon niet worden gelezen uit {{sources}} ({{reason}}).",
     "reasons": {
       "no_warehouse": "er is geen SQL-warehouse geconfigureerd",

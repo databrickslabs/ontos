@@ -179,7 +179,8 @@
     "tags_load_failed": "Les tags des entités {{entityType}} n'ont pas pu être chargés ; la règle n'a donc pas pu être évaluée."
   },
   "tableSources": {
-    "runWarning": "Objets non évalués : {{count}}. La règle lit des champs de {{sources}}, qui n'ont pas pu être lus ({{reasons}}). Leurs résultats comptent comme des échecs.",
+    "notEvaluatedStatus": "Non évalué",
+    "runWarning": "Objets non évalués : {{count}}. La règle lit des champs de {{sources}}, qui n'ont pas pu être lus ({{reasons}}). Ils ne comptent ni comme réussis ni comme échoués, ni dans le score.",
     "notEvaluated": "Non évalué : impossible de lire {{fields}} depuis {{sources}} ({{reason}}).",
     "reasons": {
       "no_warehouse": "aucun SQL warehouse n'est configuré",

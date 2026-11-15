@@ -402,11 +402,13 @@ retried twice with backoff before the source is reported as unavailable (reason
 `transient`); a missing system table or schema has the reason `not_found`.
 
 If a source can't be read (no SQL warehouse configured, no access to the system table, the
-statement fails or times out), its fields are left out and every entity whose rule reads them gets a failed
-result marked *not evaluated* with the field, the source and the reason; its `ON_PASS` /
-`ON_FAIL` actions don't run. When the `WHERE` reads a missing field, the entity is kept only
-if the `AND`-ed parts of the `WHERE` that don't read it hold. The run ends with the warning `rule_fields_unavailable` and the
-number of such entities. Fields from a source that could be read are still evaluated.
+statement fails or times out), its fields are left out and every entity whose rule reads them gets a
+result marked *not evaluated* with the field, the source and the reason. It is neither passed
+nor failed: it is not in the run's passed and failed counts, the score or the failed list,
+and its `ON_PASS` / `ON_FAIL` actions don't run. When the `WHERE` reads a missing field, the
+entity is kept only if the `AND`-ed parts of the `WHERE` that don't read it hold. The run ends
+with the warning `rule_fields_unavailable` and the number of such entities. Fields from a
+source that could be read are still evaluated.
 
 ### Application Entities
 - `type` - Entity type

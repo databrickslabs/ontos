@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import i18n from '@/i18n/config';
-import { complianceResultMessageText, complianceRunWarningText } from './compliance-run-warning';
+import {
+  complianceResultMessageText,
+  complianceResultStatus,
+  complianceRunWarningText,
+} from './compliance-run-warning';
 
 afterEach(async () => {
   await i18n.changeLanguage('en');
@@ -59,5 +63,27 @@ describe('complianceResultMessageText', () => {
     expect(complianceResultMessageText(i18n.t, { message: 'x', details_json: 'not json' }))
       .toBe('x');
     expect(complianceResultMessageText(i18n.t, {})).toBe('');
+  });
+});
+
+describe('complianceResultStatus', () => {
+  const notEvaluated = JSON.stringify({
+    code: 'rule_field_unavailable',
+    params: { fields: 'tags', sources, reason: 'no_access' },
+  });
+
+  it('shows a result not evaluated as such, not as failed', async () => {
+    await i18n.changeLanguage('pt');
+    expect(complianceResultStatus(i18n.t, { passed: false, details_json: notEvaluated }))
+      .toEqual({ label: 'Não avaliado', variant: 'outline' });
+  });
+
+  it('keeps passed and failed results, also with other details', () => {
+    expect(complianceResultStatus(i18n.t, { passed: true }).variant).toBe('secondary');
+    const actions = JSON.stringify({ actions: [] });
+    expect(complianceResultStatus(i18n.t, { passed: false, details_json: actions }))
+      .toEqual({ label: 'Failed', variant: 'destructive' });
+    expect(complianceResultStatus(i18n.t, { passed: false, details_json: '{' }).label)
+      .toBe('Failed');
   });
 });

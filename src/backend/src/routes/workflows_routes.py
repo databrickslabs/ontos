@@ -206,7 +206,8 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_unpublish": ["data_contract", "data_product"],
     "on_certify": ["data_contract", "data_product"],
     "on_decertify": ["data_contract", "data_product"],
-    "on_maturity_change": ["data_contract", "data_product"],  # maturity_evaluator
+    # maturity_evaluator; table, view and metric view assets fire as their UC type
+    "on_maturity_change": ["data_contract", "data_product", "table", "view", "metric_view"],
     # Validation gates
     "before_create": ["catalog", "schema", "table"],
     "before_update": ["data_contract"],

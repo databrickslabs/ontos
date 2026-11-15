@@ -292,6 +292,24 @@ class TestDescriptionWriteback:
         assert body['warnings'][0]['code'] == 'uc_description_write_failed'
         assert client.get(f'/api/assets/{table.id}').json()['description'] == 'Orders placed online'
 
+    def test_a_failed_write_step_logs_no_traceback_or_error_text(self, client, settings, table,
+                                                                 user_ws, monkeypatch, caplog):
+        from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
+
+        def boom(*args, **kwargs):
+            # As a SQLAlchemy error does: its text carries the bound parameters
+            raise RuntimeError("[parameters: ('Secret description',)]")
+
+        monkeypatch.setattr(UcDescriptionSyncManager, 'sync_after_update', boom)
+
+        with caplog.at_level('WARNING'):
+            _put(client, table, 'Secret description')
+
+        [record] = [r for r in caplog.records if 'to Unity Catalog failed' in r.getMessage()]
+        assert record.exc_info is None
+        assert record.getMessage().endswith(': RuntimeError')
+        assert 'Secret description' not in caplog.text
+
     def test_a_create_whose_write_step_raises_still_creates(self, client, settings, db_session,
                                                             user_ws, monkeypatch):
         from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
@@ -522,6 +540,24 @@ class TestBulkImportWriteback:
         assert [w['code'] for w in row['warnings']] == ['uc_description_write_failed']
         assert client.get(f'/api/assets/{table.id}').json()['description'] == \
             'Orders placed online'
+
+    def test_a_failed_row_write_logs_no_traceback_or_error_text(self, client, settings, table,
+                                                                user_ws, monkeypatch, caplog):
+        from src.controller.asset_bulk_manager import AssetBulkManager
+        from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("[parameters: ('Orders placed online',)]")
+
+        monkeypatch.setattr(UcDescriptionSyncManager, 'sync_after_update', boom)
+        monkeypatch.setattr(AssetBulkManager, 'index_committed_import', lambda *a, **k: None)
+
+        with caplog.at_level('WARNING'):
+            _import_csv(client, self.CSV)
+
+        records = [r for r in caplog.records if 'imported description' in r.getMessage()]
+        assert records and all(r.exc_info is None for r in records)
+        assert "[parameters: ('Orders placed online',)]" not in caplog.text
 
     def test_an_imported_column_description_updates_the_table_snapshot(
             self, client, settings, db_session, user_ws):

@@ -255,8 +255,9 @@ def _write_imported_descriptions(
         description_sync = UcDescriptionSyncManager(settings)
         limit = int(getattr(settings, 'UC_DESCRIPTION_IMPORT_WRITE_LIMIT', 100) or 0)
         items = {item.asset_id: item for item in result.items if item.asset_id}
-    except Exception:
-        logger.warning("Could not prepare the Unity Catalog writes of an import", exc_info=True)
+    except Exception as e:
+        logger.warning("Could not prepare the Unity Catalog writes of an import: %s",
+                       type(e).__name__)
         result.warning_messages.append(import_writes_failed_warning())
         return []
 
@@ -299,10 +300,12 @@ def _write_imported_descriptions(
                 if asset is not None:
                     AssetsManager.update_table_column_snapshot(db, asset)
             db.commit()
-        except Exception:
+        except Exception as e:
             db.rollback()
-            logger.warning("Writing the imported description of asset %s failed", asset_id,
-                           exc_info=True)
+            # The error's type only: its text and traceback can carry the SQL parameters,
+            # i.e. the description
+            logger.warning("Writing the imported description of asset %s failed: %s",
+                           asset_id, type(e).__name__)
             label = item.name if item else str(asset_id)
             outcome = SyncOutcome(warning=write_failed_warning(label))
         if outcome.audit:

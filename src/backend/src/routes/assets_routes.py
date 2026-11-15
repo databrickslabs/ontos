@@ -674,10 +674,12 @@ def _write_back_description(
                 AssetsManager.update_table_column_snapshot(db, asset)
         db.commit()
         return outcome
-    except Exception:
+    except Exception as e:
         db.rollback()
-        logger.warning("Writing the description of asset %s to Unity Catalog failed",
-                       asset_id, exc_info=True)
+        # The error's type only: its text and traceback can carry the SQL parameters,
+        # i.e. the description
+        logger.warning("Writing the description of asset %s to Unity Catalog failed: %s",
+                       asset_id, type(e).__name__)
         return SyncOutcome(warning=write_failed_warning(label or str(asset_id)))
 
 

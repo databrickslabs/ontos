@@ -211,7 +211,8 @@
     "permissionDenied": "Permesso negato",
     "notFound": "Non trovato",
     "required": "Questo campo è obbligatorio",
-    "invalidDate": "Data non valida"
+    "invalidDate": "Data non valida",
+    "versionsLoadFailed": "Impossibile caricare le versioni di {{kind}}"
   },
   "tooltips": {
     "zoomIn": "Zoom avanti",

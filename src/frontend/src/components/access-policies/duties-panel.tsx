@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { PanelSkeleton } from '@/components/common/list-view-skeleton';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { actionLabel, errorText } from '@/lib/access-policy-text';
 import type { DutyStatus } from '@/types/access-policy';
 
 /**
@@ -42,7 +43,7 @@ export default function DutiesPanel({
     if (!initial) load();
   }, [initial, load]);
 
-  const label = (action: string) => duties.find((d) => d.action === action)?.label || action;
+  const label = (action: string) => actionLabel(t, action, duties.find((d) => d.action === action)?.label);
 
   const fulfil = async (action: string) => {
     setBusy(action);
@@ -52,7 +53,7 @@ export default function DutiesPanel({
     });
     setBusy(null);
     if (res.error || !Array.isArray(res.data)) {
-      toast({ title: t('access-policies:duties.failed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:duties.failed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     setDuties(res.data);
@@ -83,7 +84,7 @@ export default function DutiesPanel({
                 <CircleDashed className="mt-0.5 h-4 w-4 text-amber-600" />
               )}
               <div>
-                <div className="font-medium">{d.label || d.action}</div>
+                <div className="font-medium">{actionLabel(t, d.action, d.label)}</div>
                 <div className="text-xs text-muted-foreground">
                   {d.fulfilled
                     ? t('access-policies:duties.fulfilledBy', {

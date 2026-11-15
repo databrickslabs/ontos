@@ -211,7 +211,8 @@
     "permissionDenied": "権限がありません",
     "notFound": "見つかりません",
     "required": "この項目は必須です",
-    "invalidDate": "無効な日付"
+    "invalidDate": "無効な日付",
+    "versionsLoadFailed": "{{kind}}のバージョンを読み込めませんでした"
   },
   "tooltips": {
     "zoomIn": "拡大",

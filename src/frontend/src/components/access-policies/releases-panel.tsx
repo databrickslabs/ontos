@@ -11,6 +11,7 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import ReleaseStatusBadge from '@/components/access-policies/release-status-badge';
 import TargetSelect from '@/components/access-policies/target-select';
+import { errorText } from '@/lib/access-policy-text';
 import { useCompileTargets } from '@/hooks/use-access-policies';
 import type { AccessRelease } from '@/types/access-policy';
 
@@ -45,7 +46,7 @@ export default function ReleasesPanel({ canWrite }: { canWrite: boolean }) {
     const res = await post<AccessRelease>('/api/access-policies/releases', { target: chosen });
     setCreating(false);
     if (res.error || !res.data) {
-      toast({ title: t('access-policies:releases.createFailed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:releases.createFailed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     navigate(`/access-policies/releases/${res.data.id}`);

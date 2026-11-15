@@ -4,8 +4,13 @@
     "scope",
     "securables"
   ],
+  "abac_unsupported_platform": [
+    "kind",
+    "rule"
+  ],
   "abac_unsupported_target": [
     "kind",
+    "name",
     "rule"
   ],
   "access_policy_error": null,
@@ -22,6 +27,10 @@
   ],
   "collection_empty": [],
   "column_mask": [
+    "at",
+    "rule"
+  ],
+  "column_mask_now": [
     "at",
     "rule"
   ],
@@ -59,6 +68,12 @@
   "drift_not_found": [],
   "drift_policy_unsupported": [
     "policy"
+  ],
+  "duty_admin_only": [
+    "action"
+  ],
+  "duty_assignee_only": [
+    "action"
   ],
   "duty_fulfilled": [
     "action"
@@ -155,6 +170,14 @@
     "reason",
     "rule"
   ],
+  "prohibition_inexact_assignee": [
+    "reason",
+    "rule"
+  ],
+  "prohibition_inexact_target": [
+    "reason",
+    "rule"
+  ],
   "prohibition_scheduled": [
     "at",
     "rule"
@@ -244,7 +267,12 @@
   "unknown_conflict": [
     "conflict"
   ],
-  "unknown_delivery_mode": [],
+  "unknown_delivery_mode": [
+    "mode"
+  ],
+  "unknown_delivery_modes": [
+    "modes"
+  ],
   "unknown_kind": [
     "kind"
   ],

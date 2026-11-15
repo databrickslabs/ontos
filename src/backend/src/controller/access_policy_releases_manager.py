@@ -473,7 +473,7 @@ class PolicyReleaseManager:
             try:
                 chosen = [DeliveryMode(m) for m in modes]
             except ValueError as e:
-                raise AccessPolicyError(str(e), 400, code="unknown_delivery_mode", params={"modes": ", ".join(modes)}) from e
+                raise AccessPolicyError(str(e), 400, code="unknown_delivery_modes", params={"modes": ", ".join(modes)}) from e
             not_enabled = [m.value for m in chosen if m not in active]
             if not_enabled:
                 raise AccessPolicyError(f"Delivery mode(s) not enabled in Settings: {', '.join(not_enabled)}", 400,

@@ -211,7 +211,8 @@
     "permissionDenied": "Zugriff verweigert",
     "notFound": "Nicht gefunden",
     "required": "Dieses Feld ist erforderlich",
-    "invalidDate": "Ungültiges Datum"
+    "invalidDate": "Ungültiges Datum",
+    "versionsLoadFailed": "{{kind}}-Versionen konnten nicht geladen werden"
   },
   "tooltips": {
     "zoomIn": "Vergrößern",

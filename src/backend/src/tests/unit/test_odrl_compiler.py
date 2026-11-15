@@ -138,7 +138,7 @@ def test_refined_asset_collection_gates_permission_and_blocks_prohibition():
 
 def test_unresolved_audience_in_prohibition_fails_closed():
     plan = _compile(_policy({"prohibition": [{"target": "uc:main", "action": "read", "assignee": AUD}]}))
-    assert plan.has_errors and any(i.code == "prohibition_inexact" for i in plan.issues)
+    assert plan.has_errors and any(i.code == "prohibition_inexact_assignee" for i in plan.issues)
 
 
 def test_foreign_targets_skipped_and_unmapped_action_gated():

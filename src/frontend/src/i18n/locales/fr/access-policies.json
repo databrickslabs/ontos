@@ -454,5 +454,275 @@
     "unmanaged": "Sur la plateforme, non suivi par Ontos",
     "truncated": "Seuls les premiers sécurisables ont été vérifiés.",
     "history": "Précédents"
+  },
+  "issues": {
+    "abac_outside_scope": "{{rule}} : la restriction sur {{securables}} dépasse le périmètre de cette cible ({{scope}})",
+    "abac_unsupported_platform": "{{rule}} : les cibles Snowflake ne peuvent pas encore appliquer cette restriction ({{kind}})",
+    "abac_unsupported_target": "{{rule}} : les politiques ABAC s'appliquent aux tables, pas à un objet de type {{kind}} ({{name}})",
+    "access_policy_error": "La requête n'a pas pu aboutir",
+    "assignee_inexact": "{{rule}} : {{reason}} — seuls les principaux résolubles reçoivent l'octroi",
+    "audience_empty": "Une audience nécessite des membres ou un raffinement (une audience vide signifie tout le monde)",
+    "broad_grant": "{{rule}} : 'use' est compilé en ALL PRIVILEGES",
+    "builtin_orphaned": "Les octrois suivis par la cible intégrée '{{key}}' deviendraient orphelins — utilisez la clé '{{key}}' pour la première cible Unity Catalog afin de les adopter",
+    "collection_empty": "Une collection d'actifs nécessite des membres ou un raffinement",
+    "column_mask": "{{rule}} est appliqué sous forme de masque de colonne",
+    "column_mask_now": "{{rule}} est appliqué sous forme de masque de colonne (appliqué immédiatement — un masque ne peut pas attendre son début à {{at}})",
+    "confirm_status": "Seules les releases livrées peuvent être confirmées comme appliquées",
+    "conflict_invalid_voids": "conflict=invalid annule toute la politique si une permission et une interdiction entrent en conflit",
+    "connection_user_name_case": "user_name_case doit être l'une des valeurs suivantes : {{allowed}}",
+    "connection_user_names": "user_names doit associer chaque principal à son NAME d'utilisateur Snowflake (texte)",
+    "connection_views": "views doit être une liste de noms d'objets",
+    "constraint_no_left_operand": "leftOperand est manquant dans la contrainte",
+    "constraint_no_operator": "operator est manquant dans la contrainte",
+    "constraint_not_object": "La contrainte doit être un objet",
+    "constraint_right_operand": "La contrainte requiert exactement l'un de rightOperand / rightOperandReference",
+    "cron_unsupported": "'{{expr}}' n'est pas une expression cron prise en charge ({{reason}})",
+    "delete_status": "Seules les versions en brouillon ou retirées peuvent être supprimées (celle-ci est {{status}}).",
+    "deliver_status": "Seules les releases approuvées, livrées ou échouées peuvent être livrées ; celle-ci est {{status}}",
+    "delivery_not_configured": "Le service de livraison n'est pas configuré",
+    "denied_by_prohibition": "{{principal}} {{action}} {{securable}} supprimé par {{rule}}",
+    "direct_unsupported": "Les cibles {{system}} ne peuvent pas être livrées en mode direct — utilisez Indirecte ou Manuelle",
+    "drift_not_found": "Rapport de dérive introuvable",
+    "drift_policy_unsupported": "La politique de dérive '{{policy}}' n'est pas prise en charge (rapport uniquement)",
+    "duty_admin_only": "Seul un administrateur des politiques d'accès autre que le bénéficiaire de l'Accord peut remplir '{{action}}'",
+    "duty_assignee_only": "Seul le bénéficiaire de l'Accord peut remplir '{{action}}'",
+    "duty_fulfilled": "'{{action}}' est déjà rempli",
+    "duty_not_agreement": "Les devoirs sont remplis sur les Accords (la convention d'une partie concrète)",
+    "duty_not_on_permission": "Seules les permissions peuvent porter des devoirs (utilisez 'remedy' sur les interdictions)",
+    "expired": "{{rule}} a expiré le {{at}} — non octroyé",
+    "expires_at_prohibition": "{{principal}} {{action}} {{securable}} expire le {{at}}, date d'entrée en vigueur de {{rule}}",
+    "expiring_outside_scope": "{{count}} octroi(s) à durée limitée sont hors du périmètre de la cible ; ils restent suivis ici jusqu'à leur expiration, puis sont révoqués",
+    "foreign_target": "{{rule}} : {{target}} n'est pas un sécurisable Unity Catalog ou Snowflake — ignoré",
+    "inheritance": "Héritage : {{detail}}",
+    "ledger_changed": "Le registre des octrois a changé depuis la compilation de cette release, qui livrerait désormais des modifications non révisées — renvoyez-la en brouillon et recompilez",
+    "live_grants_unreadable": "Les octrois réels ne peuvent pas encore être lus depuis {{system}}",
+    "logical_empty": "La contrainte logique '{{operator}}' nécessite au moins un opérande",
+    "mask_overridden": "{{rule}} : la permission propre à la politique prévaut sur le masque (conflict=perm)",
+    "modes_not_allowed": "Mode(s) de livraison non autorisé(s) pour cette cible : {{modes}}",
+    "modes_not_enabled": "Mode(s) de livraison non activé(s) dans les Paramètres : {{modes}}",
+    "no_delivery_mode": "Aucun mode de livraison n'est activé dans Paramètres → Livraison",
+    "no_principals": "{{rule}} : le bénéficiaire ne correspond à personne",
+    "no_rules": "Une politique nécessite au moins une permission, une interdiction ou une obligation",
+    "no_target": "Aucune cible active ne compile {{refs}} — configurez une cible d'accès pour cette plateforme",
+    "not_a_duty": "'{{action}}' n'est pas un devoir de cet Accord",
+    "not_editable": "Un(e) {{kind}} {{status}} ne peut pas être modifié(e) — créez plutôt une nouvelle version.",
+    "not_found": "{{kind}} introuvable",
+    "not_ready_to_activate": "Pas prêt à être activé : {{count}} problème(s) — voir Validation",
+    "not_yet_active": "{{rule}} commence le {{at}} — pas encore octroyé",
+    "offer_term": "{{rule}} lie les consommateurs via leurs Accords",
+    "operand_subject_mismatch": "leftOperand '{{operand}}' décrit un(e) {{describes}}, pas un(e) {{expected}}",
+    "outside_scope": "{{count}} droit(s) d'accès sont hors du périmètre de cette cible ({{scope}}) et sont livrés avec la cible qui les couvre",
+    "parent_not_found": "Politique parente {{parent}} introuvable",
+    "policy_conflict_invalid": "{{policy}} : une permission et une interdiction entrent en conflit sous la stratégie 'invalid' — la politique est nulle et sans effet",
+    "prohibition_inactive": "{{rule}} a pris fin le {{at}}",
+    "prohibition_inexact": "{{rule}} : {{reason}} ; un masque de colonne doit nommer ses principaux et ses sécurisables",
+    "prohibition_inexact_assignee": "{{rule}} : bénéficiaire — {{reason}} ; une interdiction doit être exacte pour être appliquée",
+    "prohibition_inexact_target": "{{rule}} : cible — {{reason}} ; une interdiction doit être exacte pour être appliquée",
+    "prohibition_scheduled": "{{rule}} prend effet le {{at}} — les octrois qui se chevauchent expirent alors",
+    "prohibition_unconditional": "{{rule}} : ses contraintes ne peuvent pas être appliquées statiquement — appliqué sans condition",
+    "prohibition_unenforceable": "{{rule}} ne chevauche que partiellement l'octroi {{principal}} {{action}} {{securable}} ({{overlap}}) ; la plateforme n'a pas de DENY — restreignez la permission ou l'interdiction",
+    "recompile_draft_only": "Seules les releases de politique en brouillon peuvent être recompilées",
+    "ref_not_active": "{{ref}} n'a aucune version active",
+    "refined_collection_uid": "Une collection raffinée doit utiliser 'source', pas 'uid' (ODRL §2.5.5/§2.5.6)",
+    "release_empty": "La release n'a aucune modification à livrer",
+    "release_has_errors": "La release comporte des erreurs de compilation — corrigez les politiques et recompilez",
+    "release_not_found": "Release introuvable",
+    "release_number": "Impossible d'attribuer un numéro de release — veuillez réessayer",
+    "release_separation_of_duties": "Séparation des tâches : l'auteur ou la personne qui l'a soumise ne peut pas approuver cette release",
+    "release_transition": "Impossible de faire passer une release de {{from}} à {{to}}",
+    "remedy_not_on_prohibition": "Seules les interdictions peuvent porter des recours",
+    "rule_no_action": "Il manque une action à la règle",
+    "rule_no_assignee": "Un Accord nécessite un bénéficiaire sur chaque règle",
+    "rule_no_assigner": "Un(e) {{type}} nécessite un émetteur sur chaque règle",
+    "rule_no_target": "Un(e) {{kind}} nécessite un actif cible",
+    "scope_entry_invalid": "L'entrée de périmètre '{{entry}}' n'est pas un nom de sécurisable {{system}}",
+    "scope_overlap": "Le périmètre chevauche des cibles {{system}} actives ou obsolètes : {{targets}} — retirez-les d'abord",
+    "separation_of_duties": "Une version ne peut pas être approuvée par son auteur ou la personne qui l'a soumise — demandez à un autre responsable.",
+    "snowflake_future_precedence": "{{count}} octroi(s) futur(s) au niveau base de données répété(s) sur des schémas ayant leurs propres octrois futurs (Snowflake n'y applique que ceux du niveau schéma)",
+    "snowflake_objects_as_tables": "Les objets Snowflake sont octroyés comme des tables ; listez les vues dans la connexion de la cible ('views') pour qu'elles soient octroyées ON VIEW",
+    "still_referenced": "Encore référencé par {{count}} version(s) de politique : {{names}}",
+    "subject_forbidden": "Seuls les propriétaires du produit (équipe propriétaire / projet) ou un administrateur peuvent énoncer ses conditions d'utilisation",
+    "subject_incomplete": "Le sujet d'une politique nécessite un type ({{types}}) et un identifiant",
+    "subject_not_found": "Produit de données '{{id}}' introuvable",
+    "subject_offer_only": "Seule une Offre peut énoncer les conditions d'une entité",
+    "target_key_invalid": "La clé doit comporter 2 à 40 lettres minuscules, chiffres, '-' ou '_', et commencer par une lettre",
+    "target_key_locked": "La clé d'une cible ayant plusieurs versions ne peut pas changer",
+    "target_key_taken": "Une autre cible (active ou obsolète) utilise déjà la clé '{{key}}'",
+    "target_tracks_grants": "La cible '{{key}}' suit encore {{count}} octroi(s) — révoquez-les ou retirez-les d'abord du suivi",
+    "transition_not_allowed": "Impossible de passer de {{from}} à {{to}} (autorisé : {{allowed}}).",
+    "unknown_action": "Action inconnue '{{action}}' (absente du profil Ontos)",
+    "unknown_collection_source": "Source de collection inconnue '{{ref}}'",
+    "unknown_conflict": "Stratégie de conflit inconnue '{{conflict}}'",
+    "unknown_delivery_mode": "Mode de livraison inconnu '{{mode}}'",
+    "unknown_delivery_modes": "Mode(s) de livraison inconnu(s) : {{modes}}",
+    "unknown_kind": "Type inconnu '{{kind}}'",
+    "unknown_left_operand": "leftOperand inconnu '{{operand}}' (absent du profil Ontos)",
+    "unknown_operator": "Opérateur inconnu '{{operator}}'",
+    "unknown_profile": "Profil ODRL non reconnu '{{profile}}' — la politique ne peut pas être traitée (ODRL §3.2)",
+    "unknown_reference": "Référence inconnue '{{ref}}'",
+    "unknown_system": "Système inconnu '{{system}}' (disponibles : {{available}})",
+    "unknown_target": "Cible inconnue '{{key}}'. Disponibles : {{available}}",
+    "unsupported_policy_type": "Type de politique non pris en charge '{{type}}'",
+    "untracked_outside_scope": "{{count}} octroi(s) suivi(s) sont hors du périmètre de la cible et ne seront plus suivis (ils restent sur la plateforme)",
+    "used_by_active": "Encore utilisé par des politiques actives (rendez-les obsolètes ou redirigez-les d'abord) : {{names}}",
+    "version_exists": "La version {{version}} existe déjà dans cette famille"
+  },
+  "profile": {
+    "actions": {
+      "use": {
+        "label": "Utiliser",
+        "description": "Tout usage de l'actif (action ODRL de premier niveau)."
+      },
+      "transfer": {
+        "label": "Transférer",
+        "description": "Transfert de propriété (action ODRL de premier niveau)."
+      },
+      "read": {
+        "label": "Lire",
+        "description": "Lire/interroger les données (UC SELECT, READ VOLUME, EXECUTE)."
+      },
+      "modify": {
+        "label": "Modifier",
+        "description": "Modifier les données (UC MODIFY, WRITE VOLUME)."
+      },
+      "ontos_browse": {
+        "label": "Parcourir",
+        "description": "Voir les métadonnées sans lire les données (UC BROWSE)."
+      },
+      "ontos_create": {
+        "label": "Créer",
+        "description": "Créer des objets enfants (UC CREATE TABLE/VIEW/FUNCTION/VOLUME)."
+      },
+      "ontos_manage": {
+        "label": "Gérer",
+        "description": "Gérer les octrois et les propriétés (UC MANAGE)."
+      },
+      "distribute": {
+        "label": "Distribuer",
+        "description": "Partager les données avec des tiers."
+      },
+      "derive": {
+        "label": "Dériver",
+        "description": "Créer des données dérivées à partir de l'actif."
+      },
+      "aggregate": {
+        "label": "Agréger",
+        "description": "Utiliser les données uniquement sous forme agrégée."
+      },
+      "ontos_acknowledgeTerms": {
+        "label": "Accepter les conditions",
+        "description": "Accepter les conditions d'utilisation de l'actif (workflow)."
+      },
+      "ontos_obtainApproval": {
+        "label": "Obtenir une approbation",
+        "description": "Obtenir une approbation ou une décision d'autorité (workflow)."
+      },
+      "ontos_recertify": {
+        "label": "Recertifier l'accès",
+        "description": "Reconfirmer périodiquement le besoin d'accès (workflow)."
+      },
+      "delete": {
+        "label": "Supprimer",
+        "description": "Supprimer définitivement toutes les copies de l'actif."
+      },
+      "anonymize": {
+        "label": "Anonymiser",
+        "description": "Anonymiser tout ou partie de l'actif."
+      },
+      "inform": {
+        "label": "Informer",
+        "description": "Informer une partie de l'utilisation (notification)."
+      }
+    },
+    "operands": {
+      "dateTime": {
+        "label": "Date/heure",
+        "description": "Moment de l'utilisation ; compilé en expiration/activation de l'octroi."
+      },
+      "elapsedTime": {
+        "label": "Durée écoulée",
+        "description": "Durée de l'accès ; compilée en octroi à durée limitée."
+      },
+      "purpose": {
+        "label": "Finalité",
+        "description": "Finalité d'utilisation déclarée ; attestée via un workflow, non appliquée techniquement."
+      },
+      "recipient": {
+        "label": "Destinataire",
+        "description": "Partie qui reçoit le résultat de l'utilisation."
+      },
+      "spatial": {
+        "label": "Région",
+        "description": "Région géographique d'utilisation ; compilée en filtre de lignes lorsque c'est pris en charge."
+      },
+      "ontos_classification": {
+        "label": "Classification",
+        "description": "Classification des données de l'actif ; compilée en ABAC basé sur les tags lorsque c'est pris en charge."
+      },
+      "ontos_tag": {
+        "label": "Tag",
+        "description": "Tag de l'actif (namespace/key[=value]) ; compilé en ABAC basé sur les tags lorsque c'est pris en charge."
+      },
+      "ontos_domain": {
+        "label": "Domaine",
+        "description": "Domaine Ontos de l'actif ; matérialisé en octrois concrets."
+      },
+      "ontos_dataProduct": {
+        "label": "Produit de données",
+        "description": "Produit de données auquel l'actif appartient ; matérialisé en octrois concrets."
+      },
+      "ontos_columnTag": {
+        "label": "Tag de colonne",
+        "description": "Tag au niveau de la colonne ; compilé en masque de colonne lorsque c'est pris en charge."
+      },
+      "ontos_rowCondition": {
+        "label": "Condition de ligne",
+        "description": "Prédicat au niveau de la ligne ; compilé en filtre de lignes lorsque c'est pris en charge."
+      },
+      "ontos_businessRole": {
+        "label": "Rôle métier",
+        "description": "Rôle métier Ontos du principal (raffinement d'audience)."
+      },
+      "ontos_group": {
+        "label": "Groupe",
+        "description": "Appartenance du principal à un groupe du fournisseur d'identité."
+      },
+      "ontos_principalAttribute": {
+        "label": "Attribut du principal",
+        "description": "Attribut d'annuaire du principal (ébauche : futures sources IdP/Lakebase)."
+      },
+      "ontos_remark": {
+        "label": "Remarque",
+        "description": "Condition en texte libre affichée aux consommateurs ; non appliquée."
+      }
+    },
+    "operators": {
+      "eq": "égal à",
+      "neq": "différent de",
+      "gt": "supérieur à",
+      "gteq": "supérieur ou égal à",
+      "lt": "inférieur à",
+      "lteq": "inférieur ou égal à",
+      "isA": "est un(e)",
+      "hasPart": "a pour partie",
+      "isPartOf": "fait partie de",
+      "isAllOf": "est tous parmi",
+      "isAnyOf": "est l'un parmi",
+      "isNoneOf": "n'est aucun parmi"
+    }
+  },
+  "shacl": {
+    "thePolicy": "la politique",
+    "constraint": {
+      "MinCountConstraintComponent": "{{path}} est manquant",
+      "MaxCountConstraintComponent": "{{path}} a trop de valeurs",
+      "InConstraintComponent": "{{path}} a une valeur hors de la liste autorisée",
+      "HasValueConstraintComponent": "{{path}} n'a pas la valeur requise",
+      "NodeKindConstraintComponent": "{{path}} a un mauvais type de valeur (IRI attendu)",
+      "NodeConstraintComponent": "{{path}} ne correspond pas à sa forme",
+      "OrConstraintComponent": "{{path}} ne correspond à aucune des formes autorisées",
+      "XoneConstraintComponent": "{{path}} doit correspondre à exactement une des formes autorisées",
+      "NotConstraintComponent": "{{path}} correspond à une forme interdite"
+    }
   }
 }

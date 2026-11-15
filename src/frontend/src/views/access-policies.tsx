@@ -21,6 +21,7 @@ import AccessStatusBadge from '@/components/access-policies/access-status-badge'
 import CheckAccessPanel from '@/components/access-policies/check-access-panel';
 import GrantLedgerPanel from '@/components/access-policies/grant-ledger-panel';
 import ReleasesPanel from '@/components/access-policies/releases-panel';
+import { errorText } from '@/lib/access-policy-text';
 import type { AccessCollection, AccessEntity, AccessKind, AccessPolicy, AccessTarget } from '@/types/access-policy';
 import { KIND_SEGMENT } from '@/types/access-policy';
 
@@ -216,7 +217,7 @@ export default function AccessPolicies() {
     }
     const res = await post<AccessPolicy>('/api/access-policies/policies/import', { document: doc });
     if (res.error || !res.data) {
-      toast({ title: t('access-policies:import.failed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:import.failed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     toast({ title: t('access-policies:import.done') });

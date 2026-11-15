@@ -736,7 +736,7 @@ def _compile_prohibition(rule: Dict[str, Any], src: RuleRef, conflict: str, part
         plan.abac.append(AbacRule("column_mask", sorted(party.principals), sorted(asset.securables),
                                   key.strip(), value.strip() or None, None, src, conflict))
         scheduled = start if start is not None and start > now else None
-        plan.issue(SEVERITY_INFO, "column_mask",
+        plan.issue(SEVERITY_INFO, "column_mask_now" if scheduled else "column_mask",
                    f"{src.label()} is enforced as a column mask"
                    + (f" (applied now — a mask can't wait for its start at {_iso(scheduled)})" if scheduled else ""), src, params={"rule": src.label(), "at": _iso(scheduled) if scheduled else None})
         return None  # Masks the matching columns instead of denying the whole securable.
@@ -748,8 +748,8 @@ def _compile_prohibition(rule: Dict[str, Any], src: RuleRef, conflict: str, part
     asset = assets.resolve(rule.get("target"))
     for what, reason in (("assignee", party.inexact), ("target", asset.inexact)):
         if reason:
-            plan.issue(SEVERITY_ERROR, "prohibition_inexact",
-                       f"{src.label()}: {what} — {reason}; a prohibition must be exact to be enforced", src, params={"rule": src.label(), "what": what, "reason": reason})
+            plan.issue(SEVERITY_ERROR, "prohibition_inexact_assignee" if what == "assignee" else "prohibition_inexact_target",
+                       f"{src.label()}: {what} — {reason}; a prohibition must be exact to be enforced", src, params={"rule": src.label(), "reason": reason})
     if party.inexact or asset.inexact:
         return None
     return _Prohibition(party, action, set(asset.securables), src, conflict, scheduled)

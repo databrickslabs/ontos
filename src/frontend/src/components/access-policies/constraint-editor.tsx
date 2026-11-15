@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { OdrlProfile, ProfileLeftOperand } from '@/types/access-policy';
 import { LIST_OPERATORS, type FormConstraint } from './odrl-helpers';
+import { operandDescription, operandLabel, operatorLabel } from '@/lib/access-policy-text';
 
 interface ConstraintEditorProps {
   profile: OdrlProfile | null;
@@ -49,7 +50,7 @@ export default function ConstraintEditor({ profile, value, onChange, subjects, d
               <SelectContent>
                 {operands.map((o) => (
                   <SelectItem key={o.key} value={o.key}>
-                    {o.label}
+                    {operandLabel(t, o.key, o.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -61,7 +62,7 @@ export default function ConstraintEditor({ profile, value, onChange, subjects, d
               <SelectContent>
                 {operators.map((o) => (
                   <SelectItem key={o.key} value={o.key}>
-                    {o.label}
+                    {operatorLabel(t, o.key, o.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -81,7 +82,7 @@ export default function ConstraintEditor({ profile, value, onChange, subjects, d
               onChange={(e) => update(i, { value: e.target.value })}
             />
             {op && (
-              <Badge variant={ENFORCEMENT_VARIANT[op.enforcement]} title={op.description} className="text-[10px]">
+              <Badge variant={ENFORCEMENT_VARIANT[op.enforcement]} title={operandDescription(t, op.key, op.description)} className="text-[10px]">
                 {t(`access-policies:enforcement.${op.enforcement}`)}
               </Badge>
             )}

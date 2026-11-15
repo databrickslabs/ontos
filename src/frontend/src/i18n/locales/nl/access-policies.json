@@ -454,5 +454,275 @@
     "unmanaged": "Op het platform, niet gevolgd door Ontos",
     "truncated": "Alleen de eerste securables zijn gecontroleerd.",
     "history": "Eerder"
+  },
+  "issues": {
+    "abac_outside_scope": "{{rule}}: de beperking op {{securables}} reikt buiten het bereik van dit doel ({{scope}})",
+    "abac_unsupported_platform": "{{rule}}: Snowflake-doelen kunnen deze beperking ({{kind}}) nog niet afdwingen",
+    "abac_unsupported_target": "{{rule}}: ABAC-beleid geldt voor tabellen, niet voor een {{kind}} ({{name}})",
+    "access_policy_error": "Het verzoek kon niet worden voltooid",
+    "assignee_inexact": "{{rule}}: {{reason}} — alleen de oplosbare principals krijgen toegang",
+    "audience_empty": "Een doelgroep heeft leden of een verfijning nodig (een lege doelgroep betekent iedereen)",
+    "broad_grant": "{{rule}}: 'use' wordt gecompileerd naar ALL PRIVILEGES",
+    "builtin_orphaned": "Rechten die door het ingebouwde doel '{{key}}' worden gevolgd, zouden verweesd raken — gebruik de sleutel '{{key}}' voor het eerste Unity Catalog-doel om ze over te nemen",
+    "collection_empty": "Een asset-collectie heeft leden of een verfijning nodig",
+    "column_mask": "{{rule}} wordt afgedwongen als kolommasker",
+    "column_mask_now": "{{rule}} wordt afgedwongen als kolommasker (nu toegepast — een masker kan niet wachten op de start op {{at}})",
+    "confirm_status": "Alleen geleverde releases kunnen als toegepast worden bevestigd",
+    "conflict_invalid_voids": "conflict=invalid maakt het hele beleid ongeldig als een machtiging en een verbod met elkaar botsen",
+    "connection_user_name_case": "user_name_case moet een van de volgende zijn: {{allowed}}",
+    "connection_user_names": "user_names moet elke principal koppelen aan de Snowflake-gebruikers-NAME (tekst)",
+    "connection_views": "views moet een lijst met objectnamen zijn",
+    "constraint_no_left_operand": "Bij de beperking ontbreekt leftOperand",
+    "constraint_no_operator": "Bij de beperking ontbreekt de operator",
+    "constraint_not_object": "Een beperking moet een object zijn",
+    "constraint_right_operand": "Een beperking heeft precies één van rightOperand / rightOperandReference nodig",
+    "cron_unsupported": "'{{expr}}' is geen ondersteunde cron-expressie ({{reason}})",
+    "delete_status": "Alleen concept- of buiten gebruik gestelde versies kunnen worden verwijderd (deze is {{status}}).",
+    "deliver_status": "Alleen goedgekeurde, geleverde of mislukte releases kunnen worden geleverd; deze is {{status}}",
+    "delivery_not_configured": "De leveringsservice is niet geconfigureerd",
+    "denied_by_prohibition": "{{principal}} {{action}} {{securable}} is verwijderd door {{rule}}",
+    "direct_unsupported": "{{system}}-doelen kunnen niet direct worden geleverd — gebruik Indirect of Handmatig",
+    "drift_not_found": "Driftrapport niet gevonden",
+    "drift_policy_unsupported": "Driftbeleid '{{policy}}' wordt niet ondersteund (alleen rapporteren)",
+    "duty_admin_only": "Alleen een beheerder van Toegangsbeleid die niet de ontvanger van de Overeenkomst is, kan '{{action}}' vervullen",
+    "duty_assignee_only": "Alleen de ontvanger van de Overeenkomst kan '{{action}}' vervullen",
+    "duty_fulfilled": "'{{action}}' is al vervuld",
+    "duty_not_agreement": "Plichten worden vervuld op Overeenkomsten (de afspraak van een concrete partij)",
+    "duty_not_on_permission": "Alleen machtigingen kunnen plichten hebben (gebruik 'remedy' bij verboden)",
+    "expired": "{{rule}} is verlopen op {{at}} — niet toegekend",
+    "expires_at_prohibition": "{{principal}} {{action}} {{securable}} verloopt op {{at}} wanneer {{rule}} ingaat",
+    "expiring_outside_scope": "{{count}} tijdgebonden recht(en) vallen buiten het bereik van het doel; ze blijven hier gevolgd totdat ze verlopen en worden ingetrokken",
+    "foreign_target": "{{rule}}: {{target}} is geen Unity Catalog- of Snowflake-securable — overgeslagen",
+    "inheritance": "Overerving: {{detail}}",
+    "ledger_changed": "Het Grant-register is gewijzigd sinds deze release is gecompileerd en de release zou nu onbeoordeelde wijzigingen opleveren — zet hem terug naar concept en compileer opnieuw",
+    "live_grants_unreadable": "Live rechten kunnen nog niet vanaf {{system}} worden gelezen",
+    "logical_empty": "De logische beperking '{{operator}}' heeft minstens één operand nodig",
+    "mask_overridden": "{{rule}}: de eigen machtiging van het beleid heeft voorrang op het masker (conflict=perm)",
+    "modes_not_allowed": "Leveringsmodus/-modi niet toegestaan voor dit doel: {{modes}}",
+    "modes_not_enabled": "Leveringsmodus/-modi niet ingeschakeld in Instellingen: {{modes}}",
+    "no_delivery_mode": "Er is geen leveringsmodus ingeschakeld in Instellingen → Levering",
+    "no_principals": "{{rule}}: de ontvanger wordt opgelost tot niemand",
+    "no_rules": "Een beleid heeft minstens één machtiging, verbod of verplichting nodig",
+    "no_target": "Geen actief doel compileert {{refs}} — configureer een doel voor dat platform",
+    "not_a_duty": "'{{action}}' is geen plicht van deze Overeenkomst",
+    "not_editable": "Een {{kind}} met status {{status}} kan niet worden bewerkt — maak in plaats daarvan een nieuwe versie aan.",
+    "not_found": "{{kind}} niet gevonden",
+    "not_ready_to_activate": "Niet klaar om te activeren: {{count}} probleem/problemen — zie Validatie",
+    "not_yet_active": "{{rule}} start op {{at}} — nog niet toegekend",
+    "offer_term": "{{rule}} bindt consumenten via hun Overeenkomsten",
+    "operand_subject_mismatch": "leftOperand '{{operand}}' beschrijft een {{describes}}, geen {{expected}}",
+    "outside_scope": "{{count}} recht(en) vallen buiten het bereik van dit doel ({{scope}}) en worden geleverd met het doel dat ze dekt",
+    "parent_not_found": "Bovenliggend beleid {{parent}} niet gevonden",
+    "policy_conflict_invalid": "{{policy}}: machtiging en verbod botsen onder de strategie 'invalid' — het beleid is ongeldig en heeft geen effect",
+    "prohibition_inactive": "{{rule}} is beëindigd op {{at}}",
+    "prohibition_inexact": "{{rule}}: {{reason}}; een kolommasker moet zijn principals en securables benoemen",
+    "prohibition_inexact_assignee": "{{rule}}: ontvanger — {{reason}}; een verbod moet exact zijn om te worden afgedwongen",
+    "prohibition_inexact_target": "{{rule}}: doel — {{reason}}; een verbod moet exact zijn om te worden afgedwongen",
+    "prohibition_scheduled": "{{rule}} gaat in op {{at}} — overlappende rechten verlopen dan",
+    "prohibition_unconditional": "{{rule}}: de beperkingen kunnen niet statisch worden afgedwongen — onvoorwaardelijk toegepast",
+    "prohibition_unenforceable": "{{rule}} overlapt slechts gedeeltelijk met het recht {{principal}} {{action}} {{securable}} ({{overlap}}); het platform kent geen DENY — beperk de machtiging of het verbod",
+    "recompile_draft_only": "Alleen conceptreleases van beleid kunnen opnieuw worden gecompileerd",
+    "ref_not_active": "{{ref}} heeft geen actieve versie",
+    "refined_collection_uid": "Een verfijnde collectie moet 'source' gebruiken, niet 'uid' (ODRL §2.5.5/§2.5.6)",
+    "release_empty": "De release heeft geen wijzigingen om te leveren",
+    "release_has_errors": "De release heeft compilatiefouten — los de beleidsregels op en compileer opnieuw",
+    "release_not_found": "Release niet gevonden",
+    "release_number": "Kon geen releasenummer toewijzen — probeer het opnieuw",
+    "release_separation_of_duties": "Functiescheiding: de auteur of indiener kan deze release niet goedkeuren",
+    "release_transition": "Een release kan niet van {{from}} naar {{to}} worden verplaatst",
+    "remedy_not_on_prohibition": "Alleen verboden kunnen herstelmaatregelen hebben",
+    "rule_no_action": "Bij de regel ontbreekt een actie",
+    "rule_no_assignee": "Een Overeenkomst heeft bij elke regel een ontvanger nodig",
+    "rule_no_assigner": "Een {{type}} heeft bij elke regel een verlener nodig",
+    "rule_no_target": "Een {{kind}} heeft een doel-asset nodig",
+    "scope_entry_invalid": "Bereikitem '{{entry}}' is geen {{system}}-securablenaam",
+    "scope_overlap": "Het bereik overlapt met actieve of verouderde {{system}}-doelen: {{targets}} — stel ze eerst buiten gebruik",
+    "separation_of_duties": "Een versie kan niet worden goedgekeurd door de auteur of indiener — vraag een andere steward.",
+    "snowflake_future_precedence": "{{count}} toekomstig(e) recht(en) op databaseniveau herhaald op schema's met eigen toekomstige rechten (Snowflake past daar alleen die op schemaniveau toe)",
+    "snowflake_objects_as_tables": "Snowflake-objecten worden als tabellen toegekend; vermeld views in de verbinding van het doel ('views') zodat ze ON VIEW worden toegekend",
+    "still_referenced": "Nog in gebruik door {{count}} beleidsversie(s): {{names}}",
+    "subject_forbidden": "Alleen de eigenaars van het product (eigenaarsteam / project) of een beheerder kunnen de gebruiksvoorwaarden vastleggen",
+    "subject_incomplete": "Een beleidsonderwerp heeft een type ({{types}}) en een id nodig",
+    "subject_not_found": "Dataproduct '{{id}}' niet gevonden",
+    "subject_offer_only": "Alleen een Aanbod kan de voorwaarden voor een entiteit vastleggen",
+    "target_key_invalid": "De sleutel moet 2–40 kleine letters, cijfers, '-' of '_' bevatten en met een letter beginnen",
+    "target_key_locked": "De sleutel van een doel met meerdere versies kan niet worden gewijzigd",
+    "target_key_taken": "Een ander doel (actief of verouderd) gebruikt de sleutel '{{key}}' al",
+    "target_tracks_grants": "Doel '{{key}}' volgt nog {{count}} recht(en) — trek ze in of laat ze eerst los van het volgen",
+    "transition_not_allowed": "Kan niet van {{from}} naar {{to}} (toegestaan: {{allowed}}).",
+    "unknown_action": "Onbekende actie '{{action}}' (niet in het Ontos-profiel)",
+    "unknown_collection_source": "Onbekende collectiebron '{{ref}}'",
+    "unknown_conflict": "Onbekende conflictstrategie '{{conflict}}'",
+    "unknown_delivery_mode": "Onbekende leveringsmodus '{{mode}}'",
+    "unknown_delivery_modes": "Onbekende leveringsmodus/-modi: {{modes}}",
+    "unknown_kind": "Onbekend soort '{{kind}}'",
+    "unknown_left_operand": "Onbekende leftOperand '{{operand}}' (niet in het Ontos-profiel)",
+    "unknown_operator": "Onbekende operator '{{operator}}'",
+    "unknown_profile": "Onbekend ODRL-profiel '{{profile}}' — het beleid kan niet worden verwerkt (ODRL §3.2)",
+    "unknown_reference": "Onbekende verwijzing '{{ref}}'",
+    "unknown_system": "Onbekend systeem '{{system}}' (beschikbaar: {{available}})",
+    "unknown_target": "Onbekend doel '{{key}}'. Beschikbaar: {{available}}",
+    "unsupported_policy_type": "Niet-ondersteund beleidstype '{{type}}'",
+    "untracked_outside_scope": "{{count}} gevolgd(e) recht(en) vallen buiten het bereik van het doel en worden niet meer gevolgd (ze blijven op het platform)",
+    "used_by_active": "Nog in gebruik door actief beleid (verouder of herkoppel het eerst): {{names}}",
+    "version_exists": "Versie {{version}} bestaat al in deze familie"
+  },
+  "profile": {
+    "actions": {
+      "use": {
+        "label": "Gebruiken",
+        "description": "Elk gebruik van de asset (ODRL-actie op het hoogste niveau)."
+      },
+      "transfer": {
+        "label": "Overdragen",
+        "description": "Overdracht van eigendom (ODRL-actie op het hoogste niveau)."
+      },
+      "read": {
+        "label": "Lezen",
+        "description": "De data lezen/bevragen (UC SELECT, READ VOLUME, EXECUTE)."
+      },
+      "modify": {
+        "label": "Wijzigen",
+        "description": "De data wijzigen (UC MODIFY, WRITE VOLUME)."
+      },
+      "ontos_browse": {
+        "label": "Bladeren",
+        "description": "Metadata zien zonder data te lezen (UC BROWSE)."
+      },
+      "ontos_create": {
+        "label": "Aanmaken",
+        "description": "Onderliggende objecten aanmaken (UC CREATE TABLE/VIEW/FUNCTION/VOLUME)."
+      },
+      "ontos_manage": {
+        "label": "Beheren",
+        "description": "Rechten en eigenschappen beheren (UC MANAGE)."
+      },
+      "distribute": {
+        "label": "Distribueren",
+        "description": "De data met derden delen."
+      },
+      "derive": {
+        "label": "Afleiden",
+        "description": "Afgeleide data van de asset maken."
+      },
+      "aggregate": {
+        "label": "Aggregeren",
+        "description": "De data alleen in geaggregeerde vorm gebruiken."
+      },
+      "ontos_acknowledgeTerms": {
+        "label": "Voorwaarden accepteren",
+        "description": "De gebruiksvoorwaarden van de asset accepteren (workflow)."
+      },
+      "ontos_obtainApproval": {
+        "label": "Goedkeuring verkrijgen",
+        "description": "Een goedkeuring of besluit van een bevoegde instantie verkrijgen (workflow)."
+      },
+      "ontos_recertify": {
+        "label": "Toegang hercertificeren",
+        "description": "Periodiek opnieuw bevestigen dat toegang nodig is (workflow)."
+      },
+      "delete": {
+        "label": "Verwijderen",
+        "description": "Alle kopieën van de asset definitief verwijderen."
+      },
+      "anonymize": {
+        "label": "Anonimiseren",
+        "description": "De asset geheel of gedeeltelijk anonimiseren."
+      },
+      "inform": {
+        "label": "Informeren",
+        "description": "Een partij op de hoogte stellen van het gebruik (melding)."
+      }
+    },
+    "operands": {
+      "dateTime": {
+        "label": "Datum/tijd",
+        "description": "Moment van gebruik; wordt gecompileerd naar vervaldatum/activering van een recht."
+      },
+      "elapsedTime": {
+        "label": "Verstreken tijd",
+        "description": "Duur van de toegang; wordt gecompileerd naar een tijdgebonden recht."
+      },
+      "purpose": {
+        "label": "Doel van gebruik",
+        "description": "Opgegeven gebruiksdoel; bevestigd via workflow, niet technisch afgedwongen."
+      },
+      "recipient": {
+        "label": "Ontvanger",
+        "description": "Partij die het resultaat van het gebruik ontvangt."
+      },
+      "spatial": {
+        "label": "Regio",
+        "description": "Geografische regio van gebruik; wordt gecompileerd naar een rijfilter waar ondersteund."
+      },
+      "ontos_classification": {
+        "label": "Classificatie",
+        "description": "Dataclassificatie van de asset; wordt gecompileerd naar taggebaseerde ABAC waar ondersteund."
+      },
+      "ontos_tag": {
+        "label": "Tag",
+        "description": "Tag van de asset (namespace/key[=value]); wordt gecompileerd naar taggebaseerde ABAC waar ondersteund."
+      },
+      "ontos_domain": {
+        "label": "Domein",
+        "description": "Ontos-domein van de asset; omgezet in concrete rechten."
+      },
+      "ontos_dataProduct": {
+        "label": "Dataproduct",
+        "description": "Dataproduct waartoe de asset behoort; omgezet in concrete rechten."
+      },
+      "ontos_columnTag": {
+        "label": "Kolomtag",
+        "description": "Tag op kolomniveau; wordt gecompileerd naar een kolommasker waar ondersteund."
+      },
+      "ontos_rowCondition": {
+        "label": "Rijvoorwaarde",
+        "description": "Predicaat op rijniveau; wordt gecompileerd naar een rijfilter waar ondersteund."
+      },
+      "ontos_businessRole": {
+        "label": "Bedrijfsrol",
+        "description": "Ontos-bedrijfsrol van de principal (verfijning van een Doelgroep)."
+      },
+      "ontos_group": {
+        "label": "Groep",
+        "description": "Lidmaatschap van de principal van een groep in de identity provider."
+      },
+      "ontos_principalAttribute": {
+        "label": "Principal-attribuut",
+        "description": "Directory-attribuut van de principal (stub: toekomstige IdP-/Lakebase-bronnen)."
+      },
+      "ontos_remark": {
+        "label": "Opmerking",
+        "description": "Vrije-tekstvoorwaarde die aan consumenten wordt getoond; niet afgedwongen."
+      }
+    },
+    "operators": {
+      "eq": "gelijk aan",
+      "neq": "niet gelijk aan",
+      "gt": "groter dan",
+      "gteq": "groter dan of gelijk aan",
+      "lt": "kleiner dan",
+      "lteq": "kleiner dan of gelijk aan",
+      "isA": "is een",
+      "hasPart": "heeft onderdeel",
+      "isPartOf": "is onderdeel van",
+      "isAllOf": "is alle van",
+      "isAnyOf": "is een van",
+      "isNoneOf": "is geen van"
+    }
+  },
+  "shacl": {
+    "thePolicy": "het beleid",
+    "constraint": {
+      "MinCountConstraintComponent": "{{path}} ontbreekt",
+      "MaxCountConstraintComponent": "{{path}} heeft te veel waarden",
+      "InConstraintComponent": "{{path}} heeft een waarde buiten de toegestane lijst",
+      "HasValueConstraintComponent": "{{path}} mist de vereiste waarde",
+      "NodeKindConstraintComponent": "{{path}} heeft het verkeerde soort waarde (IRI verwacht)",
+      "NodeConstraintComponent": "{{path}} komt niet overeen met de shape",
+      "OrConstraintComponent": "{{path}} komt met geen van de toegestane shapes overeen",
+      "XoneConstraintComponent": "{{path}} moet met precies één van de toegestane shapes overeenkomen",
+      "NotConstraintComponent": "{{path}} komt overeen met een verboden shape"
+    }
   }
 }

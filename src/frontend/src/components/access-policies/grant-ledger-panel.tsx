@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import TargetSelect from '@/components/access-policies/target-select';
+import { errorText } from '@/lib/access-policy-text';
 import { useCompileTargets } from '@/hooks/use-access-policies';
 import type { AccessRelease, LedgerEntry } from '@/types/access-policy';
 
@@ -52,7 +53,7 @@ export default function GrantLedgerPanel({ canAdmin }: { canAdmin: boolean }) {
     );
     setRevoking(false);
     if (res.error || !res.data) {
-      toast({ title: t('access-policies:ledger.revokeFailed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:ledger.revokeFailed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     const rel = res.data.release;

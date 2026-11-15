@@ -34,6 +34,7 @@ import VersionNavigator from '@/components/common/version-navigator';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import RuleSentence from '@/components/access-policies/rule-sentence';
+import { actionLabel as profileActionLabel, errorText, issueText, operandLabel as profileOperandLabel, shaclText } from '@/lib/access-policy-text';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
@@ -148,7 +149,7 @@ export default function AccessPolicyDetails() {
       res = await get<AccessEntity>(base);
     }
     if (!res.data || res.error) {
-      setError(res.error || t('access-policies:details.notFound'));
+      setError(errorText(t, res, t('access-policies:details.notFound')));
       setEntity(null);
       setLoading(false);
       return;
@@ -187,11 +188,11 @@ export default function AccessPolicyDetails() {
   }, [load, kind, setStaticSegments, setDynamicTitle, fetchUserProjects, t]);
 
   const actionLabel = useCallback(
-    (k: string | null | undefined) => profile?.actions.find((a) => a.key === k)?.label || k || '?',
+    (k: string | null | undefined) => (k ? profileActionLabel(t, k, profile?.actions.find((a) => a.key === k)?.label) : '?'),
     [profile],
   );
   const operandLabel = useCallback(
-    (k: string) => profile?.left_operands.find((o) => o.key === k)?.label || k,
+    (k: string) => profileOperandLabel(t, k, profile?.left_operands.find((o) => o.key === k)?.label),
     [profile],
   );
   const enforcementOf = useCallback(
@@ -206,7 +207,7 @@ export default function AccessPolicyDetails() {
     if (!statusTarget) return;
     const res = await post<AccessEntity>(`${base}/status`, { status: statusTarget, comment: statusComment || undefined });
     if (res.error || !res.data) {
-      toast({ title: t('access-policies:details.statusFailed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:details.statusFailed'), description: errorText(t, res), variant: 'destructive' });
     } else {
       toast({ title: t('access-policies:details.statusChanged', { status: t(`access-policies:status.${statusTarget}`) }) });
       setEntity(res.data);
@@ -219,7 +220,7 @@ export default function AccessPolicyDetails() {
   const createVersion = async () => {
     const res = await post<AccessEntity>(`${base}/versions`, { new_version: newVersion, change_summary: changeSummary || undefined });
     if (res.error || !res.data) {
-      toast({ title: t('access-policies:details.versionFailed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:details.versionFailed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     setVersionOpen(false);
@@ -235,7 +236,7 @@ export default function AccessPolicyDetails() {
     });
     setIriDialogOpen(false);
     if (res.error) {
-      toast({ title: t('access-policies:details.linkFailed'), description: res.error, variant: 'destructive' });
+      toast({ title: t('access-policies:details.linkFailed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     load();
@@ -244,7 +245,7 @@ export default function AccessPolicyDetails() {
   const removeLink = async (linkId: string) => {
     const res = await del(`/api/semantic-links/${linkId}`);
     if (res.error) {
-      toast({ title: t('access-policies:details.linkFailed'), description: res.error, variant: 'destructive' });
+      toast({ title: t('access-policies:details.linkFailed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     setLinks((cur) => cur.filter((x) => x.id !== linkId));
@@ -256,7 +257,7 @@ export default function AccessPolicyDetails() {
     const res = await del(base);
     setDeleteOpen(false);
     if (res.error) {
-      toast({ title: t('access-policies:details.deleteFailed'), description: res.error, variant: 'destructive' });
+      toast({ title: t('access-policies:details.deleteFailed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     toast({ title: t('access-policies:details.deleted') });
@@ -273,7 +274,7 @@ export default function AccessPolicyDetails() {
       if (shaclFor.current !== url) return;
       if (res.error || !res.data || typeof res.data.conforms !== 'boolean') {
         setShacl(null);
-        toast({ variant: 'destructive', title: t('access-policies:details.shacl.failed'), description: res.error || undefined });
+        toast({ variant: 'destructive', title: t('access-policies:details.shacl.failed'), description: errorText(t, res) || undefined });
       } else {
         setShacl(res.data);
       }
@@ -647,15 +648,16 @@ export default function AccessPolicyDetails() {
                 {validation.issues.map((i, idx) => (
                   <p key={idx} className={i.severity === 'error' ? 'text-destructive' : 'text-amber-700 dark:text-amber-400'}>
                     <AlertTriangle className="mr-1 inline h-3 w-3" />
-                    <code className="text-xs">{i.path || 'policy'}</code> — {i.message}
+                    <code className="text-xs">{i.path || 'policy'}</code> — {issueText(t, i)}
                   </p>
                 ))}
-                {(validation.activation_problems || [])
-                  .filter((p) => !validation.issues.some((i) => i.message === p))
+                {(validation.activation_problem_details ??
+                  (validation.activation_problems || []).map((message) => ({ code: '', params: {}, message })))
+                  .filter((p) => !validation.issues.some((i) => i.message === p.message))
                   .map((p, idx) => (
                     <p key={`a${idx}`} className="text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="mr-1 inline h-3 w-3" />
-                      {p}
+                      {issueText(t, p)}
                     </p>
                   ))}
               </>
@@ -822,7 +824,7 @@ export default function AccessPolicyDetails() {
                                 {r.severity}
                               </Badge>
                             )}
-                            {r.message}
+                            <span title={r.message || undefined}>{shaclText(t, r)}</span>
                             {(r.focus || r.path) && (
                               <code className="ml-1 rounded bg-muted px-1">{[r.focus, r.path].filter(Boolean).join(' → ')}</code>
                             )}

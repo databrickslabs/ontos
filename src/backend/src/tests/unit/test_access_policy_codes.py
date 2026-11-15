@@ -24,6 +24,13 @@ def _const(node):
     return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
 
 
+def _codes(node):
+    """Literal codes of an expression: a string, or both branches of ``a if c else b``."""
+    if isinstance(node, ast.IfExp):
+        return _codes(node.body) + _codes(node.orelse)
+    return [c] if (c := _const(node)) else []
+
+
 def _params(node):
     """Literal param names, or None when the dict isn't a literal (not checkable)."""
     if node is None:
@@ -36,33 +43,32 @@ def _params(node):
 def collect():
     found = {}
 
-    def add(code, params):
-        if not code:
-            return
-        found.setdefault(code, []).append(params)
+    def add(node, params):
+        for code in _codes(node) if node is not None else []:
+            found.setdefault(code, []).append(params)
 
     for rel in FILES:
         tree = ast.parse((SRC / rel).read_text())
         for n in ast.walk(tree):
             if isinstance(n, ast.Dict):
                 d = {_const(k): v for k, v in zip(n.keys, n.values) if _const(k)}
-                if "code" in d and "params" in d and _const(d["code"]):
-                    add(_const(d["code"]), _params(d["params"]))
+                if "code" in d and "params" in d:
+                    add(d["code"], _params(d["params"]))
             if not isinstance(n, ast.Call):
                 continue
             name = getattr(n.func, "id", None) or getattr(n.func, "attr", None)
             kw = {k.arg: k.value for k in n.keywords}
             a = n.args
             if name == "Issue" and len(a) >= 3:
-                add(_const(kw["code"] if "code" in kw else a[3] if len(a) > 3 else None),
+                add(kw["code"] if "code" in kw else a[3] if len(a) > 3 else None,
                     _params(kw.get("params") or (a[4] if len(a) > 4 else None)))
-            elif name == "issue" and len(a) >= 3 and _const(a[1]) and isinstance(n.func, ast.Attribute):
-                add(_const(a[1]), _params(kw.get("params")))
+            elif name == "issue" and len(a) >= 3 and isinstance(n.func, ast.Attribute):
+                add(a[1], _params(kw.get("params")))
             elif name == "Problem" and len(a) >= 2:
-                add(_const(kw["code"] if "code" in kw else a[1]),
+                add(kw["code"] if "code" in kw else a[1],
                     _params(kw.get("params") or (a[2] if len(a) > 2 else None)))
             elif name == "AccessPolicyError" and "code" in kw:
-                add(_const(kw["code"]), _params(kw.get("params")))
+                add(kw["code"], _params(kw.get("params")))
     out = {c: None for c in EXTRA}
     for code, sets in found.items():
         if any(s is None for s in sets):

@@ -211,7 +211,8 @@
     "permissionDenied": "Geen toegang",
     "notFound": "Niet gevonden",
     "required": "Dit veld is verplicht",
-    "invalidDate": "Ongeldige Datum"
+    "invalidDate": "Ongeldige Datum",
+    "versionsLoadFailed": "Kon {{kind}}-versies niet laden"
   },
   "tooltips": {
     "zoomIn": "Inzoomen",

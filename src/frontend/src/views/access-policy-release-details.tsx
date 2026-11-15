@@ -26,6 +26,7 @@ import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import ReleaseStatusBadge from '@/components/access-policies/release-status-badge';
+import { errorText, issueText } from '@/lib/access-policy-text';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
@@ -172,7 +173,7 @@ export default function AccessPolicyReleaseDetails() {
     const res = await post<AccessRelease>(`${base}/${path}`, body);
     setBusy(false);
     if (res.error || !res.data) {
-      toast({ title: t('access-policies:releases.actionFailed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:releases.actionFailed'), description: errorText(t, res), variant: 'destructive' });
       return false;
     }
     setRelease(res.data);
@@ -195,7 +196,7 @@ export default function AccessPolicyReleaseDetails() {
     const res = await post<LiveDiffReport>(`${base}/live-diff`, {});
     setBusy(false);
     if (res.error || !res.data) {
-      toast({ title: t('access-policies:releases.liveDiffFailed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:releases.liveDiffFailed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     setRelease((r) => (r ? { ...r, live_diff: res.data } : r));
@@ -341,7 +342,7 @@ export default function AccessPolicyReleaseDetails() {
                 <Badge variant={ISSUE_VARIANT[i.severity]} className="shrink-0 text-[10px]">
                   {t(`access-policies:releases.severity.${i.severity}`)}
                 </Badge>
-                <span>{i.message}</span>
+                <span>{issueText(t, i)}</span>
               </div>
             ))}
           </CardContent>

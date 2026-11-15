@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { errorText } from '@/lib/access-policy-text';
 import type { DriftGrant, DriftReport } from '@/types/access-policy';
 
 const VARIANT = { in_sync: 'secondary', drift: 'destructive', partial: 'outline', error: 'outline' } as const;
@@ -69,7 +70,7 @@ export default function DriftPanel({ targetKey, canRun, readable }: { targetKey:
     try {
       const res = await post<DriftReport>('/api/access-policies/drift-reports', { target: targetKey });
       if (res.error || !res.data) {
-        toast({ title: t('access-policies:drift.failed'), description: res.error || '', variant: 'destructive' });
+        toast({ title: t('access-policies:drift.failed'), description: errorText(t, res), variant: 'destructive' });
         return;
       }
       await load();

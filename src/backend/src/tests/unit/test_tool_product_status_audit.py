@@ -128,5 +128,5 @@ def test_another_transition_is_still_audited_as_change_status(world, run, audit)
 def test_the_schema_lists_retired_as_a_status():
     # A deprecated product retires through change-status, so the tool offers it.
     status = create_default_registry().get('update_data_product').parameters['status']
-    assert 'retired' in status['enum']
+    assert 'enum' not in status  # any stage key of the group (#1213)
     assert 'retired' in status['description']

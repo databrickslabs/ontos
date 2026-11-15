@@ -78,7 +78,8 @@ def api(levels):
         manager.run_policy_inline.return_value = SimpleNamespace(
             id='r1', policy_id='p1', status='succeeded', started_at=None, finished_at=None,
             success_count=0, failure_count=0, score=0.0, error_message=None, error_code=None,
-            error_params=None, warning_code=None, warning_params=None,
+            error_params=None, warning_code=None, warning_params=None, llm_calls=2,
+            llm_cache_hits=1,
         )
         yield SimpleNamespace(
             http=TestClient(app), manager=manager, obo=obo, user_client=user_client,
@@ -97,6 +98,14 @@ def test_a_user_run_of_an_llm_check_rule_reads_uc_with_the_users_client(api):
     api.obo.assert_called_once()
     kwargs = api.manager.run_policy_inline.call_args.kwargs
     assert kwargs['workspace_client'] is api.user_client
+
+
+def test_the_run_answer_has_the_llm_usage(api):
+    _policy(api.manager, PLAIN_RULE)
+
+    body = api.http.post('/api/compliance/policies/p1/runs', json={}).json()
+
+    assert (body['llm_calls'], body['llm_cache_hits']) == (2, 1)
 
 
 def test_a_run_of_a_rule_without_llm_check_keeps_the_app_client(api):

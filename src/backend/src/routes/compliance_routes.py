@@ -339,6 +339,15 @@ def _run_codes(run) -> dict:
     }
 
 
+def _run_llm_usage(run) -> dict:
+    """The run's LLM_CHECK usage: model calls, cached verdicts and the entities left
+    without a verdict (None when the run didn't count them)."""
+    return {
+        'llm_calls': getattr(run, 'llm_calls', None),
+        'llm_cache_hits': getattr(run, 'llm_cache_hits', None),
+    }
+
+
 @router.post("/compliance/policies/{policy_id}/runs")
 async def run_policy(
     policy_id: str,
@@ -390,6 +399,7 @@ async def run_policy(
         'score': run.score,
         'error_message': run.error_message,
         **_run_codes(run),
+        **_run_llm_usage(run),
     }
 
 
@@ -415,6 +425,7 @@ async def list_runs(
             'score': r.score,
             'error_message': r.error_message,
             **_run_codes(r),
+            **_run_llm_usage(r),
         } for r in runs
     ]
 
@@ -442,6 +453,7 @@ async def get_run_results(
             'score': run.score,
             'error_message': run.error_message,
             **_run_codes(run),
+            **_run_llm_usage(run),
         },
         'results': [
             {

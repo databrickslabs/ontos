@@ -245,6 +245,7 @@
       "llm_check_test_rate_limited": "短時間にテストが多すぎます。{{retryAfter}} 秒後にもう一度お試しください。",
       "llm_check_entity_read_required": "このルールは {{entityType}} エンティティに LLM_CHECK を使用します。実行またはテストするには、それらへの読み取りアクセスが必要です。",
       "llm_check_admin_required": "このルールは LLM_CHECK を使用します。保存、実行、テストにはコンプライアンスの管理者アクセスが必要です。"
-    }
+    },
+    "usage": "LLM_CHECK: モデル呼び出し {{calls}} 回、キャッシュからの判定 {{cached}} 件。"
   }
 }

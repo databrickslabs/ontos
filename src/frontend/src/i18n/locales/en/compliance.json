@@ -245,6 +245,7 @@
       "llm_check_test_rate_limited": "Too many tests in a short time. Try again in {{retryAfter}} seconds.",
       "llm_check_entity_read_required": "This rule uses LLM_CHECK on {{entityType}} entities. Running or testing it needs read access to them.",
       "llm_check_admin_required": "This rule uses LLM_CHECK. Saving, running or testing it requires admin access to compliance."
-    }
+    },
+    "usage": "LLM_CHECK: {{calls}} model calls, {{cached}} verdicts from the cache."
   }
 }

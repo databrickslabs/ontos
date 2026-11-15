@@ -83,4 +83,23 @@ describe('ComplianceRunDetails LLM check reasons', () => {
       'No comprobado: la ejecución alcanzó su presupuesto de llamadas al modelo.',
     );
   });
+
+  it("shows the run's model calls and cached verdicts", async () => {
+    get.mockResolvedValue({
+      data: { run: { ...RUN, llm_calls: 4, llm_cache_hits: 3 }, results: [] },
+    });
+    renderRun();
+
+    expect(await screen.findByTestId('run-llm-usage')).toHaveTextContent(
+      'LLM_CHECK: 4 model calls, 3 verdicts from the cache.',
+    );
+  });
+
+  it('shows no usage for a run that counted none', async () => {
+    get.mockResolvedValue({ data: { run: { ...RUN, llm_calls: null }, results: [] } });
+    renderRun();
+
+    await screen.findByText(/Run run-1/);
+    expect(screen.queryByTestId('run-llm-usage')).not.toBeInTheDocument();
+  });
 });

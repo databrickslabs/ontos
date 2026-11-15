@@ -47,6 +47,10 @@ class ComplianceRunDb(Base):
     # kept apart from error_code so a succeeded run never looks failed
     warning_code = Column(String, nullable=True)
     warning_params = Column(Text, nullable=True)
+    # LLM_CHECK model calls the run made, and the verdicts it read from the cache
+    # (None: a run from before they were counted)
+    llm_calls = Column(Integer, nullable=True)
+    llm_cache_hits = Column(Integer, nullable=True)
 
     policy = relationship("CompliancePolicyDb", back_populates="runs")
     results = relationship("ComplianceResultDb", back_populates="run", cascade="all, delete-orphan", lazy="selectin")

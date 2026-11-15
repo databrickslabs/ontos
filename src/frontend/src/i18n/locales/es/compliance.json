@@ -245,6 +245,7 @@
       "llm_check_test_rate_limited": "Demasiadas pruebas en poco tiempo. Inténtalo de nuevo en {{retryAfter}} segundos.",
       "llm_check_entity_read_required": "Esta regla usa LLM_CHECK en entidades {{entityType}}. Ejecutarla o probarla requiere acceso de lectura a ellas.",
       "llm_check_admin_required": "Esta regla usa LLM_CHECK. Guardarla, ejecutarla o probarla requiere acceso de administrador a cumplimiento."
-    }
+    },
+    "usage": "LLM_CHECK: {{calls}} llamadas al modelo, {{cached}} veredictos de la caché."
   }
 }

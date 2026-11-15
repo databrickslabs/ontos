@@ -22,7 +22,7 @@ import {
   complianceActionLabel,
   complianceActionOutcomes,
 } from '@/lib/compliance-action-outcome';
-import { llmCheckText, parseLlmChecks } from '@/lib/compliance-llm-checks';
+import { llmCheckText, llmUsageText, parseLlmChecks } from '@/lib/compliance-llm-checks';
 
 interface Run {
   id: string; // UUID
@@ -38,6 +38,8 @@ interface Run {
   error_params?: Record<string, unknown> | null;
   warning_code?: string | null;
   warning_params?: Record<string, unknown> | null;
+  llm_calls?: number | null;
+  llm_cache_hits?: number | null;
 }
 
 interface Result {
@@ -199,6 +201,11 @@ export default function ComplianceRunDetails() {
           {run.status !== 'failed' && run.warning_code && (
             <div className="text-sm text-amber-600" data-testid="run-warning">
               {complianceRunWarningText(t, run)}
+            </div>
+          )}
+          {llmUsageText(t, run) && (
+            <div className="text-sm text-muted-foreground" data-testid="run-llm-usage">
+              {llmUsageText(t, run)}
             </div>
           )}
         </CardHeader>

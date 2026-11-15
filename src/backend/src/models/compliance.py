@@ -45,6 +45,9 @@ class ComplianceRun(BaseModel):
     error_params: Optional[dict] = None
     warning_code: Optional[str] = None  # what a finished run reports; translated by the UI
     warning_params: Optional[dict] = None
+    # LLM_CHECK model calls of the run, and verdicts read from the cache (None: not counted)
+    llm_calls: Optional[int] = None
+    llm_cache_hits: Optional[int] = None
 
 
 class ComplianceResult(BaseModel):

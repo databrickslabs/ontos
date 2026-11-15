@@ -189,3 +189,32 @@ def test_a_job_run_shares_one_budget_across_its_policies(db_session):
     # The second policy gets the one check left; the run counts only its own overrun
     assert run_2.warning_code == 'llm_check_budget_exceeded'
     assert json.loads(run_2.warning_params) == {'count': 1, 'budget': 6}
+
+
+def test_the_run_counts_its_model_calls_and_cached_verdicts(db_session):
+    policy = _policy(db_session)
+    entities = [_domain(1, 'One row per order.'), _domain(2, 'table with data')]
+
+    first = _run(db_session, policy, entities, _grain_llm())
+    # Two checks, each a scan and a verdict
+    assert (first.llm_calls, first.llm_cache_hits) == (4, 0)
+
+    second = _run(db_session, policy, entities, _grain_llm())
+    assert (second.llm_calls, second.llm_cache_hits) == (0, 2)
+
+
+def test_a_job_run_counts_the_calls_of_each_policy_run(db_session):
+    from src.common.compliance_llm_check import DbLlmCheckCache, LlmChecker
+
+    fake = _grain_llm()
+    checker = LlmChecker(
+        _settings(), cache=DbLlmCheckCache(db_session), client_factory=lambda: fake,
+    )
+
+    run_1 = _run(db_session, _policy(db_session), [_domain(1, 'a per b')], fake,
+                 llm_checker=checker)
+    run_2 = _run(db_session, _policy(db_session), [_domain(1, 'a per b'), _domain(2, 'c')],
+                 fake, llm_checker=checker)
+
+    assert (run_1.llm_calls, run_1.llm_cache_hits) == (2, 0)
+    assert (run_2.llm_calls, run_2.llm_cache_hits) == (2, 1)

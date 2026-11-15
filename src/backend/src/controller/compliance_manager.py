@@ -674,9 +674,11 @@ class ComplianceManager:
         self, db: Session, run: ComplianceRunDb, *, success_count: int, failure_count: int,
         score: float, error_message: Optional[str] = None, error_code: Optional[str] = None,
         error_params: Optional[dict] = None, warning_code: Optional[str] = None,
-        warning_params: Optional[dict] = None,
+        warning_params: Optional[dict] = None, llm_calls: Optional[int] = None,
+        llm_cache_hits: Optional[int] = None,
     ) -> ComplianceRunDb:
         run.success_count = success_count
+        run.llm_calls, run.llm_cache_hits = llm_calls, llm_cache_hits
         run.failure_count = failure_count
         run.score = score
         run.finished_at = utc_now()
@@ -911,6 +913,14 @@ class ComplianceManager:
         if llm_checker is None:
             llm_checker = self.llm_checker(db, purge_expired=True)
         budget_exceeded_before = llm_checker.budget_exceeded
+        calls_before, hits_before = llm_checker.calls, llm_checker.cache_hits
+
+        def llm_usage() -> dict:
+            # This run's share, also when a job run passes one checker to every policy run
+            return {
+                'llm_calls': llm_checker.calls - calls_before,
+                'llm_cache_hits': llm_checker.cache_hits - hits_before,
+            }
 
         try:
             # Parse the rule using enhanced DSL
@@ -1022,7 +1032,7 @@ class ComplianceManager:
                 warning_code, warning_params = 'notifications_failed', {}
             self.complete_run(
                 db, run, success_count=success, failure_count=failure, score=score,
-                warning_code=warning_code, warning_params=warning_params,
+                warning_code=warning_code, warning_params=warning_params, **llm_usage(),
             )
             
             # Log to change log for timeline
@@ -1050,6 +1060,7 @@ class ComplianceManager:
             self.complete_run(
                 db, run, success_count=success, failure_count=failure, score=0.0,
                 error_message=str(e), error_code=error_code, error_params=error_params,
+                **llm_usage(),
             )
             
             # Log failed run to change log

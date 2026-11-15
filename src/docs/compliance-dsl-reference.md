@@ -192,7 +192,9 @@ rule editor to try a criterion on one entity (at most 10 tests a minute per user
   check makes two, the scan and the verdict; cached verdicts make none). It
   covers one policy run from the UI, and the whole run of the Compliance Checks
   job, shared by its policies. The checks past it fail with
-  `llm_check_budget_exceeded`, and each policy run reports how many.
+  `llm_check_budget_exceeded`, and each policy run reports how many. Each run
+  also shows its model calls and the verdicts it read from the cache
+  (`llm_calls` and `llm_cache_hits` in the run's API answers).
 - Scheduled runs (the Compliance Checks job) use the app's LLM settings: they
   are written into the installed job when it is installed, and when the general
   settings (which include the LLM settings) are saved. If the app can't update

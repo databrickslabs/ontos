@@ -57,3 +57,20 @@ export function llmCheckErrorText(
     { ...(response.errorParams ?? {}), defaultValue },
   ) as string;
 }
+
+/** The LLM_CHECK usage of a compliance run (null: not counted, a run from before). */
+export interface LlmUsage {
+  llm_calls?: number | null;
+  llm_cache_hits?: number | null;
+}
+
+/**
+ * How many model calls a run's LLM_CHECKs made and how many verdicts came from
+ * the cache, or null when the run counted none (no LLM_CHECK, or an older run).
+ */
+export function llmUsageText(t: TFunction, run: LlmUsage): string | null {
+  const calls = run.llm_calls ?? 0;
+  const cached = run.llm_cache_hits ?? 0;
+  if (!calls && !cached) return null;
+  return t('compliance:llmCheck.usage', { calls, cached }) as string;
+}

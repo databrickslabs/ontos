@@ -245,6 +245,7 @@
       "llm_check_test_rate_limited": "Te veel tests in korte tijd. Probeer het over {{retryAfter}} seconden opnieuw.",
       "llm_check_entity_read_required": "Deze regel gebruikt LLM_CHECK op {{entityType}}-entiteiten. Voor uitvoeren of testen is leestoegang daartoe nodig.",
       "llm_check_admin_required": "Deze regel gebruikt LLM_CHECK. Opslaan, uitvoeren of testen vereist beheerderstoegang tot compliance."
-    }
+    },
+    "usage": "LLM_CHECK: {{calls}} modelaanroepen, {{cached}} oordelen uit de cache."
   }
 }

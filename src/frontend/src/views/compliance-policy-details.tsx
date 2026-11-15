@@ -23,7 +23,7 @@ import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warni
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
 import { complianceRunWarningText } from '@/lib/compliance-run-warning';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
-import { llmCheckErrorText } from '@/lib/compliance-llm-checks';
+import { llmCheckErrorText, llmUsageText } from '@/lib/compliance-llm-checks';
 
 type Policy = {
   id: string; // UUID
@@ -54,6 +54,8 @@ type Run = {
   error_params?: Record<string, unknown> | null;
   warning_code?: string | null;
   warning_params?: Record<string, unknown> | null;
+  llm_calls?: number | null;
+  llm_cache_hits?: number | null;
 };
 
 type Result = {
@@ -348,6 +350,11 @@ export default function CompliancePolicyDetails() {
             {activeRun.status !== 'failed' && activeRun.warning_code && (
               <div className="text-sm text-amber-600" data-testid="run-warning">
                 {complianceRunWarningText(t, activeRun)}
+              </div>
+            )}
+            {llmUsageText(t, activeRun) && (
+              <div className="text-sm text-muted-foreground" data-testid="run-llm-usage">
+                {llmUsageText(t, activeRun)}
               </div>
             )}
           </CardHeader>

@@ -287,6 +287,23 @@ class LifecycleService:
         except Exception as e:  # e.g. a database without the tables yet
             logger.warning("Could not load lifecycle stage groups: %s", e)
 
+    def _ensure_all_known(self, db: Optional[Session]) -> None:
+        """For SQL built from the cache: reload when the table holds a group id the
+        cache doesn't know (a group another worker created less than
+        ``_CACHE_SECONDS`` ago), so its rows aren't judged by the default group."""
+        self._ensure(db)
+        if db is None:
+            return
+        from src.db_models.lifecycle_stage_groups import LifecycleStageGroupDb
+        try:
+            # Savepoint: a failed read must not abort the caller's transaction
+            with db.begin_nested():
+                ids = {i for (i,) in db.query(LifecycleStageGroupDb.id).all()}
+            if ids - set(self._groups):
+                self._load(db)
+        except Exception as e:
+            logger.warning("Could not check the lifecycle stage groups: %s", e)
+
     # ---- groups of entities
 
     def default_group(self, db: Optional[Session], entity_type: str) -> Group:
@@ -556,6 +573,7 @@ class LifecycleService:
         """Per group id (None = no group, i.e. the default), its stage keys in ``categories``."""
         categories = set(categories)
         out: Dict[Optional[str], List[str]] = {}
+        self._ensure_all_known(db)
         default = self.default_group(db, entity_type)
         for group in self.groups(db, entity_type) if db is not None else [default]:
             out[group.id] = [s.key for s in group.stages.values() if s.category in categories]
@@ -578,7 +596,7 @@ class LifecycleService:
         are (re)loaded first, so a cold or stale cache doesn't miss a custom group."""
         from sqlalchemy import and_, func, or_
 
-        self._ensure(db)
+        self._ensure_all_known(db)
         status = func.lower(func.trim(func.coalesce(model.status, '')))
         column = model.lifecycle_stage_group_id
         default = self.default_group(db, entity_type)

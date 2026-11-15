@@ -26,6 +26,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy.orm import Session, object_session
@@ -214,6 +215,14 @@ _BUILTIN: Dict[str, Group] = {
     t: _group_from_definition({**default_group_definition(t), 'id': None})
     for t in LIFECYCLE_ENTITY_TYPES
 }
+
+
+def _utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Aware UTC (a naive value, as SQLite returns, is taken as UTC)."""
+    if value is None:
+        return None
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else \
+        value.astimezone(timezone.utc)
 
 
 def _normalized(status: Any) -> str:
@@ -975,9 +984,14 @@ class LifecycleService:
 
     def save_group(
         self, db: Session, data: Dict[str, Any], user: Optional[str],
-        group_id: Optional[str] = None,
+        group_id: Optional[str] = None, expected_updated_at: Optional[datetime] = None,
     ):
-        """Create (``group_id`` None) or replace a group; returns the stored row. Commits."""
+        """Create (``group_id`` None) or replace a group; returns the stored row. Commits.
+
+        ``expected_updated_at``: the ``updated_at`` the caller read; a group saved
+        since then is refused (409 ``lifecycle_group_changed``) instead of the
+        last write winning.
+        """
         from src.db_models.lifecycle_stage_groups import LifecycleStageGroupDb
         from src.repositories.lifecycle_stage_groups_repository import lifecycle_stage_groups_repo
 
@@ -1009,6 +1023,13 @@ class LifecycleService:
                 if row is None:
                     raise LifecycleGroupNotFoundError(
                         f"Lifecycle stage group '{group_id}' not found", groupId=group_id,
+                    )
+                if expected_updated_at is not None and \
+                        _utc(row.updated_at) != _utc(expected_updated_at):
+                    raise LifecycleGroupConflictError(
+                        'lifecycle_group_changed',
+                        f"'{row.name}' was changed since it was read; reload it first",
+                        groupId=group_id, updatedBy=row.updated_by,
                     )
                 if row.entity_type != data['entity_type']:
                     raise LifecycleGroupInvalidError(

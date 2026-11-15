@@ -161,7 +161,9 @@ def _scope(catalog: str, schemas: Iterable[str]) -> Tuple[str, Dict[str, str]]:
 def tags_statement(catalog: str, schemas: Iterable[str]) -> Tuple[str, Dict[str, str]]:
     """Table and column tags of the given schemas of one catalog."""
     placeholders, params = _scope(catalog, schemas)
-    where = f"catalog_name = :catalog AND schema_name IN ({placeholders})"
+    # Both sides lowered, as in the lineage statement: the parameters are
+    # lowercase and the system table may keep the names' case
+    where = f"lower(catalog_name) = :catalog AND lower(schema_name) IN ({placeholders})"
     statement = (
         f"SELECT schema_name, table_name, CAST(NULL AS STRING) AS column_name, "
         f"tag_name, tag_value FROM {TABLE_TAGS_SOURCE} WHERE {where} "

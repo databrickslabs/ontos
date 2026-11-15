@@ -249,10 +249,12 @@ def test_a_review_request_doesnt_skip_ahead_without_a_start_review_step(client, 
     res = client.post('/api/lifecycle-stage-groups', json={
         'name': 'Two reviews', 'entity_type': 'data_product',
         'stages': [_stage('draft', 'draft', 0, True), _stage('vetting', 'review', 1),
-                   _stage('legal', 'review', 2), _stage('active', 'active', 3)],
+                   _stage('legal', 'review', 2), _stage('active', 'active', 3),
+                   _stage('retired', 'retired', 4)],
         'transitions': [{'from_key': 'draft', 'to_key': 'vetting'},
                         {'from_key': 'vetting', 'to_key': 'legal'},
-                        {'from_key': 'legal', 'to_key': 'active'}],
+                        {'from_key': 'legal', 'to_key': 'active'},
+                        {'from_key': 'active', 'to_key': 'retired'}],
     })
     assert res.status_code == 201, res.text
     pid = _product(db_session, 'draft', res.json()['id'])
@@ -360,11 +362,13 @@ def test_several_review_stages_after_draft_have_no_submit_review_stage(client, d
     res = client.post('/api/lifecycle-stage-groups', json={
         'name': 'Two ways in', 'entity_type': 'data_product',
         'stages': [_stage('draft', 'draft', 0, True), _stage('fast', 'review', 1),
-                   _stage('slow', 'review', 2), _stage('live', 'active', 3)],
+                   _stage('slow', 'review', 2), _stage('live', 'active', 3),
+                   _stage('gone', 'retired', 4)],
         'transitions': [{'from_key': 'draft', 'to_key': 'fast'},
                         {'from_key': 'draft', 'to_key': 'slow'},
                         {'from_key': 'fast', 'to_key': 'live'},
-                        {'from_key': 'slow', 'to_key': 'live'}],
+                        {'from_key': 'slow', 'to_key': 'live'},
+                        {'from_key': 'live', 'to_key': 'gone'}],
     })
     assert res.status_code == 201, res.text
     fast = db_session.get(DataProductDb, _product(db_session, 'fast', res.json()['id']))

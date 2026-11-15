@@ -154,6 +154,20 @@ class TestLoopingGroup:
         assert ranks == sorted(ranks)
 
 
+class TestDeadEnds:
+    def test_a_stage_with_no_move_out_must_be_retired(self):
+        group = _looping_group()
+        group['stages'].append(_stage('parked', 'deprecated', 4))
+        group['transitions'].append({'from_key': 'active', 'to_key': 'parked'})
+        with pytest.raises(LifecycleGroupInvalidError) as err:
+            lifecycle_service.validate_definition(group)
+        assert err.value.code == 'lifecycle_group_dead_end_stages'
+        assert err.value.params == {'stages': ['parked']}
+
+        group['transitions'].append({'from_key': 'parked', 'to_key': 'retired'})
+        lifecycle_service.validate_definition(group)
+
+
 class TestSaveValidation:
     @pytest.mark.parametrize('change, code', [
         (lambda g: g['stages'][0].update(is_initial=False), 'lifecycle_group_initial_stage'),
@@ -492,11 +506,13 @@ def _intake_group(entity_type='data_product'):
             _stage('intake', 'draft', 0, initial=True),
             _stage('needs_review', 'review', 1),
             _stage('live', 'active', 2),
+            _stage('gone', 'retired', 3),
         ],
         'transitions': [
             {'from_key': 'intake', 'to_key': 'needs_review'},
             {'from_key': 'needs_review', 'to_key': 'live'},
             {'from_key': 'needs_review', 'to_key': 'intake'},
+            {'from_key': 'live', 'to_key': 'gone'},
         ],
     }
 
@@ -729,7 +745,8 @@ class TestIndependentReview:
         intake = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
         other = _looping_group('Intake is live')
         other['stages'].append(_stage('intake', 'active', 4))
-        other['transitions'].append({'from_key': 'draft', 'to_key': 'intake'})
+        other['transitions'] += [{'from_key': 'draft', 'to_key': 'intake'},
+                                 {'from_key': 'intake', 'to_key': 'retired'}]
         other_group = lifecycle_service.save_group(db_session, other, 'admin')
         hidden = _product(db_session, 'intake', intake.id, draft_owner_id='bob@example.com')
         shown = _product(db_session, 'intake', other_group.id, draft_owner_id='bob@example.com')

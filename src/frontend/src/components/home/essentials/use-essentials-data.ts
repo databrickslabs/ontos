@@ -259,7 +259,8 @@ export function myOpenReviews(
 
 /**
  * Owned assets with a documentation or review gap. An asset counts as reviewed when its
- * location (UC full name) or name appears in a review request.
+ * location (UC full name) appears in a review request; its bare name is used only when it
+ * has no location, so `marketing.orders` is not covered by a review of `sales.orders`.
  */
 export function assetGaps(
   assets: OwnedAsset[],
@@ -273,7 +274,7 @@ export function assetGaps(
       asset,
       missingDescription: !asset.description?.trim(),
       missingReview: reviewed
-        ? ![asset.location, asset.name].some((k) => !!k && reviewed.has(k.toLowerCase()))
+        ? !reviewed.has((asset.location || asset.name).toLowerCase())
         : null,
     }))
     .filter((g) => g.missingDescription || g.missingReview === true);

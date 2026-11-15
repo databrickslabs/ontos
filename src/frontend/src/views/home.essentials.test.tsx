@@ -220,7 +220,7 @@ describe('Home by role home section', () => {
     expect(state.calls).not.toContain('/api/access-grants/my-requests');
   });
 
-  it('the approvals card is hidden, and its queue not fetched, without contracts or products read', () => {
+  it('the approvals card and its queue need contracts or products read', () => {
     applyJourneyRole();
     const { unmount } = renderWithProviders(<Home />);
     expect(screen.getByTestId('required-actions')).toHaveAttribute('data-fetch-queue', 'true');
@@ -245,7 +245,7 @@ describe('Home by role home section', () => {
     expect(within(list).getByText('customers')).toHaveAttribute('href', '/assets/a2');
     expect(within(list).queryByText('orders')).not.toBeInTheDocument();
     expect(within(list).getByText('No description')).toBeInTheDocument();
-    expect(within(list).getByText('Not reviewed')).toBeInTheDocument();
+    expect(within(list).getByText('No review request')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Request a review/ })).toBeInTheDocument();
   });
 
@@ -386,6 +386,20 @@ describe('Essentials home data helpers', () => {
     expect(myOpenReviews(reviews, 'boss@x.com').map((r) => r.id)).toEqual(['r1']);
     expect(myOpenReviews(reviews, null)).toEqual([]);
     expect(ReviewRequestStatus.APPROVED).toBe('approved');
+  });
+
+  it('matches a review on the asset location, not on a shared bare name', () => {
+    const assets = [
+      { id: 'a1', name: 'orders', location: 'marketing.orders', description: 'x' },
+      { id: 'a2', name: 'main.sales.refunds', location: null, description: 'x' },
+    ];
+    const rev = [review('rz', 'approved', 'a@x.com', 'b@x.com', [
+      { fqn: 'sales.orders', status: 'approved', at: '2026-01-01' },
+      { fqn: 'orders', status: 'approved', at: '2026-01-01' },
+      { fqn: 'main.sales.refunds', status: 'approved', at: '2026-01-01' },
+    ])] as any;
+    // Without a location the name is the key: a2 is reviewed; a1 has a location, no match.
+    expect(assetGaps(assets, rev).map((g) => g.asset.id)).toEqual(['a1']);
   });
 
   it('leaves the review state unknown when reviews are not readable', () => {

@@ -1028,3 +1028,29 @@ class TestCreateInAGroupWithoutDraft:
             db=db_session, contract_data=payload, current_user='alice@example.com',
         )
         assert (created.lifecycle_stage_group_id, created.status) == (group.id, 'intake')
+
+
+class TestSqlFiltersOnAStaleCache:
+    """A group another worker created while this worker's cache is still fresh."""
+
+    def _stale(self, group_id):
+        with lifecycle_service._lock:
+            lifecycle_service._groups.pop(group_id)
+
+    def test_the_category_filter_sees_the_new_groups_stages(self, db_session):
+        group = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        pid = _product(db_session, 'live', group.id)
+        self._stale(group.id)
+        rows = db_session.query(DataProductDb).filter(lifecycle_service.category_filter(
+            db_session, DataProductDb, 'data_product', ['active'],
+        )).all()
+        assert pid in {r.id for r in rows}
+
+    def test_the_first_stage_filter_judges_rows_by_the_new_group(self, db_session):
+        group = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        pid = _product(db_session, 'intake', group.id)
+        self._stale(group.id)
+        rows = db_session.query(DataProductDb).filter(lifecycle_service.first_stage_filter(
+            DataProductDb, 'data_product', db_session,
+        )).all()
+        assert pid in {r.id for r in rows}

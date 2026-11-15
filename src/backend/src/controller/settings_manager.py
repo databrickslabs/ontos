@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
+import re
 import uuid
 import yaml
 
@@ -1580,7 +1581,8 @@ class SettingsManager:
         works when the workspace can't be reached. A volume that doesn't exist is only
         found when it is used. The check runs only when the volume, catalog or schema
         changes: the General form sends all three on every save, and a value stored
-        before this check must not block saving other settings.
+        before this check must not block saving other settings, a catalog or a schema
+        included (a stored volume name does use them, so it is checked again).
         """
         keys = ('databricks_catalog', 'databricks_schema', 'databricks_volume')
         if not any(key in settings for key in keys):
@@ -1596,6 +1598,10 @@ class SettingsManager:
         if effective == current:
             return
         volume = effective['databricks_volume']
+        # A volume this save leaves as it is and that doesn't use the catalog and schema
+        # (a path or a three-part name) can't be what makes the save fail
+        if volume == current['databricks_volume'] and re.search(r'[\s./]', volume or ''):
+            return
         # A local directory (development) is exported to as it is, as resolve_git_paths
         # does; only the bare "/Volumes" has no volume to name.
         if is_local_volume_path(volume) and (volume or '').strip().rstrip('/') != '/Volumes':

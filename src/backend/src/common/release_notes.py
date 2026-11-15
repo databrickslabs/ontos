@@ -196,6 +196,12 @@ def assemble(notes: str, fragments: List[Fragment], version: str, date: str) -> 
     released = f"{_VERSION_HEADING_PREFIX}v{version} ({date})"
     if start is None:
         raise ValueError("no Unreleased block and no fragments: nothing to release")
+    end = next(
+        (i for i in range(start + 1, len(lines)) if _is_release_heading(lines[i])), len(lines)
+    )
+    if not any(_TOP_LEVEL_BULLET_RE.match(line) for line in lines[start + 1 : end]):
+        # Nothing to release (e.g. a second run after a release): do not write an empty release.
+        raise ValueError("no fragments and the Unreleased block has no entries: nothing to release")
     lines[start] = released
     return "\n".join(lines[:start] + [UNRELEASED_HEADING, "", ""] + lines[start:])
 

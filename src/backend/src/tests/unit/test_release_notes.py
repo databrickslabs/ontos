@@ -169,6 +169,19 @@ def test_assemble_without_block_or_fragments_fails():
         assemble("# Release Notes - v1.0.0 (2026-06-22)\n", [], "1.2.0", "2026-12-01")
 
 
+def test_assemble_twice_refuses_the_second_run(tmp_path):
+    _write(tmp_path, "features", "f.md", "- **f**: new feature")
+    fragments, _ = load_fragments(tmp_path)
+    released = assemble(NOTES, fragments, "1.2.0", "2026-12-01")
+    with pytest.raises(ValueError, match="nothing to release"):
+        assemble(released, [], "1.2.1", "2026-12-02")
+
+
+def test_assemble_without_fragments_releases_entries_already_in_the_block():
+    result = assemble(NOTES, [], "1.2.0", "2026-12-01")
+    assert "# Release Notes - v1.2.0 (2026-12-01)\n\n\n## ⚠️ Upgrade Notes" in result
+
+
 def test_sections_match_the_headings_in_the_release_notes_file():
     notes = (Path(__file__).resolve().parents[4] / "docs" / "RELEASE_NOTES.md").read_text(
         encoding="utf-8"

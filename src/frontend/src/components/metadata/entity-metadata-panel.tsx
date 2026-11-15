@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useSharedAssets, useMergedMetadata, attachSharedAsset, RichTextItem, LinkItem, DocumentItem, MetadataAttachment } from '@/hooks/use-entity-metadata';
-import { rewriteImageLinks } from '@/lib/metadata-image-links';
+import { previewDocuments, rewriteImageLinks } from '@/lib/metadata-image-links';
 
 export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'concept' | 'collection' | 'compliance_policy' | 'asset';
 
@@ -689,7 +689,12 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
             {previewNote && (
               <div className="space-y-2">
                 {previewNote.short_description && <div className="text-sm text-muted-foreground">{previewNote.short_description}</div>}
-                <MarkdownViewer markdown={rewriteImageLinks(previewNote.content_markdown, [...documents, ...merged.documents])} />
+                <MarkdownViewer
+                  markdown={rewriteImageLinks(
+                    previewNote.content_markdown,
+                    previewDocuments(documents, merged.documents),
+                  )}
+                />
               </div>
             )}
           </DialogContent>

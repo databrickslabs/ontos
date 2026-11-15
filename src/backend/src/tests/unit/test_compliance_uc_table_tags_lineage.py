@@ -288,6 +288,42 @@ def test_conditions_without_keeps_only_and_parts_free_of_the_fields():
     assert enr.conditions_without(None, enr.FIELD_GROUP) == []
 
 
+# --- the shared table builder ------------------------------------------------------
+
+def test_table_entity_is_what_the_loader_yields():
+    table = _table('orders', columns=[ColumnInfo(name='id', comment='Id', partition_index=0)])
+    ws = _ws({('main', 'sales'): [table]})
+
+    loaded = list(UnityCatalogLoader(ws).load_entities(['table']))
+
+    assert loaded == [enr.table_entity(table)]
+    view = enr.table_entity(_table('v', table_type=TableType.MATERIALIZED_VIEW))
+    assert (view['type'], view['table_type']) == ('view', 'MATERIALIZED_VIEW')
+
+
+def test_one_table_enriched_alone_reports_the_fields_it_could_not_read():
+    """What a maturity gate on one table asset needs: values, or which are missing."""
+    orders = enr.table_entity(_table('orders'))
+    events = enr.table_entity(_table('events', schema='bronze', catalog='lake'))
+    runner = FakeRunner(tag_rows=[_tag('orders', 'pii')], fail={LINEAGE: 'no_access'})
+
+    enr.enrich_tables([orders, events], {TAGS, LINEAGE}, runner)
+
+    assert {params['catalog'] for _, _, params in runner.calls} == {'main', 'lake'}
+    assert orders['tags'] == {'pii': True} and events['tags'] == {}
+    assert 'upstream_count' not in orders
+    assert set(enr.unavailable_fields_read(orders, {'upstream_count', 'tags'})) == {
+        'upstream_count',
+    }
+
+
+def test_uc_tag_keys_have_no_namespace():
+    entity = {'type': 'table', 'tags': {'pii': True}}
+
+    assert _rule_eval("MATCH (t:table) ASSERT HAS_TAG('pii')", entity) is True
+    assert _rule_eval("MATCH (t:table) ASSERT HAS_TAG('governance/pii')", entity) is False
+
+
 # --- the warehouse runner -------------------------------------------------------------
 
 def _response(state, rows=None, columns=('a', 'b'), next_chunk=None, error=None):

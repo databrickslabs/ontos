@@ -485,6 +485,9 @@
     "targetNotPickable": "{{type}} no se puede elegir aquí. Se gestiona en su propia página.",
     "noAccessToTarget": "No tiene acceso a {{type}}. Pida acceso de lectura a un administrador para vincularlo."
   },
+  "assetFormStoredProperties": {
+    "loadError": "No se pudieron cargar las propiedades guardadas del activo, así que no se puede guardar aquí. Cierre el diálogo e inténtelo de nuevo."
+  },
   "assetForm": {
     "groups": {
       "basic": "Información básica",

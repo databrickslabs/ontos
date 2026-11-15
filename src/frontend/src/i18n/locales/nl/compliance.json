@@ -185,7 +185,8 @@
       "no_warehouse": "er is geen SQL-warehouse geconfigureerd",
       "no_access": "geen toegang tot de systeemtabel",
       "query_failed": "de query is mislukt",
-      "timed_out": "de query liep nog bij de tijdslimiet"
+      "timed_out": "de query liep nog bij de tijdslimiet",
+      "budget_exceeded": "de uitvoering heeft haar limiet aan query's op het SQL-warehouse bereikt"
     }
   },
   "saveErrors": {

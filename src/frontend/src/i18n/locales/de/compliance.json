@@ -185,7 +185,8 @@
       "no_warehouse": "kein SQL-Warehouse konfiguriert",
       "no_access": "kein Zugriff auf die Systemtabelle",
       "query_failed": "die Abfrage ist fehlgeschlagen",
-      "timed_out": "die Abfrage lief beim Zeitlimit noch"
+      "timed_out": "die Abfrage lief beim Zeitlimit noch",
+      "budget_exceeded": "der Lauf hat sein Limit an Abfragen auf dem SQL-Warehouse erreicht"
     }
   },
   "saveErrors": {

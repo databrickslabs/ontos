@@ -368,8 +368,13 @@ Primary and foreign keys are not available yet.
 #### Table and View Tags and Lineage
 These fields come from system tables, read through the SQL warehouse the app is configured
 with (`DATABRICKS_WAREHOUSE_ID`). They are loaded only for a rule that reads them, with one
-statement per catalog and field group (never one per table), restricted to the catalogs and
-schemas selected by the `AND`-ed parts of the rule's `WHERE` that don't read these fields:
+statement per field group for each chunk of a catalog's tables (whole schemas, about 500
+tables; never one per table), restricted to the catalogs and schemas selected by the
+`AND`-ed parts of the rule's `WHERE` that don't read these fields. A chunk is read only when
+the run gets to it, so a run that stops at its `limit` reads no more. The policies of one
+compliance-checks job run share the statements: a later policy that needs the same tags or
+lineage reuses them. A run sends at most 100 statements (a job run, 100 for all its
+policies); past that, the fields are not read (reason `budget_exceeded`):
 
 - `tags` - The table's governed tags as `{key: value}`, read with `HAS_TAG` / `TAG`. Source:
   `system.information_schema.table_tags`; the same statement fills `columns[].tags` from
@@ -462,7 +467,8 @@ Extend the evaluator to support custom functions by modifying `evaluate_function
 - **Lazy Evaluation**: Entities are loaded on-demand as iterators
 - **WHERE Filtering**: Applied before ASSERT to reduce evaluations
 - **Tags and Lineage**: Read from system tables only when the rule uses them, once per
-  catalog, and only for the schemas a `WHERE` on catalog or schema selects
+  chunk of a catalog's tables, only for the schemas a `WHERE` on catalog or schema selects,
+  and at most 100 statements per run
 - **Limits**: Use the `limit` parameter when testing rules
 
 ## Integration

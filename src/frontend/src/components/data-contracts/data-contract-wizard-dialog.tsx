@@ -13,9 +13,7 @@ import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
-import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups'
-import { initialStage, selectedGroup } from '@/components/lifecycle/lifecycle-group-picker'
-import { orderedStages } from '@/lib/lifecycle-stages'
+import { useStatusOptions } from '@/hooks/use-lifecycle-stage-groups'
 
 type WizardProps = {
   isOpen: boolean
@@ -64,21 +62,20 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const { t } = useTranslation(['data-contracts', 'common'])
   const { refetch: refetchDomains } = useDomains()
   const { toast } = useToast()
-  // The stages of the contract's lifecycle (the default one for a new
-  // contract), from the API; an edited contract's status is always offered
-  const { groups: lifecycleGroups } = useLifecycleStageGroups('data_contract')
-  const contractLifecycle = selectedGroup(
-    lifecycleGroups, initial?.lifecycle_stage_group_id ?? null,
-  )
-  const lifecycleKeys = contractLifecycle
-    ? orderedStages(contractLifecycle).map((st) => st.key)
-    : ['draft']
-  // Where a new contract (and a partial save) starts: its lifecycle's first stage
-  const initialKey = initialStage(contractLifecycle)?.key ?? 'draft'
+  // The statuses offered, from the API: a new contract's group stages; an
+  // edited one's current stage and the moves its group allows
   const currentStatus = typeof initial?.status === 'string' ? initial.status.toLowerCase() : ''
-  const statuses = currentStatus && !lifecycleKeys.includes(currentStatus)
-    ? [currentStatus, ...lifecycleKeys]
-    : lifecycleKeys
+  const { options: statusStages, initial: initialStageOfGroup } = useStatusOptions(
+    'data_contract',
+    {
+      entityId: initial?.id ?? null,
+      groupId: initial?.lifecycle_stage_group_id ?? null,
+      currentStatus,
+    },
+  )
+  const statuses = statusStages.length ? statusStages.map((st) => st.key) : ['draft']
+  // Where a new contract (and a partial save) starts: its lifecycle's first stage
+  const initialKey = initialStageOfGroup?.key ?? 'draft'
 
   // Helper function to handle domain-related errors
   const handleDomainError = async (error: any) => {

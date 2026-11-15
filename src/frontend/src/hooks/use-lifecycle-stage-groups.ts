@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import type {
   EntityLifecycle,
@@ -16,8 +16,11 @@ export function useLifecycleStageGroups(entityType?: LifecycleEntityType | null)
   const [groups, setGroups] = useState<LifecycleStageGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Only the latest request sets the state (a slow older one is dropped)
+  const latest = useRef(0);
 
   const reload = useCallback(async () => {
+    const request = ++latest.current;
     if (entityType === null) {
       setGroups([]);
       setLoading(false);
@@ -28,6 +31,7 @@ export function useLifecycleStageGroups(entityType?: LifecycleEntityType | null)
       ? `/api/lifecycle-stage-groups?entity_type=${entityType}`
       : '/api/lifecycle-stage-groups';
     const response = await get<LifecycleStageGroup[]>(url);
+    if (request !== latest.current) return;
     if (response.error) {
       setError(response.error);
       setGroups([]);
@@ -91,8 +95,11 @@ export function useEntityLifecycle(
   const { get } = useApi();
   const [lifecycle, setLifecycle] = useState<EntityLifecycle | null>(null);
   const [loading, setLoading] = useState(Boolean(entityId));
+  // Only the latest request sets the state (a slow older one is dropped)
+  const latest = useRef(0);
 
   const reload = useCallback(async () => {
+    const request = ++latest.current;
     if (!entityId) {
       setLifecycle(null);
       setLoading(false);
@@ -102,6 +109,7 @@ export function useEntityLifecycle(
     const response = await get<EntityLifecycle>(
       `/api/lifecycle/${entityType}/${encodeURIComponent(entityId)}`,
     );
+    if (request !== latest.current) return;
     setLifecycle(response.error ? null : response.data);
     setLoading(false);
     // refreshKey: a reload when the caller's entity changed

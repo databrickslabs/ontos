@@ -702,3 +702,32 @@ def test_score_counts_only_evaluated_entities(db_session):
     from src.repositories.compliance_repository import compliance_result_repo
     failed = compliance_result_repo.list_for_run(db_session, run_id=run.id, only_failed=True)
     assert [r.object_name for r in failed] == ['raw_orders']
+
+
+def test_a_run_with_nothing_evaluated_keeps_the_previous_score(db_session):
+    """No 0 % for a policy whose latest run could read nothing (Isaac review)."""
+    from datetime import datetime, timedelta
+
+    ws = _ws({('main', 'sales'): [_table('orders')]})
+    rule = "MATCH (t:table) ASSERT HAS_TAG('pii')"
+    policy = _policy(db_session, rule)
+    settings = SimpleNamespace(DATABRICKS_WAREHOUSE_ID='wh-1')
+    manager = ComplianceManager()
+    with patch('src.common.workspace_client.get_workspace_client', return_value=ws), \
+            patch('src.common.config.get_settings', return_value=settings), \
+            patch('src.controller.compliance_manager.WarehouseSqlRunner',
+                  return_value=FakeRunner(tag_rows=[_tag('orders', 'pii')])):
+        scored = manager.run_policy_inline(db_session, policy=policy)
+    settings.DATABRICKS_WAREHOUSE_ID = ''
+    with patch('src.common.workspace_client.get_workspace_client', return_value=ws), \
+            patch('src.common.config.get_settings', return_value=settings):
+        unread = manager.run_policy_inline(db_session, policy=policy)
+    scored.started_at = datetime.utcnow() - timedelta(minutes=1)
+    db_session.flush()
+
+    assert scored.score == 100.0
+    assert unread.warning_code == 'rule_fields_unavailable'
+    assert (unread.success_count, unread.failure_count) == (0, 0)
+    assert manager._latest_score(db_session, policy.id) == 100.0
+    today = [p for p in manager.get_compliance_trend(db_session, days=1)]
+    assert today[-1]['compliance'] == 100.0

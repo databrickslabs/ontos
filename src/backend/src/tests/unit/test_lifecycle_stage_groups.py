@@ -182,6 +182,30 @@ class TestGroupNames:
         assert err.value.code == 'lifecycle_group_name_required'
 
 
+class TestConcurrentEdits:
+    def test_a_save_based_on_an_older_read_is_refused(self, db_session):
+        from datetime import datetime, timezone
+
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        read_at = datetime(2026, 11, 14, 10, 0, tzinfo=timezone.utc)
+        group.updated_at = datetime(2026, 11, 14, 10, 5, tzinfo=timezone.utc)  # saved since
+        db_session.commit()
+        changed = _looping_group()
+        changed['stages'][2]['label'] = 'Periodic review'
+        with pytest.raises(LifecycleGroupConflictError) as err:
+            lifecycle_service.save_group(db_session, changed, 'bob', group_id=group.id,
+                                         expected_updated_at=read_at)
+        assert err.value.code == 'lifecycle_group_changed'
+
+    def test_a_save_based_on_the_current_read_saves(self, db_session):
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        changed = _looping_group()
+        changed['stages'][2]['label'] = 'Periodic review'
+        saved = lifecycle_service.save_group(db_session, changed, 'bob', group_id=group.id,
+                                             expected_updated_at=group.updated_at)
+        assert {s.key: s.label for s in saved.stages}['needs_review'] == 'Periodic review'
+
+
 class TestSaveValidation:
     @pytest.mark.parametrize('change, code', [
         (lambda g: g['stages'][0].update(is_initial=False), 'lifecycle_group_initial_stage'),

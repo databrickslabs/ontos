@@ -35,6 +35,7 @@ from ..common.search_config_loader import get_search_config_loader
 from ..common.authorization import (
     PermissionChecker,
     enforce_feature_permission,
+    has_feature_permission,
     require_demo_admin_or_setup_token,
 )
 from ..common.features import FeatureAccessLevel
@@ -79,12 +80,30 @@ async def require_settings_write(
 
 @router.get('/settings')
 async def get_settings_route(
+    request: Request,
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
     manager: SettingsManager = Depends(get_settings_manager),
-    _: bool = Depends(PermissionChecker('settings-general', FeatureAccessLevel.READ_ONLY)),
 ):
-    """Get all settings including available job clusters"""
+    """Get all settings including available job clusters.
+
+    ``settings-general`` Read-only gets everything. A caller with only ``settings-ui``
+    Read-only gets just the ``ui_*`` keys, which the UI Customization page loads.
+    """
+    if await has_feature_permission(
+        'settings-general', FeatureAccessLevel.READ_ONLY, user_details, request
+    ):
+        ui_only = False
+    else:
+        await enforce_feature_permission(
+            'settings-ui', FeatureAccessLevel.READ_ONLY, user_details, request
+        )
+        ui_only = True
     try:
         settings_data = manager.get_settings() # Renamed variable to avoid conflict
+        if ui_only:
+            return {
+                k: v for k, v in settings_data.items() if k.startswith(UI_SETTINGS_KEY_PREFIX)
+            }
         return settings_data
     except Exception as e:
         logger.error("Error getting settings", exc_info=True)

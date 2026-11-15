@@ -188,7 +188,7 @@ rule editor to try a criterion on one entity (at most 10 tests a minute per user
   over unchanged text makes no call. Verdicts older than
   `COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS` (default 30) are asked again, and
   deleted when a run starts.
-- Budget: `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN` model calls (default 200; a
+- Budget: `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN` model calls (default 100; a
   check makes two, the scan and the verdict; cached verdicts make none). It
   covers one policy run from the UI, and the whole run of the Compliance Checks
   job, shared by its policies. The checks past it fail with

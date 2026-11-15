@@ -154,3 +154,13 @@ def test_the_routes_answer_429_without_calls_left():
         plain = "MATCH (d:domain)\nASSERT 1 = 1"
         compliance_routes.require_llm_check_quota(MagicMock(), plain, user)
         assert manager.require_llm_quota.call_count == 1
+
+
+def test_the_default_limits_are_conservative():
+    from src.common.config import Settings
+
+    fields = Settings.model_fields
+    assert fields['COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN'].default == 100
+    assert fields['COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY'].default == 400
+    # Settings without the field: the same per-run default
+    assert llm.LlmChecker(SimpleNamespace(LLM_ENABLED=True)).max_calls == 100

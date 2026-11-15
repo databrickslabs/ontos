@@ -334,7 +334,7 @@ class LlmChecker:
             or LLM_INJECTION_CHECK_PROMPT_SECURE_DEFAULT
         )
         if max_calls is None:
-            max_calls = getattr(settings, 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN', 200)
+            max_calls = getattr(settings, 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN', 100)
         self.max_calls = max(0, int(max_calls))
         self._cache = cache if cache is not None else MemoryLlmCheckCache()
         self._client_factory = client_factory or self._default_client_factory(settings)

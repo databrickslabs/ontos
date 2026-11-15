@@ -86,7 +86,7 @@ def _llm_job_parameters(settings: Any) -> Dict[str, str]:
         'llm_enabled': 'true' if getattr(settings, 'LLM_ENABLED', False) else 'false',
         'llm_endpoint': str(getattr(settings, 'LLM_ENDPOINT', None) or ''),
         'llm_check_max_calls_per_run': str(
-            getattr(settings, 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN', 200)
+            getattr(settings, 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN', 100)
         ),
     }
 

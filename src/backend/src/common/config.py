@@ -203,7 +203,7 @@ class Settings(BaseSettings):
     # Most LLM_CHECK calls one compliance run makes to the serving endpoint (cached
     # verdicts don't count); the checks past it fail with llm_check_budget_exceeded.
     COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN: int = Field(
-        200, ge=0, env='COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN'
+        100, ge=0, env='COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN'
     )
     # Most LLM_CHECK model calls the compliance runs and rule tests one user starts
     # may make a day (UTC); past it, their checks fail with

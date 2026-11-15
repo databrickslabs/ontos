@@ -294,3 +294,20 @@ def test_the_job_sets_every_not_null_column_the_models_require(engine):
         required = {c.name for c in Base.metadata.tables[table].columns
                     if not c.nullable and c.server_default is None and not c.primary_key}
         assert required - inserted[table] == set(), table
+
+
+def test_the_job_writes_timezone_aware_timestamps(engine):
+    seen = []
+
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        values = parameters.values() if isinstance(parameters, dict) else parameters
+        seen.extend(v for v in values if isinstance(v, datetime))
+
+    event.listen(engine, 'before_cursor_execute', capture)
+    _import(engine)
+    _import_contract(engine)
+    job.create_domains(engine, {'finance': [job.DiscoveredObject(
+        'SCHEMA', 'main.finance', {'data_domain_finance': ''})]}, 'skip', created_by='job')
+    event.remove(engine, 'before_cursor_execute', capture)
+
+    assert seen and all(v.tzinfo is not None for v in seen)

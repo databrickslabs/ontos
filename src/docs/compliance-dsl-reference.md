@@ -202,8 +202,11 @@ rule editor to try a criterion on one entity (at most 10 tests a minute per user
   failed, and the run's score covers only the judged entities (the run shows
   how many were not evaluated). An empty text is the exception: there is
   nothing to judge, so the entity fails.
-- Cached: a verdict is stored per text, criterion, endpoint and prompts, so a run
-  over unchanged text makes no call. Verdicts older than
+- Cached: a verdict is stored per text, criterion, endpoint, the model the
+  endpoint serves (read from its configuration once per run) and prompts, so a
+  run over unchanged text makes no call, and repointing an endpoint at another
+  model asks again. The model that answered is stored with the verdict. Calls
+  are made at temperature 0 (endpoints that reject it are called without it). Verdicts older than
   `COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS` (default 30) are asked again, and
   deleted when a run starts.
 - Budget: `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN` model calls (default 100; a

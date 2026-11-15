@@ -93,7 +93,9 @@ class ComplianceLlmCheckCacheDb(Base):
     __tablename__ = 'compliance_llm_check_cache'
 
     key = Column(String(64), primary_key=True)  # sha256 hex, see compliance_llm_check.cache_key
-    model = Column(String, nullable=False)
+    model = Column(String, nullable=False)  # the serving endpoint
+    # The model that answered (the reply's ``model``), for audits of old verdicts
+    response_model = Column(String, nullable=True)
     passed = Column(Boolean, nullable=False)
     reason = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)

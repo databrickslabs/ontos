@@ -61,7 +61,10 @@ class ComplianceLlmCheckCacheRepository(
     def get_verdict(self, db: Session, key: str) -> Optional[ComplianceLlmCheckCacheDb]:
         return db.get(ComplianceLlmCheckCacheDb, key)
 
-    def put_verdict(self, db: Session, *, key: str, model: str, passed: bool, reason: str) -> None:
+    def put_verdict(
+        self, db: Session, *, key: str, model: str, passed: bool, reason: str,
+        response_model: Optional[str] = None,
+    ) -> None:
         """Store a verdict, in a savepoint: a row another run wrote first is kept.
 
         A row past its max age (asked again) is overwritten with the new verdict.
@@ -70,12 +73,14 @@ class ComplianceLlmCheckCacheRepository(
         existing = db.get(ComplianceLlmCheckCacheDb, key)
         if existing is not None:
             existing.model, existing.passed, existing.reason = model, passed, reason
+            existing.response_model = response_model
             existing.created_at = utc_now()
             return
         try:
             with db.begin_nested():
                 db.add(ComplianceLlmCheckCacheDb(
                     key=key, model=model, passed=passed, reason=reason,
+                    response_model=response_model,
                 ))
         except IntegrityError:
             # Written by a concurrent run between the read and the insert

@@ -30,6 +30,7 @@ def upgrade() -> None:
         'compliance_llm_check_cache',
         sa.Column('key', sa.String(length=64), nullable=False),
         sa.Column('model', sa.String(), nullable=False),
+        sa.Column('response_model', sa.String(), nullable=True),
         sa.Column('passed', sa.Boolean(), nullable=False),
         sa.Column('reason', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),

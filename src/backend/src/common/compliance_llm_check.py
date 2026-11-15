@@ -22,8 +22,10 @@ whatever the expression around the call is (``NOT LLM_CHECK(...)`` too): they
 are raised, not returned as False.
 The reason is the model's text: untrusted too, capped, and shown as plain text.
 
-Verdicts are cached by a sha256 of the text, the criterion, the model and both
-prompts (``cache_key``), in memory for a run and in
+Verdicts are cached by a sha256 of the text, the criterion, the endpoint and
+what it serves (``served_model_of``), and both prompts (``cache_key``); the
+model that answered (``response.model``) is stored with the verdict. Calls are
+made at temperature 0. Verdicts are kept, in memory for a run and in
 ``compliance_llm_check_cache`` across runs; cached verdicts don't count
 against the budget, and rows older than the max age are not used and are
 deleted when a run starts. Errors and rejected texts are never cached.
@@ -255,7 +257,10 @@ class MemoryLlmCheckCache:
     def get(self, key: str) -> Optional[Tuple[bool, str]]:
         return self._verdicts.get(key)
 
-    def put(self, key: str, model: str, passed: bool, reason: str) -> None:
+    def put(
+        self, key: str, model: str, passed: bool, reason: str,
+        response_model: Optional[str] = None,
+    ) -> None:
         self._verdicts[key] = (passed, reason)
 
 
@@ -293,12 +298,16 @@ class DbLlmCheckCache(MemoryLlmCheckCache):
         super().put(key, row.model, *verdict)
         return verdict
 
-    def put(self, key: str, model: str, passed: bool, reason: str) -> None:
+    def put(
+        self, key: str, model: str, passed: bool, reason: str,
+        response_model: Optional[str] = None,
+    ) -> None:
         super().put(key, model, passed, reason)
         from src.repositories.compliance_repository import compliance_llm_check_cache_repo
 
         compliance_llm_check_cache_repo.put_verdict(
             self._db, key=key, model=model, passed=passed, reason=reason,
+            response_model=response_model,
         )
 
 
@@ -357,6 +366,39 @@ class LlmCheckQuotaExceededError(CodedValueError):
     code = QUOTA_EXCEEDED
 
 
+def served_model_of(endpoint: str, workspace_client: Any = None) -> str:
+    """What a serving endpoint serves (entity names and versions), or '' if unknown.
+
+    Part of the cache key, so repointing a custom endpoint at another model (or
+    version) asks again instead of reusing the old model's verdicts. One
+    ``serving_endpoints.get`` per checker; a failure leaves the endpoint name alone.
+    """
+    try:
+        if workspace_client is None:
+            from src.common.workspace_client import get_workspace_client
+
+            workspace_client = get_workspace_client()
+        config = getattr(workspace_client.serving_endpoints.get(endpoint), 'config', None)
+        entities = getattr(config, 'served_entities', None)
+        if not isinstance(entities, (list, tuple)):
+            return ''
+        parts = []
+        for entity in entities:
+            name = getattr(entity, 'entity_name', None)
+            version = getattr(entity, 'entity_version', None)
+            for nested in ('foundation_model', 'external_model'):
+                inner = getattr(getattr(entity, nested, None), 'name', None)
+                if isinstance(inner, str) and inner:
+                    name = name if isinstance(name, str) and name else inner
+            if isinstance(name, str) and name:
+                parts.append(f"{name}:{version}" if isinstance(version, str) and version
+                             else name)
+        return ','.join(sorted(parts))
+    except Exception as e:
+        logger.warning("LLM_CHECK: could not read serving endpoint %s: %s", endpoint, e)
+        return ''
+
+
 class LlmChecker:
     """Runs the LLM_CHECKs of one compliance run, with a cache and a call budget."""
 
@@ -368,6 +410,7 @@ class LlmChecker:
         max_calls: Optional[int] = None,
         client_factory: Optional[Callable[[], Any]] = None,
         quota: Optional[DbLlmCallQuota] = None,
+        model_resolver: Optional[Callable[[str], str]] = None,
     ):
         from src.common.config import LLM_INJECTION_CHECK_PROMPT_SECURE_DEFAULT
 
@@ -384,6 +427,12 @@ class LlmChecker:
         self._cache = cache if cache is not None else MemoryLlmCheckCache()
         self._client_factory = client_factory or self._default_client_factory(settings)
         self._client = None
+        # What the endpoint serves (see served_model_of), resolved once, for the key
+        self._model_resolver = model_resolver
+        self._served_model: Optional[str] = None
+        # Endpoints that rejected temperature=0 get the call again without it
+        self._send_temperature = True
+        self._response_model: Optional[str] = None
         # The daily calls of the user who started the run (None: a scheduled run)
         self.quota = quota
         self.calls = 0
@@ -416,7 +465,7 @@ class LlmChecker:
         if len(text) > LLM_CHECK_MAX_TEXT_CHARS:
             raise self._error(criterion, TEXT_TOO_LONG)
 
-        key = cache_key(text, criterion, self._endpoint, self._scan_prompt)
+        key = cache_key(text, criterion, self._model_key(), self._scan_prompt)
         hit = self._cache.get(key)
         if hit is not None:
             self.cache_hits += 1
@@ -433,13 +482,21 @@ class LlmChecker:
         calls_before = self.calls
         try:
             self._scan(text, criterion)
-            passed, reason = self._ask(text, criterion)
+            passed, reason, response_model = self._ask(text, criterion)
         finally:
             unused = CALLS_PER_CHECK - (self.calls - calls_before)
             if self.quota is not None and unused > 0:
                 self.quota.release(unused)
-        self._cache.put(key, self._endpoint, passed, reason)
+        self._cache.put(key, self._endpoint, passed, reason, response_model=response_model)
         return LlmCheckResult(criterion, passed, reason)
+
+    def _model_key(self) -> str:
+        """The endpoint and what it serves: the ``model`` part of the cache key."""
+        if self._served_model is None:
+            self._served_model = (
+                self._model_resolver(self._endpoint) if self._model_resolver else ''
+            ) or ''
+        return f"{self._endpoint}@{self._served_model}" if self._served_model else self._endpoint
 
     def _scan(self, text: str, criterion: str) -> None:
         """Phase 1: the injection scan; raises llm_check_text_rejected unless SAFE."""
@@ -456,14 +513,14 @@ class LlmChecker:
         logger.warning("LLM_CHECK: the safety check flagged the text (%d characters)", len(text))
         raise self._error(criterion, TEXT_REJECTED)
 
-    def _ask(self, text: str, criterion: str) -> Tuple[bool, str]:
-        """Phase 2: the verdict on the text."""
+    def _ask(self, text: str, criterion: str) -> Tuple[bool, str, Optional[str]]:
+        """Phase 2: the verdict on the text, and the model that answered (``response.model``)."""
         reply = self._complete(build_messages(text, criterion, secrets.token_hex(8)), criterion)
         verdict = parse_verdict(reply)
         if verdict is None:
             logger.warning("LLM_CHECK: reply is not a verdict (%d characters)", len(reply))
             raise self._error(criterion, INVALID_REPLY)
-        return verdict
+        return verdict[0], verdict[1], self._response_model
 
     def _complete(self, messages: List[Dict[str, str]], criterion: str) -> str:
         """One model call: the answer text, or LlmCheckError for anything else."""
@@ -471,13 +528,13 @@ class LlmChecker:
         try:
             if self._client is None:
                 self._client = self._client_factory()
-            response = self._client.chat.completions.create(
-                model=self._endpoint, messages=messages, max_tokens=LLM_CHECK_MAX_TOKENS,
-            )
+            response = self._create(messages)
         except Exception as e:
             logger.error("LLM_CHECK call to endpoint %s failed: %s", self._endpoint, e)
             raise self._error(criterion, CALL_FAILED) from e
 
+        model = getattr(response, 'model', None)
+        self._response_model = model if isinstance(model, str) and model else None
         choice = response.choices[0] if getattr(response, 'choices', None) else None
         message = getattr(choice, 'message', None)
         finish_reason = getattr(choice, 'finish_reason', None)
@@ -498,6 +555,25 @@ class LlmChecker:
             logger.warning("LLM_CHECK: reply did not finish (finish_reason=%s)", finish_reason)
             raise self._error(criterion, TRUNCATED)
         return reply
+
+    def _create(self, messages: List[Dict[str, str]]) -> Any:
+        """The chat call, at temperature 0 (as repeatable as the endpoint allows).
+
+        Some endpoints (Claude with reasoning on Databricks) reject the parameter:
+        the call is made again without it, and so are this checker's later calls.
+        """
+        kwargs: Dict[str, Any] = {
+            'model': self._endpoint, 'messages': messages, 'max_tokens': LLM_CHECK_MAX_TOKENS,
+        }
+        if self._send_temperature:
+            try:
+                return self._client.chat.completions.create(**kwargs, temperature=0)
+            except Exception as e:
+                if 'temperature' not in str(e).lower():
+                    raise
+                logger.warning("LLM_CHECK: endpoint %s rejected temperature=0", self._endpoint)
+                self._send_temperature = False
+        return self._client.chat.completions.create(**kwargs)
 
     @staticmethod
     def _error(criterion: str, code: str) -> LlmCheckError:

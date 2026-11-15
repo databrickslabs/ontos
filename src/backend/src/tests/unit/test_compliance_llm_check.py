@@ -463,3 +463,95 @@ def test_an_external_base_url_fails_closed_without_a_call():
 
     assert raised.value.code == llm.EXTERNAL_ENDPOINT
     assert fake.calls == [] and fake.scans == []
+
+
+# --- Determinism: temperature 0, the served model in the key ----------------
+
+
+def test_calls_are_made_at_temperature_zero():
+    fake = FakeLlm(_reply('PASS: ok'))
+    _checker(fake).check('Daily grain', GRAIN)
+
+    assert fake.scans[0]['temperature'] == 0
+    assert fake.calls[0]['temperature'] == 0
+
+
+def test_an_endpoint_that_rejects_temperature_is_called_without_it():
+    fake = FakeLlm(_reply('PASS: ok'))
+    create = fake._create
+    rejected = []
+
+    def picky(**kwargs):
+        if 'temperature' in kwargs:
+            rejected.append(kwargs)
+            raise ValueError("400 BAD_REQUEST: temperature is not supported")
+        return create(**kwargs)
+
+    fake.chat.completions.create = picky
+    checker = _checker(fake)
+
+    assert checker.check('Daily grain', GRAIN).passed
+    assert checker.check('Weekly grain', GRAIN).passed
+    # Rejected once; the later calls go without it
+    assert len(rejected) == 1
+    assert checker.calls == 4
+    assert all('temperature' not in c for c in fake.calls + fake.scans)
+
+
+def test_the_served_model_is_part_of_the_cache_key():
+    cache = llm.MemoryLlmCheckCache()
+    resolved = []
+
+    def resolver(model):
+        def resolve(endpoint):
+            resolved.append(endpoint)
+            return model
+        return resolve
+
+    first = FakeLlm(_reply('PASS: ok'))
+    checker = _checker(first, cache=cache, model_resolver=resolver('llama:1'))
+    checker.check('Daily grain', GRAIN)
+    checker.check('Weekly grain', GRAIN)
+    assert resolved == ['test-endpoint']  # once per checker
+
+    # Same endpoint, same model: cached
+    same = FakeLlm(_reply('FAIL: x'))
+    assert _checker(same, cache=cache, model_resolver=resolver('llama:1')).check(
+        'Daily grain', GRAIN,
+    ).cached
+    # The endpoint now serves another model: asked again
+    other = FakeLlm(_reply('FAIL: x'))
+    result = _checker(other, cache=cache, model_resolver=resolver('llama:2')).check(
+        'Daily grain', GRAIN,
+    )
+    assert (result.cached, len(other.calls)) == (False, 1)
+
+
+def test_the_answering_model_is_stored_with_the_verdict(db_session):
+    from src.db_models.compliance import ComplianceLlmCheckCacheDb
+
+    reply = _reply('PASS: daily grain')
+    reply.model = 'meta-llama-3.3-70b'
+    _checker(FakeLlm(reply), cache=llm.DbLlmCheckCache(db_session)).check('Daily grain', GRAIN)
+
+    row = db_session.query(ComplianceLlmCheckCacheDb).one()
+    assert (row.model, row.response_model) == ('test-endpoint', 'meta-llama-3.3-70b')
+
+
+def test_served_model_of_reads_the_endpoint_config():
+    entity = SimpleNamespace(entity_name='system.ai.llama', entity_version='3',
+                             foundation_model=None, external_model=None)
+    external = SimpleNamespace(entity_name=None, entity_version=None, foundation_model=None,
+                               external_model=SimpleNamespace(name='gpt-x'))
+    ws = SimpleNamespace(serving_endpoints=SimpleNamespace(
+        get=lambda name: SimpleNamespace(config=SimpleNamespace(
+            served_entities=[entity, external],
+        )),
+    ))
+    assert llm.served_model_of('ep', ws) == 'gpt-x,system.ai.llama:3'
+
+    def failing(name):
+        raise RuntimeError('no permission')
+
+    broken = SimpleNamespace(serving_endpoints=SimpleNamespace(get=failing))
+    assert llm.served_model_of('ep', broken) == ''

@@ -33,7 +33,7 @@ from src.common.api_errors import CodedValueError
 from src.common.compliance_llm_check import (
     BUDGET_EXCEEDED, CALLS_PER_CHECK, QUOTA_EXCEEDED, DbLlmCallQuota, DbLlmCheckCache,
     LlmCheckError, LlmChecker, LlmCheckQuotaExceededError, counts_as_failure,
-    seconds_to_next_utc_day,
+    seconds_to_next_utc_day, served_model_of,
 )
 from src.common.compliance_entities import (
     create_entity_iterator,
@@ -823,7 +823,10 @@ class ComplianceManager:
             except Exception as e:
                 logger.warning("Could not delete expired LLM_CHECK verdicts: %s", e)
         quota = cls.llm_quota(db, quota_user) if quota_user else None
-        return LlmChecker(settings, cache=cache, max_calls=max_calls, quota=quota)
+        return LlmChecker(
+            settings, cache=cache, max_calls=max_calls, quota=quota,
+            model_resolver=served_model_of,
+        )
 
     def test_rule_on_sample(
         self, db: Session, *, rule: str, entity: Optional[str] = None,

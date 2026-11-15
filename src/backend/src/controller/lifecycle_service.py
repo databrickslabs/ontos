@@ -981,6 +981,12 @@ class LifecycleService:
         from src.db_models.lifecycle_stage_groups import LifecycleStageGroupDb
         from src.repositories.lifecycle_stage_groups_repository import lifecycle_stage_groups_repo
 
+        # Stored trimmed, so "Foo " and "Foo" are the same name
+        data = {**data, 'name': (data.get('name') or '').strip()}
+        if not data['name']:
+            raise LifecycleGroupInvalidError(
+                'lifecycle_group_name_required', "A group needs a name",
+            )
         self.validate_definition(data)
         same_name = lifecycle_stage_groups_repo.get_by_name(db, data['entity_type'], data['name'])
         if same_name is not None and same_name.id != group_id:

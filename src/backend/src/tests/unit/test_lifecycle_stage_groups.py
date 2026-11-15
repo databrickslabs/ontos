@@ -168,6 +168,20 @@ class TestDeadEnds:
         lifecycle_service.validate_definition(group)
 
 
+class TestGroupNames:
+    def test_a_name_is_stored_trimmed_and_a_padded_duplicate_is_refused(self, db_session):
+        saved = lifecycle_service.save_group(db_session, _looping_group('  Foo '), 'admin')
+        assert saved.name == 'Foo'
+        with pytest.raises(LifecycleGroupConflictError) as err:
+            lifecycle_service.save_group(db_session, _looping_group('foo  '), 'admin')
+        assert err.value.code == 'lifecycle_group_name_taken'
+
+    def test_a_blank_name_is_refused(self, db_session):
+        with pytest.raises(LifecycleGroupInvalidError) as err:
+            lifecycle_service.save_group(db_session, _looping_group('   '), 'admin')
+        assert err.value.code == 'lifecycle_group_name_required'
+
+
 class TestSaveValidation:
     @pytest.mark.parametrize('change, code', [
         (lambda g: g['stages'][0].update(is_initial=False), 'lifecycle_group_initial_stage'),

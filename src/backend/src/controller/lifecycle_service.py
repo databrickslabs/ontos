@@ -612,8 +612,12 @@ class LifecycleService:
     def stage_for_new(
         self, db: Optional[Session], entity_type: str, group_id: Optional[str],
         status: Optional[str], default_category: Optional[str] = None,
+        model_default: Optional[str] = None,
     ) -> Tuple[Optional[str], str]:
         """``(group_id, stage key)`` a new entity starts in.
+
+        ``model_default``: the status the create model fills in when none is sent
+        (``draft``); in a group without that stage it means "no status".
 
         ``group_id`` must be a group of ``entity_type`` (None = the default
         group). Without a status the entity starts in the initial stage, or in
@@ -625,6 +629,8 @@ class LifecycleService:
         group = self.require_group(db, entity_type, group_id) if group_id else \
             self.default_group(db, entity_type)
         key = _normalized(status)
+        if key and key == model_default and key not in group.stages:
+            key = ''
         if not key:
             stage = None
             if default_category:

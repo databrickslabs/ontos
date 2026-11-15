@@ -120,16 +120,26 @@ def _transition_status(
 def _update_refusal(
     ctx: ToolContext, tool_name: str, contract: Any, changes: Dict[str, Any]
 ) -> Optional[ToolResult]:
-    """The PUT route's before_update gates (``run_update_gates``); None = may update."""
-    passed, executions = ctx.data_contracts_manager.run_update_gates(
-        ctx.db, contract, changes, caller_email(ctx)
-    )
+    """The PUT route's before_update gates (``run_update_gates``); None = may update.
+
+    A ``fail_closed`` gate that couldn't be evaluated raises its coded error,
+    audited here as a refused update.
+    """
+    contract_id = str(contract.id)
+    try:
+        passed, executions = ctx.data_contracts_manager.run_update_gates(
+            ctx.db, contract, changes, caller_email(ctx)
+        )
+    except CodedValueError as err:
+        audit_change(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, "UPDATE", False, {
+            "params": {"contract_id": contract_id}, "error_code": err.code,
+        })
+        raise
     if passed:
         return None
     from src.common.workflow_triggers import (
         describe_failed_executions, failed_execution_reasons,
     )
-    contract_id = str(contract.id)
     audit_change(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, "UPDATE", False, {
         "params": {"contract_id": contract_id}, "error_code": UPDATE_BLOCKED_CODE,
     })

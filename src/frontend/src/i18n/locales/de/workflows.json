@@ -115,6 +115,10 @@
       "descriptionPlaceholder": "Workflow-Beschreibung",
       "failClosed": "Übergang ablehnen, wenn dieses Gate nicht ausgewertet werden kann",
       "failClosedHint": "Fail closed: Wenn bei der Auswertung dieses Gates ein Fehler auftritt (kein normales Fehlschlagen), wird die Statusänderung abgelehnt. Aus (fail open) wird die Änderung durchgeführt und der Fehler protokolliert und auditiert.",
+      "updateGate": {
+        "failClosed": "Aktualisierung ablehnen, wenn dieses Gate nicht ausgewertet werden kann",
+        "failClosedHint": "Fail closed: Wenn bei der Auswertung dieses Gates ein Fehler auftritt (kein normales Fehlschlagen), wird die Aktualisierung abgelehnt. Aus (fail open) wird die Aktualisierung durchgeführt und der Fehler protokolliert und auditiert."
+      },
       "disabledFor": {
         "title": "Deaktiviert für",
         "hint": "Dieses Gate läuft nicht für die hier aufgeführten Domänen, Datenprodukte und Datenverträge (eine Domäne umfasst ihre Produkte und Verträge). Jedes Überspringen wird protokolliert und auditiert.",

@@ -199,7 +199,8 @@ class TestBlockingGates:
     def test_a_before_update_gate_that_raises_lets_the_update_through(
         self, world, run, monkeypatch
     ):
-        # Fail-open, as PUT /data-contracts/{id} (workflow-authoring-guide, #1103).
+        # Fail-open (no gate is on_error: fail_closed), as PUT /data-contracts/{id}
+        # (workflow-authoring-guide, #1103); the gate error is audited.
         import src.common.workflow_triggers as triggers
 
         def _boom(db):
@@ -210,7 +211,24 @@ class TestBlockingGates:
                   {'contract_id': world.row.id, 'description': 'changed'})
         assert res.success is True, res.error
         assert _stored(world).description_purpose == 'changed'
-        assert _actions(world) == [('UPDATE', True)]
+        assert _actions(world) == [('GATE_ERROR', False), ('UPDATE', True)]
+
+    def test_a_fail_closed_before_update_gate_that_raises_refuses_the_update(
+        self, world, run, monkeypatch
+    ):
+        import src.common.workflow_triggers as triggers
+
+        def _boom(db):
+            raise RuntimeError('registry down')
+
+        _workflow(world.db, 'before_update', on_error='fail_closed')
+        monkeypatch.setattr(triggers, 'get_trigger_registry', _boom)
+        res = run(_ctx(world), 'update_data_contract',
+                  {'contract_id': world.row.id, 'description': 'changed'})
+        assert res.success is False
+        assert res.error_code == 'update_gate_error'
+        assert _stored(world).description_purpose is None
+        assert _actions(world) == [('GATE_ERROR', False), ('UPDATE', False)]
 
     def test_a_domain_name_is_the_domain_id_a_gate_sees(self, world, run):
         # The tool sends a business-domain name; the manager stores its id, and the

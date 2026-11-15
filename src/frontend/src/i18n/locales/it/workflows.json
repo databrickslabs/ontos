@@ -115,6 +115,10 @@
       "descriptionPlaceholder": "Descrizione del workflow",
       "failClosed": "Rifiuta la transizione se questo gate non può essere valutato",
       "failClosedHint": "Fail closed: se la valutazione di questo gate genera un errore (non un normale fallimento), il cambio di stato viene rifiutato. Disattivato (fail open), il cambio avviene e l'errore viene registrato e sottoposto ad audit.",
+      "updateGate": {
+        "failClosed": "Rifiuta l'aggiornamento se questo gate non può essere valutato",
+        "failClosedHint": "Fail closed: se la valutazione di questo gate genera un errore (non un normale fallimento), l'aggiornamento viene rifiutato. Disattivato (fail open), l'aggiornamento avviene e l'errore viene registrato e sottoposto ad audit."
+      },
       "disabledFor": {
         "title": "Disattivato per",
         "hint": "Questo gate non viene eseguito per i domini, i prodotti dati e i contratti dati elencati qui (un dominio copre i suoi prodotti e contratti). Ogni salto viene registrato e sottoposto ad audit.",

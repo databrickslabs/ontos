@@ -115,6 +115,10 @@
       "descriptionPlaceholder": "Descripción del flujo de trabajo",
       "failClosed": "Rechazar la transición si esta compuerta no se puede evaluar",
       "failClosedHint": "Fail closed: cuando evaluar esta compuerta produce un error (no un fallo normal), el cambio de estado se rechaza. Desactivado (fail open), el cambio se aplica y el error se registra y se audita.",
+      "updateGate": {
+        "failClosed": "Rechazar la actualización si esta compuerta no se puede evaluar",
+        "failClosedHint": "Fail closed: cuando evaluar esta compuerta produce un error (no un fallo normal), la actualización se rechaza. Desactivado (fail open), la actualización se aplica y el error se registra y se audita."
+      },
       "disabledFor": {
         "title": "Desactivado para",
         "hint": "Esta compuerta no se ejecuta para los dominios, productos de datos y contratos de datos indicados aquí (un dominio cubre sus productos y contratos). Cada omisión se registra y se audita.",

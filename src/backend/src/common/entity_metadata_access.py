@@ -39,6 +39,7 @@ from src.common.manager_dependencies import (
     get_assets_manager, get_auth_manager, get_metadata_manager,
 )
 from src.controller.costs_manager import CostsManager
+from src.controller.metadata_manager import SHARED_ENTITY_ID
 
 METADATA_FEATURE_ID = "data-domains"
 ASSET_ENTITY_TYPE = "asset"
@@ -60,6 +61,16 @@ class EntityTypeNotSupportedError(CodedValueError):
 def _is_asset(entity_type: Optional[str]) -> bool:
     """Whether a stored entity type means an asset, whatever its case."""
     return str(entity_type or '').strip().lower() == ASSET_ENTITY_TYPE
+
+
+def _is_asset_row(owner) -> bool:
+    """Whether a stored row belongs to an asset.
+
+    A shared library row keeps the type of the page it was created on, with
+    ``entity_id`` ``__shared__``: it belongs to no asset, and the shared
+    library's ``data-domains`` rule applies to it.
+    """
+    return owner is not None and _is_asset(owner[0]) and owner[1] != SHARED_ENTITY_ID
 
 
 def _ensure_supported_entity_type(entity_type: Optional[str]) -> None:
@@ -146,7 +157,7 @@ async def _ensure_attached_row_readable(request: Request, db, user_details, auth
     if asset_type not in ('rich_text', 'link', 'document') or row_id is None:
         return
     owner = get_metadata_manager(request).get_row_owner(db, kind=asset_type, id=str(row_id))
-    if owner is not None and _is_asset(owner[0]):
+    if _is_asset_row(owner):
         await _ensure_asset(
             request, db, user_details, auth_manager, owner[1], FeatureAccessLevel.READ_ONLY,
             require_asset=False,
@@ -257,7 +268,7 @@ class RowMetadataPermission:
         auth_manager=Depends(get_auth_manager),
     ) -> None:
         owner = self.load_owner(request, db)
-        if owner is None or not _is_asset(owner[0]):
+        if not _is_asset_row(owner):
             await self._domain_checker(request, user_details, auth_manager)
             return
         if self.level != FeatureAccessLevel.READ_ONLY:

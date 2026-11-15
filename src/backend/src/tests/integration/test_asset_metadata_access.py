@@ -667,6 +667,36 @@ def test_by_id_writes_follow_the_write_rule_first(
     assert response.status_code < 300, response.text
 
 
+def _shared_asset_note(db):
+    """A shared library note created from an asset page: type ``asset``, no asset id."""
+    return str(MetadataManager().create_shared_rich_text(db, data=RichTextCreate(
+        entity_type='asset', entity_id='ignored', title='Shared', content_markdown='Body',
+    ), user_email='seed@example.com').id)
+
+
+@pytest.mark.parametrize('method', ['PUT', 'DELETE'])
+def test_a_shared_row_typed_asset_keeps_the_data_domains_rule_by_id(
+        client, db_session, act_as, method):
+    note_id = _shared_asset_note(db_session)
+    act_as('Data Steward')
+
+    response = client.request(method, f'/api/rich-texts/{note_id}',
+                              **({'json': {'title': 'N2'}} if method == 'PUT' else {}))
+
+    assert response.status_code < 300, response.text
+
+
+def test_a_steward_attaches_a_shared_row_typed_asset_to_a_product(client, db_session, act_as):
+    note_id = _shared_asset_note(db_session)
+    act_as('Data Steward')
+
+    response = client.post('/api/entities/data_product/attachments',
+                           params={'entity_id': 'product-1'},
+                           json={'asset_type': 'rich_text', 'asset_id': note_id})
+
+    assert response.status_code == 201, response.text
+
+
 # --- Entity type in the path: exact, from the supported list -------------------
 
 @pytest.mark.parametrize('entity_type', ['Asset', 'ASSET', ' asset', 'assets', 'unknown'])

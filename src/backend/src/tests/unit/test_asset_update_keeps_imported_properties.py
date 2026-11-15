@@ -162,3 +162,20 @@ def test_a_put_without_properties_keeps_them(db_session, osm):
     assert db_session.get(AssetDb, view.id).properties == {
         "owner_note": "x", METRIC_VIEW_PROPERTY: {"source": "sales"},
     }
+
+
+def test_a_put_replaces_the_public_properties_as_documented(db_session, osm):
+    """PUT /api/assets/{id} replaces the properties as a whole (AssetUpdate.properties):
+    a client that sends only some keys drops the others; the internal keys stay."""
+    view = _metric_view(db_session)
+
+    AssetsManager(ontology_schema_manager=osm).update_asset(
+        db_session, asset_id=view.id, asset_in=AssetUpdate(properties={"team": "sales"}),
+        current_user_id="alice@example.com",
+    )
+
+    db_session.expire_all()
+    assert db_session.get(AssetDb, view.id).properties == {
+        "team": "sales", METRIC_VIEW_PROPERTY: {"source": "sales"},
+    }
+    assert "Replaces the stored properties" in AssetUpdate.model_fields["properties"].description

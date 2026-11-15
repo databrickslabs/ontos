@@ -152,6 +152,20 @@ def _parse_properties(raw: Optional[str]) -> Optional[Dict[str, Any]]:
         raise ValueError(f"Invalid JSON in properties: {raw[:100]}")
 
 
+def _row_properties_update(
+    properties: Optional[Dict[str, Any]], stored: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """The ``properties`` field of an update row, as ``AssetUpdate`` keyword arguments.
+
+    A row's properties replace the stored ones, as on ``PUT /api/assets/{id}``, but
+    the internal keys are kept (they aren't exported, so the file can't carry them).
+    An empty properties cell sets nothing: the stored properties are kept.
+    """
+    if properties is None:
+        return {}
+    return {"properties": with_internal_properties(properties, stored)}
+
+
 def _format_properties(props: Optional[dict]) -> str:
     props = public_properties(props)
     if not props:
@@ -743,10 +757,9 @@ class AssetBulkManager:
                             asset_type_id=type_id,
                             platform=platform_val,
                             location=location_val,
-                            # The internal keys aren't exported, so the file can't carry them
-                            properties=with_internal_properties(properties, existing.properties),
                             tags=tags,
                             status=status_val,
+                            **_row_properties_update(properties, existing.properties),
                         )
                         updated = self._asset_repo.update(
                             db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
@@ -766,10 +779,10 @@ class AssetBulkManager:
                             previous_description = existing.description
                             update_data = AssetUpdate(
                                 **description_field,
-                                properties=with_internal_properties(
-                                    properties, existing.properties),
                                 tags=tags,
                                 status=status_val,
+                                **_row_properties_update(
+                                    properties, existing.properties),
                             )
                             updated = self._asset_repo.update(
                                 db=db, db_obj=existing,

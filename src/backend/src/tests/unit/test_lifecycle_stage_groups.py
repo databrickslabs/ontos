@@ -397,7 +397,8 @@ class TestStandardsRoundTrip:
         assert lifecycle_service.export_status(db_session, 'data_product', row) == (
             'proposed',
             {'ontosLifecycleStage': 'needs_review',
-             'ontosLifecycleStageGroup': 'Authority resolution'},
+             'ontosLifecycleStageGroup': 'Authority resolution',
+             'ontosLifecycleStageGroupId': group.id},
         )
 
     def test_the_default_group_exports_the_standard_values(self, db_session):
@@ -873,3 +874,34 @@ class TestCategoryChangeInUse:
         changed['stages'][2]['category'] = 'active'
         saved = lifecycle_service.save_group(db_session, changed, 'admin', group_id=group.id)
         assert {s.key: s.category for s in saved.stages}['active'] == 'review'
+
+
+class TestRoundTripByGroupId:
+    def test_a_renamed_group_is_found_by_its_exported_id(self, db_session):
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        row = SimpleNamespace(status='needs_review', lifecycle_stage_group_id=group.id)
+        _status, props = lifecycle_service.export_status(db_session, 'data_product', row)
+        renamed = _looping_group('Authority resolution v2')
+        lifecycle_service.save_group(db_session, renamed, 'admin', group_id=group.id)
+
+        custom = [{'property': k, 'value': v} for k, v in props.items()]
+        assert lifecycle_service.imported_status(
+            db_session, 'data_product', 'proposed', custom,
+        ) == (group.id, 'needs_review', None)
+        assert custom == []
+
+    def test_an_unknown_id_falls_back_to_the_name(self, db_session):
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        custom = [
+            {'property': 'ontosLifecycleStage', 'value': 'needs_review'},
+            {'property': 'ontosLifecycleStageGroup', 'value': 'Authority resolution'},
+            {'property': 'ontosLifecycleStageGroupId', 'value': 'from-another-install'},
+        ]
+        assert lifecycle_service.imported_status(
+            db_session, 'data_product', 'proposed', custom,
+        ) == (group.id, 'needs_review', None)
+
+    def test_the_default_group_exports_its_seeded_id(self, db_session):
+        row = SimpleNamespace(status='draft', lifecycle_stage_group_id=None)
+        _status, props = lifecycle_service.export_status(db_session, 'data_contract', row)
+        assert props['ontosLifecycleStageGroupId'] == DEFAULT_GROUP_IDS['data_contract']

@@ -691,3 +691,46 @@ def test_imported_content_needs_read_access_to_its_entity_feature(
 
     assert response.status_code == 403
     assert 'v1' not in response.text
+
+
+def _preview(client, path=ROOT):
+    return client.post('/api/metadata/markdown-import/preview', json={'path': path})
+
+
+def test_a_preview_reports_the_import_and_stores_nothing(
+        client, db_session, domain, asset, concept, volume):
+    response = _preview(client)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body['dry_run'] is True
+    assert (body['added'], body['unlinked'], body['failed']) == (2, 1, 0)
+    assert db_session.query(DocumentMetadataDb).count() == 0
+    assert _stored(db_session) == []
+    assert db_session.query(ChangeLogDb).filter(
+        ChangeLogDb.entity_type.like('%:document')).count() == 0
+    hits = client.get('/api/search', params={'search_term': 'zorbleflux'}).json()
+    assert not [hit for hit in hits if hit['type'] == 'document']
+
+    imported = _import(client).json()
+    assert imported['dry_run'] is False
+    assert imported['added'] == 2
+
+
+def test_a_preview_of_a_gone_file_keeps_its_documents(client, db_session, domain, asset, volume):
+    assert _import(client).status_code == 200
+    before = _sources(db_session)
+    del volume[f'{ROOT}/domain.md']
+
+    body = _preview(client).json()
+
+    assert body['removed'] == 1
+    assert _sources(db_session) == before
+    hits = client.get('/api/search', params={'search_term': 'zorbleflux'}).json()
+    assert [hit for hit in hits if hit['type'] == 'document']
+
+
+def test_a_preview_needs_write_access_too(client, volume, mock_test_user):
+    mock_test_user.groups = []
+
+    assert _preview(client).status_code == 403

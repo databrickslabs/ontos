@@ -665,8 +665,50 @@ async def _writable_target_kinds(
     }
 
 
+def _run_markdown_import(
+    payload: MarkdownImportRequest, request: Request, db, manager: MetadataManager,
+    ws: WorkspaceClient, writable_kinds: set, user_email: Optional[str], *, dry_run: bool,
+) -> MarkdownImportResult:
+    semantic_models_manager = getattr(request.app.state, 'semantic_models_manager', None)
+    importer = MarkdownImportManager(manager, semantic_models_manager=semantic_models_manager)
+    try:
+        return importer.import_from_volume(
+            db, ws, path=payload.path, user_email=user_email,
+            writable_kinds=writable_kinds, dry_run=dry_run,
+        )
+    except CodedValueError as e:
+        status_code = {
+            'markdown_import_path_not_found': 404,
+            'markdown_import_access_denied': 403,
+            'markdown_import_in_progress': 409,
+        }.get(e.code, 400)
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
+    except Exception:
+        db.rollback()
+        logger.exception("Markdown import from a volume failed")
+        raise HTTPException(status_code=500, detail="Markdown import failed")
+
+
 # Plain ``def``: FastAPI runs it in its threadpool, so the volume reads don't
 # block the event loop.
+@router.post("/metadata/markdown-import/preview", response_model=MarkdownImportResult)
+def preview_markdown_import(
+    payload: MarkdownImportRequest,
+    request: Request,
+    db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    manager: MetadataManager = Depends(get_metadata_manager),
+    ws: WorkspaceClient = Depends(_user_workspace_client),
+    writable_kinds: set = Depends(_writable_target_kinds),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """What importing ``path`` would do, file by file (``dry_run``); nothing is stored."""
+    return _run_markdown_import(
+        payload, request, db, manager, ws, writable_kinds,
+        current_user.email if current_user else None, dry_run=True,
+    )
+
+
 @router.post("/metadata/markdown-import", response_model=MarkdownImportResult)
 def import_markdown_from_volume(
     payload: MarkdownImportRequest,
@@ -681,25 +723,10 @@ def import_markdown_from_volume(
 ):
     """Import the ``.md`` files of a volume folder as documents on the entities their
     front matter names; a re-run updates only the files that changed."""
-    semantic_models_manager = getattr(request.app.state, 'semantic_models_manager', None)
-    importer = MarkdownImportManager(manager, semantic_models_manager=semantic_models_manager)
-    try:
-        result = importer.import_from_volume(
-            db, ws, path=payload.path, user_email=current_user.email if current_user else None,
-            writable_kinds=writable_kinds,
-        )
-    except CodedValueError as e:
-        status_code = {
-            'markdown_import_path_not_found': 404,
-            'markdown_import_access_denied': 403,
-            'markdown_import_in_progress': 409,
-        }.get(e.code, 400)
-        raise HTTPException(status_code=status_code, detail=str(e)) from e
-    except Exception:
-        db.rollback()
-        logger.exception("Markdown import from a volume failed")
-        raise HTTPException(status_code=500, detail="Markdown import failed")
-
+    result = _run_markdown_import(
+        payload, request, db, manager, ws, writable_kinds,
+        current_user.email if current_user else None, dry_run=False,
+    )
     audit_manager.log_action(
         db=db,
         username=current_user.username if current_user else 'unknown',

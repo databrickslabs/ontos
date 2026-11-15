@@ -312,6 +312,9 @@
     },
     "warnings": {
       "empty_folder": "No se encontraron archivos Markdown aquí, así que se conservaron los documentos importados antes desde esta carpeta."
-    }
+    },
+    "preview": "Vista previa",
+    "previewing": "Generando vista previa…",
+    "previewNote": "Solo vista previa: esto es lo que haría Importar. No se guardó nada."
   }
 }

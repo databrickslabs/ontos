@@ -312,6 +312,9 @@
     },
     "warnings": {
       "empty_folder": "No Markdown files were found here, so the documents imported from this folder before were kept."
-    }
+    },
+    "preview": "Preview",
+    "previewing": "Previewing…",
+    "previewNote": "Preview only: this is what Import would do. Nothing was saved."
   }
 }

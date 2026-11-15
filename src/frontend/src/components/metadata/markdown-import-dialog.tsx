@@ -37,6 +37,8 @@ export interface MarkdownImportResult {
   removed: number;
   /** Codes, e.g. empty_folder (nothing listed, so nothing was removed). */
   warnings?: string[];
+  /** A preview: what an import would do; nothing was stored. */
+  dry_run?: boolean;
   files: MarkdownImportFileResult[];
 }
 
@@ -85,7 +87,7 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
   const { t } = useTranslation(['metadata', 'common']);
   const { post } = useApi();
   const [path, setPath] = React.useState('');
-  const [running, setRunning] = React.useState(false);
+  const [running, setRunning] = React.useState<'preview' | 'import' | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<MarkdownImportResult | null>(null);
 
@@ -93,18 +95,19 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
     if (!open) {
       setError(null);
       setResult(null);
-      setRunning(false);
+      setRunning(null);
     }
   }, [open]);
 
-  const runImport = async () => {
-    setRunning(true);
+  const runImport = async (mode: 'preview' | 'import') => {
+    setRunning(mode);
     setError(null);
     setResult(null);
-    const response = await post<MarkdownImportResult>(
-      '/api/metadata/markdown-import', { path: path.trim() },
-    );
-    setRunning(false);
+    const url = mode === 'preview'
+      ? '/api/metadata/markdown-import/preview'
+      : '/api/metadata/markdown-import';
+    const response = await post<MarkdownImportResult>(url, { path: path.trim() });
+    setRunning(null);
     if (response.error) {
       const code = response.errorCode;
       setError(code && ERROR_CODES.has(code)
@@ -115,8 +118,8 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
       return;
     }
     setResult(response.data);
-    const { added, updated, removed } = response.data;
-    if (added || updated || removed) onImported?.(response.data);
+    const { added, updated, removed, dry_run: dryRun } = response.data;
+    if (!dryRun && (added || updated || removed)) onImported?.(response.data);
   };
 
   const describeUnresolved = (file: MarkdownImportFileResult) => file.unresolved
@@ -144,8 +147,10 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
             value={path}
             placeholder="/Volumes/catalog/schema/volume/docs"
             onChange={e => setPath(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && path.trim() && !running) runImport(); }}
-            disabled={running}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && path.trim() && !running) runImport('import');
+            }}
+            disabled={running !== null}
           />
           <p className="text-xs text-muted-foreground">{t('markdownImport.frontMatterHint')}</p>
         </div>
@@ -159,6 +164,12 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
 
         {result && (
           <div className="space-y-3" data-testid="markdown-import-result">
+            {result.dry_run && (
+              <Alert data-testid="markdown-import-preview-note">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{t('markdownImport.previewNote')}</AlertDescription>
+              </Alert>
+            )}
             <div className="flex flex-wrap gap-2">
               {STATUSES.map(status => (
                 <Badge key={status} variant={result[status] ? STATUS_VARIANT[status] : 'outline'}>
@@ -230,9 +241,17 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('markdownImport.close')}
           </Button>
-          <Button onClick={runImport} disabled={!path.trim() || running}>
-            {running && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {running ? t('markdownImport.importing') : t('markdownImport.submit')}
+          <Button
+            variant="secondary"
+            onClick={() => runImport('preview')}
+            disabled={!path.trim() || running !== null}
+          >
+            {running === 'preview' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {running === 'preview' ? t('markdownImport.previewing') : t('markdownImport.preview')}
+          </Button>
+          <Button onClick={() => runImport('import')} disabled={!path.trim() || running !== null}>
+            {running === 'import' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {running === 'import' ? t('markdownImport.importing') : t('markdownImport.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>

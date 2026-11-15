@@ -312,6 +312,9 @@
     },
     "warnings": {
       "empty_folder": "Hier wurden keine Markdown-Dateien gefunden; die früher aus diesem Ordner importierten Dokumente bleiben erhalten."
-    }
+    },
+    "preview": "Vorschau",
+    "previewing": "Vorschau wird erstellt…",
+    "previewNote": "Nur Vorschau: So würde Importieren vorgehen. Es wurde nichts gespeichert."
   }
 }

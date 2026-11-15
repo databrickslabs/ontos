@@ -144,4 +144,35 @@ describe('MarkdownImportDialog', () => {
     )).toBeInTheDocument();
     expect(onImported).not.toHaveBeenCalled();
   });
+
+  it('previews an import without reporting it as done', async () => {
+    const fetchMock = respond(200, { ...RESULT, dry_run: true });
+    const onImported = vi.fn();
+    render(<MarkdownImportDialog open onOpenChange={() => {}} onImported={onImported} />);
+    fireEvent.change(screen.getByLabelText('Volume folder or file'), {
+      target: { value: '/Volumes/main/docs/context' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+    expect(await screen.findByText(
+      'Preview only: this is what Import would do. Nothing was saved.',
+    )).toBeInTheDocument();
+    expect(screen.getByText('Added: 1')).toBeInTheDocument();
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toBe('/api/metadata/markdown-import/preview');
+    expect(onImported).not.toHaveBeenCalled();
+  });
+
+  it('shows the import-in-progress error', async () => {
+    respond(409, {
+      detail: {
+        code: 'markdown_import_in_progress', message: 'busy',
+        params: { path: '/Volumes/main/docs/context' },
+      },
+    });
+    open();
+    expect(await screen.findByText(
+      'Another Markdown import is running. Try again when it ends.',
+    )).toBeInTheDocument();
+  });
 });

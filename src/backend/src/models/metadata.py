@@ -192,6 +192,8 @@ class MarkdownImportResult(BaseModel):
     removed: int = 0
     # Codes for the UI: empty_folder (nothing listed, so nothing was removed)
     warnings: List[str] = Field(default_factory=list)
+    # A preview: what an import would do; nothing was stored
+    dry_run: bool = False
     files: List[MarkdownImportFileResult] = Field(default_factory=list)
 
 

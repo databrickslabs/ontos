@@ -312,6 +312,9 @@
     },
     "warnings": {
       "empty_folder": "Nenhum arquivo Markdown foi encontrado aqui, então os documentos importados antes desta pasta foram mantidos."
-    }
+    },
+    "preview": "Pré-visualizar",
+    "previewing": "Pré-visualizando…",
+    "previewNote": "Apenas pré-visualização: é isto que Importar faria. Nada foi salvo."
   }
 }

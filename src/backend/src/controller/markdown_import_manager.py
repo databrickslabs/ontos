@@ -335,12 +335,14 @@ class MarkdownImportManager:
 
     def import_from_volume(
         self, db: Session, ws: WorkspaceClient, *, path: str, user_email: Optional[str],
-        writable_kinds: Collection[str],
+        writable_kinds: Collection[str], dry_run: bool = False,
     ) -> MarkdownImportResult:
         """Import every ``.md`` file under ``path`` (a volume folder, or one file).
 
         ``writable_kinds``: the target kinds (keys of TARGET_FEATURES) the caller
         has Read/Write on; values naming another kind are reported ``forbidden``.
+        ``dry_run``: the same run and result, in a savepoint that is rolled back
+        at the end; nothing is stored or indexed (the preview).
 
         Raises:
             MarkdownImportPathInvalidError, MarkdownImportPathNotFoundError,
@@ -349,10 +351,11 @@ class MarkdownImportManager:
         """
         root = normalize_volume_path(path)
         acquire_import_lock(db, root)
+        preview = db.begin_nested() if dry_run else None
         unread: List[str] = []
         files = self._list_markdown_files(ws, root, unread)
         resolver = _TargetResolver(db, self._semantic, writable_kinds)
-        result = MarkdownImportResult(path=root)
+        result = MarkdownImportResult(path=root, dry_run=dry_run)
         # (document, its file's text) to index once the import commits
         changed: List[Tuple[DocumentMetadataDb, str]] = []
         removed_ids: List[str] = []
@@ -369,6 +372,9 @@ class MarkdownImportManager:
         for entry in gone:
             result.files.append(entry)
             result.removed += 1
+        if preview is not None:
+            preview.rollback()
+            return result
         db.commit()
         for doc, text in changed:
             db.refresh(doc)

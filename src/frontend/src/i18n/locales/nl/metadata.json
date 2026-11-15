@@ -312,6 +312,9 @@
     },
     "warnings": {
       "empty_folder": "Hier zijn geen Markdown-bestanden gevonden, dus de eerder uit deze map geïmporteerde documenten zijn behouden."
-    }
+    },
+    "preview": "Voorbeeld",
+    "previewing": "Voorbeeld maken…",
+    "previewNote": "Alleen een voorbeeld: dit zou Importeren doen. Er is niets opgeslagen."
   }
 }

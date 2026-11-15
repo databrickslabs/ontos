@@ -114,7 +114,9 @@ jobs:
           DATABRICKS_CATALOG: test_catalog
           DATABRICKS_SCHEMA: test_schema
           DATABRICKS_VOLUME: test_volume
-          APP_AUDIT_LOG_DIR: /tmp/audit_logs
+          # Under the runner's own temp dir, not a shared /tmp path: two
+          # shards on one host would otherwise write the same audit log files
+          APP_AUDIT_LOG_DIR: ${{ runner.temp }}/audit_logs
           # Passed as data, not interpolated into the script
           SHARD_FILES: ${{ matrix.files }}
           SHARD_INDEX: ${{ matrix.shard }}

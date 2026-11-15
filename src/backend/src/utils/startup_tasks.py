@@ -710,6 +710,7 @@ def initialize_managers(app: FastAPI):
                     change_check_seconds=settings.WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS,
                     idle_recheck_seconds=settings.WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS,
                     max_workers=settings.WORKFLOW_SCHEDULER_MAX_WORKERS,
+                    drain_seconds=settings.WORKFLOW_SCHEDULER_DRAIN_SECONDS,
                 )
                 app.state.workflow_scheduler.start()
         except Exception as e:

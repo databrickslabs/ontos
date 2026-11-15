@@ -521,6 +521,57 @@ def test_the_sleep_counts_from_the_time_after_the_claims(db_session, sessions):
     assert delay == pytest.approx(4 * 60 + 19 + 0.5)  # until 10:05, from 10:00:41
 
 
+def test_a_crash_after_the_claim_leaves_the_slot_claimed_and_not_run_again(
+        db_session, sessions):
+    """At most once: the claim is committed before the run, which never ended."""
+    workflow = _create(db_session, changed=_at(hour=9, minute=58))
+    _scheduler(sessions, 'crashed', run_executor=_Deferred()).run_once(
+        _at(minute=0, second=1))  # claimed; the process dies before the run
+    _scheduler(sessions, 'restarted').run_once(_at(minute=0, second=40))
+    [claim] = _claims(db_session, workflow.id)
+    assert claim.claimed_by == 'crashed'
+    assert claim.outcome == {'status': 'claimed', 'coalesced_slots': 1}
+    assert _executions(db_session, workflow.id) == []
+    _scheduler(sessions, 'restarted').run_once(_at(minute=5, second=1))
+    assert len(_executions(db_session, workflow.id)) == 1  # the next slot runs
+
+
+def test_stopping_waits_for_runs_in_progress_and_records_the_unstarted_ones(
+        db_session, sessions):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    first = _create(db_session, name='First', changed=_at(hour=9, minute=58))
+    second = _create(db_session, name='Second', changed=_at(hour=9, minute=58))
+    release, running = threading.Event(), threading.Event()
+    started = []
+
+    def run(self, workflow_id, slot, coalesced):
+        started.append(workflow_id)
+        running.set()
+        release.wait(timeout=10)
+
+    pool = ThreadPoolExecutor(max_workers=1)  # the second run queues behind the first
+    scheduler = _scheduler(sessions, run_executor=pool)
+    with patch.object(WorkflowScheduler, '_run', run):
+        scheduler.run_once(_at(minute=0, second=1))
+        assert running.wait(timeout=5)
+        threading.Timer(0.3, release.set).start()
+        scheduler.drain(timeout=5)
+    assert len(started) == 1 and not scheduler._in_flight
+    [queued] = {first.id, second.id} - set(started)
+    [claim] = _claims(db_session, queued)
+    assert claim.outcome == {'status': 'not_started', 'coalesced_slots': 1}
+
+
+def test_the_drain_gives_up_after_its_timeout(sessions, caplog):
+    scheduler = _scheduler(sessions)
+    scheduler._in_flight['wf'] = Future()  # a run that doesn't end
+    with caplog.at_level('WARNING', logger='src.controller.workflow_scheduler'):
+        scheduler.drain(timeout=0.05)
+    assert any('still in progress' in r.message for r in caplog.records)
+
+
 def test_a_failing_run_records_an_error_outcome(db_session, sessions):
     workflow = _create(db_session, changed=_at(hour=9, minute=58))
     scheduler = _scheduler(sessions)

@@ -1,4 +1,4 @@
-"""add scheduler_claims for exactly-once scheduled workflow runs
+"""add scheduler_claims for at-most-once scheduled workflow runs
 
 One row per run of a scheduled task (#941): the app instance whose insert
 succeeds (``ON CONFLICT DO NOTHING`` on the primary key) runs the slot.

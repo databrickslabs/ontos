@@ -7,9 +7,10 @@ from src.common.database import Base
 class SchedulerClaimDb(Base):
     """One run of a scheduled task, claimed by the app instance that runs it (#941).
 
-    The primary key ``(task_key, slot)`` makes the claim the exactly-once guard
+    The primary key ``(task_key, slot)`` makes the claim the at-most-once guard
     across app instances: each instance inserts the row with ``ON CONFLICT DO
-    NOTHING`` and only the one whose insert succeeds runs the slot.
+    NOTHING`` and only the one whose insert succeeds runs the slot. A slot whose
+    instance died after the claim keeps the status ``claimed`` and isn't run again.
 
     ``task_key`` is ``workflow:<workflow id>`` for a ``scheduled`` workflow (later
     sweeps use their own keys); ``slot`` is the scheduled time in UTC. ``outcome``

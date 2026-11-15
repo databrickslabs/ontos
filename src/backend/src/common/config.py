@@ -166,6 +166,9 @@ class Settings(BaseSettings):
     # Scheduled runs run on a pool of this many threads per instance, so one long
     # run doesn't hold up the other scheduled workflows.
     WORKFLOW_SCHEDULER_MAX_WORKERS: int = Field(4, env='WORKFLOW_SCHEDULER_MAX_WORKERS')
+    # On shutdown, wait up to this many seconds for scheduled runs in progress. A
+    # run cut off by the exit is not run again (each slot runs at most once).
+    WORKFLOW_SCHEDULER_DRAIN_SECONDS: int = Field(30, env='WORKFLOW_SCHEDULER_DRAIN_SECONDS')
 
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')

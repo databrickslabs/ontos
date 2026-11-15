@@ -4,9 +4,15 @@ One thread per app process, like the job poller (``JobsManager.start_background_
 polling``), claims the due slots; the runs go to a small thread pool
 (``max_workers``), each with its own session, so a long run doesn't hold up the
 other scheduled workflows. A workflow whose previous run is still going on this
-instance waits for it before its next slot is claimed. Exactly-once across processes comes from ``scheduler_claims``: for
+instance waits for it before its next slot is claimed.
+
+Each slot runs at most once across processes, through ``scheduler_claims``: for
 each due slot every instance inserts ``(workflow:<id>, slot)`` with ``ON CONFLICT
 DO NOTHING`` and only the instance whose insert wrote the row runs the workflow.
+The claim is committed before the run starts, so if the process dies in between
+or during the run, that slot isn't run again: its claim stays ``claimed`` (no
+outcome). ``stop()`` waits up to ``drain_seconds`` for the runs in progress and
+records the runs it didn't start as ``not_started``.
 
 Database access, so Lakebase can idle (no fixed polling):
 - The schedules are kept in memory. The thread sleeps until the earliest known
@@ -71,6 +77,8 @@ COALESCE_COUNT_LIMIT = 10_000
 ERROR_RETRY_SECONDS = 60
 # Scheduled runs run on a pool, so one long run doesn't hold up the other workflows.
 DEFAULT_MAX_WORKERS = 4
+# On shutdown, wait this long for the runs in progress to end.
+DEFAULT_DRAIN_SECONDS = 30
 
 _schedulers: 'weakref.WeakSet[WorkflowScheduler]' = weakref.WeakSet()
 _schedulers_lock = threading.Lock()
@@ -130,7 +138,9 @@ class WorkflowScheduler:
         instance_id: Optional[str] = None,
         max_workers: int = DEFAULT_MAX_WORKERS,
         run_executor: Optional[Executor] = None,
+        drain_seconds: float = DEFAULT_DRAIN_SECONDS,
     ):
+        self._drain_seconds = max(0.0, float(drain_seconds))
         self._session_factory = session_factory
         # Runs go to this pool; the scheduler thread only claims slots.
         self._max_workers = max(1, int(max_workers))
@@ -138,6 +148,8 @@ class WorkflowScheduler:
         self._pool_lock = threading.Lock()
         # Workflow id -> the future of its run in progress on this instance.
         self._in_flight: Dict[str, Future] = {}
+        # Future -> (task key, slot, coalesced count) of that run, for the drain.
+        self._runs: Dict[Future, tuple] = {}
         # Shortest time between two request-triggered checks for changes.
         self._change_check = timedelta(seconds=max(0, int(change_check_seconds)))
         # 0 = never: then only requests and local changes make the scheduler look.
@@ -186,11 +198,33 @@ class WorkflowScheduler:
         self._stop.set()
         self._wake.set()
         self._thread.join(timeout=10)
+        self.drain()
+        logger.info("Stopped the workflow scheduler")
+
+    def drain(self, timeout: Optional[float] = None) -> None:
+        """Stop starting runs: cancel the queued ones, wait for the ones in progress.
+
+        A queued run that never started gets the outcome ``not_started``. A run
+        still going after ``timeout`` (default ``drain_seconds``) is left to end on
+        its own; if the process exits first, its claim stays ``claimed``.
+        """
+        for future in list(self._runs):
+            if future.cancel():
+                key, slot, coalesced = self._runs.pop(future, (None, None, None))
+                if key is not None:
+                    self._record(key, slot, {
+                        'status': 'not_started', 'coalesced_slots': coalesced,
+                    })
+        timeout = self._drain_seconds if timeout is None else timeout
+        if not self.wait_for_runs(timeout=timeout):
+            logger.warning(
+                f"{len(self._in_flight)} scheduled run(s) still in progress after "
+                f"{timeout:g} s; a run cut off by the exit is not run again"
+            )
         with self._pool_lock:
             pool = self._pool
         if pool is not None:
             pool.shutdown(wait=False)
-        logger.info("Stopped the workflow scheduler")
 
     def invalidate(self) -> None:
         """Re-read the scheduled workflows now: wake the thread."""
@@ -429,7 +463,9 @@ class WorkflowScheduler:
             return True
         if not future.done():
             self._in_flight[workflow_id] = future
-            future.add_done_callback(lambda _f, wid=workflow_id: self._run_ended(wid))
+            self._runs[future] = (key, slot, coalesced)
+            future.add_done_callback(
+                lambda f, wid=workflow_id: self._run_ended(wid, f))
         return True
 
     def wait_for_runs(self, timeout: Optional[float] = None) -> bool:
@@ -445,8 +481,10 @@ class WorkflowScheduler:
                 )
             return self._pool
 
-    def _run_ended(self, workflow_id: str) -> None:
+    def _run_ended(self, workflow_id: str, future: Optional[Future] = None) -> None:
         self._in_flight.pop(workflow_id, None)
+        if future is not None and not future.cancelled():
+            self._runs.pop(future, None)
         self._wake.set()  # a slot that waited for this run can go now
 
     def _record(self, key: str, slot: datetime, outcome: dict,

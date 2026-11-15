@@ -11,7 +11,7 @@ from src.db_models.scheduler_claims import SchedulerClaimDb
 
 
 class SchedulerClaimsRepository:
-    """The exactly-once guard of the workflow scheduler (#941)."""
+    """The at-most-once guard of the workflow scheduler (#941)."""
 
     model = SchedulerClaimDb
 

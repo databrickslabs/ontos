@@ -10,7 +10,8 @@ tag set. Both WHERE and ASSERT now see one future-state object:
    tags assigned by earlier steps go on top of them.
 2. ``tag_count`` / ``has_tags`` are computed from that set, so they agree with
    ``HAS_TAG``.
-3. Other fields derived from the stored row stay out.
+3. The derived fields other triggers' rules see (``has_owner``, ``schema_object_count``,
+   counts) are there too, for the contract after the update.
 4. Stored fields the update doesn't carry, or sends as null (the manager skips nulls),
    keep their stored value, as in the WHERE.
 """
@@ -26,7 +27,7 @@ from src.common.workflow_executor import (
     _policy_rule_object,
 )
 from src.db_models.compliance import CompliancePolicyDb
-from src.db_models.data_contracts import DataContractDb
+from src.db_models.data_contracts import DataContractDb, SchemaObjectDb
 from src.db_models.data_domains import DataDomain
 from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
 from src.models.data_contracts_api import ContractDescription, DataContractUpdate
@@ -360,14 +361,37 @@ def test_a_domain_change_is_the_future_domain(db_session):
     assert gate.passed is True
 
 
-def test_fields_derived_from_the_stored_row_stay_out(db_session):
+def test_derived_fields_describe_the_contract_after_the_update(db_session):
+    # The default "Data Contract Schema Validation" rules, copied onto before_update
     contract = _contract(db_session, owner='team-1')
+    db_session.add(SchemaObjectDb(
+        id=str(uuid.uuid4()), contract_id=contract.id, name='orders', logical_type='object',
+    ))
+    db_session.flush()
 
-    obj = _policy_rule_object(db_session, _context(contract, _payload(status='active')))
+    def obj(payload):
+        return _policy_rule_object(db_session, _context(contract, payload))
 
-    assert obj['owner'] == 'team-1'
-    assert not {'has_owner', 'has_description', 'relationship_count',
-                'quality_check_count'} & set(obj)
+    renamed = obj(_payload(name='Renamed'))
+    cleared = obj(_payload(owner_team_id='', contract_schema=[]))
+    two_objects = obj(_payload(contract_schema=[
+        {'name': 'orders', 'logicalType': 'object'}, {'name': 'items', 'logicalType': 'object'},
+    ]))
+
+    # Stored, when the update doesn't send the field
+    assert renamed['has_owner'] is True
+    assert renamed['schema_object_count'] == 1
+    assert renamed['has_purpose'] is True
+    assert {'relationship_count', 'quality_check_count', 'is_certified'} <= set(renamed)
+    # From the update when it sends it
+    assert cleared['has_owner'] is False
+    assert cleared['schema_object_count'] == 0
+    assert two_objects['schema_object_count'] == 2
+    gate = _gate(
+        db_session, "MATCH (c:data_contract) ASSERT c.schema_object_count > 0 AND c.has_owner",
+        contract, _payload(name='Renamed'),
+    )
+    assert gate.passed is True
 
 
 # 4. One object for WHERE and ASSERT

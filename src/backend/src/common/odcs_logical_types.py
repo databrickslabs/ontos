@@ -1,6 +1,6 @@
 """Map a physical (Databricks / BigQuery / SQL) column type to an ODCS v3.1 logical type."""
 import re
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 ODCS_LOGICAL_TYPES = frozenset({
     "string", "date", "timestamp", "time", "number", "integer", "object", "array", "boolean",
@@ -71,3 +71,42 @@ def column_logical_type(stored: Optional[str], physical_type: Optional[str]) -> 
     if mapped == "string" and stored:
         return odcs_logical_type(stored)
     return mapped
+
+
+# Logical types ODCS added in v3.1.0; the v3.0.x and v2.2.x schemas don't list them.
+_V31_ONLY_FALLBACK = {"timestamp": "date", "time": "string"}
+
+
+def has_v31_logical_types(api_version: Optional[str]) -> bool:
+    """Whether a contract with ``api_version`` may use ``timestamp`` and ``time``.
+
+    ``None`` or a value that isn't a version (``v3.1.0``, ``3.0.2``) counts as the
+    current version, v3.1.0 being the default of a new contract.
+    """
+    match = re.fullmatch(r"v?(\d+)\.(\d+)(?:\.\d+)?", (api_version or "").strip().lower())
+    if not match:
+        return True
+    return (int(match.group(1)), int(match.group(2))) >= (3, 1)
+
+
+def logical_type_for_version(logical_type: str, api_version: Optional[str]) -> str:
+    """``logical_type`` as the ODCS version ``api_version`` lists it.
+
+    Below v3.1.0, ``timestamp`` becomes ``date`` and ``time`` becomes ``string``.
+    """
+    if has_v31_logical_types(api_version):
+        return logical_type
+    return _V31_ONLY_FALLBACK.get(logical_type, logical_type)
+
+
+def schemas_for_version(
+    schemas: List[Dict[str, Any]], api_version: Optional[str],
+) -> List[Dict[str, Any]]:
+    """Inferred ``schemas`` with each property's ``logicalType`` valid for ``api_version``."""
+    if has_v31_logical_types(api_version):
+        return schemas
+    for schema in schemas:
+        for prop in schema.get("properties") or []:
+            if isinstance(prop.get("logicalType"), str):
+                prop["logicalType"] = logical_type_for_version(prop["logicalType"], api_version)
+    return schemas

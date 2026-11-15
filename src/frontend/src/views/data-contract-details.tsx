@@ -3208,6 +3208,7 @@ export default function DataContractDetails() {
         onOpenChange={setIsSchemaFormOpen}
         initial={schemaFormInitial}
         onSubmit={editingSchemaIndex !== null ? handleUpdateSchema : handleAddSchema}
+        apiVersion={contract?.apiVersion}
       />
 
       <QualityRuleFormDialog
@@ -3291,6 +3292,7 @@ export default function DataContractDetails() {
         isOpen={isInferFromAssetOpen}
         onOpenChange={setIsInferFromAssetOpen}
         onInfer={handleInferFromAsset}
+        apiVersion={contract?.apiVersion}
       />
 
       {contract && (

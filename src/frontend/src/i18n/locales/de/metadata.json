@@ -298,7 +298,8 @@
       "front_matter_invalid": "Das Front Matter ist keine gültige YAML-Zuordnung.",
       "read_failed": "Die Datei konnte nicht gelesen werden.",
       "gone": "Die Datei ist nicht mehr im Ordner: ihre Dokumente wurden bei {{count}} Einträgen entfernt.",
-      "not_text": "Die Datei enthält NUL-Zeichen; sie ist kein Text."
+      "not_text": "Die Datei enthält NUL-Zeichen; sie ist kein Text.",
+      "import_error": "Die Datei konnte nicht importiert werden; die übrigen Dateien wurden importiert."
     },
     "errors": {
       "markdown_import_path_invalid": "„{{path}}“ ist kein Pfad in einem Unity-Catalog-Volume. Verwenden Sie /Volumes/<catalog>/<schema>/<volume>/<folder>.",

@@ -298,7 +298,8 @@
       "front_matter_invalid": "The front matter is not a valid YAML mapping.",
       "read_failed": "The file could not be read.",
       "gone": "The file is gone from the folder: its documents were removed from {{count}} entities.",
-      "not_text": "The file contains NUL characters; it is not text."
+      "not_text": "The file contains NUL characters; it is not text.",
+      "import_error": "The file could not be imported; the other files were."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" is not a path inside a Unity Catalog volume. Use /Volumes/<catalog>/<schema>/<volume>/<folder>.",

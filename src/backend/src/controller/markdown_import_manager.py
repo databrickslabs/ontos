@@ -136,7 +136,7 @@ def parse_front_matter(text: str) -> Tuple[Dict[str, Any], str]:
 
     Raises:
         FrontMatterError: The block isn't valid YAML, isn't a mapping, is larger
-            than MAX_FRONT_MATTER_BYTES, or uses anchors/aliases.
+            than MAX_FRONT_MATTER_BYTES, is nested too deeply, or uses anchors/aliases.
     """
     lines = text.splitlines(keepends=True)
     if not lines or lines[0].strip() != '---':
@@ -151,6 +151,9 @@ def parse_front_matter(text: str) -> Tuple[Dict[str, Any], str]:
                 data = yaml.load(block, Loader=_NoAliasSafeLoader) if block.strip() else {}
             except yaml.YAMLError as e:
                 raise FrontMatterError("Front matter is not valid YAML") from e
+            except RecursionError as e:
+                # Deeply nested flow collections ("[[[[...") overflow the parser.
+                raise FrontMatterError("Front matter is nested too deeply") from e
             if data is None:
                 data = {}
             if not isinstance(data, dict):
@@ -308,8 +311,8 @@ class MarkdownImportManager:
         changed: List[DocumentMetadataDb] = []
         removed_ids: List[str] = []
         for file_path, size in files:
-            entry = self._import_file(db, ws, file_path, size, resolver, user_email,
-                                      changed, removed_ids)
+            entry = self._import_file_isolated(db, ws, file_path, size, resolver, user_email,
+                                               changed, removed_ids)
             result.files.append(entry)
             setattr(result, entry.status, getattr(result, entry.status) + 1)
         if not files and not root.lower().endswith('.md'):
@@ -437,6 +440,30 @@ class MarkdownImportManager:
         return stream.read(MAX_FILE_BYTES + 1)
 
     # --- One file ---
+    def _import_file_isolated(
+        self, db: Session, ws: WorkspaceClient, path: str, size: Optional[int],
+        resolver: _TargetResolver, user_email: Optional[str], changed: List[DocumentMetadataDb],
+        removed_ids: List[str],
+    ) -> MarkdownImportFileResult:
+        """``_import_file`` in its own savepoint: an error fails only this file.
+
+        The file's writes are rolled back and it is reported ``failed``
+        (``import_error``); the files before and after it are kept.
+        """
+        file_changed: List[DocumentMetadataDb] = []
+        file_removed: List[str] = []
+        try:
+            with db.begin_nested():
+                entry = self._import_file(db, ws, path, size, resolver, user_email,
+                                          file_changed, file_removed)
+        except Exception:
+            logger.warning("Markdown import of %s failed; the file was skipped", path,
+                           exc_info=True)
+            return MarkdownImportFileResult(path=path, status='failed', reason='import_error')
+        changed.extend(file_changed)
+        removed_ids.extend(file_removed)
+        return entry
+
     def _import_file(
         self, db: Session, ws: WorkspaceClient, path: str, size: Optional[int],
         resolver: _TargetResolver, user_email: Optional[str], changed: List[DocumentMetadataDb],

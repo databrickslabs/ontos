@@ -72,6 +72,12 @@ class TestFrontMatter:
         with pytest.raises(FrontMatterError):
             parse_front_matter(text)
 
+    def test_deeply_nested_front_matter_is_refused_not_raised(self):
+        # 16,000 nested "[" fit in 32 KB and overflow the YAML parser's recursion.
+        text = '---\nkey: ' + '[' * 16000 + '\n---\nbody'
+        with pytest.raises(FrontMatterError):
+            parse_front_matter(text)
+
     def test_strip_front_matter_keeps_the_body(self):
         assert strip_front_matter('---\na: 1\n---\n\nBody\n') == 'Body\n'
         assert strip_front_matter('Body only') == 'Body only'

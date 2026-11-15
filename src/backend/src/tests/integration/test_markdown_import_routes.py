@@ -509,6 +509,49 @@ def test_a_nul_byte_fails_only_that_file(client, db_session, domain, volume):
     assert files[f'{ROOT}/good.md']['status'] == 'added'
 
 
+def test_deeply_nested_front_matter_fails_only_that_file(client, db_session, domain, volume):
+    volume.clear()
+    volume[f'{ROOT}/deep.md'] = '---\ndomain: ' + '[' * 16000 + '\n---\nx\n'
+    volume[f'{ROOT}/good.md'] = "---\ndomain: Customer\n---\nfine\n"
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    files = _by_path(response.json())
+    assert (files[f'{ROOT}/deep.md']['status'], files[f'{ROOT}/deep.md']['reason']) == (
+        'failed', 'front_matter_invalid')
+    assert _sources(db_session) == [f'{ROOT}/good.md']
+
+
+def test_an_error_on_one_file_rolls_back_only_that_file(
+        client, db_session, domain, volume, monkeypatch):
+    from src.controller.markdown_import_manager import MarkdownImportManager
+
+    volume.clear()
+    for name in ('a', 'b', 'c'):
+        volume[f'{ROOT}/{name}.md'] = f"---\ndomain: Customer\n---\n{name}\n"
+    real = MarkdownImportManager._import_file
+
+    def fail_after_writing_b(self, db, ws, path, *args):
+        entry = real(self, db, ws, path, *args)  # b's document is flushed...
+        if path.endswith('/b.md'):
+            raise RuntimeError('boom')  # ...then the file fails
+        return entry
+    monkeypatch.setattr(MarkdownImportManager, '_import_file', fail_after_writing_b)
+
+    response = _import(client)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body['added'], body['failed']) == (2, 1)
+    failed = _by_path(body)[f'{ROOT}/b.md']
+    assert (failed['status'], failed['reason']) == ('failed', 'import_error')
+    assert _sources(db_session) == [f'{ROOT}/a.md', f'{ROOT}/c.md']
+    hits = client.get('/api/search', params={'search_term': 'b'}).json()
+    assert f'{ROOT}/b.md' not in {
+        hit.get('extra_data', {}).get('source_path') for hit in hits if hit['type'] == 'document'}
+
+
 def test_an_empty_listing_removes_nothing_and_warns(client, db_session, domain, asset, volume):
     assert _import(client).status_code == 200
     before = _sources(db_session)

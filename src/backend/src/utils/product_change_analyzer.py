@@ -57,7 +57,8 @@ class ProductChangeAnalyzer:
     - MAJOR (X.0.0): Breaking changes
       - Removed output ports
       - Removed input ports (every ODPS input port names a required contract)
-      - Changed port contract IDs (incompatible)
+      - Changed or removed port contract IDs (incompatible)
+      - Repointed output ports (asset type, asset identifier, server)
       - Removed team members with critical roles
     - MINOR (0.X.0): New features (backward compatible)
       - New output ports
@@ -214,32 +215,55 @@ class ProductChangeAnalyzer:
             old_port = old_port_map[port_name]
             new_port = new_port_map[port_name]
 
-            # Check contract ID changes (critical for output ports)
+            # Contract changes (critical for output ports)
             old_contract = old_port.get('contractId') or old_port.get('contract_id')
             new_contract = new_port.get('contractId') or new_port.get('contract_id')
 
-            if old_contract and new_contract and old_contract != new_contract:
-                if port_type == 'output':
-                    # Changing output contract is BREAKING
-                    self.breaking_changes.append(
-                        f"Changed contract for {port_type} port '{port_name}': {old_contract} → {new_contract}"
-                    )
-                    severity = ChangeSeverity.CRITICAL
+            if old_contract != new_contract:
+                if not new_contract:
+                    # Unlinking a contract leaves consumers without their schema
+                    desc = f"Removed contract from {port_type} port '{port_name}': {old_contract}"
+                    breaking = port_type == 'output'
+                elif not old_contract:
+                    desc = f"Linked contract to {port_type} port '{port_name}': {new_contract}"
+                    breaking = False
                 else:
-                    self.fixes.append(
-                        f"Changed contract for {port_type} port '{port_name}': {old_contract} → {new_contract}"
+                    desc = (
+                        f"Changed contract for {port_type} port '{port_name}': "
+                        f"{old_contract} → {new_contract}"
                     )
-                    severity = ChangeSeverity.MINOR
+                    breaking = port_type == 'output'
+                self._record_modified(
+                    port_type, port_name, 'contractId', old_contract, new_contract, desc, breaking
+                )
 
-                self.port_changes.append(PortChange(
-                    change_type="modified",
-                    port_type=port_type,
-                    port_name=port_name,
-                    field_name="contractId",
-                    old_value=old_contract,
-                    new_value=new_contract,
-                    severity=severity
-                ))
+            # Where the port points: repointing an output asset or server breaks consumers
+            for field, aliases in self._ASSET_FIELDS:
+                if not self._has_any(new_port, aliases):
+                    continue  # the repository keeps what the caller leaves out
+                old_val = self._norm(self._first(old_port, aliases))
+                new_val = self._norm(self._first(new_port, aliases))
+                if old_val != new_val:
+                    self._record_modified(
+                        port_type, port_name, field, old_val, new_val,
+                        f"Changed {field} of {port_type} port '{port_name}': "
+                        f"{old_val} → {new_val}",
+                        port_type == 'output',
+                    )
+
+            # Other port attributes: informational (patch)
+            for field, aliases in self._INFO_FIELDS:
+                if not self._has_any(new_port, aliases):
+                    continue
+                old_val = self._norm(self._first(old_port, aliases))
+                new_val = self._norm(self._first(new_port, aliases))
+                if old_val != new_val:
+                    self._record_modified(
+                        port_type, port_name, field, old_val, new_val,
+                        f"Changed {field} of {port_type} port '{port_name}': "
+                        f"{old_val} → {new_val}",
+                        False,
+                    )
 
             # Check version changes
             old_version = old_port.get('version')
@@ -259,6 +283,65 @@ class ProductChangeAnalyzer:
                     new_value=new_version,
                     severity=ChangeSeverity.MINOR
                 ))
+
+    # (field, accepted keys) compared on a port that exists on both sides
+    _ASSET_FIELDS = (
+        ('assetType', ('assetType', 'asset_type')),
+        ('assetIdentifier', ('assetIdentifier', 'asset_identifier')),
+        ('server', ('server',)),
+    )
+    _INFO_FIELDS = (
+        ('status', ('status',)),
+        ('deliveryMethodId', ('deliveryMethodId', 'delivery_method_id')),
+        ('containsPii', ('containsPii', 'contains_pii')),
+        ('description', ('description',)),
+    )
+
+    @staticmethod
+    def _has_any(port: Dict, keys) -> bool:
+        return any(k in port for k in keys)
+
+    @staticmethod
+    def _first(port: Dict, keys):
+        for k in keys:
+            if port.get(k) is not None:
+                return port[k]
+        return None
+
+    @staticmethod
+    def _norm(value):
+        """Compare None, '' and False alike; drop unset keys of a server dict."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.startswith('{'):
+                try:
+                    import json
+                    value = json.loads(stripped)
+                except ValueError:
+                    return stripped or None
+            else:
+                return stripped or None
+        if isinstance(value, dict):
+            return {k: v for k, v in value.items() if v not in (None, '')} or None
+        return value or None
+
+    def _record_modified(
+        self, port_type: str, port_name: str, field: str, old_value, new_value,
+        description: str, breaking: bool,
+    ):
+        if breaking:
+            self.breaking_changes.append(description)
+        else:
+            self.fixes.append(description)
+        self.port_changes.append(PortChange(
+            change_type="modified",
+            port_type=port_type,
+            port_name=port_name,
+            field_name=field,
+            old_value=None if old_value is None else str(old_value),
+            new_value=None if new_value is None else str(new_value),
+            severity=ChangeSeverity.CRITICAL if breaking else ChangeSeverity.MINOR,
+        ))
 
     def _analyze_team_changes(self, old_members: List[Dict], new_members: List[Dict]):
         """Analyze changes in team members"""

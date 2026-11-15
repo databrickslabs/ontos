@@ -5,6 +5,7 @@ import {
   type FeatureConfig,
   type FeatureMaturity,
 } from '@/config/features';
+import { AccessGrantRequestStatus } from '@/types/access-grant';
 import { FeatureAccessLevel } from '@/types/settings';
 import {
   ReviewRequestStatus,
@@ -33,7 +34,6 @@ export const reviewsTruncated = (reviews: DataAssetReviewRequest[]) =>
 
 /** Pending requests listed; their count comes from the response's `total`. */
 const MY_REQUESTS_LIMIT = 20;
-const PENDING_REQUEST_STATUS = 'pending';
 
 const OPEN_REVIEW_STATUSES: string[] = [
   ReviewRequestStatus.QUEUED,
@@ -60,7 +60,7 @@ export interface AccessRequestItem {
   entity_name?: string | null;
   entity_id: string;
   entity_type: string;
-  status: string;
+  status: AccessGrantRequestStatus;
   created_at: string;
 }
 
@@ -178,10 +178,9 @@ export function useReviewRequests(enabled: boolean): Loadable<DataAssetReviewReq
 export function useMyPendingRequests(
   enabled: boolean,
 ): Loadable<AccessRequestItem[]> & { total: number } {
+  const query = `status=${AccessGrantRequestStatus.PENDING}&limit=${MY_REQUESTS_LIMIT}`;
   const res = useJson<{ requests?: AccessRequestItem[]; total?: number }>(
-    enabled
-      ? `/api/access-grants/my-requests?status=${PENDING_REQUEST_STATUS}&limit=${MY_REQUESTS_LIMIT}`
-      : null,
+    enabled ? `/api/access-grants/my-requests?${query}` : null,
     { requests: EMPTY_REQUESTS, total: 0 },
   );
   const items = res.data?.requests ?? EMPTY_REQUESTS;

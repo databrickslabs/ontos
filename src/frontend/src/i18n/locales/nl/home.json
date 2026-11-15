@@ -49,8 +49,7 @@
       "noRequests": "Geen openstaande aanvragen.",
       "openMyRequests": "Mijn aanvragen openen",
       "myReviews": "Mijn openstaande asset-beoordelingen ({{count}})",
-      "noReviews": "Geen openstaande asset-beoordelingen.",
-      "nothing": "Niets op te volgen."
+      "noReviews": "Geen openstaande asset-beoordelingen."
     },
     "notices": {
       "reviewsTruncated": "Alleen de {{count}} meest recent aangemaakte beoordelingsverzoeken worden gelezen, dus deze aantallen en hiaten kunnen onvolledig zijn.",

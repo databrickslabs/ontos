@@ -2,7 +2,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
-import os
 import uuid
 import yaml
 
@@ -185,6 +184,9 @@ class SettingsManager:
         self._db = db
         self._settings = settings # Store settings
         self._client = workspace_client
+        # DATABRICKS_VOLUME as loaded at startup (environment or .env), before any stored
+        # override is applied: what clearing the override returns to
+        self._startup_volume: Optional[str] = getattr(settings, 'DATABRICKS_VOLUME', None) or None
         # Available jobs derive from workflows on disk
         self._available_jobs: List[str] = []
         self._installations: Dict[str, WorkflowInstallation] = {}
@@ -1559,10 +1561,10 @@ class SettingsManager:
             error_summary = f"Failed to update {len(errors)} workflow(s): " + "; ".join(errors)
             raise RuntimeError(error_summary)
 
-    @staticmethod
-    def _env_volume() -> Optional[str]:
-        """The volume the environment configures: what applies once the override is cleared."""
-        return os.environ.get('DATABRICKS_VOLUME') or None
+    def _env_volume(self) -> Optional[str]:
+        """The volume the app started with (environment or .env): what applies once the
+        override is cleared."""
+        return self._startup_volume
 
     def _validate_volume_settings(self, settings: dict) -> None:
         """Refuse a volume, catalog or schema that can't name a Unity Catalog volume.

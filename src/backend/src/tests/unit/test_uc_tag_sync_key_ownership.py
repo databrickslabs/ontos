@@ -1039,3 +1039,43 @@ def test_missing_run_counts_are_stored_and_kept_by_a_merging_save(tag_sync):
                                         replace=False) is None
     assert tag_sync.read_missing_runs(engine) == counts
     assert set(_stored_objects(engine)["TABLE"]) == {OTHER, ORDERS}
+
+
+def test_restoring_a_sigterm_handler_not_set_from_python_uses_the_default(
+    tag_sync, job, monkeypatch
+):
+    import signal
+
+    calls = []
+
+    def fake_signal(signum, handler):
+        calls.append(handler)
+        return None  # what signal.signal returns for a handler not set from Python
+
+    monkeypatch.setattr(tag_sync.signal, "signal", fake_signal)
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
+
+    assert calls == [tag_sync._exit_on_sigterm, signal.SIG_DFL]
+
+
+def test_a_run_stopped_part_way_keeps_the_counts_of_objects_not_reached(
+    tag_sync, job, monkeypatch
+):
+    """ORDERS is found (its count resets), the run stops on THIRD: OTHER and the schema
+    it never reached keep their not-found counts."""
+    third = "main.finance.third"
+    job.state = {"TABLE": {ORDERS: {DOMAIN_KEY: "Finance"}, OTHER: {DOMAIN_KEY: "S"}},
+                 "SCHEMA": {SCHEMA: {DOMAIN_KEY: "Sales"}}}
+    job.missing_runs = {"TABLE": {ORDERS: 2, OTHER: 5}, "SCHEMA": {SCHEMA: 3}}
+    _seed(job, ORDERS, {DOMAIN_KEY: "Finance"})
+
+    def interrupt():
+        raise KeyboardInterrupt
+
+    _stop_on(tag_sync, monkeypatch, third, interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                               _table(tag_sync, fqn=third, domain="Finance")])
+
+    assert job.missing_runs == {"TABLE": {OTHER: 5}, "SCHEMA": {SCHEMA: 3},
+                                "COLUMN": {}, "CATALOG": {}}

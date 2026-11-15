@@ -2656,7 +2656,9 @@ def main() -> None:
         raise
     finally:
         if sigterm_handled:
-            signal.signal(signal.SIGTERM, previous_sigterm)
+            # None: the previous handler wasn't set from Python; restore the default.
+            signal.signal(signal.SIGTERM,
+                          signal.SIG_DFL if previous_sigterm is None else previous_sigterm)
     updated_total, removed_total = result.updated, result.removed
     all_errors: List[str] = list(result.errors)
 

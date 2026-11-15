@@ -141,6 +141,21 @@ class TestFindConceptIris:
         assert semantic.find_concept_iris('') == []
 
 
+class TestConceptLookupPerImport:
+    def test_the_concept_names_are_read_from_the_graph_once(self):
+        semantic = MagicMock()
+        semantic.concept_name_index.return_value.find.side_effect = (
+            lambda value: [f'http://ex.org/{value}'])
+        resolver = mim._TargetResolver(MagicMock(), semantic)
+
+        for names in (['A', 'B'], ['C'], ['A', 'D']):
+            targets, _ = resolver.resolve({'concepts': names})
+            assert [t.entity_id for t in targets] == [f'http://ex.org/{n}' for n in names]
+
+        semantic.concept_name_index.assert_called_once()
+        semantic.find_concept_iris.assert_not_called()
+
+
 class TestListing:
     def _ws(self, tree):
         ws = MagicMock()
@@ -250,6 +265,17 @@ class TestFileFailures:
         entry = MarkdownImportManager(MagicMock())._import_file(
             MagicMock(), ws, '/Volumes/c/s/v/a.md', size, MagicMock(), None, [], [])
         assert (entry.status, entry.reason) == ('failed', reason)
+
+    def test_more_targets_than_the_cap_fail_the_file_before_any_lookup(self):
+        names = ', '.join(f'a{n}' for n in range(mim.MAX_TARGETS_PER_FILE + 1))
+        ws = MagicMock()
+        ws.files.download.return_value = SimpleNamespace(
+            contents=io.BytesIO(f'---\nassets: [{names}]\n---\nx\n'.encode()))
+        resolver = MagicMock()
+        entry = MarkdownImportManager(MagicMock())._import_file(
+            MagicMock(), ws, '/Volumes/c/s/v/a.md', None, resolver, None, [], [])
+        assert (entry.status, entry.reason) == ('failed', 'too_many_targets')
+        resolver.resolve.assert_not_called()
 
     def test_a_read_error_is_read_failed(self):
         ws = MagicMock()

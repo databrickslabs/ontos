@@ -299,7 +299,8 @@
       "read_failed": "Não foi possível ler o arquivo.",
       "gone": "O arquivo não está mais na pasta: os documentos foram removidos de {{count}} entidades.",
       "not_text": "O arquivo contém caracteres NUL; não é texto.",
-      "import_error": "Não foi possível importar o arquivo; os demais foram importados."
+      "import_error": "Não foi possível importar o arquivo; os demais foram importados.",
+      "too_many_targets": "O front matter cita mais de 50 entidades."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" não é um caminho dentro de um volume do Unity Catalog. Use /Volumes/<catalog>/<schema>/<volume>/<folder>.",

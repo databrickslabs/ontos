@@ -299,7 +299,8 @@
       "read_failed": "Het bestand kon niet worden gelezen.",
       "gone": "Het bestand staat niet meer in de map: de documenten zijn bij {{count}} entiteiten verwijderd.",
       "not_text": "Het bestand bevat NUL-tekens; het is geen tekst.",
-      "import_error": "Het bestand kon niet worden geïmporteerd; de andere bestanden wel."
+      "import_error": "Het bestand kon niet worden geïmporteerd; de andere bestanden wel.",
+      "too_many_targets": "De front matter noemt meer dan 50 entiteiten."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" is geen pad in een Unity Catalog-volume. Gebruik /Volumes/<catalog>/<schema>/<volume>/<folder>.",

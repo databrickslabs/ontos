@@ -299,7 +299,8 @@
       "read_failed": "ファイルを読み取れませんでした。",
       "gone": "ファイルがフォルダーにありません。{{count}} 件のエンティティからドキュメントを削除しました。",
       "not_text": "ファイルに NUL 文字が含まれています。テキストではありません。",
-      "import_error": "このファイルはインポートできませんでした。ほかのファイルはインポートされました。"
+      "import_error": "このファイルはインポートできませんでした。ほかのファイルはインポートされました。",
+      "too_many_targets": "フロントマターで指定されたエンティティが 50 件を超えています。"
     },
     "errors": {
       "markdown_import_path_invalid": "「{{path}}」は Unity Catalog ボリューム内のパスではありません。/Volumes/<catalog>/<schema>/<volume>/<folder> を使用してください。",

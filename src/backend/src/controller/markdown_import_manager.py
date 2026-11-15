@@ -72,6 +72,8 @@ TARGET_FEATURES = {
 # The target kind of a document's entity_type
 _ENTITY_KINDS = {'data_domain': 'domain', 'asset': 'asset', 'concept': 'concept'}
 MAX_FRONT_MATTER_BYTES = 32 * 1024
+# Entities one file may name (all kinds together); more fails the file.
+MAX_TARGETS_PER_FILE = 50
 
 
 class MarkdownImportPathInvalidError(CodedValueError):
@@ -207,6 +209,11 @@ def _values(front_matter: Dict[str, Any], keys: Tuple[str, ...]) -> List[str]:
     return values
 
 
+def count_target_values(front_matter: Dict[str, Any]) -> int:
+    """How many entities the front matter names, all kinds together."""
+    return sum(len(_values(front_matter, keys)) for keys in _TARGET_KEYS.values())
+
+
 def document_title(front_matter: Dict[str, Any], body: str, path: str) -> str:
     title = front_matter.get('title')
     if not isinstance(title, str) or not title.strip():
@@ -229,6 +236,8 @@ class _TargetResolver:
         # Kinds (domain/asset/concept) the caller may write; None = all.
         self._writable = writable_kinds
         self._cache: Dict[Tuple[str, str], _Lookup] = {}
+        # Built on the first concept name, once per import (one graph pass).
+        self._concept_index: Any = None
 
     def may_write(self, entity_type: str) -> bool:
         """Whether the caller may change documents on an entity of this type."""
@@ -300,7 +309,9 @@ class _TargetResolver:
         iris: List[str] = []
         if self._semantic is not None:
             try:
-                iris = self._semantic.find_concept_iris(value)
+                if self._concept_index is None:
+                    self._concept_index = self._semantic.concept_name_index()
+                iris = self._concept_index.find(value)
             except Exception:
                 logger.warning("Concept lookup failed during Markdown import", exc_info=True)
         if not iris:
@@ -525,6 +536,8 @@ class MarkdownImportManager:
         except FrontMatterError:
             return failed('front_matter_invalid')
 
+        if count_target_values(front_matter) > MAX_TARGETS_PER_FILE:
+            return failed('too_many_targets')
         title = document_title(front_matter, body, path)
         targets, unresolved = resolver.resolve(front_matter)
         digest = hashlib.sha256(raw).hexdigest()

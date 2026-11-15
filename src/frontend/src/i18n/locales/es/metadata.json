@@ -299,7 +299,8 @@
       "read_failed": "No se pudo leer el archivo.",
       "gone": "El archivo ya no está en la carpeta: sus documentos se quitaron de {{count}} entidades.",
       "not_text": "El archivo contiene caracteres NUL; no es texto.",
-      "import_error": "No se pudo importar el archivo; los demás sí se importaron."
+      "import_error": "No se pudo importar el archivo; los demás sí se importaron.",
+      "too_many_targets": "El front matter nombra más de 50 entidades."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" no es una ruta dentro de un volumen de Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>/<folder>.",

@@ -13,9 +13,10 @@
   is a 409 ``lifecycle_group_changed``.
 - ``GET /api/lifecycle/{entity_type}/{entity_id}``: the entity's group, stage and
   allowed next stages, for whoever may read the entity.
-- ``POST /api/lifecycle/{entity_type}/{entity_id}/change-group``: admins of the
-  entity's feature or its owners; resets the status to the new group's first
-  stage, writes a change-log entry, refused while a workflow request is pending.
+- ``POST /api/lifecycle/{entity_type}/{entity_id}/change-group``: Read/Write on
+  the entity's feature (a write, as the entity's other updates), and Admin on it
+  or ownership of the entity; resets the status to the new group's first stage,
+  writes a change-log entry, refused while a workflow request is pending.
 
 Errors are coded (``{code, message, params}``): 400 invalid group or stage,
 404 unknown group or entity, 409 integrity conflicts.
@@ -300,7 +301,8 @@ async def change_entity_lifecycle_group(
 ):
     """Move the entity to another group of its type, in that group's first stage.
 
-    Admins of the entity's feature and its owners only.
+    Read/Write on the entity's feature (an owner with Read-only can't change the
+    entity otherwise either), plus Admin on it or ownership of the entity.
     """
     feature = ENTITY_FEATURES[entity_type]
     await _require(feature, FeatureAccessLevel.READ_WRITE, current_user, request)

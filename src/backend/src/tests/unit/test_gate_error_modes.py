@@ -291,6 +291,19 @@ class TestUpdateGates:
         assert len(audited) == 1
 
 
+    def test_listing_and_the_fail_closed_lookup_fail_and_the_update_proceeds(
+        self, contract_manager, db_session, audited, monkeypatch,
+    ):
+        def boom(*args, **kwargs):
+            raise RuntimeError('database went away')
+        monkeypatch.setattr(WorkflowsManager, 'get_workflows_for_trigger', boom)
+        monkeypatch.setattr(workflow_triggers, '_fail_closed_gate_names', boom)
+        cid = _contract(db_session)
+        # The mode is unknown: as for status changes, the update goes ahead (reported)
+        assert self._update(contract_manager, db_session, cid) == (True, [])
+        assert [e['action'] for e in audited] == ['GATE_ERROR']
+
+
 class TestBeforeTheGatesAreKnown:
     """Errors raised before any workflow ran (listing the gates, building the message)."""
 

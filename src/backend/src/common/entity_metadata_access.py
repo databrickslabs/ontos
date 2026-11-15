@@ -236,11 +236,17 @@ class RowMetadataPermission:
     ``(entity_type, entity_id)``, or ``None`` when no row has the id). An unknown
     row gets the ``data-domains`` check, and the route answers 404 as before. A
     failing lookup fails the request (500), never falls back to that check.
+
+    A row of an asset the user can't read answers as an unknown row (the
+    ``data-domains`` check, then 404 with the route's ``not_found`` text), so a
+    row id doesn't tell whether it belongs to such an asset. A reader of the
+    asset gets the asset rules, ``asset_write_denied`` included.
     """
 
-    def __init__(self, load_owner: Callable, level: FeatureAccessLevel):
+    def __init__(self, load_owner: Callable, level: FeatureAccessLevel, not_found: str):
         self.load_owner = load_owner
         self.level = level
+        self.not_found = not_found
         self._domain_checker = PermissionChecker(METADATA_FEATURE_ID, level)
 
     async def __call__(
@@ -254,23 +260,34 @@ class RowMetadataPermission:
         if owner is None or not _is_asset(owner[0]):
             await self._domain_checker(request, user_details, auth_manager)
             return
-        await _ensure_asset(
-            request, db, user_details, auth_manager, owner[1], self.level,
-            require_asset=False,
-        )
+        try:
+            await _ensure_asset(
+                request, db, user_details, auth_manager, owner[1], FeatureAccessLevel.READ_ONLY,
+                require_asset=False,
+            )
+        except HTTPException as denied:
+            if denied.status_code != status.HTTP_403_FORBIDDEN:
+                raise
+            await self._domain_checker(request, user_details, auth_manager)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=self.not_found)
+        if self.level != FeatureAccessLevel.READ_ONLY:
+            await _ensure_asset(
+                request, db, user_details, auth_manager, owner[1], self.level,
+                require_asset=False,
+            )
 
 
 def rich_text_permission(level: FeatureAccessLevel) -> RowMetadataPermission:
-    return RowMetadataPermission(_rich_text_owner, level)
+    return RowMetadataPermission(_rich_text_owner, level, "Rich text not found")
 
 
 def link_permission(level: FeatureAccessLevel) -> RowMetadataPermission:
-    return RowMetadataPermission(_link_owner, level)
+    return RowMetadataPermission(_link_owner, level, "Link not found")
 
 
 def document_permission(level: FeatureAccessLevel) -> RowMetadataPermission:
-    return RowMetadataPermission(_document_owner, level)
+    return RowMetadataPermission(_document_owner, level, "Document not found")
 
 
 def cost_item_permission(level: FeatureAccessLevel) -> RowMetadataPermission:
-    return RowMetadataPermission(_cost_item_owner, level)
+    return RowMetadataPermission(_cost_item_owner, level, "Cost item not found")

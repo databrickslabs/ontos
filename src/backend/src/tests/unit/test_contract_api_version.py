@@ -117,3 +117,28 @@ def test_the_update_route_answers_with_the_code_and_param():
     assert (detail["code"], detail["params"]) == (
         "odcs_api_version_unsupported", {"api_version": "v9.9.9"},
     )
+
+
+@pytest.mark.parametrize("sent, stored", [
+    ("3.0.2", "v3.0.2"), ("v3.1.0", "v3.1.0"), (None, "v3.1.0"),
+    # The import only warns about a value outside ODCS; it keeps it
+    ("v9.9.9", "v9.9.9"),
+])
+def test_a_file_import_stores_the_odcs_spelling(manager, db_session, sent, stored):
+    """The ODCS file / text import (create_from_upload) normalizes like the REST models."""
+    odcs = {"name": f"imported-{uuid.uuid4().hex[:8]}", "version": "1.0.0", "kind": "DataContract"}
+    if sent is not None:
+        odcs["apiVersion"] = sent
+
+    created = manager.create_from_upload(db=db_session, parsed_odcs=odcs, current_user="alice")
+
+    assert created.api_version == stored
+
+
+@pytest.mark.parametrize("sent, stored", [("3.0.2", "v3.0.2"), (None, "v3.0.1")])
+def test_a_self_service_contract_stores_the_odcs_spelling(manager, db_session, sent, stored):
+    odcs = {"name": f"self-{uuid.uuid4().hex[:8]}", "version": "1.0.0"}
+    if sent is not None:
+        odcs["apiVersion"] = sent
+
+    assert manager.create_from_odcs_dict(db_session, odcs, "alice").api_version == stored

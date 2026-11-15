@@ -858,3 +858,61 @@ def test_legacy_cleanup_keeps_tags_this_run_delivered(tag_sync, uc, db, monkeypa
     assert uc[("SCHEMA", "main.s")] == {key: OPEX}
     assert key not in uc[("SCHEMA", "main.other")]
     assert (removed, errors) == (1, [])
+
+
+class _ReadFails:
+    """spark.sql() raising ``error`` for every information_schema read."""
+
+    def __init__(self, error):
+        self.error = error
+
+    def sql(self, _statement):
+        raise RuntimeError(self.error)
+
+
+def _raising(error):
+    def read(*_a):
+        raise RuntimeError(error)
+    return read
+
+
+def _legacy_run(tag_sync, db, spark, cleanup_enabled):
+    dataset = _asset_dataset(tag_sync, "main.s.other", [OPEX])
+    return tag_sync.handle_legacy_tag_cleanup(
+        spark, db, [dataset], tag_sync.DirectLinkInfos(tables=[dataset]),
+        prefix="x_ontos_", previous={}, cleanup_enabled=cleanup_enabled,
+        is_partial_read=False, dry_run=False,
+    )
+
+
+def test_legacy_cleanup_read_failure_is_an_error_not_done(tag_sync, db, monkeypatch):
+    """A failed information_schema read used to be swallowed: the scan looked clean and
+    the cleanup was marked done without having seen the catalog."""
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags",
+                        _raising("[INTERNAL_ERROR]"))
+    _removed, errors = _legacy_run(tag_sync, db, _ReadFails("[INTERNAL_ERROR] try later"),
+                                   cleanup_enabled=True)
+
+    assert len(errors) == 1 and "main" in errors[0]
+    assert not tag_sync.read_cleanup_legacy_status(db).get("cleanup_done")
+
+
+def test_legacy_scan_read_failure_is_not_marked_checked(tag_sync, db, monkeypatch):
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags",
+                        _raising("[INTERNAL_ERROR]"))
+    _legacy_run(tag_sync, db, _ReadFails("[INTERNAL_ERROR] try later"),
+                cleanup_enabled=False)
+
+    assert not tag_sync.read_cleanup_legacy_status(db).get("checked_first_run")
+
+
+def test_legacy_cleanup_of_a_missing_catalog_finds_nothing(tag_sync, db, monkeypatch):
+    """A catalog that doesn't exist: UC raises TABLE_OR_VIEW_NOT_FOUND on its
+    information_schema (checked on a workspace). No tags, no error."""
+    error = "[TABLE_OR_VIEW_NOT_FOUND] `main`.`information_schema`.`table_tags`"
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags",
+                        _raising(error))
+    removed, errors = _legacy_run(tag_sync, db, _ReadFails(error), cleanup_enabled=True)
+
+    assert (removed, errors) == (0, [])
+    assert tag_sync.read_cleanup_legacy_status(db).get("cleanup_done")

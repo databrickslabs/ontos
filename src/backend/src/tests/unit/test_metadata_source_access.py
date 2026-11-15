@@ -53,7 +53,9 @@ def no_teams(monkeypatch):
 @pytest.fixture
 def scoped(monkeypatch):
     """Caller without assets READ_WRITE."""
-    monkeypatch.setattr(assets_routes, "_user_has_assets_feature", lambda request, user, level: False)
+    monkeypatch.setattr(
+        assets_routes, "_user_has_assets_feature", lambda request, user, level: False,
+    )
 
 
 def _asset(asset_id=None):
@@ -65,7 +67,8 @@ def test_contract_source_follows_contract_read_rule(db_session, no_teams, scoped
 
     assert can_read("data_contract", _contract(db_session, status="active"))
     assert not can_read("data_contract", _contract(db_session, status="draft"))
-    assert not can_read("data_contract", _contract(db_session, status="proposed", team="other-team"))
+    other_team = _contract(db_session, status="proposed", team="other-team")
+    assert not can_read("data_contract", other_team)
     assert not can_read(
         "data_contract", _contract(db_session, status="active", draft_owner="someone@example.com"),
     )
@@ -75,7 +78,8 @@ def test_contract_source_follows_contract_read_rule(db_session, no_teams, scoped
 def test_contracts_admin_reads_every_contract_source(db_session, no_teams, scoped):
     can_read = routes.build_inheritance_source_access(_request(), db_session, _user(), True)
 
-    assert can_read("data_contract", _contract(db_session, status="draft", draft_owner="x@example.com"))
+    someone_elses = _contract(db_session, status="draft", draft_owner="x@example.com")
+    assert can_read("data_contract", someone_elses)
 
 
 def test_asset_source_follows_asset_read_rule(db_session, scoped):
@@ -91,7 +95,9 @@ def test_asset_source_follows_asset_read_rule(db_session, scoped):
 
 
 def test_assets_read_write_reads_every_asset_source(db_session, monkeypatch):
-    monkeypatch.setattr(assets_routes, "_user_has_assets_feature", lambda request, user, level: True)
+    monkeypatch.setattr(
+        assets_routes, "_user_has_assets_feature", lambda request, user, level: True,
+    )
     can_read = routes.build_inheritance_source_access(_request(), db_session, _user(), False)
 
     assert can_read("asset", _asset())

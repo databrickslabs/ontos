@@ -145,3 +145,27 @@ def test_a_save_that_changes_the_schedule_to_an_invalid_one_is_refused(client, d
 
     assert saved.status_code == 400, saved.text
     assert 'cron_field_count' in _issue_codes(saved)
+
+
+def test_a_new_cron_sent_without_a_timezone_does_not_keep_the_stored_one(client, db_session):
+    wf_id = _stored_scheduled(db_session)
+    body = _designer_body(client, wf_id)
+    body['trigger']['schedule'] = '0 0 7 * * ?'
+
+    saved = client.put(f'/api/workflows/{wf_id}', json=body)
+
+    assert saved.status_code == 200, saved.text
+    stored = _stored_trigger(db_session, wf_id)
+    assert stored['schedule'] == '0 0 7 * * ?'
+    assert stored.get('timezone') is None
+
+
+def test_the_stored_cron_sent_back_without_a_timezone_keeps_it(client, db_session):
+    wf_id = _stored_scheduled(db_session)
+    body = _designer_body(client, wf_id)
+    body['trigger']['schedule'] = '0 0 6 * * ?'
+
+    saved = client.put(f'/api/workflows/{wf_id}', json=body)
+
+    assert saved.status_code == 200, saved.text
+    assert _stored_trigger(db_session, wf_id)['timezone'] == 'Europe/Berlin'

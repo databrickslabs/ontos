@@ -1031,15 +1031,22 @@ class WorkflowsManager:
     ) -> Optional[WorkflowTrigger]:
         """A sent ``scheduled`` trigger keeps the stored ``schedule``/``timezone`` it leaves out.
 
-        The designer doesn't edit schedules and sends neither field, so without this its
-        save of a scheduled workflow would drop the schedule. A field that is sent, even
-        empty, is used as sent (and validated).
+        A client that doesn't know these fields (an older designer, a script) sends
+        neither, so without this its save of a scheduled workflow would drop the
+        schedule. A field that is sent, even empty, is used as sent (and validated).
+        The timezone belongs to its cron: a new cron sent without a timezone doesn't
+        keep the stored one (it runs in UTC, the default).
         """
         if (new is None or stored is None or new.type != TriggerType.SCHEDULED
                 or stored.type != TriggerType.SCHEDULED):
             return new
-        kept = {field: getattr(stored, field) for field in ('schedule', 'timezone')
-                if field not in new.model_fields_set}
+        sent = new.model_fields_set
+        kept = {}
+        if 'schedule' not in sent:
+            kept['schedule'] = stored.schedule
+        if 'timezone' not in sent and (
+                'schedule' not in sent or (new.schedule or '') == (stored.schedule or '')):
+            kept['timezone'] = stored.timezone
         return new.model_copy(update=kept) if kept else new
 
     def _validate_gate_exemptions(self, trigger: WorkflowTrigger) -> List[str]:

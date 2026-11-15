@@ -146,3 +146,30 @@ class TestProductChangeAnalyzerNullSafety:
         # bob without a critical role → patch-level fix, not breaking.
         assert result.change_type == ChangeType.FIX
         assert any("bob" in entry for entry in result.fixes)
+
+
+def _with_ports(key: str, ports) -> Dict:
+    return {**_empty_product(), key: ports}
+
+
+class TestInputPortRules:
+    """Input ports have no `required` field: the rules use fields that exist."""
+
+    def test_removing_an_input_port_is_breaking(self):
+        old = _with_ports("inputPorts", [{"name": "in", "version": "1", "contractId": "c1"}])
+        new = _with_ports("inputPorts", [])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert result.version_bump == "major"
+        assert any("in" in c for c in result.breaking_changes)
+
+    def test_adding_an_input_port_is_a_feature(self):
+        old = _with_ports("inputPorts", [])
+        new = _with_ports("inputPorts", [{"name": "in", "version": "1", "contractId": "c1"}])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.FEATURE
+        assert result.breaking_changes == []

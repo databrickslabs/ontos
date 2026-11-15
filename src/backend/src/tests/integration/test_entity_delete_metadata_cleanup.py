@@ -141,3 +141,18 @@ def test_deleting_a_concept_removes_its_metadata(
     assert sum(_counts(db_session, 'concept', iri).values()) == 0
     assert _deleted_paths(files) == {upload}
     assert _document_hits(client, 'blorptastic') == []
+
+
+def test_imported_documents_leave_search_only_once_the_delete_commits(client, db_session):
+    domain = DataDomain(name='Pending', created_by='test@example.com')
+    db_session.add(domain)
+    db_session.flush()
+    _seed(db_session, 'data_domain', domain.id, 'snorkelwax')
+
+    app.state.metadata_manager.remove_all_for_entity(
+        db_session, entity_type='data_domain', entity_id=domain.id)
+
+    # Not committed yet: a failed commit would leave the rows, so the hit stays.
+    assert len(_document_hits(client, 'snorkelwax')) == 1
+    db_session.commit()
+    assert _document_hits(client, 'snorkelwax') == []

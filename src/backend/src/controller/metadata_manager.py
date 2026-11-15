@@ -35,6 +35,9 @@ SHARED_ENTITY_ID = "__shared__"
 # Session.info keys of the document files to delete once the session commits.
 _PENDING_FILES_KEY = "ontos_pending_document_files"
 _PENDING_FILES_LISTENING = "ontos_pending_document_files_listening"
+# Session.info keys of the imported documents to drop from search once it commits.
+_PENDING_UNINDEX_KEY = "ontos_pending_document_unindex"
+_PENDING_UNINDEX_LISTENING = "ontos_pending_document_unindex_listening"
 
 
 def _drop_pending_files(session: Session, previous_transaction) -> None:
@@ -49,6 +52,13 @@ def _drop_pending_files(session: Session, previous_transaction) -> None:
     pending = session.info.pop(_PENDING_FILES_KEY, [])
     if pending:
         logger.info("Rolled back: %d document file(s) kept in the volume", len(pending))
+
+
+def _drop_pending_unindex(session: Session, previous_transaction) -> None:
+    """On a rollback the document rows come back: keep them in the search index."""
+    if previous_transaction.nested:
+        return
+    session.info.pop(_PENDING_UNINDEX_KEY, None)
 
 
 # Where the search result of an imported document leads: the page of its entity.
@@ -349,7 +359,8 @@ class MetadataManager(SearchableAsset):
 
         Runs in the caller's transaction (no commit). Returns the number of rows
         removed per kind, and the volume paths of the removed documents' files,
-        for ``delete_document_files``.
+        for ``delete_document_files``. Imported documents leave the search index
+        once the caller commits.
         """
         rich_texts = self._rich_text_repo.remove_all_for_entity(
             db, entity_type=entity_type, entity_id=entity_id,
@@ -370,9 +381,30 @@ class MetadataManager(SearchableAsset):
             'rich_texts': rich_texts, 'links': links,
             'documents': len(paths) + len(imported_ids), 'attachments': attachments,
         }
-        for document_id in imported_ids:
-            self.remove_document_from_index(document_id)
+        # Not before the commit: if it fails, the rows stay and so must their hits.
+        self.remove_documents_from_index_after_commit(db, imported_ids)
         return counts, paths
+
+    def remove_documents_from_index_after_commit(
+        self, db: Session, document_ids: List[str],
+    ) -> None:
+        """Drop imported documents from the search index once ``db`` commits.
+
+        As ``delete_document_files_after_commit``: the ids wait in ``db.info``,
+        and a rollback of the session's transaction drops them (the rows and
+        their index entries stay).
+        """
+        if not document_ids:
+            return
+        db.info.setdefault(_PENDING_UNINDEX_KEY, []).extend(document_ids)
+        if not db.info.get(_PENDING_UNINDEX_LISTENING):
+            db.info[_PENDING_UNINDEX_LISTENING] = True
+            event.listen(db, 'after_commit', self._unindex_pending_documents)
+            event.listen(db, 'after_soft_rollback', _drop_pending_unindex)
+
+    def _unindex_pending_documents(self, session: Session) -> None:
+        for document_id in session.info.pop(_PENDING_UNINDEX_KEY, []):
+            self.remove_document_from_index(document_id)
 
     def delete_document_files(
         self, ws: Optional[WorkspaceClient], paths: List[str],

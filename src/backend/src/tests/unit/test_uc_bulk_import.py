@@ -14,6 +14,7 @@ import os
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
+import asyncio
 import re
 import sys
 from datetime import datetime
@@ -29,7 +30,7 @@ from src.common.database import Base
 from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.models.data_products import OutputPort
-from src.repositories.data_contracts_repository import data_contract_repo
+from src.routes.data_contracts_routes import get_contract
 
 # pyspark only exists on the job cluster; the functions under test don't use it.
 _pyspark_sql = ModuleType('pyspark.sql')
@@ -113,8 +114,9 @@ def test_an_imported_contract_is_readable_through_the_manager(engine):
 
     [contract_id] = _contract_ids(engine)
     with Session(engine) as db:
-        contract = DataContractsManager(data_dir=Path('/tmp'))._build_contract_api_model(
-            db, data_contract_repo.get_with_all(db, id=contract_id))
+        # The handler of GET /api/data-contracts/{id}, called without the HTTP layer
+        contract = asyncio.run(get_contract(
+            contract_id, db, DataContractsManager(data_dir=Path('/tmp')), True, None))
 
     assert contract.status == 'draft'
     assert [(s.name, s.physicalName) for s in contract.contract_schema] == [('orders', _TABLES[0])]
@@ -245,13 +247,22 @@ def test_update_keeps_the_existing_domain(engine):
         assert conn.execute(text('SELECT id FROM data_domains')).scalars().all() == [domain_id]
 
 
-def test_a_stored_port_with_null_booleans_still_reads():
-    # Rows written before the fix carry NULL in both columns
-    port = OutputPort.model_validate({'name': 'orders', 'version': '1.0.0',
-                                      'contains_pii': None, 'auto_approve': None})
+def test_a_stored_port_with_null_booleans_still_reads(engine):
+    # Both columns are nullable, so a row written by any raw-SQL writer can hold NULL
+    _import(engine, tables=_TABLES[:1])
+    with engine.begin() as conn:
+        conn.execute(text('UPDATE data_product_output_ports SET contains_pii = NULL, '
+                          'auto_approve = NULL'))
+        stored = conn.execute(text('SELECT contains_pii, auto_approve '
+                                   'FROM data_product_output_ports')).one()
+    assert tuple(stored) == (None, None)
 
-    assert port.containsPii is False
-    assert port.autoApprove is False
+    with Session(engine) as db:
+        manager = DataProductsManager(db=db)
+        product = manager.get_product(manager.list_products(is_admin=True)[0].id)
+
+    [port] = product.outputPorts
+    assert (port.containsPii, port.autoApprove) == (False, False)
 
 
 def test_an_imported_product_is_visible_to_admins_only(engine):

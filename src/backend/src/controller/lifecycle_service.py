@@ -260,12 +260,40 @@ class LifecycleService:
         return out
 
     def group_for(self, db: Optional[Session], entity_type: str, entity: Any) -> Group:
-        """The group of ``entity``: its own, or the type's default when it has none."""
+        """The group of ``entity``: its own, or the type's default when it has none.
+
+        A group id the cache doesn't know (a group another worker created less
+        than ``_CACHE_SECONDS`` ago) reloads the groups once, through ``db`` or the
+        entity's own session; a group still missing then raises
+        ``LifecycleGroupNotFoundError`` instead of using the default's moves.
+        """
         group_id = getattr(entity, 'lifecycle_stage_group_id', None)
-        if group_id:
-            group = self.group(db, str(group_id))
-            if group is not None and group.entity_type == entity_type:
-                return group
+        if not group_id:
+            return self.default_group(db, entity_type)
+        group_id = str(group_id)
+        group = self.group(db, group_id)
+        if group is None:
+            if db is None:
+                try:
+                    db = object_session(entity)
+                except Exception:
+                    db = None
+            if db is not None:
+                try:
+                    self._load(db)
+                except Exception as e:
+                    logger.warning("Could not reload lifecycle stage groups: %s", e)
+                group = self._groups.get(group_id)
+                if group is None and group_id == DEFAULT_GROUP_IDS.get(entity_type) \
+                        and not self._groups:
+                    # The seeded default's id while no group is stored yet
+                    return self.default_group(db, entity_type)
+                if group is None:
+                    raise LifecycleGroupNotFoundError(
+                        f"Lifecycle stage group '{group_id}' not found", groupId=group_id,
+                    )
+        if group is not None and group.entity_type == entity_type:
+            return group
         return self.default_group(db, entity_type)
 
     def initial_stage_of(

@@ -1019,6 +1019,7 @@
     "maturity_gate_error": "Non è stato possibile valutare il gate {{gateName}}. I dettagli sono nel log del server."
   },
   "maturityResult": {
+    "notStored": "Calcolato ora e non salvato: la cronologia mostra le valutazioni salvate. Rivaluta per salvare questo risultato.",
     "notEvaluated": "Non valutato"
   },
   "createDialog": {

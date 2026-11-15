@@ -123,6 +123,11 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
             })}
           </p>
         ))}
+        {report.stored === false && (
+          <p className="text-xs text-muted-foreground" data-testid="maturity-not-stored">
+            {t('data-products:maturityResult.notStored')}
+          </p>
+        )}
         {/* Level progression */}
         {report.levels.map((level: LevelResult) => {
           const isExpanded = expandedLevel === level.level_order;

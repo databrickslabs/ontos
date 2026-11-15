@@ -1019,6 +1019,7 @@
     "maturity_gate_error": "Gate {{gateName}} could not be evaluated. The details are in the server log."
   },
   "maturityResult": {
+    "notStored": "Computed now and not stored: the history shows the stored evaluations. Re-evaluate to store this result.",
     "notEvaluated": "Not evaluated"
   },
   "createDialog": {

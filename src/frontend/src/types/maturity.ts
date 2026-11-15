@@ -64,6 +64,8 @@ export interface MaturityReport {
   evaluated_at: string;
   evaluated_by: string | null;
   notices?: MaturityNotice[];
+  /** False for a result computed live and not stored (an asset's GET) */
+  stored?: boolean;
 }
 
 export interface MaturitySnapshot {

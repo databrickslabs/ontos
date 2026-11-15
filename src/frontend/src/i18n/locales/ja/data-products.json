@@ -1019,6 +1019,7 @@
     "maturity_gate_error": "ゲート {{gateName}} を評価できませんでした。詳細はサーバーログにあります。"
   },
   "maturityResult": {
+    "notStored": "今計算した結果で、保存されていません。履歴には保存済みの評価が表示されます。この結果を保存するには再評価してください。",
     "notEvaluated": "未評価"
   },
   "createDialog": {

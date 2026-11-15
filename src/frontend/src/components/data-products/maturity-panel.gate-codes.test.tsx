@@ -134,3 +134,26 @@ describe('MaturityPanel gate that could not be evaluated', () => {
     expect(screen.queryByText('Not evaluated')).not.toBeInTheDocument();
   });
 });
+
+describe('MaturityPanel result that is not stored', () => {
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await i18n.changeLanguage('en');
+    delete REPORT.stored;
+  });
+
+  it('says a live result is not stored', async () => {
+    REPORT.stored = false;
+    await renderPanel('pt');
+    expect(await screen.findByTestId('maturity-not-stored')).toHaveTextContent(
+      'Calculado agora e não salvo',
+    );
+  });
+
+  it('says nothing for a stored result', async () => {
+    REPORT.stored = true;
+    await renderPanel('en');
+    await screen.findByText('Has owner');
+    expect(screen.queryByTestId('maturity-not-stored')).not.toBeInTheDocument();
+  });
+});

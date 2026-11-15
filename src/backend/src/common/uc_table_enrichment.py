@@ -58,6 +58,17 @@ REASON_NO_WAREHOUSE = 'no_warehouse'
 REASON_NO_ACCESS = 'no_access'
 REASON_QUERY_FAILED = 'query_failed'
 REASON_TIMED_OUT = 'timed_out'
+REASON_BUDGET_EXCEEDED = 'budget_exceeded'
+
+# Statements a run may send. A run is one policy run started by a user, or a
+# whole compliance-checks job run (every policy it runs shares the budget).
+MAX_STATEMENTS_PER_RUN = 100
+# Rows kept for reuse by later rules of the same run; past this, rows are not kept
+MAX_CACHED_ROWS = 200_000
+# Tables enriched together: the loader yields a catalog's tables in chunks of
+# whole schemas of about this size, so a run that stops at its limit reads no
+# more, and one statement result stays small
+CHUNK_TABLES = 500
 
 
 class SourceUnavailable(Exception):
@@ -239,6 +250,63 @@ def mark_unavailable(entities: List[Dict[str, Any]], group: str, reason: str) ->
         missing = entity.setdefault(UNAVAILABLE_KEY, {})
         for field in GROUP_FIELDS[group]:
             missing[field] = {'source': GROUP_SOURCE[group], 'reason': reason}
+
+
+# --- statement reuse and budget ------------------------------------------------------
+
+class StatementCache:
+    """The statements of one run: their rows, reused by the later rules that send
+    the same statement (same catalog, field group and schemas), and the budget.
+
+    A statement that failed is not sent again in the run. Past
+    ``max_statements``, a new statement is not sent and its group is
+    unavailable (reason ``budget_exceeded``).
+    """
+
+    def __init__(
+        self, max_statements: int = MAX_STATEMENTS_PER_RUN,
+        max_cached_rows: int = MAX_CACHED_ROWS,
+    ):
+        self.max_statements = max_statements
+        self.max_cached_rows = max_cached_rows
+        self.sent = 0
+        self._cached_rows = 0
+        self._results: Dict[Any, Any] = {}
+
+    def runner(self, inner: SqlRunner) -> SqlRunner:
+        """``inner`` with this run's reuse and budget."""
+        return _CachedRunner(inner, self)
+
+    def rows(self, inner: SqlRunner, statement: str, parameters: Dict[str, str]):
+        key = (statement, tuple(sorted(parameters.items())))
+        if key in self._results:
+            result = self._results[key]
+            if isinstance(result, SourceUnavailable):
+                raise result
+            return result
+        if self.sent >= self.max_statements:
+            raise SourceUnavailable(
+                REASON_BUDGET_EXCEEDED, f"run already sent {self.sent} statements",
+            )
+        self.sent += 1
+        try:
+            result = inner.rows(statement, parameters)
+        except SourceUnavailable as e:
+            self._results[key] = e
+            raise
+        if self._cached_rows + len(result) <= self.max_cached_rows:
+            self._cached_rows += len(result)
+            self._results[key] = result
+        return result
+
+
+class _CachedRunner:
+    def __init__(self, inner: SqlRunner, cache: StatementCache):
+        self.inner = inner
+        self.cache = cache
+
+    def rows(self, statement: str, parameters: Dict[str, str]) -> List[Dict[str, Any]]:
+        return self.cache.rows(self.inner, statement, parameters)
 
 
 # --- the rule object of a table ---------------------------------------------------

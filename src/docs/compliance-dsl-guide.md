@@ -238,8 +238,8 @@ ON_FAIL FAIL 'Tag the table with data_classification and make sure its sources a
 - `HAS_TAG` reads the table's governed tags from `system.information_schema.table_tags`
 - `upstream_count` counts the distinct tables the table was written from in the last 90 days
   (`system.access.table_lineage`)
-- Both are read through the app's SQL warehouse, once per catalog and only for the schemas
-  the `WHERE` selects. Without a warehouse or access to these system tables, the tables are
+- Both are read through the app's SQL warehouse, in a few statements per catalog and only
+  for the schemas the `WHERE` selects. Without a warehouse or access to these system tables, the tables are
   reported as *not evaluated* and the run shows a warning, instead of failing them as untagged
 
 ---

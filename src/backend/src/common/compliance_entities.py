@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
 from src.common.uc_table_enrichment import (
-    VIEW_TABLE_TYPES, SqlRunner, conditions_without, enrich_catalog_tables, fields_read,
+    CHUNK_TABLES, VIEW_TABLE_TYPES, SqlRunner, conditions_without, enrich_catalog_tables, fields_read,
     table_entity, unavailable_fields_read,
 )
 
@@ -96,6 +96,15 @@ class UnityCatalogLoader(EntityLoader):
 
     SUPPORTED_TYPES = ('catalog', 'schema', 'table', 'view', 'function', 'volume')
 
+    def _enriched(self, catalog: str, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """The tables of one chunk of a catalog, with the enrichment's fields added."""
+        enrichment = self.table_enrichment
+        enrich_catalog_tables(
+            catalog, [e for e in entities if enrichment.in_scope(e)],
+            enrichment.groups, enrichment.runner,
+        )
+        return entities
+
     def get_supported_types(self) -> List[str]:
         return list(self.SUPPORTED_TYPES)
 
@@ -142,11 +151,15 @@ class UnityCatalogLoader(EntityLoader):
             # Load tables and views
             if 'table' in entity_types or 'view' in entity_types:
                 for catalog in self.ws.catalogs.list():
-                    # With enrichment, a catalog's tables are read first and then
-                    # enriched with one statement per field group for the catalog
+                    # With enrichment, tables are read in chunks of whole schemas and
+                    # each chunk is enriched with one statement per field group, before
+                    # the next chunk is listed (a run that stops at its limit reads no more)
                     pending: List[Dict[str, Any]] = []
                     try:
                         for schema in self.ws.schemas.list(catalog_name=catalog.name):
+                            if len(pending) >= CHUNK_TABLES:
+                                yield from self._enriched(catalog.name, pending)
+                                pending = []
                             try:
                                 for table in self.ws.tables.list(
                                     catalog_name=catalog.name,
@@ -166,14 +179,7 @@ class UnityCatalogLoader(EntityLoader):
                     except Exception:
                         logger.exception(f"Failed to list schemas for catalog {catalog.name}")
                     if pending:
-                        enrichment = self.table_enrichment
-                        enrich_catalog_tables(
-                            catalog.name,
-                            [e for e in pending if enrichment.in_scope(e)],
-                            enrichment.groups,
-                            enrichment.runner,
-                        )
-                        yield from pending
+                        yield from self._enriched(catalog.name, pending)
 
             # Load functions
             if 'function' in entity_types:

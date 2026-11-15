@@ -288,6 +288,63 @@ def test_conditions_without_keeps_only_and_parts_free_of_the_fields():
     assert enr.conditions_without(None, enr.FIELD_GROUP) == []
 
 
+# --- reuse, budget and chunks ---------------------------------------------------------
+
+def test_statement_cache_reuses_rows_and_failures_and_keeps_a_budget():
+    cache = enr.StatementCache(max_statements=2)
+    inner = FakeRunner(tag_rows=[_tag('orders', 'pii')], fail={LINEAGE: 'no_access'})
+    runner = cache.runner(inner)
+    tags = enr.tags_statement('main', ['sales'])
+    lineage = enr.lineage_statement('main', ['sales'])
+
+    assert runner.rows(*tags) == runner.rows(*tags)
+    for _ in range(2):
+        with pytest.raises(SourceUnavailable):
+            runner.rows(*lineage)
+    assert len(inner.calls) == 2  # each sent once
+
+    with pytest.raises(SourceUnavailable) as raised:
+        runner.rows(*enr.tags_statement('lake', ['bronze']))
+    assert raised.value.reason == 'budget_exceeded'
+    assert len(inner.calls) == 2
+
+
+def test_policies_sharing_a_cache_send_each_statement_once(db_session):
+    """Two rules reading tags of the same tables, in one job run: one tags statement."""
+    ws = _ws({('main', 'sales'): [_table('orders')]})
+    runner = FakeRunner(tag_rows=[_tag('orders', 'pii')])
+    cache = enr.StatementCache()
+    settings = SimpleNamespace(DATABRICKS_WAREHOUSE_ID='wh-1')
+
+    with patch('src.common.workspace_client.get_workspace_client', return_value=ws), \
+            patch('src.common.config.get_settings', return_value=settings), \
+            patch('src.controller.compliance_manager.WarehouseSqlRunner', return_value=runner):
+        for rule in ("MATCH (t:table) ASSERT HAS_TAG('pii')",
+                     "MATCH (t:table) ASSERT NOT HAS_TAG('deprecated')"):
+            run = ComplianceManager().run_policy_inline(
+                db_session, policy=_policy(db_session, rule), statement_cache=cache,
+            )
+            assert run.status == 'succeeded' and run.warning_code is None
+
+    assert [source for source, _, _ in runner.calls] == [TAGS]
+
+
+def test_loader_enriches_chunk_by_chunk_and_stops_with_the_iterator(monkeypatch):
+    monkeypatch.setattr('src.common.compliance_entities.CHUNK_TABLES', 2)
+    schemas = {('main', f's{i}'): [_table(f't{i}a', schema=f's{i}'),
+                                   _table(f't{i}b', schema=f's{i}')] for i in range(3)}
+    runner = FakeRunner()
+    loader = UnityCatalogLoader(_ws(schemas), TableEnrichment(groups={TAGS}, runner=runner))
+    iterator = EntityIterator([loader])
+
+    first = list(iterator.iterate(parse_entity_filter("MATCH (t:table) ASSERT HAS_TAG('x')"),
+                                  limit=2))
+
+    assert [e['name'] for e in first] == ['t0a', 't0b']
+    # Only the first chunk (schema s0) was read; whole schemas per statement
+    assert [params for _, _, params in runner.calls] == [{'catalog': 'main', 's0': 's0'}]
+
+
 # --- the shared table builder ------------------------------------------------------
 
 def test_table_entity_is_what_the_loader_yields():

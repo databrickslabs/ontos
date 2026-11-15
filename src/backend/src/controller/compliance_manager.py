@@ -31,6 +31,7 @@ from src.common.api_errors import UserTokenRequiredError
 from src.common.run_identity import RunIdentity
 from src.common.uc_table_enrichment import (
     FIELD_GROUP,
+    StatementCache,
     WarehouseSqlRunner,
     conditions_without,
     fields_read,
@@ -758,6 +759,7 @@ class ComplianceManager:
 
     def _table_enrichment_for(
         self, parsed_rule: Dict, entity_types: List[str], ws,
+        statement_cache: Optional[StatementCache] = None,
     ) -> Optional[TableEnrichment]:
         """Tags / lineage to load for a run, or None when the rule reads neither.
 
@@ -777,7 +779,10 @@ class ComplianceManager:
         except Exception:
             logger.warning("Settings unavailable; no SQL warehouse for tags and lineage")
             warehouse_id = ''
-        runner = WarehouseSqlRunner(ws, warehouse_id) if warehouse_id else None
+        runner = None
+        if warehouse_id:
+            cache = statement_cache or StatementCache()
+            runner = cache.runner(WarehouseSqlRunner(ws, warehouse_id))
         return TableEnrichment(
             groups=groups, runner=runner, scope=conditions_without(where, FIELD_GROUP),
         )
@@ -790,6 +795,7 @@ class ComplianceManager:
         limit: Optional[int] = None,
         current_user: Optional[str] = None,
         run_identity: Optional[RunIdentity] = None,
+        statement_cache: Optional[StatementCache] = None,
     ) -> ComplianceRunDb:
         """Run a compliance policy with enhanced DSL support.
 
@@ -799,6 +805,9 @@ class ComplianceManager:
         ``run_identity``: whose permissions Unity Catalog is read with (the
         tables listed, their tags and lineage). A run a user starts passes
         theirs; the default, the app's, is for scheduled runs.
+
+        ``statement_cache``: the warehouse statements (tags, lineage) and their
+        budget, shared by the policies of one job run; a new one by default.
         """
         run = self.create_run(db, policy_id=policy.id)
         success = 0
@@ -825,7 +834,7 @@ class ComplianceManager:
             entity_iterator = create_entity_iterator(
                 db=db, workspace_client=ws,
                 table_enrichment=self._table_enrichment_for(
-                    parsed_rule, entity_filter.entity_types, ws,
+                    parsed_rule, entity_filter.entity_types, ws, statement_cache,
                 ),
             )
             rule_fields = fields_read(

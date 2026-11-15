@@ -185,7 +185,8 @@
       "no_warehouse": "aucun SQL warehouse n'est configuré",
       "no_access": "pas d'accès à la table système",
       "query_failed": "la requête a échoué",
-      "timed_out": "la requête était encore en cours à la limite de temps"
+      "timed_out": "la requête était encore en cours à la limite de temps",
+      "budget_exceeded": "l'exécution a atteint sa limite de requêtes sur le SQL warehouse"
     }
   },
   "saveErrors": {

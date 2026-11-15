@@ -414,7 +414,8 @@ def run_policy(
     db: Session,
     policy: Dict[str, Any],
     manager: Any,
-    entity_limit: Optional[int]
+    entity_limit: Optional[int],
+    statement_cache: Any = None,
 ) -> Dict[str, Any]:
     """Run a single compliance policy.
 
@@ -440,7 +441,9 @@ def run_policy(
 
     try:
         # Run policy using ComplianceManager
-        run = manager.run_policy_inline(db, policy=policy_db, limit=entity_limit)
+        run = manager.run_policy_inline(
+            db, policy=policy_db, limit=entity_limit, statement_cache=statement_cache,
+        )
 
         print(f"  Run ID: {run.id}")
         print(f"  Status: {run.status}")
@@ -595,8 +598,12 @@ def main() -> None:
         total_failed = 0
         total_entities = 0
 
+        # The policies share the warehouse statements (UC tags, lineage) and their budget
+        from src.common.uc_table_enrichment import StatementCache
+        statement_cache = StatementCache()
+
         for policy in policies:
-            result = run_policy(db, policy, manager, entity_limit)
+            result = run_policy(db, policy, manager, entity_limit, statement_cache)
             results.append(result)
 
             if result.get("status") in ["succeeded", "running"]:

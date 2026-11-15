@@ -318,3 +318,21 @@ def test_read_only_levels_cannot_write(with_levels):
     client = with_levels({"settings-general": _RO, "settings-ui": _RO})
     assert client.put("/api/settings", json=_BRANDING).status_code == 403
     assert client.put("/api/settings", json=_GENERAL).status_code == 403
+
+
+def test_settings_ui_alone_reads_only_the_ui_keys(with_levels):
+    client = with_levels({"settings-ui": _RO})
+    body = client.get("/api/settings").json()
+    assert body and all(k.startswith("ui_") for k in body)
+    assert "ui_app_display_name" in body and "ui_show_powered_by" in body
+
+
+def test_settings_general_reads_every_key(with_levels):
+    client = with_levels({"settings-general": _RO})
+    body = client.get("/api/settings").json()
+    assert "current_settings" in body and "ui_app_display_name" in body
+
+
+def test_no_settings_feature_cannot_read(with_levels):
+    client = with_levels({"settings-git": _RW})
+    assert client.get("/api/settings").status_code == 403

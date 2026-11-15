@@ -1301,7 +1301,7 @@
     },
     "entityTypes": {
       "all": "Data products and contracts",
-      "Asset": "Assets (tables and views)",
+      "Asset": "Assets (tables, views and metric views)",
       "DataProduct": "Data Products",
       "DataContract": "Data Contracts"
     },

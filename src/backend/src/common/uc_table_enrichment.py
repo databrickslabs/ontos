@@ -241,6 +241,65 @@ def mark_unavailable(entities: List[Dict[str, Any]], group: str, reason: str) ->
             missing[field] = {'source': GROUP_SOURCE[group], 'reason': reason}
 
 
+# --- the rule object of a table ---------------------------------------------------
+
+VIEW_TABLE_TYPES = ('VIEW', 'MATERIALIZED_VIEW', 'METRIC_VIEW')
+
+
+def table_entity(
+    table: Any, catalog: Optional[str] = None, schema: Optional[str] = None,
+) -> Dict[str, Any]:
+    """The rule object of one Unity Catalog table or view (a ``TableInfo``).
+
+    The one builder for every caller that evaluates DSL rules on a UC table:
+    the compliance loader and, for an asset that points to a table, its
+    maturity gates. Add tags and lineage with ``enrich_tables``.
+
+    Tag keys are the governed tags' keys as Unity Catalog stores them
+    (``tag_name``), with no namespace: unlike app tags (``namespace/name`` or
+    the name), ``HAS_TAG('ns/x')`` doesn't match a UC tag ``x``.
+    """
+    from src.common.uc_table_columns import table_column_fields
+
+    catalog = catalog or getattr(table, 'catalog_name', None)
+    schema = schema or getattr(table, 'schema_name', None)
+    # The SDK returns a TableType enum; rules compare strings.
+    table_type = getattr(table, 'table_type', 'TABLE')
+    table_type = getattr(table_type, 'value', table_type)
+    full_name = getattr(table, 'full_name', None) or f"{catalog}.{schema}.{table.name}"
+    return {
+        'type': 'view' if table_type in VIEW_TABLE_TYPES else 'table',
+        'name': table.name,
+        'id': full_name,
+        'full_name': full_name,
+        'catalog': catalog,
+        'schema': schema,
+        'table_type': table_type,
+        'owner': getattr(table, 'owner', None),
+        'comment': getattr(table, 'comment', None),
+        'created_at': getattr(table, 'created_at', None),
+        'updated_at': getattr(table, 'updated_at', None),
+        'storage_location': getattr(table, 'storage_location', None),
+        **table_column_fields(table),
+    }
+
+
+def enrich_tables(
+    entities: List[Dict[str, Any]], groups: Set[str], runner: Optional[SqlRunner],
+) -> None:
+    """``enrich_catalog_tables`` for table entities of any catalogs (one table or many).
+
+    A caller evaluating a rule on them checks ``unavailable_fields_read`` first:
+    a field it reads that is listed there is missing, not ``None``, and the rule
+    is not evaluated rather than failed or passed.
+    """
+    by_catalog: Dict[str, List[Dict[str, Any]]] = {}
+    for entity in entities:
+        by_catalog.setdefault(str(entity.get('catalog') or ''), []).append(entity)
+    for catalog, members in by_catalog.items():
+        enrich_catalog_tables(catalog, members, groups, runner)
+
+
 # --- loading -------------------------------------------------------------------------
 
 def enrich_catalog_tables(

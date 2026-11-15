@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
-from src.common.uc_table_columns import table_column_fields
 from src.common.uc_table_enrichment import (
-    SqlRunner, conditions_without, enrich_catalog_tables, fields_read, unavailable_fields_read,
+    VIEW_TABLE_TYPES, SqlRunner, conditions_without, enrich_catalog_tables, fields_read,
+    table_entity, unavailable_fields_read,
 )
 
 logger = get_logger(__name__)
@@ -58,9 +58,6 @@ class EntityLoader(ABC):
 
 
 # Unity Catalog table types that are views. The exact type stays in `table_type`.
-VIEW_TABLE_TYPES = ('VIEW', 'MATERIALIZED_VIEW', 'METRIC_VIEW')
-
-
 @dataclass
 class TableEnrichment:
     """Fields to add to table and view entities beyond what ``tables.list`` returns.
@@ -155,31 +152,11 @@ class UnityCatalogLoader(EntityLoader):
                                     catalog_name=catalog.name,
                                     schema_name=schema.name
                                 ):
-                                    # The SDK returns a TableType enum; rules compare strings.
-                                    table_type_raw = getattr(table, 'table_type', 'TABLE')
-                                    table_type_raw = getattr(
-                                        table_type_raw, 'value', table_type_raw)
-                                    is_view = table_type_raw in VIEW_TABLE_TYPES
-                                    entity_type = 'view' if is_view else 'table'
-
-                                    if entity_type not in entity_types:
+                                    entity = table_entity(
+                                        table, catalog=catalog.name, schema=schema.name,
+                                    )
+                                    if entity['type'] not in entity_types:
                                         continue
-
-                                    entity = {
-                                        'type': entity_type,
-                                        'name': table.name,
-                                        'id': getattr(table, 'full_name', f"{catalog.name}.{schema.name}.{table.name}"),
-                                        'full_name': getattr(table, 'full_name', f"{catalog.name}.{schema.name}.{table.name}"),
-                                        'catalog': catalog.name,
-                                        'schema': schema.name,
-                                        'table_type': table_type_raw,
-                                        'owner': getattr(table, 'owner', None),
-                                        'comment': getattr(table, 'comment', None),
-                                        'created_at': getattr(table, 'created_at', None),
-                                        'updated_at': getattr(table, 'updated_at', None),
-                                        'storage_location': getattr(table, 'storage_location', None),
-                                        **table_column_fields(table),
-                                    }
                                     if self.table_enrichment is None:
                                         yield entity
                                     else:

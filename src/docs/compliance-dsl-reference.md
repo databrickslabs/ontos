@@ -137,8 +137,10 @@ repeat across namespaces, use the fully qualified name
 `True`. If the tags can't be loaded, the run fails instead of treating the
 entities as untagged.
 
-For Unity Catalog tables and views, `key` is the governed tag's key, and a tag
-without a value has the value `True`. See [Table and View Tags and
+For Unity Catalog tables and views, `key` is the governed tag's key as Unity
+Catalog stores it, with no namespace: `HAS_TAG('governance/pii')` doesn't match a
+UC tag `pii`, so a rule that covers both app entities and tables names the tag
+the way each one stores it. A tag without a value has the value `True`. See [Table and View Tags and
 Lineage](#table-and-view-tags-and-lineage) for where the tags come from.
 
 `TAG(key)` is `null` on an entity without that tag, and `null != ''` is true: `ASSERT

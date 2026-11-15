@@ -1,10 +1,11 @@
 import json
 import os
 import re
+import signal
 import sys
 import time
 import argparse
-from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 from uuid import uuid4
 
@@ -2008,6 +2009,7 @@ def sync_tags(
     verbose: bool = False,
     partial: bool = False,
     result: Optional[SyncResult] = None,
+    object_done: Optional[Callable[[SyncResult], None]] = None,
 ) -> SyncResult:
     """Reconcile UC tags for every linked object, then clean up lost links.
 
@@ -2021,8 +2023,9 @@ def sync_tags(
     every record previous holds so the state is not lost.
 
     ``result`` is filled as the run goes, so a caller that passes it can still save what
-    was delivered when the run stops part way (see keep_unvisited_records). An error on
+    was delivered when the run stops part way (see with_unvisited_records). An error on
     one object is counted and the run goes on; that object keeps its previous record.
+    ``object_done`` is called after each object (see DeliveryStateWriter.object_done).
     """
     if result is None:
         result = SyncResult()
@@ -2077,6 +2080,11 @@ def sync_tags(
             result.failed_objects.append(f"{object_type} {fqn}")
             result.delivered[object_type][fqn] = {**recorded, **ours}
             return 0, 0
+        except BaseException:
+            # Cancelled or killed part way (KeyboardInterrupt, SystemExit): what was
+            # written is recorded before the caller saves the state.
+            result.delivered[object_type][fqn] = {**recorded, **ours}
+            raise
         result.updated += u
         result.removed += r
         result.errors.extend(errs)
@@ -2091,12 +2099,17 @@ def sync_tags(
                 result.delivered[object_type][fqn].setdefault(key, value)
         return u, r
 
+    def done() -> None:
+        if object_done is not None:
+            object_done(result)
+
     # Dataset-level
     for d in datasets:
         desired = build_desired_for_dataset(d, tag_sync_configs)
         if not desired:
             continue
         u, r = apply("TABLE", d.fqn, desired)
+        done()
         if verbose:
             print(f"Dataset {d.fqn}: updated={u} removed={r}")
 
@@ -2131,6 +2144,7 @@ def sync_tags(
                 result.delivered["COLUMN"][col.fqn] = dict(kept)
             continue
         u, r = apply("COLUMN", col.fqn, desired)
+        done()
         if verbose:
             print(f"Column {col.fqn}: updated={u} removed={r}")
 
@@ -2138,11 +2152,13 @@ def sync_tags(
     for schema_fqn, desired in schema_desired.items():
         if desired:
             apply("SCHEMA", schema_fqn, desired)
+            done()
 
     # Catalog-level
     for catalog_name, desired in catalog_desired.items():
         if desired:
             apply("CATALOG", catalog_name, desired)
+            done()
 
     # Objects that had tags delivered last run but have no link now: nothing
     # above reconciles them, so remove what this job delivered there.
@@ -2174,6 +2190,7 @@ def sync_tags(
                 result.delivered[object_type][fqn] = still_delivered
             if verbose:
                 print(f"{object_type} {fqn} (no link left): removed={r}")
+            done()
     return result
 
 
@@ -2338,37 +2355,71 @@ def build_desired_for_dataset(d: DatasetTagInfo, tag_sync_configs: List[Dict[str
     return desired
 
 
-def keep_unvisited_records(result: SyncResult, previous: Optional[DeliveryState]) -> None:
-    """After a run that stopped part way: keep the record of every object it didn't reach.
+def with_unvisited_records(
+    result: SyncResult, previous: Optional[DeliveryState]
+) -> DeliveryState:
+    """What the run delivered so far, plus the record of every object it didn't reach.
 
-    The objects it reached keep their new record. An object it had already cleaned up
-    gets its old record back, which is harmless: the next run finds nothing to remove.
+    An object it had already cleaned up gets its old record back, which is harmless:
+    the next run finds nothing to remove.
     """
+    state: DeliveryState = {
+        object_type: dict(result.delivered.get(object_type, {}))
+        for object_type in DELIVERY_OBJECT_TYPES
+    }
     for object_type in DELIVERY_OBJECT_TYPES:
         for fqn, tags in (previous or {}).get(object_type, {}).items():
-            result.delivered[object_type].setdefault(fqn, dict(tags))
+            state[object_type].setdefault(fqn, dict(tags))
+    return state
 
 
-def save_run_delivery_state(
-    engine: Engine,
-    result: SyncResult,
-    previous: Optional[DeliveryState],
-    ownership: TagOwnership,
-    is_partial_read: bool,
-) -> Optional[str]:
-    """Store what the run delivered. Returns an error message on failure.
+# A full run saves the delivery state every CHECKPOINT_EVERY objects, so a run that is
+# killed (no chance to save at the end) loses at most that many objects' records.
+CHECKPOINT_EVERY = 50
+
+
+class DeliveryStateWriter:
+    """Saves the run's delivery state: at checkpoints during the run, and at the end.
 
     A full run that read the previous state replaces the record; otherwise the run's
-    objects are merged into it. A stored state that didn't parse is backed up first, and
-    kept as it is when the backup fails.
+    objects are merged into it. A stored state that didn't parse is backed up once,
+    before the first save, and kept as it is when the backup fails.
     """
-    replace = previous is not None and not is_partial_read
-    if replace and isinstance(previous, CorruptDeliveryState):
-        backup_error = backup_delivery_state(engine, previous.raw)
-        if backup_error:
-            return backup_error
-    return save_delivery_state(engine, result.delivered, ownership.describe(),
-                               replace=replace)
+
+    def __init__(self, engine: Engine, previous: Optional[DeliveryState],
+                 ownership: TagOwnership, is_partial_read: bool):
+        self.engine = engine
+        self.previous = previous
+        self.ownership = ownership
+        self.replace = previous is not None and not is_partial_read
+        self.backed_up = False
+        self.objects = 0
+
+    def save(self, state: DeliveryState) -> Optional[str]:
+        """Store ``state``. Returns an error message on failure."""
+        if (self.replace and isinstance(self.previous, CorruptDeliveryState)
+                and not self.backed_up):
+            backup_error = backup_delivery_state(self.engine, self.previous.raw)
+            if backup_error:
+                return backup_error
+            self.backed_up = True
+        return save_delivery_state(self.engine, state, self.ownership.describe(),
+                                   replace=self.replace)
+
+    def save_part_way(self, result: SyncResult) -> Optional[str]:
+        """Save mid-run: the objects not reached yet keep their previous record."""
+        return self.save(with_unvisited_records(result, self.previous))
+
+    def object_done(self, result: SyncResult) -> None:
+        self.objects += 1
+        if self.objects % CHECKPOINT_EVERY == 0:
+            # A failed checkpoint is not fatal: the save at the end is tried again.
+            self.save_part_way(result)
+
+
+def _exit_on_sigterm(signum: int, _frame: Any) -> None:
+    # A raised SystemExit runs the except / finally blocks, so the state is saved.
+    raise SystemExit(128 + signum)
 
 
 def main() -> None:
@@ -2490,6 +2541,13 @@ def main() -> None:
 
     print(f"\nProcessing {len(datasets)} datasets (merged)...")
     result = SyncResult()
+    writer = DeliveryStateWriter(engine, previous, ownership, is_partial_read)
+    sigterm_handled = True
+    try:
+        # A SIGTERM to the process is turned into SystemExit, so the state is saved.
+        previous_sigterm = signal.signal(signal.SIGTERM, _exit_on_sigterm)
+    except ValueError:
+        sigterm_handled = False  # not on the main thread: no signal handler here
     try:
         sync_tags(
             ws,
@@ -2503,20 +2561,23 @@ def main() -> None:
             verbose=verbose,
             partial=is_partial_read,
             result=result,
+            object_done=None if dry_run else writer.object_done,
         )
-    except Exception:
-        # The tags written so far must not be lost from the state, or they are orphaned
-        # once their objects lose the link: save them with every record not reached.
+    except BaseException:
+        # Also a cancel, timeout or SIGTERM: the tags written so far must not be lost
+        # from the state, or they are orphaned once their objects lose the link. Save
+        # them with every record not reached.
         if not dry_run:
-            keep_unvisited_records(result, previous)
-            save_run_delivery_state(engine, result, previous, ownership, is_partial_read)
+            writer.save_part_way(result)
         raise
+    finally:
+        if sigterm_handled:
+            signal.signal(signal.SIGTERM, previous_sigterm)
     updated_total, removed_total = result.updated, result.removed
     all_errors: List[str] = list(result.errors)
 
     if not dry_run:
-        save_error = save_run_delivery_state(engine, result, previous, ownership,
-                                             is_partial_read)
+        save_error = writer.save(result.delivered)
         if save_error:
             all_errors.append(save_error)
 

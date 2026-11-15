@@ -65,14 +65,22 @@ def info(message: str) -> None:
 # Test files
 # ---------------------------------------------------------------------------
 
+# pytest's default python_files (src/pyproject.toml doesn't override it)
+TEST_FILE_PATTERNS = ("test_*.py", "*_test.py")
+
+
 def list_test_files(tests_dir: Path, root: Path) -> list[str]:
-    """Every test_*.py under tests_dir (recursive), relative to root, sorted."""
+    """Every file pytest collects under tests_dir (recursive), relative to root, sorted.
+
+    That is test_*.py and *_test.py, the default python_files of pytest.
+    """
     tests_dir = tests_dir.resolve()
     root = root.resolve()
     if not tests_dir.is_dir():
         raise PlanError(f"Tests directory not found: {tests_dir}")
     files = []
-    for path in sorted(tests_dir.rglob("test_*.py")):
+    found = {p for pattern in TEST_FILE_PATTERNS for p in tests_dir.rglob(pattern)}
+    for path in sorted(found):
         if not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
@@ -82,7 +90,8 @@ def list_test_files(tests_dir: Path, root: Path) -> list[str]:
             )
         files.append(rel)
     if not files:
-        raise PlanError(f"No test_*.py files under {tests_dir}")
+        patterns = " or ".join(TEST_FILE_PATTERNS)
+        raise PlanError(f"No {patterns} files under {tests_dir}")
     return files
 
 

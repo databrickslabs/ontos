@@ -99,7 +99,8 @@ def test_run_without_warehouse_reports_not_evaluated(client: TestClient, db_sess
     assert run['warning_code'] == 'rule_fields_unavailable'
     assert run['warning_params']['count'] == 2
     assert run['warning_params']['reasons'] == 'no_warehouse'
-    assert run['failure_count'] == 2
+    # Not evaluated: out of the counts and the score
+    assert (run['success_count'], run['failure_count']) == (0, 0)
     details = json.loads(results['orders']['details_json'])
     assert details['code'] == 'rule_field_unavailable'
     # Only the fields the rule reads

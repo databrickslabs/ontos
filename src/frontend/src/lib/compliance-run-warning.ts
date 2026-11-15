@@ -40,6 +40,30 @@ export function complianceRunWarningText(t: TFunction, run: ComplianceRunWarning
   return t(key, { ...params, defaultValue: run.warning_code }) as string;
 }
 
+/** The details code of a result not evaluated because a source could not be read. */
+const NOT_EVALUATED_CODE = 'rule_field_unavailable';
+
+function resultDetailsCode(detailsJson?: string | null): unknown {
+  if (!detailsJson) return undefined;
+  try {
+    return JSON.parse(detailsJson)?.code;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Status of one result: passed, failed, or not evaluated (neither, and out of the score). */
+export function complianceResultStatus(
+  t: TFunction,
+  result: ComplianceResultMessageFields & { passed: boolean },
+): { label: string; variant: 'secondary' | 'destructive' | 'outline' } {
+  if (result.passed) return { label: t('compliance:results.passed'), variant: 'secondary' };
+  if (resultDetailsCode(result.details_json) === NOT_EVALUATED_CODE) {
+    return { label: t('compliance:tableSources.notEvaluatedStatus'), variant: 'outline' };
+  }
+  return { label: t('compliance:results.failed'), variant: 'destructive' };
+}
+
 /**
  * The message of one result: translated when the backend gave it a code in
  * `details_json` (an object not evaluated because a source could not be read),
@@ -57,7 +81,7 @@ export function complianceResultMessageText(
   } catch {
     return fallback;
   }
-  if (details?.code !== 'rule_field_unavailable') return fallback;
+  if (details?.code !== NOT_EVALUATED_CODE) return fallback;
   const params = details.params ?? {};
   return t('compliance:tableSources.notEvaluated', {
     ...params,

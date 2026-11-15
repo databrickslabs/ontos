@@ -608,7 +608,8 @@ def test_policy_run_without_warehouse_reports_entities_not_evaluated(db_session)
     make_runner.assert_not_called()
     act.assert_not_called()  # no ON_FAIL for an entity that was not evaluated
     assert run.status == 'succeeded'
-    assert (run.success_count, run.failure_count) == (0, 2)
+    # Not evaluated is neither passed nor failed: out of the counts and the score
+    assert (run.success_count, run.failure_count, run.score) == (0, 0, 0.0)
     assert run.warning_code == 'rule_fields_unavailable'
     assert json.loads(run.warning_params) == {
         'count': 2, 'sources': enr.GROUP_SOURCE[TAGS], 'reasons': 'no_warehouse',
@@ -655,3 +656,39 @@ def test_policy_run_with_where_on_tags_enriches_the_catalog_scope(db_session):
     }
     assert {n: r.passed for n, r in results.items()} == {'orders': True}
     assert run.warning_code is None
+
+
+def test_not_evaluated_entities_leave_the_score_and_the_failed_list(db_session):
+    ws = _ws({('main', 'sales'): [_table('orders'), _table('raw_orders')]})
+    runner = FakeRunner(tag_rows=[_tag('orders', 'pii')], fail={LINEAGE: 'no_access'})
+    rule = "MATCH (t:table) ASSERT HAS_TAG('pii') OR t.upstream_count > 0"
+
+    run, results, _ = _run(db_session, rule, ws, runner)
+
+    # Both read the missing lineage field, so both are not evaluated
+    assert (run.success_count, run.failure_count) == (0, 0)
+    from src.repositories.compliance_repository import compliance_result_repo
+    assert compliance_result_repo.list_for_run(db_session, run_id=run.id, only_failed=True) == []
+    assert len(compliance_result_repo.list_for_run(db_session, run_id=run.id)) == 2
+
+
+def test_score_counts_only_evaluated_entities(db_session):
+    ws = _ws({('main', 'sales'): [_table('orders'), _table('raw_orders')],
+              ('lake', 'bronze'): [_table('events', schema='bronze', catalog='lake')]},
+             catalogs=('main', 'lake'))
+
+    class LakeDenied(FakeRunner):
+        def rows(self, statement, parameters):
+            if parameters.get('catalog') == 'lake':
+                raise SourceUnavailable('no_access')
+            return super().rows(statement, parameters)
+
+    runner = LakeDenied(tag_rows=[_tag('orders', 'pii')])
+
+    run, results, _ = _run(db_session, "MATCH (t:table) ASSERT HAS_TAG('pii')", ws, runner)
+
+    assert (run.success_count, run.failure_count, run.score) == (1, 1, 50.0)
+    assert json.loads(run.warning_params)['count'] == 1
+    from src.repositories.compliance_repository import compliance_result_repo
+    failed = compliance_result_repo.list_for_run(db_session, run_id=run.id, only_failed=True)
+    assert [r.object_name for r in failed] == ['raw_orders']

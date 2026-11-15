@@ -18,6 +18,7 @@ import {
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
 import {
   complianceResultMessageText,
+  complianceResultStatus,
   complianceRunWarningText,
 } from '@/lib/compliance-run-warning';
 import {
@@ -74,8 +75,8 @@ export default function ComplianceRunDetails() {
       <code className="text-xs bg-muted px-2 py-1 rounded">{row.original.object_name || row.original.object_id}</code>
     ) },
     { accessorKey: 'passed', header: t('common:labels.status'), cell: ({ row }) => (
-      <Badge variant={row.original.passed ? 'secondary' : 'destructive'}>
-        {row.original.passed ? t('compliance:results.passed') : t('compliance:results.failed')}
+      <Badge variant={complianceResultStatus(t, row.original).variant}>
+        {complianceResultStatus(t, row.original).label}
       </Badge>
     ) },
     { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (

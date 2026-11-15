@@ -179,7 +179,8 @@
     "tags_load_failed": "{{entityType}} エンティティのタグを読み込めなかったため、ルールを評価できませんでした。"
   },
   "tableSources": {
-    "runWarning": "評価されなかったオブジェクト: {{count}}。ルールは {{sources}} のフィールドを読み取りますが、読み取れませんでした ({{reasons}})。これらの結果は不合格として数えられます。",
+    "notEvaluatedStatus": "未評価",
+    "runWarning": "評価されなかったオブジェクト: {{count}}。ルールは {{sources}} のフィールドを読み取りますが、読み取れませんでした ({{reasons}})。これらは合格にも不合格にも、スコアにも数えられません。",
     "notEvaluated": "未評価: {{sources}} から {{fields}} を読み取れませんでした ({{reason}})。",
     "reasons": {
       "no_warehouse": "SQL ウェアハウスが設定されていません",

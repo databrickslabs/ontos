@@ -59,7 +59,7 @@ class LifecycleStageGroupsRepository:
             db.query(LifecycleStageGroupDb)
             .filter(
                 LifecycleStageGroupDb.entity_type == entity_type,
-                func.lower(LifecycleStageGroupDb.name) == (name or '').strip().lower(),
+                func.lower(func.trim(LifecycleStageGroupDb.name)) == (name or '').strip().lower(),
             )
             .first()
         )

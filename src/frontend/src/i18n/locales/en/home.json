@@ -53,7 +53,9 @@
       "nothing": "Nothing to follow up."
     },
     "notices": {
-      "reviewsTruncated": "Only the {{count}} most recently created review requests are read, so these counts and gaps may be incomplete."
+      "reviewsTruncated": "Only the {{count}} most recently created review requests are read, so these counts and gaps may be incomplete.",
+      "loadError": "Could not load this data.",
+      "retry": "Retry"
     }
   },
   "search": {

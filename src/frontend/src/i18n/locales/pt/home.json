@@ -53,7 +53,9 @@
       "nothing": "Nada para acompanhar."
     },
     "notices": {
-      "reviewsTruncated": "Apenas os {{count}} pedidos de revisão criados mais recentemente são lidos, então estas contagens e lacunas podem estar incompletas."
+      "reviewsTruncated": "Apenas os {{count}} pedidos de revisão criados mais recentemente são lidos, então estas contagens e lacunas podem estar incompletas.",
+      "loadError": "Não foi possível carregar estes dados.",
+      "retry": "Tentar novamente"
     }
   },
   "search": {

@@ -53,7 +53,9 @@
       "nothing": "Nichts nachzuverfolgen."
     },
     "notices": {
-      "reviewsTruncated": "Es werden nur die {{count}} zuletzt erstellten Prüfanfragen gelesen, daher können diese Zahlen und Lücken unvollständig sein."
+      "reviewsTruncated": "Es werden nur die {{count}} zuletzt erstellten Prüfanfragen gelesen, daher können diese Zahlen und Lücken unvollständig sein.",
+      "loadError": "Diese Daten konnten nicht geladen werden.",
+      "retry": "Erneut versuchen"
     }
   },
   "search": {

@@ -53,7 +53,9 @@
       "nothing": "Rien à suivre."
     },
     "notices": {
-      "reviewsTruncated": "Seules les {{count}} demandes de revue les plus récemment créées sont lues, ces totaux et lacunes peuvent donc être incomplets."
+      "reviewsTruncated": "Seules les {{count}} demandes de revue les plus récemment créées sont lues, ces totaux et lacunes peuvent donc être incomplets.",
+      "loadError": "Impossible de charger ces données.",
+      "retry": "Réessayer"
     }
   },
   "search": {

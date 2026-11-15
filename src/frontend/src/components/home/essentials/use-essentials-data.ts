@@ -67,6 +67,14 @@ export interface AccessRequestItem {
 interface Loadable<T> {
   data: T;
   loading: boolean;
+  /** The call failed with anything but 403 (a 403 reads as "nothing here", #1416). */
+  error: boolean;
+  retry: () => void;
+}
+
+interface Fetched<T> {
+  data: T | null;
+  error: boolean;
 }
 
 /**
@@ -97,40 +105,51 @@ export function useEssentialsFeature(
   }, [allowedMaturities, hiddenFeatures, hasPermission]);
 }
 
-async function getJson<T>(url: string): Promise<T | null> {
+/** `data` is null on any failure; `error` is false for a 403, true for the rest. */
+async function getJson<T>(url: string): Promise<Fetched<T>> {
   try {
     const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
+    if (res.status === 403) return { data: null, error: false };
+    if (!res.ok) return { data: null, error: true };
+    return { data: (await res.json()) as T, error: false };
   } catch {
-    return null;
+    return { data: null, error: true };
   }
 }
 
 /**
- * Run `load(key)` whenever `key` changes; `key === null` means disabled. The result is
- * kept with its key, so a stale or disabled key reads as `fallback` (loading while pending).
+ * Run `load(key)` whenever `key` changes (or `retry` is called); `key === null` means
+ * disabled. The result is kept with its key, so a stale or disabled key reads as `fallback`
+ * (loading while pending).
  */
 function useLoad<T>(
   key: string | null,
-  load: (key: string) => Promise<T | null>,
+  load: (key: string) => Promise<Fetched<T>>,
   fallback: T,
 ): Loadable<T> {
-  const [result, setResult] = useState<{ key: string; data: T } | null>(null);
+  const [result, setResult] = useState<{ key: string; data: T; error: boolean } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!key) return;
     let cancelled = false;
-    load(key).then((data) => {
-      if (!cancelled) setResult({ key, data: data ?? fallback });
+    setResult(null);
+    load(key).then(({ data, error }) => {
+      if (!cancelled) setResult({ key, data: data ?? fallback, error });
     });
     return () => {
       cancelled = true;
     };
     // `load` and `fallback` are constants per call site.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, attempt]);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const current = key !== null && result?.key === key;
-  return { data: current ? result.data : fallback, loading: key !== null && !current };
+  return {
+    data: current ? result.data : fallback,
+    loading: key !== null && !current,
+    error: current && result.error,
+    retry,
+  };
 }
 
 function useJson<T>(url: string | null, fallback: T): Loadable<T> {
@@ -142,7 +161,7 @@ const EMPTY_REQUESTS: AccessRequestItem[] = [];
 
 export function useAssetTotal(enabled: boolean): Loadable<number | null> {
   const res = useJson<{ total?: number } | null>(enabled ? '/api/assets?limit=1' : null, null);
-  return { data: res.data?.total ?? null, loading: res.loading };
+  return { ...res, data: res.data?.total ?? null };
 }
 
 /** Review requests; the endpoint returns a list, or `{items: []}` when there are none. */
@@ -152,7 +171,7 @@ export function useReviewRequests(enabled: boolean): Loadable<DataAssetReviewReq
     EMPTY_REVIEWS,
   );
   const data = Array.isArray(res.data) ? res.data : res.data?.items ?? EMPTY_REVIEWS;
-  return { data, loading: res.loading };
+  return { ...res, data };
 }
 
 /** The user's pending access requests: the newest page, and how many there are in all. */
@@ -166,7 +185,7 @@ export function useMyPendingRequests(
     { requests: EMPTY_REQUESTS, total: 0 },
   );
   const items = res.data?.requests ?? EMPTY_REQUESTS;
-  return { data: items, total: res.data?.total ?? items.length, loading: res.loading };
+  return { ...res, data: items, total: res.data?.total ?? items.length };
 }
 
 interface AssetPage {
@@ -192,7 +211,9 @@ export interface OwnedAssets extends Loadable<OwnedAsset[]> {
 export function useOwnedAssets(enabled: boolean, pageSize: number): OwnedAssets {
   const key = enabled ? ownedPageUrl(0, pageSize) : null;
   const first = useJson<AssetPage | null>(key, null);
-  const [more, setMore] = useState<{ key: string; items: OwnedAsset[]; loading: boolean }>();
+  const [more, setMore] = useState<{
+    key: string; items: OwnedAsset[]; loading: boolean; error: boolean;
+  }>();
   const extra = key && more?.key === key ? more : undefined;
   const items = useMemo(
     () => [...(first.data?.items ?? []), ...(extra?.items ?? [])],
@@ -205,15 +226,24 @@ export function useOwnedAssets(enabled: boolean, pageSize: number): OwnedAssets 
     if (!key || loadingMore) return;
     const skip = items.length;
     const keep = (m?: { key: string; items: OwnedAsset[] }) => (m?.key === key ? m.items : []);
-    setMore((m) => ({ key, items: keep(m), loading: true }));
-    getJson<AssetPage>(ownedPageUrl(skip, pageSize)).then((page) =>
-      setMore((m) => ({ key, items: [...keep(m), ...(page?.items ?? [])], loading: false })),
+    setMore((m) => ({ key, items: keep(m), loading: true, error: false }));
+    getJson<AssetPage>(ownedPageUrl(skip, pageSize)).then(({ data, error }) =>
+      setMore((m) => ({
+        key, items: [...keep(m), ...(data?.items ?? [])], loading: false, error,
+      })),
     );
   }, [key, loadingMore, items.length, pageSize]);
+
+  const firstRetry = first.retry;
+  const retry = useCallback(
+    () => (first.error ? firstRetry() : loadMore()), [first.error, firstRetry, loadMore],
+  );
 
   return {
     data: items,
     loading: first.loading,
+    error: first.error || !!extra?.error,
+    retry,
     total,
     hasMore: !first.loading && items.length < total,
     loadingMore,

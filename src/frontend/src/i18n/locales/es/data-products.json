@@ -1018,6 +1018,9 @@
     "maturity_uc_table_read_failed": "No se pudo leer la tabla {{tableName}} de Unity Catalog, por lo que faltan sus campos.",
     "maturity_gate_error": "No se pudo evaluar el gate {{gateName}}. Los detalles están en el registro del servidor."
   },
+  "maturityResult": {
+    "notEvaluated": "No evaluado"
+  },
   "createDialog": {
     "editTitle": "Editar metadatos del producto de datos",
     "createTitle": "Crear producto de datos (ODPS v1.0.0)",

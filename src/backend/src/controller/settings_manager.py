@@ -22,7 +22,7 @@ from src.common.instance_identity import (
 )
 from types import SimpleNamespace
 
-from src.common.config import Settings, resolve_volume
+from src.common.config import Settings, is_local_volume_path, resolve_volume
 from src.common.sanitization import (
     APP_SHORT_NAME_MAX_LEN,
     APP_TAGLINE_MAX_LEN,
@@ -1663,7 +1663,7 @@ class SettingsManager(ThreadBoundDb):
     def _validate_volume_settings(self, settings: dict) -> None:
         """Refuse a volume, catalog or schema that can't name a Unity Catalog volume.
 
-        Runs ``resolve_volume`` on the values the save would leave in effect and raises
+        Runs ``resolve_volume`` (a local directory passes as is) on the values the save would leave in effect and raises
         its ``VolumeInvalidError`` (a coded ``ValueError``, answered as a 400 with the
         code and params). Nothing is written yet when it raises.
 
@@ -1684,6 +1684,11 @@ class SettingsManager(ThreadBoundDb):
         if 'databricks_volume' in settings and not candidate['databricks_volume']:
             effective['databricks_volume'] = self._env_volume()
         if effective == current:
+            return
+        volume = effective['databricks_volume']
+        # A local directory (development) is exported to as it is, as resolve_git_paths
+        # does; only the bare "/Volumes" has no volume to name.
+        if is_local_volume_path(volume) and (volume or '').strip().rstrip('/') != '/Volumes':
             return
         resolve_volume(SimpleNamespace(**{key.upper(): value for key, value in effective.items()}))
 

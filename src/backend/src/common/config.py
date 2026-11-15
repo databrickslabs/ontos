@@ -493,6 +493,16 @@ class VolumeInvalidError(CodedValueError):
     code = 'volume_invalid'
 
 
+def is_local_volume_path(value: Optional[str]) -> bool:
+    """True for a volume setting that is a local directory (development).
+
+    An absolute path outside ``/Volumes``. ``resolve_git_paths`` exports to it
+    directly, so it needs no Unity Catalog volume.
+    """
+    raw = (value or '').strip().rstrip('/')
+    return raw.startswith('/') and not raw.startswith('/Volumes/')
+
+
 def resolve_volume(settings: Settings) -> Optional[Tuple[str, str, str]]:
     """(catalog, schema, volume) for ``DATABRICKS_VOLUME``, or None when it isn't set.
 

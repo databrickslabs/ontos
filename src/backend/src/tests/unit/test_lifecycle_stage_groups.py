@@ -841,6 +841,13 @@ class TestCacheMiss:
         assert lifecycle_service.allowed_target_keys(db_session, 'data_product', row) == \
             ['active']
 
+    def test_the_category_of_a_row_reloads_on_a_miss_too(self, db_session):
+        group = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        with lifecycle_service._lock:
+            lifecycle_service._groups.pop(group.id)
+        row = SimpleNamespace(status='live', lifecycle_stage_group_id=group.id)
+        assert lifecycle_service.category_of_row(row, db_session) == 'active'
+
     def test_a_group_still_missing_after_the_reload_raises(self, db_session):
         from src.controller.lifecycle_service import LifecycleGroupNotFoundError
 

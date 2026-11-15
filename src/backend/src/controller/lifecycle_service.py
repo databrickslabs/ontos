@@ -296,8 +296,20 @@ class LifecycleService:
         return self._groups.get(group_id) if group_id else _BUILTIN[entity_type]
 
     def group(self, db: Optional[Session], group_id: Optional[str]) -> Optional[Group]:
+        """The cached group; with ``db``, an id the cache doesn't know (a group
+        another worker created less than ``_CACHE_SECONDS`` ago) reloads it once."""
         self._ensure(db)
-        return self._groups.get(group_id) if group_id else None
+        if not group_id:
+            return None
+        found = self._groups.get(group_id)
+        seeded_only = not self._groups and group_id in DEFAULT_GROUP_IDS.values()
+        if found is None and db is not None and not seeded_only:
+            try:
+                self._load(db)
+            except Exception as e:
+                logger.warning("Could not reload lifecycle stage groups: %s", e)
+            found = self._groups.get(group_id)
+        return found
 
     def groups(self, db: Session, entity_type: Optional[str] = None) -> List[Group]:
         self._ensure(db)
@@ -322,26 +334,20 @@ class LifecycleService:
             return self.default_group(db, entity_type)
         group_id = str(group_id)
         group = self.group(db, group_id)
-        if group is None:
-            if db is None:
-                try:
-                    db = object_session(entity)
-                except Exception:
-                    db = None
+        if group is None and db is None:
+            try:
+                db = object_session(entity)
+            except Exception:
+                db = None
             if db is not None:
-                try:
-                    self._load(db)
-                except Exception as e:
-                    logger.warning("Could not reload lifecycle stage groups: %s", e)
-                group = self._groups.get(group_id)
-                if group is None and group_id == DEFAULT_GROUP_IDS.get(entity_type) \
-                        and not self._groups:
-                    # The seeded default's id while no group is stored yet
-                    return self.default_group(db, entity_type)
-                if group is None:
-                    raise LifecycleGroupNotFoundError(
-                        f"Lifecycle stage group '{group_id}' not found", groupId=group_id,
-                    )
+                group = self.group(db, group_id)
+        if group is None and db is not None:
+            if not self._groups and group_id == DEFAULT_GROUP_IDS.get(entity_type):
+                # The seeded default's id while no group is stored yet
+                return self.default_group(db, entity_type)
+            raise LifecycleGroupNotFoundError(
+                f"Lifecycle stage group '{group_id}' not found", groupId=group_id,
+            )
         if group is not None and group.entity_type == entity_type:
             return group
         return self.default_group(db, entity_type)

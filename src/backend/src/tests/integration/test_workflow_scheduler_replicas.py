@@ -104,7 +104,8 @@ def _create_workflow(sessions, schedule='0 0/5 * * * ?', name='Every five minute
         ))
         changed = datetime(2026, 1, 5, 9, 58, tzinfo=UTC)
         db.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == workflow.id).update(
-            {'updated_at': changed, 'created_at': changed}, synchronize_session=False)
+            {'updated_at': changed, 'created_at': changed, 'schedule_changed_at': changed},
+            synchronize_session=False)
         db.commit()
         return workflow.id
     finally:

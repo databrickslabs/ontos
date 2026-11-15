@@ -47,7 +47,8 @@ def _create(db, schedule=EVERY_5, tz=None, *, active=True, trigger_type=TriggerT
         steps=[WorkflowStepCreate(step_id='done', name='Done', step_type=StepType.PASS, order=0)],
     ))
     db.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == workflow.id).update(
-        {'updated_at': changed, 'created_at': changed}, synchronize_session=False)
+        {'updated_at': changed, 'created_at': changed, 'schedule_changed_at': changed},
+        synchronize_session=False)
     db.commit()
     return workflow
 
@@ -209,7 +210,7 @@ def test_a_second_scheduler_finds_the_slot_claimed(db_session, sessions):
 def test_a_slot_before_the_workflow_changed_is_not_run(db_session, sessions):
     workflow = _create(db_session)
     db_session.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == workflow.id).update(
-        {'updated_at': _at(minute=3)}, synchronize_session=False)
+        {'schedule_changed_at': _at(minute=3)}, synchronize_session=False)
     db_session.commit()
     scheduler = _scheduler(sessions)
     scheduler.run_once(_at(minute=4))
@@ -326,6 +327,50 @@ def test_an_unrelated_edit_after_a_slot_does_not_drop_it(db_session, sessions):
     assert len(_executions(db_session, workflow.id)) == 2
 
 
+def test_a_restart_after_an_unrelated_edit_still_runs_the_due_slot(db_session, sessions):
+    """Down 05:50-06:10, renamed at 06:01: the 06:00 slot still runs after the restart."""
+    from src.models.process_workflows import ProcessWorkflowUpdate
+
+    workflow = _create(db_session, schedule='0 0 6 * * ?', changed=_at(day=4, hour=12))
+    WorkflowsManager(db_session).update_workflow(
+        workflow.id, ProcessWorkflowUpdate(name='Renamed'))
+    db_session.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == workflow.id).update(
+        {'updated_at': _at(hour=6, minute=1)}, synchronize_session=False)
+    db_session.commit()
+    _scheduler(sessions, 'restarted').run_once(_at(hour=6, minute=10))  # empty cache
+    [claim] = _claims(db_session, workflow.id)
+    assert claim.slot.replace(tzinfo=UTC) == _at(hour=6)
+
+
+@pytest.mark.parametrize('update, moves', [
+    ({'name': 'Renamed'}, False),
+    ({'description': 'x'}, False),
+    ({'trigger': {'schedule': '0 0/15 * * * ?'}}, True),
+    ({'trigger': {'timezone': 'Europe/Berlin'}}, True),
+    ({'trigger': {'type': TriggerType.MANUAL, 'schedule': None}}, True),
+    ({'is_active': False}, True),
+])
+def test_only_a_schedule_change_moves_schedule_changed_at(db_session, update, moves):
+    from src.models.process_workflows import ProcessWorkflowUpdate
+
+    workflow = _create(db_session, tz='UTC')
+    if 'trigger' in update:
+        stored = WorkflowsManager(db_session).get_workflow(workflow.id).trigger
+        update = {'trigger': stored.model_copy(update=update['trigger'])}
+    WorkflowsManager(db_session).update_workflow(workflow.id, ProcessWorkflowUpdate(**update))
+    row = db_session.get(ProcessWorkflowDb, workflow.id)
+    db_session.refresh(row)
+    assert (row.schedule_changed_at.replace(tzinfo=UTC) != CHANGED) is moves
+
+
+def test_toggling_a_workflow_moves_schedule_changed_at(db_session):
+    workflow = _create(db_session)
+    WorkflowsManager(db_session).toggle_active(workflow.id, False)
+    row = db_session.get(ProcessWorkflowDb, workflow.id)
+    db_session.refresh(row)
+    assert row.schedule_changed_at.replace(tzinfo=UTC) > CHANGED
+
+
 @pytest.mark.parametrize('change', ['cron', 'toggle'])
 def test_a_schedule_change_after_a_slot_still_moves_the_cutoff(db_session, sessions, change):
     workflow = _create(db_session, changed=_at(hour=9, minute=58))
@@ -334,13 +379,14 @@ def test_a_schedule_change_after_a_slot_still_moves_the_cutoff(db_session, sessi
     query = db_session.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == workflow.id)
     if change == 'cron':
         query.update({'trigger_config': '{"type": "scheduled", "schedule": "0 0/15 * * * ?"}',
-                      'updated_at': _at(minute=5, second=30)}, synchronize_session=False)
+                      'schedule_changed_at': _at(minute=5, second=30)},
+                     synchronize_session=False)
     else:
         query.update({'is_active': False}, synchronize_session=False)
         db_session.commit()
         scheduler.invalidate()
         scheduler.run_once(_at(minute=5, second=20))  # sees it off
-        query.update({'is_active': True, 'updated_at': _at(minute=5, second=30)},
+        query.update({'is_active': True, 'schedule_changed_at': _at(minute=5, second=30)},
                      synchronize_session=False)
     db_session.commit()
     scheduler.invalidate()
@@ -437,7 +483,7 @@ def test_coalesced_slots_count_from_the_last_change_without_an_earlier_claim(
         db_session, sessions):
     workflow = _create(db_session)
     db_session.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == workflow.id).update(
-        {'updated_at': _at(minute=10)}, synchronize_session=False)
+        {'schedule_changed_at': _at(minute=10)}, synchronize_session=False)
     db_session.commit()
     _scheduler(sessions).run_once(_at(minute=21))  # 10:10, 10:15, 10:20
     [claim] = _claims(db_session, workflow.id)

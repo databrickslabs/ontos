@@ -29,8 +29,9 @@ schedule saved without the validator) is skipped, not the workflow.
 Missed runs are coalesced: after downtime only the latest slot runs, if it is at
 most one interval and at most 24 hours old, and its claim's
 ``outcome.coalesced_slots`` counts the slots it stands for. A slot before the
-workflow's last change is not run, so creating or enabling a workflow doesn't run
-a slot that passed before it.
+workflow's last schedule change (``schedule_changed_at``: the trigger's type, cron
+or timezone, or ``is_active``) is not run, so creating or enabling a workflow
+doesn't run a slot that passed before it; other edits and restarts keep the slot.
 """
 import json
 import os
@@ -278,11 +279,8 @@ class WorkflowScheduler:
                 if schedule is None:
                     continue
                 known = self._schedules.get(row.id)
-                if known and (known.cron, known.tz) == (schedule.cron, schedule.tz):
-                    # Same schedule, still active: an edit of anything else (name,
-                    # steps, ...) bumps ``updated_at`` but must not move the cutoff,
-                    # or a slot due before that edit would be dropped.
-                    schedule.changed_at = known.changed_at
+                if known and (known.cron, known.tz, known.changed_at) == (
+                        schedule.cron, schedule.tz, schedule.changed_at):
                     schedule.handled_slot = known.handled_slot
                 schedules[row.id] = schedule
             self._schedules = schedules
@@ -311,7 +309,11 @@ class WorkflowScheduler:
                 f"Scheduled workflow {row.id} is not run: invalid schedule ({e.code})"
             )
             return None
-        changed_at = _utc(row.updated_at or row.created_at) or datetime.now(timezone.utc)
+        # Only a change of the schedule or of ``is_active`` moves the cutoff: an edit
+        # of anything else (name, steps, ...) after a slot, or a restart, keeps it.
+        changed_at = _utc(
+            row.schedule_changed_at or row.created_at
+        ) or datetime.now(timezone.utc)
         return _Schedule(workflow_id=row.id, cron=cron, tz=tz, changed_at=changed_at)
 
     @staticmethod

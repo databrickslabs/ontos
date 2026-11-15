@@ -2,6 +2,8 @@
 
 One row per run of a scheduled task (#941): the app instance whose insert
 succeeds (``ON CONFLICT DO NOTHING`` on the primary key) runs the slot.
+``process_workflows.schedule_changed_at`` records when a workflow's schedule or
+``is_active`` last changed; existing rows start at their ``updated_at``.
 
 Revision ID: c8_workflow_scheduler_claims
 Revises: o2_step_execution_message
@@ -32,7 +34,12 @@ def upgrade() -> None:
         sa.Column('outcome', sa.JSON(), nullable=True),
         sa.PrimaryKeyConstraint('task_key', 'slot', name='pk_scheduler_claims'),
     )
+    op.add_column('process_workflows', sa.Column(
+        'schedule_changed_at', sa.TIMESTAMP(timezone=True), nullable=True,
+    ))
+    op.execute('UPDATE process_workflows SET schedule_changed_at = updated_at')
 
 
 def downgrade() -> None:
+    op.drop_column('process_workflows', 'schedule_changed_at')
     op.drop_table('scheduler_claims')

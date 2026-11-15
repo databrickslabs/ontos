@@ -374,12 +374,13 @@ def _trigger_type(context: 'StepContext') -> Optional[str]:
 def apply_deferred_tag_writes(
     db: Session, executions: List[WorkflowExecution], user_email: Optional[str],
 ) -> int:
-    """Write the tags the assign-tag steps of passed before_update gates recorded.
+    """Write the tag changes the tag steps of passed before_update gates recorded.
 
-    Those steps don't write while the gate runs (``deferred_tag_write`` in their
-    result): the executor commits each step record, so a write there would stay
-    even when a later step, or another gate, blocks the update. Called once all
-    the gates passed; returns the number of tags written.
+    Assign-tag and remove-tag steps don't write while the gate runs
+    (``deferred_tag_write`` in their result): the executor commits each step
+    record, so a write there would stay even when a later step, or another
+    gate, blocks the update. Called once all the gates passed, in step order;
+    returns the number of changes written.
     """
     from uuid import UUID
 
@@ -392,14 +393,14 @@ def apply_deferred_tag_writes(
             write = (step.result_data or {}).get('deferred_tag_write')
             if not isinstance(write, dict) or not step.passed:
                 continue
-            tags_mgr.add_tag_to_entity(
-                db=db,
-                entity_id=write['entity_id'],
-                entity_type=write['entity_type'],
-                tag_id=UUID(write['tag_id']),
-                assigned_value=write.get('assigned_value'),
-                user_email=user_email,
-            )
+            target = {
+                'db': db, 'entity_id': write['entity_id'], 'entity_type': write['entity_type'],
+                'tag_id': UUID(write['tag_id']), 'user_email': user_email,
+            }
+            if write.get('action') == 'remove':
+                tags_mgr.remove_tag_from_entity(**target)
+            else:
+                tags_mgr.add_tag_to_entity(**target, assigned_value=write.get('assigned_value'))
             written += 1
     return written
 
@@ -523,16 +524,29 @@ def _tags_as_rules_read_them(assigned: Dict[str, Any]) -> Dict[str, Any]:
     return values
 
 
+def _deferred_removals(context: 'StepContext') -> List[str]:
+    """``namespace/name`` of the tags earlier remove-tag steps of this gate will remove."""
+    removed = []
+    for entry in (context.step_results or {}).values():
+        write = ((entry or {}).get('data') or {}).get('deferred_tag_write') or {}
+        if write.get('action') == 'remove' and write.get('tag_fqn'):
+            removed.append(write['tag_fqn'])
+    return removed
+
+
 def _future_tags(
     db: Session, payload: Dict[str, Any], stored: Optional[Dict[str, Any]],
+    removed: Optional[List[str]] = None,
 ) -> Optional[Dict[str, Any]]:
     """The tags an entity will have after a before_update gate's update, as assignments.
 
     A list in the update replaces the stored tags (``[]`` clears them), as
     ``set_tags_for_entity`` does (a listed tag without a value keeps its stored
     value); without one (no ``tags``, or None) the stored tags
-    stay, and tags earlier assign-tag steps set (a dict) go on top. None when the
-    update sends no list and there is no stored entity to read the tags from.
+    stay less the ones earlier remove-tag steps remove (``removed``, written only
+    once the gates pass), and tags earlier assign-tag steps set (a dict) go on
+    top. None when the update sends no list and there is no stored entity to
+    read the tags from.
     """
     from src.models.tags import TAG_NAMESPACE_SEPARATOR as SEP
 
@@ -545,7 +559,7 @@ def _future_tags(
         return _tag_assignments(db, tags, current)
     if stored is None:
         return None
-    future = current
+    future = {key: value for key, value in current.items() if key not in (removed or [])}
     if isinstance(tags, dict):
         future.update(_tag_assignments(db, tags))
     return future
@@ -609,7 +623,7 @@ def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]
     try:
         # Savepoint and coded error as in _rule_object (proposed tags are read by id)
         with db.begin_nested():
-            tags = _future_tags(db, payload, stored)
+            tags = _future_tags(db, payload, stored, _deferred_removals(context))
     except Exception as e:
         raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
     stored = stored or {}
@@ -1630,6 +1644,7 @@ class AssignTagStepHandler(StepHandler):
                             effective_value = existing.assigned_value
                         elif _trigger_type(context) == 'before_update':
                             deferred = {
+                                'action': 'assign',
                                 'entity_type': context.entity_type,
                                 'entity_id': str(context.entity_id),
                                 'tag_id': str(tag.id),
@@ -1706,8 +1721,10 @@ class RemoveTagStepHandler(StepHandler):
         try:
             logger.info(f"Removing tag {key} from {context.entity_type} {context.entity_id}")
 
-            # Persist via TagsManager
+            # Persist via TagsManager; a before_update gate only records the
+            # removal, as an assign-tag step does (``apply_deferred_tag_writes``)
             persisted = False
+            deferred = None
             try:
                 from src.controller.tags_manager import TagsManager
                 tags_mgr = TagsManager()
@@ -1715,7 +1732,15 @@ class RemoveTagStepHandler(StepHandler):
                 # not leave the run unable to record the step
                 with self._db.begin_nested():
                     tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
-                    if tag:
+                    if tag and _trigger_type(context) == 'before_update':
+                        deferred = {
+                            'action': 'remove',
+                            'entity_type': context.entity_type,
+                            'entity_id': str(context.entity_id),
+                            'tag_id': str(tag.id),
+                            'tag_fqn': tag.fully_qualified_name,
+                        }
+                    elif tag:
                         persisted = tags_mgr.remove_tag_from_entity(
                             db=self._db,
                             entity_id=context.entity_id,
@@ -1732,14 +1757,17 @@ class RemoveTagStepHandler(StepHandler):
                 persisted = False
                 logger.warning(f"TagsManager integration failed (context still updated): {e}")
             
-            if 'tags' in context.entity and key in context.entity['tags']:
+            if isinstance(context.entity.get('tags'), dict) and key in context.entity['tags']:
                 del context.entity['tags'][key]
-            
-            return StepResult(
-                passed=True,
-                message=f"Removed tag {key}" + (" (persisted)" if persisted else " (context only)"),
-                data={'key': key, 'persisted': persisted}
-            )
+
+            if deferred is not None:
+                suffix = " (written when the update passes its gates)"
+            else:
+                suffix = " (persisted)" if persisted else " (context only)"
+            data = {'key': key, 'persisted': persisted}
+            if deferred is not None:
+                data['deferred_tag_write'] = deferred
+            return StepResult(passed=True, message=f"Removed tag {key}{suffix}", data=data)
         except Exception as e:
             logger.exception(f"Remove tag step failed: {e}")
             return StepResult(passed=False, error=str(e))

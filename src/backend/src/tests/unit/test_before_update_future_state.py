@@ -20,6 +20,7 @@ from src.common.workflow_executor import (
     AssignTagStepHandler,
     ConditionalStepHandler,
     PolicyCheckStepHandler,
+    RemoveTagStepHandler,
     StepContext,
     ValidationStepHandler,
     _policy_rule_object,
@@ -151,6 +152,26 @@ def test_a_step_tag_on_an_update_with_null_tags_goes_on_top_of_the_stored_ones(d
 
     assert assigned.passed is True
     assert result.passed is True
+
+
+def test_a_tag_a_remove_tag_step_removes_is_gone_but_stays_stored_until_the_gate_passes(
+    db_session,
+):
+    contract = _contract(db_session)
+    _tag(db_session, contract, ['reviewed', 'kept'], namespace='gate')
+    context = _context(contract, _payload(name='Renamed'))
+    removed = RemoveTagStepHandler(db_session, {'key': 'gate/reviewed'}).execute(context)
+    context.step_results['remove'] = removed.context_entry()
+    policy = _policy(
+        db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('kept') AND NOT HAS_TAG('reviewed')",
+    )
+
+    result = PolicyCheckStepHandler(db_session, {'policy_id': policy.id}).execute(context)
+
+    assert removed.data['deferred_tag_write']['action'] == 'remove'
+    assert result.passed is True
+    stored = db_session.query(EntityTagAssociationDb).filter_by(entity_id=contract.id).count()
+    assert stored == 2
 
 
 def test_tags_sent_as_names_are_read_like_assignments(db_session):

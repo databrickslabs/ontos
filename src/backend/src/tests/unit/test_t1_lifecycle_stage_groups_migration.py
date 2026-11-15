@@ -34,7 +34,7 @@ def _apply(conn, step):
 
 
 def test_upgrade_seeds_and_backfills_and_downgrade_removes_everything(tmp_path, migration):
-    assert migration.down_revision == 'r2_canonical_relationship_types'
+    assert migration.down_revision == 'o2_step_execution_message'
     engine = create_engine(f"sqlite:///{tmp_path / 't1.db'}")
     with engine.begin() as conn:
         for table in ('data_products', 'data_contracts', 'assets'):

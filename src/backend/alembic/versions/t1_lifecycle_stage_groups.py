@@ -15,7 +15,7 @@ type's default group. Downgrade drops the column and the tables (the stage keys
 stay in ``status``).
 
 Revision ID: t1_lifecycle_stage_groups
-Revises: r2_canonical_relationship_types
+Revises: o2_step_execution_message
 Create Date: 2026-11-12
 """
 import uuid
@@ -26,7 +26,7 @@ from alembic import op
 
 
 revision: str = "t1_lifecycle_stage_groups"
-down_revision: Union[str, Sequence[str], None] = "r2_canonical_relationship_types"
+down_revision: Union[str, Sequence[str], None] = "o2_step_execution_message"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

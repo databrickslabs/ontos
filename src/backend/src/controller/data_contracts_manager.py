@@ -1700,6 +1700,24 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             logger.warning(f"Domain resolution failed: {e}")
             return None
 
+    def _primary_within_stored_domains(
+        self, db, contract_id: str, data_dict: dict,
+    ) -> tuple[List[str], Optional[str]]:
+        """(stored domain ids, new primary) for an update that sends only primaryDomainId.
+
+        Raises ValueError when that domain is not one of the contract's domains.
+        """
+        requested = data_dict.get('primaryDomainId') or data_dict.get('primary_domain_id')
+        primary = self._resolve_domain(db, domain_id=str(requested))
+        stored = [
+            d.domain_id for d in entity_domain_repo.get_domains_for_entity(
+                db, entity_type="data_contract", entity_id=contract_id,
+            )
+        ]
+        if primary not in stored:
+            raise ValueError(f"Domain {primary} is not one of the contract's domains")
+        return stored, primary
+
     def _resolve_domain_assignment(self, db, data_dict: dict) -> tuple[List[str], Optional[str]]:
         """Resolve a contract payload's domain assignment to (domain_ids, primary_domain_id).
 
@@ -2621,9 +2639,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 k in data_dict and data_dict.get(k) is not None
                 for k in ('domain_ids', 'domainIds', 'primary_domain_id', 'primaryDomainId', 'domainId', 'domain')
             )
-            resolved_domain_ids, resolved_primary_domain_id = (
-                self._resolve_domain_assignment(db, data_dict) if domains_provided else ([], None)
+            lone_primary = (
+                data_dict.get('primaryDomainId') or data_dict.get('primary_domain_id')
+            ) and all(
+                data_dict.get(k) is None
+                for k in ('domain_ids', 'domainIds', 'domainId', 'domain_id', 'domain')
             )
+            if lone_primary:
+                # primaryDomainId alone moves the primary within the stored domains
+                resolved_domain_ids, resolved_primary_domain_id = (
+                    self._primary_within_stored_domains(db, contract_id, data_dict)
+                )
+            else:
+                resolved_domain_ids, resolved_primary_domain_id = (
+                    self._resolve_domain_assignment(db, data_dict)
+                    if domains_provided else ([], None)
+                )
 
             # Extract description fields from nested dict or flat keys
             description = data_dict.get('description')

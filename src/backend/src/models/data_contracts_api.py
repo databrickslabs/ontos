@@ -495,8 +495,8 @@ class DataContractCreate(DataContractBase):
 
 _KEEP_IF_NULL = "Omitted or null: the stored value is kept."
 _DOMAINS_NOTE = (
-    " A non-null domainIds, primaryDomainId or domainId replaces the whole"
-    " assignment; domainIds [] clears it."
+    " A non-null domainIds or domainId replaces the whole assignment; domainIds []"
+    " clears it. primaryDomainId alone makes one of the stored domains primary."
 )
 
 
@@ -504,9 +504,10 @@ class DataContractUpdate(BaseModel):
     """Contract update. ``apiVersion`` and the domain fields omitted or sent as null
     keep the stored value.
 
-    Domains: when ``domainIds``, ``primaryDomainId`` or ``domainId`` is
-    sent with a non-null value, the domain assignment is replaced as a whole, so
-    ``domainIds: []`` clears it; all of them null or omitted keep it.
+    Domains: when ``domainIds`` or ``domainId`` is sent with a non-null value, the
+    domain assignment is replaced as a whole (with ``primaryDomainId`` as its primary),
+    so ``domainIds: []`` clears it; ``primaryDomainId`` alone makes one of the stored
+    domains primary (another domain is refused); all of them null or omitted keep it.
     """
     name: Optional[str] = None
     version: Optional[str] = None

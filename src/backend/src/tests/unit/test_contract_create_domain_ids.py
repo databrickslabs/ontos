@@ -132,3 +132,29 @@ def test_an_update_with_null_api_version_keeps_it(db_session: Session):
 
     db_session.expire_all()
     assert db_session.get(type(created), created.id).api_version == "v3.0.2"
+
+
+def _primary(db: Session, contract_id: str):
+    return [
+        d.domain_id for d in entity_domain_repo.get_domains_for_entity(
+            db, entity_type="data_contract", entity_id=contract_id,
+        ) if d.is_primary
+    ]
+
+
+def test_an_update_with_only_primary_domain_id_moves_the_primary(db_session: Session):
+    """primaryDomainId alone keeps the domains and changes the primary (before, it
+    cleared every domain)."""
+    first, second = _domain(db_session), _domain(db_session)
+    created = _create(db_session, domainIds=[first, second], primaryDomainId=first)
+
+    assert _update(db_session, created.id, primaryDomainId=second) == {first, second}
+    assert _primary(db_session, created.id) == [second]
+
+
+def test_an_update_with_only_an_unrelated_primary_domain_id_is_refused(db_session: Session):
+    first, other = _domain(db_session), _domain(db_session)
+    created = _create(db_session, domainIds=[first])
+
+    with pytest.raises(ValueError, match="not one of the contract's domains"):
+        _update(db_session, created.id, primaryDomainId=other)

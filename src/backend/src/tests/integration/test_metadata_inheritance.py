@@ -268,3 +268,25 @@ def test_failing_read_check_hides_the_source(manager, db_session, stack):
     )
 
     assert merged.rich_texts == []
+
+
+def test_unqualified_exact_match_only_takes_tables_and_views(manager, db_session, stack):
+    dataset_type = AssetTypeDb(id=uuid4(), name="Dataset")
+    db_session.add(dataset_type)
+    db_session.flush()
+    dataset = AssetDb(
+        id=uuid4(), name="orders ds", asset_type_id=dataset_type.id, location="orders",
+    )
+    table = AssetDb(
+        id=uuid4(), name="orders bare", asset_type_id=stack.table.asset_type_id, location="orders",
+    )
+    db_session.add_all([dataset, table])
+    db_session.flush()
+    _schema_object(db_session, stack.contract, "orders")
+
+    sources = manager.resolve_inheritance_sources(
+        db_session, entity_type="data_contract", entity_id=stack.contract.id,
+    )
+
+    assert ("asset", str(table.id)) in sources
+    assert ("asset", str(dataset.id)) not in sources

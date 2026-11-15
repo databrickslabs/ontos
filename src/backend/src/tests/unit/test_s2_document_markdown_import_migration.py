@@ -49,6 +49,19 @@ def test_one_imported_document_per_file_and_entity(tmp_path, migration):
             with conn.begin_nested():
                 _insert(conn, 'dup', '/Volumes/c/s/v/a.md')
 
+        # The text once per file
+        conn.execute(text(
+            "INSERT INTO imported_markdown_files (source_path, content_hash, content_text) "
+            "VALUES ('/Volumes/c/s/v/a.md', 'h', 'body')"))
+        with pytest.raises(sa.exc.IntegrityError):
+            with conn.begin_nested():
+                conn.execute(text(
+                    "INSERT INTO imported_markdown_files (source_path, content_hash, "
+                    "content_text) VALUES ('/Volumes/c/s/v/a.md', 'h2', 'other')"))
+        columns = {c['name'] for c in sa.inspect(conn).get_columns('document_metadata')}
+        assert 'content_text' not in columns
+
         _apply(conn, migration.downgrade)
         columns = {c['name'] for c in sa.inspect(conn).get_columns('document_metadata')}
-        assert not columns & {'source_path', 'content_hash', 'content_text'}
+        assert not columns & {'source_path', 'content_hash'}
+        assert 'imported_markdown_files' not in sa.inspect(conn).get_table_names()

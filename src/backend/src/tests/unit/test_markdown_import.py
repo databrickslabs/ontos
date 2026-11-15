@@ -285,12 +285,14 @@ class TestFileFailures:
         assert (entry.status, entry.reason) == ('failed', 'read_failed')
 
 
+_TEXT = '---\nconcepts: [Customer]\n---\nChurn means no order.\n'
+
+
 class TestSearchItem:
     def _doc(self, **overrides):
         values = dict(
             id=uuid.uuid4(), entity_type='concept', entity_id='http://ex.org/onto#Customer',
             title='Customer terms', source_path='/Volumes/c/s/v/t.md',
-            content_text='---\nconcepts: [Customer]\n---\nChurn means no order.\n',
             is_shared=False,
         )
         values.update(overrides)
@@ -298,7 +300,7 @@ class TestSearchItem:
 
     def test_an_imported_document_is_indexed_with_its_body(self):
         doc = self._doc()
-        item = MetadataManager().build_document_search_item(doc)
+        item = MetadataManager().build_document_search_item(doc, _TEXT)
         assert item.id == f'document::{doc.id}'
         assert (item.type, item.feature_id) == ('document', 'semantic-models')
         assert item.description == 'Churn means no order.\n'
@@ -309,12 +311,13 @@ class TestSearchItem:
         ('data_domain', 'data-domains'), ('asset', 'assets'), ('concept', 'semantic-models'),
     ])
     def test_readers_of_the_entity_feature_see_it(self, entity_type, feature):
-        item = MetadataManager().build_document_search_item(self._doc(entity_type=entity_type))
+        item = MetadataManager().build_document_search_item(
+            self._doc(entity_type=entity_type), _TEXT)
         assert item.feature_id == feature
 
     def test_uploads_are_not_indexed(self):
-        doc = self._doc(source_path=None, content_text=None)
-        assert MetadataManager().build_document_search_item(doc) is None
+        doc = self._doc(source_path=None)
+        assert MetadataManager().build_document_search_item(doc, None) is None
 
     def test_delete_removes_an_imported_document_from_the_index(self):
         repo = MagicMock()

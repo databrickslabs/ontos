@@ -263,9 +263,13 @@ class MetadataManager(SearchableAsset):
         if not db_obj:
             return False
         entity_type, entity_id = db_obj.entity_type, db_obj.entity_id
-        imported = db_obj.source_path is not None
+        source_path = db_obj.source_path
         removed = self._document_repo.remove(db, id=id)
         if removed:
+            imported = source_path is not None
+            if imported:
+                self._document_repo.remove_unreferenced_imported_files(
+                    db, source_paths=[source_path])
             db.commit()
             if imported:
                 self.remove_document_from_index(id)
@@ -282,7 +286,10 @@ class MetadataManager(SearchableAsset):
     def get_document_text(self, db: Session, *, id: str) -> Optional[str]:
         """The stored Markdown of an imported document; None for an uploaded file."""
         db_obj = self._document_repo.get(db, id=id)
-        return db_obj.content_text if db_obj else None
+        if not db_obj or db_obj.source_path is None:
+            return None
+        texts = self._document_repo.imported_texts(db, source_paths=[db_obj.source_path])
+        return texts.get(db_obj.source_path)
 
     # --- Search (imported Markdown documents) ---
     def _active_search_manager(self):
@@ -290,9 +297,12 @@ class MetadataManager(SearchableAsset):
         # which startup doesn't wire to search: use the app's search manager.
         return self._search_manager or get_app_state_manager('search_manager')
 
-    def build_document_search_item(self, doc: DocumentMetadataDb) -> Optional[SearchIndexItem]:
-        """The search item of an imported Markdown document, or None for other documents."""
-        if doc.source_path is None or doc.content_text is None or doc.is_shared:
+    def build_document_search_item(
+        self, doc: DocumentMetadataDb, text: Optional[str],
+    ) -> Optional[SearchIndexItem]:
+        """The search item of an imported Markdown document (``text``: its file's
+        stored Markdown), or None for other documents."""
+        if doc.source_path is None or text is None or doc.is_shared:
             return None
         link = _ENTITY_LINKS.get(doc.entity_type)
         if not link:
@@ -302,7 +312,7 @@ class MetadataManager(SearchableAsset):
             type="document",
             feature_id=_ENTITY_FEATURES[doc.entity_type],
             title=doc.title,
-            description=strip_front_matter(doc.content_text),
+            description=strip_front_matter(text),
             link=link.format(id=urllib.parse.quote(str(doc.entity_id), safe='')),
             tags=[],
             extra_data={
@@ -312,9 +322,9 @@ class MetadataManager(SearchableAsset):
             },
         )
 
-    def index_document(self, doc: DocumentMetadataDb) -> None:
+    def index_document(self, doc: DocumentMetadataDb, text: Optional[str]) -> None:
         """Upsert an imported document in the search index (best effort)."""
-        item = self.build_document_search_item(doc)
+        item = self.build_document_search_item(doc, text)
         search_manager = self._active_search_manager()
         if item is None or search_manager is None:
             return
@@ -343,7 +353,10 @@ class MetadataManager(SearchableAsset):
         try:
             with session_factory() as db:
                 docs = self._document_repo.list_imported(db)
-                items = [self.build_document_search_item(doc) for doc in docs]
+                texts = self._document_repo.imported_texts(
+                    db, source_paths=[doc.source_path for doc in docs])
+                items = [self.build_document_search_item(doc, texts.get(doc.source_path))
+                         for doc in docs]
         except Exception:
             logger.error("Failed to fetch imported documents for search", exc_info=True)
             return []
@@ -368,12 +381,16 @@ class MetadataManager(SearchableAsset):
         links = self._link_repo.remove_all_for_entity(
             db, entity_type=entity_type, entity_id=entity_id,
         )
-        imported_ids = self._document_repo.imported_ids_for_entity(
+        imported = self._document_repo.imported_for_entity(
             db, entity_type=entity_type, entity_id=entity_id,
         )
+        imported_ids = [document_id for document_id, _ in imported]
         paths = self._document_repo.remove_all_for_entity(
             db, entity_type=entity_type, entity_id=entity_id,
         )
+        # The text of a file goes with the last document imported from it.
+        self._document_repo.remove_unreferenced_imported_files(
+            db, source_paths=[path for _, path in imported])
         attachments = self._attachment_repo.remove_all_for_entity(
             db, entity_type=entity_type, entity_id=entity_id,
         )

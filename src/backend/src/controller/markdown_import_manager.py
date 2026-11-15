@@ -19,7 +19,8 @@ stay document text; no concepts are created.
 
 The files are read with the caller's workspace client (on behalf of the user),
 so an import can't expose files the user can't read. The Markdown is stored
-with the document; the source file is never written or deleted.
+once per file (imported_markdown_files), whatever the number of entities it
+names; the source file is never written or deleted.
 """
 import hashlib
 import json
@@ -352,7 +353,8 @@ class MarkdownImportManager:
         files = self._list_markdown_files(ws, root, unread)
         resolver = _TargetResolver(db, self._semantic, writable_kinds)
         result = MarkdownImportResult(path=root)
-        changed: List[DocumentMetadataDb] = []
+        # (document, its file's text) to index once the import commits
+        changed: List[Tuple[DocumentMetadataDb, str]] = []
         removed_ids: List[str] = []
         for file_path, size in files:
             entry = self._import_file_isolated(db, ws, file_path, size, resolver, user_email,
@@ -368,9 +370,9 @@ class MarkdownImportManager:
             result.files.append(entry)
             result.removed += 1
         db.commit()
-        for doc in changed:
+        for doc, text in changed:
             db.refresh(doc)
-            self._metadata.index_document(doc)
+            self._metadata.index_document(doc, text)
         for document_id in removed_ids:
             self._metadata.remove_document_from_index(document_id)
         logger.info(
@@ -472,6 +474,8 @@ class MarkdownImportManager:
             entries.append(MarkdownImportFileResult(
                 path=path, status='removed', title=docs[0].title, removed=len(docs),
             ))
+        # Documents on kinds the caller can't edit keep their file's text.
+        self._documents.remove_unreferenced_imported_files(db, source_paths=list(gone))
         db.flush()
         return entries
 
@@ -486,15 +490,15 @@ class MarkdownImportManager:
     # --- One file ---
     def _import_file_isolated(
         self, db: Session, ws: WorkspaceClient, path: str, size: Optional[int],
-        resolver: _TargetResolver, user_email: Optional[str], changed: List[DocumentMetadataDb],
-        removed_ids: List[str],
+        resolver: _TargetResolver, user_email: Optional[str],
+        changed: List[Tuple[DocumentMetadataDb, str]], removed_ids: List[str],
     ) -> MarkdownImportFileResult:
         """``_import_file`` in its own savepoint: an error fails only this file.
 
         The file's writes are rolled back and it is reported ``failed``
         (``import_error``); the files before and after it are kept.
         """
-        file_changed: List[DocumentMetadataDb] = []
+        file_changed: List[Tuple[DocumentMetadataDb, str]] = []
         file_removed: List[str] = []
         try:
             with db.begin_nested():
@@ -510,8 +514,8 @@ class MarkdownImportManager:
 
     def _import_file(
         self, db: Session, ws: WorkspaceClient, path: str, size: Optional[int],
-        resolver: _TargetResolver, user_email: Optional[str], changed: List[DocumentMetadataDb],
-        removed_ids: List[str],
+        resolver: _TargetResolver, user_email: Optional[str],
+        changed: List[Tuple[DocumentMetadataDb, str]], removed_ids: List[str],
     ) -> MarkdownImportFileResult:
         def failed(reason: str) -> MarkdownImportFileResult:
             return MarkdownImportFileResult(path=path, status='failed', reason=reason)
@@ -581,7 +585,6 @@ class MarkdownImportManager:
                     storage_path=path,
                     source_path=path,
                     content_hash=digest,
-                    content_text=text,
                     created_by=user_email,
                     updated_by=user_email,
                 )
@@ -592,13 +595,20 @@ class MarkdownImportManager:
                 doc.title = title
                 doc.size_bytes = len(raw)
                 doc.content_hash = digest
-                doc.content_text = text
                 doc.updated_by = user_email
                 log(doc, 'UPDATE')
                 updated += 1
             else:
                 continue
-            changed.append(doc)
+            changed.append((doc, text))
+        if targets:
+            # The text once per file, whatever the number of entities it names.
+            self._documents.save_imported_file(
+                db, source_path=path, content_hash=digest, content_text=text,
+                size_bytes=len(raw), user_email=user_email,
+            )
+        elif removed:
+            self._documents.remove_unreferenced_imported_files(db, source_paths=[path])
         db.flush()
 
         if not targets:

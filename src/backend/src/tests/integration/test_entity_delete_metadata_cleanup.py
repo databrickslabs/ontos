@@ -14,19 +14,23 @@ from src.app import app
 from src.common.app_state import set_app_state_manager
 from src.controller.semantic_models_manager import SemanticModelsManager
 from src.db_models.data_domains import DataDomain
-from src.db_models.metadata import DocumentMetadataDb, LinkMetadataDb, RichTextMetadataDb
+from src.db_models.metadata import (
+    DocumentMetadataDb, ImportedMarkdownFileDb, LinkMetadataDb, RichTextMetadataDb,
+)
 
-SOURCE = '/Volumes/main/docs/context/glossary.md'
+SOURCE = '/Volumes/main/docs/context/{word}.md'
 MODELS = (RichTextMetadataDb, LinkMetadataDb, DocumentMetadataDb)
 
 
 def _seed(db, entity_type: str, entity_id: str, word: str) -> str:
     """A note, a link, an uploaded and an imported document; returns the upload's path."""
     upload = f'/Volumes/c/s/v/uploads/{uuid.uuid4().hex}.txt'
+    source = SOURCE.format(word=word)
+    text = f'---\nx: 1\n---\nThe {word} is defined here.\n'
     imported = DocumentMetadataDb(
         entity_type=entity_type, entity_id=entity_id, title=f'Glossary {word}',
-        original_filename='glossary.md', storage_path=SOURCE, source_path=SOURCE,
-        content_hash='h', content_text=f'---\nx: 1\n---\nThe {word} is defined here.\n',
+        original_filename=f'{word}.md', storage_path=source, source_path=source,
+        content_hash='h',
     )
     db.add_all([
         RichTextMetadataDb(entity_type=entity_type, entity_id=entity_id, title='Note',
@@ -36,9 +40,10 @@ def _seed(db, entity_type: str, entity_id: str, word: str) -> str:
         DocumentMetadataDb(entity_type=entity_type, entity_id=entity_id, title='Upload',
                            original_filename='u.txt', storage_path=upload),
         imported,
+        ImportedMarkdownFileDb(source_path=source, content_hash='h', content_text=text),
     ])
     db.flush()
-    app.state.metadata_manager.index_document(imported)
+    app.state.metadata_manager.index_document(imported, text)
     return upload
 
 

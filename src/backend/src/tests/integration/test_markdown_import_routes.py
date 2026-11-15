@@ -21,7 +21,7 @@ from src.controller.metadata_manager import MetadataManager
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.change_log import ChangeLogDb
 from src.db_models.data_domains import DataDomain
-from src.db_models.metadata import DocumentMetadataDb
+from src.db_models.metadata import DocumentMetadataDb, ImportedMarkdownFileDb
 
 ROOT = '/Volumes/main/docs/context'
 CUSTOMER_IRI = 'http://example.org/ontology#Customer'
@@ -189,7 +189,7 @@ def test_a_rerun_updates_only_the_changed_file(client, db_session, domain, asset
     docs = db_session.query(DocumentMetadataDb).filter(
         DocumentMetadataDb.source_path == f'{ROOT}/domain.md').all()
     assert len(docs) == 1
-    assert 'two or more' in docs[0].content_text
+    assert 'two or more' in db_session.get(ImportedMarkdownFileDb, f'{ROOT}/domain.md').content_text
     updates = db_session.query(ChangeLogDb).filter(
         ChangeLogDb.entity_type == 'data_domain:document', ChangeLogDb.action == 'UPDATE').count()
     assert updates == 1
@@ -271,7 +271,11 @@ def test_imported_documents_are_in_the_search_index_at_startup(client, db_sessio
     db_session.add(DocumentMetadataDb(
         entity_type='data_domain', entity_id=domain.id, title='Glossary',
         original_filename='g.md', storage_path=f'{ROOT}/g.md', source_path=f'{ROOT}/g.md',
-        content_hash='x', content_text='---\ndomain: Customer\n---\nChurn is defined here.\n',
+        content_hash='x',
+    ))
+    db_session.add(ImportedMarkdownFileDb(
+        source_path=f'{ROOT}/g.md', content_hash='x',
+        content_text='---\ndomain: Customer\n---\nChurn is defined here.\n',
     ))
     db_session.add(DocumentMetadataDb(
         entity_type='data_domain', entity_id=domain.id, title='Uploaded',
@@ -332,8 +336,9 @@ def test_a_changed_file_that_drops_a_target_leaves_that_entity(
     assert (entry['status'], entry['removed']) == ('updated', 1)
     docs = db_session.query(DocumentMetadataDb).filter(
         DocumentMetadataDb.source_path == f'{ROOT}/only.md').all()
-    assert [(d.entity_type, d.content_text) for d in docs] == [
-        ('data_domain', "---\ndomain: Customer\n---\nv2\n")]
+    assert [d.entity_type for d in docs] == ['data_domain']
+    assert db_session.get(ImportedMarkdownFileDb, f'{ROOT}/only.md').content_text == (
+        "---\ndomain: Customer\n---\nv2\n")
     hits = client.get('/api/search', params={'search_term': 'v1'}).json()
     assert not [hit for hit in hits if hit['type'] == 'document']
 
@@ -559,7 +564,7 @@ def test_a_second_document_for_the_same_file_and_entity_is_refused(db_session, d
         return DocumentMetadataDb(
             entity_type='data_domain', entity_id=domain.id, title='Twice',
             original_filename='t.md', storage_path=f'{ROOT}/t.md', source_path=f'{ROOT}/t.md',
-            content_hash='h', content_text='x')
+            content_hash='h')
     db_session.add(imported())
     db_session.flush()
 
@@ -579,6 +584,35 @@ def test_a_concurrent_import_answers_409(client, volume, monkeypatch):
 
     assert response.status_code == 409, response.text
     assert response.json()['detail']['code'] == 'markdown_import_in_progress'
+
+
+def _stored(db_session):
+    """The files whose text is stored (a fresh query: the routes use their own session)."""
+    return sorted(path for (path,) in db_session.query(ImportedMarkdownFileDb.source_path))
+
+
+def test_the_text_is_stored_once_per_file_and_goes_with_its_last_document(
+        client, db_session, domain, asset, concept, volume):
+    assert _import(client).status_code == 200
+    terms = f'{ROOT}/glossary/terms.md'  # linked to an asset and a concept
+    assert len(_kinds(db_session, terms)) == 2
+    [stored] = db_session.query(ImportedMarkdownFileDb).filter_by(source_path=terms).all()
+    assert stored.content_text == TERMS_FILE
+    asset_doc, concept_doc = sorted(
+        db_session.query(DocumentMetadataDb).filter_by(source_path=terms),
+        key=lambda d: d.entity_type)
+    for doc in (asset_doc, concept_doc):
+        assert client.get(f'/api/documents/{doc.id}/content').text == TERMS_FILE
+
+    assert client.delete(f'/api/documents/{asset_doc.id}').status_code in (200, 204)
+    assert _stored(db_session) == [f'{ROOT}/domain.md', terms]  # the concept's is left
+    assert client.delete(f'/api/documents/{concept_doc.id}').status_code in (200, 204)
+    assert _stored(db_session) == [f'{ROOT}/domain.md']
+
+    del volume[f'{ROOT}/domain.md']
+    body = _import(client).json()
+    assert (body['removed'], body['added']) == (1, 1)  # terms.md comes back
+    assert _stored(db_session) == [terms]
 
 
 def test_an_empty_listing_removes_nothing_and_warns(client, db_session, domain, asset, volume):

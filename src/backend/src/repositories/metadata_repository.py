@@ -8,6 +8,7 @@ from src.db_models.metadata import (
     RichTextMetadataDb, 
     LinkMetadataDb, 
     DocumentMetadataDb,
+    ImportedMarkdownFileDb,
     MetadataAttachmentDb,
 )
 from src.models.metadata import (
@@ -146,12 +147,14 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
         )
         return paths
 
-    def imported_ids_for_entity(
+    def imported_for_entity(
         self, db: Session, *, entity_type: str, entity_id: str,
-    ) -> List[str]:
-        """Ids of the entity's imported Markdown documents (the ones in the search index)."""
+    ) -> List[tuple]:
+        """(id, source path) of the entity's imported Markdown documents."""
         return [
-            str(doc_id) for (doc_id,) in db.query(DocumentMetadataDb.id).filter(
+            (str(doc_id), path) for (doc_id, path) in db.query(
+                DocumentMetadataDb.id, DocumentMetadataDb.source_path,
+            ).filter(
                 DocumentMetadataDb.entity_type == entity_type,
                 DocumentMetadataDb.entity_id == entity_id,
                 DocumentMetadataDb.source_path.isnot(None),
@@ -173,6 +176,58 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
             db.query(DocumentMetadataDb)
             .filter(DocumentMetadataDb.source_path.startswith(prefix, autoescape=True))
             .all()
+        )
+
+    # --- The text of imported files (once per file) ---
+    def get_imported_file(
+        self, db: Session, *, source_path: str,
+    ) -> Optional[ImportedMarkdownFileDb]:
+        return db.get(ImportedMarkdownFileDb, source_path)
+
+    def save_imported_file(
+        self, db: Session, *, source_path: str, content_hash: str, content_text: str,
+        size_bytes: Optional[int], user_email: Optional[str],
+    ) -> None:
+        """Store a file's text, or replace it when the file changed."""
+        row = self.get_imported_file(db, source_path=source_path)
+        if row is None:
+            db.add(ImportedMarkdownFileDb(
+                source_path=source_path, content_hash=content_hash, content_text=content_text,
+                size_bytes=size_bytes, updated_by=user_email,
+            ))
+        elif row.content_hash != content_hash:
+            row.content_hash = content_hash
+            row.content_text = content_text
+            row.size_bytes = size_bytes
+            row.updated_by = user_email
+
+    def imported_texts(self, db: Session, *, source_paths: List[str]) -> Dict[str, str]:
+        """source path -> stored text, for the given files."""
+        if not source_paths:
+            return {}
+        return dict(
+            db.query(ImportedMarkdownFileDb.source_path, ImportedMarkdownFileDb.content_text)
+            .filter(ImportedMarkdownFileDb.source_path.in_(set(source_paths)))
+            .all()
+        )
+
+    def remove_unreferenced_imported_files(self, db: Session, *, source_paths: List[str]) -> int:
+        """Delete the stored text of these files where no document points to it any more."""
+        paths = {path for path in source_paths if path}
+        if not paths:
+            return 0
+        db.flush()
+        referenced = {
+            path for (path,) in db.query(DocumentMetadataDb.source_path)
+            .filter(DocumentMetadataDb.source_path.in_(paths)).distinct()
+        }
+        unreferenced = paths - referenced
+        if not unreferenced:
+            return 0
+        return (
+            db.query(ImportedMarkdownFileDb)
+            .filter(ImportedMarkdownFileDb.source_path.in_(unreferenced))
+            .delete(synchronize_session='fetch')
         )
 
     def list_imported(self, db: Session) -> List[DocumentMetadataDb]:

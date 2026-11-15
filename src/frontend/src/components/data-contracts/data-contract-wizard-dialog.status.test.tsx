@@ -29,7 +29,11 @@ describe('DataContractWizardDialog status', () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve({
       ok: true,
       headers: new Headers({ 'Content-Type': 'application/json' }),
-      json: () => Promise.resolve(url.startsWith('/api/lifecycle-stage-groups') ? [{
+      json: () => Promise.resolve(url.startsWith('/api/lifecycle/data_contract/') ? {
+        group: { id: 'g-live' }, stage: { key: 'live', label: 'live', category: 'active',
+          color: null, order: 1, is_initial: false },
+        allowed_transitions: [],
+      } : url.startsWith('/api/lifecycle-stage-groups') ? [{
         id: 'g', name: 'Default data contract lifecycle', entity_type: 'data_contract',
         is_default_for_type: true, transitions: [],
         stages: STAGES.map((key, order) => ({
@@ -83,5 +87,20 @@ describe('DataContractWizardDialog status', () => {
     expect(statusSelect).toBeDefined()
     fireEvent.click(statusSelect!)
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['intake', 'live'])
+  })
+
+  it('offers an existing contract its current stage and the moves its group allows', async () => {
+    renderWithProviders(
+      <DataContractWizardDialog isOpen={true} onOpenChange={vi.fn()} onSubmit={vi.fn()}
+        initial={{ id: 'c1', name: 'Feed', version: '1.0.0', status: 'live',
+          lifecycle_stage_group_id: 'g-live' }} />,
+    )
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/lifecycle/data_contract/c1'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const statusSelect = screen.getAllByRole('combobox').find((el) => el.textContent === 'live')
+    expect(statusSelect).toBeDefined()
+    fireEvent.click(statusSelect!)
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['live'])
   })
 })

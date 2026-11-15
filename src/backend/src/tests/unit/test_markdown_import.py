@@ -34,6 +34,9 @@ class TestVolumePath:
     @pytest.mark.parametrize('raw', [
         '', '/tmp/docs', 'Volumes/c/s/v', '/Volumes/c/s', '/Volumes/c/s/v/../w',
         '/Volumes/c/s/v/./docs', '/Volumes/c/s/v\\docs', '/volumes/c/s/v',
+        '/Volumes/c/s/v/%2e%2e/w', '/Volumes/c/s/v/%2E/docs', '/Volumes/c/s/v/\uff0e\uff0e/w',
+        '/Volumes/c/s/v/a\x00b', '/Volumes/c/s/v/a\nb', '/Volumes/c/s/v/a\x7fb',
+        '/Volumes/c/s\x01/v',
     ])
     def test_refuses_other_paths_with_a_code(self, raw):
         with pytest.raises(MarkdownImportPathInvalidError) as raised:
@@ -216,6 +219,34 @@ class TestListing:
         ws.files.get_metadata.side_effect = NotFound('missing')
         with pytest.raises(MarkdownImportPathNotFoundError):
             MarkdownImportManager(MagicMock())._list_markdown_files(ws, '/Volumes/c/s/v/a.md')
+
+    def test_entries_outside_the_listed_folder_are_skipped(self):
+        ws = self._ws({'/Volumes/c/s/v': [
+            DirectoryEntry(path='/Volumes/c/s/v/ok.md', is_directory=False),
+            DirectoryEntry(path='/Volumes/c/s/other/x.md', is_directory=False),
+            DirectoryEntry(path='/Volumes/c/s/v/sub/../../w/y.md', is_directory=False),
+            DirectoryEntry(path='/Volumes/c/s/v/..', is_directory=True),
+            DirectoryEntry(path='/Volumes/c/s/v/bad\nname.md', is_directory=False),
+            DirectoryEntry(path='/Volumes/c/s/v/dir/', is_directory=True),
+        ], '/Volumes/c/s/v/dir': []})
+        found = MarkdownImportManager(MagicMock())._list_markdown_files(ws, '/Volumes/c/s/v')
+        assert found == [('/Volumes/c/s/v/ok.md', None)]
+        listed = [call.args[0] for call in ws.files.list_directory_contents.call_args_list]
+        assert listed == ['/Volumes/c/s/v', '/Volumes/c/s/v/dir']
+
+    def test_the_listing_stops_at_the_cap_without_reading_every_page(self, monkeypatch):
+        monkeypatch.setattr(mim, 'MAX_FILES', 2)
+        read = []
+
+        def pages(folder):
+            for n in range(1000):
+                read.append(n)
+                yield DirectoryEntry(path=f'/Volumes/c/s/v/{n}.md', is_directory=False)
+        ws = MagicMock()
+        ws.files.list_directory_contents.side_effect = pages
+        with pytest.raises(MarkdownImportTooManyFilesError):
+            MarkdownImportManager(MagicMock())._list_markdown_files(ws, '/Volumes/c/s/v')
+        assert len(read) == 3
 
     def test_too_many_files_is_refused(self, monkeypatch):
         monkeypatch.setattr(mim, 'MAX_FILES', 2)

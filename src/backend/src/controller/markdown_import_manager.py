@@ -26,6 +26,8 @@ import hashlib
 import json
 import posixpath
 import re
+import unicodedata
+import urllib.parse
 import zlib
 from typing import Any, Collection, Dict, List, Optional, Tuple
 from uuid import UUID
@@ -135,16 +137,29 @@ class FrontMatterError(ValueError):
     """The YAML front matter can't be read as a mapping."""
 
 
+def _is_dot_segment(segment: str) -> bool:
+    """``.`` or ``..``, also percent-encoded (``%2e%2e``) or as Unicode look-alikes
+    that NFKC folds to dots (fullwidth ``．．``)."""
+    decoded = unicodedata.normalize('NFKC', urllib.parse.unquote(segment))
+    return decoded in ('.', '..')
+
+
+def _has_control_characters(text: str) -> bool:
+    """NUL, newlines and other C0/C1 control characters (Unicode category Cc)."""
+    return any(unicodedata.category(char) == 'Cc' for char in text)
+
+
 def normalize_volume_path(raw: str) -> str:
     """``raw`` as a clean ``/Volumes/<catalog>/<schema>/<volume>[/...]`` path.
 
     Raises:
-        MarkdownImportPathInvalidError: Not inside a volume, or with ``.``/``..`` segments.
+        MarkdownImportPathInvalidError: Not inside a volume, with ``.``/``..``
+            segments (also encoded), a backslash or control characters.
     """
     path = (raw or '').strip()
     segments = path.split('/')
-    if (not path.startswith('/') or '\\' in path
-            or any(segment in ('.', '..') for segment in segments)):
+    if (not path.startswith('/') or '\\' in path or _has_control_characters(path)
+            or any(_is_dot_segment(segment) for segment in segments)):
         raise MarkdownImportPathInvalidError(f"Invalid volume path {path!r}", path=path)
     cleaned = '/' + '/'.join(segment for segment in segments if segment)
     if not _VOLUME_ROOT.match(cleaned):
@@ -411,7 +426,10 @@ class MarkdownImportManager:
         while pending:
             folder, depth = pending.pop(0)
             try:
-                entries = list(ws.files.list_directory_contents(folder))
+                # The SDK pages through the folder lazily: the file cap below
+                # stops the listing instead of reading a huge folder first.
+                for entry in ws.files.list_directory_contents(folder):
+                    self._add_entry(entry, folder, depth, root, found, pending, unread)
             except (NotFound, BadRequest) as e:
                 # BadRequest: the path is a file, not a folder
                 if folder == root:
@@ -423,22 +441,39 @@ class MarkdownImportManager:
                     raise MarkdownImportAccessDeniedError(f"Can't read {root}", path=root) from e
                 unread.append(folder)
                 continue
-            for entry in entries:
-                entry_path = entry.path or posixpath.join(folder, entry.name or '')
-                if entry.is_directory:
-                    if depth + 1 <= MAX_DEPTH:
-                        pending.append((entry_path, depth + 1))
-                    else:
-                        unread.append(entry_path)
-                elif entry_path.lower().endswith('.md'):
-                    found.append((entry_path, entry.file_size))
-                    if len(found) > MAX_FILES:
-                        raise MarkdownImportTooManyFilesError(
-                            f"More than {MAX_FILES} Markdown files under {root}",
-                            path=root, max=MAX_FILES,
-                        )
         found.sort()
         return found
+
+    @staticmethod
+    def _add_entry(
+        entry: Any, folder: str, depth: int, root: str,
+        found: List[Tuple[str, Optional[int]]], pending: List[Tuple[str, int]],
+        unread: List[str],
+    ) -> None:
+        """Queue a listed subfolder or keep a listed ``.md`` file.
+
+        Only direct children of ``folder`` with a plain name are taken: an
+        entry path the listing returns outside the folder, or a name with
+        ``..`` or control characters, is skipped.
+        """
+        entry_path = (entry.path or posixpath.join(folder, entry.name or '')).rstrip('/')
+        parent, name = posixpath.split(entry_path)
+        if (parent != folder or not name or _is_dot_segment(name)
+                or _has_control_characters(name)):
+            logger.warning("Skipped a listed entry outside %s during Markdown import", folder)
+            return
+        if entry.is_directory:
+            if depth + 1 <= MAX_DEPTH:
+                pending.append((entry_path, depth + 1))
+            else:
+                unread.append(entry_path)
+        elif entry_path.lower().endswith('.md'):
+            found.append((entry_path, entry.file_size))
+            if len(found) > MAX_FILES:
+                raise MarkdownImportTooManyFilesError(
+                    f"More than {MAX_FILES} Markdown files under {root}",
+                    path=root, max=MAX_FILES,
+                )
 
     def _remove_gone_files(
         self, db: Session, root: str, files: List[Tuple[str, Optional[int]]],

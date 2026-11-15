@@ -22,7 +22,7 @@ import {
   Box, Table2, Eye, Columns2, LayoutDashboard, Globe, FileCode, Brain,
   Activity, Server, Shield, BookOpen, Database, Shapes, Package, Tag, Send,
 } from 'lucide-react';
-import * as dagre from 'dagre';
+import dagre from 'dagre';
 import type { LineageGraph, LineageGraphNode, LineageGraphEdge } from '@/types/ontology-schema';
 import { TYPE_COLOR } from '@/components/lineage/constants';
 import { useFormatLabel } from '@/lib/format-label';

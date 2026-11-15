@@ -243,6 +243,19 @@ def test_an_invalid_stored_schedule_never_runs(db_session, sessions):
     assert scheduler._has_scheduled is False
 
 
+def test_a_stored_schedule_without_upcoming_runs_is_logged_once(db_session, sessions, caplog):
+    # Saved through YAML or an older API client: the save check would refuse it.
+    workflow = _create(db_session, schedule='0 0 0 * * ? 2020', name='Past year')
+    scheduler = _scheduler(sessions)
+    with caplog.at_level('WARNING', logger='src.controller.workflow_scheduler'):
+        scheduler.run_once(_at(minute=0, second=1))
+        scheduler.invalidate()
+        scheduler.run_once(_at(minute=1))
+    logged = [r for r in caplog.records if 'no upcoming run' in r.getMessage()]
+    assert len(logged) == 1 and workflow.id in logged[0].getMessage()
+    assert _executions(db_session, workflow.id) == []
+
+
 def test_a_slot_too_soon_after_the_last_run_is_skipped_not_the_workflow(
         db_session, sessions, caplog):
     # Saved without the validator; the 5-minute rule only skips slots at runtime.

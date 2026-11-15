@@ -163,6 +163,8 @@ class WorkflowScheduler:
         # unknown, so a change committed after its query isn't lost.
         self._generation = 0
         self._short_gap_logged: set = set()
+        # Workflows already reported as never running again (logged once each).
+        self._no_run_logged: set = set()
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._claimed_by = instance_id or f'{socket.gethostname()}:{os.getpid()}'
         self._schedules: Dict[str, _Schedule] = {}
@@ -338,6 +340,7 @@ class WorkflowScheduler:
                 schedule = self._schedule_of(row)
                 if schedule is None:
                     continue
+                self._warn_if_never_runs(schedule, self._last_look)
                 known = self._schedules.get(row.id)
                 if known and (known.cron, known.tz, known.changed_at) == (
                         schedule.cron, schedule.tz, schedule.changed_at):
@@ -348,6 +351,22 @@ class WorkflowScheduler:
                 self._has_scheduled = bool(schedules)
         finally:
             db.close()
+
+    def _warn_if_never_runs(self, schedule: _Schedule, now: datetime) -> None:
+        """Log once that a stored schedule has no run left (e.g. only past years).
+
+        Saves refuse it (``cron_no_upcoming_runs``), but the API before that check
+        or a YAML file can store one; it isn't an error, it just never runs.
+        """
+        if schedule.workflow_id in self._no_run_logged:
+            return
+        if next_runs(schedule.cron, schedule.tz, after=now, count=1):
+            return
+        self._no_run_logged.add(schedule.workflow_id)
+        logger.warning(
+            f"Scheduled workflow {schedule.workflow_id} is not run: its schedule has no "
+            "upcoming run (cron_no_upcoming_runs)"
+        )
 
     @staticmethod
     def _schedule_of(row: ProcessWorkflowDb) -> Optional[_Schedule]:

@@ -716,6 +716,25 @@ def test_an_unsupported_entity_type_is_422(
     ws.files.upload.assert_not_called()
 
 
+# Written out, not taken from ENTITY_TYPES: a type dropped from it must fail here. The
+# compliance policy, concept and collection pages show the metadata panel too.
+@pytest.mark.parametrize('entity_type', [
+    'data_domain', 'data_product', 'data_contract', 'dataset', 'compliance_policy', 'concept',
+    'collection',
+])
+def test_every_supported_non_asset_type_keeps_the_data_domains_rule(
+        client, act_as, entity_type):
+    act_as('Data Steward')
+
+    for url, kwargs in [
+        (f'/api/entities/{entity_type}/rich-texts', {'params': {'entity_id': 'x'}}),
+        (f'/api/entities/{entity_type}/attachments', {'params': {'entity_id': 'x'}}),
+        (f'/api/entities/{entity_type}/x/cost-items', {}),
+    ]:
+        response = client.get(url, **kwargs)
+        assert response.status_code == 200, (url, response.text)
+
+
 @pytest.mark.parametrize('method', ['PUT', 'DELETE'])
 def test_a_row_stored_under_another_casing_of_asset_gets_the_asset_rules(
         client, db_session, asset, act_as, method):

@@ -6,6 +6,9 @@ name: release-notes-fragment
 # changes, and asks for one when the PR title type is feat, fix or perf.
 # Opt out with the `no-release-notes` label. While existing PRs still edit
 # src/docs/RELEASE_NOTES.md, editing it also passes (with a notice).
+# Removal trigger for that transition rule: delete the `RELEASE_NOTES.md` branch
+# below once the first release has been assembled from fragments and no open PR
+# edits that file any more (then a PR editing it should fail like any other).
 
 on:
   pull_request:

@@ -4,11 +4,12 @@ Kept apart from maturity_routes.py; registered by its register_routes.
 """
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 
 from src.common.authorization import PermissionChecker
 from src.common.dependencies import CurrentUserDep
 from src.common.features import FeatureAccessLevel
+from src.common.run_identity import RunIdentity
 from src.models.maturity import (
     MaturityBulkEvaluationRequest,
     MaturityBulkEvaluationRun,
@@ -30,6 +31,7 @@ SETTINGS_FEATURE_ID = "settings"
 )
 def start_bulk_asset_maturity_evaluation(
     body: MaturityBulkEvaluationRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     current_user: CurrentUserDep,
     _: bool = Depends(PermissionChecker(SETTINGS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
@@ -51,8 +53,11 @@ def start_bulk_asset_maturity_evaluation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except bulk.MaturityBulkRunInProgressError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    # The admin's own token reads the UC tables, so the run stores only what
+    # they can read; the app's identity is for runs no user starts
     background_tasks.add_task(
         bulk.execute_run, run["id"], scope, evaluated_by=current_user.email,
+        run_identity=RunIdentity.for_request(request),
     )
     return run
 

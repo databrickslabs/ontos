@@ -493,17 +493,39 @@ class DataContractCreate(DataContractBase):
         )
 
 
+_KEEP_IF_NULL = "Omitted or null: the stored value is kept."
+_DOMAINS_NOTE = (
+    " A non-null domainIds, primaryDomainId or domainId replaces the whole"
+    " assignment; domainIds [] clears it."
+)
+
+
 class DataContractUpdate(BaseModel):
+    """Contract update. ``apiVersion`` and the domain fields omitted or sent as null
+    keep the stored value.
+
+    Domains: when ``domainIds``, ``primaryDomainId`` or ``domainId`` is
+    sent with a non-null value, the domain assignment is replaced as a whole, so
+    ``domainIds: []`` clears it; all of them null or omitted keep it.
+    """
     name: Optional[str] = None
     version: Optional[str] = None
     status: Optional[str] = None
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     project_id: Optional[str] = None  # Project association
     kind: Optional[str] = None
-    apiVersion: Optional[str] = Field(None, alias='api_version')
-    domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
-    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain replace-all
-    primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
+    apiVersion: Optional[str] = Field(None, alias='api_version', description=_KEEP_IF_NULL)
+    # Legacy single-domain (primary)
+    domainId: Optional[str] = Field(
+        None, alias='domain_id', description=_KEEP_IF_NULL + _DOMAINS_NOTE,
+    )
+    # Multi-domain replace-all
+    domainIds: Optional[List[str]] = Field(
+        None, alias='domain_ids', description=_KEEP_IF_NULL + _DOMAINS_NOTE,
+    )
+    primaryDomainId: Optional[str] = Field(
+        None, alias='primary_domain_id', description=_KEEP_IF_NULL + _DOMAINS_NOTE,
+    )
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None  # Nested description object (flattened in manager)

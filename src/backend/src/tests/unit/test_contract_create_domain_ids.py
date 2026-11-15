@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from src.controller.data_contracts_manager import DataContractsManager
 from src.db_models.data_domains import DataDomain
-from src.models.data_contracts_api import DataContractCreate
+from src.models.data_contracts_api import DataContractCreate, DataContractUpdate
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 
 
@@ -99,3 +99,36 @@ def test_create_refuses_an_unknown_domain_id(db_session: Session, key):
     with pytest.raises(ValueError, match="not found"):
         _create(db_session, **{key: [str(uuid.uuid4())]})
 
+
+def _update(db: Session, contract_id: str, **fields):
+    _manager().update_contract_with_relations(
+        db=db, contract_id=contract_id,
+        contract_data=DataContractUpdate.model_validate({"name": "Renamed", **fields}),
+    )
+    return {
+        d.domain_id for d in entity_domain_repo.get_domains_for_entity(
+            db, entity_type="data_contract", entity_id=contract_id,
+        )
+    }
+
+
+@pytest.mark.parametrize("fields", [{}, {"domainIds": None, "primaryDomainId": None}])
+def test_an_update_without_domains_or_with_null_keeps_them(db_session: Session, fields):
+    domain = _domain(db_session)
+    created = _create(db_session, domainIds=[domain])
+
+    assert _update(db_session, created.id, **fields) == {domain}
+
+
+def test_an_update_with_empty_domain_ids_clears_them(db_session: Session):
+    created = _create(db_session, domainIds=[_domain(db_session)])
+
+    assert _update(db_session, created.id, domainIds=[]) == set()
+
+
+def test_an_update_with_null_api_version_keeps_it(db_session: Session):
+    created = _create(db_session, apiVersion="v3.0.2")
+    _update(db_session, created.id, apiVersion=None)
+
+    db_session.expire_all()
+    assert db_session.get(type(created), created.id).api_version == "v3.0.2"

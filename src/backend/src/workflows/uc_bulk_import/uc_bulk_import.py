@@ -564,6 +564,12 @@ def create_products(
     With the ``update`` strategy an existing draft product (matched by name)
     keeps its id and gets an output port for each tagged table it doesn't have
     yet; a product past draft is skipped.
+
+    Imported products have no owner on purpose: ``draft_owner_id``,
+    ``owner_team_id`` and ``project_id`` stay NULL, so only admins see the
+    draft and can edit it until they assign an owner in the app. The job also
+    skips what the manager's create path does (change log, search index, tags,
+    domain links, on_create workflows).
     """
     stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
 
@@ -691,6 +697,7 @@ def create_domains(
 
     With the ``update`` strategy an existing domain (matched by its unique
     name) keeps its row; only ``updated_at`` changes, as the job sets nothing else.
+    Domains are standalone: the job doesn't link them to products or contracts.
     """
     stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
     domain_sql = text("""

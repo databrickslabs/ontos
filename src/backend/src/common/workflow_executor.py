@@ -576,7 +576,7 @@ def _proposed_values(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
     The payload is the data contract update request (ODCS field names). As
     ``update_contract_with_relations`` does, a null leaves the stored value
     (the key is omitted here); a domain field replaces the primary domain
-    (``domain``, an id). Tags: ``_future_tags``.
+    (``domain`` its name, ``domain_id`` its id). Tags: ``_future_tags``.
     """
     proposed = {}
     if payload.get('owner_team_id') is not None:
@@ -588,7 +588,7 @@ def _proposed_values(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
     if purpose is not None:
         proposed['description'] = purpose
     if any(payload.get(key) is not None for key in _DOMAIN_FIELDS):
-        proposed['domain'] = _proposed_primary_domain(db, payload)
+        proposed['domain_id'], proposed['domain'] = _proposed_primary_domain(db, payload)
     return proposed
 
 
@@ -600,27 +600,35 @@ _DOMAIN_FIELDS = (
 )
 
 
-def _proposed_primary_domain(db: Session, payload: Dict[str, Any]) -> Optional[str]:
-    """The primary domain id an update leaves, as ``_resolve_domain_assignment`` picks it.
+def _proposed_primary_domain(
+    db: Session, payload: Dict[str, Any],
+) -> Tuple[Optional[str], Optional[str]]:
+    """The primary domain an update leaves, as ``_resolve_domain_assignment`` picks it.
 
-    The ids with the primary id (else the first id), else the legacy
-    ``domainId``, else ``domain``: a name, resolved to its domain's id as the
-    manager does (an unknown name leaves the contract unassigned). None when
-    none of them has a value (the update unassigns the contract).
+    ``(id, name)``, the keys the compliance loader gives an entity's primary
+    domain (``domain_id``, ``domain``). The ids with the primary id (else the
+    first id), else the legacy ``domainId``, else ``domain``: a name, resolved
+    to its domain as the manager does (an unknown name leaves the contract
+    unassigned). ``(None, None)`` when none of them has a value (the update
+    unassigns the contract); an id that matches no domain has no name.
     """
     from src.db_models.data_domains import DataDomain
 
     ids = payload.get('domain_ids') or payload.get('domainIds')
     if isinstance(ids, list) and ids:
         primary = payload.get('primary_domain_id') or payload.get('primaryDomainId')
-        return primary if primary in ids else ids[0]
-    if payload.get('domainId'):
-        return payload['domainId']
-    name = payload.get('domain')
-    if not name:
-        return None
-    row = db.query(DataDomain.id).filter(DataDomain.name == name).first()
-    return str(row[0]) if row else None
+        domain_id = primary if primary in ids else ids[0]
+    elif payload.get('domainId'):
+        domain_id = payload['domainId']
+    elif payload.get('domain'):
+        row = db.query(DataDomain.id, DataDomain.name).filter(
+            DataDomain.name == payload['domain'],
+        ).first()
+        return (str(row[0]), row[1]) if row else (None, None)
+    else:
+        return None, None
+    row = db.query(DataDomain.name).filter(DataDomain.id == domain_id).first()
+    return domain_id, row[0] if row else None
 
 
 # Derived fields of a contract an update can change (see _future_contract_fields)

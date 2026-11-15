@@ -231,8 +231,9 @@ class TestBlockingGates:
         assert _actions(world) == [('GATE_ERROR', False), ('UPDATE', False)]
 
     def test_a_domain_name_is_the_domain_id_a_gate_sees(self, world, run):
-        # The tool sends a business-domain name; the manager stores its id, and the
-        # gate's c.domain is that id, as for PUT /data-contracts/{id} (domainId)
+        # The tool sends a business-domain name; the manager stores its id. The gate
+        # sees the domain as for PUT /data-contracts/{id} (domainId) and as the
+        # compliance loader keys it (#1459): name under domain, id under domain_id
         from src.db_models.compliance import CompliancePolicyDb
         from src.db_models.data_domains import DataDomain
 
@@ -240,7 +241,8 @@ class TestBlockingGates:
         domain = DataDomain(id=str(uuid.uuid4()), name=name, created_by='u@example.com')
         policy = CompliancePolicyDb(
             id=str(uuid.uuid4()), name='In Sales', is_active=True,
-            rule=f"MATCH (c:data_contract) ASSERT c.domain = '{domain.id}'",
+            rule=f"MATCH (c:data_contract) ASSERT c.domain = '{name}' "
+                 f"AND c.domain_id = '{domain.id}'",
         )
         world.db.add_all([domain, policy])
         world.db.commit()

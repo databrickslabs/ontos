@@ -374,25 +374,36 @@ def test_a_description_without_a_purpose_keeps_the_stored_purpose(db_session):
 
 def test_a_domain_change_is_the_future_domain(db_session):
     # update_contract_with_relations: domainIds with primaryDomainId (else the first),
-    # else domainId; a domain field without an id unassigns the contract
+    # else domainId, else a domain name; a domain field without a value unassigns the
+    # contract. As the compliance loader keys a stored primary domain (#1459): its name
+    # under domain, its id under domain_id
     contract = _contract(db_session)
+    sales, ops = (
+        DataDomain(id=str(uuid.uuid4()), name=name, created_by='u@example.com')
+        for name in ('Sales', 'Ops')
+    )
+    db_session.add_all([sales, ops])
+    db_session.flush()
 
     def domain(payload):
-        return _policy_rule_object(db_session, _context(contract, payload)).get('domain')
+        obj = _policy_rule_object(db_session, _context(contract, payload))
+        return obj.get('domain_id'), obj.get('domain')
 
-    assert domain(_payload(domainIds=['d-1', 'd-2'], primaryDomainId='d-2')) == 'd-2'
-    assert domain(_payload(domainIds=['d-1', 'd-2'])) == 'd-1'
-    assert domain(_payload(domainId='d-3')) == 'd-3'
-    assert domain(_payload(domainIds=[])) is None
-    # A name (the assistant tool's field) is resolved to its domain's id
-    sales = DataDomain(id=str(uuid.uuid4()), name='Sales', created_by='u@example.com')
-    db_session.add(sales)
-    db_session.flush()
-    assert domain({'domain': 'Sales'}) == sales.id
-    assert domain({'domain': 'Unknown'}) is None
+    assert domain(_payload(domainIds=[sales.id, ops.id], primaryDomainId=ops.id)) == (
+        ops.id, 'Ops',
+    )
+    assert domain(_payload(domainIds=[sales.id, ops.id])) == (sales.id, 'Sales')
+    assert domain(_payload(domainId=ops.id)) == (ops.id, 'Ops')
+    assert domain(_payload(domainIds=[])) == (None, None)
+    # A name (the assistant tool's field) is resolved to its domain
+    assert domain({'domain': 'Sales'}) == (sales.id, 'Sales')
+    assert domain({'domain': 'Unknown'}) == (None, None)
+    # An id the update names but no domain has (the manager then refuses the update)
+    assert domain(_payload(domainId='d-3')) == ('d-3', None)
     gate = _gate(
-        db_session, "MATCH (c:data_contract) ASSERT c.domain = 'd-2'",
-        contract, _payload(domainIds=['d-2']),
+        db_session,
+        f"MATCH (c:data_contract) ASSERT c.domain = 'Ops' AND c.domain_id = '{ops.id}'",
+        contract, _payload(domainIds=[ops.id]),
     )
     assert gate.passed is True
 

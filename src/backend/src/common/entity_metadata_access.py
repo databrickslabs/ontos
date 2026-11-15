@@ -260,6 +260,18 @@ class RowMetadataPermission:
         if owner is None or not _is_asset(owner[0]):
             await self._domain_checker(request, user_details, auth_manager)
             return
+        if self.level != FeatureAccessLevel.READ_ONLY:
+            try:
+                # The write rule decides first, so its role resolution alone grants the write.
+                await _ensure_asset(
+                    request, db, user_details, auth_manager, owner[1], self.level,
+                    require_asset=False,
+                )
+                return
+            except HTTPException as denied:
+                if denied.status_code != status.HTTP_403_FORBIDDEN:
+                    raise
+                write_denied = denied
         try:
             await _ensure_asset(
                 request, db, user_details, auth_manager, owner[1], FeatureAccessLevel.READ_ONLY,
@@ -271,10 +283,7 @@ class RowMetadataPermission:
             await self._domain_checker(request, user_details, auth_manager)
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=self.not_found)
         if self.level != FeatureAccessLevel.READ_ONLY:
-            await _ensure_asset(
-                request, db, user_details, auth_manager, owner[1], self.level,
-                require_asset=False,
-            )
+            raise write_denied
 
 
 def rich_text_permission(level: FeatureAccessLevel) -> RowMetadataPermission:

@@ -66,6 +66,16 @@ def test_powered_by_true_survives_restart(manager, db_session, tmp_path):
     assert _restart(db_session, tmp_path).UI_SHOW_POWERED_BY is True
 
 
+def test_clearing_powered_by_restores_the_environment_default_at_once(db_session, tmp_path):
+    env_off = make_settings(tmp_path)
+    env_off.UI_SHOW_POWERED_BY = False
+    mgr = SettingsManager(db=db_session, settings=env_off, workspace_client=None)
+    mgr.update_settings({"ui_show_powered_by": True})
+    assert env_off.UI_SHOW_POWERED_BY is True
+    mgr.update_settings({"ui_show_powered_by": None})
+    assert env_off.UI_SHOW_POWERED_BY is False
+
+
 @pytest.mark.parametrize("value", ["yes", 1, "false"])
 def test_powered_by_must_be_a_boolean(manager, value):
     with pytest.raises(ValueError):

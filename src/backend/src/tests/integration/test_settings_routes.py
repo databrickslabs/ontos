@@ -227,10 +227,10 @@ def test_ui_customization_show_powered_by(client: TestClient, test_settings):
 
         bad = client.put("/api/settings", json={"ui_show_powered_by": "no"})
         assert bad.status_code == 400
-        # null clears the stored override but keeps the value in effect until restart
+        # null clears the stored override: the environment default (on) applies again
         clear = client.put("/api/settings", json={"ui_show_powered_by": None})
         assert clear.status_code == 200, clear.text
-        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is False
+        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is True
     finally:
         test_settings.UI_SHOW_POWERED_BY = True
 

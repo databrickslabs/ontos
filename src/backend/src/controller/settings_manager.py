@@ -184,6 +184,8 @@ class SettingsManager:
         self._db = db
         self._settings = settings # Store settings
         self._client = workspace_client
+        # Environment default of "Powered by", before any stored override is applied
+        self._env_show_powered_by = getattr(settings, 'UI_SHOW_POWERED_BY', True)
         # Available jobs derive from workflows on disk
         self._available_jobs: List[str] = []
         self._installations: Dict[str, WorkflowInstallation] = {}
@@ -1925,12 +1927,13 @@ class SettingsManager:
 
         if 'ui_show_powered_by' in settings:
             value = ui['ui_show_powered_by']
-            # null clears the override; the environment default applies after a restart
+            # null clears the override: the environment default applies again at once
             app_settings_repo.set(
                 self._db, 'UI_SHOW_POWERED_BY', str(value).lower() if value is not None else None
             )
-            if value is not None:
-                self._settings.UI_SHOW_POWERED_BY = value
+            self._settings.UI_SHOW_POWERED_BY = (
+                value if value is not None else self._env_show_powered_by
+            )
             logger.info("Updated UI_SHOW_POWERED_BY to: %s", value)
 
         # Reinitialize the Git service only when a value it reads changed. The

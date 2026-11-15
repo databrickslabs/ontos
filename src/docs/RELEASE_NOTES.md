@@ -291,6 +291,7 @@
 - resolve 7 TypeScript errors from main merge
 - **frontend**: resolve all TypeScript errors and failing tests
 - **frontend**: resolve TypeScript errors breaking vite build
+- **workflows**: steps after an approval see the tags the run had when it paused. Before, a resumed run rebuilt the entity from the trigger's snapshot, so tags that assign-tag or remove-tag steps changed only in the run context (no tag with that name exists) were lost after the approval. Runs paused before the upgrade resume with the trigger's tags, as before.
 
 ## 📚 Documentation
 

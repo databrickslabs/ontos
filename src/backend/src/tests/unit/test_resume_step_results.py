@@ -57,27 +57,32 @@ class _Spy:
 
     def __init__(self, executor):
         self.seen = {}
+        self.tags = {}
         original = executor._execute_step
 
         def spy(step, context):
             self.seen[step.step_id] = {k: dict(v) if isinstance(v, dict) else v
                                        for k, v in context.step_results.items()}
+            tags = context.entity.get('tags')
+            self.tags[step.step_id] = dict(tags) if isinstance(tags, dict) else tags
             self.context = context
             return original(step, context)
 
         executor._execute_step = spy
 
 
-def _run(db, workflow_id, executor):
+def _run(db, workflow_id, executor, entity=None):
     workflow = WorkflowsManager(db).get_workflow(workflow_id)
+    entity = entity or {'id': 't-1', 'name': 'orders'}
     return executor.execute_workflow(
         workflow=workflow,
-        entity={'id': 't-1', 'name': 'orders'},
+        entity=entity,
         entity_type='table', entity_id='t-1', entity_name='orders',
         user_email='pat@example.com',
         trigger_context=TriggerContext(
             entity_type='table', entity_id='t-1', entity_name='orders',
             trigger_type=TriggerType.MANUAL, user_email='pat@example.com',
+            entity_data=entity,
         ),
     )
 
@@ -236,3 +241,47 @@ def test_runs_written_within_one_second_restore_the_later_one(db_session):
     restored = WorkflowExecutor(db_session)._restored_step_results(execution.id, steps_by_id)
 
     assert restored['check']['message'] == 'second run'
+
+
+def test_tags_set_in_the_run_context_survive_the_approval(db_session):
+    """Tags only in the run context (no tag with that name exists) are what a
+    step after the approval sees, as it would without the pause."""
+    db_workflow = _create(db_session, [
+        _step('tier', StepType.ASSIGN_TAG, {'key': 'tier', 'value': 'gold'}, on_pass='flag'),
+        _step('flag', StepType.ASSIGN_TAG, {'key': 'reviewed'}, on_pass='drop'),
+        _step('drop', StepType.REMOVE_TAG, {'key': 'stale'}, on_pass='approve'),
+        _approval('approve', on_pass='done'),
+        _step('done', StepType.PASS),
+    ])
+    before = WorkflowExecutor(db_session)
+    spy_before = _Spy(before)
+    entity = {'id': 't-1', 'name': 'orders', 'tags': {'stale': 'yes', 'owner': 'pat'}}
+    paused = _run(db_session, db_workflow.id, before, entity=entity)
+    assert paused.status.value == 'paused'
+    tags_at_pause = spy_before.tags['approve']
+    assert tags_at_pause == {'owner': 'pat', 'tier': 'gold', 'reviewed': True}
+
+    after = WorkflowExecutor(db_session)
+    spy_after = _Spy(after)
+    resumed = _resume(after, paused.id)
+
+    assert resumed.status.value == 'succeeded'
+    assert spy_after.tags['done'] == tags_at_pause
+
+
+def test_tags_changed_between_two_approvals_survive_both(db_session):
+    db_workflow = _create(db_session, [
+        _approval('first', on_pass='tier'),
+        _step('tier', StepType.ASSIGN_TAG, {'key': 'tier', 'value': 'gold'}, on_pass='second'),
+        _approval('second', on_pass='done'),
+        _step('done', StepType.PASS),
+    ])
+    paused = _run(db_session, db_workflow.id, WorkflowExecutor(db_session))
+    paused_again = _resume(WorkflowExecutor(db_session), paused.id)
+    assert paused_again.status.value == 'paused'
+
+    last = WorkflowExecutor(db_session)
+    spy = _Spy(last)
+    _resume(last, paused.id)
+
+    assert spy.tags['done'] == {'tier': 'gold'}

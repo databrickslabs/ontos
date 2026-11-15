@@ -1485,8 +1485,10 @@ class AssignTagStepHandler(StepHandler):
                 else:
                     # Nothing was assigned, so the step must not pass
                     return _rule_step_error(TagNotFoundError(key))
-            except Exception as e:
-                logger.warning(f"TagsManager integration failed (context still updated): {e}")
+            except Exception:
+                # Same false success as a missing tag: nothing was assigned.
+                logger.exception("TagsManager failed assigning tag %s", key)
+                return StepResult(passed=False, error=f"Could not assign tag '{key}'")
 
             if 'tags' not in context.entity:
                 context.entity['tags'] = {}

@@ -93,16 +93,18 @@ class TestAssignTagPersistence:
 
         assert 'tags' not in ctx.entity
 
-    def test_assign_tag_falls_back_on_tags_manager_error(self, db_session):
-        """When TagsManager throws, should still pass with persisted=False."""
+    def test_assign_tag_fails_on_tags_manager_error(self, db_session):
+        """A tags manager error is a failed step, not a context-only success."""
         with patch('src.controller.tags_manager.TagsManager') as MockTM:
             MockTM.side_effect = RuntimeError("DB unavailable")
 
+            ctx = _make_context(entity={'name': 'tbl'})
             handler = AssignTagStepHandler(db=db_session, config={'key': 'ns.tag', 'value': 'v'})
-            result = handler.execute(_make_context())
+            result = handler.execute(ctx)
 
-        assert result.passed is True
-        assert result.data['persisted'] is False
+        assert result.passed is False
+        assert 'DB unavailable' not in (result.error or '')
+        assert 'tags' not in ctx.entity
 
     def test_assign_tag_updates_context_for_downstream(self, db_session):
         """In-memory context must be updated regardless of persistence."""

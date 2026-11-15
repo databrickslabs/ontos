@@ -882,3 +882,20 @@ def test_uc_gates_of_the_blocker_level_are_marked_not_evaluated(db_session):
     stored = {g['policy_name']: g for g in json.loads(snapshot.gate_results_json)}
     assert stored[uc_gate.policy_name]['evaluated'] is False
     assert 'evaluated' not in stored[owner_gate.policy_name]
+
+
+def test_report_says_whether_it_was_stored(db_session):
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
+    _level(db_session, 2, 'Has columns', ['ASSERT obj.column_count > 0'])
+
+    def run(ws, persist):
+        return MaturityEvaluator(ws).evaluate(
+            db_session, entity_type='Asset', entity_id=str(asset.id), persist=persist,
+        )
+
+    assert run(_ws(_table([('id', 'Id')])), False).stored is False
+    assert run(_ws(_table([('id', 'Id')])), True).stored is True
+    # An unreadable table keeps the stored level and stores nothing
+    kept = run(_ws(error=NotFound('gone')), True)
+    assert kept.achieved_level_order == 2 and kept.stored is False

@@ -305,6 +305,7 @@ class MaturityEvaluator:
             prev_level = prev_snapshot.achieved_level_order if prev_snapshot else None
 
             self._persist(db, report)
+            report.stored = True
 
             if achieved_order != prev_level:
                 self._log_change(

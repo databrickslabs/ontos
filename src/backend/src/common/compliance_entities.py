@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
 from src.common.uc_table_enrichment import (
-    CHUNK_TABLES, VIEW_TABLE_TYPES, SqlRunner, conditions_without, enrich_catalog_tables, fields_read,
-    table_entity, unavailable_fields_read,
+    CHUNK_TABLES, VIEW_TABLE_TYPES, SqlRunner, conditions_without, enrich_catalog_tables,
+    fields_read, table_entity, unavailable_fields_read,
 )
 
 logger = get_logger(__name__)

@@ -161,3 +161,22 @@ def test_imported_documents_leave_search_only_once_the_delete_commits(client, db
     assert len(_document_hits(client, 'snorkelwax')) == 1
     db_session.commit()
     assert _document_hits(client, 'snorkelwax') == []
+
+
+def test_a_rolled_back_delete_keeps_the_documents_in_search(client, db_session):
+    domain = DataDomain(name='Kept', created_by='test@example.com')
+    db_session.add(domain)
+    db_session.flush()
+    _seed(db_session, 'data_domain', domain.id, 'glimmerfoot')
+    [doc_id] = [d.id for d in db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.entity_id == domain.id, DocumentMetadataDb.source_path.isnot(None))]
+    assert f'document::{doc_id}' in {item.id for item in app.state.search_manager.index}
+
+    app.state.metadata_manager.remove_all_for_entity(
+        db_session, entity_type='data_domain', entity_id=domain.id)
+    db_session.rollback()  # the delete's transaction fails: its rows come back
+    db_session.add(DataDomain(name='Later', created_by='test@example.com'))
+    db_session.commit()  # a later commit on the same session unindexes nothing
+
+    # (The index itself: the rollback also undid this test's rows.)
+    assert f'document::{doc_id}' in {item.id for item in app.state.search_manager.index}

@@ -1243,7 +1243,7 @@
     },
     "entityTypes": {
       "all": "Productos y contratos de datos",
-      "Asset": "Activos (tablas y vistas)",
+      "Asset": "Activos (tablas, vistas y vistas de métricas)",
       "DataProduct": "Productos de datos",
       "DataContract": "Contratos de datos"
     },

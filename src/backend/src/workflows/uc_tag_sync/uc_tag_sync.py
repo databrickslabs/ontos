@@ -1316,54 +1316,57 @@ def reconcile_tags(
                   f"kept (customer-owned)={customer_owned}")
         return (0, 0, [])
 
-    for k in to_remove:
-        try:
-            unassign_tag(spark, object_type, object_name, k)
-            removed += 1
-        except Exception as e:
-            if is_missing_object_error(e, column_alter=object_type == "COLUMN"):
-                raise UcObjectMissing(object_type, object_name) from None
-            msg = f"Failed to remove tag {k} from {object_type} {object_name}: {e}"
-            print(f"[WARN] {msg}")
-            errors.append(msg)
-            # Still on the object: kept in the state, so the next run retries it.
-            ours[k] = existing.get(k)
-
-    for k, v in to_upsert.items():
-        key_error: Optional[str] = None
-        try:
-            ensure_tag_key(ws, k)
-        except Exception as e:
-            if is_missing_object_error(e):
-                raise UcObjectMissing(object_type, object_name) from None
-            # The write is still tried: the key may exist under a name the check
-            # missed, or the job may be allowed to set tags it can't create.
-            key_error = f"Failed to create tag key {k} for {object_type} {object_name}: {e}"
-        try:
-            assign_tag(spark, object_type, object_name, k, v)
-            updated += 1
-            ours[k] = v
-            if key_error is not None:
-                # The tag is on the object: a warning, without the SDK text.
-                msg = f"{object_type} {object_name}: tag key {k} could not be created"
+    # A tag written before the object went missing (or anything else stopped the
+    # loop) is still the job's: it is recorded whatever happens next.
+    try:
+        for k in to_remove:
+            try:
+                unassign_tag(spark, object_type, object_name, k)
+                removed += 1
+            except Exception as e:
+                if is_missing_object_error(e, column_alter=object_type == "COLUMN"):
+                    raise UcObjectMissing(object_type, object_name) from None
+                msg = f"Failed to remove tag {k} from {object_type} {object_name}: {e}"
                 print(f"[WARN] {msg}")
-                if warnings is not None:
-                    warnings.append(msg)
-        except Exception as e:
-            if is_missing_object_error(e, column_alter=object_type == "COLUMN"):
-                raise UcObjectMissing(object_type, object_name) from None
-            if key_error is not None:
-                print(f"[WARN] {key_error}")
-                errors.append(key_error)
-            msg = f"Failed to assign tag {k}={v} to {object_type} {object_name}: {e}"
-            print(f"[WARN] {msg}")
-            errors.append(msg)
-            if k in recorded and k in existing and same_tag_value(recorded[k], existing[k]):
-                # The value the job wrote before is still there: still the job's.
-                ours[k] = recorded[k]
+                errors.append(msg)
+                # Still on the object: kept in the state, so the next run retries it.
+                ours[k] = existing.get(k)
 
-    if delivered is not None:
-        delivered.update(ours)
+        for k, v in to_upsert.items():
+            key_error: Optional[str] = None
+            try:
+                ensure_tag_key(ws, k)
+            except Exception as e:
+                if is_missing_object_error(e):
+                    raise UcObjectMissing(object_type, object_name) from None
+                # The write is still tried: the key may exist under a name the check
+                # missed, or the job may be allowed to set tags it can't create.
+                key_error = f"Failed to create tag key {k} for {object_type} {object_name}: {e}"
+            try:
+                assign_tag(spark, object_type, object_name, k, v)
+                updated += 1
+                ours[k] = v
+                if key_error is not None:
+                    # The tag is on the object: a warning, without the SDK text.
+                    msg = f"{object_type} {object_name}: tag key {k} could not be created"
+                    print(f"[WARN] {msg}")
+                    if warnings is not None:
+                        warnings.append(msg)
+            except Exception as e:
+                if is_missing_object_error(e, column_alter=object_type == "COLUMN"):
+                    raise UcObjectMissing(object_type, object_name) from None
+                if key_error is not None:
+                    print(f"[WARN] {key_error}")
+                    errors.append(key_error)
+                msg = f"Failed to assign tag {k}={v} to {object_type} {object_name}: {e}"
+                print(f"[WARN] {msg}")
+                errors.append(msg)
+                if k in recorded and k in existing and same_tag_value(recorded[k], existing[k]):
+                    # The value the job wrote before is still there: still the job's.
+                    ours[k] = recorded[k]
+    finally:
+        if delivered is not None:
+            delivered.update(ours)
     return (updated, removed, errors)
 
 
@@ -2002,16 +2005,18 @@ def sync_tags(
     if result is None:
         result = SyncResult()
 
-    def skip_missing(object_type: str, fqn: str) -> None:
+    def skip_missing(object_type: str, fqn: str,
+                     written: Optional[Dict[str, Optional[str]]] = None) -> None:
         # Only the object type and name are logged: the SDK error text can carry paths.
         print(f"[WARN] Skipped {object_type} {fqn}: {MISSING_OBJECT_SKIP_REASON}")
         result.skipped.append(f"{object_type} {fqn}: {MISSING_OBJECT_SKIP_REASON}")
-        # UC also answers "not found" for an object the job can't see (no USE CATALOG,
-        # catalog not bound to the workspace). Keep what an earlier run delivered there,
-        # so the tags are still removed once the object is reachable again.
-        kept = (previous or {}).get(object_type, {}).get(fqn)
+        # UC can't tell a dropped object from one the job can't see (e.g. a catalog
+        # not bound to the workspace). Keep what an earlier run delivered there, and
+        # what this run wrote before the object went missing (``written``), so the
+        # tags are still removed once the object is reachable again.
+        kept = {**(previous or {}).get(object_type, {}).get(fqn, {}), **(written or {})}
         if kept:
-            result.delivered[object_type][fqn] = dict(kept)
+            result.delivered[object_type][fqn] = kept
 
     def apply(
         object_type: str, fqn: str, desired: Dict[str, Optional[str]]
@@ -2033,16 +2038,17 @@ def sync_tags(
                                         delivered=ours,
                                         warnings=result.warnings)
         except UcObjectMissing:
-            skip_missing(object_type, fqn)
+            skip_missing(object_type, fqn, ours)
             return 0, 0
         except Exception as e:
             # E.g. its information_schema can't be read: the rest of the run goes on,
-            # and the object keeps the record of the previous run.
+            # and the object keeps the record of the previous run plus what this run
+            # wrote before the error.
             msg = f"Failed to sync tags of {object_type} {fqn}: {e}"
             print(f"[WARN] {msg}")
             result.errors.append(msg)
             result.failed_objects.append(f"{object_type} {fqn}")
-            result.delivered[object_type][fqn] = dict(recorded)
+            result.delivered[object_type][fqn] = {**recorded, **ours}
             return 0, 0
         result.updated += u
         result.removed += r

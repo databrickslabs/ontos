@@ -15,7 +15,7 @@ from pathlib import Path
 
 from src.controller.entity_data_cleanup import remove_entity_data
 from src.common.timestamps import utc_now
-from src.common.api_errors import CodedValueError
+from src.common.api_errors import CodedValueError, VersioningRequiredError
 from src.common.notification_i18n import notification_i18n_data
 
 SOURCE_ID_PROPERTY = "sourceId"
@@ -738,8 +738,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         user: Optional[str] = None,
         background_tasks: Optional[Any] = None,
         workflow_user: Optional[str] = None,
+        force_update: bool = False,
+        user_is_admin: bool = False,
     ) -> Optional[DataProductApi]:
         """Update an existing ODPS v1.0.0 data product.
+
+        An edit of a product that is not a draft that breaks consumers (removed
+        ports, a repointed output port, an unlinked contract) raises
+        ``VersioningRequiredError`` unless ``force_update`` is set. Every caller
+        goes through this check: the REST route, the assistant and MCP tools.
 
         Fires the ``on_update`` workflows once the product is updated (PUT
         /data-products/{id}, the assistant tool), with the fields sent.
@@ -785,6 +792,23 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # request-status-change), which runs the gates; an update may only
             # repeat it.
             check_status_unchanged(db_obj.status, product_data_dict.get('status'))
+
+            if not force_update and (db_obj.status or '').lower() not in ('', 'draft'):
+                impact = self.analyze_update_impact(
+                    product_id=product_id,
+                    proposed_changes=product_update_model.model_dump(
+                        by_alias=False, exclude_unset=True
+                    ),
+                    db=db_session,
+                )
+                if impact['requires_versioning']:
+                    raise VersioningRequiredError(
+                        "Breaking changes detected - new version required"
+                        if not user_is_admin
+                        else "Breaking changes detected - recommend new version",
+                        change_analysis=impact['change_analysis'],
+                        user_can_override=user_is_admin,
+                    )
 
             # Update via repository
             updated_db_obj = self._repo.update(db=db_session, db_obj=db_obj, obj_in=product_update_model)
@@ -842,6 +866,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             return result
 
+        except VersioningRequiredError:
+            raise
         except SQLAlchemyError as e:
             logger.error(f"Database error updating ODPS product {product_id}: {e}")
             db_session.rollback()
@@ -932,9 +958,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         background_tasks: Optional[Any] = None,
         caller_team_ids: Optional[List[str]] = None,
         is_feature_admin: bool = False,
+        force_update: bool = False,
+        user_is_admin: bool = False,
     ) -> Optional[DataProductApi]:
         """
         Update a data product with ownership-scope authorization.
+
+        The authorization check runs first; the versioning check of
+        ``update_product`` follows, so a caller who may not edit gets a 403, not a 409.
 
         Authorization cascade for non-admin callers (any condition allows):
           1. Project membership — caller is a member of any team assigned to
@@ -999,10 +1030,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 db=db_session,
                 user=user_email,
                 background_tasks=background_tasks,
+                force_update=force_update,
+                user_is_admin=user_is_admin,
             )
         
-        except PermissionError:
-            # Don't rollback for permission errors as no data was modified
+        except (PermissionError, VersioningRequiredError):
+            # Don't rollback for refusals as no data was modified
             raise
         except Exception as e:
             logger.error(f"Error in update_product_with_auth for {product_id}: {e}")

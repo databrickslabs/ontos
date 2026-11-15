@@ -2276,7 +2276,7 @@ Triggers determine when a workflow fires. Available trigger types:
 | **On Update** | Fires when an entity is updated | Notify subscribers of changes |
 | **On Delete** | Fires when an entity is deleted | Archive audit trail |
 | **On Status Change** | Fires when status transitions | Approve publish to production |
-| **Scheduled** | Fires on a cron schedule (does not run yet, see [#941](https://github.com/databrickslabs/ontos/issues/941)) | Daily compliance scans |
+| **Scheduled** | Fires on a Quartz cron schedule, in the workflow's time zone; each slot runs at most once across app instances | Daily compliance scans |
 | **Manual** | Triggered by user action: use **Run** on the Workflows list (see [Running a Manual Workflow](#running-a-manual-workflow)) | On-demand data quality check |
 | **Before Create** | Fires before entity creation (blocking) | Enforce naming policies |
 | **Before Update** | Fires before entity update (blocking) | Validate schema changes |
@@ -2468,7 +2468,7 @@ A workflow whose trigger is **Manual** never fires on its own. To start it, open
 #### Known Limits
 
 - **Scope** is saved but not applied yet ([#1118](https://github.com/databrickslabs/ontos/issues/1118)).
-- **Scheduled** workflows do not run yet ([#941](https://github.com/databrickslabs/ontos/issues/941)).
+- **Scheduled** workflows run on their Quartz cron (`trigger.schedule`, in `trigger.timezone`, default UTC), each slot at most once across app instances. A slot is claimed before its run starts, so a slot whose instance stops right after the claim is not run again; on shutdown the app waits up to 30 seconds for the runs in progress. See the [Workflow Authoring Guide](/user-docs/workflow-authoring-guide) for the cron rules.
 - **Approval steps**: `timeout_days` is accepted but not enforced: a pending approval never expires ([#1119](https://github.com/databrickslabs/ontos/issues/1119)); an admin can cancel it. With `require_all`, every approver decides and any rejection fails the step.
 
 #### Blocking vs Non-Blocking

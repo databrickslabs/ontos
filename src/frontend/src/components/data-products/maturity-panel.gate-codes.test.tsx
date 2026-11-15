@@ -109,3 +109,28 @@ describe('MaturityPanel gate codes', () => {
     }
   });
 });
+
+describe('MaturityPanel gate that could not be evaluated', () => {
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await i18n.changeLanguage('en');
+  });
+
+  it('marks it "not evaluated" instead of failed', async () => {
+    const gate = REPORT.levels[0].gates[0];
+    gate.evaluated = false;
+    try {
+      await renderPanel('pt');
+      expect(await screen.findByText('Não avaliado')).toBeInTheDocument();
+      expect(screen.getAllByText('Não avaliado')).toHaveLength(1);
+    } finally {
+      delete gate.evaluated;
+    }
+  });
+
+  it('shows no marker for an evaluated gate', async () => {
+    await renderPanel('en');
+    await screen.findByText('Has owner');
+    expect(screen.queryByText('Not evaluated')).not.toBeInTheDocument();
+  });
+});

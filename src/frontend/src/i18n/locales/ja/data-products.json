@@ -1018,6 +1018,9 @@
     "maturity_uc_table_read_failed": "テーブル {{tableName}} を Unity Catalog から読み取れなかったため、フィールドがありません。",
     "maturity_gate_error": "ゲート {{gateName}} を評価できませんでした。詳細はサーバーログにあります。"
   },
+  "maturityResult": {
+    "notEvaluated": "未評価"
+  },
   "createDialog": {
     "editTitle": "データ製品のメタデータを編集",
     "createTitle": "データ製品を作成（ODPS v1.0.0）",

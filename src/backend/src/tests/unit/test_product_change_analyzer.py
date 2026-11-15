@@ -173,3 +173,58 @@ class TestInputPortRules:
 
         assert result.change_type == ChangeType.FEATURE
         assert result.breaking_changes == []
+
+
+def _out(**over) -> Dict:
+    port = {
+        "name": "o", "version": "1", "contractId": "c1", "assetType": "table",
+        "assetIdentifier": "main.sales.orders", "containsPii": False,
+    }
+    return {**port, **over}
+
+
+class TestOutputPortChanges:
+    """Changes to an output port that consumers read are breaking."""
+
+    @pytest.mark.parametrize("over", [
+        {"assetIdentifier": "main.sales.orders_v2"},
+        {"assetType": "view"},
+        {"server": {"host": "kafka-b"}},
+        {"contractId": None},
+    ])
+    def test_repointing_or_unlinking_is_breaking(self, over):
+        old = _with_ports("outputPorts", [_out(server={"host": "kafka-a"})])
+        new = _with_ports("outputPorts", [_out(**{"server": {"host": "kafka-a"}, **over})])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert result.version_bump == "major"
+
+    @pytest.mark.parametrize("over", [
+        {"status": "deprecated"},
+        {"containsPii": True},
+        {"description": "new text"},
+        {"deliveryMethodId": "dm-2"},
+    ])
+    def test_other_attribute_changes_are_a_patch(self, over):
+        old = _with_ports("outputPorts", [_out(deliveryMethodId="dm-1")])
+        new = _with_ports("outputPorts", [_out(**{"deliveryMethodId": "dm-1", **over})])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.FIX
+
+    def test_unchanged_port_with_empty_values_is_not_a_change(self):
+        old = _with_ports("outputPorts", [_out(description=None, containsPii=None)])
+        new = _with_ports("outputPorts", [_out(description="", containsPii=False)])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.NONE
+
+    def test_left_out_delivery_method_is_not_a_change(self):
+        old = _with_ports("outputPorts", [_out(deliveryMethodId="dm-1")])
+        new = _with_ports("outputPorts", [_out()])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.NONE

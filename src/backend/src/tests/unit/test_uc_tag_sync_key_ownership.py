@@ -896,3 +896,74 @@ def test_a_run_whose_only_missing_objects_are_unlinked_succeeds(tag_sync, job,
     out = capsys.readouterr().out
     assert "completed successfully" in out
     assert "[ERROR] None of the" not in out
+
+
+# A run stopped inside the per-object loop ------------------------------------------
+
+def _stop_on(tag_sync, monkeypatch, fqn, stop):
+    """assign_tag calls ``stop()`` when it reaches ``fqn`` (after ORDERS was tagged)."""
+    real_assign = tag_sync.assign_tag
+
+    def assign(spark, object_type, name, key, value):
+        if name == fqn:
+            stop()
+        real_assign(spark, object_type, name, key, value)
+
+    monkeypatch.setattr(tag_sync, "assign_tag", assign)
+
+
+@pytest.mark.parametrize("how", ["interrupt", "sigterm"])
+def test_a_run_stopped_inside_the_object_loop_saves_what_it_wrote(
+    tag_sync, job, monkeypatch, how
+):
+    """The run is cancelled while tagging OTHER, after ORDERS was tagged: the state holds
+    ORDERS, OTHER keeps its record, the schema not reached keeps its record, and an
+    unlink later leaves no orphan."""
+    import os
+    import signal
+
+    _seed(job, OTHER, {DOMAIN_KEY: "Old"})
+    _seed(job, SCHEMA, {DOMAIN_KEY: "Sales"}, object_type="SCHEMA")
+    job.state = {"TABLE": {OTHER: {DOMAIN_KEY: "Old"}},
+                 "SCHEMA": {SCHEMA: {DOMAIN_KEY: "Sales"}}}
+
+    def interrupt():
+        raise KeyboardInterrupt
+
+    def sigterm():
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    fixture_assign = tag_sync.assign_tag
+    _stop_on(tag_sync, monkeypatch, OTHER, interrupt if how == "interrupt" else sigterm)
+    with pytest.raises((KeyboardInterrupt, SystemExit)):
+        job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                               _table(tag_sync, fqn=OTHER, domain="Finance")])
+
+    assert job.state["TABLE"] == {ORDERS: {DOMAIN_KEY: "Finance"},
+                                  OTHER: {DOMAIN_KEY: "Old"}}
+    assert job.state["SCHEMA"][SCHEMA] == {DOMAIN_KEY: "Sales"}
+    # The handler is restored after the run.
+    assert signal.getsignal(signal.SIGTERM) is not tag_sync._exit_on_sigterm
+
+    monkeypatch.setattr(tag_sync, "assign_tag", fixture_assign)
+    job.run([DOMAIN_CFG], [])
+
+    assert job.store[("TABLE", ORDERS)] == {}
+    assert job.store[("TABLE", OTHER)] == {}
+    assert job.store[("SCHEMA", SCHEMA)] == {}
+
+
+def test_the_state_is_saved_every_checkpoint_during_the_run(tag_sync, job, monkeypatch):
+    """A run killed without a chance to save loses at most CHECKPOINT_EVERY objects:
+    by the time OTHER is tagged, ORDERS is already in the stored state."""
+    monkeypatch.setattr(tag_sync, "CHECKPOINT_EVERY", 1)
+    seen = {}
+
+    def look():
+        seen.update(copy.deepcopy(job.state.get("TABLE", {})))
+
+    _stop_on(tag_sync, monkeypatch, OTHER, look)
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                           _table(tag_sync, fqn=OTHER, domain="Finance")])
+
+    assert seen == {ORDERS: {DOMAIN_KEY: "Finance"}}

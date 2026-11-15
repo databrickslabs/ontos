@@ -1761,6 +1761,12 @@ def _build_desired_set(
     return desired
 
 
+def _missing_or_raise(error: Exception) -> None:
+    """Swallow a not-found error (the catalog is gone: no tags), raise any other."""
+    if not is_missing_object_error(error):
+        raise error
+
+
 def _bulk_read_prefixed_tags_per_catalog(
     spark: SparkSession,
     catalog: str,
@@ -1769,7 +1775,9 @@ def _bulk_read_prefixed_tags_per_catalog(
     """Bulk read prefixed tags at all four levels for a catalog.
 
     Returns dict mapping (object_type, fqn) -> {tag_key: tag_value, ...}
-    for all objects in this catalog with the given prefix.
+    for all objects in this catalog with the given prefix. A catalog that doesn't exist
+    has no tags; any other read error is raised, so the caller doesn't take a failed
+    scan for a clean one.
     """
     result: Dict[Tuple[str, str], Dict[str, Optional[str]]] = {}
 
@@ -1778,8 +1786,8 @@ def _bulk_read_prefixed_tags_per_catalog(
         catalog_tags = get_existing_prefixed_tags(spark, "CATALOG", catalog, prefix)
         if catalog_tags:
             result[("CATALOG", catalog.lower())] = catalog_tags
-    except Exception:
-        pass
+    except Exception as e:
+        _missing_or_raise(e)
 
     # Read SCHEMA tags - need to query information_schema
     try:
@@ -1799,8 +1807,8 @@ def _bulk_read_prefixed_tags_per_catalog(
                 if (("SCHEMA", schema_fqn)) not in result:
                     result[("SCHEMA", schema_fqn)] = {}
                 result[("SCHEMA", schema_fqn)][tag_name] = tag_value
-    except Exception:
-        pass
+    except Exception as e:
+        _missing_or_raise(e)
 
     # Read TABLE tags
     try:
@@ -1820,8 +1828,8 @@ def _bulk_read_prefixed_tags_per_catalog(
                 if (("TABLE", table_fqn)) not in result:
                     result[("TABLE", table_fqn)] = {}
                 result[("TABLE", table_fqn)][tag_name] = tag_value
-    except Exception:
-        pass
+    except Exception as e:
+        _missing_or_raise(e)
 
     # Read COLUMN tags
     try:
@@ -1845,8 +1853,8 @@ def _bulk_read_prefixed_tags_per_catalog(
                 if (("COLUMN", column_fqn)) not in result:
                     result[("COLUMN", column_fqn)] = {}
                 result[("COLUMN", column_fqn)][tag_name] = tag_value
-    except Exception:
-        pass
+    except Exception as e:
+        _missing_or_raise(e)
 
     return result
 
@@ -1989,6 +1997,7 @@ def handle_legacy_tag_cleanup(
             desired = _build_desired_set(datasets, direct, current)
             candidates_found = 0
             candidate_samples: List[str] = []
+            scan_failed = False
 
             for cat in linked_catalogs:
                 try:
@@ -2014,8 +2023,10 @@ def handle_legacy_tag_cleanup(
                                     f"{obj_type} {fqn}: {tag_key}"
                                 )
 
-                except Exception:
-                    pass
+                except Exception as e:
+                    # Not marked checked: the next full run scans again.
+                    print(f"[WARN] Legacy tag scan of catalog {cat} failed: {e}")
+                    scan_failed = True
 
             if candidates_found > 0:
                 sample_str = ", ".join(candidate_samples[:5])
@@ -2029,7 +2040,7 @@ def handle_legacy_tag_cleanup(
                 )
 
             # Mark "checked" so we don't repeat this scan
-            if not dry_run:
+            if not dry_run and not scan_failed:
                 mark_cleanup_legacy_checked(engine, dry_run=dry_run)
 
     return (removed_count, errors)

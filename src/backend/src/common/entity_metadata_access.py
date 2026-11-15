@@ -29,12 +29,9 @@ from src.common.asset_access import (
 from src.common.authorization import PermissionChecker, get_user_details_from_sdk
 from src.common.dependencies import get_db
 from src.common.features import FeatureAccessLevel
-from src.common.logging import get_logger
 from src.common.manager_dependencies import get_auth_manager, get_metadata_manager
 from src.controller.assets_manager import assets_manager
 from src.controller.costs_manager import CostsManager
-
-logger = get_logger(__name__)
 
 METADATA_FEATURE_ID = "data-domains"
 ASSET_ENTITY_TYPE = "asset"
@@ -106,17 +103,12 @@ async def _ensure_attached_row_readable(request: Request, db, user_details, auth
         asset_type, row_id = body.get('asset_type'), body.get('asset_id')
     except (ValueError, AttributeError):
         return
-    manager = get_metadata_manager(request)
-    load_row = {
-        'rich_text': manager.get_rich_text, 'link': manager.get_link,
-        'document': manager.get_document,
-    }.get(asset_type)
-    if load_row is None or row_id is None:
+    if asset_type not in ('rich_text', 'link', 'document') or row_id is None:
         return
-    row = load_row(db, id=str(row_id))
-    if row is not None and getattr(row, 'entity_type', None) == ASSET_ENTITY_TYPE:
+    owner = get_metadata_manager(request).get_row_owner(db, kind=asset_type, id=str(row_id))
+    if owner is not None and owner[0] == ASSET_ENTITY_TYPE:
         await _ensure_asset(
-            request, db, user_details, auth_manager, row.entity_id, FeatureAccessLevel.READ_ONLY,
+            request, db, user_details, auth_manager, owner[1], FeatureAccessLevel.READ_ONLY,
             require_asset=False,
         )
 
@@ -175,30 +167,38 @@ class EntityMetadataPermission:
 
 
 def _rich_text_owner(request: Request, db):
-    return get_metadata_manager(request).get_rich_text(db, id=request.path_params['id'])
+    return get_metadata_manager(request).get_row_owner(
+        db, kind='rich_text', id=request.path_params['id'],
+    )
 
 
 def _link_owner(request: Request, db):
-    return get_metadata_manager(request).get_link(db, id=request.path_params['id'])
+    return get_metadata_manager(request).get_row_owner(
+        db, kind='link', id=request.path_params['id'],
+    )
 
 
 def _document_owner(request: Request, db):
-    return get_metadata_manager(request).get_document(db, id=request.path_params['id'])
+    return get_metadata_manager(request).get_row_owner(
+        db, kind='document', id=request.path_params['id'],
+    )
 
 
 def _cost_item_owner(request: Request, db):
-    return CostsManager().get(db, id=request.path_params['id'])
+    return CostsManager().get_owner(db, id=request.path_params['id'])
 
 
 class RowMetadataPermission:
     """Dependency for the routes that address a row by its id (``/rich-texts/{id}``, ...).
 
-    The row is loaded to learn its entity; a row that can't be loaded gets the
-    ``data-domains`` check, and the route answers 404 as before.
+    The stored row is read to learn its entity (``load_owner`` returns
+    ``(entity_type, entity_id)``, or ``None`` when no row has the id). An unknown
+    row gets the ``data-domains`` check, and the route answers 404 as before. A
+    failing lookup fails the request (500), never falls back to that check.
     """
 
-    def __init__(self, load_row: Callable, level: FeatureAccessLevel):
-        self.load_row = load_row
+    def __init__(self, load_owner: Callable, level: FeatureAccessLevel):
+        self.load_owner = load_owner
         self.level = level
         self._domain_checker = PermissionChecker(METADATA_FEATURE_ID, level)
 
@@ -209,16 +209,12 @@ class RowMetadataPermission:
         user_details=Depends(get_user_details_from_sdk),
         auth_manager=Depends(get_auth_manager),
     ) -> None:
-        try:
-            row = self.load_row(request, db)
-        except Exception:
-            logger.warning("Could not load the row of %s before the access check", request.url.path)
-            row = None
-        if row is None or getattr(row, 'entity_type', None) != ASSET_ENTITY_TYPE:
+        owner = self.load_owner(request, db)
+        if owner is None or owner[0] != ASSET_ENTITY_TYPE:
             await self._domain_checker(request, user_details, auth_manager)
             return
         await _ensure_asset(
-            request, db, user_details, auth_manager, row.entity_id, self.level,
+            request, db, user_details, auth_manager, owner[1], self.level,
             require_asset=False,
         )
 

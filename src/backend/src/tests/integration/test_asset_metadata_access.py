@@ -137,6 +137,11 @@ _PLACEHOLDER_IDS = dict.fromkeys(('note', 'link', 'doc', 'cost', 'attached'), 'x
 ROUTES = [(r[0], r[1]) for r in _requests('asset', 'x', _PLACEHOLDER_IDS)]
 READ_ROUTES = [name for name, kind in ROUTES if kind == 'read']
 WRITE_ROUTES = [name for name, kind in ROUTES if kind == 'write']
+# Routes with {entity_type} in the path; the others address a row by its id.
+ENTITY_ROUTES = [
+    r[0] for r in _requests('asset', 'x', _PLACEHOLDER_IDS) if r[3].startswith('/api/entities/')
+]
+ROW_ROUTES = [name for name, _kind in ROUTES if name not in ENTITY_ROUTES]
 
 
 def _request(entity_type, entity_id, ids, route):
@@ -202,8 +207,9 @@ def test_assets_read_write_reads_and_writes_everything(client, db_session, asset
 
 
 @pytest.mark.parametrize('role', ['Data Steward', 'Data Consumer'])
-@pytest.mark.parametrize('route', READ_ROUTES + WRITE_ROUTES)
-def test_without_assets_every_route_is_403(client, db_session, asset, ws, act_as, role, route):
+@pytest.mark.parametrize('route', ENTITY_ROUTES)
+def test_without_assets_every_entity_route_is_403(
+        client, db_session, asset, ws, act_as, role, route):
     """Neither role has ``assets``, and the asset is linked to no product."""
     ids = _seed(db_session, 'asset', str(asset.id))
     act_as(role)
@@ -233,6 +239,24 @@ def test_the_checks_use_the_startup_wired_assets_manager(
 
     assert response.status_code == 200, response.text
     assert calls == [asset.id]
+
+
+@pytest.mark.parametrize('role', ['Data Steward', 'Data Consumer'])
+@pytest.mark.parametrize('route', ROW_ROUTES)
+def test_without_assets_a_row_by_id_answers_as_an_unknown_row(
+        client, db_session, asset, ws, act_as, role, route):
+    """The data-domains check, then 404: a row id doesn't tell that it is an asset's."""
+    ids = _seed(db_session, 'asset', str(asset.id))
+    act_as(role)
+    _name, kind, method, url, kwargs = _request('asset', str(asset.id), ids, route)
+
+    response = _call(client, method, url, kwargs)
+
+    if role == 'Data Consumer' and kind == 'write':
+        _assert_data_domains_refusal(response)
+    else:
+        assert response.status_code == 404, response.text
+        assert response.json()['detail'].endswith(' not found')
 
 
 @pytest.fixture
@@ -588,8 +612,8 @@ def test_a_steward_cannot_delete_an_asset_row_its_response_model_cannot_load(
 
     response = client.delete(url)
 
-    assert response.status_code == 403, response.text
-    assert _code(response) == 'asset_write_denied'
+    # The asset isn't readable: answered as an unknown row (see above).
+    assert response.status_code == 404, response.text
 
 
 @pytest.mark.parametrize('method', ['PUT', 'DELETE'])
@@ -601,16 +625,11 @@ def test_a_steward_cannot_change_an_asset_note_by_id(
     response = client.request(method, f"/api/rich-texts/{ids['note']}",
                               **({'json': {'title': 'N2'}} if method == 'PUT' else {}))
 
-    assert response.status_code == 403, response.text
-    assert _code(response) == 'asset_write_denied'
+    # The asset isn't readable: answered as an unknown row (see above).
+    assert response.status_code == 404, response.text
 
 
 # --- Entity type in the path: exact, from the supported list -------------------
-
-ENTITY_ROUTES = [
-    r[0] for r in _requests('asset', 'x', _PLACEHOLDER_IDS) if r[3].startswith('/api/entities/')
-]
-
 
 @pytest.mark.parametrize('entity_type', ['Asset', 'ASSET', ' asset', 'assets', 'unknown'])
 @pytest.mark.parametrize('route', ENTITY_ROUTES)
@@ -643,5 +662,5 @@ def test_a_row_stored_under_another_casing_of_asset_gets_the_asset_rules(
     response = client.request(method, f'/api/rich-texts/{note.id}',
                               **({'json': {'title': 'N2'}} if method == 'PUT' else {}))
 
-    assert response.status_code == 403, response.text
-    assert _code(response) == 'asset_write_denied'
+    # The asset isn't readable: answered as an unknown row (see above).
+    assert response.status_code == 404, response.text

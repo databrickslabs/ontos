@@ -163,8 +163,8 @@ class ProductChangeAnalyzer:
         """Analyze changes in ports (input/output/management)"""
         # Filter out None entries defensively; serialized port lists from
         # partially-populated products can contain holes.
-        old_port_map = {p.get('name'): p for p in (old_ports or []) if p}
-        new_port_map = {p.get('name'): p for p in (new_ports or []) if p}
+        old_port_map = self._port_map(old_ports)
+        new_port_map = self._port_map(new_ports)
 
         old_names = set(old_port_map.keys())
         new_names = set(new_port_map.keys())
@@ -214,6 +214,15 @@ class ProductChangeAnalyzer:
         for port_name in old_names & new_names:
             old_port = old_port_map[port_name]
             new_port = new_port_map[port_name]
+
+            # The repository keeps a port by id: a same-named port with another id
+            # (or none) is a new port, and its relationships are gone.
+            old_id, new_id = old_port.get('id'), new_port.get('id')
+            if old_id and old_id != new_id and port_type == 'output':
+                self._record_modified(
+                    port_type, port_name, 'id', old_id, new_id,
+                    f"Recreated {port_type} port '{port_name}' with a new id", True,
+                )
 
             # Contract changes (critical for output ports)
             old_contract = old_port.get('contractId') or old_port.get('contract_id')
@@ -296,6 +305,21 @@ class ProductChangeAnalyzer:
         ('containsPii', ('containsPii', 'contains_pii')),
         ('description', ('description',)),
     )
+
+    @staticmethod
+    def _port_map(ports: List[Dict]) -> Dict[str, Dict]:
+        """Ports by name; a repeated name gets a '#n' suffix so none is lost."""
+        result: Dict[str, Dict] = {}
+        for port in ports or []:
+            if not port:
+                continue
+            name = port.get('name')
+            key, n = name, 1
+            while key in result:
+                n += 1
+                key = f"{name}#{n}"
+            result[key] = port
+        return result
 
     @staticmethod
     def _has_any(port: Dict, keys) -> bool:

@@ -35,8 +35,9 @@ from src.common.api_errors import CodedValueError
 from src.common.authorization import PermissionChecker, get_user_details_from_sdk
 from src.common.dependencies import get_db
 from src.common.features import FeatureAccessLevel
-from src.common.manager_dependencies import get_auth_manager, get_metadata_manager
-from src.controller.assets_manager import assets_manager
+from src.common.manager_dependencies import (
+    get_assets_manager, get_auth_manager, get_metadata_manager,
+)
 from src.controller.costs_manager import CostsManager
 
 METADATA_FEATURE_ID = "data-domains"
@@ -104,7 +105,9 @@ async def _ensure_asset(
                 _read_denied()
         else:
             try:
-                ensure_asset_readable(request, db, user_details, assets_manager, asset_id)
+                ensure_asset_readable(
+                    request, db, user_details, get_assets_manager(request), asset_id,
+                )
             except HTTPException as denied:
                 if denied.status_code != status.HTTP_403_FORBIDDEN:
                     raise
@@ -120,7 +123,9 @@ async def _ensure_asset(
                 "read/write access to Assets."
             ))
 
-    if require_asset and (asset_id is None or not assets_manager.asset_exists(db, asset_id)):
+    if require_asset and (
+        asset_id is None or not get_assets_manager(request).asset_exists(db, asset_id)
+    ):
         _refuse(status.HTTP_404_NOT_FOUND, AssetNotFoundError(
             f"Asset '{entity_id}' not found.", assetId=str(entity_id),
         ))

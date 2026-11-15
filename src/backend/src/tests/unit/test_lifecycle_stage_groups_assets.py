@@ -36,8 +36,10 @@ def _live_asset_group():
     return {
         'name': 'Certified tables', 'description': None, 'entity_type': 'asset',
         'is_default_for_type': True,
-        'stages': [_stage('intake', 'draft', 0, True), _stage('live', 'active', 1)],
-        'transitions': [{'from_key': 'intake', 'to_key': 'live'}],
+        'stages': [_stage('intake', 'draft', 0, True), _stage('live', 'active', 1),
+                   _stage('closed', 'retired', 2)],
+        'transitions': [{'from_key': 'intake', 'to_key': 'live'},
+                        {'from_key': 'live', 'to_key': 'closed'}],
     }
 
 

@@ -232,6 +232,23 @@ class TestNotAnAdmin:
         # Refused before any write (the refused request's rollback ends the test data)
         assert res.status_code == 403
 
+    def test_a_read_only_owner_cant_change_the_group(
+        self, client, db_session, mock_test_user, monkeypatch,
+    ):
+        from src.common.features import FeatureAccessLevel
+        from src.routes import lifecycle_stage_groups_routes as routes
+
+        created = _create(client, _group())
+        pid = self._owned(db_session, 'draft', mock_test_user.email)
+
+        async def read_only(feature_id, level, user, request):
+            return level == FeatureAccessLevel.READ_ONLY
+
+        monkeypatch.setattr(routes, 'has_feature_permission', read_only)
+        res = client.post(f'/api/lifecycle/data_product/{pid}/change-group',
+                          json={'group_id': created['id']})
+        assert res.status_code == 403
+
     def test_someone_elses_unpublished_product_reads_as_missing(
         self, client, db_session, not_admin,
     ):

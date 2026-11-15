@@ -19,6 +19,7 @@ from src.models.compliance import (
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
 from src.common.compliance_entities import validate_rule
+from src.common.run_identity import RunIdentity
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -273,11 +274,14 @@ async def run_policy(
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
 
     # For now, implement inline only; async can be backed by Databricks job later
+    # The user's own token reads Unity Catalog, so the stored results hold only
+    # what they can read; scheduled runs (the compliance-checks job) read as the app
     run = manager.run_policy_inline(
         db, 
         policy=policy, 
         limit=payload.limit,
-        current_user=current_user.username if current_user else None
+        current_user=current_user.username if current_user else None,
+        run_identity=RunIdentity.for_request(request),
     )
     
     audit_manager.log_action(

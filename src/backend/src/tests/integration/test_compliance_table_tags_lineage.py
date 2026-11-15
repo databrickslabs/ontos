@@ -56,12 +56,18 @@ def _policy(db: Session) -> CompliancePolicyDb:
     return policy
 
 
-def _run(client: TestClient, db: Session, ws, warehouse_id: str):
+def _run(client: TestClient, db: Session, ws, warehouse_id: str, app_ws=None):
+    """Run the policy as a user: their token reads UC; ``app_ws`` is the app's client."""
     policy = _policy(db)
-    with patch('src.common.workspace_client.get_workspace_client', return_value=ws), \
+    with patch('src.common.workspace_client.get_obo_workspace_client', return_value=ws), \
+            patch('src.common.workspace_client.get_workspace_client',
+                  return_value=app_ws or MagicMock()), \
             patch('src.common.config.get_settings',
                   return_value=SimpleNamespace(DATABRICKS_WAREHOUSE_ID=warehouse_id)):
-        response = client.post(f'/api/compliance/policies/{policy.id}/runs', json={})
+        response = client.post(
+            f'/api/compliance/policies/{policy.id}/runs', json={},
+            headers={'x-forwarded-access-token': 'user-token'},
+        )
     assert response.status_code == 200, response.text
     run = response.json()
     results = client.get(f"/api/compliance/runs/{run['id']}/results")
@@ -98,3 +104,17 @@ def test_run_without_warehouse_reports_not_evaluated(client: TestClient, db_sess
     assert details['code'] == 'rule_field_unavailable'
     # Only the fields the rule reads
     assert details['params']['fields'] == 'tags, upstream_count'
+
+
+def test_a_user_run_reads_uc_with_the_user_token(client: TestClient, db_session: Session):
+    user_ws, app_ws = _ws(), _ws()
+    user_ws.tables.list.return_value = [_table('orders')]
+    user_ws.statement_execution.execute_statement.side_effect = _answer
+
+    run, results = _run(client, db_session, user_ws, 'wh-1', app_ws=app_ws)
+
+    assert run['status'] == 'succeeded'
+    # A table the user can't list is not in the results, and the app reads nothing
+    assert set(results) == {'orders'}
+    app_ws.tables.list.assert_not_called()
+    app_ws.statement_execution.execute_statement.assert_not_called()

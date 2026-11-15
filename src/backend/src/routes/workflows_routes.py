@@ -6,7 +6,7 @@ Provides CRUD operations for workflow definitions and execution management.
 
 import json
 from datetime import datetime
-from typing import Any, Collection, Dict, List, Optional, Set, Union
+from typing import Any, Collection, Dict, List, Optional, Union
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,9 @@ from src.common.authorization import (
 from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
 from src.models.notifications import Notification
+from src.common.workflow_approvals import (
+    is_handled, open_approval_ids, open_execution_approvals,
+)
 from src.common.logging import get_logger
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.notifications_manager import NotificationsManager
@@ -1372,7 +1375,7 @@ async def resume_workflow_execution(
         # The step the resume decides, read before the resume moves on
         decided_step = _pending_step_id(db, execution_id)
         # Open before the resume: a loop-back into this step opens a new round
-        open_before = _open_approval_ids(db, execution_id)
+        open_before = open_approval_ids(db, execution_id)
 
         # Resume the workflow
         result = executor.resume_workflow(
@@ -1530,17 +1533,6 @@ def _is_for_step(
     return step_id is None or notified_step is None or notified_step == step_id
 
 
-def _is_handled(notification: Union[Notification, NotificationDb]) -> bool:
-    """Whether the approval notification's decision was already recorded."""
-    payload = notification.action_payload
-    if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except ValueError:
-            return False
-    return isinstance(payload, dict) and bool(payload.get('handled'))
-
-
 def _is_own_owner_approval(
     db: Session, execution_id: str, step_id: Optional[str], user_info: UserInfo,
 ) -> bool:
@@ -1648,7 +1640,7 @@ def _assert_caller_authorized_for_execution(
     candidates = [
         n for n in _find_approval_notifications_for_execution(db, execution_id)
         if (n.recipient or n.recipient_role_id) and _is_for_step(n, pending_step)
-        and not (for_read and _is_handled(n))
+        and not (for_read and is_handled(n))
     ]
     if not candidates:
         raise HTTPException(
@@ -1684,24 +1676,6 @@ def _assert_caller_authorized_for_execution(
     )
 
 
-def _open_execution_approvals(db: Session, execution_id: str) -> List[NotificationDb]:
-    """The approval notifications of ``execution_id`` not handled yet, read or not.
-
-    The text filter (the quoted id) narrows the rows in SQL; callers check
-    the payload's ``execution_id`` exactly.
-    """
-    rows = db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'workflow_approval',
-        NotificationDb.action_payload.contains(json.dumps(execution_id)),
-    ).all()
-    return [n for n in rows if not _is_handled(n)]
-
-
-def _open_approval_ids(db: Session, execution_id: str) -> Set[str]:
-    """Ids of the approval notifications of ``execution_id`` open right now."""
-    return {n.id for n in _open_execution_approvals(db, execution_id)}
-
-
 def _mark_step_notifications_handled(
     db: Session,
     execution_id: str,
@@ -1721,7 +1695,7 @@ def _mark_step_notifications_handled(
     open before a resume: a workflow that loops back into the same step opens
     a new round that must stay open.
     """
-    for notif in _open_execution_approvals(db, execution_id):
+    for notif in open_execution_approvals(db, execution_id):
         if only_ids is not None and notif.id not in only_ids:
             continue
         try:
@@ -1760,7 +1734,7 @@ def _mark_decided_approver_notifications(
     from src.common.workflow_executor import approver_key
 
     by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
-    for notif in _open_execution_approvals(db, execution_id):
+    for notif in open_execution_approvals(db, execution_id):
         try:
             payload = json.loads(notif.action_payload or '{}')
         except (TypeError, ValueError):
@@ -1977,7 +1951,7 @@ async def handle_workflow_approval(
         # Resuming may pause at the next approval step and notify its
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)
-        open_before = _open_approval_ids(db, execution_id)
+        open_before = open_approval_ids(db, execution_id)
 
         # Resume the workflow. The caller passed the per-execution check, so
         # the decision counts as the approval step's (e.g. for the certified

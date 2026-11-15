@@ -6,7 +6,7 @@ Provides CRUD operations for workflow definitions and execution management.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Collection, Dict, List, Optional, Set, Union
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
@@ -1371,6 +1371,8 @@ async def resume_workflow_execution(
 
         # The step the resume decides, read before the resume moves on
         decided_step = _pending_step_id(db, execution_id)
+        # Open before the resume: a loop-back into this step opens a new round
+        open_before = _open_approval_ids(db, execution_id)
 
         # Resume the workflow
         result = executor.resume_workflow(
@@ -1392,7 +1394,9 @@ async def resume_workflow_execution(
 
         # An approval resumed here (e.g. by an external system) is decided:
         # close its notifications so My actions stops offering it
-        _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
+        _mark_step_notifications_handled(
+            db, execution_id, decided_step, approved, user_email, only_ids=open_before,
+        )
         db.commit()
 
         audit_manager.log_action(
@@ -1693,6 +1697,11 @@ def _open_execution_approvals(db: Session, execution_id: str) -> List[Notificati
     return [n for n in rows if not _is_handled(n)]
 
 
+def _open_approval_ids(db: Session, execution_id: str) -> Set[str]:
+    """Ids of the approval notifications of ``execution_id`` open right now."""
+    return {n.id for n in _open_execution_approvals(db, execution_id)}
+
+
 def _mark_step_notifications_handled(
     db: Session,
     execution_id: str,
@@ -1700,6 +1709,7 @@ def _mark_step_notifications_handled(
     approved: bool,
     user_email: Optional[str],
     decision: Optional[str] = None,
+    only_ids: Optional[Collection[str]] = None,
 ) -> None:
     """Mark the approval notifications of ``step_id`` not yet handled as handled.
 
@@ -1707,9 +1717,13 @@ def _mark_step_notifications_handled(
     sees it in My actions until it is handled. Notifications of later steps,
     created while the workflow resumed, stay open for their approvers.
     ``decision`` overrides approved / rejected (``cancelled`` when an admin
-    cancels the step).
+    cancels the step). ``only_ids`` limits the marking to the notifications
+    open before a resume: a workflow that loops back into the same step opens
+    a new round that must stay open.
     """
     for notif in _open_execution_approvals(db, execution_id):
+        if only_ids is not None and notif.id not in only_ids:
+            continue
         try:
             payload = notif.action_payload
             if isinstance(payload, str):
@@ -1963,6 +1977,7 @@ async def handle_workflow_approval(
         # Resuming may pause at the next approval step and notify its
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)
+        open_before = _open_approval_ids(db, execution_id)
 
         # Resume the workflow. The caller passed the per-execution check, so
         # the decision counts as the approval step's (e.g. for the certified
@@ -1993,7 +2008,9 @@ async def handle_workflow_approval(
                 detail="Execution not found or not in paused state"
             )
 
-        _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
+        _mark_step_notifications_handled(
+            db, execution_id, decided_step, approved, user_email, only_ids=open_before,
+        )
 
         audit_manager.log_action(
             db=db,

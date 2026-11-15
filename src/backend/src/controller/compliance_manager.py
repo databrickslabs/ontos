@@ -229,6 +229,15 @@ def _action_outcomes(action_results) -> List[Dict[str, object]]:
     return outcomes
 
 
+def _run_scored(run: ComplianceRunDb) -> bool:
+    """Whether a run's score measures anything: not when every entity it matched
+    was not evaluated (warning ``rule_fields_unavailable``, no pass, no fail)."""
+    return not (
+        run.warning_code == 'rule_fields_unavailable'
+        and not (run.success_count or 0) and not (run.failure_count or 0)
+    )
+
+
 class ComplianceManager:
     def __init__(self):
         # Stateless; uses DB via repositories
@@ -475,14 +484,23 @@ class ComplianceManager:
         return True
 
     # --- Stats ---
+    @staticmethod
+    def _latest_score(db: Session, policy_id: str) -> float:
+        """Score of the policy's latest run that evaluated something (0.0 if none).
+
+        A run whose entities were all not evaluated (a source could not be
+        read) has no score of its own; it keeps the one before it.
+        """
+        runs = compliance_run_repo.list_for_policy(db, policy_id=policy_id, limit=20)
+        return next((r.score for r in runs if _run_scored(r)), 0.0)
+
     def get_compliance_stats(self, db: Session) -> Dict[str, float]:
         policies = self.list_policies(db)
         # Use latest run score per policy
         scores: List[float] = []
         critical_issues = 0
         for p in policies:
-            runs = compliance_run_repo.list_for_policy(db, policy_id=p.id, limit=1)
-            score = runs[0].score if runs else 0.0
+            score = self._latest_score(db, p.id)
             scores.append(score)
             if (p.severity or '').lower() == 'critical' and score < 70:
                 critical_issues += 1
@@ -522,8 +540,7 @@ class ComplianceManager:
         policies = []
         for r in rows:
             # Get latest run score for this policy
-            runs = compliance_run_repo.list_for_policy(db, policy_id=r.id, limit=1)
-            compliance_score = runs[0].score if runs else 0.0
+            compliance_score = self._latest_score(db, r.id)
             
             policies.append({
                 'id': r.id,
@@ -601,7 +618,7 @@ class ComplianceManager:
         runs = db.query(ComplianceRunDb).all()
         by_date: Dict[str, List[float]] = {}
         for r in runs:
-            if not r.started_at:
+            if not r.started_at or not _run_scored(r):
                 continue
             d = r.started_at.date()
             if d < start or d > end:

@@ -417,3 +417,23 @@ def _run_ws(tag_sync, ws, fqns):
     direct = tag_sync.build_direct_link_infos([], None, None)
     return tag_sync.sync_tags(ws, FakeSpark(), [_dataset(tag_sync, f) for f in fqns],
                               direct, CFG, tag_sync.TagOwnership(), previous=None)
+
+
+@pytest.mark.parametrize("linked", [False, True])
+def test_a_recorded_column_that_is_gone_is_skipped_on_removal(tag_sync, monkeypatch,
+                                                               linked):
+    """UNSET TAGS on a dropped column (unlinked: cleanup; linked: a recorded tag no
+    longer desired) raises COLUMN_NOT_FOUND_IN_TABLE: skipped, record kept."""
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags",
+                        lambda _s, t, n, _p: {"ontos_old": "x"} if t == "COLUMN" else {})
+    spark = FakeSpark({"ALTER COLUMN `nope`": MISSING_COLUMN_ERROR})
+    previous = {"TABLE": {}, "COLUMN": {"main.a.t.nope": {"ontos_old": "x"}},
+                "SCHEMA": {}, "CATALOG": {}}
+    direct = _columns(tag_sync, "nope") if linked else _columns(tag_sync)
+    result = tag_sync.sync_tags(MagicMock(), spark, [], direct, CFG,
+                                tag_sync.TagOwnership(), previous=previous)
+
+    assert any("UNSET TAGS ('ontos_old')" in s for s in spark.statements)
+    assert result.failed_objects == []
+    assert any("COLUMN main.a.t.nope" in item for item in result.skipped)
+    assert result.delivered["COLUMN"]["main.a.t.nope"]["ontos_old"] == "x"

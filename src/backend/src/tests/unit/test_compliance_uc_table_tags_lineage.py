@@ -136,6 +136,20 @@ def test_tag_rows_fill_table_and_column_tags():
     assert untagged['tags'] == {} and untagged['columns'][0]['tags'] == {}
 
 
+def test_tag_not_empty_passes_untagged_tables_so_rules_use_has_tag():
+    """Pins the documented trap: TAG() is null without the tag, and null != ''."""
+    untagged = {'type': 'table', 'tags': {}}
+    key_only = {'type': 'table', 'tags': {'data_classification': True}}
+    tagged = {'type': 'table', 'tags': {'data_classification': 'internal'}}
+    not_empty = "MATCH (t:table) ASSERT TAG('data_classification') != ''"
+    has_tag = "MATCH (t:table) ASSERT HAS_TAG('data_classification')"
+    one_of = "MATCH (t:table) ASSERT TAG('data_classification') IN ['public', 'internal']"
+
+    assert [_rule_eval(not_empty, e) for e in (untagged, key_only, tagged)] == [True] * 3
+    assert [_rule_eval(has_tag, e) for e in (untagged, key_only, tagged)] == [False, True, True]
+    assert [_rule_eval(one_of, e) for e in (untagged, key_only, tagged)] == [False, False, True]
+
+
 def test_lineage_rows_give_counts_and_zero_without_events():
     entities = [{'full_name': 'main.sales.Orders'}, {'full_name': 'main.sales.raw'}]
 

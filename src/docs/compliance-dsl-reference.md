@@ -141,6 +141,12 @@ For Unity Catalog tables and views, `key` is the governed tag's key, and a tag
 without a value has the value `True`. See [Table and View Tags and
 Lineage](#table-and-view-tags-and-lineage) for where the tags come from.
 
+`TAG(key)` is `null` on an entity without that tag, and `null != ''` is true: `ASSERT
+TAG('data_classification') != ''` passes every untagged entity, and an entity with the tag
+but no value (`True`) as well. To require a tag, use `HAS_TAG('data_classification')`; to
+require one of some values, use `TAG('data_classification') IN ['public', 'internal']`, which
+is false without the tag.
+
 ### String Functions
 - `UPPER(str)` - Convert to uppercase
 - `LOWER(str)` - Convert to lowercase

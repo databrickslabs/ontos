@@ -119,3 +119,24 @@ def test_a_user_run_reads_uc_with_the_user_token(client: TestClient, db_session:
     assert set(results) == {'orders'}
     app_ws.tables.list.assert_not_called()
     app_ws.statement_execution.execute_statement.assert_not_called()
+
+
+def test_a_run_waits_on_the_warehouse_off_the_event_loop(
+    client: TestClient, db_session: Session,
+):
+    from src.routes import compliance_routes
+
+    ws = _ws()
+    ws.statement_execution.execute_statement.side_effect = _answer
+    calls = []
+    real = compliance_routes.run_in_threadpool
+
+    async def recording(func, *args, **kwargs):
+        calls.append(func)
+        return await real(func, *args, **kwargs)
+
+    with patch.object(compliance_routes, 'run_in_threadpool', recording):
+        run, _ = _run(client, db_session, ws, 'wh-1')
+
+    assert run['status'] == 'succeeded'
+    assert calls == [compliance_routes.manager.run_policy_inline]

@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, FastAPI, HTTPException, Depends, Body, Query, Request
+from starlette.concurrency import run_in_threadpool
 
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
@@ -276,7 +277,9 @@ async def run_policy(
     # For now, implement inline only; async can be backed by Databricks job later
     # The user's own token reads Unity Catalog, so the stored results hold only
     # what they can read; scheduled runs (the compliance-checks job) read as the app
-    run = manager.run_policy_inline(
+    # Off the event loop: the run can wait on SQL warehouse statements (tags, lineage)
+    run = await run_in_threadpool(
+        manager.run_policy_inline,
         db, 
         policy=policy, 
         limit=payload.limit,

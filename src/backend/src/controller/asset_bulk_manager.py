@@ -99,6 +99,14 @@ def _bulk_status(db: Session, existing: Any, requested: Optional[str]) -> str:
     return lifecycle_service.check_transition(db, 'asset', existing, requested)[1]
 
 
+def _bulk_status_update(db: Session, existing: Any, requested: Optional[str]) -> Dict[str, str]:
+    """``AssetUpdate`` keyword for a bulk row's status: none without one, so the
+    update leaves the stored status alone instead of writing it back."""
+    if not requested:
+        return {}
+    return {'status': _bulk_status(db, existing, requested)}
+
+
 class ImportAction(str, Enum):
     CREATE = "create"
     UPDATE = "update"
@@ -769,7 +777,7 @@ class AssetBulkManager:
                             # The internal keys aren't exported, so the file can't carry them
                             properties=with_internal_properties(properties, existing.properties),
                             tags=tags,
-                            status=_bulk_status(db, existing, status_val),
+                            **_bulk_status_update(db, existing, status_val),
                         )
                         updated = self._asset_repo.update(
                             db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
@@ -792,7 +800,7 @@ class AssetBulkManager:
                                 properties=with_internal_properties(
                                     properties, existing.properties),
                                 tags=tags,
-                                status=_bulk_status(db, existing, status_val),
+                                **_bulk_status_update(db, existing, status_val),
                             )
                             updated = self._asset_repo.update(
                                 db=db, db_obj=existing,

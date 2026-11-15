@@ -252,3 +252,22 @@ def test_a_stored_group_reads_with_its_stages_and_transitions(client):
     body = res.json()
     assert [s['key'] for s in body['stages']] == ['draft', 'active', 'needs_review', 'retired']
     assert {'from_key': 'needs_review', 'to_key': 'active'} in body['transitions']
+
+
+def test_a_reader_without_settings_write_gets_no_audit_fields(client, monkeypatch):
+    from src.common.features import FeatureAccessLevel
+    from src.routes import lifecycle_stage_groups_routes as routes
+
+    created = _create(client, _group())
+    assert created['created_by']
+
+    async def read_only(feature_id, level, user, request):
+        return level == FeatureAccessLevel.READ_ONLY
+
+    monkeypatch.setattr(routes, 'has_feature_permission', read_only)
+    listed = client.get('/api/lifecycle-stage-groups',
+                        params={'entity_type': 'data_product'}).json()
+    one = client.get(f"/api/lifecycle-stage-groups/{created['id']}").json()
+    for group in listed + [one]:
+        assert (group['created_by'], group['updated_by']) == (None, None)
+    assert [s['key'] for s in one['stages']] == ['draft', 'active', 'needs_review', 'retired']

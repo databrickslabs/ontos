@@ -184,7 +184,8 @@
     "reasons": {
       "no_warehouse": "kein SQL-Warehouse konfiguriert",
       "no_access": "kein Zugriff auf die Systemtabelle",
-      "query_failed": "die Abfrage ist fehlgeschlagen"
+      "query_failed": "die Abfrage ist fehlgeschlagen",
+      "timed_out": "die Abfrage lief beim Zeitlimit noch"
     }
   },
   "saveErrors": {

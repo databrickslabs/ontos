@@ -381,8 +381,11 @@ MATCH (t:table) WHERE t.catalog = 'production' ASSERT t.upstream_count > 0
 MATCH (v:view) ASSERT v.downstream_count > 0 OR HAS_TAG('deprecated')
 ```
 
-If a source can't be read (no SQL warehouse configured, no access to the system table, or the
-statement fails), its fields are left out and every entity whose rule reads them gets a failed
+A statement that is still running after 50 seconds keeps running and is polled; one still
+running after 5 minutes is cancelled (reason `timed_out`).
+
+If a source can't be read (no SQL warehouse configured, no access to the system table, the
+statement fails or times out), its fields are left out and every entity whose rule reads them gets a failed
 result marked *not evaluated* with the field, the source and the reason; its `ON_PASS` /
 `ON_FAIL` actions don't run. When the `WHERE` reads a missing field, the entity is kept only
 if the `AND`-ed parts of the `WHERE` that don't read it hold. The run ends with the warning `rule_fields_unavailable` and the

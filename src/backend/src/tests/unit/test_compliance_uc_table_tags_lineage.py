@@ -330,6 +330,57 @@ def test_runner_turns_an_sdk_error_into_source_unavailable():
     assert raised.value.reason == 'query_failed'
 
 
+class FakeClock:
+    """Monotonic clock that sleeping advances."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.sleeps = []
+
+    def __call__(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+def _runner(ws, clock):
+    return WarehouseSqlRunner(ws, 'wh-1', clock=clock, sleep=clock.sleep)
+
+
+def test_runner_keeps_a_long_statement_running_and_polls_it_to_the_end():
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.return_value = _response('PENDING')
+    ws.statement_execution.get_statement.side_effect = [
+        _response('RUNNING'), _response('SUCCEEDED', rows=[['1', 'x']]),
+    ]
+    clock = FakeClock()
+
+    rows = _runner(ws, clock).rows('SELECT 1', {})
+
+    assert rows == [{'a': '1', 'b': 'x'}]
+    kwargs = ws.statement_execution.execute_statement.call_args.kwargs
+    # Not cancelled at the first wait: CONTINUE, then polled
+    assert kwargs['on_wait_timeout'].value == 'CONTINUE'
+    assert ws.statement_execution.get_statement.call_count == 2
+    ws.statement_execution.cancel_execution.assert_not_called()
+
+
+def test_runner_cancels_a_statement_still_running_at_the_deadline():
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.return_value = _response('RUNNING')
+    ws.statement_execution.get_statement.return_value = _response('RUNNING')
+    clock = FakeClock()
+
+    with pytest.raises(SourceUnavailable) as raised:
+        _runner(ws, clock).rows('SELECT 1', {})
+
+    assert raised.value.reason == 'timed_out'
+    assert clock.now >= WarehouseSqlRunner.DEADLINE_SECONDS
+    ws.statement_execution.cancel_execution.assert_called_once_with('st-1')
+
+
 # --- policy runs ----------------------------------------------------------------------
 
 def _policy(db_session, rule):

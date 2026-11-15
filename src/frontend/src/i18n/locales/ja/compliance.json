@@ -184,7 +184,8 @@
     "reasons": {
       "no_warehouse": "SQL ウェアハウスが設定されていません",
       "no_access": "システムテーブルへのアクセス権がありません",
-      "query_failed": "クエリが失敗しました"
+      "query_failed": "クエリが失敗しました",
+      "timed_out": "制限時間に達した時点でクエリがまだ実行中でした"
     }
   },
   "saveErrors": {

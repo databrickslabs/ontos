@@ -49,6 +49,7 @@ const SEEDED_CATEGORIES: Record<string, string> = {
 /** A row's status and Stage Category, as products (camelCase) and contracts send them. */
 export interface LifecycleRow {
   status?: string | null;
+  lifecycle_stage_group_id?: string | null;
   status_category?: string | null;
   statusCategory?: string | null;
 }
@@ -64,25 +65,72 @@ export function categoryOf(row: LifecycleRow | null | undefined): string | null 
     ?? SEEDED_CATEGORIES[(row.status || '').toLowerCase()] ?? null;
 }
 
-/**
- * In a review stage that awaits a steward's decision (Approve / Reject): any
- * review-category stage but the approve action's own `approved`, as the
- * backend's lifecycle service decides (proposed / under_review by default).
- */
-export function awaitsReviewDecision(entity: LifecycleRow): boolean {
-  const status = (entity.status || '').toLowerCase();
-  return categoryOf(entity) === 'review' && status !== 'approved';
+/** The group of a row among the groups of its type: its own, else the default one. */
+export function groupOfRow(
+  row: LifecycleRow, groups: LifecycleStageGroup[] | null | undefined,
+): LifecycleStageGroup | null {
+  const list = groups ?? [];
+  return list.find((g) => g.id && g.id === row.lifecycle_stage_group_id)
+    ?? list.find((g) => g.is_default_for_type) ?? list[0] ?? null;
 }
 
 /**
- * In an active-category stage or the approve action's review stage (`approved`):
- * a contract that may be published, linked to an output port or a product
- * created from (the backend's `contract_publishable`), or a product listed as
- * live for its consumers.
+ * The review stages the approve action reaches from another review stage, as
+ * the backend's `_approved_review_stages` decides: from a review stage, the
+ * move to `approved` when the group allows it, else (the group having no
+ * `approved` stage) the only allowed review-category target, else none.
  */
-export function isApprovedOrActive(row: LifecycleRow): boolean {
+export function approvedReviewStages(group: LifecycleStageGroup): Set<string> {
+  const byKey = new Map(group.stages.map((s) => [s.key, s]));
+  const out = new Set<string>();
+  for (const stage of group.stages) {
+    if (stage.category !== 'review') continue;
+    const targets = group.transitions
+      .filter((t) => t.from_key === stage.key && byKey.has(t.to_key))
+      .map((t) => t.to_key);
+    let target: string | null = null;
+    if (targets.includes('approved')) target = 'approved';
+    else if (!byKey.has('approved')) {
+      const review = targets.filter((k) => byKey.get(k)?.category === 'review');
+      if (review.length === 1) target = review[0];
+      else if (review.length === 0) target = null;
+    }
+    if (target && byKey.get(target)?.category === 'review') out.add(target);
+  }
+  return out;
+}
+
+/** Whether a row's status is a review stage the approve action reaches. */
+function isApproveStage(row: LifecycleRow, groups?: LifecycleStageGroup[] | null): boolean {
+  const status = (row.status || '').toLowerCase();
+  const group = groupOfRow(row, groups);
+  // Groups not loaded yet: the seeded `approved`
+  return group ? approvedReviewStages(group).has(status) : status === 'approved';
+}
+
+/**
+ * In a review stage that awaits a steward's decision (Approve / Reject): a
+ * review-category stage that is not the one the approve action reaches in the
+ * entity's group (`approved` by default; proposed / under_review await a
+ * decision). `groups` are the groups of the entity's type.
+ */
+export function awaitsReviewDecision(
+  entity: LifecycleRow, groups?: LifecycleStageGroup[] | null,
+): boolean {
+  return categoryOf(entity) === 'review' && !isApproveStage(entity, groups);
+}
+
+/**
+ * In an active-category stage or the review stage the approve action reaches
+ * (`approved` by default): a contract that may be published, linked to an output
+ * port or a product created from (the backend's `contract_publishable`), or a
+ * product listed as live for its consumers.
+ */
+export function isApprovedOrActive(
+  row: LifecycleRow, groups?: LifecycleStageGroup[] | null,
+): boolean {
   const category = categoryOf(row);
-  return category === 'active' || (category === 'review' && !awaitsReviewDecision(row));
+  return category === 'active' || (category === 'review' && !awaitsReviewDecision(row, groups));
 }
 
 /** A contract that may be published: see `isApprovedOrActive`. */

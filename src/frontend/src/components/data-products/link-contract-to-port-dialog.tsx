@@ -11,6 +11,7 @@ import CreateContractInlineDialog from '@/components/data-contracts/create-contr
 import EntityVersionPicker, { type ScopeValue } from '@/components/common/entity-version-picker';
 import { omitTags } from '@/lib/tag-payload';
 import { isContractPublishable } from '@/lib/lifecycle-stages';
+import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups';
 
 type LinkContractToPortDialogProps = {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export default function LinkContractToPortDialog({
   const { toast } = useToast();
   const { t } = useTranslation(['data-products', 'common']);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { groups: contractGroups } = useLifecycleStageGroups('data_contract');
   // PRD #442 picker value. Entity-pinned only for now — switching the
   // output-port write path to support family-follow-latest requires the
   // schema work in the reference-storage slice (still pending).
@@ -168,7 +170,7 @@ export default function LinkContractToPortDialog({
                 value={pickerValue}
                 onChange={setPickerValue}
                 allowedScopes={['entity']}
-                rowFilter={isContractPublishable}
+                rowFilter={(row) => isContractPublishable(row, contractGroups)}
                 placeholder={t('data-products:linkContract.placeholders.chooseContract')}
               />
               <p className="text-xs text-muted-foreground">

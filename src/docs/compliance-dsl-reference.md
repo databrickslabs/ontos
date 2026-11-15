@@ -360,7 +360,8 @@ Column tags, table tags, keys and lineage are not available yet.
 - `status` - Status (draft, active, etc.)
 - `version` - Version number
 - `owner` - Owner email
-- `domain` - Primary domain: its name for data products, its id for data contracts
+- `domain` - Name of the primary domain (data products and data contracts); null when there is none
+- `domain_id` - Id of the primary domain (data products and data contracts); null when there is none
 - `tags` - Tag dictionary
 - `created_at` - Creation timestamp
 - `updated_at` - Last update timestamp

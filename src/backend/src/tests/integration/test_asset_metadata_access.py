@@ -646,6 +646,27 @@ def test_a_steward_cannot_change_an_asset_note_by_id(
     assert response.status_code == 404, response.text
 
 
+@pytest.mark.parametrize('method', ['PUT', 'DELETE'])
+def test_by_id_writes_follow_the_write_rule_first(
+        client, db_session, asset, mock_test_user, method):
+    """``assets`` READ_WRITE from an email-assigned role: the write check grants it.
+
+    The read check doesn't resolve those roles yet (#1355); writes by id must not
+    depend on it, as creating the row doesn't.
+    """
+    app.state.settings_manager.create_app_role(AppRoleCreate(
+        name='Assets by email (#1342)', assigned_users=[mock_test_user.email],
+        feature_permissions={'assets': FeatureAccessLevel.READ_WRITE},
+    ))
+    mock_test_user.groups = ['no-role-group']
+    ids = _seed(db_session, 'asset', str(asset.id))
+
+    response = client.request(method, f"/api/rich-texts/{ids['note']}",
+                              **({'json': {'title': 'N2'}} if method == 'PUT' else {}))
+
+    assert response.status_code < 300, response.text
+
+
 # --- Entity type in the path: exact, from the supported list -------------------
 
 @pytest.mark.parametrize('entity_type', ['Asset', 'ASSET', ' asset', 'assets', 'unknown'])

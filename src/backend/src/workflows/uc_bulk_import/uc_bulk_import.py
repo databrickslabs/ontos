@@ -397,13 +397,27 @@ def qualify_table_name(full_name: str, default_catalog: Optional[str], default_s
     return full_name
 
 
-def find_existing_id(engine: Engine, table: str, name: str) -> Optional[str]:
-    """Id of the row a discovered entity matches, by name: the key both the
-    skip and the update strategies use. Versions of an entity share its name,
-    so the newest row is the one updated."""
-    sql = text(f"SELECT id FROM {table} WHERE name = :name ORDER BY created_at DESC LIMIT 1")
+def find_existing(engine: Engine, table: str, name: str) -> Optional[Tuple[str, Optional[str]]]:
+    """(id, status) of the row a discovered entity matches, by name: the key both
+    the skip and the update strategies use. Versions of an entity share its name,
+    so the newest row is the one matched. Domains have no lifecycle: status is None."""
+    columns = "id" if table == "data_domains" else "id, status"
+    sql = text(f"SELECT {columns} FROM {table} WHERE name = :name ORDER BY created_at DESC LIMIT 1")
     with engine.connect() as conn:
-        return conn.execute(sql, {"name": name}).scalar()
+        row = conn.execute(sql, {"name": name}).first()
+    if row is None:
+        return None
+    return row[0], (row[1] if len(row) > 1 else None)
+
+
+def should_skip_update(kind: str, name: str, status: Optional[str]) -> bool:
+    """``update`` only touches drafts: a product or contract past draft is
+    lifecycle-controlled in the app (versions, change log, search index), and
+    the job would change it behind those, or re-add what a user deleted."""
+    if status is None or status == 'draft':
+        return False
+    print(f"  Skipped {kind} '{name}': status is '{status}', update only changes drafts")
+    return True
 
 
 def _tables(objects: List[DiscoveredObject], default_catalog: Optional[str],
@@ -429,8 +443,9 @@ def create_contracts(
 ) -> Dict[str, int]:
     """Create data contracts from discovered objects.
 
-    With the ``update`` strategy an existing contract (matched by name) keeps
-    its id and gets a schema object for each tagged table it doesn't have yet.
+    With the ``update`` strategy an existing draft contract (matched by name)
+    keeps its id and gets a schema object for each tagged table it doesn't have
+    yet; a contract past draft is skipped.
     """
     stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
 
@@ -461,7 +476,8 @@ def create_contracts(
             if verbose:
                 print(f"  Processing contract: {contract_name}")
 
-            existing_id = find_existing_id(engine, "data_contracts", contract_name)
+            existing = find_existing(engine, "data_contracts", contract_name)
+            existing_id = existing[0] if existing else None
             if existing_id:
                 if conflict_strategy == 'skip':
                     if verbose:
@@ -470,6 +486,9 @@ def create_contracts(
                     continue
                 elif conflict_strategy == 'error':
                     raise ValueError(f"Contract '{contract_name}' already exists")
+            if existing_id and should_skip_update('contract', contract_name, existing[1]):
+                stats["skipped"] += 1
+                continue
             outcome = "updated" if existing_id else "created"
 
             if dry_run:
@@ -542,8 +561,9 @@ def create_products(
 ) -> Dict[str, int]:
     """Create data products from discovered objects.
 
-    With the ``update`` strategy an existing product (matched by name) keeps
-    its id and gets an output port for each tagged table it doesn't have yet.
+    With the ``update`` strategy an existing draft product (matched by name)
+    keeps its id and gets an output port for each tagged table it doesn't have
+    yet; a product past draft is skipped.
     """
     stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
 
@@ -580,7 +600,8 @@ def create_products(
             if verbose:
                 print(f"  Processing product: {product_name}")
 
-            existing_id = find_existing_id(engine, "data_products", product_name)
+            existing = find_existing(engine, "data_products", product_name)
+            existing_id = existing[0] if existing else None
             if existing_id:
                 if conflict_strategy == 'skip':
                     if verbose:
@@ -589,6 +610,9 @@ def create_products(
                     continue
                 elif conflict_strategy == 'error':
                     raise ValueError(f"Product '{product_name}' already exists")
+            if existing_id and should_skip_update('product', product_name, existing[1]):
+                stats["skipped"] += 1
+                continue
             outcome = "updated" if existing_id else "created"
 
             if dry_run:
@@ -683,7 +707,8 @@ def create_domains(
             if verbose:
                 print(f"  Processing domain: {domain_name}")
 
-            existing_id = find_existing_id(engine, "data_domains", domain_name)
+            existing = find_existing(engine, "data_domains", domain_name)
+            existing_id = existing[0] if existing else None
             if existing_id:
                 if conflict_strategy == 'skip':
                     if verbose:
@@ -781,7 +806,9 @@ def link_products_to_contracts(
             update_sql = text("""
                 UPDATE data_product_output_ports
                 SET contract_id = :contract_id
-                WHERE product_id IN (SELECT id FROM data_products WHERE name = :product_name)
+                WHERE product_id IN (
+                    SELECT id FROM data_products WHERE name = :product_name AND status = 'draft'
+                )
                   AND asset_identifier = :asset_identifier
             """)
             

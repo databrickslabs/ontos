@@ -166,6 +166,52 @@ def test_update_adds_the_new_ports_to_the_existing_product(engine):
     assert _port_assets(engine) == sorted(_TABLES)
 
 
+def _set_status(engine, table, status):
+    with engine.begin() as conn:
+        conn.execute(text(f"UPDATE {table} SET status = :s"), {'s': status})
+
+
+@pytest.mark.parametrize('status', ['active', 'deprecated', 'retired'])
+def test_update_leaves_a_product_past_draft_alone(engine, status):
+    _import(engine, tables=_TABLES[:1])
+    _set_status(engine, 'data_products', status)
+    with engine.connect() as conn:
+        before = conn.execute(text('SELECT updated_at FROM data_products')).scalar()
+
+    # Ports a user deleted in the app must not come back, new ones must not appear
+    assert _import(engine, 'update') == {'created': 0, 'updated': 0, 'skipped': 1, 'errors': 0}
+
+    assert _port_assets(engine) == _TABLES[:1]
+    with engine.connect() as conn:
+        assert conn.execute(text('SELECT updated_at FROM data_products')).scalar() == before
+
+
+@pytest.mark.parametrize('status', ['active', 'deprecated', 'retired'])
+def test_update_leaves_a_contract_past_draft_alone(engine, status):
+    _import_contract(engine, tables=_TABLES[:1])
+    _set_status(engine, 'data_contracts', status)
+
+    stats, _ = _import_contract(engine, tables=_TABLES, strategy='update')
+
+    assert stats == {'created': 0, 'updated': 0, 'skipped': 1, 'errors': 0}
+    with engine.connect() as conn:
+        assert conn.execute(text('SELECT COUNT(*) FROM data_contract_schema_objects')).scalar() == 1
+
+
+def test_linking_leaves_the_ports_of_a_product_past_draft_alone(engine):
+    _, contracts = _import_contract(engine)
+    _import(engine)
+    _set_status(engine, 'data_products', 'active')
+
+    discovered = {'product': _discovered(), 'contract': contracts}
+    assert job.link_products_to_contracts(engine, discovered) == 0
+    with engine.connect() as conn:
+        linked = conn.execute(text(
+            'SELECT COUNT(*) FROM data_product_output_ports WHERE contract_id IS NOT NULL'
+        )).scalar()
+    assert linked == 0
+
+
 def test_update_adds_the_new_schema_objects_to_the_existing_contract(engine):
     _import_contract(engine, tables=_TABLES[:1])
     [contract_id] = _contract_ids(engine)

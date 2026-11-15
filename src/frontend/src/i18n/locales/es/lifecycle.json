@@ -70,7 +70,12 @@
     "lifecycle_group_is_default": "El ciclo de vida predeterminado de un tipo de entidad no se puede eliminar.",
     "lifecycle_group_in_use_one": "Este ciclo de vida lo usa {{count}} entidad y no se puede eliminar.",
     "lifecycle_group_in_use_other": "Este ciclo de vida lo usan {{count}} entidades y no se puede eliminar.",
-    "lifecycle_transition_self": "La etapa «{{key}}» no puede pasar a sí misma."
+    "lifecycle_transition_self": "La etapa «{{key}}» no puede pasar a sí misma.",
+    "lifecycle_group_changed": "Alguien más cambió este ciclo de vida desde que lo abriste. Ciérralo y ábrelo de nuevo para ver sus cambios.",
+    "lifecycle_group_dead_end_stages": "Estas etapas no tienen ningún paso de salida y no están en la categoría Retirado: {{stages}}.",
+    "lifecycle_group_name_required": "Un ciclo de vida necesita un nombre.",
+    "lifecycle_stage_category_in_use_one": "La etapa «{{key}}» no puede pasar de {{fromCategory}} a {{toCategory}}: {{count}} entidad está en ella.",
+    "lifecycle_stage_category_in_use_other": "La etapa «{{key}}» no puede pasar de {{fromCategory}} a {{toCategory}}: {{count}} entidades están en ella."
   },
   "defaultGroupDescription": "Ciclo de vida inicial; reproduce las transiciones integradas.",
   "editor": {

@@ -70,7 +70,12 @@
     "lifecycle_group_is_default": "O ciclo de vida padrão de um tipo de entidade não pode ser excluído.",
     "lifecycle_group_in_use_one": "Este ciclo de vida é usado por {{count}} entidade e não pode ser excluído.",
     "lifecycle_group_in_use_other": "Este ciclo de vida é usado por {{count}} entidades e não pode ser excluído.",
-    "lifecycle_transition_self": "O estágio “{{key}}” não pode passar para ele mesmo."
+    "lifecycle_transition_self": "O estágio “{{key}}” não pode passar para ele mesmo.",
+    "lifecycle_group_changed": "Outra pessoa alterou este ciclo de vida desde que você o abriu. Feche-o e abra-o de novo para ver as alterações.",
+    "lifecycle_group_dead_end_stages": "Estes estágios não têm nenhuma transição de saída e não estão na categoria Aposentado: {{stages}}.",
+    "lifecycle_group_name_required": "Um ciclo de vida precisa de um nome.",
+    "lifecycle_stage_category_in_use_one": "O estágio “{{key}}” não pode passar de {{fromCategory}} para {{toCategory}}: {{count}} entidade está nele.",
+    "lifecycle_stage_category_in_use_other": "O estágio “{{key}}” não pode passar de {{fromCategory}} para {{toCategory}}: {{count}} entidades estão nele."
   },
   "defaultGroupDescription": "Ciclo de vida inicial; reproduz as transições embutidas.",
   "editor": {

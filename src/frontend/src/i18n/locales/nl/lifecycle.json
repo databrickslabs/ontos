@@ -70,7 +70,12 @@
     "lifecycle_group_is_default": "De standaardlevenscyclus van een entiteitstype kan niet worden verwijderd.",
     "lifecycle_group_in_use_one": "Deze levenscyclus wordt door {{count}} entiteit gebruikt en kan niet worden verwijderd.",
     "lifecycle_group_in_use_other": "Deze levenscyclus wordt door {{count}} entiteiten gebruikt en kan niet worden verwijderd.",
-    "lifecycle_transition_self": "Fase ‘{{key}}’ kan niet naar zichzelf overgaan."
+    "lifecycle_transition_self": "Fase ‘{{key}}’ kan niet naar zichzelf overgaan.",
+    "lifecycle_group_changed": "Iemand anders heeft deze levenscyclus gewijzigd sinds je hem opende. Sluit hem en open hem opnieuw om de wijzigingen te zien.",
+    "lifecycle_group_dead_end_stages": "Deze fasen hebben geen overgang naar buiten en zitten niet in de categorie Buiten Gebruik: {{stages}}.",
+    "lifecycle_group_name_required": "Een levenscyclus heeft een naam nodig.",
+    "lifecycle_stage_category_in_use_one": "Fase ‘{{key}}’ kan niet van {{fromCategory}} naar {{toCategory}} gaan: {{count}} entiteit staat erin.",
+    "lifecycle_stage_category_in_use_other": "Fase ‘{{key}}’ kan niet van {{fromCategory}} naar {{toCategory}} gaan: {{count}} entiteiten staan erin."
   },
   "defaultGroupDescription": "Standaard aangemaakte levenscyclus; volgt de ingebouwde overgangen.",
   "editor": {

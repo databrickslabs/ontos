@@ -11,6 +11,7 @@ const IMPORT_CODES = new Set([
   'imported_status_mapped',
   'imported_legacy_status',
   'imported_certified_as_active',
+  'imported_lifecycle_group_unknown',
 ]);
 
 /** Codes of status checks an import can fail, with the keys the status change dialogs use. */

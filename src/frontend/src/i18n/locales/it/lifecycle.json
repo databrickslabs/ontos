@@ -70,7 +70,12 @@
     "lifecycle_group_is_default": "Il ciclo di vita predefinito di un tipo di entità non può essere eliminato.",
     "lifecycle_group_in_use_one": "Questo ciclo di vita è usato da {{count}} entità e non può essere eliminato.",
     "lifecycle_group_in_use_other": "Questo ciclo di vita è usato da {{count}} entità e non può essere eliminato.",
-    "lifecycle_transition_self": "La fase «{{key}}» non può passare a se stessa."
+    "lifecycle_transition_self": "La fase «{{key}}» non può passare a se stessa.",
+    "lifecycle_group_changed": "Qualcun altro ha modificato questo ciclo di vita da quando l’hai aperto. Chiudilo e riaprilo per vedere le modifiche.",
+    "lifecycle_group_dead_end_stages": "Queste fasi non hanno alcuna transizione in uscita e non sono nella categoria Ritirato: {{stages}}.",
+    "lifecycle_group_name_required": "Un ciclo di vita deve avere un nome.",
+    "lifecycle_stage_category_in_use_one": "La fase «{{key}}» non può passare da {{fromCategory}} a {{toCategory}}: {{count}} entità è in essa.",
+    "lifecycle_stage_category_in_use_other": "La fase «{{key}}» non può passare da {{fromCategory}} a {{toCategory}}: {{count}} entità sono in essa."
   },
   "defaultGroupDescription": "Ciclo di vita iniziale; riproduce le transizioni integrate.",
   "editor": {

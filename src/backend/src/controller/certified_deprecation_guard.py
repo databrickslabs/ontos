@@ -409,12 +409,14 @@ def check_certified_deprecation(db: Session, event: Any) -> None:
     """Refuse a direct deprecation of a certified product or contract.
 
     ``event`` is the transition's ``TriggerEvent`` (``run_status_gates``
-    calls this before the gates). Passes for any other target status or entity
-    type, an uncertified entity, the approved request being applied
+    calls this before the gates); a deprecation is a move into a deprecated-category
+    stage of the entity's group. Passes for any other target or entity type, an
+    uncertified entity, the approved request being applied
     (``approved_status_change``) and an entity the guard is switched off for
     (audited).
     """
-    if (event.to_status or '').lower() != 'deprecated':
+    to_status = (event.to_status or '').strip().lower()
+    if not to_status:
         return
     entity_type = event.entity_type.value
     model = _entity_model(entity_type)
@@ -423,6 +425,10 @@ def check_certified_deprecation(db: Session, event: Any) -> None:
     entity_id = str(event.entity_id)
     entity = db.get(model, entity_id)
     if entity is None or entity.certification_level is None:
+        return
+    # A deprecated-category stage of the entity's group (``deprecated`` by default)
+    from src.controller.lifecycle_service import lifecycle_service
+    if lifecycle_service.group_for(db, entity_type, entity).category(to_status) != 'deprecated':
         return
     decision = _approved_change.get()
     if decision is not None and decision[:2] == (entity_type, entity_id):

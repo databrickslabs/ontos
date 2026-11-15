@@ -423,7 +423,13 @@
     "privileges": {
       "homeSections": {
         "title": "Home Sections",
-        "description": "Select which sections appear on the home page for users with this role."
+        "description": "Select which sections appear on the home page for users with this role.",
+        "labels": {
+          "JOURNEY": "Journey home"
+        },
+        "descriptions": {
+          "JOURNEY": "Replaces the full home page with Find, Understand, Trust, Publish and Maintain. It can't be combined with other sections."
+        }
       },
       "approvalPrivileges": {
         "title": "Approval Privileges",

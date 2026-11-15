@@ -416,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "Secciones de inicio",
-        "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol."
+        "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol.",
+        "labels": {
+          "JOURNEY": "Inicio por recorrido"
+        },
+        "descriptions": {
+          "JOURNEY": "Sustituye la página de inicio completa por Buscar, Entender, Confiar, Publicar y Mantener. No se puede combinar con otras secciones."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilegios de aprobación",

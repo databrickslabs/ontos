@@ -361,6 +361,21 @@ describe('Home by role home section', () => {
     expect(screen.queryByText('Overview')).not.toBeInTheDocument();
   });
 
+  it('a group union of a journey role and another role keeps the other role\'s sections', () => {
+    state.roles = [
+      { id: 'j', name: 'J', home_sections: [HomeSection.JOURNEY], assigned_groups: ['g'] },
+      { id: 'd', name: 'D', home_sections: [HomeSection.DISCOVERY], assigned_groups: ['g'] },
+    ];
+    useUserStore.setState({
+      userInfo: { email: 'me@x.com', username: 'me', user: 'me', ip: null,
+        groups: ['g'] } as any,
+    });
+    renderWithProviders(<Home />);
+    expect(screen.getByTestId('essentials-home')).toBeInTheDocument();
+    expect(screen.getByTestId('discovery-section')).toBeInTheDocument();
+    expect(screen.queryByText('Overview')).not.toBeInTheDocument();
+  });
+
   it('a role without the journey section keeps the Full home', () => {
     applyJourneyRole([HomeSection.DISCOVERY]);
     renderWithProviders(<Home />);

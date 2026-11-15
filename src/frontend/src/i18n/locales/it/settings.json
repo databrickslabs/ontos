@@ -416,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "Sezioni home",
-        "description": "Selezionare quali sezioni appaiono nella pagina home per gli utenti con questo ruolo."
+        "description": "Selezionare quali sezioni appaiono nella pagina home per gli utenti con questo ruolo.",
+        "labels": {
+          "JOURNEY": "Home per percorso"
+        },
+        "descriptions": {
+          "JOURNEY": "Sostituisce la home completa con Trova, Comprendi, Fidati, Pubblica e Mantieni. Non può essere combinata con altre sezioni."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilegi di approvazione",

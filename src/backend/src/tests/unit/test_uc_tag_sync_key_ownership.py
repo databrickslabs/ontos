@@ -732,10 +732,10 @@ def test_two_configs_producing_the_same_key_are_reported(tag_sync, job, capsys):
     assert f"[WARN] Tag key {DOMAIN_KEY} is produced by several configs" in out
 
 
-def test_an_unreadable_state_keeps_matching_tags_recorded(tag_sync, job, monkeypatch):
+def test_an_unreadable_state_does_not_adopt_matching_tags(tag_sync, job, monkeypatch):
     """The state can't be read: nothing is removed, a tag that already has the desired
-    value stays recorded (merged into the stored state), and the stored records stay,
-    also the ones of the tagged table (ontos_semantic_old, removed by a later run)."""
+    value is not recorded (it may be the customer's), and the stored records stay, also
+    the ones of the tagged table (ontos_semantic_old, removed by a later run)."""
     _seed(job, ORDERS, {DOMAIN_KEY: "Finance", "ontos_semantic_old": "stale"})
     job.state = {"TABLE": {OTHER: {DOMAIN_KEY: "Sales"},
                            ORDERS: {"ontos_semantic_old": "stale"}}}
@@ -746,9 +746,26 @@ def test_an_unreadable_state_keeps_matching_tags_recorded(tag_sync, job, monkeyp
     # The schema and catalog get the aggregated tag; the table is already right.
     assert [a for a in job.assigned if a[0] == "TABLE"] == [] and job.unassigned == []
     assert job.state["TABLE"] == {
-        ORDERS: {DOMAIN_KEY: "Finance", "ontos_semantic_old": "stale"},
+        ORDERS: {"ontos_semantic_old": "stale"},
         OTHER: {DOMAIN_KEY: "Sales"},
     }
+
+
+def test_an_unreadable_state_then_an_unlink_keeps_the_customer_tag(
+    tag_sync, job, monkeypatch
+):
+    """A customer set the desired value by hand; the state can't be read on that run.
+    A later unlink must not remove the customer's tag."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "Finance"})
+    monkeypatch.setattr(tag_sync, "read_delivery_state", lambda _engine: None)
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
+
+    monkeypatch.setattr(tag_sync, "read_delivery_state",
+                        lambda _engine: copy.deepcopy(job.state))
+    job.run([DOMAIN_CFG], [])
+
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}
+    assert [u for u in job.unassigned if u[0] == "TABLE"] == []
 
 
 # A stored state that doesn't parse -------------------------------------------------
@@ -800,9 +817,10 @@ def test_a_corrupt_state_is_not_replaced_when_the_backup_fails(tag_sync, job, mo
     assert _app_settings(engine) == {"uc_tag_sync_delivery_state": CORRUPT_WITH_RECORDS}
 
 
-def test_a_corrupt_state_keeps_tags_that_already_match_recorded(tag_sync, job, monkeypatch):
-    """With a corrupt state, a tag already right on a linked table is recorded in the
-    repaired state, so a later unlink still removes it."""
+def test_a_corrupt_state_does_not_adopt_tags_that_already_match(tag_sync, job, monkeypatch):
+    """With a corrupt state, a tag already right on a linked table may be the
+    customer's: it is not recorded, so a later unlink leaves it (the accepted cost: a
+    tag the job wrote before the state broke stays as an orphan)."""
     import sqlalchemy
 
     engine = _sqlite_engine(sqlalchemy, CORRUPT_WITH_RECORDS)
@@ -814,8 +832,8 @@ def test_a_corrupt_state_keeps_tags_that_already_match_recorded(tag_sync, job, m
     job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
 
     assert [a for a in job.assigned if a[0] == "TABLE"] == []
-    assert _stored_objects(engine)["TABLE"] == {ORDERS: {DOMAIN_KEY: "Finance"}}
+    assert _stored_objects(engine)["TABLE"].get(ORDERS, {}) == {}
 
     job.run([DOMAIN_CFG], [])
 
-    assert job.store[("TABLE", ORDERS)] == {}
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}

@@ -480,6 +480,9 @@
     "targetNotPickable": "{{type}} ne peut pas être choisi ici. Il est géré sur sa propre page.",
     "noAccessToTarget": "Vous n'avez pas accès à {{type}}. Demandez un accès en lecture à un administrateur pour créer ce lien."
   },
+  "assetFormStoredProperties": {
+    "loadError": "Les propriétés enregistrées de l'actif n'ont pas pu être chargées : il ne peut pas être enregistré ici. Fermez la boîte de dialogue et réessayez."
+  },
   "assetForm": {
     "groups": {
       "basic": "Informations de base",

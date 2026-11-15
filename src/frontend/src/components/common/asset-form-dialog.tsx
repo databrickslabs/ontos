@@ -99,21 +99,30 @@ export function AssetFormDialog({
   const [storedProperties, setStoredProperties] = useState<
     Record<string, any> | null | undefined
   >(undefined);
+  // 'loading' keeps the form closed (a late read would reset it); 'failed' blocks Save
+  const [propertiesRead, setPropertiesRead] = useState<'ready' | 'loading' | 'failed'>('ready');
 
   useEffect(() => {
     if (!isOpen || !asset) {
       setStoredProperties(undefined);
+      setPropertiesRead('ready');
       return;
     }
     if (asset.properties !== undefined) {
       setStoredProperties(asset.properties);
+      setPropertiesRead('ready');
       return;
     }
     let cancelled = false;
     setStoredProperties(undefined);
+    setPropertiesRead('loading');
     apiGet<AssetRead>(`/api/assets/${asset.id}`).then((response) => {
-      if (!cancelled && !response.error && response.data) {
+      if (cancelled) return;
+      if (!response.error && response.data) {
         setStoredProperties(response.data.properties ?? null);
+        setPropertiesRead('ready');
+      } else {
+        setPropertiesRead('failed');
       }
     });
     return () => { cancelled = true; };
@@ -269,7 +278,7 @@ export function AssetFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {schemaLoading ? (
+        {schemaLoading || propertiesRead === 'loading' ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             <span className="ml-2 text-sm text-muted-foreground">{t('common:assetForm.loadingSchema')}</span>
@@ -400,11 +409,16 @@ export function AssetFormDialog({
                 </div>
               ))}
 
+              {propertiesRead === 'failed' && (
+                <p role="alert" className="text-sm text-destructive">
+                  {t('common:assetFormStoredProperties.loadError')}
+                </p>
+              )}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   {t('common:actions.cancel')}
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting || propertiesRead !== 'ready'}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isEdit ? t('common:actions.saveChanges') : t('common:assetForm.createTitle', { name: assetTypeName })}
                 </Button>

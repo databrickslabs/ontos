@@ -153,7 +153,31 @@ describe('AssetFormDialog edit', () => {
     });
   });
 
-  it('leaves properties out when the stored ones cannot be read', async () => {
+  it('keeps the form closed until the stored properties are read', async () => {
+    const { properties: _omit, ...row } = column as unknown as Record<string, unknown>;
+    let resolveRead: (value: unknown) => void = () => {};
+    mockGet.mockImplementation((url: string) => (
+      url === '/api/assets/col-1'
+        ? new Promise((resolve) => { resolveRead = resolve; })
+        : Promise.resolve({ data: COLUMN_SCHEMA })
+    ));
+    render(
+      <AssetFormDialog
+        isOpen onOpenChange={vi.fn()} onSuccess={vi.fn()}
+        assetTypeId="type-column" assetTypeName="Column"
+        assetTypeIri="http://ontos.app/ontology#Column"
+        asset={row as unknown as AssetRead}
+      />,
+    );
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/assets/col-1'));
+    // Nothing to edit yet, so a late read can't reset the user's edits
+    expect(screen.queryByRole('checkbox', { name: /primary key/i })).not.toBeInTheDocument();
+    resolveRead({ data: column });
+    expect(await screen.findByRole('checkbox', { name: /primary key/i })).toBeInTheDocument();
+  });
+
+  it('says so and blocks Save when the stored properties cannot be read', async () => {
     const { properties: _omit, ...row } = column as unknown as Record<string, unknown>;
     mockGet.mockImplementation(async (url: string) => (
       url === '/api/assets/col-1' ? { error: 'boom' } : { data: COLUMN_SCHEMA }
@@ -167,10 +191,10 @@ describe('AssetFormDialog edit', () => {
       />,
     );
 
-    await screen.findByRole('checkbox', { name: /primary key/i });
-    await userEvent.click(screen.getByRole('button', { name: 'common:actions.saveChanges' }));
-
-    await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(1));
-    expect('properties' in mockPut.mock.calls[0][1]).toBe(false);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'common:assetFormStoredProperties.loadError',
+    );
+    expect(screen.getByRole('button', { name: 'common:actions.saveChanges' })).toBeDisabled();
+    expect(mockPut).not.toHaveBeenCalled();
   });
 });

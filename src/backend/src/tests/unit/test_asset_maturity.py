@@ -822,3 +822,36 @@ def test_kept_level_without_its_certain_level_reports_no_levels(db_session):
     # Level 2 isn't among the certain levels, so none are reported: the counts agree
     assert report.achieved_level_order == 2
     assert report.levels == [] and report.gates_total == 0 and report.gates_passed == 0
+
+
+def test_row_lock_is_taken_after_the_uc_read_and_before_the_snapshot_read(db_session):
+    # The FOR UPDATE must not span the UC round trip, and must cover the previous-level read
+    from src.controller import maturity_evaluator as module
+
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
+    calls = []
+    ws = _ws()
+    ws.tables.get.side_effect = lambda **kw: calls.append('uc') or _table([])
+    real_lock, real_latest = module._lock_asset_row, maturity_repo.get_latest_snapshot
+
+    def lock(db, asset_id):
+        calls.append('lock')
+        real_lock(db, asset_id)
+
+    def latest(*args, **kwargs):
+        calls.append('snapshot')
+        return real_latest(*args, **kwargs)
+
+    with patch.object(module, '_lock_asset_row', lock), \
+            patch.object(maturity_repo, 'get_latest_snapshot', latest):
+        MaturityEvaluator(ws).evaluate(
+            db_session, entity_type='Asset', entity_id=str(asset.id), persist=True,
+        )
+        assert calls == ['uc', 'lock', 'snapshot']
+
+        calls.clear()
+        MaturityEvaluator(ws).evaluate(
+            db_session, entity_type='Asset', entity_id=str(asset.id), persist=False,
+        )
+        assert 'lock' not in calls

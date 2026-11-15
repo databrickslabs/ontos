@@ -201,6 +201,21 @@ class TestDocumentUploadInvalidVolume:
         assert detail["code"] == "volume_invalid"
         assert detail["params"]["value"] == "a.b"
 
+    def test_a_cleared_volume_answers_a_coded_400_not_a_500(self, client: TestClient, test_settings):
+        test_settings.DATABRICKS_VOLUME = None
+        for url, extra in (
+            ("/api/entities/asset/documents", {"params": {"entity_id": "asset-1"}}),
+            ("/api/metadata/shared/documents", {}),
+        ):
+            response = client.post(
+                url,
+                data={"title": "Snapshot"},
+                files={"file": ("snapshot.png", b"\x89PNG", "image/png")},
+                **extra,
+            )
+            assert response.status_code == 400, response.text
+            assert response.json()["detail"]["code"] == "volume_not_configured"
+
     def test_entity_document_upload(self, client: TestClient):
         response = client.post(
             "/api/entities/asset/documents",

@@ -107,7 +107,8 @@
     "messages": {
       "deleteFailed": "Eliminazione fallita",
       "uploadFailed": "Caricamento fallito",
-      "volume_invalid": "«{{value}}» non indica un volume Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> o il nome di un volume; un nome semplice richiede un catalogo e uno schema senza punti, barre o spazi. Chiedi a un amministratore di correggerlo in Impostazioni > Generale."
+      "volume_invalid": "«{{value}}» non indica un volume Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> o il nome di un volume; un nome semplice richiede un catalogo e uno schema senza punti, barre o spazi. Chiedi a un amministratore di correggerlo in Impostazioni > Generale.",
+      "volume_not_configured": "Nessun volume è impostato per i documenti. Chiedi a un amministratore di impostarne uno in Impostazioni > Generale."
     }
   },
   "sharedAssets": {

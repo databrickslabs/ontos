@@ -107,7 +107,8 @@
     "messages": {
       "deleteFailed": "Delete failed",
       "uploadFailed": "Upload failed",
-      "volume_invalid": "The volume \"{{value}}\" doesn't name a Unity Catalog volume. Use /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume>, or a volume name; a plain name needs a catalog and schema without periods, slashes or spaces. Ask an administrator to fix it in Settings > General."
+      "volume_invalid": "The volume \"{{value}}\" doesn't name a Unity Catalog volume. Use /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume>, or a volume name; a plain name needs a catalog and schema without periods, slashes or spaces. Ask an administrator to fix it in Settings > General.",
+      "volume_not_configured": "No volume is set for documents. Ask an administrator to set one in Settings > General."
     }
   },
   "sharedAssets": {

@@ -9,6 +9,7 @@ const state = vi.hoisted(() => {
   // The UI customization store fetches on import; keep it offline until a test sets routes.
   const s = {
     perms: {} as Record<string, string>,
+    loading: false,
     routes: {} as Record<string, unknown>,
     calls: [] as string[],
     roles: [] as unknown[],
@@ -44,7 +45,7 @@ vi.mock('@/stores/permissions-store', () => {
     (ACCESS_LEVEL_ORDER as Record<string, number>)[level];
   return {
     usePermissions: () => ({
-      isLoading: false,
+      isLoading: state.loading,
       permissions: state.perms,
       hasPermission,
       availableRoles: state.roles,
@@ -153,6 +154,7 @@ function applyJourneyRole(sections: HomeSection[] = [HomeSection.JOURNEY]) {
 describe('Home by role home section', () => {
   beforeEach(() => {
     state.perms = { ...ALL_PERMS };
+    state.loading = false;
     state.calls = [];
     state.roles = [];
     state.applied = null;
@@ -440,6 +442,19 @@ describe('Home by role home section', () => {
     renderWithProviders(<Home />);
     expect(screen.getByTestId('essentials-home')).toBeInTheDocument();
     expect(screen.getByTestId('discovery-section')).toBeInTheDocument();
+    expect(screen.queryByText('Overview')).not.toBeInTheDocument();
+  });
+
+  it('renders no section while permissions load, then the journey', () => {
+    applyJourneyRole();
+    state.loading = true;
+    const { rerender } = renderWithProviders(<Home />);
+    expect(screen.queryByTestId('essentials-home')).not.toBeInTheDocument();
+    expect(screen.queryByText('Overview')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('discovery-section')).not.toBeInTheDocument();
+    state.loading = false;
+    rerender(<Home />);
+    expect(screen.getByTestId('essentials-home')).toBeInTheDocument();
     expect(screen.queryByText('Overview')).not.toBeInTheDocument();
   });
 

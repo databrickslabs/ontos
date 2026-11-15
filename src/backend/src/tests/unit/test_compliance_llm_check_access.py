@@ -69,11 +69,11 @@ def api(levels):
         have = levels.get(feature)
         return have is not None and order.index(have) >= order.index(required)
 
-    user_client = object()
+    user_identity = object()
     with patch.object(compliance_routes, 'user_has_feature_level', side_effect=level), \
             patch.object(compliance_routes, 'manager') as manager, \
             patch.object(
-                compliance_routes, 'get_obo_workspace_client', return_value=user_client,
+                compliance_routes.RunIdentity, 'for_request', return_value=user_identity,
             ) as obo:
         manager.run_policy_inline.return_value = SimpleNamespace(
             id='r1', policy_id='p1', status='succeeded', started_at=None, finished_at=None,
@@ -82,7 +82,7 @@ def api(levels):
             llm_cache_hits=1,
         )
         yield SimpleNamespace(
-            http=TestClient(app), manager=manager, obo=obo, user_client=user_client,
+            http=TestClient(app), manager=manager, obo=obo, user_identity=user_identity,
         )
 
 
@@ -90,14 +90,14 @@ def _policy(manager, rule):
     manager.get_policy.return_value = SimpleNamespace(id='p1', name='P', rule=rule)
 
 
-def test_a_user_run_of_an_llm_check_rule_reads_uc_with_the_users_client(api):
+def test_a_user_run_of_an_llm_check_rule_reads_as_the_user(api):
     _policy(api.manager, UC_RULE)
 
     assert api.http.post('/api/compliance/policies/p1/runs', json={}).status_code == 200
 
     api.obo.assert_called_once()
     kwargs = api.manager.run_policy_inline.call_args.kwargs
-    assert kwargs['workspace_client'] is api.user_client
+    assert kwargs['run_identity'] is api.user_identity
 
 
 def test_the_run_answer_has_the_llm_usage(api):
@@ -108,26 +108,24 @@ def test_the_run_answer_has_the_llm_usage(api):
     assert (body['llm_calls'], body['llm_cache_hits']) == (2, 1)
 
 
-def test_a_run_of_a_rule_without_llm_check_keeps_the_app_client(api):
+def test_a_run_of_a_rule_without_llm_check_keeps_the_app_identity(api):
     _policy(api.manager, PLAIN_RULE)
 
     assert api.http.post('/api/compliance/policies/p1/runs', json={}).status_code == 200
 
     api.obo.assert_not_called()
-    assert api.manager.run_policy_inline.call_args.kwargs['workspace_client'] is None
+    assert api.manager.run_policy_inline.call_args.kwargs['run_identity'] is None
 
 
-def test_without_the_users_token_the_run_is_refused(api):
-    from src.common.workspace_client import raise_user_token_required
+def test_without_the_users_token_the_rule_test_is_refused(api):
+    from src.common.api_errors import UserTokenRequiredError
 
-    _policy(api.manager, UC_RULE)
-    api.obo.side_effect = lambda request: raise_user_token_required()
+    api.manager.test_rule_on_sample.side_effect = UserTokenRequiredError('sign in')
 
-    response = api.http.post('/api/compliance/policies/p1/runs', json={})
+    response = api.http.post('/api/compliance/llm-check/test', json={'rule': UC_RULE})
 
     assert response.status_code == 403
     assert response.json()['detail']['code'] == 'user_token_required'
-    api.manager.run_policy_inline.assert_not_called()
 
 
 def test_an_llm_check_rule_on_app_entities_needs_read_access_to_them(api, levels):
@@ -149,10 +147,8 @@ def test_an_llm_check_rule_on_readable_app_entities_runs(api):
 
     assert api.http.post('/api/compliance/policies/p1/runs', json={}).status_code == 200
 
-    api.obo.assert_not_called()  # no Unity Catalog type: nothing to read as the user
 
-
-def test_the_rule_test_reads_uc_with_the_users_client(api):
+def test_the_rule_test_reads_as_the_user(api):
     from src.models.compliance import LlmCheckTestResponse
 
     api.manager.test_rule_on_sample.return_value = LlmCheckTestResponse(
@@ -163,7 +159,7 @@ def test_the_rule_test_reads_uc_with_the_users_client(api):
 
     assert response.status_code == 200, response.text
     kwargs = api.manager.test_rule_on_sample.call_args.kwargs
-    assert kwargs['workspace_client'] is api.user_client
+    assert kwargs['run_identity'] is api.user_identity
 
 
 def test_the_rule_test_on_unreadable_app_entities_is_refused(api, levels):
@@ -176,7 +172,9 @@ def test_the_rule_test_on_unreadable_app_entities_is_refused(api, levels):
     api.manager.test_rule_on_sample.assert_not_called()
 
 
-def test_the_run_reads_uc_with_the_client_it_is_given(db_session):
+def test_the_run_reads_uc_with_the_identity_it_is_given(db_session):
+    from src.common.run_identity import RunIdentity
+
     policy = CompliancePolicyDb(
         id=str(uuid.uuid4()), name='P', rule=PLAIN_RULE, created_at=datetime.now(),
         updated_at=datetime.now(),
@@ -184,14 +182,36 @@ def test_the_run_reads_uc_with_the_client_it_is_given(db_session):
     db_session.add(policy)
     db_session.flush()
     user_client = MagicMock()
+    identity = RunIdentity(lambda: user_client, on_behalf_of_user=True)
     manager = ComplianceManager()
-    with patch.object(ComplianceManager, '_workspace_client_for') as app_client, \
+    with patch('src.common.workspace_client.get_workspace_client') as app_client, \
             patch('src.controller.compliance_manager.create_entity_iterator') as iterator:
         iterator.return_value.iterate.return_value = []
-        manager.run_policy_inline(db_session, policy=policy, workspace_client=user_client)
+        manager.run_policy_inline(db_session, policy=policy, run_identity=identity)
 
     app_client.assert_not_called()
     assert iterator.call_args.kwargs['workspace_client'] is user_client
+
+
+def test_a_run_without_the_users_token_fails_with_a_code(db_session):
+    from src.common.api_errors import UserTokenRequiredError
+    from src.common.run_identity import RunIdentity
+
+    policy = CompliancePolicyDb(
+        id=str(uuid.uuid4()), name='P', rule=UC_RULE, created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    db_session.add(policy)
+    db_session.flush()
+
+    def no_token():
+        raise UserTokenRequiredError('sign in')
+
+    run = ComplianceManager().run_policy_inline(
+        db_session, policy=policy, run_identity=RunIdentity(no_token, on_behalf_of_user=True),
+    )
+
+    assert (run.status, run.error_code) == ('failed', 'user_token_required')
 
 
 # --- Admin gate: LLM_CHECK rules are saved, run and tested by compliance admins ---
@@ -274,3 +294,13 @@ def test_saving_a_rule_with_llm_check_in_where_is_refused(api):
     assert response.status_code == 422
     assert response.json()['detail']['code'] == 'llm_check_in_where'
     api.manager.create_policy.assert_not_called()
+
+
+def test_the_rule_test_without_a_workspace_client_answers_503(api):
+    error = RuntimeError('no workspace')
+    error.error_code = 'workspace_client_unavailable'
+    api.manager.test_rule_on_sample.side_effect = error
+
+    response = api.http.post('/api/compliance/llm-check/test', json={'rule': UC_RULE})
+
+    assert response.status_code == 503

@@ -29,7 +29,8 @@ from src.common.compliance_actions import (
     APP_ENTITY_TYPES, ActionContext, ActionError, ActionExecutor, get_action_registry,
 )
 from src.common.compliance_notifications import ComplianceRunNotifier
-from src.common.api_errors import CodedValueError
+from src.common.api_errors import CodedValueError, UserTokenRequiredError
+from src.common.run_identity import RunIdentity
 from src.common.compliance_llm_check import (
     BUDGET_EXCEEDED, CALLS_PER_CHECK, QUOTA_EXCEEDED, DbLlmCallQuota, DbLlmCheckCache,
     LlmCheckError, LlmChecker, LlmCheckQuotaExceededError, counts_as_failure,
@@ -830,7 +831,7 @@ class ComplianceManager:
 
     def test_rule_on_sample(
         self, db: Session, *, rule: str, entity: Optional[str] = None,
-        workspace_client=None, quota_user: Optional[str] = None,
+        run_identity: Optional[RunIdentity] = None, quota_user: Optional[str] = None,
     ) -> LlmCheckTestResponse:
         """Evaluate a rule's ASSERT on one entity it matches, LLM_CHECKs included.
 
@@ -838,7 +839,7 @@ class ComplianceManager:
         run, result or action is written, only the verdicts to the cache. The
         entity is the one named ``entity`` (name, id or full name) among the
         first ``SAMPLE_SCAN_LIMIT`` the rule matches, else the first match.
-        ``workspace_client``: the client to read Unity Catalog entities with (the
+        ``run_identity``: whose permissions Unity Catalog is read with (the
         caller's own, see ``run_policy_inline``); default: the app's.
         ``quota_user``: the user whose daily LLM_CHECK calls the test counts against.
 
@@ -851,9 +852,7 @@ class ComplianceManager:
         parsed = parse_rule(rule)
         entity_filter = parse_entity_filter(rule, parsed=parsed)
         source = SimpleNamespace(name='rule test', id='unsaved')
-        ws = workspace_client
-        if ws is None:
-            ws = self._workspace_client_for(entity_filter.entity_types, source)
+        ws = self._workspace_client_for(entity_filter.entity_types, source, run_identity)
         iterator = create_entity_iterator(db=db, workspace_client=ws)
         wanted = (entity or '').strip()
         sample = None
@@ -892,25 +891,31 @@ class ComplianceManager:
             llm_checks=[LlmCheckOutcome(**c.to_dict()) for c in evaluator.llm_checks],
         )
 
-    def _workspace_client_for(self, entity_types: List[str], policy: CompliancePolicyDb):
+    def _workspace_client_for(
+        self, entity_types: List[str], policy: CompliancePolicyDb,
+        identity: Optional[RunIdentity] = None,
+    ):
         """Workspace client for a run, or None when the rule doesn't need one.
 
         Rules whose MATCH covers Unity Catalog types (including ``Object``,
         which covers every type) need the client: without it the run fails
         instead of passing after evaluating only part of its scope. Rules on
-        app entities alone run without it.
+        app entities alone run without it. The client is the identity's: the
+        user's own for a run they start, the app's for a scheduled run.
         """
         from src.common.compliance_entities import UnityCatalogLoader
-        from src.common.workspace_client import get_workspace_client
 
+        identity = identity or RunIdentity.app()
         needs_uc = any(t in UnityCatalogLoader.SUPPORTED_TYPES for t in entity_types)
         try:
-            ws = get_workspace_client()
+            ws = identity.workspace_client()
         except Exception as e:
             if needs_uc:
                 # A code the UI translates; the exception text stays in the
                 # stored message and the log, not in what the UI shows
-                e.error_code, e.error_params = 'workspace_client_unavailable', {}
+                code = ('user_token_required' if isinstance(e, UserTokenRequiredError)
+                        else 'workspace_client_unavailable')
+                e.error_code, e.error_params = code, {}
                 raise
             logger.warning(
                 "Workspace client unavailable, policy '%s' (%s) only matches app entities "
@@ -950,7 +955,7 @@ class ComplianceManager:
         limit: Optional[int] = None,
         current_user: Optional[str] = None,
         llm_checker: Optional[LlmChecker] = None,
-        workspace_client=None,
+        run_identity: Optional[RunIdentity] = None,
         quota_user: Optional[str] = None,
     ) -> ComplianceRunDb:
         """Run a compliance policy with enhanced DSL support.
@@ -958,10 +963,10 @@ class ComplianceManager:
         This method supports both the old simple DSL syntax and the new enhanced syntax
         with MATCH, WHERE, ASSERT, ON_PASS, and ON_FAIL clauses.
 
-        ``workspace_client``: the client to read Unity Catalog entities with;
-        default: the app's. A run a user starts of an ``LLM_CHECK`` rule passes the
-        user's own (on-behalf-of) client, so its results and the model's reasons
-        only cover the objects that user can read; scheduled runs use the app's.
+        ``run_identity``: whose permissions Unity Catalog is read with; default:
+        the app's. A run a user starts of an ``LLM_CHECK`` rule passes the user's
+        (on-behalf-of), so its results and the model's reasons only cover the
+        objects that user can read; scheduled runs use the app's.
         ``quota_user``: the user who started the run, whose daily LLM_CHECK calls
         it counts against; None for scheduled runs (per-run budget only).
         """
@@ -999,9 +1004,7 @@ class ComplianceManager:
             entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)
 
             # Create entity iterator
-            ws = workspace_client
-            if ws is None:
-                ws = self._workspace_client_for(entity_filter.entity_types, policy)
+            ws = self._workspace_client_for(entity_filter.entity_types, policy, run_identity)
             entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
 
             # Iterate over entities

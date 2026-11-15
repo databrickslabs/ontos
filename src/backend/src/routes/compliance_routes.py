@@ -6,7 +6,7 @@ from typing import Deque, Dict, Optional
 from fastapi import APIRouter, FastAPI, HTTPException, Depends, Body, Query, Request
 from starlette.concurrency import run_in_threadpool
 
-from src.common.api_errors import CodedValueError
+from src.common.api_errors import CodedValueError, UserTokenRequiredError
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker, user_has_feature_level
@@ -32,10 +32,10 @@ from src.models.compliance import (
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
 from src.common.compliance_entities import (
-    APP_ENTITY_FEATURES, UnityCatalogLoader, parse_entity_filter, validate_rule,
+    APP_ENTITY_FEATURES, parse_entity_filter, validate_rule,
 )
 from src.common.compliance_llm_check import LlmCheckQuotaExceededError
-from src.common.workspace_client import get_obo_workspace_client
+from src.common.run_identity import RunIdentity
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -192,17 +192,19 @@ class LlmCheckReadRequiredError(CodedValueError):
     code = 'llm_check_entity_read_required'
 
 
-def llm_check_reader(request: Request, rule: Optional[str], auth_manager, current_user):
-    """The client a run or test that a user starts reads Unity Catalog with, for LLM_CHECK.
+def llm_check_identity(
+    request: Request, rule: Optional[str], auth_manager, current_user,
+) -> Optional[RunIdentity]:
+    """Whose permissions a run or test that a user starts reads with, for LLM_CHECK.
 
     The model's reasons can quote the text it judged, so a user only gets them
     for what they can read: Unity Catalog objects are read with the user's own
-    (on-behalf-of) client (403 ``user_token_required`` without the token, except
-    where the app's client is allowed in its place, see
-    ``get_obo_workspace_client``), and the app entity types the rule matches
-    need read access to their feature (403 ``llm_check_entity_read_required``).
-    None for a rule without LLM_CHECK or without Unity Catalog types: the run
-    then uses the app's client as before. Scheduled runs use the app's client.
+    (on-behalf-of) token (``RunIdentity.for_request``; without the token the run
+    fails with ``user_token_required``, except where the app's client is allowed
+    in its place, see ``get_obo_workspace_client``), and the app entity types the
+    rule matches need read access to their feature (403
+    ``llm_check_entity_read_required``). None for a rule without LLM_CHECK: the
+    run then reads as the app, as before. Scheduled runs read as the app.
     """
     if not rule_uses_llm_check(rule):
         return None
@@ -221,9 +223,7 @@ def llm_check_reader(request: Request, rule: Optional[str], auth_manager, curren
                 entityType=entity_type,
             )
             raise HTTPException(status_code=403, detail=str(error)) from error
-    if any(t in UnityCatalogLoader.SUPPORTED_TYPES for t in entity_types):
-        return get_obo_workspace_client(request)
-    return None
+    return RunIdentity.for_request(request)
 
 
 @router.post("/compliance/policies")
@@ -412,7 +412,7 @@ async def run_policy(
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
     require_compliance_admin_for_llm_check(policy.rule, auth_manager, current_user, request)
-    reader = llm_check_reader(request, policy.rule, auth_manager, current_user)
+    identity = llm_check_identity(request, policy.rule, auth_manager, current_user)
     require_llm_check_quota(db, policy.rule, current_user)
 
     # For now, implement inline only; async can be backed by Databricks job later.
@@ -423,7 +423,7 @@ async def run_policy(
         policy=policy,
         limit=payload.limit,
         current_user=current_user.username if current_user else None,
-        workspace_client=reader,
+        run_identity=identity,
         quota_user=_username(current_user),
     )
     
@@ -577,7 +577,7 @@ async def test_llm_check(
     """
     _check_rule(payload.rule)
     require_compliance_admin_for_llm_check(payload.rule, auth_manager, current_user, request)
-    reader = llm_check_reader(request, payload.rule, auth_manager, current_user)
+    identity = llm_check_identity(request, payload.rule, auth_manager, current_user)
     require_llm_check_quota(db, payload.rule, current_user)
     try:
         _throttle_rule_test(current_user.username if current_user else 'unknown')
@@ -590,10 +590,13 @@ async def test_llm_check(
         # The model calls block: run them off the event loop
         return await run_in_threadpool(
             manager.test_rule_on_sample, db, rule=payload.rule, entity=payload.entity,
-            workspace_client=reader, quota_user=_username(current_user),
+            run_identity=identity, quota_user=_username(current_user),
         )
     except SampleEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except UserTokenRequiredError as e:
+        # The test reads Unity Catalog as the user, and the request has no token
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     except RuntimeError as e:

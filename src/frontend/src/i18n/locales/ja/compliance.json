@@ -174,6 +174,7 @@
   "runErrors": {
     "entities_load_failed": "{{entityType}} エンティティを読み込めなかったため、ルールを評価できませんでした。",
     "rule_parse_failed": "ルールを解析できませんでした: {{detail}}",
+    "user_token_required": "このルールは Databricks へのサインインで読み取る Unity Catalog オブジェクトを確認しますが、リクエストにサインイン情報がなかったため、実行できませんでした。",
     "workspace_client_unavailable": "Databricks ワークスペースを利用できません。このルールは Unity Catalog オブジェクトを確認するため、実行できませんでした。",
     "tags_load_failed": "{{entityType}} エンティティのタグを読み込めなかったため、ルールを評価できませんでした。"
   },

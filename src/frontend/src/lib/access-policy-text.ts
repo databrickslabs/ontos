@@ -11,10 +11,20 @@ export interface Coded {
   code?: string | null;
   params?: Record<string, unknown> | null;
   message?: string | null;
+  /** The rule a compile issue is about; its label replaces the backend's English `rule` param. */
+  source?: { policy_name: string; rule_kind: string; rule_index: number } | null;
 }
 
-// Params holding an enum value that has its own translation (status names, rule kinds).
+/** A rule's label in the user's language: `Sales analytics read · Erlaubnis #1`. */
+export function ruleLabel(t: TFunction, s: { policy_name: string; rule_kind: string; rule_index: number }): string {
+  const kind = t(`access-policies:ruleKinds.${s.rule_kind}`, { defaultValue: s.rule_kind });
+  return `${s.policy_name} · ${kind} #${s.rule_index + 1}`;
+}
+
+// Params holding an enum value that has its own translation (status names, rule and entity kinds).
 const RELEASE_STATUS_CODES = new Set(['release_transition', 'deliver_status']);
+const RULE_KINDS = ['permission', 'prohibition', 'obligation'];
+const ENTITY_KINDS = ['policy', 'audience', 'asset_collection', 'target'];
 
 function translatedParams(t: TFunction, code: string, params: Record<string, unknown>): Record<string, unknown> {
   const statusNs = RELEASE_STATUS_CODES.has(code) ? 'releases.status' : 'status';
@@ -24,8 +34,10 @@ function translatedParams(t: TFunction, code: string, params: Record<string, unk
     const text = String(value);
     if (key === 'status' || key === 'from' || key === 'to') {
       out[key] = t(`access-policies:${statusNs}.${text}`, { defaultValue: text });
-    } else if (key === 'kind' && ['permission', 'prohibition', 'obligation'].includes(text)) {
+    } else if (key === 'kind' && RULE_KINDS.includes(text)) {
       out[key] = t(`access-policies:ruleKinds.${text}`, { defaultValue: text });
+    } else if (key === 'kind' && ENTITY_KINDS.includes(text)) {
+      out[key] = t(`access-policies:kinds.${text}`, { defaultValue: text });
     } else {
       out[key] = value;
     }
@@ -39,10 +51,11 @@ export function issueText(t: TFunction, item: Coded | string | null | undefined)
   if (typeof item === 'string') return item;
   const message = item.message ?? '';
   if (!item.code || item.code === 'message') return message;
-  return t(`access-policies:issues.${item.code}`, {
-    ...translatedParams(t, item.code, item.params ?? {}),
-    defaultValue: message,
-  });
+  const params = translatedParams(t, item.code, item.params ?? {});
+  const s = item.source;
+  // The backend's English label of the issue's own rule (`<policy> <kind> #<n>`, see RuleSource.label).
+  if (s && params.rule === `${s.policy_name} ${s.rule_kind} #${s.rule_index + 1}`) params.rule = ruleLabel(t, s);
+  return t(`access-policies:issues.${item.code}`, { ...params, defaultValue: message });
 }
 
 /** The translated error of an API response (`useApi`), or `fallback` when it has none. */

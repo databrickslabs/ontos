@@ -365,7 +365,7 @@ class AccessPoliciesManager:
         row = self.get(db, kind, entity_id)
         if not row:
             raise AccessPolicyError(f"{self.spec(kind).label} not found", 404, code="not_found",
-                                    params={"kind": self.spec(kind).label})
+                                    params={"kind": kind})
         return row
 
     def require_visible(self, db: Session, kind: str, entity_id: str, viewer: Optional[str], is_admin: bool) -> Any:
@@ -373,7 +373,7 @@ class AccessPoliciesManager:
         row = self.require(db, kind, entity_id)
         if not self._visible(row, viewer, is_admin):
             raise AccessPolicyError(f"{self.spec(kind).label} not found", 404, code="not_found",
-                                    params={"kind": self.spec(kind).label})
+                                    params={"kind": kind})
         return row
 
     def list(self, db: Session, kind: str, *, include_history: bool = False, status: Optional[str] = None,
@@ -398,7 +398,7 @@ class AccessPoliciesManager:
         if content_keys & set(data) and row.status not in EDITABLE_STATUSES:
             raise AccessPolicyError(
                 f"A {row.status} {self.spec(kind).label.lower()} can't be edited — create a new version instead.", 409,
-                code="not_editable", params={"status": row.status, "kind": self.spec(kind).label.lower()})
+                code="not_editable", params={"status": row.status, "kind": kind})
         for f in ("name", "description", "owner_team_id", "project_id", "change_summary"):
             if f in data:
                 setattr(row, f, data[f])

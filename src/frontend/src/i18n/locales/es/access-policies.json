@@ -724,5 +724,11 @@
       "XoneConstraintComponent": "{{path}} debe coincidir exactamente con una de las formas permitidas",
       "NotConstraintComponent": "{{path}} coincide con una forma prohibida"
     }
+  },
+  "kinds": {
+    "policy": "Política de acceso",
+    "audience": "Audiencia",
+    "asset_collection": "Colección de activos",
+    "target": "Destino"
   }
 }

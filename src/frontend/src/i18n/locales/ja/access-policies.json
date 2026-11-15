@@ -724,5 +724,11 @@
       "XoneConstraintComponent": "{{path}} は、許可されたシェイプのうちちょうど1つに一致する必要があります",
       "NotConstraintComponent": "{{path}} が禁止されたシェイプに一致しています"
     }
+  },
+  "kinds": {
+    "policy": "アクセスポリシー",
+    "audience": "オーディエンス",
+    "asset_collection": "アセットコレクション",
+    "target": "ターゲット"
   }
 }

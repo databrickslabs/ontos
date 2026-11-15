@@ -55,6 +55,12 @@ describe('issueText', () => {
     expect(issueText(t, 'A string problem')).toBe('A string problem');
   });
 
+  it('rebuilds the rule label of a compile issue in the user language', () => {
+    const source = { policy_name: 'Sales', rule_kind: 'prohibition', rule_index: 0 };
+    const text = issueText(t, { code: 'offer_term', params: { rule: 'Sales prohibition #1' }, message: '', source });
+    expect(text).toContain(`Sales · ${deText.ruleKinds.prohibition} #1`);
+  });
+
   it('translates status params', () => {
     const text = issueText(t, { code: 'delete_status', params: { status: 'active' }, message: '' });
     expect(text).toContain(deText.status.active);

@@ -724,5 +724,11 @@
       "XoneConstraintComponent": "{{path}} moet met precies één van de toegestane shapes overeenkomen",
       "NotConstraintComponent": "{{path}} komt overeen met een verboden shape"
     }
+  },
+  "kinds": {
+    "policy": "Toegangsbeleid",
+    "audience": "Doelgroep",
+    "asset_collection": "Asset-collectie",
+    "target": "Doel"
   }
 }

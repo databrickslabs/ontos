@@ -26,7 +26,7 @@ import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import ReleaseStatusBadge from '@/components/access-policies/release-status-badge';
-import { errorText, issueText } from '@/lib/access-policy-text';
+import { errorText, issueText, ruleLabel } from '@/lib/access-policy-text';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
@@ -85,7 +85,7 @@ function GrantTable({ grants, empty }: { grants: UcGrant[]; empty: string }) {
               </TableCell>
               <TableCell className="text-xs">—</TableCell>
               <TableCell className="text-xs text-muted-foreground">
-                {(g.sources || []).map((s) => `${s.policy_name} · ${s.rule_kind} #${s.rule_index + 1}`).join('; ')}
+                {(g.sources || []).map((s) => ruleLabel(t, s)).join('; ')}
               </TableCell>
             </TableRow>
           ) : (
@@ -107,7 +107,7 @@ function GrantTable({ grants, empty }: { grants: UcGrant[]; empty: string }) {
             </TableCell>
             <TableCell className="text-xs">{g.expires_at ? new Date(g.expires_at).toLocaleString() : '—'}</TableCell>
             <TableCell className="text-xs text-muted-foreground">
-              {(g.sources || []).map((s) => `${s.policy_name} · ${s.rule_kind} #${s.rule_index + 1}`).join('; ')}
+              {(g.sources || []).map((s) => ruleLabel(t, s)).join('; ')}
             </TableCell>
           </TableRow>
           ),
@@ -422,7 +422,7 @@ export default function AccessPolicyReleaseDetails() {
                 </Badge>
                 <span>
                   <span className="font-medium">
-                    {g.source.policy_name} · {g.source.rule_kind} #{g.source.rule_index + 1}
+                    {ruleLabel(t, g.source)}
                   </span>
                   : {g.reason}
                 </span>

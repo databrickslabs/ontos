@@ -505,7 +505,7 @@
     "no_rules": "A policy needs at least one permission, prohibition or obligation",
     "no_target": "No active target compiles {{refs}} — configure an Access Target for that platform",
     "not_a_duty": "'{{action}}' is not a duty of this Agreement",
-    "not_editable": "A {{status}} {{kind}} can't be edited — create a new version instead.",
+    "not_editable": "{{kind}} with status {{status}} can't be edited — create a new version instead.",
     "not_found": "{{kind}} not found",
     "not_ready_to_activate": "Not ready to activate: {{count}} problem(s) — see Validation",
     "not_yet_active": "{{rule}} starts at {{at}} — not granted yet",
@@ -724,5 +724,11 @@
       "XoneConstraintComponent": "{{path}} must match exactly one of the allowed shapes",
       "NotConstraintComponent": "{{path}} matches a forbidden shape"
     }
+  },
+  "kinds": {
+    "policy": "Access policy",
+    "audience": "Audience",
+    "asset_collection": "Asset collection",
+    "target": "Target"
   }
 }

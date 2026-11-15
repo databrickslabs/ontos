@@ -77,6 +77,30 @@ def test_lists_only_test_files_relative_to_src(tree):
     assert f"{TESTS_DIR}/sub/test_d.py" in files
 
 
+def test_lists_files_named_like_pytest_collects_them(tree):
+    """pytest's default python_files is test_*.py and *_test.py."""
+    root, files = tree
+    extra = [
+        _write(root, f"{TESTS_DIR}/api_test.py", _tests(2)),
+        _write(root, f"{TESTS_DIR}/sub/db_test.py", _tests(1)),
+    ]
+    assert shards.list_test_files(root / TESTS_DIR, root) == sorted(files + extra)
+
+
+def test_planned_files_match_pytest_collection_on_the_real_tree():
+    """The plan covers every file pytest would collect from the real directory."""
+    src = SCRIPT.parent.parent
+    real = src / TESTS_DIR
+    planned = set(shards.list_test_files(real, src))
+    collected = {
+        p.relative_to(src).as_posix()
+        for pattern in ("test_*.py", "*_test.py")
+        for p in real.rglob(pattern)
+    }
+    assert planned == collected
+    assert planned
+
+
 def test_bad_file_name_fails_the_plan(tree, tmp_path, capsys):
     root, _ = tree
     _write(root, f"{TESTS_DIR}/test_$(boom).py", _tests(1))

@@ -44,6 +44,8 @@ export default function Home() {
   const userGroups = (userInfo as any)?.groups || [];
 
   const configuredSections: HomeSection[] = useMemo(() => {
+    // Roles and the applied role may still be arriving: no sections until permissions are loaded.
+    if (permissionsLoading) return [];
     if (appliedRoleId) {
       const r = availableRoles.find(role => role.id === appliedRoleId);
       return (r?.home_sections || []) as HomeSection[];
@@ -63,7 +65,7 @@ export default function Home() {
       return result.length > 0 ? result : [HomeSection.DISCOVERY];
     }
     return [];
-  }, [availableRoles, appliedRoleId, userGroups]);
+  }, [permissionsLoading, availableRoles, appliedRoleId, userGroups]);
 
   const defaultSections: HomeSection[] = [HomeSection.DISCOVERY];
   const orderedSections = configuredSections.length > 0 ? configuredSections : defaultSections;
@@ -72,7 +74,7 @@ export default function Home() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {hasAnyAccess && journeyHome && (
+      {!permissionsLoading && hasAnyAccess && journeyHome && (
         <>
           <EssentialsHome />
           {/* A group union can add sections the role editor keeps off a journey role itself. */}
@@ -81,7 +83,7 @@ export default function Home() {
         </>
       )}
 
-      {hasAnyAccess && !journeyHome && (
+      {!permissionsLoading && hasAnyAccess && !journeyHome && (
         <>
           <div className="max-w-2xl mx-auto text-center mb-8">
             <div className="flex items-center justify-center mb-4">

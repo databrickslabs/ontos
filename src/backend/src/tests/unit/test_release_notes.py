@@ -1,5 +1,6 @@
 """Release-note fragments: validation, merge, assemble, and the docs viewer."""
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -300,3 +301,54 @@ def test_cli_strips_a_leading_v(cli):
     assert cli("--version", "v1.2.0", "--date", "2026-12-01") == 0
     text = cli.notes.read_text(encoding="utf-8")
     assert "# Release Notes - v1.2.0 (2026-12-01)" in text and "vv1.2.0" not in text
+
+
+def test_cli_writes_the_notes_and_deletes_the_fragments(cli, capsys):
+    _write(cli.unreleased, "features", "f.md", "- **f**: new")
+    _write(cli.unreleased, "bug-fixes", "b.md", "- **b**: fixed")
+    assert cli("--version", "1.2.0", "--date", "2026-12-01") == 0
+    text = cli.notes.read_text(encoding="utf-8")
+    assert "- **f**: new" in text and "- **b**: fixed" in text
+    assert not (cli.unreleased / "features" / "f.md").exists()
+    assert not (cli.unreleased / "bug-fixes" / "b.md").exists()
+    assert not cli.notes.with_name(cli.notes.name + ".tmp").exists()
+    assert "Released 2 fragment(s)" in capsys.readouterr().out
+
+
+def test_cli_second_run_does_not_write_an_empty_release(cli, capsys):
+    _write(cli.unreleased, "features", "f.md", "- **f**: new")
+    assert cli("--version", "1.2.0", "--date", "2026-12-01") == 0
+    after_first = cli.notes.read_text(encoding="utf-8")
+    assert cli("--version", "1.2.1", "--date", "2026-12-02") == 1
+    assert cli.notes.read_text(encoding="utf-8") == after_first
+    assert "nothing to release" in capsys.readouterr().out
+
+
+def test_cli_keeps_the_notes_and_fragments_when_the_swap_fails(cli, monkeypatch):
+    _write(cli.unreleased, "features", "f.md", "- **f**: new")
+
+    def broken_replace(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", broken_replace)
+    with pytest.raises(OSError):
+        cli("--version", "1.2.0", "--date", "2026-12-01")
+    assert cli.notes.read_text(encoding="utf-8") == NOTES
+    assert (cli.unreleased / "features" / "f.md").exists()
+    assert not cli.notes.with_name(cli.notes.name + ".tmp").exists()
+
+
+def test_cli_reports_fragments_it_could_not_delete(cli, monkeypatch, capsys):
+    _write(cli.unreleased, "features", "f.md", "- **f**: new")
+    original_unlink = Path.unlink
+
+    def failing_unlink(self, *args, **kwargs):
+        if self.name == "f.md":
+            raise PermissionError("denied")
+        return original_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", failing_unlink)
+    assert cli("--version", "1.2.0", "--date", "2026-12-01") == 1
+    out = capsys.readouterr().out
+    assert "could not delete 1 fragment(s)" in out and "features/f.md" in out
+    assert "# Release Notes - v1.2.0 (2026-12-01)" in cli.notes.read_text(encoding="utf-8")

@@ -11,6 +11,7 @@ Usage:
 """
 import argparse
 import importlib.util
+import os
 import sys
 from datetime import date as _date
 from pathlib import Path
@@ -95,9 +96,27 @@ def main() -> int:
     if args.preview:
         print(result, end="")
         return 0
-    NOTES_PATH.write_text(result, encoding="utf-8")
+    # Write next to the target and swap it in, so a failed write leaves the notes intact;
+    # only then delete the fragments.
+    temp_path = NOTES_PATH.with_name(NOTES_PATH.name + ".tmp")
+    try:
+        temp_path.write_text(result, encoding="utf-8")
+        os.replace(temp_path, NOTES_PATH)
+    finally:
+        temp_path.unlink(missing_ok=True)
+    leftovers = []
     for fragment in fragments:
-        fragment.path.unlink()
+        try:
+            fragment.path.unlink()
+        except OSError:
+            leftovers.append(fragment)
+    if leftovers:
+        print(
+            f"Released v{args.version} but could not delete {len(leftovers)} fragment(s). "
+            "Delete them by hand, or the next run will release them again:"
+        )
+        print("\n".join(f"  {f.section}/{f.name}" for f in leftovers))
+        return 1
     print(f"Released {len(fragments)} fragment(s) as v{args.version} ({release_date}).")
     return 0
 

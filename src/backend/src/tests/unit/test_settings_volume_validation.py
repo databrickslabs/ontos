@@ -133,6 +133,22 @@ def _real_manager(db_session, tmp_path, env_file_text):
     return SettingsManager(db=db_session, settings=settings, workspace_client=None)
 
 
+def test_a_stored_invalid_volume_does_not_block_a_catalog_change(manager):
+    manager._settings.DATABRICKS_VOLUME = "a.b"
+
+    _save(manager, {"databricks_catalog": "other_catalog", "databricks_volume": "a.b"})
+
+    assert manager._settings.DATABRICKS_CATALOG == "other_catalog"
+
+
+def test_a_catalog_change_names_the_catalog_when_it_breaks_a_stored_volume_name(manager):
+    with pytest.raises(VolumeInvalidError) as raised:
+        _save(manager, {"databricks_catalog": "my.catalog", "databricks_volume": "app_files"})
+
+    assert raised.value.params["catalog"] == "my.catalog"
+    assert "DATABRICKS_CATALOG" in str(raised.value)
+
+
 def test_clearing_the_volume_leaves_memory_as_a_restart_would(db_session, tmp_path, monkeypatch):
     monkeypatch.delenv("DATABRICKS_VOLUME", raising=False)
     manager = _real_manager(db_session, tmp_path, "")

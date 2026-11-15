@@ -15,6 +15,7 @@ import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { RelativeDate } from '@/components/common/relative-date';
 import type { DataProduct, SubscriberInfo } from '@/types/data-product';
 import { isApprovedOrActive } from '@/lib/lifecycle-stages';
+import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups';
 
 interface ProductWithSubscribers {
   product: DataProduct;
@@ -25,6 +26,7 @@ interface ProductWithSubscribers {
 export default function OwnerConsumersView() {
   const { t } = useTranslation(['data-products', 'common']);
   const api = useApi();
+  const { groups: productGroups } = useLifecycleStageGroups('data_product');
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
 
   const [products, setProducts] = useState<DataProduct[]>([]);
@@ -120,7 +122,7 @@ export default function OwnerConsumersView() {
   }, [selectedData, searchQuery]);
 
   // Live for consumers: an active-category stage or approved (by Stage Category)
-  const activeProducts = products.filter((p) => isApprovedOrActive(p));
+  const activeProducts = products.filter((p) => isApprovedOrActive(p, productGroups));
 
   return (
     <div className="space-y-6">

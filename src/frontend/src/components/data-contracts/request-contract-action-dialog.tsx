@@ -176,7 +176,8 @@ export default function RequestContractActionDialog({
           // backend's contract_publishable decides
           enabled: isContractPublishable({
             status: contractStatus, status_category: currentStage?.category,
-          }),
+            lifecycle_stage_group_id: lifecycleGroup?.id,
+          }, groups),
           endpoint: `/api/data-contracts/${contractId}/request-publish`,
         };
       case 'certify':

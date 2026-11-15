@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import type { DataContractListItem } from '@/types/data-contract';
 import type { DeliveryMethodRead } from '@/types/delivery-method';
 import CreateContractInlineDialog from '@/components/data-contracts/create-contract-inline-dialog';
 import { isContractPublishable } from '@/lib/lifecycle-stages';
+import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups';
 
 type OutputPortFormProps = {
   isOpen: boolean;
@@ -26,6 +27,7 @@ type OutputPortFormProps = {
 };
 
 export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, initial, product }: OutputPortFormProps) {
+  const { groups: contractGroups } = useLifecycleStageGroups('data_contract');
   const { toast } = useToast();
   const { t } = useTranslation(['data-products', 'common']);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,7 +48,12 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
 
   // Contract selection states
   const [contractSelectionMode, setContractSelectionMode] = useState<'none' | 'existing' | 'create'>('none');
-  const [contracts, setContracts] = useState<DataContractListItem[]>([]);
+  const [allContracts, setContracts] = useState<DataContractListItem[]>([]);
+  // Active or approved (by Stage Category, in each contract's own group)
+  const contracts = useMemo(
+    () => allContracts.filter((c) => isContractPublishable(c, contractGroups)),
+    [allContracts, contractGroups],
+  );
   const [isLoadingContracts, setIsLoadingContracts] = useState(false);
   const [isCreateContractOpen, setIsCreateContractOpen] = useState(false);
 
@@ -84,7 +91,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
   }, [isOpen, initial]);
 
   useEffect(() => {
-    if (isOpen && contractSelectionMode === 'existing' && contracts.length === 0) {
+    if (isOpen && contractSelectionMode === 'existing' && allContracts.length === 0) {
       fetchContracts();
     }
   }, [isOpen, contractSelectionMode]);
@@ -113,9 +120,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
       const response = await fetch('/api/data-contracts');
       if (!response.ok) throw new Error('Failed to fetch contracts');
       const data: DataContractListItem[] = await response.json();
-      // Active or approved (by Stage Category): the contracts a port may use
-      const filteredContracts = data.filter((c) => isContractPublishable(c));
-      setContracts(filteredContracts);
+      setContracts(data);
     } catch (error: any) {
       toast({
         title: 'Error',

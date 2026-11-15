@@ -1756,7 +1756,7 @@ export default function DataContractDetails() {
         </div>
         <div className="flex items-center gap-2">
           {/* Lifecycle actions */}
-          {contract && awaitsReviewDecision(contract) && (
+          {contract && awaitsReviewDecision(contract, contractGroups) && (
             <>
               <Button size="sm" variant="outline" onClick={handleApprove}>{t('data-contracts:detailsView.header.approve', 'Approve')}</Button>
               <Button size="sm" variant="destructive" onClick={handleReject}>{t('data-contracts:detailsView.header.reject', 'Reject')}</Button>
@@ -1776,7 +1776,7 @@ export default function DataContractDetails() {
             </Button>
           )}
           {contract &&
-            isContractPublishable(contract) &&
+            isContractPublishable(contract, contractGroups) &&
             canWriteContracts && (
               <Button
                 variant="outline"
@@ -2662,7 +2662,7 @@ export default function DataContractDetails() {
                 size="sm"
                 variant="outline"
                 onClick={() => setIsLinkProductDialogOpen(true)}
-                disabled={!contract || !isContractPublishable(contract)}
+                disabled={!contract || !isContractPublishable(contract, contractGroups)}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
                 {t('data-contracts:detailsView.linkedProducts.linkExisting', 'Link to Existing Product')}
@@ -2670,7 +2670,7 @@ export default function DataContractDetails() {
               <Button
                 size="sm"
                 onClick={() => setIsCreateProductDialogOpen(true)}
-                disabled={!contract || !isContractPublishable(contract)}
+                disabled={!contract || !isContractPublishable(contract, contractGroups)}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
                 {t('data-contracts:detailsView.linkedProducts.createProduct', 'Create Data Product')}
@@ -2690,7 +2690,7 @@ export default function DataContractDetails() {
               <div className="text-sm text-muted-foreground mb-4">
                 {t('data-contracts:detailsView.linkedProducts.emptyHint', 'Create a data product that uses this contract to govern a deliverable')}
               </div>
-              {contract && isContractPublishable(contract) ? (
+              {contract && isContractPublishable(contract, contractGroups) ? (
                 <Button onClick={() => setIsCreateProductDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   {t('data-contracts:detailsView.linkedProducts.createProduct', 'Create Data Product')}

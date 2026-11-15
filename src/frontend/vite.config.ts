@@ -3,8 +3,10 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://localhost:8000';
-// Packages grouped into the `vendor` chunk (same set as the former object-form manualChunks).
-const VENDOR_CHUNK_TEST = /[\\/]node_modules[\\/](react|react-dom|react-router-dom)[\\/]/;
+// Packages grouped into the `vendor` chunk: the former object-form manualChunks entries plus
+// their transitive deps (scheduler; react-router, which react-router-dom 7 re-exports).
+const VENDOR_CHUNK_TEST =
+  /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/;
 const devPort = Number(process.env.VITE_PORT) || 3000;
 
 export default defineConfig(({ command }) => ({

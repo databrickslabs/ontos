@@ -22,7 +22,7 @@ from src.controller.assets_manager import AssetsManager
 from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
 from src.db_models.assets import AssetDb, AssetTypeDb
-from src.db_models.metadata import DocumentMetadataDb
+from src.db_models.metadata import DocumentMetadataDb, RichTextMetadataDb
 from src.models.costs import CostItem, CostItemCreate
 from src.models.metadata import (
     LinkCreate, MetadataAttachmentCreate, RichText, RichTextCreate,
@@ -585,3 +585,44 @@ def test_a_steward_cannot_change_an_asset_note_by_id(
     assert response.status_code == 403, response.text
     assert _code(response) == 'asset_write_denied'
 
+
+# --- Entity type in the path: exact, from the supported list -------------------
+
+ENTITY_ROUTES = [
+    r[0] for r in _requests('asset', 'x', _PLACEHOLDER_IDS) if r[3].startswith('/api/entities/')
+]
+
+
+@pytest.mark.parametrize('entity_type', ['Asset', 'ASSET', ' asset', 'assets', 'unknown'])
+@pytest.mark.parametrize('route', ENTITY_ROUTES)
+def test_an_unsupported_entity_type_is_422(
+        client, db_session, asset, ws, act_as, entity_type, route):
+    """Rows are stored under the exact type: ``Asset`` would skip the asset rules."""
+    ids = _seed(db_session, 'asset', str(asset.id))
+    act_as('Data Steward')
+    _name, _kind, method, url, kwargs = _request(entity_type, str(asset.id), ids, route)
+
+    response = _call(client, method, url, kwargs)
+
+    assert response.status_code == 422, response.text
+    assert _code(response) == 'entity_type_not_supported'
+    assert response.json()['detail']['params'] == {'entityType': entity_type}
+    ws.files.upload.assert_not_called()
+
+
+@pytest.mark.parametrize('method', ['PUT', 'DELETE'])
+def test_a_row_stored_under_another_casing_of_asset_gets_the_asset_rules(
+        client, db_session, asset, act_as, method):
+    """Rows written before the type check, under ``Asset``, are still an asset's rows."""
+    note = RichTextMetadataDb(
+        entity_type='Asset', entity_id=str(asset.id), title='Note', content_markdown='Body',
+    )
+    db_session.add(note)
+    db_session.commit()
+    act_as('Data Steward')
+
+    response = client.request(method, f'/api/rich-texts/{note.id}',
+                              **({'json': {'title': 'N2'}} if method == 'PUT' else {}))
+
+    assert response.status_code == 403, response.text
+    assert _code(response) == 'asset_write_denied'

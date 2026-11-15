@@ -13,6 +13,11 @@ an asset (``entity_type == "asset"``) the asset's own rules apply instead
 - the asset must exist (404 ``asset_not_found``), except on the routes that
   address a row by its own id, so orphaned rows can still be cleaned up.
 
+The ``{entity_type}`` in the path must be one of ``ENTITY_TYPES``, as stored
+(422 ``entity_type_not_supported``): rows are filtered under the exact type, so
+``Asset`` would otherwise be a namespace outside the asset rules. A stored row
+whose type is another casing of ``asset`` gets the asset rules.
+
 Every other entity type keeps the ``data-domains`` check, run exactly as the
 ``PermissionChecker`` dependency did before. Both checks are dependencies, so
 they run before the request body and the query are validated, as before.
@@ -26,6 +31,7 @@ from src.common.asset_access import (
     ASSETS_FEATURE_ID, AssetNotFoundError, AssetReadDeniedError, AssetWriteDeniedError,
     ensure_asset_readable, user_has_assets_feature,
 )
+from src.common.api_errors import CodedValueError
 from src.common.authorization import PermissionChecker, get_user_details_from_sdk
 from src.common.dependencies import get_db
 from src.common.features import FeatureAccessLevel
@@ -36,6 +42,35 @@ from src.controller.costs_manager import CostsManager
 METADATA_FEATURE_ID = "data-domains"
 ASSET_ENTITY_TYPE = "asset"
 _ASSETS_WRITE_CHECKER = PermissionChecker(ASSETS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)
+# The entity types the notes, links, documents and costs routes serve: the request
+# models' types and the entity pages that show the metadata panel.
+ENTITY_TYPES = frozenset({
+    'data_domain', 'data_product', 'data_contract', 'dataset', ASSET_ENTITY_TYPE,
+    'compliance_policy', 'concept', 'collection',
+})
+
+
+class EntityTypeNotSupportedError(CodedValueError):
+    """The path names an entity type the routes don't serve, or not in its stored form."""
+
+    code = 'entity_type_not_supported'
+
+
+def _is_asset(entity_type: Optional[str]) -> bool:
+    """Whether a stored entity type means an asset, whatever its case."""
+    return str(entity_type or '').strip().lower() == ASSET_ENTITY_TYPE
+
+
+def _ensure_supported_entity_type(entity_type: Optional[str]) -> None:
+    """Refuse (422) a type outside ``ENTITY_TYPES``, including another casing of one.
+
+    Rows are stored and filtered under the exact type, so ``Asset`` would be a
+    separate namespace that the asset rules don't cover.
+    """
+    if entity_type not in ENTITY_TYPES:
+        _refuse(status.HTTP_422_UNPROCESSABLE_ENTITY, EntityTypeNotSupportedError(
+            f"Unsupported entity type '{entity_type}'.", entityType=str(entity_type),
+        ))
 
 
 def _asset_uuid(entity_id: Optional[str]) -> Optional[UUID]:
@@ -106,7 +141,7 @@ async def _ensure_attached_row_readable(request: Request, db, user_details, auth
     if asset_type not in ('rich_text', 'link', 'document') or row_id is None:
         return
     owner = get_metadata_manager(request).get_row_owner(db, kind=asset_type, id=str(row_id))
-    if owner is not None and owner[0] == ASSET_ENTITY_TYPE:
+    if owner is not None and _is_asset(owner[0]):
         await _ensure_asset(
             request, db, user_details, auth_manager, owner[1], FeatureAccessLevel.READ_ONLY,
             require_asset=False,
@@ -149,6 +184,7 @@ class EntityMetadataPermission:
         auth_manager=Depends(get_auth_manager),
     ) -> None:
         entity_type = request.path_params.get('entity_type')
+        _ensure_supported_entity_type(entity_type)
         if entity_type != ASSET_ENTITY_TYPE:
             await self._domain_checker(request, user_details, auth_manager)
             if self.attaching:
@@ -210,7 +246,7 @@ class RowMetadataPermission:
         auth_manager=Depends(get_auth_manager),
     ) -> None:
         owner = self.load_owner(request, db)
-        if owner is None or owner[0] != ASSET_ENTITY_TYPE:
+        if owner is None or not _is_asset(owner[0]):
             await self._domain_checker(request, user_details, auth_manager)
             return
         await _ensure_asset(

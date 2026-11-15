@@ -206,6 +206,23 @@ def test_assets_read_write_reads_and_writes_everything(client, db_session, asset
         assert response.status_code < 300, (name, response.status_code, response.text)
 
 
+def test_a_role_resolved_from_the_users_group_reads_and_writes(
+        client, db_session, asset, ws, mock_test_user):
+    """The other tests apply a role as the role switcher does; here it comes from a group."""
+    app.state.settings_manager.create_app_role(AppRoleCreate(
+        name='Assets by group (#1342)', assigned_groups=['asset-editors'],
+        feature_permissions={'assets': FeatureAccessLevel.READ_WRITE},
+    ))
+    mock_test_user.groups = ['asset-editors']
+    ids = _seed(db_session, 'asset', str(asset.id))
+
+    for name, _kind, method, url, kwargs in _requests('asset', str(asset.id), ids):
+        if name in ('attach', 'detach'):
+            continue
+        response = _call(client, method, url, kwargs)
+        assert response.status_code < 300, (name, response.status_code, response.text)
+
+
 @pytest.mark.parametrize('role', ['Data Steward', 'Data Consumer'])
 @pytest.mark.parametrize('route', ENTITY_ROUTES)
 def test_without_assets_every_entity_route_is_403(

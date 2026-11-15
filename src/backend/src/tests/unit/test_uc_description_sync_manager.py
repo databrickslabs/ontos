@@ -9,8 +9,9 @@ from databricks.sdk.service.sql import StatementState
 from src.common.api_errors import UserTokenRequiredError
 from src.common.config import Settings
 from src.controller.uc_description_sync_manager import (
-    CODE_EXISTING_COMMENT, CODE_NO_WAREHOUSE, CODE_NOT_FOUND, CODE_PERMISSION_DENIED,
-    CODE_UNSUPPORTED_TEXT, CODE_USER_TOKEN_REQUIRED, UcDescriptionSyncManager, uc_comment_target,
+    CODE_EXISTING_COMMENT, CODE_IMPORT_TIME_BUDGET, CODE_NO_WAREHOUSE, CODE_NOT_FOUND,
+    CODE_PERMISSION_DENIED, CODE_UNSUPPORTED_TEXT, CODE_USER_TOKEN_REQUIRED, CODE_WRITE_FAILED,
+    UcDescriptionSyncManager, uc_comment_target,
 )
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.models.assets import DESCRIPTION_SYNC_PROPERTY
@@ -361,3 +362,64 @@ def test_a_failure_before_the_read_keeps_the_agreed_comment_it_stored(db_session
 
     assert (warning, state) == (None, None)
     assert _statements(ws) == ["COMMENT ON TABLE `main`.`sales`.`orders` IS 'New text'"]
+
+
+def _sync_with_budget(db, asset, ws, time_left, previous='Old text'):
+    outcome = UcDescriptionSyncManager(_settings()).sync_after_update(
+        db, asset.id, description_sent=True, previous_description=previous,
+        user_client=lambda: ws, time_left=time_left,
+    )
+    db.flush()
+    return outcome
+
+
+def test_an_import_with_no_time_left_does_not_read_unity_catalog(db_session):
+    asset = _asset(db_session)
+    ws = _ws(comment='Old text')
+
+    outcome = _sync_with_budget(db_session, asset, ws, lambda: 0)
+
+    assert outcome.warning.code == CODE_IMPORT_TIME_BUDGET
+    ws.tables.get.assert_not_called()
+    assert _statements(ws) == []
+
+
+def test_an_import_write_waits_at_most_the_time_left(db_session):
+    asset = _asset(db_session)
+    ws = _ws(comment='Old text')
+
+    outcome = _sync_with_budget(db_session, asset, ws, lambda: 30)
+
+    assert outcome.in_sync
+    assert ws.statement_execution.execute_statement.call_args.kwargs['wait_timeout'] == '30s'
+
+
+def test_an_import_write_that_outlasts_the_budget_is_a_time_budget_warning(
+        db_session, monkeypatch):
+    from src.common import uc_comments
+
+    clock = iter([0, 0, 100])
+    monkeypatch.setattr(uc_comments.time, 'monotonic', lambda: next(clock, 100))
+    monkeypatch.setattr(uc_comments.time, 'sleep', lambda s: None)
+    asset = _asset(db_session)
+    ws = _ws(StatementState.RUNNING, comment='Old text')
+    ws.statement_execution.get_statement.return_value = \
+        ws.statement_execution.execute_statement.return_value
+    left = iter([10, 10, 0.5])  # the check before the read, the read, the write
+
+    outcome = _sync_with_budget(db_session, asset, ws, lambda: next(left, -1))
+
+    assert outcome.warning.code == CODE_IMPORT_TIME_BUDGET
+    ws.statement_execution.cancel_execution.assert_called_once_with('st-1')
+
+
+def test_a_single_save_that_times_out_is_a_failed_write(db_session, monkeypatch):
+    from src.common import uc_comments
+
+    clock = iter([0, 100])
+    monkeypatch.setattr(uc_comments.time, 'monotonic', lambda: next(clock, 100))
+    asset = _asset(db_session)
+
+    warning, _ = _sync(db_session, asset, _ws(StatementState.RUNNING, comment='Old text'))
+
+    assert warning.code == CODE_WRITE_FAILED

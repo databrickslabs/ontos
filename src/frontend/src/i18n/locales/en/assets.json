@@ -44,7 +44,7 @@
       "uc_description_user_token_required": "The request had no Databricks user token, so the description of {{object}} was not written to Unity Catalog.",
       "uc_description_no_warehouse": "No SQL warehouse is configured, so the description of {{object}} was not written to Unity Catalog.",
       "uc_description_write_failed": "Writing the description of {{object}} to Unity Catalog failed.",
-      "uc_description_import_write_limit": "This import reached its limit of {{limit}} descriptions written to Unity Catalog, so the description of {{object}} was not written there.",
+      "uc_description_import_write_limit": "This import reached its limit of {{limit}} rows tried in Unity Catalog, so the description of {{object}} was not written there.",
       "uc_description_import_writes_failed": "The assets were imported, but their descriptions could not be written to Unity Catalog.",
       "uc_description_existing_comment": "Unity Catalog already has another comment on {{object}}, so the description was not written there. Set the description to that comment, or change the comment in Unity Catalog, and save again.",
       "uc_description_unsupported_text": "The description of {{object}} has a character Unity Catalog can't store, so it was not written there.",

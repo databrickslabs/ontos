@@ -1,4 +1,5 @@
 """Unity Catalog comment statements: quoting, escaping, running and error reasons (#1477)."""
+import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -8,7 +9,8 @@ from databricks.sdk.service.sql import StatementState
 
 from src.common import uc_comments
 from src.common.uc_comments import (
-    FAILED, NOT_FOUND, PERMISSION_DENIED, UNSUPPORTED_TEXT, CommentWriteError, comment_statement,
+    FAILED, NOT_FOUND, PERMISSION_DENIED, TIMED_OUT, UNSUPPORTED_TEXT, CommentWriteError,
+    comment_statement,
     read_comment, set_comment, split_column_location, string_literal,
 )
 
@@ -114,8 +116,51 @@ def test_a_statement_still_running_at_the_timeout_is_cancelled(monkeypatch):
     with pytest.raises(CommentWriteError) as raised:
         set_comment(ws, 'wh-1', 'main.sales.orders', None, 'x', timeout_seconds=10)
 
-    assert raised.value.reason == FAILED
+    assert raised.value.reason == TIMED_OUT
     ws.statement_execution.cancel_execution.assert_called_once_with('st-1')
+
+
+def test_no_time_left_runs_no_statement():
+    ws = _ws(_response(StatementState.SUCCEEDED))
+
+    with pytest.raises(CommentWriteError) as raised:
+        set_comment(ws, 'wh-1', 'main.sales.orders', None, 'x', timeout_seconds=0)
+
+    assert raised.value.reason == TIMED_OUT
+    ws.statement_execution.execute_statement.assert_not_called()
+
+
+@pytest.mark.parametrize('timeout, wait', [(3, '0s'), (30, '30s'), (120, '50s')])
+def test_the_statement_waits_no_longer_than_the_time_left(timeout, wait):
+    ws = _ws(_response(StatementState.SUCCEEDED))
+
+    set_comment(ws, 'wh-1', 'main.sales.orders', None, 'x', timeout_seconds=timeout)
+
+    assert ws.statement_execution.execute_statement.call_args.kwargs['wait_timeout'] == wait
+
+
+def test_a_read_slower_than_its_timeout_times_out():
+    release = threading.Event()
+    ws = MagicMock()
+    ws.tables.get.side_effect = lambda **kwargs: release.wait(5)
+
+    try:
+        with pytest.raises(CommentWriteError) as raised:
+            read_comment(ws, 'main.sales.orders', None, timeout_seconds=0.05)
+    finally:
+        release.set()
+
+    assert raised.value.reason == TIMED_OUT
+
+
+def test_a_read_with_no_time_left_is_not_sent():
+    ws = MagicMock()
+
+    with pytest.raises(CommentWriteError) as raised:
+        read_comment(ws, 'main.sales.orders', None, timeout_seconds=0)
+
+    assert raised.value.reason == TIMED_OUT
+    ws.tables.get.assert_not_called()
 
 
 @pytest.mark.parametrize('text, literal', [

@@ -199,7 +199,7 @@ describe('GeneralSettings - write asset descriptions to Unity Catalog', () => {
     mockFetch({ ...baseResponse, uc_description_writeback_enabled: true,
       uc_description_import_write_limit: 100 });
     render(<GeneralSettings />);
-    const limit = await screen.findByLabelText('Max descriptions written per bulk import');
+    const limit = await screen.findByLabelText('Max rows tried in Unity Catalog per bulk import');
     expect(limit).toHaveValue(100);
     await userEvent.clear(limit);
     await userEvent.type(limit, '25');

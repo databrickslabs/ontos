@@ -6,12 +6,15 @@ caller passes the workspace client, so Unity Catalog checks the permissions of
 whoever that client belongs to (the user's on-behalf-of client, or the app's).
 """
 import time
-from typing import Any, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Optional, Tuple
 
 # Why a comment could not be written (``CommentWriteError.reason``)
 PERMISSION_DENIED = 'permission_denied'
 NOT_FOUND = 'not_found'
 UNSUPPORTED_TEXT = 'unsupported_text'
+# The caller's time (``timeout_seconds``) ran out before Unity Catalog answered
+TIMED_OUT = 'timed_out'
 FAILED = 'failed'
 
 # Markers in Databricks SQL error messages
@@ -25,6 +28,8 @@ _NOT_FOUND_MARKERS = (
 
 # A save waits at most this long for its comment statement
 DEFAULT_TIMEOUT_SECONDS = 60
+# The shortest wait the Statement Execution API accepts, other than 0 (don't wait)
+_MIN_WAIT_SECONDS = 5
 
 
 class StatementError(RuntimeError):
@@ -78,18 +83,40 @@ def comment_statement(table_fqn: str, column_name: Optional[str], text: Optional
     return f'COMMENT ON {target} IS {value}'
 
 
+def _call_with_timeout(call: Callable[[], Any], timeout_seconds: Optional[float]) -> Any:
+    """``call()``, or ``TimeoutError`` when it has not returned after ``timeout_seconds``.
+
+    The SDK call has no per-call timeout, so it runs on its own thread; on a
+    timeout the caller goes on and the thread ends with the HTTP call.
+    """
+    if timeout_seconds is None:
+        return call()
+    if timeout_seconds <= 0:
+        raise TimeoutError('No time left for the Unity Catalog call')
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        return executor.submit(call).result(timeout=timeout_seconds)
+    finally:
+        executor.shutdown(wait=False)
+
+
 def read_comment(
     ws: Any, table_fqn: str, column_name: Optional[str],
+    *, timeout_seconds: Optional[float] = None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """``(table_type, comment)`` of a table or view, or of one of its columns, as read.
 
     ``table_type`` is the Unity Catalog type name (e.g. ``METRIC_VIEW``). Raises
-    ``CommentWriteError`` (NOT_FOUND, PERMISSION_DENIED or FAILED) when it can't be read.
+    ``CommentWriteError`` (NOT_FOUND, PERMISSION_DENIED, TIMED_OUT or FAILED) when it
+    can't be read; TIMED_OUT when ``timeout_seconds`` (None: the client's own timeout)
+    passes first.
     """
     from databricks.sdk.errors import NotFound, PermissionDenied
 
     try:
-        info = ws.tables.get(full_name=table_fqn)
+        info = _call_with_timeout(lambda: ws.tables.get(full_name=table_fqn), timeout_seconds)
+    except TimeoutError as e:
+        raise CommentWriteError(TIMED_OUT, str(e)) from e
     except NotFound as e:
         raise CommentWriteError(NOT_FOUND, str(e)) from e
     except PermissionDenied as e:
@@ -116,20 +143,25 @@ def classify_error(message: str) -> str:
 
 
 def execute_statement(
-    ws: Any, warehouse_id: str, statement: str, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+    ws: Any, warehouse_id: str, statement: str,
+    *, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> Any:
     """Run ``statement`` on ``warehouse_id`` and wait for it.
 
     Raises ``StatementError`` unless it succeeded, ``TimeoutError`` when it is
-    still running after ``timeout_seconds``.
+    still running after ``timeout_seconds`` (then it is cancelled).
     """
     from databricks.sdk.service.sql import StatementState
 
+    if timeout_seconds <= 0:
+        raise TimeoutError('No time left for the SQL statement')
     deadline = time.monotonic() + timeout_seconds
+    # Below the API's shortest wait, don't wait in the call: the loop below polls instead
+    wait = int(timeout_seconds) if timeout_seconds >= _MIN_WAIT_SECONDS else 0
     resp = ws.statement_execution.execute_statement(
         statement=statement,
         warehouse_id=warehouse_id,
-        wait_timeout=f'{min(max(timeout_seconds, 5), 50)}s',
+        wait_timeout=f'{min(wait, 50)}s',
     )
     while resp.status and resp.status.state in (StatementState.PENDING, StatementState.RUNNING):
         if time.monotonic() > deadline:
@@ -148,11 +180,12 @@ def execute_statement(
 
 def set_comment(
     ws: Any, warehouse_id: str, table_fqn: str, column_name: Optional[str], text: Optional[str],
-    *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+    *, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> None:
     """Set (or, for an empty ``text``, remove) the comment of a table, view or column.
 
-    Raises ``CommentWriteError`` with the reason when it isn't written.
+    Raises ``CommentWriteError`` with the reason when it isn't written (TIMED_OUT
+    when the statement is still running after ``timeout_seconds``).
     """
     from databricks.sdk.errors import PermissionDenied
 
@@ -162,6 +195,8 @@ def set_comment(
     statement = comment_statement(table_fqn, column_name, text)
     try:
         execute_statement(ws, warehouse_id, statement, timeout_seconds=timeout_seconds)
+    except TimeoutError as e:
+        raise CommentWriteError(TIMED_OUT, str(e)) from e
     except StatementError as e:
         raise CommentWriteError(classify_error(str(e)), str(e)) from e
     except PermissionDenied as e:

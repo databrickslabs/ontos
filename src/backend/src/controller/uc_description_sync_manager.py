@@ -22,8 +22,8 @@ from src.common.api_errors import CodedValueError
 from src.common.config import Settings
 from src.common.logging import get_logger
 from src.common.uc_comments import (
-    CommentWriteError, NOT_FOUND, PERMISSION_DENIED, UNSUPPORTED_TEXT,
-    read_comment, set_comment, split_column_location,
+    CommentWriteError, DEFAULT_TIMEOUT_SECONDS, NOT_FOUND, PERMISSION_DENIED, TIMED_OUT,
+    UNSUPPORTED_TEXT, read_comment, set_comment, split_column_location,
 )
 from src.db_models.assets import AssetDb
 from src.models.assets import (
@@ -47,9 +47,9 @@ CODE_WRITE_FAILED = 'uc_description_write_failed'
 CODE_UNSUPPORTED_TEXT = 'uc_description_unsupported_text'
 # Unity Catalog already has another comment on the object, which the save keeps
 CODE_EXISTING_COMMENT = 'uc_description_existing_comment'
-# Bulk import: a row over the import's write limit (params: object, limit), a row
-# after the import's time budget for Unity Catalog writes (params: object), and the
-# writes of a whole import not run (no params)
+# Bulk import: a row over the import's cap on rows tried in Unity Catalog (params:
+# object, limit), a row after the import's time budget for Unity Catalog calls
+# (params: object), and the writes of a whole import not run (no params)
 CODE_IMPORT_WRITE_LIMIT = 'uc_description_import_write_limit'
 CODE_IMPORT_TIME_BUDGET = 'uc_description_import_time_budget'
 CODE_IMPORT_WRITES_FAILED = 'uc_description_import_writes_failed'
@@ -84,7 +84,7 @@ _MESSAGES = {
         "Catalog, and save again."
     ),
     CODE_IMPORT_WRITE_LIMIT: (
-        "This import reached its limit of {limit} descriptions written to Unity Catalog, "
+        "This import reached its limit of {limit} rows tried in Unity Catalog, "
         "so the description of {object} was not written there."
     ),
     CODE_IMPORT_TIME_BUDGET: (
@@ -125,6 +125,17 @@ _REASON_CODES = {
     NOT_FOUND: CODE_NOT_FOUND,
     UNSUPPORTED_TEXT: CODE_UNSUPPORTED_TEXT,
 }
+
+
+def _reason_code(reason: str, budgeted: bool) -> str:
+    """The warning code of a ``CommentWriteError`` reason.
+
+    A call that ran out of a bulk import's time budget (``budgeted``) is a
+    time-budget warning; a single save's timeout is a failed write.
+    """
+    if reason == TIMED_OUT and budgeted:
+        return CODE_IMPORT_TIME_BUDGET
+    return _REASON_CODES.get(reason, CODE_WRITE_FAILED)
 
 
 def uc_comment_target_for(
@@ -204,6 +215,7 @@ class UcDescriptionSyncManager:
         description_sent: bool,
         previous_description: Optional[str],
         user_client: Callable[[], Any],
+        time_left: Optional[Callable[[], float]] = None,
     ) -> SyncOutcome:
         """Bring a saved description to Unity Catalog; returns the ``SyncOutcome``.
 
@@ -218,6 +230,9 @@ class UcDescriptionSyncManager:
         again retries). With the setting off, a save drops the mark.
         ``user_client`` builds the user's workspace client; a ``CodedValueError``
         from it (no user token, time budget) is a warning.
+        ``time_left`` (bulk import) returns the seconds left of the import's time
+        budget: Unity Catalog is not read once it is used up, and the read and the
+        write each wait at most what is left (else a time-budget warning).
         """
         asset = (
             db.query(AssetDb).filter(AssetDb.id == asset_id)
@@ -259,12 +274,17 @@ class UcDescriptionSyncManager:
             warning = _warning(code, label, **params)
             return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=baseline))
 
+        if time_left is not None and time_left() <= 0:
+            warning = _warning(CODE_IMPORT_TIME_BUDGET, label)
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=baseline))
         try:
-            table_type, uc_comment = read_comment(ws, table_fqn, column_name)
+            table_type, uc_comment = read_comment(
+                ws, table_fqn, column_name,
+                timeout_seconds=time_left() if time_left is not None else None)
         except CommentWriteError as e:
             logger.warning("Reading the comment of %s to write asset %s failed: %s",
                            label, asset.id, e.reason)
-            warning = _warning(_REASON_CODES.get(e.reason, CODE_WRITE_FAILED), label)
+            warning = _warning(_reason_code(e.reason, time_left is not None), label)
             audit = {'before': None, 'after': text, 'outcome': 'failed'}
             state = self._store_state(db, asset, warning, agreed=baseline)
             return SyncOutcome(warning, state, audit=audit)
@@ -290,11 +310,13 @@ class UcDescriptionSyncManager:
             return SyncOutcome(warning, self._store_state(db, asset, warning), audit=audit)
 
         try:
-            set_comment(ws, warehouse_id, table_fqn, column_name, text)
+            set_comment(
+                ws, warehouse_id, table_fqn, column_name, text,
+                timeout_seconds=time_left() if time_left is not None else DEFAULT_TIMEOUT_SECONDS)
         except CommentWriteError as e:
             logger.warning("Writing the description of asset %s to Unity Catalog failed: %s",
                            asset.id, e.reason)
-            warning = _warning(_REASON_CODES.get(e.reason, CODE_WRITE_FAILED), label)
+            warning = _warning(_reason_code(e.reason, time_left is not None), label)
             audit.update(after=uc_comment, outcome='failed')
             # The comment still there was agreed to (it passed the guard), so a retry may replace it
             return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=uc_comment),

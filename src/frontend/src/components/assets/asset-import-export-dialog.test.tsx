@@ -29,7 +29,7 @@ describe('ImportRowWarnings', () => {
         }]}
       />
     );
-    expect(screen.getByText(/limit of 100 descriptions/)).toHaveTextContent('main.s.b');
+    expect(screen.getByText(/limit of 100 rows tried/)).toHaveTextContent('main.s.b');
   });
 
   it('renders nothing without warnings', () => {

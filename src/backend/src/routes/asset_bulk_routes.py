@@ -37,7 +37,8 @@ from src.db_models.assets import AssetDb
 
 logger = get_logger(__name__)
 
-# Unity Catalog writes of one import share this much time (each write waits at most 60 s)
+# The Unity Catalog calls of one import share this much time: each read and each
+# write waits at most what is left of it
 UC_IMPORT_WRITE_BUDGET_SECONDS = 120
 
 router = APIRouter(prefix="/api/assets/bulk", tags=["Asset Bulk"])
@@ -240,10 +241,11 @@ def _write_imported_descriptions(
 ) -> list:
     """Write the committed rows' descriptions to Unity Catalog, one commit per row.
 
-    The user's client is built once per import. At most
-    ``UC_DESCRIPTION_IMPORT_WRITE_LIMIT`` descriptions are written, and the
-    writes share ``UC_IMPORT_WRITE_BUDGET_SECONDS``: rows past either get a
-    warning. Never raises: the import is committed, so a failure here is a
+    The user's client is built once per import. ``UC_DESCRIPTION_IMPORT_WRITE_LIMIT``
+    caps the rows tried in Unity Catalog (a row counts whether its comment is
+    written, kept or skipped as a metric view), and the reads and writes share
+    ``UC_IMPORT_WRITE_BUDGET_SECONDS``: each waits at most what is left, and rows
+    past either limit get a warning. Never raises: the import is committed, so a failure here is a
     warning on the row or on the result. Returns the audit entries of the
     Unity Catalog comments that were read.
     """
@@ -261,11 +263,14 @@ def _write_imported_descriptions(
     deadline = time.monotonic() + UC_IMPORT_WRITE_BUDGET_SECONDS
     client: dict = {}
 
+    def time_left() -> float:
+        return deadline - time.monotonic()
+
     def user_client():
-        """The user's client, built on the first write; one write per call."""
-        if time.monotonic() > deadline:
+        """The user's client, built on the first row tried; each call is one row tried."""
+        if time_left() <= 0:
             raise ImportTimeBudgetError('The import time budget is used up.')
-        if client.get('writes', 0) >= limit:
+        if client.get('attempts', 0) >= limit:
             raise ImportWriteLimitError('The import write limit is reached.', limit=limit)
         if 'error' in client:
             raise client['error']
@@ -275,7 +280,7 @@ def _write_imported_descriptions(
             except Exception as e:
                 client['error'] = e
                 raise
-        client['writes'] = client.get('writes', 0) + 1
+        client['attempts'] = client.get('attempts', 0) + 1
         return client['ws']
 
     audit: list = []
@@ -287,6 +292,7 @@ def _write_imported_descriptions(
                 description_sent=described,
                 previous_description=previous_description,
                 user_client=user_client,
+                time_left=time_left,
             )
             if outcome.in_sync:
                 asset = db.get(AssetDb, asset_id)

@@ -44,7 +44,7 @@
       "uc_description_user_token_required": "リクエストに Databricks のユーザートークンがなかったため、{{object}} の説明は Unity Catalog に書き込まれませんでした。",
       "uc_description_no_warehouse": "SQL ウェアハウスが設定されていないため、{{object}} の説明は Unity Catalog に書き込まれませんでした。",
       "uc_description_write_failed": "{{object}} の説明を Unity Catalog に書き込めませんでした。",
-      "uc_description_import_write_limit": "このインポートは Unity Catalog に書き込む説明の上限 {{limit}} 件に達したため、{{object}} の説明は書き込まれませんでした。",
+      "uc_description_import_write_limit": "このインポートは Unity Catalog で試行する行の上限 {{limit}} 件に達したため、{{object}} の説明は書き込まれませんでした。",
       "uc_description_import_writes_failed": "アセットはインポートされましたが、説明を Unity Catalog に書き込めませんでした。",
       "uc_description_existing_comment": "{{object}} には Unity Catalog に別のコメントが既にあるため、説明はそこに書き込まれませんでした。説明をそのコメントに合わせるか、Unity Catalog でコメントを変更してから、もう一度保存してください。",
       "uc_description_unsupported_text": "{{object}} の説明に Unity Catalog が保存できない文字が含まれているため、そこには書き込まれませんでした。",

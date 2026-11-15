@@ -443,6 +443,29 @@ class TestBulkImportWriteback:
         assert [w['code'] for w in row['warnings']] == ['uc_description_import_time_budget']
         user_ws.statement_execution.execute_statement.assert_not_called()
 
+    def test_a_read_that_outlasts_the_import_time_budget_stops_the_writes(
+            self, client, settings, table, user_ws, monkeypatch):
+        import threading
+
+        from src.routes import asset_bulk_routes
+
+        monkeypatch.setattr(asset_bulk_routes, 'UC_IMPORT_WRITE_BUDGET_SECONDS', 0.2)
+        release = threading.Event()
+        user_ws.tables.get.side_effect = lambda **kwargs: release.wait(5)
+
+        try:
+            body = _import_csv(client, 'name,asset_type,platform,location,description\n'
+                                       'a,Table,databricks,main.s.a,About a\n'
+                                       'b,Table,databricks,main.s.b,About b\n')
+        finally:
+            release.set()
+
+        codes = {i['name']: [w['code'] for w in i['warnings']] for i in body['items']}
+        assert codes == {'a': ['uc_description_import_time_budget'],
+                         'b': ['uc_description_import_time_budget']}
+        assert user_ws.tables.get.call_count == 1
+        user_ws.statement_execution.execute_statement.assert_not_called()
+
     def test_the_preview_flags_rows_written_to_unity_catalog(self, client, settings, table,
                                                              user_ws):
         response = client.post(

@@ -1707,7 +1707,7 @@ class SettingsManager:
             self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED = value
             logger.info("Updated UC_DESCRIPTION_WRITEBACK_ENABLED to: %s", value)
 
-        # Bulk import: most descriptions written to Unity Catalog per import (1..10000)
+        # Bulk import: most rows tried in Unity Catalog per import (1..10000), written or not
         if 'uc_description_import_write_limit' in settings:
             try:
                 int_val = int(settings.get('uc_description_import_write_limit'))

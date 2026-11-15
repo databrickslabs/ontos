@@ -216,7 +216,8 @@ class Settings(BaseSettings):
     # Write table, view and column descriptions saved in Ontos to Unity Catalog as
     # comments, as the user (on-behalf-of token), so Unity Catalog permissions decide.
     UC_DESCRIPTION_WRITEBACK_ENABLED: bool = Field(False, env='UC_DESCRIPTION_WRITEBACK_ENABLED')
-    # At most this many descriptions are written to Unity Catalog per bulk import
+    # At most this many rows of a bulk import are tried in Unity Catalog (a row counts
+    # whether its comment is written, kept or skipped), so it caps attempts, not writes
     UC_DESCRIPTION_IMPORT_WRITE_LIMIT: int = Field(100, env='UC_DESCRIPTION_IMPORT_WRITE_LIMIT')
 
     # Delivery Mode settings

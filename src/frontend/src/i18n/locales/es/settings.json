@@ -146,8 +146,8 @@
       "label": "Escribir las descripciones de activos en Unity Catalog",
       "help": "Al guardar la descripción de una tabla, vista o columna de Databricks también se establece su comentario en Unity Catalog, como el usuario que la guarda. Sin el permiso MODIFY, la descripción se guarda solo en Ontos y el activo indica que no está sincronizado.",
       "importLimit": {
-        "label": "Máximo de descripciones escritas por importación masiva",
-        "help": "Una importación CSV/XLSX escribe como máximo este número de descripciones en Unity Catalog (1–10000); las filas por encima del límite se guardan en Ontos con una advertencia."
+        "label": "Máximo de filas intentadas en Unity Catalog por importación masiva",
+        "help": "Una importación CSV/XLSX intenta como máximo este número de descripciones en Unity Catalog (1–10000), ya sea que las escriba, conserve otro comentario u omita una vista de métricas; las filas por encima del límite se guardan en Ontos con una advertencia."
       }
     },
     "instanceIdentity": {

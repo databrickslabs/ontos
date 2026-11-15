@@ -322,7 +322,7 @@ export default function GeneralSettings() {
             <Label htmlFor="ucDescriptionImportWriteLimit">
               {t(
                 'settings:general.ucDescriptionWriteback.importLimit.label',
-                'Max descriptions written per bulk import'
+                'Max rows tried in Unity Catalog per bulk import'
               )}
             </Label>
             <Input

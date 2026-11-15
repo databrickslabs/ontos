@@ -93,12 +93,13 @@ def _record_order(ws, monkeypatch):
 
     monkeypatch.setattr(Session, 'commit', recording_commit)
     from src.controller.asset_bulk_manager import AssetBulkManager
-    from src.controller.assets_manager import assets_manager
+    from src.controller.assets_manager import AssetsManager
 
-    update, execute_import = assets_manager.update_asset, AssetBulkManager.execute_import
+    # The routes use the startup-wired instance, so patch the class, not the singleton
+    update, execute_import = AssetsManager.update_asset, AssetBulkManager.execute_import
 
-    def recording_update(*args, **kwargs):
-        result = update(*args, **kwargs)
+    def recording_update(self, *args, **kwargs):
+        result = update(self, *args, **kwargs)
         events.append('saved')
         return result
 
@@ -107,7 +108,7 @@ def _record_order(ws, monkeypatch):
         events.append('saved')
         return result
 
-    monkeypatch.setattr(assets_manager, 'update_asset', recording_update)
+    monkeypatch.setattr(AssetsManager, 'update_asset', recording_update)
     monkeypatch.setattr(AssetBulkManager, 'execute_import', recording_import)
     done = ws.statement_execution.execute_statement.return_value
 
@@ -454,12 +455,16 @@ class TestBulkImportWriteback:
 
     def test_a_failing_write_step_never_fails_the_row(self, client, settings, table, user_ws,
                                                       monkeypatch):
+        from src.controller.asset_bulk_manager import AssetBulkManager
         from src.controller.uc_description_sync_manager import UcDescriptionSyncManager
 
         def boom(*args, **kwargs):
             raise RuntimeError('unexpected')
 
         monkeypatch.setattr(UcDescriptionSyncManager, 'sync_after_update', boom)
+        # The shared test session never really commits: indexing after the commit would open
+        # a transaction that the failed write's rollback then discards with the fixture rows
+        monkeypatch.setattr(AssetBulkManager, 'index_committed_import', lambda *a, **k: None)
 
         body = _import_csv(client, self.CSV)
 

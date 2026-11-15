@@ -115,6 +115,32 @@ def require_compliance_admin_for_notify(rule: Optional[str], auth_manager, curre
         )
 
 
+class LlmCheckAdminRequiredError(CodedValueError):
+    """A user without admin access to compliance saved, ran or tested an LLM_CHECK rule."""
+
+    code = 'llm_check_admin_required'
+
+
+def require_compliance_admin_for_llm_check(
+    rule: Optional[str], auth_manager, current_user, request: Request,
+) -> None:
+    """LLM_CHECK calls the serving endpoint for each entity (paid by the app), so
+    saving, running or testing a rule that uses it needs admin access to
+    compliance, as NOTIFY does (Data Governance Officers and Admins by default).
+
+    Scheduled runs have no acting user; they run rules saved by users who had
+    that access.
+    """
+    if rule_uses_llm_check(rule) and not user_has_feature_level(
+        auth_manager, current_user, FEATURE_ID, FeatureAccessLevel.ADMIN, request
+    ):
+        error = LlmCheckAdminRequiredError(
+            "This policy uses LLM_CHECK; saving, running or testing it requires admin "
+            "access to compliance",
+        )
+        raise HTTPException(status_code=403, detail=str(error)) from error
+
+
 class LlmCheckReadRequiredError(CodedValueError):
     """A user ran an LLM_CHECK rule over app entities they can't read."""
 
@@ -168,6 +194,7 @@ async def create_policy(
     warnings = _check_rule(policy.rule)
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
+    require_compliance_admin_for_llm_check(policy.rule, auth_manager, current_user, request)
     created = manager.create_policy(
         db, 
         policy, 
@@ -218,6 +245,7 @@ async def update_policy(
     warnings = _check_rule(policy.rule) if rule_changed else []
     if rule_changed:
         require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
+        require_compliance_admin_for_llm_check(policy.rule, auth_manager, current_user, request)
     # The name is the title of the notifications NOTIFY sends: renaming is gated too
     if rule_changed or existing.name != policy.name:
         require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
@@ -327,6 +355,7 @@ async def run_policy(
         raise HTTPException(status_code=404, detail="Policy not found")
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
+    require_compliance_admin_for_llm_check(policy.rule, auth_manager, current_user, request)
     reader = llm_check_reader(request, policy.rule, auth_manager, current_user)
 
     # For now, implement inline only; async can be backed by Databricks job later.
@@ -480,11 +509,12 @@ async def test_llm_check(
 ):
     """Try a rule (and its LLM_CHECK criteria) on one entity before saving it.
 
-    READ_WRITE, as saving a rule: each LLM_CHECK calls the serving endpoint.
-    At most RULE_TEST_MAX_CALLS tests per user a minute (429). Nothing but
-    cached verdicts is written.
+    READ_WRITE, as saving a rule, and admin access to compliance for a rule with
+    LLM_CHECK (each one calls the serving endpoint). At most RULE_TEST_MAX_CALLS
+    tests per user a minute (429). Nothing but cached verdicts is written.
     """
     _check_rule(payload.rule)
+    require_compliance_admin_for_llm_check(payload.rule, auth_manager, current_user, request)
     reader = llm_check_reader(request, payload.rule, auth_manager, current_user)
     try:
         _throttle_rule_test(current_user.username if current_user else 'unknown')

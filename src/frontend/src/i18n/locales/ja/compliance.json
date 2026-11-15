@@ -243,7 +243,8 @@
     "errors": {
       "sample_entity_not_found": "ルールに一致するエンティティが見つかりませんでした。名前を確認するか、空欄にして最初の一致を使用してください。",
       "llm_check_test_rate_limited": "短時間にテストが多すぎます。{{retryAfter}} 秒後にもう一度お試しください。",
-      "llm_check_entity_read_required": "このルールは {{entityType}} エンティティに LLM_CHECK を使用します。実行またはテストするには、それらへの読み取りアクセスが必要です。"
+      "llm_check_entity_read_required": "このルールは {{entityType}} エンティティに LLM_CHECK を使用します。実行またはテストするには、それらへの読み取りアクセスが必要です。",
+      "llm_check_admin_required": "このルールは LLM_CHECK を使用します。保存、実行、テストにはコンプライアンスの管理者アクセスが必要です。"
     }
   }
 }

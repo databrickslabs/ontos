@@ -243,7 +243,8 @@
     "errors": {
       "sample_entity_not_found": "Non è stata trovata alcuna entità a cui la regola si applica. Controlla il nome, oppure lascialo vuoto per usare la prima corrispondenza.",
       "llm_check_test_rate_limited": "Troppe prove in poco tempo. Riprova tra {{retryAfter}} secondi.",
-      "llm_check_entity_read_required": "Questa regola usa LLM_CHECK su entità {{entityType}}. Per eseguirla o provarla serve l’accesso in lettura a esse."
+      "llm_check_entity_read_required": "Questa regola usa LLM_CHECK su entità {{entityType}}. Per eseguirla o provarla serve l’accesso in lettura a esse.",
+      "llm_check_admin_required": "Questa regola usa LLM_CHECK. Per salvarla, eseguirla o provarla serve l’accesso da amministratore alla conformità."
     }
   }
 }

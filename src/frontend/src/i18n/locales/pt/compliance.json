@@ -243,7 +243,8 @@
     "errors": {
       "sample_entity_not_found": "Nenhuma entidade encontrada pela regra. Confira o nome ou deixe-o vazio para usar a primeira encontrada.",
       "llm_check_test_rate_limited": "Testes demais em pouco tempo. Tente de novo em {{retryAfter}} segundos.",
-      "llm_check_entity_read_required": "Esta regra usa LLM_CHECK em entidades {{entityType}}. Executá-la ou testá-la exige acesso de leitura a elas."
+      "llm_check_entity_read_required": "Esta regra usa LLM_CHECK em entidades {{entityType}}. Executá-la ou testá-la exige acesso de leitura a elas.",
+      "llm_check_admin_required": "Esta regra usa LLM_CHECK. Salvá-la, executá-la ou testá-la exige acesso de administrador à conformidade."
     }
   }
 }

@@ -166,6 +166,13 @@ check is the model's text: it is capped at 300 characters and shown as plain
 text next to the result. Before saving, use **Test on a sample entity** in the
 rule editor to try a criterion on one entity (at most 10 tests a minute per user).
 
+- Access: saving, running or testing a rule with `LLM_CHECK` needs admin access
+  to compliance (Data Governance Officers and Admins by default), as `NOTIFY`
+  does (`llm_check_admin_required`). A run or test a user starts reads Unity
+  Catalog with that user's own token, so its results and reasons only cover the
+  objects the user can read; the app entity types the rule matches (data
+  products, contracts, domains, reviews) need read access to their feature
+  (`llm_check_entity_read_required`). Scheduled runs use the app's identity.
 - Two phases: the text is first scanned with the injection-check prompt
   (`LLM_INJECTION_CHECK_PROMPT`). A text the scan doesn't call `SAFE` fails with
   `llm_check_text_rejected`, and the criterion is never asked.

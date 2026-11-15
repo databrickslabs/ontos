@@ -183,3 +183,75 @@ def test_the_run_reads_uc_with_the_client_it_is_given(db_session):
 
     app_client.assert_not_called()
     assert iterator.call_args.kwargs['workspace_client'] is user_client
+
+
+# --- Admin gate: LLM_CHECK rules are saved, run and tested by compliance admins ---
+
+def _payload(rule, name='P'):
+    return {
+        'name': name, 'description': 'd', 'category': 'Governance', 'severity': 'low',
+        'rule': rule, 'is_active': True,
+    }
+
+
+@pytest.fixture
+def writer(levels):
+    """Write access to compliance, not admin."""
+    levels['compliance'] = FeatureAccessLevel.READ_WRITE
+    return levels
+
+
+def _admin_required(response):
+    assert response.status_code == 403, response.text
+    assert response.json()['detail']['code'] == 'llm_check_admin_required'
+
+
+def test_creating_an_llm_check_rule_needs_compliance_admin(api, writer):
+    _admin_required(api.http.post('/api/compliance/policies', json=_payload(UC_RULE)))
+    api.manager.create_policy.assert_not_called()
+
+
+def test_a_writer_still_creates_rules_without_llm_check(api, writer):
+    api.manager.create_policy.return_value = SimpleNamespace(
+        id='p1', name='P', description='d', rule=PLAIN_RULE, created_at=None, updated_at=None,
+        is_active=True, severity='low', category='Governance',
+    )
+    response = api.http.post('/api/compliance/policies', json=_payload(PLAIN_RULE))
+    assert response.status_code == 200, response.text
+
+
+PID = str(uuid.uuid4())
+
+
+def test_changing_a_rule_to_llm_check_needs_compliance_admin(api, writer):
+    api.manager.get_policy.return_value = SimpleNamespace(id=PID, name='P', rule=PLAIN_RULE)
+
+    response = api.http.put(
+        f'/api/compliance/policies/{PID}', json={**_payload(UC_RULE), 'id': PID},
+    )
+
+    _admin_required(response)
+    api.manager.update_policy.assert_not_called()
+
+
+def test_other_edits_of_an_llm_check_policy_are_not_gated(api, writer):
+    api.manager.get_policy.return_value = SimpleNamespace(id=PID, name='P', rule=UC_RULE)
+    api.manager.update_policy.return_value = CompliancePolicyDb(
+        id=PID, name='P', description='d2', rule=UC_RULE, category='Governance',
+        severity='low', is_active=False, created_at=datetime.now(), updated_at=datetime.now(),
+    )
+
+    edited = {**_payload(UC_RULE), 'description': 'd2', 'is_active': False, 'id': PID}
+    assert api.http.put(f'/api/compliance/policies/{PID}', json=edited).status_code == 200
+
+
+def test_running_an_llm_check_rule_needs_compliance_admin(api, writer):
+    _policy(api.manager, UC_RULE)
+
+    _admin_required(api.http.post('/api/compliance/policies/p1/runs', json={}))
+    api.manager.run_policy_inline.assert_not_called()
+
+
+def test_testing_an_llm_check_rule_needs_compliance_admin(api, writer):
+    _admin_required(api.http.post('/api/compliance/llm-check/test', json={'rule': UC_RULE}))
+    api.manager.test_rule_on_sample.assert_not_called()

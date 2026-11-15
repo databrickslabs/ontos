@@ -773,3 +773,22 @@ class TestIndependentReview:
         )
         db_session.expire_all()
         assert db_session.get(AssetDb, asset.id).status == expected
+
+
+class TestCacheMiss:
+    def test_a_group_another_worker_created_is_loaded_on_first_use(self, db_session):
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        # This worker's cache is fresh but predates the group
+        with lifecycle_service._lock:
+            lifecycle_service._groups.pop(group.id)
+        row = SimpleNamespace(status='needs_review', lifecycle_stage_group_id=group.id)
+        assert lifecycle_service.allowed_target_keys(db_session, 'data_product', row) == \
+            ['active']
+
+    def test_a_group_still_missing_after_the_reload_raises(self, db_session):
+        from src.controller.lifecycle_service import LifecycleGroupNotFoundError
+
+        lifecycle_service.save_group(db_session, _looping_group(), 'admin')
+        row = SimpleNamespace(status='draft', lifecycle_stage_group_id='no-such-group')
+        with pytest.raises(LifecycleGroupNotFoundError):
+            lifecycle_service.check_transition(db_session, 'data_product', row, 'sandbox')

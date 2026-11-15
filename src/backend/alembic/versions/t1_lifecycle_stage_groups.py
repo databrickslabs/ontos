@@ -12,19 +12,25 @@ Seed: one default group per entity type reproducing the transition maps of the
 code before this revision (assets had none: every move between their four
 stages is allowed; categories: sandbox -> draft; proposed,
 under_review, approved -> review). Backfill: every existing row gets its
-type's default group. Downgrade drops the column and the tables (the stage keys
-stay in ``status``).
+type's default group. Contracts still stored as ``archived`` (the wizard
+offered it before the status clean-up) become ``retired``, as the import path
+maps it; the rows whose status is still not a stage of their default group are
+counted in the migration log. Downgrade drops the column and the tables (the
+stage keys stay in ``status``; ``archived`` isn't restored).
 
 Revision ID: t1_lifecycle_stage_groups
 Revises: o2_step_execution_message
 Create Date: 2026-11-12
 """
+import logging
 import uuid
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 
+
+logger = logging.getLogger("alembic.runtime.migration")
 
 revision: str = "t1_lifecycle_stage_groups"
 down_revision: Union[str, Sequence[str], None] = "o2_step_execution_message"
@@ -191,6 +197,33 @@ def upgrade() -> None:
                 "WHERE lifecycle_stage_group_id IS NULL"
             ).bindparams(group_id=GROUP_IDS[entity_type])
         )
+
+    # A stored ``archived`` contract has no stage, so it could neither move nor
+    # be seen by consumers: map it as the import path does
+    op.execute(sa.text(
+        "UPDATE data_contracts SET status = 'retired' WHERE lower(trim(status)) = 'archived'"
+    ))
+    _log_statuses_without_stage(op.get_bind())
+
+
+def _log_statuses_without_stage(bind) -> None:
+    """Log, per table, the rows whose status isn't a stage of their default group."""
+    for entity_type, table in ENTITY_TABLES.items():
+        keys = list(TRANSITIONS[entity_type])
+        rows = bind.execute(
+            sa.text(
+                f"SELECT lower(trim(coalesce(status, ''))) AS s, count(*) FROM {table} "
+                "WHERE lower(trim(coalesce(status, ''))) NOT IN :keys GROUP BY s"
+            ).bindparams(sa.bindparam("keys", expanding=True)),
+            {"keys": keys},
+        ).all()
+        if rows:
+            logger.warning(
+                "t1_lifecycle_stage_groups: %s rows in %s have a status that isn't a "
+                "lifecycle stage: %s",
+                sum(n for _s, n in rows), table,
+                ", ".join(f"'{status}' x{n}" for status, n in sorted(rows)),
+            )
 
 
 def downgrade() -> None:

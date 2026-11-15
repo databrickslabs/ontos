@@ -423,7 +423,13 @@
     "privileges": {
       "homeSections": {
         "title": "Home Secties",
-        "description": "Selecteer welke secties op de homepagina verschijnen voor gebruikers met deze rol."
+        "description": "Selecteer welke secties op de homepagina verschijnen voor gebruikers met deze rol.",
+        "labels": {
+          "JOURNEY": "Journey-startpagina"
+        },
+        "descriptions": {
+          "JOURNEY": "Vervangt de volledige startpagina door Vinden, Begrijpen, Vertrouwen, Publiceren en Onderhouden. Kan niet met andere secties worden gecombineerd."
+        }
       },
       "approvalPrivileges": {
         "title": "Goedkeuringsprivileges",

@@ -72,7 +72,14 @@ export default function Home() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {hasAnyAccess && journeyHome && <EssentialsHome />}
+      {hasAnyAccess && journeyHome && (
+        <>
+          <EssentialsHome />
+          {/* A group union can add sections the role editor keeps off a journey role itself. */}
+          {orderedSections.includes(HomeSection.DATA_CURATION) && <DataCurationSection />}
+          {orderedSections.includes(HomeSection.DISCOVERY) && <DiscoverySection />}
+        </>
+      )}
 
       {hasAnyAccess && !journeyHome && (
         <>

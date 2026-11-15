@@ -423,7 +423,13 @@
     "privileges": {
       "homeSections": {
         "title": "Seções da página inicial",
-        "description": "Selecione quais seções aparecem na página inicial para usuários com este papel."
+        "description": "Selecione quais seções aparecem na página inicial para usuários com este papel.",
+        "labels": {
+          "JOURNEY": "Início por jornada"
+        },
+        "descriptions": {
+          "JOURNEY": "Substitui a página inicial completa por Encontrar, Entender, Confiar, Publicar e Manter. Não pode ser combinada com outras seções."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilégios de aprovação",

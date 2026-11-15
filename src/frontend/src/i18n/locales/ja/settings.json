@@ -416,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "ホームセクション",
-        "description": "このロールを持つユーザーのホームページに表示されるセクションを選択します。"
+        "description": "このロールを持つユーザーのホームページに表示されるセクションを選択します。",
+        "labels": {
+          "JOURNEY": "ジャーニーホーム"
+        },
+        "descriptions": {
+          "JOURNEY": "完全なホームページを、検索・理解・信頼・公開・保守の流れに置き換えます。他のセクションとは併用できません。"
+        }
       },
       "approvalPrivileges": {
         "title": "承認権限",

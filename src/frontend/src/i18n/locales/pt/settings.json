@@ -708,6 +708,10 @@
     "errorCodes": {
       "brandingPathTraversal": "O caminho não pode conter segmentos \"..\""
     },
+    "loadFailed": {
+      "title": "Não foi possível carregar as configurações atuais",
+      "description": "A marca salva não foi carregada, então o salvamento está desativado para não sobrescrevê-la com os valores padrão. Recarregue a página para tentar novamente."
+    },
     "messages": {
       "saveSuccess": "Configurações de personalização da interface salvas",
       "saveError": "Falha ao salvar as configurações de personalização da interface",

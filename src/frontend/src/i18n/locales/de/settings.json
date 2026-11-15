@@ -690,6 +690,10 @@
     "errorCodes": {
       "brandingPathTraversal": "Der Pfad darf keine \"..\"-Segmente enthalten"
     },
+    "loadFailed": {
+      "title": "Aktuelle Einstellungen konnten nicht geladen werden",
+      "description": "Das gespeicherte Branding wurde nicht geladen. Speichern ist deaktiviert, damit es nicht mit Standardwerten überschrieben wird. Laden Sie die Seite neu und versuchen Sie es erneut."
+    },
     "messages": {
       "saveSuccess": "UI-Anpassungseinstellungen gespeichert",
       "saveError": "UI-Anpassungseinstellungen konnten nicht gespeichert werden",

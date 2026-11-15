@@ -690,6 +690,10 @@
     "errorCodes": {
       "brandingPathTraversal": "Le chemin ne doit pas contenir de segments \"..\""
     },
+    "loadFailed": {
+      "title": "Impossible de charger les paramètres actuels",
+      "description": "L'image de marque enregistrée n'a pas été chargée ; l'enregistrement est désactivé pour éviter de l'écraser par les valeurs par défaut. Rechargez la page pour réessayer."
+    },
     "messages": {
       "saveSuccess": "Paramètres de personnalisation enregistrés",
       "saveError": "Échec de l'enregistrement des paramètres",

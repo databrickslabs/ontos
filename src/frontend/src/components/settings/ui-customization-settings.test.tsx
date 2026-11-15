@@ -156,3 +156,40 @@ describe('UICustomizationSettings co-branding fields', () => {
     });
   });
 });
+
+describe('UICustomizationSettings load failure', () => {
+  beforeEach(() => {
+    toast.mockReset();
+    mockFetch();
+  });
+
+  it('shows an error and cannot save defaults over the stored values', async () => {
+    const base = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (String(url) === '/api/settings' && !init?.method) {
+        return { ok: false, status: 403, json: async () => ({}) } as Response;
+      }
+      return (base as typeof fetch)(url, init);
+    }) as unknown as typeof fetch;
+
+    render(<UICustomizationSettings />);
+    expect(await screen.findByText('Could not load the current settings')).toBeTruthy();
+    const save = screen.getByRole('button', { name: 'Save UI Settings' });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(save);
+    expect(putBody).toBeNull();
+  });
+
+  it('shows the same error when the request itself fails', async () => {
+    globalThis.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      if (String(url) === '/api/settings') throw new Error('network');
+      return new Promise(() => {}) as Promise<Response>;
+    }) as unknown as typeof fetch;
+
+    render(<UICustomizationSettings />);
+    expect(await screen.findByText('Could not load the current settings')).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: 'Save UI Settings' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+});

@@ -361,7 +361,9 @@ Column tags, table tags, keys and lineage are not available yet.
 - `version` - Version number
 - `owner` - Owner: the owner team's id for data products and data contracts; for domains, the
   list of the emails of their active Business Owners (`[]` when none), so test it with
-  `LENGTH(d.owner) > 0` or `d.owner CONTAINS 'user@example.com'`
+  `LENGTH(d.owner) > 0` or `d.owner CONTAINS 'user@example.com'`. `d.owner != ''` is true for a domain
+  with no owners (`[] != ''`), so it does not test emptiness. On `before_update` gates the `WHERE`
+  sees the stored owners, but an `ASSERT` on `owner` sees only the change, which carries none
 - `domain` - Name of the primary domain (data products and data contracts); null when there is none, so `x.domain != ''` is also true for an entity without a domain
 - `domain_id` - Id of the primary domain (data products and data contracts); null when there is none
 - `tags` - Tag dictionary

@@ -201,12 +201,14 @@ def shard_count(total_seconds: float, workers: int, target_seconds: float,
 def assign(weights: dict[str, float], n: int) -> list[list[str]]:
     """Longest first, each file into the lightest shard; ties broken by path.
 
-    Shards with the same total go by index, so the plan is deterministic.
+    Shards with the same total go to the one with fewer files, then by index, so
+    zero-weight files spread out (and no shard stays empty) and the plan is
+    deterministic.
     """
     shards: list[list[str]] = [[] for _ in range(n)]
     totals = [0.0] * n
     for rel in sorted(weights, key=lambda f: (-weights[f], f)):
-        target = min(range(n), key=lambda i: (totals[i], i))
+        target = min(range(n), key=lambda i: (totals[i], len(shards[i]), i))
         shards[target].append(rel)
         totals[target] += weights[rel]
     return [sorted(files) for files in shards]

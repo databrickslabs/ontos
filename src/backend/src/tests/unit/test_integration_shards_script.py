@@ -120,6 +120,12 @@ def test_assignment_is_deterministic_and_complete():
     assert len(placed) == len(set(placed))
 
 
+def test_zero_weight_files_spread_over_all_shards():
+    weights = {f"t/test_{i}.py": 0.0 for i in range(6)}
+    groups = shards.assign(weights, 3)
+    assert [len(g) for g in groups] == [2, 2, 2]
+
+
 def test_assignment_longest_first_into_lightest_shard_ties_by_path():
     weights = {"t/test_b.py": 5.0, "t/test_a.py": 5.0, "t/test_c.py": 3.0,
                "t/test_d.py": 2.0}

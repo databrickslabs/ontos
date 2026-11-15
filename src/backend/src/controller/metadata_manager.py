@@ -1,8 +1,9 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import List, Optional, Dict, Any, Tuple
 
 from sqlalchemy.orm import Session
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import VolumeType
+from collections.abc import Callable
 
 from src.common.logging import get_logger
 from src.common.config import Settings, resolve_volume

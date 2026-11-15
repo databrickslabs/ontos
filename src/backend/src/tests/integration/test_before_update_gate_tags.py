@@ -56,8 +56,8 @@ def test_the_gate_sees_the_stored_tags_and_an_empty_list_clears_them(client, pii
     assert cleared.json()['detail']['message'] == 'Pre-update validation failed'
 
 
-def _tag_then_check_gate(db_session, rule):
-    """An active before_update gate: assign the gate/reviewed tag, then a policy check."""
+def _tag_then_check_gate(db_session, rule, step_type='assign_tag'):
+    """An active before_update gate: assign (or remove) a reviewed tag, then a policy check."""
     now = datetime.utcnow()
     namespace = TagNamespaceDb(name=f'gate-{uuid.uuid4().hex[:6]}')
     db_session.add(namespace)
@@ -74,7 +74,7 @@ def _tag_then_check_gate(db_session, rule):
     ))
     db_session.add(WorkflowStepDb(
         id=str(uuid.uuid4()), workflow_id=wf_id, step_id='tag', name='Tag',
-        step_type='assign_tag', on_pass='check', order=0, created_at=now, updated_at=now,
+        step_type=step_type, on_pass='check', order=0, created_at=now, updated_at=now,
         config=json.dumps({'key': f'{namespace.name}/reviewed', 'value': 'yes'}),
     ))
     db_session.add(WorkflowStepDb(
@@ -112,13 +112,18 @@ def tag_writes(monkeypatch):
     from src.controller.tags_manager import TagsManager
 
     writes = []
-    original = TagsManager.add_tag_to_entity
+    add, remove = TagsManager.add_tag_to_entity, TagsManager.remove_tag_from_entity
 
-    def recording(self, db, **kwargs):
+    def adding(self, db, **kwargs):
         writes.append((kwargs['entity_id'], kwargs['assigned_value']))
-        return original(self, db, **kwargs)
+        return add(self, db, **kwargs)
 
-    monkeypatch.setattr(TagsManager, 'add_tag_to_entity', recording)
+    def removing(self, db, **kwargs):
+        writes.append((kwargs['entity_id'], 'removed'))
+        return remove(self, db, **kwargs)
+
+    monkeypatch.setattr(TagsManager, 'add_tag_to_entity', adding)
+    monkeypatch.setattr(TagsManager, 'remove_tag_from_entity', removing)
     return writes
 
 
@@ -146,3 +151,20 @@ def test_an_update_that_passes_the_gate_gets_the_tag_of_its_assign_tag_step(
     assert passed.status_code == 200, passed.text
     assert tag_writes == [(contract_id, 'yes')]
     assert [t.assigned_value for t in _contract_tags(db_session, contract_id, tag_id)] == ['yes']
+
+
+def test_a_blocked_update_keeps_the_tag_a_remove_tag_step_removes(client, db_session, tag_writes):
+    tag_id = _tag_then_check_gate(
+        db_session, "MATCH (c:data_contract) ASSERT c.name = 'never'", step_type='remove_tag',
+    )
+    contract_id = _new_contract(client)
+    db_session.add(EntityTagAssociationDb(
+        tag_id=tag_id, entity_id=contract_id, entity_type='data_contract',
+    ))
+    db_session.flush()
+
+    blocked = client.put(f'/api/data-contracts/{contract_id}', json={'name': 'Renamed'})
+
+    assert blocked.status_code == 400
+    # Before, the step removed (and committed) it before the policy check blocked
+    assert tag_writes == []

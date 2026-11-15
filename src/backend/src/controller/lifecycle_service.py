@@ -171,6 +171,39 @@ def _group_from_db(row) -> Group:
     })
 
 
+def _action_target(
+    group: Group, current: str, action: str,
+) -> Tuple[Optional[str], Optional[str], List[str]]:
+    """``(target, category, candidates)`` of a named action from ``current``: the
+    action's seeded stage when it is an allowed move, else the only allowed
+    target of the first of its categories with one. No target: ``candidates``
+    lists the stages of an ambiguous ``category`` (empty when no move fits)."""
+    seeded_key, categories = NAMED_ACTIONS[action]
+    targets = group.targets(current)
+    if any(s.key == seeded_key for s in targets):
+        return seeded_key, None, []
+    if seeded_key not in group.stages:
+        for category in categories:
+            candidates = [s.key for s in targets if s.category == category]
+            if len(candidates) == 1:
+                return candidates[0], category, []
+            if candidates:
+                return None, category, candidates
+    return None, None, []
+
+
+def _approved_review_stages(group: Group) -> set:
+    """The review stages the approve action moves to from a review stage."""
+    out = set()
+    for stage in group.stages.values():
+        if stage.category != 'review':
+            continue
+        target = _action_target(group, stage.key, 'approve')[0]
+        if target is not None and group.category(target) == 'review':
+            out.add(target)
+    return out
+
+
 # The seeded definitions, for an entity type with no stored group. Their id is
 # None: an entity created meanwhile stores no group (= the default).
 _BUILTIN: Dict[str, Group] = {
@@ -350,26 +383,21 @@ class LifecycleService:
         raises ``InvalidStatusTransitionError``, several
         ``LifecycleActionUnresolvedError`` (both HTTP 409 on the action routes).
         """
-        seeded_key, categories = NAMED_ACTIONS[action]
         group = self.group_for(db, entity_type, entity)
         current = _normalized(getattr(entity, 'status', None)) or 'draft'
-        targets = group.targets(current)
-        if any(s.key == seeded_key for s in targets):
-            return seeded_key
-        if seeded_key not in group.stages:
-            for category in categories:
-                candidates = [s.key for s in targets if s.category == category]
-                if len(candidates) == 1:
-                    return candidates[0]
-                if candidates:
-                    raise LifecycleActionUnresolvedError(
-                        f"'{action}' is ambiguous from '{current}': several allowed stages "
-                        f"are in category '{category}' ({', '.join(candidates)})",
-                        action=action, fromStatus=current, category=category,
-                        candidates=candidates,
-                    )
+        seeded_key = NAMED_ACTIONS[action][0]
+        target, category, candidates = _action_target(group, current, action)
+        if target is not None:
+            return target
+        if candidates:
+            raise LifecycleActionUnresolvedError(
+                f"'{action}' is ambiguous from '{current}': several allowed stages "
+                f"are in category '{category}' ({', '.join(candidates)})",
+                action=action, fromStatus=current, category=category,
+                candidates=candidates,
+            )
         # The refusal the UI already translates: a move the lifecycle doesn't allow
-        allowed = [s.key for s in targets]
+        allowed = [s.key for s in group.targets(current)]
         raise InvalidStatusTransitionError(
             f"Invalid status transition from '{current}' to '{seeded_key}'. "
             f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}",
@@ -377,11 +405,15 @@ class LifecycleService:
         )
 
     def awaits_review_decision(self, db: Optional[Session], entity_type: str, entity: Any) -> bool:
-        """In a review stage that awaits a decision: any review stage but the approve
-        action's own (proposed / under_review by default, not approved)."""
-        if self.category_of(db, entity_type, entity) != 'review':
+        """In a review stage that awaits a decision: any review stage that the approve
+        action doesn't move to from another review stage of the group (proposed /
+        under_review by default, not approved; in ``draft -> review_a -> approved_x ->
+        active``, review_a)."""
+        group = self.group_for(db, entity_type, entity)
+        key = _normalized(getattr(entity, 'status', None))
+        if group.category(key) != 'review':
             return False
-        return _normalized(getattr(entity, 'status', None)) != NAMED_ACTIONS['approve'][0]
+        return key not in _approved_review_stages(group)
 
     def submit_review_stage(self, db: Optional[Session], entity_type: str,
                             entity: Any) -> Optional[str]:

@@ -794,6 +794,55 @@ class TestCacheMiss:
             lifecycle_service.check_transition(db_session, 'data_product', row, 'sandbox')
 
 
+def _two_step_review_group(entity_type='data_contract'):
+    """``draft -> review_a -> approved_x -> active``: no seeded review keys."""
+    return {
+        'name': 'Two step review', 'description': None, 'entity_type': entity_type,
+        'is_default_for_type': False,
+        'stages': [
+            _stage('draft', 'draft', 0, initial=True),
+            _stage('review_a', 'review', 1),
+            _stage('approved_x', 'review', 2),
+            _stage('active', 'active', 3),
+            _stage('retired', 'retired', 4),
+        ],
+        'transitions': [
+            {'from_key': 'draft', 'to_key': 'review_a'},
+            {'from_key': 'review_a', 'to_key': 'approved_x'},
+            {'from_key': 'review_a', 'to_key': 'draft'},
+            {'from_key': 'approved_x', 'to_key': 'active'},
+            {'from_key': 'active', 'to_key': 'retired'},
+        ],
+    }
+
+
+class TestReviewDecisionByApproveTarget:
+    def test_the_stage_approve_moves_to_no_longer_awaits_a_decision(self, db_session):
+        group = lifecycle_service.save_group(db_session, _two_step_review_group(), 'admin')
+        waiting = SimpleNamespace(status='review_a', lifecycle_stage_group_id=group.id)
+        approved = SimpleNamespace(status='approved_x', lifecycle_stage_group_id=group.id)
+
+        assert lifecycle_service.resolve_action(
+            db_session, 'data_contract', waiting, 'approve') == 'approved_x'
+        assert lifecycle_service.awaits_review_decision(db_session, 'data_contract', waiting)
+        assert not lifecycle_service.awaits_review_decision(
+            db_session, 'data_contract', approved)
+        assert lifecycle_service.contract_publishable(db_session, approved)
+        assert not lifecycle_service.contract_publishable(db_session, waiting)
+
+    @pytest.mark.parametrize('entity_type', ['data_product', 'data_contract'])
+    def test_the_default_groups_keep_approved_as_the_decided_stage(
+        self, db_session, entity_type,
+    ):
+        def awaits(status):
+            row = SimpleNamespace(status=status, lifecycle_stage_group_id=None)
+            return lifecycle_service.awaits_review_decision(db_session, entity_type, row)
+
+        assert [awaits(s) for s in ('proposed', 'under_review', 'approved', 'active')] == [
+            True, True, False, False,
+        ]
+
+
 class TestCategoryChangeInUse:
     def test_a_stage_with_entities_cant_leave_the_active_category(self, db_session):
         group = lifecycle_service.save_group(db_session, _looping_group(), 'admin')

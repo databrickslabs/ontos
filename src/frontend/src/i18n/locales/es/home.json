@@ -51,6 +51,9 @@
       "myReviews": "Mis revisiones de activos abiertas ({{count}})",
       "noReviews": "No hay revisiones de activos abiertas.",
       "nothing": "Nada que seguir."
+    },
+    "notices": {
+      "reviewsTruncated": "Solo se leen las {{count}} solicitudes de revisión creadas más recientemente, por lo que estos recuentos y carencias pueden estar incompletos."
     }
   },
   "search": {

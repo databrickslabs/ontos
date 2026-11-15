@@ -43,7 +43,9 @@ import {
   assetGaps,
   latestReviewedAssets,
   myOpenReviews,
+  reviewsTruncated,
   reviewStatusCounts,
+  REVIEWS_LIMIT,
   useAssetTotal,
   useEssentialsFeature,
   useMyAccessRequests,
@@ -151,9 +153,11 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
   const latest = useMemo(
     () => latestReviewedAssets(reviewList.data, LIST_LIMIT), [reviewList.data],
   );
+  const truncated = reviewsTruncated(reviewList.data);
+  // With a truncated review list an asset's review can be in the part not read: unknown.
   const gaps = useMemo(
-    () => assetGaps(owned.data, reviews ? reviewList.data : null),
-    [owned.data, reviews, reviewList.data],
+    () => assetGaps(owned.data, reviews && !truncated ? reviewList.data : null),
+    [owned.data, reviews, truncated, reviewList.data],
   );
   const openReviews = useMemo(
     () => myOpenReviews(reviewList.data, email), [reviewList.data, email],
@@ -249,6 +253,14 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                     </Badge>
                   ))}
                 </div>
+                {truncated && (
+                  <p
+                    className="text-xs text-muted-foreground"
+                    data-testid="essentials-trust-truncated"
+                  >
+                    {t('home:essentials.notices.reviewsTruncated', { count: REVIEWS_LIMIT })}
+                  </p>
+                )}
                 {reviewList.loading ? null : latest.length === 0 ? (
                   <Empty>{t('home:essentials.trust.empty')}</Empty>
                 ) : (

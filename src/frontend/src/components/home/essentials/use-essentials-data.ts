@@ -23,6 +23,13 @@ import {
 /** Review requests read to compute statuses (the endpoint pages at 100 by default). */
 export const REVIEWS_LIMIT = 500;
 
+/**
+ * The review list is newest-created first and capped at `REVIEWS_LIMIT`; a full page means
+ * older requests may exist that the counts, the latest list and the review gaps don't see.
+ */
+export const reviewsTruncated = (reviews: DataAssetReviewRequest[]) =>
+  reviews.length >= REVIEWS_LIMIT;
+
 const OPEN_REVIEW_STATUSES: string[] = [
   ReviewRequestStatus.QUEUED,
   ReviewRequestStatus.IN_REVIEW,

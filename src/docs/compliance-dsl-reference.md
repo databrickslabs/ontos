@@ -345,8 +345,7 @@ Entities have different properties based on their type:
 Tables and views also carry fields computed from their columns, as returned by Unity Catalog
 when Ontos lists the tables (no extra call per table):
 
-- `columns` - List of `{name, type, comment, is_partition_key}`; with `tags` (the column's
-  governed tags) when the rule reads table tags
+- `columns` - List of `{name, type, comment, is_partition_key}`
 - `column_count` - Number of columns
 - `columns_without_comment_count` - Columns with no comment; a comment of only spaces counts
   as missing
@@ -377,8 +376,7 @@ lineage reuses them. A run sends at most 100 statements (a job run, 100 for all 
 policies); past that, the fields are not read (reason `budget_exceeded`):
 
 - `tags` - The table's governed tags as `{key: value}`, read with `HAS_TAG` / `TAG`. Source:
-  `system.information_schema.table_tags`; the same statement fills `columns[].tags` from
-  `system.information_schema.column_tags`
+  `system.information_schema.table_tags`. Column tags are not read
 - `upstream_count` - Distinct tables this table was written from, in
   `system.access.table_lineage`
 - `downstream_count` - Distinct tables written from this table

@@ -61,6 +61,10 @@ NAMED_ACTIONS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
 
 _STAGE_KEY_CHARS = set('abcdefghijklmnopqrstuvwxyz0123456789_')
 
+# Categories that decide what consumers, the Marketplace and search see: a stage
+# with entities in it can't change into or out of them
+_VISIBILITY_CATEGORIES = frozenset({'active', 'deprecated', 'retired'})
+
 
 # --------------------------------------------------------------------------- errors
 
@@ -854,12 +858,31 @@ class LifecycleService:
                 'lifecycle_group_no_active_stage', "A group needs at least one active stage",
             )
 
-    def _check_removed_stages(self, db: Session, row, keys_kept: Iterable[str]) -> None:
+    def _check_stage_changes(self, db: Session, row, new_stages: List[Dict[str, Any]]) -> None:
+        """Refuse removing a stage that entities are in or a workflow names, and moving
+        a stage with entities across the active / deprecated / retired boundary (it
+        would silently change what consumers, the Marketplace and search see)."""
         from src.repositories.lifecycle_stage_groups_repository import lifecycle_stage_groups_repo
 
-        kept = set(keys_kept)
+        kept = {s['key']: s['category'] for s in new_stages}
         for stage in row.stages:
             if stage.key in kept:
+                new_category = kept[stage.key]
+                if new_category == stage.category or not (
+                        {stage.category, new_category} & _VISIBILITY_CATEGORIES):
+                    continue
+                in_use = lifecycle_stage_groups_repo.count_entities_in_stage(
+                    db, row.entity_type, row.id, stage.key,
+                    include_unassigned=row.is_default_for_type,
+                )
+                if in_use:
+                    raise LifecycleGroupConflictError(
+                        'lifecycle_stage_category_in_use',
+                        f"Stage '{stage.key}' can't move from category '{stage.category}' "
+                        f"to '{new_category}': {in_use} entities are in it",
+                        key=stage.key, fromCategory=stage.category,
+                        toCategory=new_category, count=in_use,
+                    )
                 continue
             in_use = lifecycle_stage_groups_repo.count_entities_in_stage(
                 db, row.entity_type, row.id, stage.key,
@@ -933,7 +956,7 @@ class LifecycleService:
                         "Make another group the default instead",
                         entityType=row.entity_type,
                     )
-                self._check_removed_stages(db, row, [s['key'] for s in data['stages']])
+                self._check_stage_changes(db, row, data['stages'])
                 row.name = data['name']
                 row.description = data.get('description')
                 row.updated_by = user

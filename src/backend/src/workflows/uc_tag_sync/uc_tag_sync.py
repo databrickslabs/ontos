@@ -1274,9 +1274,11 @@ def reconcile_tags(
     ``delivered``, when given, is filled with the job's tags on the object after the
     call: the keys it assigned, the recorded ones that already had the desired value or
     whose removal failed, and the recorded value of a key whose update failed. A failed
-    assignment is not recorded, so an unlink never removes the customer's value. With an
-    unknown state, a desired tag that already has the desired value is kept as the
-    job's, as before the state existed.
+    assignment is not recorded, so an unlink never removes the customer's value. A
+    desired tag that already has the desired value is the job's only when it is recorded:
+    with an unknown state it may be the customer's (set by hand), so it isn't adopted.
+    The cost is that a tag the job wrote and lost the record of stays on the object
+    (orphaned) once the object loses its link.
     """
     ownership = as_ownership(owned)
     recorded = previously_delivered or {}
@@ -1303,7 +1305,7 @@ def reconcile_tags(
 
     ours: Dict[str, Optional[str]] = {}
     for k, v in desired.items():
-        if k not in to_upsert and (previously_delivered is None or k in recorded):
+        if k not in to_upsert and k in recorded:
             ours[k] = v
 
     updated = 0
@@ -2025,7 +2027,8 @@ def sync_tags(
         # A partial read may miss a table's contract or domain rows: its desired tags
         # are then incomplete, so nothing is removed (no record is passed). A state that
         # couldn't be read, or didn't parse, is unknown (None): nothing is removed, and a
-        # tag that already has the desired value stays recorded as the job's.
+        # tag that already has the desired value is not recorded (it may be the
+        # customer's).
         unknown = previous is None or isinstance(previous, CorruptDeliveryState)
         delivered_before: Optional[Dict[str, Optional[str]]] = (
             None if unknown else {} if partial else recorded

@@ -39,7 +39,7 @@
     "notInSync": "Not in sync with Unity Catalog.",
     "warningTitle": "Saved in Ontos, not in Unity Catalog",
     "warnings": {
-      "uc_description_permission_denied": "Unity Catalog refused to change the description of {{object}} (MODIFY permission or ownership needed).",
+      "uc_description_permission_denied": "Unity Catalog refused to change the description of {{object}} (SELECT and MODIFY permissions, or ownership, needed).",
       "uc_description_object_not_found": "{{object}} was not found in Unity Catalog, or you don't have access to it, so its description was not written there.",
       "uc_description_user_token_required": "The request had no Databricks user token, so the description of {{object}} was not written to Unity Catalog.",
       "uc_description_no_warehouse": "No SQL warehouse is configured, so the description of {{object}} was not written to Unity Catalog.",

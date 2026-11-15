@@ -73,6 +73,8 @@ def test_set_comment_waits_for_a_running_statement(monkeypatch):
     ('[INSUFFICIENT_PERMISSIONS] User does not have MODIFY on Table main.sales.orders',
      PERMISSION_DENIED),
     ('PERMISSION_DENIED: User is not the owner of the table', PERMISSION_DENIED),
+    # As measured: COMMENT ON by a principal with MODIFY but no SELECT
+    ('User does not have SELECT on Table main.sales.orders', PERMISSION_DENIED),
     ('[TABLE_OR_VIEW_NOT_FOUND] The table or view `main`.`sales`.`gone` cannot be found',
      NOT_FOUND),
     ('[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column `nope` cannot be resolved', NOT_FOUND),

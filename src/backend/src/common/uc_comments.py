@@ -19,7 +19,8 @@ FAILED = 'failed'
 
 # Markers in Databricks SQL error messages
 _PERMISSION_MARKERS = (
-    'PERMISSION_DENIED', 'INSUFFICIENT_PERMISSIONS', 'does not have MODIFY', 'is not the owner',
+    'PERMISSION_DENIED', 'INSUFFICIENT_PERMISSIONS', 'does not have MODIFY',
+    'does not have SELECT', 'is not the owner',
 )
 _NOT_FOUND_MARKERS = (
     'TABLE_OR_VIEW_NOT_FOUND', 'SCHEMA_NOT_FOUND', 'CATALOG_NOT_FOUND', 'UNRESOLVED_COLUMN',

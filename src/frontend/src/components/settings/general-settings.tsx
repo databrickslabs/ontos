@@ -304,9 +304,9 @@ export default function GeneralSettings() {
               {t(
                 'settings:general.ucDescriptionWriteback.help',
                 'Saving the description of a Databricks table, view or column also sets its ' +
-                  'Unity Catalog comment, as the user who saves it. Without the MODIFY ' +
-                  'permission the description is saved in Ontos only, and the asset shows ' +
-                  'that it is not in sync.'
+                  'Unity Catalog comment, as the user who saves it. Without the SELECT and ' +
+                  'MODIFY permissions the description is saved in Ontos only, and the asset ' +
+                  'shows that it is not in sync.'
               )}
             </p>
             {!hasAdminAccess && (

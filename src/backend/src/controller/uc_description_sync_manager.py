@@ -66,8 +66,9 @@ CODE_IMPORT_KEEPS_UC = 'uc_description_import_keeps_uc'
 
 _MESSAGES = {
     CODE_PERMISSION_DENIED: (
+        # Measured: COMMENT ON needs SELECT as well as MODIFY ("does not have SELECT")
         "Unity Catalog refused to change the description of {object} "
-        "(MODIFY permission or ownership needed)."
+        "(SELECT and MODIFY permissions, or ownership, needed)."
     ),
     CODE_NOT_FOUND: (
         "{object} was not found in Unity Catalog, or you don't have access to it, "

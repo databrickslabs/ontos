@@ -514,3 +514,14 @@ def test_a_baseline_is_kept_only_with_the_setting_on(db_session):
     UcDescriptionSyncManager(_settings(enabled=False)).keep_baseline(db_session, asset)
 
     assert asset.properties is None
+
+
+def test_the_permission_warning_names_select_and_modify(db_session):
+    asset = _asset(db_session)
+    ws = _ws(StatementState.FAILED, 'PERMISSION_DENIED: User does not have SELECT on Table',
+             comment='Old text')
+
+    warning, _ = _sync(db_session, asset, ws)
+
+    assert warning.code == CODE_PERMISSION_DENIED
+    assert 'SELECT and MODIFY permissions' in warning.message

@@ -144,7 +144,7 @@
       "title": "Assetbeschrijvingen",
       "adminOnly": "Alleen een beheerder kan dit inschakelen.",
       "label": "Assetbeschrijvingen naar Unity Catalog schrijven",
-      "help": "Bij het opslaan van de beschrijving van een Databricks-tabel, -view of -kolom wordt ook het Unity Catalog-commentaar ingesteld, als de gebruiker die opslaat. Zonder de MODIFY-machtiging wordt de beschrijving alleen in Ontos opgeslagen en geeft de asset aan dat deze niet gesynchroniseerd is.",
+      "help": "Bij het opslaan van de beschrijving van een Databricks-tabel, -view of -kolom wordt ook het Unity Catalog-commentaar ingesteld, als de gebruiker die opslaat. Zonder de SELECT- en MODIFY-machtiging wordt de beschrijving alleen in Ontos opgeslagen en geeft de asset aan dat deze niet gesynchroniseerd is.",
       "importLimit": {
         "label": "Max. in Unity Catalog geprobeerde rijen per bulkimport",
         "help": "Een CSV/XLSX-import probeert maximaal zoveel beschrijvingen in Unity Catalog (1–10000), of hij ze schrijft, een andere opmerking behoudt of een metriekweergave overslaat; de rijen boven de limiet worden met een waarschuwing in Ontos opgeslagen."

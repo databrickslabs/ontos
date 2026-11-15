@@ -483,8 +483,16 @@ def update_asset(
         asset_in = asset_in.model_copy(
             update={"properties": without_internal_properties(asset_in.properties)})
     try:
-        existing = db.get(AssetDb, asset_id)
+        # Read under the row lock this save holds until its commit, so a concurrent save of
+        # the asset can't change the description in between (that would look like a
+        # comment someone else wrote in Unity Catalog)
+        existing = (
+            db.query(AssetDb).filter(AssetDb.id == asset_id)
+            .with_for_update().populate_existing().one_or_none()
+        )
         previous_description = existing.description if existing is not None else None
+        if existing is not None and 'description' in asset_in.model_fields_set:
+            UcDescriptionSyncManager(settings).keep_baseline(db, existing)
         result = manager.update_asset(db=db, asset_id=asset_id, asset_in=asset_in, current_user_id=current_user.email)
         # The save is committed before Unity Catalog is written, so Unity Catalog never
         # gets ahead of a save that failed to commit. With the setting on, a changed

@@ -146,6 +146,31 @@ class TestDescriptionWriteback:
 
         _assert_committed_between_save_and_write(events)
 
+    def test_the_previous_description_is_read_under_the_row_lock(self, client, settings, table,
+                                                                 user_ws, monkeypatch):
+        from sqlalchemy.orm import Query
+
+        from src.controller.assets_manager import AssetsManager
+
+        events = []
+        lock, update = Query.with_for_update, AssetsManager.update_asset
+
+        def recording_lock(query, *args, **kwargs):
+            events.append('lock')
+            return lock(query, *args, **kwargs)
+
+        def recording_update(self, *args, **kwargs):
+            events.append('update')
+            return update(self, *args, **kwargs)
+
+        monkeypatch.setattr(Query, 'with_for_update', recording_lock)
+        monkeypatch.setattr(AssetsManager, 'update_asset', recording_update)
+
+        _put(client, table, 'New')
+
+        # The save's read, then the save, then the write's own locked re-read
+        assert events == ['lock', 'update', 'lock']
+
     def test_a_table_description_is_written_as_the_user(self, client, settings, table, user_ws):
         body = _put(client, table, 'Orders placed online')
 

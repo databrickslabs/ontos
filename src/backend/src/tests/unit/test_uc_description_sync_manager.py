@@ -477,3 +477,40 @@ def test_a_failed_read_back_keeps_the_write_unverified(db_session):
     assert outcome.in_sync and outcome.warning is None
     assert outcome.audit == {'before': 'Old text', 'after': 'New text', 'outcome': 'written',
                              'verified': False}
+
+
+def test_two_saves_in_a_row_whose_writes_run_out_of_order_are_not_refused(db_session):
+    """Save A then save B, but B's write runs before A's: Unity Catalog still has P."""
+    manager = UcDescriptionSyncManager(_settings())
+    asset = _asset(db_session, description='P')
+    for text in ('A', 'B'):  # each save, under its row lock, before it changes the text
+        manager.keep_baseline(db_session, asset)
+        asset.description = text
+        db_session.flush()
+    ws = _ws(comment='P')
+
+    outcome = _sync_outcome(db_session, asset, ws, previous='A')
+
+    assert outcome.warning is None and outcome.in_sync
+    assert _statements(ws) == ["COMMENT ON TABLE `main`.`sales`.`orders` IS 'B'"]
+    db_session.refresh(asset)
+    assert DESCRIPTION_SYNC_PROPERTY not in (asset.properties or {})
+
+
+def test_the_kept_baseline_does_not_mark_the_asset_out_of_sync(db_session):
+    from src.models.assets import description_sync_state
+
+    asset = _asset(db_session, description='P')
+
+    UcDescriptionSyncManager(_settings()).keep_baseline(db_session, asset)
+
+    assert asset.properties[DESCRIPTION_SYNC_PROPERTY] == {'agreed': 'P'}
+    assert description_sync_state(asset.properties) is None
+
+
+def test_a_baseline_is_kept_only_with_the_setting_on(db_session):
+    asset = _asset(db_session, description='P')
+
+    UcDescriptionSyncManager(_settings(enabled=False)).keep_baseline(db_session, asset)
+
+    assert asset.properties is None

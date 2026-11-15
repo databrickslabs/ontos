@@ -358,6 +358,28 @@ class UcDescriptionSyncManager:
             return _UNREAD
         return comment
 
+    def keep_baseline(self, db: Session, asset: AssetDb) -> None:
+        """Before a save changes the description: keep it as the comment Ontos agreed to.
+
+        Called under the save's row lock. The stored baseline lets the write of a
+        later save replace the comment while the write of this save has not run yet
+        (two saves in a row: the second one's write may run first, and Unity Catalog
+        then still has the description from before the first). Kept until a write
+        succeeds or a comment is refused; a baseline already stored is kept, as
+        Unity Catalog may still hold it. Stored without a code, so the asset doesn't
+        read as not in sync.
+        """
+        if not self.enabled or uc_comment_target(asset) is None or not asset.description:
+            return
+        stored = (asset.properties or {}).get(DESCRIPTION_SYNC_PROPERTY)
+        stored = dict(stored) if isinstance(stored, dict) else {}
+        if stored.get('agreed') is not None:
+            return
+        stored['agreed'] = asset.description
+        # A new dict, so the JSON column is seen as changed
+        asset.properties = {**(asset.properties or {}), DESCRIPTION_SYNC_PROPERTY: stored}
+        db.flush()
+
     @staticmethod
     def _baseline(asset: AssetDb, previous_description: Optional[str]) -> Optional[str]:
         """The comment Ontos agreed to before a failed save: the stored one, else the previous text.

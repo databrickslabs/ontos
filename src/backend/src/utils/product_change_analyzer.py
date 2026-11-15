@@ -99,18 +99,18 @@ class ProductChangeAnalyzer:
         # nullable relationships), the fallback is skipped and `.get(...)` crashes
         # on NoneType. The `or` form covers both missing-key and None-value.
         self._analyze_port_changes(
-            old_product.get('inputPorts') or [],
-            new_product.get('inputPorts') or [],
+            self._get(old_product, 'inputPorts', 'input_ports') or [],
+            self._get(new_product, 'inputPorts', 'input_ports') or [],
             'input'
         )
         self._analyze_port_changes(
-            old_product.get('outputPorts') or [],
-            new_product.get('outputPorts') or [],
+            self._get(old_product, 'outputPorts', 'output_ports') or [],
+            self._get(new_product, 'outputPorts', 'output_ports') or [],
             'output'
         )
         self._analyze_port_changes(
-            old_product.get('managementPorts') or [],
-            new_product.get('managementPorts') or [],
+            self._get(old_product, 'managementPorts', 'management_ports') or [],
+            self._get(new_product, 'managementPorts', 'management_ports') or [],
             'management'
         )
 
@@ -122,8 +122,8 @@ class ProductChangeAnalyzer:
 
         # Analyze support channel changes
         self._analyze_support_changes(
-            old_product.get('support') or [],
-            new_product.get('support') or []
+            self._get(old_product, 'support', 'support_channels') or [],
+            self._get(new_product, 'support', 'support_channels') or []
         )
 
         # Analyze description changes (minor/patch)
@@ -149,6 +149,14 @@ class ProductChangeAnalyzer:
             new_features=self.new_features,
             fixes=self.fixes
         )
+
+    @staticmethod
+    def _get(product: Dict, *keys):
+        """The first key present: callers send field names or snake_case aliases."""
+        for key in keys:
+            if product.get(key) is not None:
+                return product[key]
+        return None
 
     def _reset(self):
         """Reset internal state"""

@@ -268,3 +268,18 @@ class TestPortIdentity:
 
         assert result.change_type == ChangeType.BREAKING
         assert any("Removed" in c for c in result.breaking_changes)
+
+
+class TestSnakeCaseKeys:
+    """POST /data-products/compare takes caller-supplied dicts: aliases work too."""
+
+    def test_snake_case_port_lists_are_analyzed(self):
+        old = {"output_ports": [{"name": "o", "version": "1", "contract_id": "c1"}],
+               "support_channels": [{"channel": "slack", "url": "u"}]}
+        new = {"output_ports": [], "support_channels": []}
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert any("Removed output port" in c for c in result.breaking_changes)
+        assert any("slack" in f for f in result.fixes)

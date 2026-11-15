@@ -367,3 +367,37 @@ def test_a_tag_policy_rejection_is_not_retried(tag_sync, monkeypatch):
                 if "ALTER TABLE gone.crm.customers SET" in s]) == 1
     assert sleeps == []
     assert result.failed_objects == ["TABLE gone.crm.customers"]
+
+
+SECRET = "urn:glossary:privacy/secret"
+
+
+def _two_link_dataset(tag_sync, fqn):
+    d = _dataset(tag_sync, fqn)
+    d.semantic_links.append(tag_sync.SemanticLink(iri=SECRET, label=None,
+                                                  slug=tag_sync.slugify_iri(SECRET)))
+    return d
+
+
+def _two_tag_keys(tag_sync):
+    return (f"ontos_semantic_{tag_sync.slugify_iri(PII)}",
+            f"ontos_semantic_{tag_sync.slugify_iri(SECRET)}")
+
+
+def test_a_tag_written_before_the_object_goes_missing_is_recorded(tag_sync):
+    """Tag A is set, then tag B's ALTER finds the table gone: the record keeps A next to
+    the earlier record, so a later unlink of the table removes A instead of leaving it
+    behind."""
+    key_a, key_b = _two_tag_keys(tag_sync)
+    spark = FakeSpark({f"SET TAGS ('{key_b}'": "[TABLE_OR_VIEW_NOT_FOUND] dropped"})
+    previous = {"TABLE": {"main.a.t": {"ontos_semantic_old": "x"}}, "COLUMN": {},
+                "SCHEMA": {}, "CATALOG": {}}
+    direct = tag_sync.build_direct_link_infos([], None, None)
+    result = tag_sync.sync_tags(MagicMock(), spark,
+                                [_two_link_dataset(tag_sync, "main.a.t")], direct, CFG,
+                                tag_sync.TagOwnership(), previous=previous)
+
+    assert any("TABLE main.a.t" in item for item in result.skipped)
+    assert any(f"SET TAGS ('{key_a}'" in s for s in spark.sets())
+    assert result.delivered["TABLE"]["main.a.t"] == {"ontos_semantic_old": "x",
+                                                     key_a: PII}

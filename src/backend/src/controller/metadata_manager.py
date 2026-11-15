@@ -68,8 +68,9 @@ _ENTITY_LINKS = {
     'concept': '/concepts/browser?concept={id}',
 }
 _DOCUMENT_ITEM_PREFIX = 'document::'
-# Search shows an imported document to readers of its entity's feature.
-_ENTITY_FEATURES = {
+# Search shows an imported document to readers of its entity's feature, and
+# its content route serves it to them.
+ENTITY_FEATURES = {
     'data_domain': 'data-domains',
     'asset': 'assets',
     'concept': 'semantic-models',
@@ -310,7 +311,7 @@ class MetadataManager(SearchableAsset):
         return SearchIndexItem(
             id=f"{_DOCUMENT_ITEM_PREFIX}{doc.id}",
             type="document",
-            feature_id=_ENTITY_FEATURES[doc.entity_type],
+            feature_id=ENTITY_FEATURES[doc.entity_type],
             title=doc.title,
             description=strip_front_matter(text),
             link=link.format(id=urllib.parse.quote(str(doc.entity_id), safe='')),

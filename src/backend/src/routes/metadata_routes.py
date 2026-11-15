@@ -15,7 +15,7 @@ from src.common.authorization import (
 from src.models.users import UserInfo
 from src.common.logging import get_logger
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header, is_safe_path_component
-from src.controller.metadata_manager import MetadataManager, SHARED_ENTITY_ID
+from src.controller.metadata_manager import ENTITY_FEATURES, MetadataManager, SHARED_ENTITY_ID
 from src.common.manager_dependencies import get_metadata_manager
 from src.models.metadata import (
     RichText, RichTextCreate, RichTextUpdate,
@@ -721,19 +721,33 @@ def register_routes(app):
     logger.info("Metadata routes registered with prefix /api")
 
 
+async def _may_read_feature(request: Request, user: UserInfo, feature: str) -> bool:
+    auth_manager = getattr(request.app.state, 'authorization_manager', None)
+    if auth_manager is None:
+        return False
+    permissions = await resolve_effective_permissions(user.email, user.groups, request)
+    return auth_manager.has_permission(permissions, feature, FeatureAccessLevel.READ_ONLY)
+
+
 @router.get("/documents/{id}/content")
 async def get_document_content(
     id: str,
+    request: Request,
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
+    user: UserInfo = Depends(get_user_details_from_sdk),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     doc = manager.get_document(db, id=id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     if doc.source_path is not None:
-        # Imported Markdown is served as stored: the source volume may be one
-        # only the importing user can read.
+        # Imported Markdown is a copy of a volume file kept in the app: it's
+        # served to readers of its entity's feature (as search shows it), not
+        # only of data-domains, and never re-read from the volume.
+        feature = ENTITY_FEATURES.get(doc.entity_type)
+        if feature is None or not await _may_read_feature(request, user, feature):
+            raise HTTPException(status_code=403, detail="Document not readable")
         text = manager.get_document_text(db, id=id) or ''
         safe_filename = sanitize_filename_for_header(doc.original_filename, default="document.md")
         return Response(

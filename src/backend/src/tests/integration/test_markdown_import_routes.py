@@ -675,3 +675,19 @@ def test_a_gone_file_keeps_documents_the_user_cannot_edit(
     gone = _by_path(body)[f'{ROOT}/only.md']
     assert (gone['status'], gone['removed']) == ('removed', 1)
     assert _kinds(db_session, f'{ROOT}/only.md') == ['asset']
+
+
+def test_imported_content_needs_read_access_to_its_entity_feature(
+        client, db_session, domain, asset, volume, mock_test_user):
+    _single_file(volume, "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv1\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+    docs = {d.entity_type: d.id for d in db_session.query(DocumentMetadataDb)}
+    # Reads data-domains (where the documents routes live) but not assets.
+    _add_role(db_session, {'data-domains': 'Read-only'}, 'domain-readers')
+    mock_test_user.groups = ['domain-readers']
+
+    assert client.get(f"/api/documents/{docs['data_domain']}/content").status_code == 200
+    response = client.get(f"/api/documents/{docs['asset']}/content")
+
+    assert response.status_code == 403
+    assert 'v1' not in response.text

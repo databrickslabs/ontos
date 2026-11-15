@@ -620,32 +620,69 @@ class TestAssetStatusChanges:
         db_session.commit()
         return asset
 
-    def test_an_allowed_move_is_stored_and_a_refused_one_is_coded(self, db_session):
+    @staticmethod
+    def _manager():
         from src.controller.assets_manager import AssetsManager
-        from src.models.assets import AssetUpdate
 
         mgr = AssetsManager()
         mgr._update_search_index = lambda *a, **k: None
+        return mgr
+
+    @pytest.mark.parametrize('start, target', [
+        ('active', 'draft'), ('draft', 'retired'), ('retired', 'active'),
+        ('deprecated', 'draft'), ('active', 'deprecated'),
+    ])
+    def test_the_default_group_keeps_every_move_assets_had(self, db_session, start, target):
+        from src.models.assets import AssetUpdate
+
+        asset = self._asset(db_session, start)
+        updated = self._manager().update_asset(
+            db_session, asset_id=asset.id, asset_in=AssetUpdate(status=target),
+            current_user_id='u',
+        )
+        assert updated.status == target
+
+    def test_a_custom_group_refuses_a_move_it_doesnt_allow_with_a_code(self, db_session):
+        from src.models.assets import AssetUpdate
+
+        group = lifecycle_service.save_group(
+            db_session, _looping_group(entity_type='asset'), 'admin',
+        )
         asset = self._asset(db_session, 'active')
+        asset.lifecycle_stage_group_id = group.id
+        db_session.commit()
+        mgr = self._manager()
         with pytest.raises(InvalidStatusTransitionError) as err:
             mgr.update_asset(db_session, asset_id=asset.id,
                              asset_in=AssetUpdate(status='draft'), current_user_id='u')
-        assert err.value.params['allowed'] == ['deprecated']
-        updated = mgr.update_asset(db_session, asset_id=asset.id,
-                                   asset_in=AssetUpdate(status='deprecated'),
-                                   current_user_id='u')
-        assert updated.status == 'deprecated'
+        assert err.value.params['allowed'] == ['needs_review', 'retired']
         # Repeating the stored status is no move
         assert mgr.update_asset(db_session, asset_id=asset.id,
-                                asset_in=AssetUpdate(status='DEPRECATED', name='Orders 2'),
-                                current_user_id='u').status == 'deprecated'
+                                asset_in=AssetUpdate(status='ACTIVE', name='Orders 2'),
+                                current_user_id='u').status == 'active'
+
+    @pytest.mark.parametrize('status', ['draft', 'active', 'deprecated', 'retired'])
+    def test_a_new_asset_takes_any_of_the_old_statuses(self, db_session, status):
+        _group, key = lifecycle_service.stage_for_new(
+            db_session, 'asset', None, status, default_category='active',
+        )
+        assert key == status
+        with pytest.raises(InvalidStatusError):
+            lifecycle_service.stage_for_new(db_session, 'asset', None, 'in_use')
 
     def test_a_bulk_row_moves_through_the_lifecycle(self, db_session):
         from src.controller.asset_bulk_manager import _bulk_status
 
         asset = self._asset(db_session, 'active')
         assert _bulk_status(db_session, asset, None) == 'active'
-        assert _bulk_status(db_session, asset, 'deprecated') == 'deprecated'
+        assert _bulk_status(db_session, asset, 'draft') == 'draft'
+        group = lifecycle_service.save_group(
+            db_session, _looping_group(entity_type='asset'), 'admin',
+        )
+        asset.lifecycle_stage_group_id = group.id
+        db_session.commit()
+        asset.status = 'active'
+        db_session.commit()
         with pytest.raises(InvalidStatusTransitionError):
             _bulk_status(db_session, asset, 'draft')
 
@@ -708,8 +745,9 @@ class TestIndependentReview:
 
     @pytest.mark.parametrize('status, approved, expected', [
         ('draft', True, 'active'),
-        ('retired', True, 'retired'),  # no publish move from retired
-        ('active', False, 'active'),  # no reject move from active
+        # The default asset group allows every move, as before stage groups
+        ('retired', True, 'active'),
+        ('active', False, 'draft'),
     ])
     def test_an_asset_review_result_follows_the_assets_lifecycle(
         self, db_session, status, approved, expected,

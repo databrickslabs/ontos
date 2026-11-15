@@ -1,7 +1,8 @@
 """The seeded Lifecycle Stage Groups: one default group per entity type (PRD #1208).
 
-They reproduce the transition maps the app had before stage groups, so an
-install that doesn't configure anything behaves as before. Migration
+They reproduce the transition maps the app had before stage groups (assets,
+which had no transition check, may move between any two of their stages), so
+an install that doesn't configure anything behaves as before. Migration
 ``t1_lifecycle_stage_groups`` writes the same rows (with its own copy, as
 migrations don't import app code) and backfills existing entities; the startup
 seed (``lifecycle_stage_groups_repo.seed_defaults``) writes them on a fresh
@@ -75,11 +76,13 @@ _DEFAULT_TRANSITIONS: Dict[str, Dict[str, List[str]]] = {
         'deprecated': ['retired', 'active'],
         'retired': [],
     },
+    # Assets took any of these statuses from any other before stage groups (the
+    # API's AssetStatus enum, no transition check): the default keeps every move
     ASSET: {
-        'draft': ['active', 'deprecated'],
-        'active': ['deprecated'],
-        'deprecated': ['retired', 'active'],
-        'retired': [],
+        'draft': ['active', 'deprecated', 'retired'],
+        'active': ['draft', 'deprecated', 'retired'],
+        'deprecated': ['draft', 'active', 'retired'],
+        'retired': ['draft', 'active', 'deprecated'],
     },
 }
 

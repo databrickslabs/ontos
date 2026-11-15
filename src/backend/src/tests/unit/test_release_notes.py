@@ -357,3 +357,37 @@ def test_cli_reports_fragments_it_could_not_delete(cli, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "could not delete 1 fragment(s)" in out and "features/f.md" in out
     assert "# Release Notes - v1.2.0 (2026-12-01)" in cli.notes.read_text(encoding="utf-8")
+
+
+def test_cli_check_reports_one_line_per_problem_and_fails(cli, capsys):
+    _write(cli.unreleased, "features", "ok.md", "- **f**: fine")
+    _write(cli.unreleased, "features", "bad.md", "no bullet")
+    ok = cli.unreleased / "features" / "ok.md"
+    bad = cli.unreleased / "features" / "bad.md"
+    assert cli("--check", str(ok), str(bad)) == 1
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 1 and lines[0].startswith(str(bad))
+
+
+def test_cli_check_reports_a_missing_file(cli, capsys):
+    assert cli("--check", str(cli.unreleased / "missing.md")) == 1
+    assert "file not found" in capsys.readouterr().out
+
+
+def test_cli_check_without_files_validates_the_whole_folder(cli, capsys):
+    _write(cli.unreleased, "features", "ok.md", "- **f**: fine")
+    assert cli("--check") == 0
+    assert capsys.readouterr().out == ""
+    _write(cli.unreleased, "features", "bad.md", "no bullet")
+    assert cli("--check") == 1
+    assert "features/bad.md" in capsys.readouterr().out
+
+
+def test_cli_refuses_to_release_with_invalid_fragments(cli, capsys):
+    _write(cli.unreleased, "features", "ok.md", "- **f**: fine")
+    _write(cli.unreleased, "features", "bad.md", "no bullet")
+    assert cli("--version", "1.2.0", "--date", "2026-12-01") == 1
+    assert "features/bad.md" in capsys.readouterr().out
+    assert cli.notes.read_text(encoding="utf-8") == NOTES
+    assert (cli.unreleased / "features" / "ok.md").exists()
+    assert (cli.unreleased / "features" / "bad.md").exists()

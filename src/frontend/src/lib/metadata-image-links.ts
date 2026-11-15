@@ -25,3 +25,9 @@ export function rewriteImageLinks(markdown: string, documents: DocumentItem[]): 
   out = out.replace(/\[[^\]]*\]\(([^)]+)\)/g, (m, p1) => m.replace(p1, replaceUrl(p1)));
   return out;
 }
+
+// Documents a note preview can reference: inherited ones first, the entity's
+// own last, so an own document wins a `file:<name>` clash (byName keeps the last).
+export function previewDocuments(own: DocumentItem[], inherited: DocumentItem[]): DocumentItem[] {
+  return [...inherited, ...own];
+}

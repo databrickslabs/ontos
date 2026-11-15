@@ -288,7 +288,10 @@ class AppEntityLoader(EntityLoader):
     def _rows(self, repo, entity_id: Optional[str], **kwargs) -> List[Any]:
         """The rows load_entities reads: all of them, or the one with ``entity_id``."""
         if entity_id is None:
-            return repo.get_multi(self.db, limit=1000, **kwargs)
+            # No cap (a cap without ORDER BY checked an arbitrary subset); sorted
+            # by id because the repositories don't order, so runs are repeatable.
+            rows = repo.get_multi(self.db, limit=None, **kwargs)
+            return sorted(rows, key=lambda row: str(row.id))
         # Session.get, not repo.get: the repositories roll the whole
         # transaction back on an error, past the savepoint of _load.
         row = self.db.get(repo.model, entity_id)

@@ -837,3 +837,62 @@ def test_a_corrupt_state_does_not_adopt_tags_that_already_match(tag_sync, job, m
     job.run([DOMAIN_CFG], [])
 
     assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}
+
+
+# Linked objects Unity Catalog doesn't find -----------------------------------------
+
+def _not_found_for(tag_sync, monkeypatch, *missing):
+    """Tag reads of the ``missing`` objects raise what UC raises for a missing table."""
+    real_existing = tag_sync.get_existing_prefixed_tags
+
+    def existing(spark, object_type, name, prefix):
+        if any(name == m or name.startswith(f"{m}.") or m.startswith(f"{name}.")
+               for m in missing):
+            raise RuntimeError(f"[TABLE_OR_VIEW_NOT_FOUND] `{name}` cannot be found. "
+                               "SQLSTATE: 42P01")
+        return real_existing(spark, object_type, name, prefix)
+
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags", existing)
+
+
+def test_a_run_where_every_linked_object_is_missing_fails(tag_sync, job, monkeypatch,
+                                                          capsys):
+    """A renamed catalog: every linked object is not found. Before, the run printed
+    errors=0 and ended green with nothing synced."""
+    _not_found_for(tag_sync, monkeypatch, ORDERS, OTHER)
+
+    with pytest.raises(SystemExit) as exit_info:
+        job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                               _table(tag_sync, fqn=OTHER, domain="Sales")])
+
+    assert exit_info.value.code == 1
+    out = capsys.readouterr().out
+    assert "errors=0" in out and "missing=" in out
+    assert "[ERROR] None of the" in out and "linked UC object(s) was found" in out
+    assert job.assigned == []
+
+
+def test_a_run_where_some_linked_objects_are_missing_succeeds(tag_sync, job, monkeypatch,
+                                                              capsys):
+    _not_found_for(tag_sync, monkeypatch, OTHER)
+
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                           _table(tag_sync, fqn=OTHER, domain="Sales")])
+
+    out = capsys.readouterr().out
+    assert "[ERROR] None of the" not in out
+    assert "completed successfully" in out
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}
+
+
+def test_a_run_whose_only_missing_objects_are_unlinked_succeeds(tag_sync, job,
+                                                                monkeypatch, capsys):
+    """A dropped table that only has a record left: skipped, the run stays green."""
+    job.state = _previous(OTHER, {DOMAIN_KEY: "Sales"})
+    _not_found_for(tag_sync, monkeypatch, OTHER)
+
+    job.run([DOMAIN_CFG], [])
+
+    out = capsys.readouterr().out
+    assert "completed successfully" in out
+    assert "[ERROR] None of the" not in out

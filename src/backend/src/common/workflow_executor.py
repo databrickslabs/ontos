@@ -540,13 +540,13 @@ def _future_tags(
     return future
 
 
-def _proposed_values(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _proposed_values(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
     """A before_update payload's values under AppEntityLoader's keys, except tags.
 
     The payload is the data contract update request (ODCS field names). As
     ``update_contract_with_relations`` does, a null leaves the stored value
     (the key is omitted here); a domain field replaces the primary domain
-    (``domain``). Tags: ``_future_tags``.
+    (``domain``, an id). Tags: ``_future_tags``.
     """
     proposed = {}
     if payload.get('owner_team_id') is not None:
@@ -558,26 +558,39 @@ def _proposed_values(payload: Dict[str, Any]) -> Dict[str, Any]:
     if purpose is not None:
         proposed['description'] = purpose
     if any(payload.get(key) is not None for key in _DOMAIN_FIELDS):
-        proposed['domain'] = _proposed_primary_domain(payload)
+        proposed['domain'] = _proposed_primary_domain(db, payload)
     return proposed
 
 
-# The update fields that replace a contract's domains (as update_contract_with_relations
-# reads them; DataContractUpdate dumps them under these names).
-_DOMAIN_FIELDS = ('domainIds', 'primaryDomainId', 'domainId')
+# The update fields that replace a contract's domains, as update_contract_with_relations
+# reads them (DataContractUpdate dumps the first ones; the assistant tool sends ``domain``,
+# a business-domain name).
+_DOMAIN_FIELDS = (
+    'domain_ids', 'domainIds', 'primary_domain_id', 'primaryDomainId', 'domainId', 'domain',
+)
 
 
-def _proposed_primary_domain(payload: Dict[str, Any]) -> Optional[str]:
+def _proposed_primary_domain(db: Session, payload: Dict[str, Any]) -> Optional[str]:
     """The primary domain id an update leaves, as ``_resolve_domain_assignment`` picks it.
 
-    ``domainIds`` with ``primaryDomainId`` (else the first id), else the legacy
-    ``domainId``; None when neither has an id (the update unassigns the contract).
+    The ids with the primary id (else the first id), else the legacy
+    ``domainId``, else ``domain``: a name, resolved to its domain's id as the
+    manager does (an unknown name leaves the contract unassigned). None when
+    none of them has a value (the update unassigns the contract).
     """
-    ids = payload.get('domainIds')
+    from src.db_models.data_domains import DataDomain
+
+    ids = payload.get('domain_ids') or payload.get('domainIds')
     if isinstance(ids, list) and ids:
-        primary = payload.get('primaryDomainId')
+        primary = payload.get('primary_domain_id') or payload.get('primaryDomainId')
         return primary if primary in ids else ids[0]
-    return payload.get('domainId') or None
+    if payload.get('domainId'):
+        return payload['domainId']
+    name = payload.get('domain')
+    if not name:
+        return None
+    row = db.query(DataDomain.id).filter(DataDomain.name == name).first()
+    return str(row[0]) if row else None
 
 
 def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
@@ -596,9 +609,10 @@ def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]
     payload = context.entity if isinstance(context.entity, dict) else {}
     stored = _compliance_entity(db, context)
     try:
-        # Savepoint and coded error as in _rule_object (proposed tags are read by id)
+        # Savepoint and coded error as in _rule_object (tags by id, a domain by name)
         with db.begin_nested():
             tags = _future_tags(db, payload, stored, _deferred_removals(context))
+            proposed = _proposed_values(db, payload)
     except Exception as e:
         raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
     stored = stored or {}
@@ -608,7 +622,7 @@ def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]
         key: value for key, value in payload.items()
         if key not in stored or (value is not None and key != 'description')
     }
-    state = {**stored, **sent, **_proposed_values(payload)}
+    state = {**stored, **sent, **proposed}
     if state.get('tags') is None:
         state.pop('tags', None)  # a null, with no stored tags to keep: none known
     if tags is not None:

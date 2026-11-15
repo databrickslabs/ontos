@@ -240,7 +240,8 @@
       "llm_check_empty_text": "Le texte est vide.",
       "rule_evaluation_failed": "La règle n'a pas pu être évaluée sur cette entité.",
       "llm_check_text_rejected": "Non vérifié : le contrôle de sécurité a signalé le texte (par exemple, des instructions au modèle).",
-      "llm_check_daily_quota_exceeded": "Non vérifié : vous avez utilisé vos appels au modèle pour aujourd’hui."
+      "llm_check_daily_quota_exceeded": "Non vérifié : vous avez utilisé vos appels au modèle pour aujourd’hui.",
+      "llm_check_external_endpoint": "Non vérifié : LLM_BASE_URL pointe en dehors de cet espace de travail Databricks, et LLM_CHECK n’envoie le texte des entités qu’aux serving endpoints de l’espace de travail."
     },
     "errors": {
       "sample_entity_not_found": "Aucune entité à laquelle la règle s'applique n'a été trouvée. Vérifiez le nom, ou laissez-le vide pour utiliser la première correspondance.",

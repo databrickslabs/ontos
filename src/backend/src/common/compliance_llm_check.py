@@ -13,11 +13,13 @@ criterion, a string literal the rule author wrote, goes in the system prompt;
 the text goes in the user message between markers with a random nonce, and the
 system prompt tells the model to treat it as data. The reply's first line must
 be ``PASS: <reason>`` or ``FAIL: <reason>``. Everything else fails closed with
-a code (``LlmCheckError``): no text, no endpoint, a refusal (also next to a
-verdict), an empty reply, a reply that did not finish (``finish_reason !=
-"stop"``), a first line in any other form, a failed call, and a run past its
-call budget. Those codes make the rule fail whatever the expression around the
-call is (``NOT LLM_CHECK(...)`` too): they are raised, not returned as False.
+a code (``LlmCheckError``): no text, no endpoint, an ``LLM_BASE_URL``
+outside the workspace (entity text only goes to the workspace's serving
+endpoints), a refusal (also next to a verdict), an empty reply, a reply that
+did not finish (``finish_reason != "stop"``), a first line in any other form,
+a failed call, and a run past its call budget. Those codes make the rule fail
+whatever the expression around the call is (``NOT LLM_CHECK(...)`` too): they
+are raised, not returned as False.
 The reason is the model's text: untrusted too, capped, and shown as plain text.
 
 Verdicts are cached by a sha256 of the text, the criterion, the model and both
@@ -72,6 +74,8 @@ TRUNCATED = 'llm_check_truncated'
 INVALID_REPLY = 'llm_check_invalid_reply'
 EMPTY_TEXT = 'llm_check_empty_text'  # no text to judge (no call)
 TEXT_REJECTED = 'llm_check_text_rejected'  # the injection scan didn't find the text safe
+# LLM_BASE_URL points outside the Databricks workspace: entity text isn't sent there
+EXTERNAL_ENDPOINT = 'llm_check_external_endpoint'
 # The user who started the run or test used their model calls for the day
 QUOTA_EXCEEDED = 'llm_check_daily_quota_exceeded'
 
@@ -89,6 +93,9 @@ _MESSAGES = {
     EMPTY_TEXT: "LLM_CHECK was not run: the text is empty",
     TEXT_REJECTED: "LLM_CHECK was not run: the safety check flagged the text",
     QUOTA_EXCEEDED: "LLM_CHECK was not run: you used your model calls for today",
+    EXTERNAL_ENDPOINT: (
+        "LLM_CHECK was not run: LLM_BASE_URL is not the workspace's serving endpoints"
+    ),
 }
 
 # The phase 1 verdict must open the reply ("SAFE" / "UNSAFE: reason").
@@ -200,6 +207,33 @@ def _aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _host(url: Optional[str]) -> str:
+    """The lower-case host name of a URL or a bare host ('' when there is none)."""
+    from urllib.parse import urlparse
+
+    url = (url or '').strip()
+    if not url:
+        return ''
+    if '://' not in url:
+        url = f'https://{url}'
+    return (urlparse(url).hostname or '').lower()
+
+
+def workspace_serving_only(settings: Any) -> bool:
+    """Whether the model calls go to the workspace's own serving endpoints.
+
+    Without ``LLM_BASE_URL`` they go to ``<DATABRICKS_HOST>/serving-endpoints``.
+    An ``LLM_BASE_URL`` on another host (or with no ``DATABRICKS_HOST`` to
+    compare with) would send entity descriptions, and the app's token, outside
+    the workspace, so LLM_CHECK refuses it.
+    """
+    base_url = getattr(settings, 'LLM_BASE_URL', None)
+    if not base_url:
+        return True
+    workspace = _host(getattr(settings, 'DATABRICKS_HOST', None))
+    return bool(workspace) and _host(base_url) == workspace
 
 
 class MemoryLlmCheckCache:
@@ -329,6 +363,7 @@ class LlmChecker:
 
         self._enabled = bool(getattr(settings, 'LLM_ENABLED', False))
         self._endpoint = getattr(settings, 'LLM_ENDPOINT', None) or None
+        self._workspace_only = workspace_serving_only(settings)
         self._scan_prompt = (
             getattr(settings, 'LLM_INJECTION_CHECK_PROMPT', None)
             or LLM_INJECTION_CHECK_PROMPT_SECURE_DEFAULT
@@ -366,6 +401,8 @@ class LlmChecker:
             raise self._error(criterion, DISABLED)
         if not self._endpoint:
             raise self._error(criterion, NO_ENDPOINT)
+        if not self._workspace_only:
+            raise self._error(criterion, EXTERNAL_ENDPOINT)
         if len(text) > LLM_CHECK_MAX_TEXT_CHARS:
             raise self._error(criterion, TEXT_TOO_LONG)
 

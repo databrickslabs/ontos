@@ -433,3 +433,33 @@ def test_old_verdicts_are_not_used_and_are_purged(db_session):
     db_session.flush()
     assert llm.DbLlmCheckCache(db_session, max_age_days=30).purge_expired() == 1
     assert db_session.query(ComplianceLlmCheckCacheDb).count() == 0
+
+
+# --- Egress: only the workspace's serving endpoints -------------------------
+
+
+@pytest.mark.parametrize('base_url, host, allowed', [
+    (None, 'https://adb-1.azuredatabricks.net', True),
+    ('https://adb-1.azuredatabricks.net/serving-endpoints', 'adb-1.azuredatabricks.net', True),
+    ('https://ADB-1.azuredatabricks.net/serving-endpoints/', 'https://adb-1.azuredatabricks.net/',
+     True),
+    ('https://api.example.com/v1', 'https://adb-1.azuredatabricks.net', False),
+    ('https://adb-1.azuredatabricks.net.example.com/v1', 'adb-1.azuredatabricks.net', False),
+    ('https://adb-1.azuredatabricks.net/serving-endpoints', None, False),
+])
+def test_only_the_workspace_serving_host_is_allowed(base_url, host, allowed):
+    settings = SimpleNamespace(LLM_BASE_URL=base_url, DATABRICKS_HOST=host)
+    assert llm.workspace_serving_only(settings) is allowed
+
+
+def test_an_external_base_url_fails_closed_without_a_call():
+    fake = FakeLlm(_reply('PASS: ok'))
+    settings = _settings()
+    settings.LLM_BASE_URL = 'https://api.example.com/v1'
+    settings.DATABRICKS_HOST = 'https://adb-1.azuredatabricks.net'
+
+    with pytest.raises(llm.LlmCheckError) as raised:
+        _checker(fake, settings=settings).check('Daily grain', GRAIN)
+
+    assert raised.value.code == llm.EXTERNAL_ENDPOINT
+    assert fake.calls == [] and fake.scans == []

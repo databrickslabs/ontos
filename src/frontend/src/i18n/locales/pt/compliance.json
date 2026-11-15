@@ -240,7 +240,8 @@
       "llm_check_empty_text": "O texto está vazio.",
       "rule_evaluation_failed": "Não foi possível avaliar a regra nesta entidade.",
       "llm_check_text_rejected": "Não verificado: a verificação de segurança sinalizou o texto (por exemplo, instruções para o modelo).",
-      "llm_check_daily_quota_exceeded": "Não verificado: você usou suas chamadas ao modelo de hoje."
+      "llm_check_daily_quota_exceeded": "Não verificado: você usou suas chamadas ao modelo de hoje.",
+      "llm_check_external_endpoint": "Não verificado: LLM_BASE_URL aponta para fora deste workspace do Databricks, e LLM_CHECK só envia texto de entidades aos serving endpoints do workspace."
     },
     "errors": {
       "sample_entity_not_found": "Nenhuma entidade encontrada pela regra. Confira o nome ou deixe-o vazio para usar a primeira encontrada.",

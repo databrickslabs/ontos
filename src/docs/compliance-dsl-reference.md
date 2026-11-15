@@ -173,6 +173,15 @@ rule editor to try a criterion on one entity (at most 10 tests a minute per user
   objects the user can read; the app entity types the rule matches (data
   products, contracts, domains, reviews) need read access to their feature
   (`llm_check_entity_read_required`). Scheduled runs use the app's identity.
+- Data leaves the compliance store: the text under test (descriptions, column
+  comments, owner text) goes to the serving endpoint, Foundation Model APIs or
+  the model behind `LLM_ENDPOINT`, with no redaction of personal data or
+  secrets. `LLM_CHECK` only calls the workspace's own serving endpoints
+  (`<DATABRICKS_HOST>/serving-endpoints`): with an `LLM_BASE_URL` on another
+  host it fails without a call (`llm_check_external_endpoint`).
+- There is no switch for `LLM_CHECK` alone: turning on the LLM features
+  (`LLM_ENABLED`, used by Ask Ontos) also turns it on, for the compliance admins
+  who may save and run such rules.
 - Two phases: the text is first scanned with the injection-check prompt
   (`LLM_INJECTION_CHECK_PROMPT`). A text the scan doesn't call `SAFE` fails with
   `llm_check_text_rejected`, and the criterion is never asked.

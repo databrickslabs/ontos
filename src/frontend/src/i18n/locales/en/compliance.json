@@ -240,7 +240,8 @@
       "llm_check_empty_text": "The text is empty.",
       "rule_evaluation_failed": "The rule could not be evaluated on this entity.",
       "llm_check_text_rejected": "Not checked: the safety check flagged the text (for example, instructions to the model).",
-      "llm_check_daily_quota_exceeded": "Not checked: you used your model calls for today."
+      "llm_check_daily_quota_exceeded": "Not checked: you used your model calls for today.",
+      "llm_check_external_endpoint": "Not checked: LLM_BASE_URL points outside this Databricks workspace, and LLM_CHECK only sends entity text to the workspace's serving endpoints."
     },
     "errors": {
       "sample_entity_not_found": "No entity the rule matches was found. Check the name, or leave it empty to use the first match.",

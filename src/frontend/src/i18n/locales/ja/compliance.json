@@ -240,7 +240,8 @@
       "llm_check_empty_text": "テキストが空です。",
       "rule_evaluation_failed": "このエンティティでルールを評価できませんでした。",
       "llm_check_text_rejected": "未チェック: 安全性チェックがテキストを検出しました (モデルへの指示など)。",
-      "llm_check_daily_quota_exceeded": "未チェック: 本日のモデル呼び出しを使い切りました。"
+      "llm_check_daily_quota_exceeded": "未チェック: 本日のモデル呼び出しを使い切りました。",
+      "llm_check_external_endpoint": "未チェック: LLM_BASE_URL がこの Databricks ワークスペースの外を指しています。LLM_CHECK はエンティティのテキストをワークスペースのサービングエンドポイントにのみ送信します。"
     },
     "errors": {
       "sample_entity_not_found": "ルールに一致するエンティティが見つかりませんでした。名前を確認するか、空欄にして最初の一致を使用してください。",

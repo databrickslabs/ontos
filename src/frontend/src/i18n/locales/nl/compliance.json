@@ -240,7 +240,8 @@
       "llm_check_empty_text": "De tekst is leeg.",
       "rule_evaluation_failed": "De regel kon niet worden geëvalueerd op deze entiteit.",
       "llm_check_text_rejected": "Niet gecontroleerd: de veiligheidscontrole heeft de tekst gemarkeerd (bijvoorbeeld instructies aan het model).",
-      "llm_check_daily_quota_exceeded": "Niet gecontroleerd: u hebt uw modelaanroepen voor vandaag gebruikt."
+      "llm_check_daily_quota_exceeded": "Niet gecontroleerd: u hebt uw modelaanroepen voor vandaag gebruikt.",
+      "llm_check_external_endpoint": "Niet gecontroleerd: LLM_BASE_URL wijst buiten deze Databricks-workspace, en LLM_CHECK stuurt entiteitstekst alleen naar de serving endpoints van de workspace."
     },
     "errors": {
       "sample_entity_not_found": "Er is geen entiteit gevonden waarop de regel van toepassing is. Controleer de naam, of laat hem leeg om de eerste overeenkomst te gebruiken.",

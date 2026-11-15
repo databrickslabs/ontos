@@ -240,7 +240,8 @@
       "llm_check_empty_text": "Der Text ist leer.",
       "rule_evaluation_failed": "Die Regel konnte für diese Entität nicht ausgewertet werden.",
       "llm_check_text_rejected": "Nicht geprüft: Die Sicherheitsprüfung hat den Text markiert (zum Beispiel Anweisungen an das Modell).",
-      "llm_check_daily_quota_exceeded": "Nicht geprüft: Sie haben Ihre Modellaufrufe für heute aufgebraucht."
+      "llm_check_daily_quota_exceeded": "Nicht geprüft: Sie haben Ihre Modellaufrufe für heute aufgebraucht.",
+      "llm_check_external_endpoint": "Nicht geprüft: LLM_BASE_URL verweist außerhalb dieses Databricks-Workspace, und LLM_CHECK sendet Entitätstexte nur an die Serving-Endpunkte des Workspace."
     },
     "errors": {
       "sample_entity_not_found": "Es wurde keine Entität gefunden, auf die die Regel zutrifft. Prüfen Sie den Namen oder lassen Sie ihn leer, um den ersten Treffer zu verwenden.",

@@ -264,3 +264,13 @@ def test_running_an_llm_check_rule_needs_compliance_admin(api, writer):
 def test_testing_an_llm_check_rule_needs_compliance_admin(api, writer):
     _admin_required(api.http.post('/api/compliance/llm-check/test', json={'rule': UC_RULE}))
     api.manager.test_rule_on_sample.assert_not_called()
+
+
+def test_saving_a_rule_with_llm_check_in_where_is_refused(api):
+    rule = "MATCH (t:table)\nWHERE LLM_CHECK(t.comment, 'x')\nASSERT t.name = 'x'"
+
+    response = api.http.post('/api/compliance/policies', json=_payload(rule))
+
+    assert response.status_code == 422
+    assert response.json()['detail']['code'] == 'llm_check_in_where'
+    api.manager.create_policy.assert_not_called()

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.common import compliance_llm_check as llm
+from src.common.api_errors import CodedValueError
 from src.common.compliance_dsl import (
     Evaluator,
     LlmCheckCriterionError,
@@ -73,10 +74,13 @@ def test_criterion_must_be_a_string():
         evaluator.evaluate(node)
 
 
-def test_llm_check_in_where_is_reported_when_saving():
+def test_llm_check_in_where_is_rejected_when_saving():
+    """In WHERE it would fail for every entity, so the rule would silently skip them all."""
     rule = f"MATCH (t:table)\nWHERE LLM_CHECK(t.comment, '{GRAIN}')\nASSERT t.name = 'x'"
 
-    assert [w['code'] for w in validate_rule(rule)] == ['llm_check_in_where']
+    with pytest.raises(CodedValueError) as raised:
+        validate_rule(rule)
+    assert raised.value.code == 'llm_check_in_where'
 
 
 # --- Verdicts --------------------------------------------------------------

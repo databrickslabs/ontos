@@ -169,8 +169,7 @@
   },
   "ruleWarnings": {
     "unsupported_match_type": "MATCH type '{{type}}' is not supported, so the rule matches no entities. Supported types: {{supported}}, or Object for all of them.",
-    "missing_assert": "The rule has no ASSERT clause, so every entity passes.",
-    "llm_check_in_where": "LLM_CHECK is only evaluated in ASSERT. In WHERE it fails, so the rule skips every entity. Move it to ASSERT."
+    "missing_assert": "The rule has no ASSERT clause, so every entity passes."
   },
   "runErrors": {
     "entities_load_failed": "The {{entityType}} entities could not be loaded, so the rule could not be evaluated.",
@@ -249,7 +248,8 @@
       "llm_check_entity_read_required": "This rule uses LLM_CHECK on {{entityType}} entities. Running or testing it needs read access to them.",
       "llm_check_admin_required": "This rule uses LLM_CHECK. Saving, running or testing it requires admin access to compliance.",
       "llm_check_daily_quota_exceeded": "You used your {{limit}} LLM_CHECK model calls for today. Try again in {{retryAfter}} seconds (the count starts over at midnight UTC).",
-      "llm_check_policy_in_use": "This policy is used by {{workflowSteps}} workflow policy checks and {{maturityGates}} maturity gates. They can't evaluate LLM_CHECK, so it would fail every entity there. Remove the policy from them first, or use LLM_CHECK in a separate policy."
+      "llm_check_policy_in_use": "This policy is used by {{workflowSteps}} workflow policy checks and {{maturityGates}} maturity gates. They can't evaluate LLM_CHECK, so it would fail every entity there. Remove the policy from them first, or use LLM_CHECK in a separate policy.",
+      "llm_check_in_where": "LLM_CHECK is only evaluated in ASSERT. In WHERE it fails, so the rule skips every entity. Move it to ASSERT."
     },
     "usage": "LLM_CHECK: {{calls}} model calls, {{cached}} verdicts from the cache.",
     "notEvaluated": "Not evaluated",

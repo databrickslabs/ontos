@@ -169,8 +169,7 @@
   },
   "ruleWarnings": {
     "unsupported_match_type": "O tipo '{{type}}' do MATCH não é suportado, então a regra não avalia nenhuma entidade. Tipos suportados: {{supported}}, ou Object para todos eles.",
-    "missing_assert": "A regra não tem cláusula ASSERT, então todas as entidades passam.",
-    "llm_check_in_where": "LLM_CHECK só é avaliado no ASSERT. No WHERE ele falha, então a regra ignora todas as entidades. Mova-o para o ASSERT."
+    "missing_assert": "A regra não tem cláusula ASSERT, então todas as entidades passam."
   },
   "runErrors": {
     "entities_load_failed": "Não foi possível carregar as entidades {{entityType}}, por isso a regra não pôde ser avaliada.",
@@ -249,7 +248,8 @@
       "llm_check_entity_read_required": "Esta regra usa LLM_CHECK em entidades {{entityType}}. Executá-la ou testá-la exige acesso de leitura a elas.",
       "llm_check_admin_required": "Esta regra usa LLM_CHECK. Salvá-la, executá-la ou testá-la exige acesso de administrador à conformidade.",
       "llm_check_daily_quota_exceeded": "Você usou suas {{limit}} chamadas ao modelo de LLM_CHECK de hoje. Tente de novo em {{retryAfter}} segundos (a contagem recomeça à meia-noite UTC).",
-      "llm_check_policy_in_use": "Esta política é usada por {{workflowSteps}} verificações de política de workflows e {{maturityGates}} gates de maturidade. Eles não avaliam LLM_CHECK, então lá todas as entidades seriam reprovadas. Remova a política deles primeiro, ou use LLM_CHECK em uma política separada."
+      "llm_check_policy_in_use": "Esta política é usada por {{workflowSteps}} verificações de política de workflows e {{maturityGates}} gates de maturidade. Eles não avaliam LLM_CHECK, então lá todas as entidades seriam reprovadas. Remova a política deles primeiro, ou use LLM_CHECK em uma política separada.",
+      "llm_check_in_where": "LLM_CHECK só é avaliado no ASSERT. No WHERE ele falha, então a regra ignora todas as entidades. Mova-o para o ASSERT."
     },
     "usage": "LLM_CHECK: {{calls}} chamadas ao modelo, {{cached}} veredictos do cache.",
     "notEvaluated": "Não avaliado",

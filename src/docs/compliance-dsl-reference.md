@@ -188,9 +188,10 @@ rule editor to try a criterion on one entity (at most 10 tests a minute per user
 
 - Only evaluated in compliance runs, in `ASSERT`. In `WHERE`, in maturity gates
   and in workflow policy checks the check fails (`llm_check_not_available`), so
-  those are refused when saved: a `policy_check` step on a policy with
-  `LLM_CHECK` (`policy_check_policy_uses_llm_check`, an error for an active
-  workflow and a warning for an inactive one), a maturity gate on such a policy
+  those are refused when saved: a rule with `LLM_CHECK` in `WHERE`
+  (`llm_check_in_where`; it would skip every entity), a `policy_check` step on
+  a policy with `LLM_CHECK` (`policy_check_policy_uses_llm_check`, an error for
+  an active workflow and a warning for an inactive one), a maturity gate on such a policy
   (`maturity_gate_policy_uses_llm_check`), and an `LLM_CHECK` rule for a policy
   that steps or gates already use (409 `llm_check_policy_in_use`).
 - Fails closed: with an empty text (no call), LLM features off

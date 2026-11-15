@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterator, List, Optional, Protocol
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
 from src.common.uc_table_columns import table_column_fields
@@ -574,6 +575,13 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
     )
 
     parsed = parse_rule(rule, strict=True)
+    if _function_calls(parsed.get('where_clause'), 'LLM_CHECK'):
+        # The WHERE is evaluated without a model: the check fails, and the rule
+        # would skip every entity without a word
+        raise LlmCheckInWhereError(
+            "LLM_CHECK is only evaluated in ASSERT; in WHERE it fails, so the rule "
+            "would skip every entity. Move it to ASSERT."
+        )
     for call in llm_check_calls(parsed):
         if llm_check_criterion(call) is None:
             raise LlmCheckCriterionError(
@@ -600,14 +608,13 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
             'params': {},
             'message': "The rule has no ASSERT clause, so every entity passes.",
         })
-    if _function_calls(parsed.get('where_clause'), 'LLM_CHECK'):
-        warnings.append({
-            'code': 'llm_check_in_where',
-            'params': {},
-            'message': "LLM_CHECK is only evaluated in ASSERT; in WHERE it fails, so the rule "
-                       "skips every entity. Move it to ASSERT.",
-        })
     return warnings
+
+
+class LlmCheckInWhereError(CodedValueError):
+    """A rule with LLM_CHECK in WHERE (rejected on save)."""
+
+    code = 'llm_check_in_where'
 
 
 def llm_check_calls(parsed: Dict[str, Any]) -> list:

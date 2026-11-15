@@ -169,8 +169,7 @@
   },
   "ruleWarnings": {
     "unsupported_match_type": "El tipo '{{type}}' de MATCH no es compatible, así que la regla no evalúa ninguna entidad. Tipos compatibles: {{supported}}, u Object para todos ellos.",
-    "missing_assert": "La regla no tiene cláusula ASSERT, así que todas las entidades pasan.",
-    "llm_check_in_where": "LLM_CHECK solo se evalúa en el ASSERT. En el WHERE falla, por lo que la regla omite todas las entidades. Muévelo al ASSERT."
+    "missing_assert": "La regla no tiene cláusula ASSERT, así que todas las entidades pasan."
   },
   "runErrors": {
     "entities_load_failed": "No se pudieron cargar las entidades {{entityType}}, por lo que no se pudo evaluar la regla.",
@@ -249,7 +248,8 @@
       "llm_check_entity_read_required": "Esta regla usa LLM_CHECK en entidades {{entityType}}. Ejecutarla o probarla requiere acceso de lectura a ellas.",
       "llm_check_admin_required": "Esta regla usa LLM_CHECK. Guardarla, ejecutarla o probarla requiere acceso de administrador a cumplimiento.",
       "llm_check_daily_quota_exceeded": "Usaste tus {{limit}} llamadas al modelo de LLM_CHECK de hoy. Inténtalo de nuevo en {{retryAfter}} segundos (el recuento se reinicia a medianoche UTC).",
-      "llm_check_policy_in_use": "Esta política la usan {{workflowSteps}} comprobaciones de política de flujos de trabajo y {{maturityGates}} puertas de madurez. No pueden evaluar LLM_CHECK, así que allí fallarían todas las entidades. Quita primero la política de ellas o usa LLM_CHECK en una política aparte."
+      "llm_check_policy_in_use": "Esta política la usan {{workflowSteps}} comprobaciones de política de flujos de trabajo y {{maturityGates}} puertas de madurez. No pueden evaluar LLM_CHECK, así que allí fallarían todas las entidades. Quita primero la política de ellas o usa LLM_CHECK en una política aparte.",
+      "llm_check_in_where": "LLM_CHECK solo se evalúa en el ASSERT. En el WHERE falla, por lo que la regla omite todas las entidades. Muévelo al ASSERT."
     },
     "usage": "LLM_CHECK: {{calls}} llamadas al modelo, {{cached}} veredictos de la caché.",
     "notEvaluated": "No evaluado",

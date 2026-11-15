@@ -153,6 +153,22 @@ def test_count_tests_counts_functions_and_methods_parametrized_once(tmp_path):
     assert shards.count_tests(path) == 4
 
 
+def test_count_tests_counts_unittest_testcase_classes(tmp_path):
+    body = (
+        "import unittest\n"
+        "class Checks(unittest.TestCase):\n"
+        "    def test_a(self):\n        pass\n"
+        "    def test_b(self):\n        pass\n"
+        "class Other(TestCase):\n"
+        "    def test_c(self):\n        pass\n"
+        "class NotATest:\n"
+        "    def test_d(self):\n        pass\n"
+    )
+    path = tmp_path / "test_u.py"
+    path.write_text(body)
+    assert shards.count_tests(path) == 3
+
+
 def test_unparsable_file_weighs_one(tmp_path):
     rel = _write(tmp_path, "test_bad.py", "def test_x(:\n")
     assert shards.count_tests(tmp_path / rel) is None
@@ -396,3 +412,22 @@ def test_merge_ignores_invalid_times_and_unreadable_xml(tree, tmp_path, capsys):
     assert out["durations"][f"{TESTS_DIR}/test_c.py"] == 0.0
     assert all(math.isfinite(v) for v in out["durations"].values())
     assert "Ignoring unreadable JUnit file junit-2.xml" in capsys.readouterr().err
+
+
+def test_merge_fails_when_a_testcase_file_has_no_result(tree, tmp_path, capsys):
+    """Files pytest collects through unittest.TestCase are not exempt."""
+    root, _ = tree
+    _write(root, f"{TESTS_DIR}/test_unit_style.py",
+           "import unittest\nclass Checks(unittest.TestCase):\n"
+           "    def test_a(self):\n        pass\n")
+    _run_plan(capsys, root, tmp_path, None, "--default-shards", "1")
+    mod = "backend.src.tests.integration"
+    _junit(tmp_path / "junit" / "junit-1.xml", [
+        (f"{mod}.test_a", "test_0", 1.0),
+        (f"{mod}.test_b", "test_0", 1.0),
+        (f"{mod}.test_c", "test_0", 1.0),
+        (f"{mod}.sub.test_d", "test_0", 1.0),
+    ])
+    rc, _ = _merge(root, tmp_path, None)
+    assert rc == 1
+    assert f"{TESTS_DIR}/test_unit_style.py" in capsys.readouterr().err

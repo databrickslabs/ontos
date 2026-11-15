@@ -212,6 +212,33 @@ class TestBlockingGates:
         assert _stored(world).description_purpose == 'changed'
         assert _actions(world) == [('UPDATE', True)]
 
+    def test_a_domain_name_is_the_domain_id_a_gate_sees(self, world, run):
+        # The tool sends a business-domain name; the manager stores its id, and the
+        # gate's c.domain is that id, as for PUT /data-contracts/{id} (domainId)
+        from src.db_models.compliance import CompliancePolicyDb
+        from src.db_models.data_domains import DataDomain
+
+        name = f'Sales-{uuid.uuid4().hex[:6]}'
+        domain = DataDomain(id=str(uuid.uuid4()), name=name, created_by='u@example.com')
+        policy = CompliancePolicyDb(
+            id=str(uuid.uuid4()), name='In Sales', is_active=True,
+            rule=f"MATCH (c:data_contract) ASSERT c.domain = '{domain.id}'",
+        )
+        world.db.add_all([domain, policy])
+        world.db.commit()
+        gate = _workflow(world.db, 'before_update', step_type='policy_check')
+        step = world.db.query(WorkflowStepDb).filter_by(workflow_id=gate).one()
+        step.config = json.dumps({'policy_id': policy.id})
+        world.db.commit()
+
+        moved = run(_ctx(world), 'update_data_contract',
+                    {'contract_id': world.row.id, 'domain': name})
+        unknown = run(_ctx(world), 'update_data_contract',
+                      {'contract_id': world.row.id, 'domain': 'No such domain'})
+
+        assert moved.success is True, moved.error
+        assert unknown.error_code == UPDATE_BLOCKED_CODE
+
     def test_run_update_gates_returns_pass_when_the_registry_raises(self, world, monkeypatch):
         import src.common.workflow_triggers as triggers
 

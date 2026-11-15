@@ -27,6 +27,7 @@ from src.common.workflow_executor import (
 )
 from src.db_models.compliance import CompliancePolicyDb
 from src.db_models.data_contracts import DataContractDb
+from src.db_models.data_domains import DataDomain
 from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
 from src.models.data_contracts_api import ContractDescription, DataContractUpdate
 from src.models.process_workflows import TriggerContext, TriggerType
@@ -346,6 +347,12 @@ def test_a_domain_change_is_the_future_domain(db_session):
     assert domain(_payload(domainIds=['d-1', 'd-2'])) == 'd-1'
     assert domain(_payload(domainId='d-3')) == 'd-3'
     assert domain(_payload(domainIds=[])) is None
+    # A name (the assistant tool's field) is resolved to its domain's id
+    sales = DataDomain(id=str(uuid.uuid4()), name='Sales', created_by='u@example.com')
+    db_session.add(sales)
+    db_session.flush()
+    assert domain({'domain': 'Sales'}) == sales.id
+    assert domain({'domain': 'Unknown'}) is None
     gate = _gate(
         db_session, "MATCH (c:data_contract) ASSERT c.domain = 'd-2'",
         contract, _payload(domainIds=['d-2']),

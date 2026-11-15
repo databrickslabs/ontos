@@ -53,7 +53,9 @@
       "nothing": "Niets op te volgen."
     },
     "notices": {
-      "reviewsTruncated": "Alleen de {{count}} meest recent aangemaakte beoordelingsverzoeken worden gelezen, dus deze aantallen en hiaten kunnen onvolledig zijn."
+      "reviewsTruncated": "Alleen de {{count}} meest recent aangemaakte beoordelingsverzoeken worden gelezen, dus deze aantallen en hiaten kunnen onvolledig zijn.",
+      "loadError": "Deze gegevens konden niet worden geladen.",
+      "retry": "Opnieuw proberen"
     }
   },
   "search": {

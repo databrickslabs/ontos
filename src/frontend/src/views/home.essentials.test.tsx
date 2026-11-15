@@ -14,10 +14,18 @@ const state = vi.hoisted(() => {
     roles: [] as unknown[],
     applied: null as string | null,
     hidden: [] as string[],
+    /** URL prefix -> HTTP status to answer, or 'offline' to reject like a lost network. */
+    failures: {} as Record<string, number | 'offline'>,
   };
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
     s.calls.push(url);
+    const failing = Object.keys(s.failures).find((k) => url.startsWith(k));
+    if (failing) {
+      const how = s.failures[failing];
+      if (how === 'offline') throw new TypeError('Failed to fetch');
+      return { ok: false, status: how, json: async () => ({}) };
+    }
     const key = Object.keys(s.routes)
       .sort((a, b) => b.length - a.length)
       .find((k) => url.startsWith(k));
@@ -149,6 +157,7 @@ describe('Home by role home section', () => {
     state.roles = [];
     state.applied = null;
     state.hidden = [];
+    state.failures = {};
     setRoutes();
     useEssentialsHomePreferencesStore.setState({ publishPageSize: 10 });
     useFeatureVisibilityStore.setState({
@@ -329,6 +338,56 @@ describe('Home by role home section', () => {
     applyJourneyRole();
     renderWithProviders(<Home />);
     expect(await screen.findByText('My pending requests (37)')).toBeInTheDocument();
+  });
+
+  it('a 403 reads as empty, with no error', async () => {
+    state.failures = { '/api/data-asset-reviews': 403, '/api/assets?limit=1': 403 };
+    applyJourneyRole();
+    renderWithProviders(<Home />);
+    expect(await screen.findByText('No asset has been reviewed yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No open asset reviews.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('a 500 on the reviews shows an error with a retry, not an empty state', async () => {
+    state.failures = { '/api/data-asset-reviews': 500 };
+    applyJourneyRole();
+    renderWithProviders(<Home />);
+    const trust = screen.getByTestId('essentials-section-trust');
+    expect(await within(trust).findByRole('alert')).toHaveTextContent('Could not load this data.');
+    expect(within(trust).queryByText('No asset has been reviewed yet.')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('essentials-trust-counts')).not.toBeInTheDocument();
+    const reviews = screen.getByTestId('essentials-maintain-reviews');
+    expect(within(reviews).getByRole('alert')).toBeInTheDocument();
+    expect(within(reviews).queryByText('No open asset reviews.')).not.toBeInTheDocument();
+
+    state.failures = {};
+    await act(async () => {
+      within(trust).getByRole('button', { name: 'Retry' }).click();
+    });
+    await waitFor(() => expect(within(trust).getByText('main.sales.orders')).toBeInTheDocument());
+    expect(within(trust).queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('a lost network on my assets is an error, not "You don\'t own any asset yet."', async () => {
+    state.failures = { '/api/assets?owned_by_me=true': 'offline' };
+    applyJourneyRole();
+    renderWithProviders(<Home />);
+    const publish = screen.getByTestId('essentials-section-publish');
+    expect(await within(publish).findByRole('alert')).toBeInTheDocument();
+    expect(within(publish).queryByText("You don't own any asset yet.")).not.toBeInTheDocument();
+  });
+
+  it('a 500 on the asset total and on my requests shows an error', async () => {
+    state.failures = { '/api/assets?limit=1': 500, '/api/access-grants/my-requests': 500 };
+    applyJourneyRole();
+    renderWithProviders(<Home />);
+    const understand = screen.getByTestId('essentials-section-understand');
+    await waitFor(() =>
+      expect(within(understand).getByText('Could not load this data.')).toBeInTheDocument());
+    const requests = screen.getByTestId('essentials-maintain-requests');
+    expect(await within(requests).findByRole('alert')).toBeInTheDocument();
+    expect(within(requests).queryByText('No pending requests.')).not.toBeInTheDocument();
   });
 
   it('Maintain shows my pending requests and my open reviews', async () => {

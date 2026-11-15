@@ -53,7 +53,9 @@
       "nothing": "Nada que seguir."
     },
     "notices": {
-      "reviewsTruncated": "Solo se leen las {{count}} solicitudes de revisión creadas más recientemente, por lo que estos recuentos y carencias pueden estar incompletos."
+      "reviewsTruncated": "Solo se leen las {{count}} solicitudes de revisión creadas más recientemente, por lo que estos recuentos y carencias pueden estar incompletos.",
+      "loadError": "No se pudieron cargar estos datos.",
+      "retry": "Reintentar"
     }
   },
   "search": {

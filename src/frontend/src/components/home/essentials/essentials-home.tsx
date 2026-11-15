@@ -102,6 +102,19 @@ function JourneyCard({ id, icon, title, description, className, children }: Jour
   );
 }
 
+/** A failed read (not a 403): says so and offers a retry, instead of reading as empty. */
+function LoadError({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation('home');
+  return (
+    <div role="alert" className="flex items-center gap-2 text-sm text-destructive">
+      <span>{t('essentials.notices.loadError')}</span>
+      <Button size="sm" variant="outline" onClick={onRetry}>
+        {t('essentials.notices.retry')}
+      </Button>
+    </div>
+  );
+}
+
 function Empty({ children }: { children: ReactNode }) {
   return <p className="text-sm text-muted-foreground">{children}</p>;
 }
@@ -218,7 +231,8 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                 description={t('home:essentials.understand.description')}
               >
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {assets && (
+                  {assets && assetTotal.error && <LoadError onRetry={assetTotal.retry} />}
+                  {assets && !assetTotal.error && (
                     <OverviewTile
                       icon={<assets.icon className="h-4 w-4" />}
                       title={t('home:essentials.understand.assets')}
@@ -243,13 +257,16 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                 title={t('home:essentials.trust.title')}
                 description={t('home:essentials.trust.description')}
               >
-                <div className="flex flex-wrap gap-2" data-testid="essentials-trust-counts">
-                  {STATUS_ORDER.map((s) => (
-                    <Badge key={s} variant={counts[s] > 0 ? STATUS_VARIANT[s] : 'outline'}>
-                      {statusLabel(s)}: {counts[s]}
-                    </Badge>
-                  ))}
-                </div>
+                {reviewList.error && <LoadError onRetry={reviewList.retry} />}
+                {!reviewList.error && (
+                  <div className="flex flex-wrap gap-2" data-testid="essentials-trust-counts">
+                    {STATUS_ORDER.map((s) => (
+                      <Badge key={s} variant={counts[s] > 0 ? STATUS_VARIANT[s] : 'outline'}>
+                        {statusLabel(s)}: {counts[s]}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
                 {truncated && (
                   <p
                     className="text-xs text-muted-foreground"
@@ -258,7 +275,7 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                     {t('home:essentials.notices.reviewsTruncated', { count: REVIEWS_LIMIT })}
                   </p>
                 )}
-                {reviewList.loading ? null : latest.length === 0 ? (
+                {reviewList.loading || reviewList.error ? null : latest.length === 0 ? (
                   <Empty>{t('home:essentials.trust.empty')}</Empty>
                 ) : (
                   <ul className="space-y-1 text-sm">
@@ -299,7 +316,9 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
               title={t('home:essentials.publish.title')}
               description={t('home:essentials.publish.description')}
             >
-              {owned.loading ? null : owned.data.length === 0 ? (
+              {owned.error && <LoadError onRetry={owned.retry} />}
+              {owned.loading || (owned.error && owned.data.length === 0) ? null
+                : owned.data.length === 0 ? (
                 <Empty>{t('home:essentials.publish.noAssets')}</Empty>
               ) : gaps.length === 0 ? (
                 <Empty>
@@ -387,9 +406,13 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
             {myRequests && (
               <div data-testid="essentials-maintain-requests">
                 <h3 className="text-sm font-semibold mb-1">
-                  {t('home:essentials.maintain.myRequests', { count: accessRequests.total })}
+                  {t('home:essentials.maintain.myRequests', {
+                    count: accessRequests.error ? '-' : accessRequests.total,
+                  })}
                 </h3>
-                {!accessRequests.loading && accessRequests.total === 0 ? (
+                {accessRequests.error ? (
+                  <LoadError onRetry={accessRequests.retry} />
+                ) : !accessRequests.loading && accessRequests.total === 0 ? (
                   <Empty>{t('home:essentials.maintain.noRequests')}</Empty>
                 ) : (
                   <ul className="space-y-1 text-sm">
@@ -406,9 +429,13 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
             {reviews && (
               <div data-testid="essentials-maintain-reviews">
                 <h3 className="text-sm font-semibold mb-1">
-                  {t('home:essentials.maintain.myReviews', { count: openReviews.length })}
+                  {t('home:essentials.maintain.myReviews', {
+                    count: reviewList.error ? '-' : openReviews.length,
+                  })}
                 </h3>
-                {!reviewList.loading && openReviews.length === 0 ? (
+                {reviewList.error ? (
+                  <LoadError onRetry={reviewList.retry} />
+                ) : !reviewList.loading && openReviews.length === 0 ? (
                   <Empty>{t('home:essentials.maintain.noReviews')}</Empty>
                 ) : (
                   <ul className="space-y-1 text-sm">

@@ -94,6 +94,30 @@ export function AssetFormDialog({
   });
   // The values the form opened with, to send only the properties the user edited
   const openedWith = useRef<Record<string, any>>({});
+  // The asset's stored properties. A list row (Asset Explorer) carries none, so they
+  // are read from the asset; undefined until known (then the update leaves them out).
+  const [storedProperties, setStoredProperties] = useState<
+    Record<string, any> | null | undefined
+  >(undefined);
+
+  useEffect(() => {
+    if (!isOpen || !asset) {
+      setStoredProperties(undefined);
+      return;
+    }
+    if (asset.properties !== undefined) {
+      setStoredProperties(asset.properties);
+      return;
+    }
+    let cancelled = false;
+    setStoredProperties(undefined);
+    apiGet<AssetRead>(`/api/assets/${asset.id}`).then((response) => {
+      if (!cancelled && !response.error && response.data) {
+        setStoredProperties(response.data.properties ?? null);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [isOpen, asset, apiGet]);
 
   const fetchSchema = useCallback(async () => {
     if (!assetTypeIri) return;
@@ -132,7 +156,7 @@ export function AssetFormDialog({
       defaults.primary_domain_id = asset.primary_domain_id
         ?? asset.domains?.find(d => d.is_primary)?.domain_id
         ?? asset.domain_id ?? null;
-      const props = asset.properties || {};
+      const props = storedProperties || {};
       if (schema?.fields) {
         for (const f of schema.fields) {
           if (TOP_LEVEL_FIELDS.has(f.name) || SYSTEM_FIELDS.has(f.name)) continue;
@@ -156,7 +180,7 @@ export function AssetFormDialog({
     }
     openedWith.current = defaults;
     form.reset(defaults);
-  }, [isOpen, schema, isEdit, asset]);
+  }, [isOpen, schema, isEdit, asset, storedProperties]);
 
   const groupedFields = useMemo(() => {
     if (!schema?.fields) return [];
@@ -170,11 +194,10 @@ export function AssetFormDialog({
     setIsSubmitting(true);
     try {
       // On edit, keep the stored properties: the form shows only the ontology fields
-      const properties = isEdit && asset
-        ? mergeEditedProperties(asset.properties, values, openedWith.current)
-        : newAssetProperties(values);
-
       if (isEdit && asset) {
+        const properties = storedProperties === undefined
+          ? undefined
+          : mergeEditedProperties(storedProperties, values, openedWith.current);
         const payload: AssetUpdate = {
           name: values.name || null,
           description: values.description || null,
@@ -183,8 +206,8 @@ export function AssetFormDialog({
           location: values.location || null,
           domain_ids: values.domain_ids || [],
           primary_domain_id: values.primary_domain_id ?? null,
-          // {} clears the properties; null would also drop the ones Ontos keeps itself
-          properties,
+          // {} clears the properties; left out (stored ones unknown), they are kept
+          ...(properties === undefined ? {} : { properties }),
         };
         const response = await apiPut<AssetUpdateResult>(`/api/assets/${asset.id}`, payload);
         if (response.error) throw new Error(response.error);
@@ -200,6 +223,7 @@ export function AssetFormDialog({
         }
         onSuccess(response.data!);
       } else {
+        const properties = newAssetProperties(values);
         const payload: AssetCreate = {
           name: values.name,
           description: values.description || null,

@@ -126,4 +126,51 @@ describe('AssetFormDialog edit', () => {
     // null would drop the keys Ontos keeps for itself; {} clears only the public ones
     expect(mockPut.mock.calls[0][1].properties).toEqual({});
   });
+
+  it('reads the stored properties of a list row (Asset Explorer) before merging', async () => {
+    // A list row (AssetSummary) has no properties: the dialog reads the asset
+    const { properties: _omit, ...row } = column as unknown as Record<string, unknown>;
+    mockGet.mockImplementation(async (url: string) => (
+      url === '/api/assets/col-1' ? { data: column } : { data: COLUMN_SCHEMA }
+    ));
+    render(
+      <AssetFormDialog
+        isOpen onOpenChange={vi.fn()} onSuccess={vi.fn()}
+        assetTypeId="type-column" assetTypeName="Column"
+        assetTypeIri="http://ontos.app/ontology#Column"
+        asset={row as unknown as AssetRead}
+      />,
+    );
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/assets/col-1'));
+    const primaryKey = await screen.findByRole('checkbox', { name: /primary key/i });
+    await userEvent.click(primaryKey);
+    await userEvent.click(screen.getByRole('button', { name: 'common:actions.saveChanges' }));
+
+    await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(1));
+    expect(mockPut.mock.calls[0][1].properties).toEqual({
+      data_type: 'DATE', nullable: true, comment: 'Order day', isPrimaryKey: true,
+    });
+  });
+
+  it('leaves properties out when the stored ones cannot be read', async () => {
+    const { properties: _omit, ...row } = column as unknown as Record<string, unknown>;
+    mockGet.mockImplementation(async (url: string) => (
+      url === '/api/assets/col-1' ? { error: 'boom' } : { data: COLUMN_SCHEMA }
+    ));
+    render(
+      <AssetFormDialog
+        isOpen onOpenChange={vi.fn()} onSuccess={vi.fn()}
+        assetTypeId="type-column" assetTypeName="Column"
+        assetTypeIri="http://ontos.app/ontology#Column"
+        asset={row as unknown as AssetRead}
+      />,
+    );
+
+    await screen.findByRole('checkbox', { name: /primary key/i });
+    await userEvent.click(screen.getByRole('button', { name: 'common:actions.saveChanges' }));
+
+    await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(1));
+    expect('properties' in mockPut.mock.calls[0][1]).toBe(false);
+  });
 });

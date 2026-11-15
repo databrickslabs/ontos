@@ -1576,6 +1576,10 @@ class SyncResult:
     )
     # Objects not tagged on purpose, with the reason. They don't fail the run.
     skipped: List[str] = field(default_factory=list)
+    # Linked objects the run tried to tag, and those of them UC reported as not found.
+    # When every one is missing, the run fails (see all_linked_objects_missing).
+    linked_attempted: int = 0
+    linked_missing: List[str] = field(default_factory=list)
     # Objects ("TYPE fqn") that had at least one tag error this run.
     failed_objects: List[str] = field(default_factory=list)
     # Things worth a look that did not stop a tag from being written.
@@ -1586,6 +1590,18 @@ class SyncResult:
 # ALTER VIEW has no ALTER COLUMN clause, and neither ALTER TABLE ... ALTER COLUMN nor
 # SET TAG ON COLUMN names metric views. Their fields are left untagged until the job
 # writes metric view tags with a documented statement.
+def all_linked_objects_missing(result: SyncResult) -> bool:
+    """True when the run tried linked objects and UC reported every one as not found.
+
+    That is what a renamed or deleted catalog (or a link set pointing at the wrong
+    workspace) looks like: nothing is synced, so the run must not end green. Unlinked
+    objects with a record don't count: those are often just dropped tables.
+    """
+    return result.linked_attempted > 0 and (
+        len(result.linked_missing) == result.linked_attempted
+    )
+
+
 METRIC_VIEW_TABLE_TYPE = "METRIC_VIEW"
 MISSING_OBJECT_SKIP_REASON = "not found in Unity Catalog"
 METRIC_VIEW_FIELD_SKIP_REASON = (
@@ -2012,10 +2028,13 @@ def sync_tags(
         result = SyncResult()
 
     def skip_missing(object_type: str, fqn: str,
-                     written: Optional[Dict[str, Optional[str]]] = None) -> None:
+                     written: Optional[Dict[str, Optional[str]]] = None,
+                     linked: bool = False) -> None:
         # Only the object type and name are logged: the SDK error text can carry paths.
         print(f"[WARN] Skipped {object_type} {fqn}: {MISSING_OBJECT_SKIP_REASON}")
         result.skipped.append(f"{object_type} {fqn}: {MISSING_OBJECT_SKIP_REASON}")
+        if linked:
+            result.linked_missing.append(f"{object_type} {fqn}")
         # UC can't tell a dropped object from one the job can't see (e.g. a catalog
         # not bound to the workspace). Keep what an earlier run delivered there, and
         # what this run wrote before the object went missing (``written``), so the
@@ -2027,6 +2046,7 @@ def sync_tags(
     def apply(
         object_type: str, fqn: str, desired: Dict[str, Optional[str]]
     ) -> Tuple[int, int]:
+        result.linked_attempted += 1
         recorded = (previous or {}).get(object_type, {}).get(fqn, {})
         # A partial read may miss a table's contract or domain rows: its desired tags
         # are then incomplete, so nothing is removed (no record is passed). A state that
@@ -2045,7 +2065,7 @@ def sync_tags(
                                         delivered=ours,
                                         warnings=result.warnings)
         except UcObjectMissing:
-            skip_missing(object_type, fqn, ours)
+            skip_missing(object_type, fqn, ours, linked=True)
             return 0, 0
         except Exception as e:
             # E.g. its information_schema can't be read: the rest of the run goes on,
@@ -2521,8 +2541,17 @@ def main() -> None:
     print("\n" + "=" * 80)
     msg = f"Summary: updated={updated_total} removed={removed_total} errors="
     print(f"{msg}{len(all_errors)} skipped={len(result.skipped)} "
+          f"missing={len(result.linked_missing)}/{result.linked_attempted} "
           f"failed_objects={len(result.failed_objects)} "
           f"warnings={len(result.warnings)}")
+    all_missing = all_linked_objects_missing(result)
+    if all_missing:
+        print("!" * 80)
+        print(f"[ERROR] None of the {result.linked_attempted} linked UC object(s) was "
+              f"found in Unity Catalog, so nothing was synced. Check that the linked "
+              f"catalogs still exist under these names and are bound to this "
+              f"workspace.")
+        print("!" * 80)
 
     if result.skipped:
         print(f"\n{len(result.skipped)} object(s) skipped (not errors):")
@@ -2538,6 +2567,10 @@ def main() -> None:
         print(f"\n{len(all_errors)} error(s) occurred during tag sync:")
         for err in all_errors:
             print(f"  - {err}")
+        print("=" * 80)
+        sys.exit(1)
+
+    if all_missing:
         print("=" * 80)
         sys.exit(1)
 

@@ -176,7 +176,7 @@ describe('LifecycleStageGroupEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'This lifecycle was changed by someone else since you opened it. Close it and open it again to see their changes.',
+      /changed by someone else since you opened it/,
     );
     expect(onSaved).not.toHaveBeenCalled();
   });

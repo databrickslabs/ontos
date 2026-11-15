@@ -6,6 +6,7 @@ from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentU
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker, user_has_feature_level
 from src.common.manager_dependencies import get_auth_manager
+from src.common.run_identity import RunIdentity
 from src.controller.authorization_manager import AuthorizationManager
 from src.controller.compliance_manager import ComplianceManager, rule_changes_tags, rule_sends_notifications
 from src.models.compliance import (
@@ -19,7 +20,6 @@ from src.models.compliance import (
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
 from src.common.compliance_entities import validate_rule
-from src.common.run_identity import RunIdentity
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)

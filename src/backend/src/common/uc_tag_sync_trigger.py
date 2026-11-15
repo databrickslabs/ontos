@@ -51,9 +51,12 @@ def request_uc_tag_sync_after_transition(
     Returns the run id, or None when no run was requested. Never raises.
     """
     old, new = (from_status or "").lower(), (to_status or "").lower()
-    if old == new or not ({old, new} & _on_demand_statuses()):
+    if old == new:
         return None
     try:
+        # Inside the try: the stage lookup opens a database session
+        if not ({old, new} & _on_demand_statuses()):
+            return None
         jobs_manager = get_app_state_manager("jobs_manager")
         if jobs_manager is None:
             return None
@@ -66,8 +69,8 @@ def request_uc_tag_sync_after_transition(
         return run_id
     except Exception:
         # The status change is already committed and must stand whatever happens here
-        # (Databricks API, job lookup), so every error is caught. The next scheduled run
-        # updates the tag instead.
+        # (stage lookup, Databricks API, job lookup), so every error is caught. The next
+        # scheduled run updates the tag instead.
         logger.warning(
             "Could not request a uc_tag_sync run after %s %s moved from %s to %s",
             entity_type, entity_id, old, new, exc_info=True,

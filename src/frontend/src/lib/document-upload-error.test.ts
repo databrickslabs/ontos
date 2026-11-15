@@ -13,6 +13,15 @@ describe('documentUploadErrorText', () => {
     expect(documentUploadErrorText(body, t)).toBe('metadata:documents.messages.volume_invalid:a.b');
   });
 
+  it('translates volume_not_configured', () => {
+    const body = JSON.stringify({
+      detail: { code: 'volume_not_configured', message: 'english', params: {} },
+    });
+    expect(documentUploadErrorText(body, t)).toBe(
+      'metadata:documents.messages.volume_not_configured:undefined'
+    );
+  });
+
   it('keeps any other response text', () => {
     expect(documentUploadErrorText('{"detail":"Failed to upload document"}', t)).toBe(
       '{"detail":"Failed to upload document"}'

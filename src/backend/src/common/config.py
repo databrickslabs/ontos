@@ -493,6 +493,12 @@ class VolumeInvalidError(CodedValueError):
     code = 'volume_invalid'
 
 
+class VolumeNotConfiguredError(CodedValueError):
+    """A feature needs the volume setting, and it is empty."""
+
+    code = 'volume_not_configured'
+
+
 def canonical_volume_value(value: Optional[str]) -> Optional[str]:
     """The volume setting as it is stored: trimmed, and for a path with repeated
     slashes collapsed and no trailing slash. None when empty.

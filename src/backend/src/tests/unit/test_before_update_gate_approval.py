@@ -1,15 +1,23 @@
-"""Approving a paused before_update gate doesn't apply the update.
+"""What a before_update gate's verdict means for the update it lets through or holds.
+
+Approving a paused before_update gate doesn't apply the update.
 
 The update is refused while the gate waits (a paused gate isn't ``succeeded``).
 Approving it runs the gate's remaining steps on the payload of the refused
 request, but nothing applies the update afterwards, and the tags the remaining
 steps assign aren't written either: the user resubmits the update, which
 starts a new approval round.
+
+A gate that passed on the update's tag list assumed the list is written; when
+writing it fails (the manager logs it and keeps the update), that is logged
+as a warning.
 """
 import json
+import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from src.common.workflow_executor import WorkflowExecutor
 from src.controller.data_contracts_manager import DataContractsManager
@@ -73,3 +81,25 @@ def test_approving_a_paused_gate_does_not_apply_the_update(db_session, monkeypat
     db_session.expire_all()
     assert db_session.get(DataContractDb, contract.id).name == 'Gated'
     assert writes == []
+
+
+def test_a_tag_list_the_gates_passed_on_that_is_not_written_is_logged(db_session, caplog):
+    tags_manager = MagicMock()
+    tags_manager.set_tags_for_entity.side_effect = RuntimeError('tag write failed')
+    manager = DataContractsManager(data_dir=Path('/tmp'), tags_manager=tags_manager)
+    manager._update_search_index = lambda *a, **k: None
+    manager._queue_delivery = lambda *a, **k: None
+    contract = DataContractDb(
+        id=str(uuid.uuid4()), name='Tagged', version='1.0.0', status='draft',
+        created_by='u@example.com',
+    )
+    db_session.add(contract)
+    db_session.commit()
+
+    with caplog.at_level(logging.WARNING):
+        manager.update_contract_with_relations(
+            db_session, contract.id, {'tags': ['security/pii']}, current_user='u@example.com',
+        )
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any('before_update gates passed' in r.getMessage() for r in warnings)

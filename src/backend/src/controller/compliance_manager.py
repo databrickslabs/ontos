@@ -31,7 +31,8 @@ from src.common.compliance_actions import (
 from src.common.compliance_notifications import ComplianceRunNotifier
 from src.common.api_errors import CodedValueError
 from src.common.compliance_llm_check import (
-    BUDGET_EXCEEDED, DbLlmCheckCache, LlmCheckError, LlmChecker,
+    BUDGET_EXCEEDED, CALLS_PER_CHECK, QUOTA_EXCEEDED, DbLlmCallQuota, DbLlmCheckCache,
+    LlmCheckError, LlmChecker, LlmCheckQuotaExceededError, seconds_to_next_utc_day,
 )
 from src.common.compliance_entities import (
     create_entity_iterator,
@@ -742,22 +743,54 @@ class ComplianceManager:
         return objs
 
     @staticmethod
+    def _settings():
+        from src.common.config import get_settings
+
+        try:
+            return get_settings()
+        except RuntimeError:
+            # Not initialized: LLM_CHECK then fails closed (llm_check_disabled)
+            return None
+
+    @classmethod
+    def llm_quota(cls, db: Session, user: str) -> DbLlmCallQuota:
+        """The daily LLM_CHECK calls of ``user``.
+
+        The limit is COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY.
+        """
+        limit = getattr(
+            cls._settings(), 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY', 400,
+        )
+        return DbLlmCallQuota(db, user, limit)
+
+    @classmethod
+    def require_llm_quota(cls, db: Session, user: str) -> None:
+        """Refuse a run or rule test of an LLM_CHECK rule when ``user`` has no calls left today.
+
+        Raises:
+            LlmCheckQuotaExceededError: not one check's calls left (answered 429).
+        """
+        quota = cls.llm_quota(db, user)
+        if quota.remaining() < CALLS_PER_CHECK:
+            raise LlmCheckQuotaExceededError(
+                f"You used your {quota.limit} LLM_CHECK model calls for today",
+                limit=quota.limit, retryAfter=seconds_to_next_utc_day(),
+            )
+
+    @classmethod
     def llm_checker(
-        db: Session, max_calls: Optional[int] = None, *, purge_expired: bool = False,
+        cls, db: Session, max_calls: Optional[int] = None, *, purge_expired: bool = False,
+        quota_user: Optional[str] = None,
     ) -> LlmChecker:
         """The LLM_CHECK runner of a run: the configured endpoint and budget, the DB cache.
 
         ``purge_expired`` deletes the cached verdicts past their max age first
         (when a run starts). A Compliance Checks job run makes one and passes it
         to every policy run, so the budget covers the whole job run.
+        ``quota_user``: the user who started the run or test, whose daily calls
+        it counts against (see ``DbLlmCallQuota``); None for scheduled runs.
         """
-        from src.common.config import get_settings
-
-        try:
-            settings = get_settings()
-        except RuntimeError:
-            # Not initialized: LLM_CHECK then fails closed (llm_check_disabled)
-            settings = None
+        settings = cls._settings()
         cache = DbLlmCheckCache(
             db, max_age_days=getattr(settings, 'COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS', 30),
         )
@@ -766,11 +799,12 @@ class ComplianceManager:
                 cache.purge_expired()
             except Exception as e:
                 logger.warning("Could not delete expired LLM_CHECK verdicts: %s", e)
-        return LlmChecker(settings, cache=cache, max_calls=max_calls)
+        quota = cls.llm_quota(db, quota_user) if quota_user else None
+        return LlmChecker(settings, cache=cache, max_calls=max_calls, quota=quota)
 
     def test_rule_on_sample(
         self, db: Session, *, rule: str, entity: Optional[str] = None,
-        workspace_client=None,
+        workspace_client=None, quota_user: Optional[str] = None,
     ) -> LlmCheckTestResponse:
         """Evaluate a rule's ASSERT on one entity it matches, LLM_CHECKs included.
 
@@ -780,6 +814,7 @@ class ComplianceManager:
         first ``SAMPLE_SCAN_LIMIT`` the rule matches, else the first match.
         ``workspace_client``: the client to read Unity Catalog entities with (the
         caller's own, see ``run_policy_inline``); default: the app's.
+        ``quota_user``: the user whose daily LLM_CHECK calls the test counts against.
 
         Raises:
             ValueError: the rule doesn't parse.
@@ -809,7 +844,9 @@ class ComplianceManager:
                 f"No entity the rule matches was found{named}", entity=wanted,
             )
 
-        evaluator = Evaluator(sample, llm_checker=self.llm_checker(db, max_calls=TEST_MAX_CALLS))
+        evaluator = Evaluator(sample, llm_checker=self.llm_checker(
+            db, max_calls=TEST_MAX_CALLS, quota_user=quota_user,
+        ))
         passed, error_code = True, None
         if parsed.get('assert_clause') is not None:
             try:
@@ -888,6 +925,7 @@ class ComplianceManager:
         current_user: Optional[str] = None,
         llm_checker: Optional[LlmChecker] = None,
         workspace_client=None,
+        quota_user: Optional[str] = None,
     ) -> ComplianceRunDb:
         """Run a compliance policy with enhanced DSL support.
 
@@ -898,6 +936,8 @@ class ComplianceManager:
         default: the app's. A run a user starts of an ``LLM_CHECK`` rule passes the
         user's own (on-behalf-of) client, so its results and the model's reasons
         only cover the objects that user can read; scheduled runs use the app's.
+        ``quota_user``: the user who started the run, whose daily LLM_CHECK calls
+        it counts against; None for scheduled runs (per-run budget only).
         """
         run = self.create_run(db, policy_id=policy.id)
         success = 0
@@ -911,8 +951,9 @@ class ComplianceManager:
         # LLM_CHECK calls: one budget for this run (or the job run that passes
         # its checker), verdicts cached across runs
         if llm_checker is None:
-            llm_checker = self.llm_checker(db, purge_expired=True)
+            llm_checker = self.llm_checker(db, purge_expired=True, quota_user=quota_user)
         budget_exceeded_before = llm_checker.budget_exceeded
+        quota_exceeded_before = llm_checker.quota_exceeded
         calls_before, hits_before = llm_checker.calls, llm_checker.cache_hits
 
         def llm_usage() -> dict:
@@ -1018,8 +1059,8 @@ class ComplianceManager:
             # notification flush is the other warning (the tail is what to fix first).
             trailing = parsed_rule.get('trailing_input')
             # One warning per run: the rule's tail is what to fix first, then the
-            # entities that failed because the run reached its LLM_CHECK budget, then a
-            # failed notification flush
+            # entities that failed because the run reached its LLM_CHECK budget, then
+            # those past the user's daily quota, then a failed notification flush
             warning_code, warning_params = None, None
             if trailing:
                 warning_code, warning_params = 'rule_trailing_input', trailing
@@ -1027,6 +1068,11 @@ class ComplianceManager:
                 warning_code, warning_params = BUDGET_EXCEEDED, {
                     'count': llm_checker.budget_exceeded - budget_exceeded_before,
                     'budget': llm_checker.max_calls,
+                }
+            elif llm_checker.quota_exceeded > quota_exceeded_before:
+                warning_code, warning_params = QUOTA_EXCEEDED, {
+                    'count': llm_checker.quota_exceeded - quota_exceeded_before,
+                    'limit': llm_checker.quota.limit,
                 }
             elif not notified:
                 warning_code, warning_params = 'notifications_failed', {}

@@ -185,7 +185,8 @@
   "runWarnings": {
     "rule_trailing_input": "Cette règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Il est ignoré à l'exécution, donc la règle peut vérifier moins que ce qu'elle indique. Modifiez la règle pour le corriger.",
     "notifications_failed": "Les notifications de la politique (NOTIFY) n'ont pas pu être envoyées pour cette exécution. Les résultats sont complets.",
-    "llm_check_budget_exceeded": "{{count}} vérifications LLM n'ont pas été exécutées car l'exécution a atteint son budget de {{budget}} appels au modèle ; ces entités ont donc échoué. Relancez-la (les verdicts en cache ne comptent pas) ou augmentez COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN."
+    "llm_check_budget_exceeded": "{{count}} vérifications LLM n'ont pas été exécutées car l'exécution a atteint son budget de {{budget}} appels au modèle ; ces entités ont donc échoué. Relancez-la (les verdicts en cache ne comptent pas) ou augmentez COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
+    "llm_check_daily_quota_exceeded": "{{count}} vérifications LLM n’ont pas été exécutées, car vous avez utilisé vos {{limit}} appels au modèle pour aujourd’hui ; ces entités ont donc échoué. Relancez-la demain (les verdicts en cache ne comptent pas) ou demandez à un administrateur d’augmenter COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY."
   },
   "actionOutcomes": {
     "status": {
@@ -238,13 +239,15 @@
       "llm_check_invalid_reply": "La réponse du modèle n'était pas un verdict PASS ou FAIL.",
       "llm_check_empty_text": "Le texte est vide.",
       "rule_evaluation_failed": "La règle n'a pas pu être évaluée sur cette entité.",
-      "llm_check_text_rejected": "Non vérifié : le contrôle de sécurité a signalé le texte (par exemple, des instructions au modèle)."
+      "llm_check_text_rejected": "Non vérifié : le contrôle de sécurité a signalé le texte (par exemple, des instructions au modèle).",
+      "llm_check_daily_quota_exceeded": "Non vérifié : vous avez utilisé vos appels au modèle pour aujourd’hui."
     },
     "errors": {
       "sample_entity_not_found": "Aucune entité à laquelle la règle s'applique n'a été trouvée. Vérifiez le nom, ou laissez-le vide pour utiliser la première correspondance.",
       "llm_check_test_rate_limited": "Trop de tests en peu de temps. Réessayez dans {{retryAfter}} secondes.",
       "llm_check_entity_read_required": "Cette règle utilise LLM_CHECK sur des entités {{entityType}}. L’exécuter ou la tester nécessite un accès en lecture à celles-ci.",
-      "llm_check_admin_required": "Cette règle utilise LLM_CHECK. L’enregistrer, l’exécuter ou la tester nécessite un accès administrateur à la conformité."
+      "llm_check_admin_required": "Cette règle utilise LLM_CHECK. L’enregistrer, l’exécuter ou la tester nécessite un accès administrateur à la conformité.",
+      "llm_check_daily_quota_exceeded": "Vous avez utilisé vos {{limit}} appels au modèle LLM_CHECK pour aujourd’hui. Réessayez dans {{retryAfter}} secondes (le décompte repart à minuit UTC)."
     },
     "usage": "LLM_CHECK : {{calls}} appels au modèle, {{cached}} verdicts issus du cache."
   }

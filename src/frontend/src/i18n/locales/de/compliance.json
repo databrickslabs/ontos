@@ -185,7 +185,8 @@
   "runWarnings": {
     "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren.",
     "notifications_failed": "Die Benachrichtigungen der Richtlinie (NOTIFY) konnten für diesen Lauf nicht gesendet werden. Die Ergebnisse sind vollständig.",
-    "llm_check_budget_exceeded": "{{count}} LLM-Prüfungen wurden nicht ausgeführt, weil der Lauf sein Budget von {{budget}} Modellaufrufen erreicht hat; diese Entitäten sind daher fehlgeschlagen. Führen Sie ihn erneut aus (zwischengespeicherte Urteile zählen nicht) oder erhöhen Sie COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN."
+    "llm_check_budget_exceeded": "{{count}} LLM-Prüfungen wurden nicht ausgeführt, weil der Lauf sein Budget von {{budget}} Modellaufrufen erreicht hat; diese Entitäten sind daher fehlgeschlagen. Führen Sie ihn erneut aus (zwischengespeicherte Urteile zählen nicht) oder erhöhen Sie COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
+    "llm_check_daily_quota_exceeded": "{{count}} LLM-Prüfungen wurden nicht ausgeführt, weil Sie Ihre {{limit}} Modellaufrufe für heute aufgebraucht haben; diese Entitäten sind daher fehlgeschlagen. Führen Sie die Regel morgen erneut aus (zwischengespeicherte Urteile zählen nicht) oder bitten Sie einen Administrator, COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY zu erhöhen."
   },
   "actionOutcomes": {
     "status": {
@@ -238,13 +239,15 @@
       "llm_check_invalid_reply": "Die Antwort des Modells war kein PASS- oder FAIL-Urteil.",
       "llm_check_empty_text": "Der Text ist leer.",
       "rule_evaluation_failed": "Die Regel konnte für diese Entität nicht ausgewertet werden.",
-      "llm_check_text_rejected": "Nicht geprüft: Die Sicherheitsprüfung hat den Text markiert (zum Beispiel Anweisungen an das Modell)."
+      "llm_check_text_rejected": "Nicht geprüft: Die Sicherheitsprüfung hat den Text markiert (zum Beispiel Anweisungen an das Modell).",
+      "llm_check_daily_quota_exceeded": "Nicht geprüft: Sie haben Ihre Modellaufrufe für heute aufgebraucht."
     },
     "errors": {
       "sample_entity_not_found": "Es wurde keine Entität gefunden, auf die die Regel zutrifft. Prüfen Sie den Namen oder lassen Sie ihn leer, um den ersten Treffer zu verwenden.",
       "llm_check_test_rate_limited": "Zu viele Tests in kurzer Zeit. Versuchen Sie es in {{retryAfter}} Sekunden erneut.",
       "llm_check_entity_read_required": "Diese Regel verwendet LLM_CHECK für {{entityType}}-Entitäten. Zum Ausführen oder Testen ist Lesezugriff darauf nötig.",
-      "llm_check_admin_required": "Diese Regel verwendet LLM_CHECK. Speichern, Ausführen oder Testen erfordert Administratorzugriff auf Compliance."
+      "llm_check_admin_required": "Diese Regel verwendet LLM_CHECK. Speichern, Ausführen oder Testen erfordert Administratorzugriff auf Compliance.",
+      "llm_check_daily_quota_exceeded": "Sie haben Ihre {{limit}} LLM_CHECK-Modellaufrufe für heute aufgebraucht. Versuchen Sie es in {{retryAfter}} Sekunden erneut (die Zählung beginnt um Mitternacht UTC neu)."
     },
     "usage": "LLM_CHECK: {{calls}} Modellaufrufe, {{cached}} Urteile aus dem Cache."
   }

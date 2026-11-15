@@ -72,6 +72,8 @@ TRUNCATED = 'llm_check_truncated'
 INVALID_REPLY = 'llm_check_invalid_reply'
 EMPTY_TEXT = 'llm_check_empty_text'  # no text to judge (no call)
 TEXT_REJECTED = 'llm_check_text_rejected'  # the injection scan didn't find the text safe
+# The user who started the run or test used their model calls for the day
+QUOTA_EXCEEDED = 'llm_check_daily_quota_exceeded'
 
 _MESSAGES = {
     NOT_AVAILABLE: "LLM_CHECK is only evaluated in compliance runs",
@@ -86,6 +88,7 @@ _MESSAGES = {
     INVALID_REPLY: "LLM_CHECK failed: the model's reply is not a PASS or FAIL verdict",
     EMPTY_TEXT: "LLM_CHECK was not run: the text is empty",
     TEXT_REJECTED: "LLM_CHECK was not run: the safety check flagged the text",
+    QUOTA_EXCEEDED: "LLM_CHECK was not run: you used your model calls for today",
 }
 
 # The phase 1 verdict must open the reply ("SAFE" / "UNSAFE: reason").
@@ -255,6 +258,61 @@ class DbLlmCheckCache(MemoryLlmCheckCache):
         )
 
 
+def seconds_to_next_utc_day(now: Optional[datetime] = None) -> int:
+    """Seconds until the daily quota starts over (midnight UTC), at least 1."""
+    now = now or utc_now()
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(1, int((tomorrow - now).total_seconds()))
+
+
+class DbLlmCallQuota:
+    """The model calls a user may start a day (UTC), counted in compliance_llm_check_usage.
+
+    The runs and rule tests a user starts reserve the calls of each check that
+    isn't cached before making them, and give back the ones not made (a
+    rejected text makes one). Every reservation is committed at once, so it
+    counts for the user's other runs, also if this run fails later.
+    """
+
+    def __init__(self, db, user: str, limit: int):
+        self._db = db
+        self.user = user
+        self.limit = max(0, int(limit))
+
+    @staticmethod
+    def _today():
+        return utc_now().date()
+
+    def remaining(self) -> int:
+        from src.repositories.compliance_repository import compliance_llm_check_usage_repo
+
+        used = compliance_llm_check_usage_repo.used(self._db, self.user, self._today())
+        return max(0, self.limit - used)
+
+    def reserve(self, calls: int) -> bool:
+        """Count ``calls`` for today if they fit in the limit (committed); False if not."""
+        from src.repositories.compliance_repository import compliance_llm_check_usage_repo
+
+        ok = compliance_llm_check_usage_repo.reserve(
+            self._db, self.user, self._today(), calls, self.limit,
+        )
+        self._db.commit()
+        return ok
+
+    def release(self, calls: int) -> None:
+        """Give back reserved calls that weren't made (committed)."""
+        from src.repositories.compliance_repository import compliance_llm_check_usage_repo
+
+        compliance_llm_check_usage_repo.release(self._db, self.user, self._today(), calls)
+        self._db.commit()
+
+
+class LlmCheckQuotaExceededError(CodedValueError):
+    """The user used their LLM_CHECK model calls for the day (answered with 429)."""
+
+    code = QUOTA_EXCEEDED
+
+
 class LlmChecker:
     """Runs the LLM_CHECKs of one compliance run, with a cache and a call budget."""
 
@@ -265,6 +323,7 @@ class LlmChecker:
         cache: Optional[MemoryLlmCheckCache] = None,
         max_calls: Optional[int] = None,
         client_factory: Optional[Callable[[], Any]] = None,
+        quota: Optional[DbLlmCallQuota] = None,
     ):
         from src.common.config import LLM_INJECTION_CHECK_PROMPT_SECURE_DEFAULT
 
@@ -280,9 +339,12 @@ class LlmChecker:
         self._cache = cache if cache is not None else MemoryLlmCheckCache()
         self._client_factory = client_factory or self._default_client_factory(settings)
         self._client = None
+        # The daily calls of the user who started the run (None: a scheduled run)
+        self.quota = quota
         self.calls = 0
         self.cache_hits = 0
         self.budget_exceeded = 0
+        self.quota_exceeded = 0
 
     @staticmethod
     def _default_client_factory(settings: Any) -> Callable[[], Any]:
@@ -317,8 +379,18 @@ class LlmChecker:
             self.budget_exceeded += 1
             raise self._error(criterion, BUDGET_EXCEEDED)
 
-        self._scan(text, criterion)
-        passed, reason = self._ask(text, criterion)
+        if self.quota is not None and not self.quota.reserve(CALLS_PER_CHECK):
+            self.quota_exceeded += 1
+            raise self._error(criterion, QUOTA_EXCEEDED)
+
+        calls_before = self.calls
+        try:
+            self._scan(text, criterion)
+            passed, reason = self._ask(text, criterion)
+        finally:
+            unused = CALLS_PER_CHECK - (self.calls - calls_before)
+            if self.quota is not None and unused > 0:
+                self.quota.release(unused)
         self._cache.put(key, self._endpoint, passed, reason)
         return LlmCheckResult(criterion, passed, reason)
 

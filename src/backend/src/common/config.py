@@ -205,6 +205,13 @@ class Settings(BaseSettings):
     COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN: int = Field(
         200, ge=0, env='COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN'
     )
+    # Most LLM_CHECK model calls the compliance runs and rule tests one user starts
+    # may make a day (UTC); past it, their checks fail with
+    # llm_check_daily_quota_exceeded and new runs are answered 429. Scheduled runs
+    # have no user and only the per-run budget.
+    COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY: int = Field(
+        400, ge=0, env='COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY'
+    )
     # Days a cached LLM_CHECK verdict is used; older ones are asked again and
     # deleted when a compliance run starts.
     COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS: int = Field(

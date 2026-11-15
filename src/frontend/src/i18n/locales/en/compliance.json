@@ -185,7 +185,8 @@
   "runWarnings": {
     "rule_trailing_input": "This rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). It is ignored when the rule runs, so the rule may check less than it says. Edit the rule to fix it.",
     "notifications_failed": "The policy's notifications (NOTIFY) could not be sent for this run. The results are complete.",
-    "llm_check_budget_exceeded": "{{count}} LLM checks were not run because the run reached its budget of {{budget}} model calls, so those entities failed. Run it again (cached verdicts don't count) or raise COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN."
+    "llm_check_budget_exceeded": "{{count}} LLM checks were not run because the run reached its budget of {{budget}} model calls, so those entities failed. Run it again (cached verdicts don't count) or raise COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
+    "llm_check_daily_quota_exceeded": "{{count}} LLM checks were not run because you used your {{limit}} model calls for today, so those entities failed. Run it again tomorrow (cached verdicts don't count) or ask an admin to raise COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY."
   },
   "actionOutcomes": {
     "status": {
@@ -238,13 +239,15 @@
       "llm_check_invalid_reply": "The model's reply was not a PASS or FAIL verdict.",
       "llm_check_empty_text": "The text is empty.",
       "rule_evaluation_failed": "The rule could not be evaluated on this entity.",
-      "llm_check_text_rejected": "Not checked: the safety check flagged the text (for example, instructions to the model)."
+      "llm_check_text_rejected": "Not checked: the safety check flagged the text (for example, instructions to the model).",
+      "llm_check_daily_quota_exceeded": "Not checked: you used your model calls for today."
     },
     "errors": {
       "sample_entity_not_found": "No entity the rule matches was found. Check the name, or leave it empty to use the first match.",
       "llm_check_test_rate_limited": "Too many tests in a short time. Try again in {{retryAfter}} seconds.",
       "llm_check_entity_read_required": "This rule uses LLM_CHECK on {{entityType}} entities. Running or testing it needs read access to them.",
-      "llm_check_admin_required": "This rule uses LLM_CHECK. Saving, running or testing it requires admin access to compliance."
+      "llm_check_admin_required": "This rule uses LLM_CHECK. Saving, running or testing it requires admin access to compliance.",
+      "llm_check_daily_quota_exceeded": "You used your {{limit}} LLM_CHECK model calls for today. Try again in {{retryAfter}} seconds (the count starts over at midnight UTC)."
     },
     "usage": "LLM_CHECK: {{calls}} model calls, {{cached}} verdicts from the cache."
   }

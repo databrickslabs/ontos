@@ -185,7 +185,8 @@
   "runWarnings": {
     "rule_trailing_input": "Esta regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Ele é ignorado quando a regra é executada, então a regra pode verificar menos do que diz. Edite a regra para corrigir.",
     "notifications_failed": "Não foi possível enviar as notificações da política (NOTIFY) nesta execução. Os resultados estão completos.",
-    "llm_check_budget_exceeded": "{{count}} verificações de LLM não foram executadas porque a execução atingiu seu limite de {{budget}} chamadas ao modelo, então essas entidades falharam. Execute de novo (vereditos em cache não contam) ou aumente COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN."
+    "llm_check_budget_exceeded": "{{count}} verificações de LLM não foram executadas porque a execução atingiu seu limite de {{budget}} chamadas ao modelo, então essas entidades falharam. Execute de novo (vereditos em cache não contam) ou aumente COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
+    "llm_check_daily_quota_exceeded": "{{count}} verificações LLM não foram executadas porque você usou suas {{limit}} chamadas ao modelo de hoje, então essas entidades falharam. Execute de novo amanhã (veredictos em cache não contam) ou peça a um administrador para aumentar COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY."
   },
   "actionOutcomes": {
     "status": {
@@ -238,13 +239,15 @@
       "llm_check_invalid_reply": "A resposta do modelo não foi um veredito PASS ou FAIL.",
       "llm_check_empty_text": "O texto está vazio.",
       "rule_evaluation_failed": "Não foi possível avaliar a regra nesta entidade.",
-      "llm_check_text_rejected": "Não verificado: a verificação de segurança sinalizou o texto (por exemplo, instruções para o modelo)."
+      "llm_check_text_rejected": "Não verificado: a verificação de segurança sinalizou o texto (por exemplo, instruções para o modelo).",
+      "llm_check_daily_quota_exceeded": "Não verificado: você usou suas chamadas ao modelo de hoje."
     },
     "errors": {
       "sample_entity_not_found": "Nenhuma entidade encontrada pela regra. Confira o nome ou deixe-o vazio para usar a primeira encontrada.",
       "llm_check_test_rate_limited": "Testes demais em pouco tempo. Tente de novo em {{retryAfter}} segundos.",
       "llm_check_entity_read_required": "Esta regra usa LLM_CHECK em entidades {{entityType}}. Executá-la ou testá-la exige acesso de leitura a elas.",
-      "llm_check_admin_required": "Esta regra usa LLM_CHECK. Salvá-la, executá-la ou testá-la exige acesso de administrador à conformidade."
+      "llm_check_admin_required": "Esta regra usa LLM_CHECK. Salvá-la, executá-la ou testá-la exige acesso de administrador à conformidade.",
+      "llm_check_daily_quota_exceeded": "Você usou suas {{limit}} chamadas ao modelo de LLM_CHECK de hoje. Tente de novo em {{retryAfter}} segundos (a contagem recomeça à meia-noite UTC)."
     },
     "usage": "LLM_CHECK: {{calls}} chamadas ao modelo, {{cached}} veredictos do cache."
   }

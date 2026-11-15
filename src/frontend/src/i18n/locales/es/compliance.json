@@ -185,7 +185,8 @@
   "runWarnings": {
     "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo.",
     "notifications_failed": "No se pudieron enviar las notificaciones de la política (NOTIFY) en esta ejecución. Los resultados están completos.",
-    "llm_check_budget_exceeded": "{{count}} comprobaciones de LLM no se ejecutaron porque la ejecución alcanzó su presupuesto de {{budget}} llamadas al modelo, por lo que esas entidades fallaron. Vuelve a ejecutarla (los veredictos en caché no cuentan) o aumenta COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN."
+    "llm_check_budget_exceeded": "{{count}} comprobaciones de LLM no se ejecutaron porque la ejecución alcanzó su presupuesto de {{budget}} llamadas al modelo, por lo que esas entidades fallaron. Vuelve a ejecutarla (los veredictos en caché no cuentan) o aumenta COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
+    "llm_check_daily_quota_exceeded": "{{count}} comprobaciones LLM no se ejecutaron porque usaste tus {{limit}} llamadas al modelo de hoy, así que esas entidades fallaron. Ejecútala de nuevo mañana (los veredictos en caché no cuentan) o pide a un administrador que aumente COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY."
   },
   "actionOutcomes": {
     "status": {
@@ -238,13 +239,15 @@
       "llm_check_invalid_reply": "La respuesta del modelo no fue un veredicto PASS o FAIL.",
       "llm_check_empty_text": "El texto está vacío.",
       "rule_evaluation_failed": "No se pudo evaluar la regla en esta entidad.",
-      "llm_check_text_rejected": "No comprobado: la revisión de seguridad marcó el texto (por ejemplo, instrucciones al modelo)."
+      "llm_check_text_rejected": "No comprobado: la revisión de seguridad marcó el texto (por ejemplo, instrucciones al modelo).",
+      "llm_check_daily_quota_exceeded": "No comprobado: usaste tus llamadas al modelo de hoy."
     },
     "errors": {
       "sample_entity_not_found": "No se encontró ninguna entidad que coincida con la regla. Revisa el nombre o déjalo vacío para usar la primera coincidencia.",
       "llm_check_test_rate_limited": "Demasiadas pruebas en poco tiempo. Inténtalo de nuevo en {{retryAfter}} segundos.",
       "llm_check_entity_read_required": "Esta regla usa LLM_CHECK en entidades {{entityType}}. Ejecutarla o probarla requiere acceso de lectura a ellas.",
-      "llm_check_admin_required": "Esta regla usa LLM_CHECK. Guardarla, ejecutarla o probarla requiere acceso de administrador a cumplimiento."
+      "llm_check_admin_required": "Esta regla usa LLM_CHECK. Guardarla, ejecutarla o probarla requiere acceso de administrador a cumplimiento.",
+      "llm_check_daily_quota_exceeded": "Usaste tus {{limit}} llamadas al modelo de LLM_CHECK de hoy. Inténtalo de nuevo en {{retryAfter}} segundos (el recuento se reinicia a medianoche UTC)."
     },
     "usage": "LLM_CHECK: {{calls}} llamadas al modelo, {{cached}} veredictos de la caché."
   }

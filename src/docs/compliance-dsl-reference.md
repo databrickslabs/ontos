@@ -195,6 +195,13 @@ rule editor to try a criterion on one entity (at most 10 tests a minute per user
   `llm_check_budget_exceeded`, and each policy run reports how many. Each run
   also shows its model calls and the verdicts it read from the cache
   (`llm_calls` and `llm_cache_hits` in the run's API answers).
+- Daily quota: the runs and rule tests one user starts may make
+  `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY` model calls a day (UTC,
+  default 400). The checks past it fail with `llm_check_daily_quota_exceeded`
+  (the run warns how many), and a run or test started with fewer than one
+  check's calls left is answered 429 with `Retry-After` (seconds to midnight
+  UTC). Cached verdicts don't count. Scheduled runs have no user: only the
+  per-run budget applies to them.
 - Scheduled runs (the Compliance Checks job) use the app's LLM settings: they
   are written into the installed job when it is installed, and when the general
   settings (which include the LLM settings) are saved. If the app can't update

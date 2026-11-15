@@ -1,13 +1,14 @@
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from src.common.repository import CRUDBase
 from src.common.timestamps import utc_now
 from src.db_models.compliance import (
     ComplianceLlmCheckCacheDb,
+    ComplianceLlmCheckUsageDb,
     CompliancePolicyDb,
     ComplianceResultDb,
     ComplianceRunDb,
@@ -91,9 +92,70 @@ class ComplianceLlmCheckCacheRepository(
             )
 
 
+class ComplianceLlmCheckUsageRepository(
+    CRUDBase[ComplianceLlmCheckUsageDb, Dict[str, Any], Dict[str, Any]]
+):
+    """LLM_CHECK model calls per user and day (see ComplianceLlmCheckUsageDb)."""
+
+    def __init__(self):
+        super().__init__(ComplianceLlmCheckUsageDb)
+
+    @staticmethod
+    def _calls(db: Session, username: str, day) -> Optional[int]:
+        """The stored count (read from the database, not the session), or None."""
+        model = ComplianceLlmCheckUsageDb
+        return db.execute(
+            select(model.calls).where(model.username == username, model.day == day)
+        ).scalar_one_or_none()
+
+    def used(self, db: Session, username: str, day) -> int:
+        return int(self._calls(db, username, day) or 0)
+
+    def reserve(self, db: Session, username: str, day, calls: int, limit: int) -> bool:
+        """Add ``calls`` to the user's day if the total stays within ``limit``.
+
+        One conditional UPDATE, so two runs of the same user can't both take the
+        last calls; the day's first reservation inserts the row (in a savepoint;
+        a row a concurrent run inserted first is updated instead). Not committed.
+        """
+        if calls > limit:
+            return False
+        model = ComplianceLlmCheckUsageDb
+        for _ in range(2):
+            result = db.execute(
+                update(model)
+                .where(model.username == username, model.day == day,
+                       model.calls + calls <= limit)
+                .values(calls=model.calls + calls)
+                .execution_options(synchronize_session=False)
+            )
+            if result.rowcount:
+                return True
+            if self._calls(db, username, day) is not None:
+                return False
+            try:
+                with db.begin_nested():
+                    db.add(model(username=username, day=day, calls=calls))
+                return True
+            except IntegrityError:
+                continue  # inserted by a concurrent run: update it
+        return False
+
+    def release(self, db: Session, username: str, day, calls: int) -> None:
+        """Take back ``calls`` reserved but not made. Not committed."""
+        model = ComplianceLlmCheckUsageDb
+        db.execute(
+            update(model)
+            .where(model.username == username, model.day == day, model.calls >= calls)
+            .values(calls=model.calls - calls)
+            .execution_options(synchronize_session=False)
+        )
+
+
 compliance_policy_repo = CompliancePolicyRepository()
 compliance_run_repo = ComplianceRunRepository()
 compliance_result_repo = ComplianceResultRepository()
 compliance_llm_check_cache_repo = ComplianceLlmCheckCacheRepository()
+compliance_llm_check_usage_repo = ComplianceLlmCheckUsageRepository()
 
 

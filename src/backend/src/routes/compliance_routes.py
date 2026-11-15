@@ -34,6 +34,7 @@ from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
 from src.common.compliance_entities import (
     APP_ENTITY_FEATURES, UnityCatalogLoader, parse_entity_filter, validate_rule,
 )
+from src.common.compliance_llm_check import LlmCheckQuotaExceededError
 from src.common.workspace_client import get_obo_workspace_client
 
 from src.common.logging import get_logger
@@ -139,6 +140,28 @@ def require_compliance_admin_for_llm_check(
             "access to compliance",
         )
         raise HTTPException(status_code=403, detail=str(error)) from error
+
+
+def require_llm_check_quota(db, rule: Optional[str], current_user) -> None:
+    """A run or rule test of an LLM_CHECK rule needs the user's daily model calls
+    (COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY): without one check's calls
+    left it is answered 429 ``llm_check_daily_quota_exceeded``, with Retry-After
+    (seconds to midnight UTC). Checks past the quota during a run fail with the
+    same code.
+    """
+    if not rule_uses_llm_check(rule):
+        return
+    try:
+        manager.require_llm_quota(db, _username(current_user))
+    except LlmCheckQuotaExceededError as e:
+        raise HTTPException(
+            status_code=429, detail=str(e),
+            headers={'Retry-After': str(e.params['retryAfter'])},
+        ) from e
+
+
+def _username(current_user) -> str:
+    return current_user.username if current_user else 'unknown'
 
 
 class LlmCheckReadRequiredError(CodedValueError):
@@ -366,6 +389,7 @@ async def run_policy(
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
     require_compliance_admin_for_llm_check(policy.rule, auth_manager, current_user, request)
     reader = llm_check_reader(request, policy.rule, auth_manager, current_user)
+    require_llm_check_quota(db, policy.rule, current_user)
 
     # For now, implement inline only; async can be backed by Databricks job later.
     # Off the event loop: LLM_CHECK rules call the serving endpoint per entity.
@@ -376,6 +400,7 @@ async def run_policy(
         limit=payload.limit,
         current_user=current_user.username if current_user else None,
         workspace_client=reader,
+        quota_user=_username(current_user),
     )
     
     audit_manager.log_action(
@@ -528,6 +553,7 @@ async def test_llm_check(
     _check_rule(payload.rule)
     require_compliance_admin_for_llm_check(payload.rule, auth_manager, current_user, request)
     reader = llm_check_reader(request, payload.rule, auth_manager, current_user)
+    require_llm_check_quota(db, payload.rule, current_user)
     try:
         _throttle_rule_test(current_user.username if current_user else 'unknown')
     except RuleTestRateLimitedError as e:
@@ -539,7 +565,7 @@ async def test_llm_check(
         # The model calls block: run them off the event loop
         return await run_in_threadpool(
             manager.test_rule_on_sample, db, rule=payload.rule, entity=payload.entity,
-            workspace_client=reader,
+            workspace_client=reader, quota_user=_username(current_user),
         )
     except SampleEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

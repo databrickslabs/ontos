@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, String, DateTime, Text, Boolean, ForeignKey, Integer, Float
+from sqlalchemy import (
+    Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text,
+)
 from sqlalchemy.orm import relationship
 
 from src.common.database import Base
@@ -89,3 +91,16 @@ class ComplianceLlmCheckCacheDb(Base):
     passed = Column(Boolean, nullable=False)
     reason = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class ComplianceLlmCheckUsageDb(Base):
+    """LLM_CHECK model calls a user started on one day (UTC), for the daily quota.
+
+    Counted for the runs and rule tests a user starts; scheduled runs have no
+    user and only the per-run budget.
+    """
+    __tablename__ = 'compliance_llm_check_usage'
+
+    username = Column(String, primary_key=True)
+    day = Column(Date, primary_key=True)
+    calls = Column(Integer, nullable=False, default=0)

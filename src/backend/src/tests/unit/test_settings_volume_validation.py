@@ -103,8 +103,24 @@ def test_an_unchanged_legacy_value_does_not_block_other_settings(manager):
     assert manager._settings.DATABRICKS_VOLUME == "a.b"
 
 
-def test_clearing_the_volume_leaves_memory_as_a_restart_would(manager, monkeypatch):
+def _real_manager(db_session, tmp_path, env_file_text):
+    """A manager on real Settings loaded from a .env file (the variable is not in os.environ)."""
+    env_file = tmp_path / ".env"
+    env_file.write_text(env_file_text)
+    settings = Settings(
+        _env_file=str(env_file),
+        DATABRICKS_HOST="https://test.example.com",
+        DATABRICKS_WAREHOUSE_ID="wh",
+        APP_AUDIT_LOG_DIR=str(tmp_path),
+        ENV="TEST",
+    )
+    return SettingsManager(db=db_session, settings=settings, workspace_client=None)
+
+
+def test_clearing_the_volume_leaves_memory_as_a_restart_would(db_session, tmp_path, monkeypatch):
     monkeypatch.delenv("DATABRICKS_VOLUME", raising=False)
+    manager = _real_manager(db_session, tmp_path, "")
+    _save(manager, {"databricks_volume": "other_vol"})
 
     _save(manager, {"databricks_volume": ""})
 
@@ -113,16 +129,38 @@ def test_clearing_the_volume_leaves_memory_as_a_restart_would(manager, monkeypat
     assert manager._settings.DATABRICKS_VOLUME is None
 
 
-def test_clearing_the_volume_falls_back_to_the_environment_value(manager, monkeypatch):
-    monkeypatch.setenv("DATABRICKS_VOLUME", "/Volumes/c/s/env_vol")
+def test_clearing_the_volume_falls_back_to_the_volume_in_the_env_file(
+    db_session, tmp_path, monkeypatch
+):
+    monkeypatch.delenv("DATABRICKS_VOLUME", raising=False)
+    manager = _real_manager(db_session, tmp_path, "DATABRICKS_VOLUME=/Volumes/c/s/env_vol\n")
+    assert manager._settings.DATABRICKS_VOLUME == "/Volumes/c/s/env_vol"
+    _save(manager, {"databricks_volume": "other_vol"})
 
     _save(manager, {"databricks_volume": ""})
 
     assert manager._settings.DATABRICKS_VOLUME == "/Volumes/c/s/env_vol"
 
 
-def test_clearing_the_volume_checks_the_environment_value(manager, monkeypatch):
-    monkeypatch.setenv("DATABRICKS_VOLUME", "a.b")
+def test_after_a_restart_clearing_still_returns_to_the_env_file_value(
+    db_session, tmp_path, monkeypatch
+):
+    monkeypatch.delenv("DATABRICKS_VOLUME", raising=False)
+    first = _real_manager(db_session, tmp_path, "DATABRICKS_VOLUME=/Volumes/c/s/env_vol\n")
+    _save(first, {"databricks_volume": "other_vol"})
+
+    # The restart loads the stored override over the .env value.
+    restarted = _real_manager(db_session, tmp_path, "DATABRICKS_VOLUME=/Volumes/c/s/env_vol\n")
+    assert restarted._settings.DATABRICKS_VOLUME == "other_vol"
+    _save(restarted, {"databricks_volume": ""})
+
+    assert restarted._settings.DATABRICKS_VOLUME == "/Volumes/c/s/env_vol"
+
+
+def test_clearing_the_volume_checks_the_volume_in_the_env_file(db_session, tmp_path, monkeypatch):
+    monkeypatch.delenv("DATABRICKS_VOLUME", raising=False)
+    manager = _real_manager(db_session, tmp_path, "DATABRICKS_VOLUME=a.b\n")
+    manager._settings.DATABRICKS_VOLUME = "other_vol"
 
     with pytest.raises(VolumeInvalidError):
         _save(manager, {"databricks_volume": ""})

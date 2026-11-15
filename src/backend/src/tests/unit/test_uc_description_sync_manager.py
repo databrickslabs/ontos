@@ -15,6 +15,7 @@ from src.controller.uc_description_sync_manager import (
 )
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.models.assets import DESCRIPTION_SYNC_PROPERTY
+from src.tests.helpers import reads_back_comment_writes
 
 
 def _settings(enabled=True, warehouse='wh-1'):
@@ -53,7 +54,7 @@ def _ws(state=StatementState.SUCCEEDED, message=None, *, comment=None, table_typ
         status=SimpleNamespace(state=state, error=error), statement_id='st-1')
     ws.tables.get.return_value = SimpleNamespace(
         comment=comment, table_type=table_type, columns=list(columns))
-    return ws
+    return reads_back_comment_writes(ws)
 
 
 def _statements(ws):
@@ -423,3 +424,56 @@ def test_a_single_save_that_times_out_is_a_failed_write(db_session, monkeypatch)
     warning, _ = _sync(db_session, asset, _ws(StatementState.RUNNING, comment='Old text'))
 
     assert warning.code == CODE_WRITE_FAILED
+
+
+def _sync_outcome(db, asset, ws, previous='Old text'):
+    outcome = UcDescriptionSyncManager(_settings()).sync_after_update(
+        db, asset.id, description_sent=True, previous_description=previous,
+        user_client=lambda: ws,
+    )
+    db.flush()
+    return outcome
+
+
+def test_the_comment_is_read_back_after_the_write_and_audited(db_session):
+    asset = _asset(db_session)
+    ws = _ws(comment='Old text')
+
+    outcome = _sync_outcome(db_session, asset, ws)
+
+    assert outcome.in_sync and outcome.warning is None
+    assert ws.tables.get.call_count == 2
+    assert outcome.audit == {'before': 'Old text', 'after': 'New text', 'outcome': 'written',
+                             'verified': True}
+
+
+def test_a_comment_written_right_after_the_write_is_kept_and_audited(db_session):
+    asset = _asset(db_session)
+    ws = _ws(comment='Old text')
+    ws.tables.get.side_effect = [
+        SimpleNamespace(comment='Old text', table_type=None, columns=[]),
+        SimpleNamespace(comment='Customer comment', table_type=None, columns=[]),
+    ]
+
+    outcome = _sync_outcome(db_session, asset, ws)
+
+    assert not outcome.in_sync
+    assert outcome.warning.code == CODE_EXISTING_COMMENT
+    assert outcome.state.code == CODE_EXISTING_COMMENT
+    assert outcome.audit == {'before': 'Old text', 'after': 'Customer comment',
+                             'outcome': 'written', 'verified': True}
+
+
+def test_a_failed_read_back_keeps_the_write_unverified(db_session):
+    asset = _asset(db_session)
+    ws = _ws(comment='Old text')
+    ws.tables.get.side_effect = [
+        SimpleNamespace(comment='Old text', table_type=None, columns=[]),
+        RuntimeError('reset'),
+    ]
+
+    outcome = _sync_outcome(db_session, asset, ws)
+
+    assert outcome.in_sync and outcome.warning is None
+    assert outcome.audit == {'before': 'Old text', 'after': 'New text', 'outcome': 'written',
+                             'verified': False}

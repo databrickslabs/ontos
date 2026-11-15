@@ -13,6 +13,7 @@ from databricks.sdk.service.sql import StatementState
 from src.app import app
 from src.common.dependencies import get_settings
 from src.db_models.assets import AssetDb, AssetTypeDb
+from src.tests.helpers import reads_back_comment_writes
 
 TOKEN = {'x-forwarded-access-token': 'user-token', 'X-Forwarded-Email': 'user@example.com'}
 
@@ -70,7 +71,7 @@ def _uc_client(comment=None):
         status=SimpleNamespace(state=StatementState.SUCCEEDED, error=None), statement_id='st-1')
     ws.tables.get.return_value = SimpleNamespace(
         table_type=None, comment=comment, columns=[SimpleNamespace(name='order_id', comment=None)])
-    return ws
+    return reads_back_comment_writes(ws)
 
 
 def _fail_with(ws, message):

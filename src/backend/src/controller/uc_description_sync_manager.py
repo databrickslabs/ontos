@@ -11,6 +11,10 @@ save. Any other comment (e.g. one written by a customer in Unity Catalog) is
 kept, and the save gets a coded warning. A failed write never fails the save:
 the asset keeps the reason in an internal property (shown as "not in sync
 with Unity Catalog") until a later write succeeds.
+
+Unity Catalog has no compare-and-set for comments, so a comment written there
+between Ontos's read and its write is replaced. The comment is read back after
+the write, and the audit records what was read before and after.
 """
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -109,6 +113,10 @@ _CLIENT_ERROR_CODES = {
 }
 
 
+# A comment that could not be read back after a write
+_UNREAD = object()
+
+
 class ImportWriteLimitError(CodedValueError):
     """A bulk import already wrote as many descriptions as its limit allows."""
 
@@ -191,7 +199,8 @@ class SyncOutcome:
     ``state``: the mark stored on the asset afterwards.
     ``in_sync``: Unity Catalog holds the saved description now (written, or already equal).
     ``audit``: ``before`` / ``after`` Unity Catalog comments and the ``outcome``
-    (written, unchanged, refused, failed) when Unity Catalog was read.
+    (written, unchanged, refused, failed) when Unity Catalog was read; after a
+    write, ``after`` is the comment read back (``verified``), else the text written.
     """
     warning: Optional[CodedWarning] = None
     state: Optional[DescriptionSyncState] = None
@@ -323,7 +332,31 @@ class UcDescriptionSyncManager:
                                audit=audit)
         logger.info("Wrote the description of asset %s to Unity Catalog (%s)", asset.id, label)
         audit['outcome'] = 'written'
-        return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
+        after = self._read_back(ws, table_fqn, column_name, time_left)
+        audit['verified'] = after is not _UNREAD
+        if after is _UNREAD or after == text:
+            return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
+        # Someone wrote another comment right after this write: theirs is kept
+        logger.info("The Unity Catalog comment of %s changed right after Ontos wrote it "
+                    "(asset %s)", label, asset.id)
+        audit['after'] = after
+        warning = _warning(CODE_EXISTING_COMMENT, label)
+        return SyncOutcome(warning, self._store_state(db, asset, warning), audit=audit)
+
+    @staticmethod
+    def _read_back(ws: Any, table_fqn: str, column_name: Optional[str],
+                   time_left: Optional[Callable[[], float]]) -> Any:
+        """The comment read back after a write, or ``_UNREAD`` when it can't be read."""
+        if time_left is not None and time_left() <= 0:
+            return _UNREAD
+        try:
+            _, comment = read_comment(
+                ws, table_fqn, column_name,
+                timeout_seconds=time_left() if time_left is not None else None)
+        except CommentWriteError as e:
+            logger.info("Reading back the comment of %s failed: %s", table_fqn, e.reason)
+            return _UNREAD
+        return comment
 
     @staticmethod
     def _baseline(asset: AssetDb, previous_description: Optional[str]) -> Optional[str]:

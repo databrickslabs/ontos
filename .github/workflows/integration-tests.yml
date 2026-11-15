@@ -28,7 +28,6 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      id-token: write # JFrog OIDC (setup-python bootstrap)
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       # Names this plan's artifacts. "Re-run failed jobs" reuses this job and
@@ -40,12 +39,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Standard library only: no dependencies installed, no pip cache
-      - uses: ./.github/actions/setup-python-jfrog
+      # Standard library only: nothing is installed, so no JFrog token (the PR's
+      # own script runs in this job and must not see one) and no id-token.
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: '3.11'
-          installer: none
-          cache: ''
 
       - name: Restore test durations
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
@@ -177,7 +176,6 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      id-token: write # JFrog OIDC (setup-python bootstrap)
 
     steps:
       - name: Check the plan
@@ -191,11 +189,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: ./.github/actions/setup-python-jfrog
+      # Standard library only, as in the plan job: no JFrog token, no id-token.
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: '3.11'
-          installer: none
-          cache: ''
 
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8

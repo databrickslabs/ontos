@@ -314,3 +314,20 @@ def test_failed_objects_are_counted_once_each(tag_sync):
     result = _run(tag_sync, spark, ["main.a.one", "main.a.three"])
     assert result.failed_objects == ["TABLE main.a.one"]
     assert len(result.errors) == 1
+
+
+def test_a_tag_policy_rejection_is_not_retried(tag_sync, monkeypatch):
+    """A governed tag policy that doesn't allow the value: the error a workspace
+    returned. A retry can't fix it, so the statement runs once and the object fails."""
+    sleeps = []
+    monkeypatch.setattr(tag_sync, "TAG_SQL_SLEEP", sleeps.append)
+    spark = FakeSpark({"ALTER TABLE gone.crm.customers SET": (
+        "[INVALID_PARAMETER_VALUE.UC_TAG_POLICY_VALUE_NOT_ALLOWED] The value is not "
+        "allowed by the tag policy."
+    )})
+    result = _run(tag_sync, spark, TABLES)
+
+    assert len([s for s in spark.statements
+                if "ALTER TABLE gone.crm.customers SET" in s]) == 1
+    assert sleeps == []
+    assert result.failed_objects == ["TABLE gone.crm.customers"]

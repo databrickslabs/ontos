@@ -1174,6 +1174,9 @@ _NON_RETRYABLE_TAG_ERRORS = _MISSING_OBJECT_ERRORS + _MISSING_COLUMN_ERRORS + (
     "APPLY TAG",
     # A column the statement names can't be resolved: the query is wrong.
     "UNRESOLVED_COLUMN",
+    # A governed tag policy rejects the value. Checked on a workspace: a value the
+    # policy doesn't allow raises INVALID_PARAMETER_VALUE.UC_TAG_POLICY_VALUE_NOT_ALLOWED.
+    "UC_TAG_POLICY_VALUE_NOT_ALLOWED",
 )
 
 

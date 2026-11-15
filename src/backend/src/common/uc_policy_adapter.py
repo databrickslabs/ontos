@@ -374,9 +374,10 @@ def build_abac(plan: EntitlementPlan, abac: Any,
             if kind not in _ABAC_ON:
                 # The rule relied on this restriction (a mask replaced a deny, a filter narrows a
                 # grant): not being able to build it must block the release, never fail open.
+                label = rule.source.label() if rule.source else rule.kind
                 plan.issue(SEVERITY_ERROR, "abac_unsupported_target",
-                           f"{rule.source.label() if rule.source else rule.kind}: ABAC policies apply to "
-                           f"tables, not to a {kind} ({name})", rule.source, params={"rule": rule.source.label() if rule.source else rule.kind, "kind": kind, "name": name})
+                           f"{label}: ABAC policies apply to tables, not to a {kind} ({name})", rule.source,
+                           params={"rule": label, "kind": kind, "name": name})
                 continue
             on_type = _ABAC_ON[kind]
             spec: Dict[str, Any] = {

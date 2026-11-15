@@ -11,8 +11,6 @@ export interface Coded {
   code?: string | null;
   params?: Record<string, unknown> | null;
   message?: string | null;
-  /** The rule a compile issue is about; its label replaces the backend's English `rule` param. */
-  source?: { policy_name: string; rule_kind: string; rule_index: number } | null;
 }
 
 /** A rule's label in the user's language: `Sales analytics read · Erlaubnis #1`. */
@@ -25,19 +23,32 @@ export function ruleLabel(t: TFunction, s: { policy_name: string; rule_kind: str
 const RELEASE_STATUS_CODES = new Set(['release_transition', 'deliver_status']);
 const RULE_KINDS = ['permission', 'prohibition', 'obligation'];
 const ENTITY_KINDS = ['policy', 'audience', 'asset_collection', 'target'];
+const ABAC_KINDS = ['row_filter', 'column_mask'];
+// The backend's English rule label (RuleSource.label): `<policy> <kind> #<n>`.
+const RULE_LABEL = /^(.*) (permission|prohibition|obligation) #(\d+)$/;
 
 function translatedParams(t: TFunction, code: string, params: Record<string, unknown>): Record<string, unknown> {
   const statusNs = RELEASE_STATUS_CODES.has(code) ? 'releases.status' : 'status';
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(params)) {
     if (value == null) continue;
+    if (Array.isArray(value)) {
+      // A list of coded problems (e.g. what blocks an activation): each translated.
+      out[key] = value.map((v) => (v && typeof v === 'object' ? issueText(t, v as Coded) : String(v))).join('; ');
+      continue;
+    }
     const text = String(value);
+    const label = key === 'rule' ? RULE_LABEL.exec(text) : null;
     if (key === 'status' || key === 'from' || key === 'to') {
       out[key] = t(`access-policies:${statusNs}.${text}`, { defaultValue: text });
     } else if (key === 'kind' && RULE_KINDS.includes(text)) {
       out[key] = t(`access-policies:ruleKinds.${text}`, { defaultValue: text });
     } else if (key === 'kind' && ENTITY_KINDS.includes(text)) {
       out[key] = t(`access-policies:kinds.${text}`, { defaultValue: text });
+    } else if (key === 'kind' && ABAC_KINDS.includes(text)) {
+      out[key] = t(`access-policies:abacKinds.${text}`, { defaultValue: text });
+    } else if (label) {
+      out[key] = ruleLabel(t, { policy_name: label[1], rule_kind: label[2], rule_index: Number(label[3]) - 1 });
     } else {
       out[key] = value;
     }
@@ -51,11 +62,10 @@ export function issueText(t: TFunction, item: Coded | string | null | undefined)
   if (typeof item === 'string') return item;
   const message = item.message ?? '';
   if (!item.code || item.code === 'message') return message;
-  const params = translatedParams(t, item.code, item.params ?? {});
-  const s = item.source;
-  // The backend's English label of the issue's own rule (`<policy> <kind> #<n>`, see RuleSource.label).
-  if (s && params.rule === `${s.policy_name} ${s.rule_kind} #${s.rule_index + 1}`) params.rule = ruleLabel(t, s);
-  return t(`access-policies:issues.${item.code}`, { ...params, defaultValue: message });
+  return t(`access-policies:issues.${item.code}`, {
+    ...translatedParams(t, item.code, item.params ?? {}),
+    defaultValue: message,
+  });
 }
 
 /** The translated error of an API response (`useApi`), or `fallback` when it has none. */

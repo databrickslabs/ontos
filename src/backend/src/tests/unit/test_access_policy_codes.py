@@ -51,7 +51,7 @@ def collect():
         tree = ast.parse((SRC / rel).read_text())
         for n in ast.walk(tree):
             if isinstance(n, ast.Dict):
-                d = {_const(k): v for k, v in zip(n.keys, n.values) if _const(k)}
+                d = {_const(k): v for k, v in zip(n.keys, n.values, strict=True) if _const(k)}
                 if "code" in d and "params" in d:
                     add(d["code"], _params(d["params"]))
             if not isinstance(n, ast.Call):
@@ -69,7 +69,7 @@ def collect():
                     _params(kw.get("params") or (a[2] if len(a) > 2 else None)))
             elif name == "AccessPolicyError" and "code" in kw:
                 add(kw["code"], _params(kw.get("params")))
-    out = {c: None for c in EXTRA}
+    out = dict.fromkeys(EXTRA)
     for code, sets in found.items():
         if any(s is None for s in sets):
             out[code] = None  # dynamic params: placeholders aren't checked
@@ -91,8 +91,20 @@ def test_every_emitted_code_is_exported_for_the_frontend():
         "access-policy-codes.json is stale — run with UPDATE_ACCESS_POLICY_CODES=1")
 
 
-def test_no_raise_site_falls_back_to_the_generic_code():
+def test_no_error_falls_back_to_the_generic_code():
+    """Every AccessPolicyError is built with a code (raised directly or wrapped, e.g. ``_http(...)``)."""
     for rel in FILES:
         for n in ast.walk(ast.parse((SRC / rel).read_text())):
-            if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call) and getattr(n.exc.func, "id", "") == "AccessPolicyError":
-                assert any(k.arg == "code" for k in n.exc.keywords), f"{rel}:{n.lineno} raises without a code"
+            if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "AccessPolicyError":
+                assert any(k.arg == "code" for k in n.keywords), f"{rel}:{n.lineno} builds an error without a code"
+
+
+def test_problem_survives_copy_and_pickle():
+    import copy
+    import pickle
+
+    from src.common import odrl
+
+    p = odrl.Problem("Scope entry 'x' is invalid", "scope_entry_invalid", {"entry": "x"})
+    for clone in (copy.copy(p), copy.deepcopy(p), pickle.loads(pickle.dumps(p))):
+        assert clone == p and clone.code == p.code and clone.params == p.params

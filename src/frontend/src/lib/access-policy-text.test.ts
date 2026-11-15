@@ -55,10 +55,23 @@ describe('issueText', () => {
     expect(issueText(t, 'A string problem')).toBe('A string problem');
   });
 
-  it('rebuilds the rule label of a compile issue in the user language', () => {
-    const source = { policy_name: 'Sales', rule_kind: 'prohibition', rule_index: 0 };
-    const text = issueText(t, { code: 'offer_term', params: { rule: 'Sales prohibition #1' }, message: '', source });
-    expect(text).toContain(`Sales · ${deText.ruleKinds.prohibition} #1`);
+  it('rebuilds backend rule labels in the user language', () => {
+    const text = issueText(t, {
+      code: 'denied_by_prohibition',
+      params: { principal: 'bob', action: 'read', securable: 'uc:a.b', rule: 'Sales — terms prohibition #2' },
+      message: '',
+    });
+    expect(text).toContain(`Sales — terms · ${deText.ruleKinds.prohibition} #2`);
+  });
+
+  it('translates a list of coded problems inside a param', () => {
+    const text = issueText(t, {
+      code: 'not_ready_to_activate',
+      params: { count: 2, problems: [{ code: 'audience_empty', params: {}, message: 'x' }, { code: 'message', params: {}, message: 'Plain' }] },
+      message: '',
+    });
+    expect(text).toContain(deText.issues.audience_empty);
+    expect(text).toContain('Plain');
   });
 
   it('translates status params', () => {

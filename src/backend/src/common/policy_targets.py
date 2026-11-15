@@ -106,9 +106,11 @@ class TargetAdapter:
             names = [self.native_name(s) for s in rule.securables]
             above = [n for n in names if not any(inside(n, s) for s in scope) and any(inside(s, n) for s in scope)]
             if above:
+                label = rule.source.label() if rule.source else rule.kind
                 plan.issue(SEVERITY_ERROR, "abac_outside_scope",
-                           f"{rule.source.label() if rule.source else rule.kind}: restriction on {', '.join(above)} "
-                           f"reaches beyond this target's scope ({', '.join(scope)})", rule.source, params={"rule": rule.source.label() if rule.source else rule.kind, "securables": ", ".join(above), "scope": ", ".join(scope)})
+                           f"{label}: restriction on {', '.join(above)} reaches beyond this target's scope "
+                           f"({', '.join(scope)})", rule.source,
+                           params={"rule": label, "securables": ", ".join(above), "scope": ", ".join(scope)})
             rule.securables = [s for s, n in zip(rule.securables, names, strict=True) if any(inside(n, p) for p in scope)]
             if rule.securables:
                 kept.append(rule)

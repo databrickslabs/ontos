@@ -479,6 +479,7 @@
     "cron_unsupported": "'{{expr}}' is geen ondersteunde cron-expressie ({{reason}})",
     "delete_status": "Alleen concept- of buiten gebruik gestelde versies kunnen worden verwijderd (deze is {{status}}).",
     "deliver_status": "Alleen goedgekeurde, geleverde of mislukte releases kunnen worden geleverd; deze is {{status}}",
+    "delivery_failed": "Levering mislukt: {{reason}}",
     "delivery_not_configured": "De leveringsservice is niet geconfigureerd",
     "denied_by_prohibition": "{{principal}} {{action}} {{securable}} is verwijderd door {{rule}}",
     "direct_unsupported": "{{system}}-doelen kunnen niet direct worden geleverd — gebruik Indirect of Handmatig",
@@ -504,10 +505,11 @@
     "no_principals": "{{rule}}: de ontvanger wordt opgelost tot niemand",
     "no_rules": "Een beleid heeft minstens één machtiging, verbod of verplichting nodig",
     "no_target": "Geen actief doel compileert {{refs}} — configureer een doel voor dat platform",
+    "no_target_more": "Geen actief doel compileert {{refs}} en {{more}} andere — configureer een toegangsdoel voor dat platform",
     "not_a_duty": "'{{action}}' is geen plicht van deze Overeenkomst",
     "not_editable": "Een {{kind}} met status {{status}} kan niet worden bewerkt — maak in plaats daarvan een nieuwe versie aan.",
     "not_found": "{{kind}} niet gevonden",
-    "not_ready_to_activate": "Niet klaar om te activeren: {{count}} probleem/problemen — zie Validatie",
+    "not_ready_to_activate": "Niet klaar om te activeren: {{problems}}",
     "not_yet_active": "{{rule}} start op {{at}} — nog niet toegekend",
     "offer_term": "{{rule}} bindt consumenten via hun Overeenkomsten",
     "operand_subject_mismatch": "leftOperand '{{operand}}' beschrijft een {{describes}}, geen {{expected}}",
@@ -730,5 +732,9 @@
     "audience": "Doelgroep",
     "asset_collection": "Asset-collectie",
     "target": "Doel"
+  },
+  "abacKinds": {
+    "row_filter": "Rijfilter",
+    "column_mask": "Kolommasker"
   }
 }

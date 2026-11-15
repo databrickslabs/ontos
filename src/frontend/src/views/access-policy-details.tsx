@@ -189,11 +189,11 @@ export default function AccessPolicyDetails() {
 
   const actionLabel = useCallback(
     (k: string | null | undefined) => (k ? profileActionLabel(t, k, profile?.actions.find((a) => a.key === k)?.label) : '?'),
-    [profile],
+    [profile, t],
   );
   const operandLabel = useCallback(
     (k: string) => profileOperandLabel(t, k, profile?.left_operands.find((o) => o.key === k)?.label),
-    [profile],
+    [profile, t],
   );
   const enforcementOf = useCallback(
     (c: OdrlConstraint): string[] =>

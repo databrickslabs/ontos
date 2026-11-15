@@ -484,6 +484,10 @@ class Problem(str):
         obj.code, obj.params = code, dict(params or {})
         return obj
 
+    def __getnewargs__(self) -> tuple:
+        # copy / deepcopy / pickle rebuild through __new__, which needs the code.
+        return (str(self), self.code, self.params)
+
     def to_dict(self) -> Dict[str, Any]:
         return {"code": self.code, "params": dict(self.params), "message": str(self)}
 

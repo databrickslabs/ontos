@@ -479,6 +479,7 @@
     "cron_unsupported": "'{{expr}}' n'est pas une expression cron prise en charge ({{reason}})",
     "delete_status": "Seules les versions en brouillon ou retirées peuvent être supprimées (celle-ci est {{status}}).",
     "deliver_status": "Seules les releases approuvées, livrées ou échouées peuvent être livrées ; celle-ci est {{status}}",
+    "delivery_failed": "Échec de la livraison : {{reason}}",
     "delivery_not_configured": "Le service de livraison n'est pas configuré",
     "denied_by_prohibition": "{{principal}} {{action}} {{securable}} supprimé par {{rule}}",
     "direct_unsupported": "Les cibles {{system}} ne peuvent pas être livrées en mode direct — utilisez Indirecte ou Manuelle",
@@ -504,10 +505,11 @@
     "no_principals": "{{rule}} : le bénéficiaire ne correspond à personne",
     "no_rules": "Une politique nécessite au moins une permission, une interdiction ou une obligation",
     "no_target": "Aucune cible active ne compile {{refs}} — configurez une cible d'accès pour cette plateforme",
+    "no_target_more": "Aucune cible active ne compile {{refs}} et {{more}} autre(s) — configurez une cible d'accès pour cette plateforme",
     "not_a_duty": "'{{action}}' n'est pas un devoir de cet Accord",
     "not_editable": "Un(e) {{kind}} {{status}} ne peut pas être modifié(e) — créez plutôt une nouvelle version.",
     "not_found": "{{kind}} introuvable",
-    "not_ready_to_activate": "Pas prêt à être activé : {{count}} problème(s) — voir Validation",
+    "not_ready_to_activate": "Pas prêt pour l'activation : {{problems}}",
     "not_yet_active": "{{rule}} commence le {{at}} — pas encore octroyé",
     "offer_term": "{{rule}} lie les consommateurs via leurs Accords",
     "operand_subject_mismatch": "leftOperand '{{operand}}' décrit un(e) {{describes}}, pas un(e) {{expected}}",
@@ -730,5 +732,9 @@
     "audience": "Audience",
     "asset_collection": "Collection d'actifs",
     "target": "Cible"
+  },
+  "abacKinds": {
+    "row_filter": "Filtre de lignes",
+    "column_mask": "Masque de colonne"
   }
 }

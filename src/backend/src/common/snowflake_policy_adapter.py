@@ -139,9 +139,10 @@ class SnowflakeAdapter(TargetAdapter):
               target: Any = None) -> List[uc.UCGrant]:
         for rule in plan.abac:
             # A mask stands in for a denial, a row filter narrows a grant: dropping either fails open.
+            label = rule.source.label() if rule.source else rule.kind
             plan.issue(SEVERITY_ERROR, "abac_unsupported_platform",
-                       f"{rule.source.label() if rule.source else rule.kind}: Snowflake targets can't enforce "
-                       f"{rule.kind.replace('_', ' ')}s yet", rule.source, params={"rule": rule.source.label() if rule.source else rule.kind, "kind": rule.kind})
+                       f"{label}: Snowflake targets can't enforce {rule.kind.replace('_', ' ')}s yet", rule.source,
+                       params={"rule": label, "kind": rule.kind})
         key = target.key if target is not None else ""
         connection = (target.connection if target is not None else None) or {}
         views = {str(v).strip().lower() for v in connection.get("views") or []}

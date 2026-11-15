@@ -535,7 +535,8 @@ class AccessPoliciesManager:
             problems = self.activation_problems(db, kind, row)
             if problems:
                 raise AccessPolicyError("Not ready to activate: " + "; ".join(problems), 409, details=problems,
-                                    code="not_ready_to_activate", params={"count": len(problems)})
+                                    code="not_ready_to_activate",
+                                    params={"count": len(problems), "problems": odrl.problem_dicts(problems)})
         if new_status == STATUS_RETIRED and kind == KIND_TARGET and not self._other_active_version(db, kind, row):
             # A retired target is never compiled or swept again: whatever it still tracks would never be revoked.
             tracked = self.tracked_grants(db, row.key)
@@ -691,10 +692,10 @@ class AccessPoliciesManager:
     def import_jsonld(self, db: Session, request: Any, current_user: Optional[str]) -> AccessPolicyDb:
         doc = request.document or {}
         norm = odrl.normalize_policy(doc)
-        profile_errors = [i.message for i in odrl.validate_policy(norm) if "profile" in i.path]
+        profile_errors = [i for i in odrl.validate_policy(norm) if "profile" in i.path]
         if profile_errors:
-            raise AccessPolicyError(str(profile_errors[0]), code=getattr(profile_errors[0], "code", "") or "invalid_profile",
-                                    params=getattr(profile_errors[0], "params", None))
+            first = profile_errors[0]
+            raise AccessPolicyError(first.message, code=first.code, params=first.params)
         if norm["type"] not in odrl.POLICY_TYPES:
             raise AccessPolicyError(f"Unsupported policy type '{norm['type']}'", code="unsupported_policy_type",
                                     params={"type": norm["type"]})

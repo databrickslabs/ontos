@@ -479,6 +479,7 @@
     "cron_unsupported": "'{{expr}}' はサポートされていない cron 式です（{{reason}}）",
     "delete_status": "削除できるのは下書きまたは廃止のバージョンのみです（このバージョンは{{status}}です）。",
     "deliver_status": "配信できるのは承認済み、配信済み、または失敗のリリースのみです。このリリースは{{status}}です",
+    "delivery_failed": "配信に失敗しました: {{reason}}",
     "delivery_not_configured": "配信サービスが設定されていません",
     "denied_by_prohibition": "{{principal}} の {{securable}} に対する {{action}} は {{rule}} によって除外されました",
     "direct_unsupported": "{{system}} のターゲットには直接配信できません — 間接または手動を使用してください",
@@ -504,10 +505,11 @@
     "no_principals": "{{rule}}: 割り当て先に該当するプリンシパルがいません",
     "no_rules": "ポリシーには、許可・禁止・義務のいずれかが少なくとも1つ必要です",
     "no_target": "{{refs}} をコンパイルできるアクティブなターゲットがありません — そのプラットフォーム用のアクセスターゲットを設定してください",
+    "no_target_more": "{{refs}} ほか {{more}} 件をコンパイルする有効なターゲットがありません — そのプラットフォーム用のアクセスターゲットを構成してください",
     "not_a_duty": "'{{action}}' はこのアグリーメントの履行義務ではありません",
     "not_editable": "{{status}}の{{kind}}は編集できません — 代わりに新しいバージョンを作成してください。",
     "not_found": "{{kind}}が見つかりません",
-    "not_ready_to_activate": "有効化の準備ができていません: {{count}} 件の問題があります — 検証を確認してください",
+    "not_ready_to_activate": "有効化の準備ができていません: {{problems}}",
     "not_yet_active": "{{rule}} は {{at}} に開始されます — まだ付与されていません",
     "offer_term": "{{rule}} は、消費者をそのアグリーメントを通じて拘束します",
     "operand_subject_mismatch": "leftOperand '{{operand}}' は {{describes}} を表しており、{{expected}} ではありません",
@@ -730,5 +732,9 @@
     "audience": "オーディエンス",
     "asset_collection": "アセットコレクション",
     "target": "ターゲット"
+  },
+  "abacKinds": {
+    "row_filter": "行フィルター",
+    "column_mask": "列マスク"
   }
 }

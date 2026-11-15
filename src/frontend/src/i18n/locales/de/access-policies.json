@@ -479,6 +479,7 @@
     "cron_unsupported": "'{{expr}}' ist kein unterstützter cron-Ausdruck ({{reason}})",
     "delete_status": "Nur Entwurfs- oder außer Betrieb genommene Versionen können gelöscht werden (diese hat den Status {{status}}).",
     "deliver_status": "Nur genehmigte, ausgelieferte oder fehlgeschlagene Releases können ausgeliefert werden; dieses hat den Status {{status}}",
+    "delivery_failed": "Auslieferung fehlgeschlagen: {{reason}}",
     "delivery_not_configured": "Der Auslieferungsdienst ist nicht konfiguriert",
     "denied_by_prohibition": "{{principal}} {{action}} {{securable}} durch {{rule}} entfernt",
     "direct_unsupported": "{{system}}-Ziele können nicht direkt ausgeliefert werden — verwenden Sie Indirekt oder Manuell",
@@ -504,10 +505,11 @@
     "no_principals": "{{rule}}: Der Empfänger wird zu niemandem aufgelöst",
     "no_rules": "Eine Richtlinie benötigt mindestens eine Erlaubnis, ein Verbot oder eine Verpflichtung",
     "no_target": "Kein aktives Ziel kompiliert {{refs}} — konfigurieren Sie ein Zugriffsziel für diese Plattform",
+    "no_target_more": "Kein aktives Ziel kompiliert {{refs}} und {{more}} weitere — konfigurieren Sie ein Zugriffsziel für diese Plattform",
     "not_a_duty": "'{{action}}' ist keine Pflicht dieser Vereinbarung",
     "not_editable": "Ein Objekt vom Typ {{kind}} mit Status {{status}} kann nicht bearbeitet werden — legen Sie stattdessen eine neue Version an.",
     "not_found": "{{kind}} nicht gefunden",
-    "not_ready_to_activate": "Nicht bereit zur Aktivierung: {{count}} Problem(e) — siehe Validierung",
+    "not_ready_to_activate": "Nicht bereit zur Aktivierung: {{problems}}",
     "not_yet_active": "{{rule}} beginnt am {{at}} — noch nicht gewährt",
     "offer_term": "{{rule}} bindet Konsumenten über deren Vereinbarungen",
     "operand_subject_mismatch": "leftOperand '{{operand}}' beschreibt ein Objekt vom Typ {{describes}}, nicht {{expected}}",
@@ -730,5 +732,9 @@
     "audience": "Zielgruppe",
     "asset_collection": "Asset-Sammlung",
     "target": "Ziel"
+  },
+  "abacKinds": {
+    "row_filter": "Zeilenfilter",
+    "column_mask": "Spaltenmaske"
   }
 }

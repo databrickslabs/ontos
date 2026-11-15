@@ -479,6 +479,7 @@
     "cron_unsupported": "'{{expr}}' is not a supported cron expression ({{reason}})",
     "delete_status": "Only draft or retired versions can be deleted (this one is {{status}}).",
     "deliver_status": "Only approved, delivered or failed releases can be delivered; this one is {{status}}",
+    "delivery_failed": "Delivery failed: {{reason}}",
     "delivery_not_configured": "Delivery service is not configured",
     "denied_by_prohibition": "{{principal}} {{action}} {{securable}} removed by {{rule}}",
     "direct_unsupported": "{{system}} targets can't be delivered directly — use Indirect or Manual",
@@ -504,10 +505,11 @@
     "no_principals": "{{rule}}: the assignee resolves to nobody",
     "no_rules": "A policy needs at least one permission, prohibition or obligation",
     "no_target": "No active target compiles {{refs}} — configure an Access Target for that platform",
+    "no_target_more": "No active target compiles {{refs}} and {{more}} more — configure an Access Target for that platform",
     "not_a_duty": "'{{action}}' is not a duty of this Agreement",
     "not_editable": "{{kind}} with status {{status}} can't be edited — create a new version instead.",
     "not_found": "{{kind}} not found",
-    "not_ready_to_activate": "Not ready to activate: {{count}} problem(s) — see Validation",
+    "not_ready_to_activate": "Not ready to activate: {{problems}}",
     "not_yet_active": "{{rule}} starts at {{at}} — not granted yet",
     "offer_term": "{{rule}} binds consumers via their Agreements",
     "operand_subject_mismatch": "leftOperand '{{operand}}' describes a {{describes}}, not a {{expected}}",
@@ -730,5 +732,9 @@
     "audience": "Audience",
     "asset_collection": "Asset collection",
     "target": "Target"
+  },
+  "abacKinds": {
+    "row_filter": "Row filter",
+    "column_mask": "Column mask"
   }
 }

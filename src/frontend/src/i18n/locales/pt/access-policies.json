@@ -479,6 +479,7 @@
     "cron_unsupported": "'{{expr}}' não é uma expressão cron suportada ({{reason}})",
     "delete_status": "Somente versões em rascunho ou aposentadas podem ser excluídas (esta está {{status}}).",
     "deliver_status": "Somente liberações aprovadas, entregues ou com falha podem ser entregues; esta está {{status}}",
+    "delivery_failed": "Falha na entrega: {{reason}}",
     "delivery_not_configured": "O serviço de entrega não está configurado",
     "denied_by_prohibition": "{{principal}} {{action}} {{securable}} removido por {{rule}}",
     "direct_unsupported": "Alvos {{system}} não podem ser entregues diretamente — use Indireto ou Manual",
@@ -504,10 +505,11 @@
     "no_principals": "{{rule}}: o destinatário não resolve para ninguém",
     "no_rules": "Uma política precisa de pelo menos uma permissão, proibição ou obrigação",
     "no_target": "Nenhum alvo ativo compila {{refs}} — configure um Alvo de Acesso para essa plataforma",
+    "no_target_more": "Nenhum alvo ativo compila {{refs}} e mais {{more}} — configure um alvo de acesso para essa plataforma",
     "not_a_duty": "'{{action}}' não é um dever deste Acordo",
     "not_editable": "Um(a) {{kind}} {{status}} não pode ser editado(a) — crie uma nova versão.",
     "not_found": "{{kind}} não encontrado(a)",
-    "not_ready_to_activate": "Não está pronta para ativar: {{count}} problema(s) — veja Validação",
+    "not_ready_to_activate": "Não está pronto para ativação: {{problems}}",
     "not_yet_active": "{{rule}} começa em {{at}} — ainda não concedida",
     "offer_term": "{{rule}} vincula os consumidores por meio dos seus Acordos",
     "operand_subject_mismatch": "O leftOperand '{{operand}}' descreve {{describes}}, não {{expected}}",
@@ -730,5 +732,9 @@
     "audience": "Audiência",
     "asset_collection": "Coleção de ativos",
     "target": "Alvo"
+  },
+  "abacKinds": {
+    "row_filter": "Filtro de linhas",
+    "column_mask": "Máscara de coluna"
   }
 }

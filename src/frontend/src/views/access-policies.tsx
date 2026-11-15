@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ColumnDef } from '@tanstack/react-table';
@@ -227,6 +227,10 @@ export default function AccessPolicies() {
   };
 
   // Targets decide where grants get pushed: admin only (mirrors the API).
+  // Skeleton until the first load returns; later reloads keep the rows.
+  const listOrSkeleton = (table: ReactNode) =>
+    loaded ? table : <ListViewSkeleton columns={6} rows={5} toolbarButtons={2} />;
+
   const newButton = (kind: AccessKind) =>
     (kind === 'target' ? canAdmin : canWrite) ? (
       <Button size="sm" onClick={() => setCreateKind(kind)}>
@@ -265,61 +269,55 @@ export default function AccessPolicies() {
         </TabsList>
 
         <TabsContent value="policies" className="pt-4">
-          {!loaded ? (
-            <ListViewSkeleton columns={6} rows={5} toolbarButtons={2} />
-          ) : (
-          <DataTable
-            columns={policyColumns}
-            data={policies}
-            searchColumn="name"
-            storageKey="access-policies-list"
-            onRowClick={(row) => openDetail('policy', row.original.id)}
-            toolbarActions={
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" asChild>
-                  <a href="/api/access-policies/profile/shacl" download="ontos-odrl-shapes.ttl" title={t('access-policies:list.shaclHint')}>
-                    <FileDown className="mr-1 h-4 w-4" /> {t('access-policies:list.shacl')}
-                  </a>
-                </Button>
-                {canWrite && (
-                  <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
-                    <FileUp className="mr-1 h-4 w-4" /> {t('access-policies:list.import')}
+          {listOrSkeleton(
+            <DataTable
+              columns={policyColumns}
+              data={policies}
+              searchColumn="name"
+              storageKey="access-policies-list"
+              onRowClick={(row) => openDetail('policy', row.original.id)}
+              toolbarActions={
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" asChild>
+                    <a href="/api/access-policies/profile/shacl" download="ontos-odrl-shapes.ttl" title={t('access-policies:list.shaclHint')}>
+                      <FileDown className="mr-1 h-4 w-4" /> {t('access-policies:list.shacl')}
+                    </a>
                   </Button>
-                )}
-                {newButton('policy')}
-              </div>
-            }
-          />
+                  {canWrite && (
+                    <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+                      <FileUp className="mr-1 h-4 w-4" /> {t('access-policies:list.import')}
+                    </Button>
+                  )}
+                  {newButton('policy')}
+                </div>
+              }
+            />,
           )}
         </TabsContent>
         <TabsContent value="audiences" className="pt-4">
           <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:list.audiencesHint')}</p>
-          {!loaded ? (
-            <ListViewSkeleton columns={6} rows={5} toolbarButtons={2} />
-          ) : (
-          <DataTable
-            columns={collectionColumns}
-            data={audiences}
-            searchColumn="name"
-            storageKey="access-audiences-list"
-            onRowClick={(row) => openDetail('audience', row.original.id)}
-            toolbarActions={newButton('audience')}
-          />
+          {listOrSkeleton(
+            <DataTable
+              columns={collectionColumns}
+              data={audiences}
+              searchColumn="name"
+              storageKey="access-audiences-list"
+              onRowClick={(row) => openDetail('audience', row.original.id)}
+              toolbarActions={newButton('audience')}
+            />,
           )}
         </TabsContent>
         <TabsContent value="asset-collections" className="pt-4">
           <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:list.collectionsHint')}</p>
-          {!loaded ? (
-            <ListViewSkeleton columns={6} rows={5} toolbarButtons={2} />
-          ) : (
-          <DataTable
-            columns={collectionColumns}
-            data={collections}
-            searchColumn="name"
-            storageKey="access-asset-collections-list"
-            onRowClick={(row) => openDetail('asset_collection', row.original.id)}
-            toolbarActions={newButton('asset_collection')}
-          />
+          {listOrSkeleton(
+            <DataTable
+              columns={collectionColumns}
+              data={collections}
+              searchColumn="name"
+              storageKey="access-asset-collections-list"
+              onRowClick={(row) => openDetail('asset_collection', row.original.id)}
+              toolbarActions={newButton('asset_collection')}
+            />,
           )}
         </TabsContent>
         <TabsContent value="check" className="pt-4">
@@ -333,17 +331,15 @@ export default function AccessPolicies() {
         </TabsContent>
         <TabsContent value="targets" className="pt-4">
           <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:targets.hint')}</p>
-          {!loaded ? (
-            <ListViewSkeleton columns={6} rows={5} toolbarButtons={2} />
-          ) : (
-          <DataTable
-            columns={targetColumns}
-            data={targets}
-            searchColumn="name"
-            storageKey="access-targets-list"
-            onRowClick={(row) => openDetail('target', row.original.id)}
-            toolbarActions={newButton('target')}
-          />
+          {listOrSkeleton(
+            <DataTable
+              columns={targetColumns}
+              data={targets}
+              searchColumn="name"
+              storageKey="access-targets-list"
+              onRowClick={(row) => openDetail('target', row.original.id)}
+              toolbarActions={newButton('target')}
+            />,
           )}
         </TabsContent>
       </Tabs>

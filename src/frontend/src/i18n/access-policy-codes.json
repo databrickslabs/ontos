@@ -55,6 +55,9 @@
   "deliver_status": [
     "status"
   ],
+  "delivery_failed": [
+    "reason"
+  ],
   "delivery_not_configured": [],
   "denied_by_prohibition": [
     "action",
@@ -127,6 +130,10 @@
     "more",
     "refs"
   ],
+  "no_target_more": [
+    "more",
+    "refs"
+  ],
   "not_a_duty": [
     "action"
   ],
@@ -138,7 +145,8 @@
     "kind"
   ],
   "not_ready_to_activate": [
-    "count"
+    "count",
+    "problems"
   ],
   "not_yet_active": [
     "at",

@@ -378,7 +378,8 @@ def deliver_release(release_id: str, db: DBSessionDep, current_user: AuditCurren
     try:
         row = releases.deliver(db, release_id, _email(current_user), delivery_service, payload.modes)
     except (AccessPolicyError, ValueError) as e:
-        raise _http(e if isinstance(e, AccessPolicyError) else AccessPolicyError(str(e)))
+        raise _http(e if isinstance(e, AccessPolicyError) else AccessPolicyError(
+            str(e), code="delivery_failed", params={"reason": str(e)}))
     return releases.to_read_dict(row)
 
 

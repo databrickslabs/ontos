@@ -26,6 +26,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from src.common import odrl
 from src.common import policy_targets as pt
 from src.common import uc_policy_adapter as uc
 from src.common.logging import get_logger
@@ -323,7 +324,7 @@ class PolicyReleaseManager:
         lost = sorted(ref for ref in plan.elsewhere
                       if (a := pt.adapter_for_ref(ref)) is None or a.system not in covered)
         if lost:
-            plan.issue("warning", "no_target",
+            plan.issue("warning", "no_target_more" if len(lost) > 5 else "no_target",
                        f"No active target compiles {', '.join(lost[:5])}{' …' if len(lost) > 5 else ''} — "
                        "configure an Access Target for that platform", params={"refs": ", ".join(lost[:5]), "more": max(0, len(lost) - 5)})
 
@@ -378,7 +379,8 @@ class PolicyReleaseManager:
         if new_status == R_UNDER_REVIEW:
             if any(i.get("severity") == "error" for i in row.issues or []):
                 raise AccessPolicyError("Release has compile errors — fix the policies and recompile", 409,
-                                        [i["message"] for i in row.issues if i.get("severity") == "error"],
+                                        [odrl.Problem(i["message"], i.get("code") or "message", i.get("params"))
+                                         for i in row.issues if i.get("severity") == "error"],
                                         code="release_has_errors")
             if self._is_empty(row):
                 raise AccessPolicyError("Release has no changes to deliver", 409, code="release_empty")

@@ -771,7 +771,7 @@ class MetadataManager(SearchableAsset):
         if entity_type == "data_contract":
             from src.db_models.entity_relationships import EntityRelationshipDb
             from src.db_models.data_contracts import SchemaObjectDb
-            from src.controller.model_lineage import ModelLineageResolver
+            from src.controller.model_lineage import PHYSICAL_TABLE_TYPES, ModelLineageResolver
 
             rels = (
                 db.query(EntityRelationshipDb.source_id)
@@ -794,7 +794,9 @@ class MetadataManager(SearchableAsset):
                 if pn:
                     exact = "." not in pn
                     for asset in ModelLineageResolver._query_physical_assets(db, pn, exact=exact):
-                        add("asset", asset.id)
+                        # The exact lookup also returns Dataset assets; only Tables/Views count
+                        if asset.asset_type.name in PHYSICAL_TABLE_TYPES:
+                            add("asset", asset.id)
 
         elif entity_type == "data_product":
             from sqlalchemy import func

@@ -2,7 +2,8 @@
 
 - ``GET /api/lifecycle-stage-groups?entity_type=`` and ``GET .../{id}``: read
   access to the entity type's feature (data-products, data-contracts, assets),
-  or ``settings-lifecycle-stage-groups`` without an entity type.
+  or ``settings-lifecycle-stage-groups`` without an entity type; ``created_by`` /
+  ``updated_by`` only with Read/Write on ``settings-lifecycle-stage-groups``.
 - ``POST`` / ``PUT`` / ``DELETE /api/lifecycle-stage-groups[/{id}]``:
   ``settings-lifecycle-stage-groups`` Read/Write. A save replaces the group's
   stages and transitions and is validated (one first stage, all stages
@@ -92,6 +93,17 @@ def _group_read(group) -> LifecycleStageGroupRead:
     )
 
 
+async def _without_audit_fields(
+    groups: List[LifecycleStageGroupRead], user, request: Request,
+) -> List[LifecycleStageGroupRead]:
+    """Who created or last changed a group is for its managers (Read/Write on
+    the settings feature), not for every reader of an entity type."""
+    if await has_feature_permission(SETTINGS_FEATURE_ID, FeatureAccessLevel.READ_WRITE,
+                                    user, request):
+        return groups
+    return [g.model_copy(update={'created_by': None, 'updated_by': None}) for g in groups]
+
+
 async def _require(feature_id: str, level: FeatureAccessLevel, user, request: Request) -> None:
     if not await has_feature_permission(feature_id, level, user, request):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
@@ -115,7 +127,9 @@ async def list_lifecycle_stage_groups(
         _group_read(g) for g in lifecycle_service.groups(db, entity_type)
         if g.id is None and g.entity_type not in stored_types
     ]
-    return [_group_read(r) for r in rows] + builtin
+    return await _without_audit_fields(
+        [_group_read(r) for r in rows] + builtin, current_user, request,
+    )
 
 
 @router.get('/lifecycle-stage-groups/{group_id}', response_model=LifecycleStageGroupRead)
@@ -127,7 +141,7 @@ async def get_lifecycle_stage_group(
         raise HTTPException(status_code=404, detail="Lifecycle stage group not found")
     await _require(ENTITY_FEATURES[row.entity_type], FeatureAccessLevel.READ_ONLY,
                    current_user, request)
-    return _group_read(row)
+    return (await _without_audit_fields([_group_read(row)], current_user, request))[0]
 
 
 def _audit(audit_manager, db, request, user, action: str, details: dict) -> None:

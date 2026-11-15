@@ -76,17 +76,19 @@ class LinkMetadataDb(Base):
 
 
 class ImportedMarkdownFileDb(Base):
-    """The text of a Markdown file imported from a volume, once per file.
+    """The text of a Markdown file imported from a volume, once per file version.
 
-    Every document imported from the file (one per entity it names) has this
-    ``source_path``; the text is served and indexed from here, so the source
-    file is never read again or deleted with the documents. The row goes when
-    the last of those documents does.
+    Every document imported from the file (one per entity it names) points to
+    it by ``source_path`` and ``content_hash``; the text is served and indexed
+    from here, so the source file is never read again or deleted with the
+    documents. Usually one version per file; a document the importer couldn't
+    edit keeps the version it was written from. A row goes when the last
+    document of that version does.
     """
     __tablename__ = "imported_markdown_files"
 
     source_path = Column(String, primary_key=True)
-    content_hash = Column(String(64), nullable=False)
+    content_hash = Column(String(64), primary_key=True)
     content_text = Column(Text, nullable=False)
     size_bytes = Column(Integer, nullable=True)
     updated_by = Column(String, nullable=True)
@@ -121,7 +123,7 @@ class DocumentMetadataDb(Base):
 
     # Markdown imported from a volume (empty for uploads): the file it came
     # from and the SHA-256 this document was written from. The text is stored
-    # once per file, in ImportedMarkdownFileDb.
+    # once per file version, in ImportedMarkdownFileDb.
     source_path = Column(String, nullable=True)
     content_hash = Column(String(64), nullable=True)
 

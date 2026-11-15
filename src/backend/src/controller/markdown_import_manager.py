@@ -19,7 +19,7 @@ stay document text; no concepts are created.
 
 The files are read with the caller's workspace client (on behalf of the user),
 so an import can't expose files the user can't read. The Markdown is stored
-once per file (imported_markdown_files), whatever the number of entities it
+once per file version (imported_markdown_files), whatever the number of entities it
 names; the source file is never written or deleted.
 """
 import hashlib
@@ -643,12 +643,13 @@ class MarkdownImportManager:
                 continue
             changed.append((doc, text))
         if targets:
-            # The text once per file, whatever the number of entities it names.
+            # The text once per file version, whatever the number of entities
+            # it names. Documents the caller couldn't edit keep their version.
             self._documents.save_imported_file(
                 db, source_path=path, content_hash=digest, content_text=text,
                 size_bytes=len(raw), user_email=user_email,
             )
-        elif removed:
+        if targets or removed:
             self._documents.remove_unreferenced_imported_files(db, source_paths=[path])
         db.flush()
 

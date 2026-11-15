@@ -49,15 +49,16 @@ def test_one_imported_document_per_file_and_entity(tmp_path, migration):
             with conn.begin_nested():
                 _insert(conn, 'dup', '/Volumes/c/s/v/a.md')
 
-        # The text once per file
-        conn.execute(text(
-            "INSERT INTO imported_markdown_files (source_path, content_hash, content_text) "
-            "VALUES ('/Volumes/c/s/v/a.md', 'h', 'body')"))
+        # The text once per file version
+        def store(digest):
+            conn.execute(text(
+                "INSERT INTO imported_markdown_files (source_path, content_hash, content_text) "
+                "VALUES ('/Volumes/c/s/v/a.md', :digest, 'body')"), {'digest': digest})
+        store('h')
+        store('h2')  # another version of the same file
         with pytest.raises(sa.exc.IntegrityError):
             with conn.begin_nested():
-                conn.execute(text(
-                    "INSERT INTO imported_markdown_files (source_path, content_hash, "
-                    "content_text) VALUES ('/Volumes/c/s/v/a.md', 'h2', 'other')"))
+                store('h')
         columns = {c['name'] for c in sa.inspect(conn).get_columns('document_metadata')}
         assert 'content_text' not in columns
 

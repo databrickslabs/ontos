@@ -8,8 +8,8 @@ Markdown files imported from a Unity Catalog volume become documents on the
 entities their front matter names. On document_metadata, ``source_path`` is
 the file they came from and ``content_hash`` (SHA-256 of the file) tells a
 re-run whether the file changed; uploaded documents leave both empty. The new
-table imported_markdown_files keeps the Markdown once per file (not once per
-entity), so search can index it and the documents open without reading the
+table imported_markdown_files keeps the Markdown once per file version (not
+once per entity), so search can index it and the documents open without reading the
 source volume again. A partial unique index on (source_path, entity_type,
 entity_id) keeps one imported document per file and entity, also when two
 imports overlap.
@@ -33,7 +33,7 @@ def upgrade() -> None:
     op.create_table(
         'imported_markdown_files',
         sa.Column('source_path', sa.String(), primary_key=True),
-        sa.Column('content_hash', sa.String(length=64), nullable=False),
+        sa.Column('content_hash', sa.String(length=64), primary_key=True),
         sa.Column('content_text', sa.Text(), nullable=False),
         sa.Column('size_bytes', sa.Integer(), nullable=True),
         sa.Column('updated_by', sa.String(), nullable=True),

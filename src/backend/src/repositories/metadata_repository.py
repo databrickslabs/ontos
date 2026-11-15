@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, Dict, Any, Type
+from typing import List, Optional, Union, Dict, Any, Tuple, Type
 
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -179,56 +179,52 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
         )
 
     # --- The text of imported files (once per file) ---
-    def get_imported_file(
-        self, db: Session, *, source_path: str,
-    ) -> Optional[ImportedMarkdownFileDb]:
-        return db.get(ImportedMarkdownFileDb, source_path)
-
     def save_imported_file(
         self, db: Session, *, source_path: str, content_hash: str, content_text: str,
         size_bytes: Optional[int], user_email: Optional[str],
     ) -> None:
-        """Store a file's text, or replace it when the file changed."""
-        row = self.get_imported_file(db, source_path=source_path)
-        if row is None:
+        """Store this version of a file's text, unless it is stored already.
+
+        Other versions stay while a document still points to them (one the
+        importer couldn't edit); ``remove_unreferenced_imported_files`` drops
+        the rest.
+        """
+        if db.get(ImportedMarkdownFileDb, (source_path, content_hash)) is None:
             db.add(ImportedMarkdownFileDb(
                 source_path=source_path, content_hash=content_hash, content_text=content_text,
                 size_bytes=size_bytes, updated_by=user_email,
             ))
-        elif row.content_hash != content_hash:
-            row.content_hash = content_hash
-            row.content_text = content_text
-            row.size_bytes = size_bytes
-            row.updated_by = user_email
 
-    def imported_texts(self, db: Session, *, source_paths: List[str]) -> Dict[str, str]:
-        """source path -> stored text, for the given files."""
+    def imported_texts(
+        self, db: Session, *, source_paths: List[str],
+    ) -> Dict[Tuple[str, str], str]:
+        """(source path, content hash) -> stored text, for every version of these files."""
         if not source_paths:
             return {}
-        return dict(
-            db.query(ImportedMarkdownFileDb.source_path, ImportedMarkdownFileDb.content_text)
-            .filter(ImportedMarkdownFileDb.source_path.in_(set(source_paths)))
-            .all()
-        )
+        rows = db.query(
+            ImportedMarkdownFileDb.source_path, ImportedMarkdownFileDb.content_hash,
+            ImportedMarkdownFileDb.content_text,
+        ).filter(ImportedMarkdownFileDb.source_path.in_(set(source_paths)))
+        return {(path, digest): text for path, digest, text in rows}
 
     def remove_unreferenced_imported_files(self, db: Session, *, source_paths: List[str]) -> int:
-        """Delete the stored text of these files where no document points to it any more."""
+        """Delete the stored versions of these files that no document points to any more."""
         paths = {path for path in source_paths if path}
         if not paths:
             return 0
         db.flush()
-        referenced = {
-            path for (path,) in db.query(DocumentMetadataDb.source_path)
+        referenced = set(
+            db.query(DocumentMetadataDb.source_path, DocumentMetadataDb.content_hash)
             .filter(DocumentMetadataDb.source_path.in_(paths)).distinct()
-        }
-        unreferenced = paths - referenced
-        if not unreferenced:
-            return 0
-        return (
-            db.query(ImportedMarkdownFileDb)
-            .filter(ImportedMarkdownFileDb.source_path.in_(unreferenced))
-            .delete(synchronize_session='fetch')
         )
+        stored = db.query(ImportedMarkdownFileDb).filter(
+            ImportedMarkdownFileDb.source_path.in_(paths)).all()
+        removed = 0
+        for row in stored:
+            if (row.source_path, row.content_hash) not in referenced:
+                db.delete(row)
+                removed += 1
+        return removed
 
     def list_imported(self, db: Session) -> List[DocumentMetadataDb]:
         """Every document imported from a Markdown file."""

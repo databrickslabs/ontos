@@ -290,7 +290,7 @@ class MetadataManager(SearchableAsset):
         if not db_obj or db_obj.source_path is None:
             return None
         texts = self._document_repo.imported_texts(db, source_paths=[db_obj.source_path])
-        return texts.get(db_obj.source_path)
+        return texts.get((db_obj.source_path, db_obj.content_hash))
 
     # --- Search (imported Markdown documents) ---
     def _active_search_manager(self):
@@ -356,8 +356,11 @@ class MetadataManager(SearchableAsset):
                 docs = self._document_repo.list_imported(db)
                 texts = self._document_repo.imported_texts(
                     db, source_paths=[doc.source_path for doc in docs])
-                items = [self.build_document_search_item(doc, texts.get(doc.source_path))
-                         for doc in docs]
+                items = [
+                    self.build_document_search_item(
+                        doc, texts.get((doc.source_path, doc.content_hash)))
+                    for doc in docs
+                ]
         except Exception:
             logger.error("Failed to fetch imported documents for search", exc_info=True)
             return []

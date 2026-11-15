@@ -189,7 +189,8 @@ def test_a_rerun_updates_only_the_changed_file(client, db_session, domain, asset
     docs = db_session.query(DocumentMetadataDb).filter(
         DocumentMetadataDb.source_path == f'{ROOT}/domain.md').all()
     assert len(docs) == 1
-    assert 'two or more' in db_session.get(ImportedMarkdownFileDb, f'{ROOT}/domain.md').content_text
+    [stored] = db_session.query(ImportedMarkdownFileDb).filter_by(source_path=f'{ROOT}/domain.md')
+    assert 'two or more' in stored.content_text
     updates = db_session.query(ChangeLogDb).filter(
         ChangeLogDb.entity_type == 'data_domain:document', ChangeLogDb.action == 'UPDATE').count()
     assert updates == 1
@@ -337,8 +338,8 @@ def test_a_changed_file_that_drops_a_target_leaves_that_entity(
     docs = db_session.query(DocumentMetadataDb).filter(
         DocumentMetadataDb.source_path == f'{ROOT}/only.md').all()
     assert [d.entity_type for d in docs] == ['data_domain']
-    assert db_session.get(ImportedMarkdownFileDb, f'{ROOT}/only.md').content_text == (
-        "---\ndomain: Customer\n---\nv2\n")
+    [stored] = db_session.query(ImportedMarkdownFileDb).filter_by(source_path=f'{ROOT}/only.md')
+    assert stored.content_text == "---\ndomain: Customer\n---\nv2\n"
     hits = client.get('/api/search', params={'search_term': 'v1'}).json()
     assert not [hit for hit in hits if hit['type'] == 'document']
 
@@ -734,3 +735,36 @@ def test_a_preview_needs_write_access_too(client, volume, mock_test_user):
     mock_test_user.groups = []
 
     assert _preview(client).status_code == 403
+
+
+def test_a_domain_only_import_leaves_the_text_of_asset_documents_as_it_was(
+        client, db_session, domain, asset, volume, mock_test_user):
+    v1 = "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv1\n"
+    _single_file(volume, v1)
+    assert _targets(_import(client).json())['status'] == 'added'
+    _domain_only_user(db_session, mock_test_user)
+    v2 = "---\ndomain: Customer\nassets: [main.crm.customers]\n---\nv2\n"
+    volume[f'{ROOT}/only.md'] = v2
+
+    assert _targets(_import(client).json())['status'] == 'updated'
+
+    docs = {d.entity_type: d.id for d in db_session.query(DocumentMetadataDb)}
+    assert client.get(f"/api/documents/{docs['data_domain']}/content").text == v2
+    _add_role(db_session, {'data-domains': 'Read-only', 'assets': 'Read-only'}, 'readers')
+    mock_test_user.groups = ['readers']
+    assert client.get(f"/api/documents/{docs['asset']}/content").text == v1
+
+
+def test_a_changed_file_that_names_nothing_any_more_takes_its_text_away(
+        client, db_session, domain, volume):
+    _single_file(volume, "---\ndomain: Customer\n---\nv1\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+    volume[f'{ROOT}/only.md'] = "---\nx: 1\n---\nquibblezap\n"
+
+    entry = _targets(_import(client).json())
+
+    assert (entry['status'], entry['removed']) == ('unlinked', 1)
+    assert _sources(db_session) == []
+    assert _stored(db_session) == []
+    hits = client.get('/api/search', params={'search_term': 'v1'}).json()
+    assert not [hit for hit in hits if hit['type'] == 'document']

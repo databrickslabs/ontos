@@ -288,7 +288,8 @@ export default function UICustomizationSettings() {
           <AlertDescription>
             {t(
               'settings:uiCustomization.loadFailed.description',
-              'The stored branding was not loaded, so saving is disabled to avoid overwriting it with defaults. Reload the page to try again.',
+              'The stored branding was not loaded, so saving is disabled to avoid '
+                + 'overwriting it with defaults. Reload the page to try again.',
             )}
           </AlertDescription>
         </Alert>

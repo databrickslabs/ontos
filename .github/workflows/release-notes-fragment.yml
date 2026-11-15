@@ -39,6 +39,15 @@ jobs:
         run: |
           set -euo pipefail
           dir=src/docs/release-notes/unreleased
+          # File names come from the PR: escape what a workflow command would decode,
+          # so a name cannot end the annotation and start another one.
+          escape() {
+            local text=$1
+            text=${text//'%'/'%25'}
+            text=${text//$'\r'/'%0D'}
+            text=${text//$'\n'/'%0A'}
+            printf '%s' "$text"
+          }
           changed=$(git diff --name-only --diff-filter=ACMR "${BASE_SHA}...HEAD")
 
           # Fragments added or changed by this PR.
@@ -48,7 +57,7 @@ jobs:
           done < <(printf '%s\n' "$changed" | grep -E "^${dir}/.+" | grep -v '/\.gitkeep$' || true)
           if [ "${#fragments[@]}" -gt 0 ]; then
             python3 src/scripts/assemble_release_notes.py --check "${fragments[@]}" > problems.txt || {
-              while IFS= read -r line; do echo "::error title=Release notes fragment::${line}"; done < problems.txt
+              while IFS= read -r line; do echo "::error title=Release notes fragment::$(escape "$line")"; done < problems.txt
               exit 1
             }
             echo "Fragments are valid: ${fragments[*]}"

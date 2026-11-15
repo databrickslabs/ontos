@@ -261,6 +261,21 @@ _APPROVAL_RECORD_KEYS = frozenset({
 })
 
 
+# The run context's tags when a step paused the run, kept in the pause record's
+# result_data: tag steps may change them only in the context, and a resume
+# rebuilds the entity from the trigger's snapshot
+_CONTEXT_TAGS_KEY = '_context_tags'
+
+
+def _pause_result_data(result: 'StepResult', context: 'StepContext') -> Optional[Dict[str, Any]]:
+    """The result_data stored for a step that paused the run: its data plus the
+    context's tags, which ``resume_workflow`` puts back."""
+    tags = context.entity.get('tags') if isinstance(context.entity, dict) else None
+    if not isinstance(tags, dict):
+        return result.data
+    return {**(result.data or {}), _CONTEXT_TAGS_KEY: dict(tags)}
+
+
 def _json_object(text: Optional[str]) -> Dict[str, Any]:
     """A stored JSON object (e.g. a step execution's result_data), else {}."""
     try:
@@ -3292,7 +3307,7 @@ class WorkflowExecutor:
                 step_name=step.name,
                 status=step_status.value,
                 passed=result.passed,
-                result_data=result.data,
+                result_data=_pause_result_data(result, context) if result.blocking else result.data,
                 error_message=result.error,
                 message=result.message,
                 duration_ms=duration_ms,
@@ -3731,10 +3746,13 @@ class WorkflowExecutor:
         # of a require_all step (#1119); its pause record is closed
         denied_without_reason = not step_result and not (result_data or {}).get('reason')
         decisions: List[Dict[str, Any]] = []
+        context_tags = None
         if current_step.step_type == StepType.APPROVAL:
             pause_record = self._approval_pause_record(execution_id, current_step, refresh=True)
             if pause_record is not None:
-                stored = _json_object(pause_record.result_data).get('decisions')
+                pause_data = _json_object(pause_record.result_data)
+                context_tags = pause_data.get(_CONTEXT_TAGS_KEY)
+                stored = pause_data.get('decisions')
                 if isinstance(stored, list):
                     decisions = [d for d in stored if isinstance(d, dict)]
                 self._close_approval_pause(pause_record)
@@ -3817,6 +3835,11 @@ class WorkflowExecutor:
             },
             on_behalf_of=on_behalf_of,
         )
+        # The tags the run had when it paused, with those tag steps set or
+        # removed only in the context. Runs paused before they were kept: the
+        # trigger's snapshot, as before
+        if isinstance(context_tags, dict):
+            context.entity['tags'] = dict(context_tags)
 
         # Concept review ping-pong (O2): when the resumed approval step gates an
         # ontology_concept, the approver's decision drives the concept lifecycle
@@ -3947,7 +3970,7 @@ class WorkflowExecutor:
                 step_name=step.name,
                 status=step_status.value,
                 passed=result.passed,
-                result_data=result.data,
+                result_data=_pause_result_data(result, context) if result.blocking else result.data,
                 error_message=result.error,
                 message=result.message,
                 duration_ms=duration_ms,

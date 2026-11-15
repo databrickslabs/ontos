@@ -14,13 +14,15 @@ import os
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
+import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 
 from src.common.database import Base
@@ -250,3 +252,45 @@ def test_a_stored_port_with_null_booleans_still_reads():
 
     assert port.containsPii is False
     assert port.autoApprove is False
+
+
+def test_an_imported_product_is_visible_to_admins_only(engine):
+    # The job sets no draft_owner_id, owner_team_id or project_id (documented)
+    _import(engine)
+
+    with Session(engine) as db:
+        manager = DataProductsManager(db=db)
+        assert len(manager.list_products(is_admin=True)) == 1
+        assert manager.list_products(
+            is_admin=False, caller_email='analyst@example.com',
+            caller_team_ids=[], caller_project_ids=[]) == []
+
+
+def _inserted_columns(engine, run):
+    """Columns of each table the job inserts into while ``run`` executes."""
+    columns = {}
+
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        match = re.match(r'\s*INSERT INTO (\w+) \(([^)]*)\)', statement)
+        if match:
+            columns.setdefault(match.group(1), set()).update(
+                c.strip() for c in match.group(2).split(','))
+
+    event.listen(engine, 'before_cursor_execute', capture)
+    run()
+    event.remove(engine, 'before_cursor_execute', capture)
+    return columns
+
+
+def test_the_job_sets_every_not_null_column_the_models_require(engine):
+    def run():
+        _import(engine)
+        _import_contract(engine)
+
+    inserted = _inserted_columns(engine, run)
+
+    for table in ('data_products', 'data_product_output_ports',
+                  'data_contracts', 'data_contract_schema_objects'):
+        required = {c.name for c in Base.metadata.tables[table].columns
+                    if not c.nullable and c.server_default is None and not c.primary_key}
+        assert required - inserted[table] == set(), table

@@ -67,4 +67,27 @@ describe('ui-customization store: fetchSettings', () => {
     await useUICustomizationStore.getState().fetchSettings();
     expect(useUICustomizationStore.getState().isLoaded).toBe(true);
   });
+
+  it('opens the first-paint gate when the request never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      useUICustomizationStore.setState({ isLoaded: false });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          (_url: string, init?: RequestInit) =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+            }),
+        ),
+      );
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const pending = useUICustomizationStore.getState().fetchSettings();
+      await vi.advanceTimersByTimeAsync(10000);
+      await pending;
+      expect(useUICustomizationStore.getState().isLoaded).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

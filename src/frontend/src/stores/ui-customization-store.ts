@@ -36,6 +36,8 @@ interface UICustomizationStore extends UICustomizationSettings {
   getShortName: () => string;
 }
 
+const FETCH_TIMEOUT_MS = 5000;
+
 export const useUICustomizationStore = create<UICustomizationStore>((set, get) => ({
   i18nEnabled: true,
   customLogoUrl: null,
@@ -53,8 +55,13 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
   setSettings: (settings) => set((state) => ({ ...state, ...settings })),
 
   fetchSettings: async () => {
+    // The layout holds its first paint until this settles, so a stalled request must end.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch('/api/settings/ui-customization');
+      const response = await fetch('/api/settings/ui-customization', {
+        signal: controller.signal,
+      });
       if (response.ok) {
         const data = await response.json();
         set({
@@ -98,6 +105,8 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
     } catch (error) {
       console.error('Failed to fetch UI customization settings:', error);
       set({ isLoaded: true });
+    } finally {
+      clearTimeout(timer);
     }
   },
 

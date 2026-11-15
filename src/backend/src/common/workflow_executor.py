@@ -365,6 +365,45 @@ def _rule_step_error(error: Exception, data: Optional[Dict[str, Any]] = None) ->
     return StepResult(passed=False, error=str(error), data=data or None)
 
 
+def _trigger_type(context: 'StepContext') -> Optional[str]:
+    """The step's trigger type as a string (``before_update``...), None without one."""
+    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
+    return getattr(trigger_type, 'value', trigger_type)
+
+
+def apply_deferred_tag_writes(
+    db: Session, executions: List[WorkflowExecution], user_email: Optional[str],
+) -> int:
+    """Write the tags the assign-tag steps of passed before_update gates recorded.
+
+    Those steps don't write while the gate runs (``deferred_tag_write`` in their
+    result): the executor commits each step record, so a write there would stay
+    even when a later step, or another gate, blocks the update. Called once all
+    the gates passed; returns the number of tags written.
+    """
+    from uuid import UUID
+
+    from src.controller.tags_manager import TagsManager
+
+    tags_mgr = TagsManager()
+    written = 0
+    for execution in executions:
+        for step in execution.step_executions or []:
+            write = (step.result_data or {}).get('deferred_tag_write')
+            if not isinstance(write, dict) or not step.passed:
+                continue
+            tags_mgr.add_tag_to_entity(
+                db=db,
+                entity_id=write['entity_id'],
+                entity_type=write['entity_type'],
+                tag_id=UUID(write['tag_id']),
+                assigned_value=write.get('assigned_value'),
+                user_email=user_email,
+            )
+            written += 1
+    return written
+
+
 def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     """What workflow rules see as ``obj``: the stored entity plus the trigger payload.
 
@@ -1557,8 +1596,13 @@ class AssignTagStepHandler(StepHandler):
 
             # Persist via TagsManager. ``effective_value`` is what the entity holds
             # afterwards: a key-only assign keeps a value the entity already has.
+            # A before_update gate only records the write (``deferred``): the step
+            # records are committed as the gate runs, so a tag written here would
+            # stay when a later step blocks the update. ``apply_deferred_tag_writes``
+            # writes it once every gate passed.
             persisted = False
             wrote = False
+            deferred = None
             effective_value = resolved_value
             try:
                 from src.controller.tags_manager import TagsManager
@@ -1581,6 +1625,13 @@ class AssignTagStepHandler(StepHandler):
                         if existing is not None:
                             # Already assigned: nothing to write (and no change-log entry).
                             effective_value = existing.assigned_value
+                        elif _trigger_type(context) == 'before_update':
+                            deferred = {
+                                'entity_type': context.entity_type,
+                                'entity_id': str(context.entity_id),
+                                'tag_id': str(tag.id),
+                                'assigned_value': resolved_value,
+                            }
                         else:
                             tags_mgr.add_tag_to_entity(
                                 db=self._db,
@@ -1592,7 +1643,7 @@ class AssignTagStepHandler(StepHandler):
                                 commit=False,
                             )
                             wrote = True
-                        persisted = True
+                        persisted = deferred is None
                 if not tag:
                     # Nothing was assigned, so the step must not pass
                     return _rule_step_error(TagNotFoundError(key))
@@ -1614,11 +1665,14 @@ class AssignTagStepHandler(StepHandler):
                 context.entity['tags'].setdefault(key, True)
 
             label = f"{key}={resolved_value}" if resolved_value is not None else key
-            return StepResult(
-                passed=True,
-                message=f"Assigned tag {label}" + (" (persisted)" if persisted else " (context only)"),
-                data={'key': key, 'value': resolved_value, 'persisted': persisted}
-            )
+            if deferred is not None:
+                suffix = " (written when the update passes its gates)"
+            else:
+                suffix = " (persisted)" if persisted else " (context only)"
+            data = {'key': key, 'value': resolved_value, 'persisted': persisted}
+            if deferred is not None:
+                data['deferred_tag_write'] = deferred
+            return StepResult(passed=True, message=f"Assigned tag {label}{suffix}", data=data)
         except Exception as e:
             logger.exception(f"Assign tag step failed: {e}")
             return StepResult(passed=False, error=str(e))

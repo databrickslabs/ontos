@@ -1385,6 +1385,31 @@ DeliveryState = Dict[str, Dict[str, Dict[str, Optional[str]]]]
 
 DELIVERY_OBJECT_TYPES = ("TABLE", "COLUMN", "SCHEMA", "CATALOG")
 
+# For each recorded object UC reported as not found: how many full runs in a row did.
+# object type -> object FQN -> count. UC can't tell a dropped object from one the job
+# can't see, so time is the only signal: after MISSING_RUNS_BEFORE_DROP runs in a row
+# the record is dropped (logged), so the skip doesn't recur forever and a recreated
+# table with the same name doesn't lose a tag the job never wrote on it.
+MissingRuns = Dict[str, Dict[str, int]]
+MISSING_RUNS_BEFORE_DROP = 14
+
+
+def read_missing_runs(engine: Engine) -> MissingRuns:
+    """The not-found counts the last full run stored ({} when there are none or the
+    state can't be read)."""
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT value FROM app_settings WHERE key = "
+                    "'uc_tag_sync_delivery_state'"
+                )
+            ).first()
+        counts = json.loads(row[0]).get("missing_runs", {}) if row and row[0] else {}
+        return counts if isinstance(counts, dict) else {}
+    except Exception:
+        return {}
+
 
 class CorruptDeliveryState(dict):
     """An empty state read from a stored value that did not parse.
@@ -1465,7 +1490,8 @@ def backup_delivery_state(engine: Engine, raw: str) -> Optional[str]:
 
 
 def save_delivery_state(
-    engine: Engine, state: DeliveryState, prefix: str, replace: bool = True
+    engine: Engine, state: DeliveryState, prefix: str, replace: bool = True,
+    missing_runs: Optional[MissingRuns] = None,
 ) -> Optional[str]:
     """Store what this run delivered in app_settings, for the next run.
 
@@ -1475,6 +1501,9 @@ def save_delivery_state(
     key: such a run removed nothing, so every stored key stays and this run's keys are
     added or updated. If the stored state can't be read, nothing is written.
 
+    ``missing_runs`` (see MissingRuns) is stored with a replacing save; a merging save
+    keeps the stored counts as they are.
+
     Returns an error message on failure.
 
     prefix is informational (a description of the managed keys); ownership is per key.
@@ -1482,6 +1511,7 @@ def save_delivery_state(
     try:
         with engine.begin() as conn:
             objects: DeliveryState = state
+            counts: MissingRuns = missing_runs or {}
             if not replace:
                 row = conn.execute(
                     text(
@@ -1489,13 +1519,17 @@ def save_delivery_state(
                         "'uc_tag_sync_delivery_state'"
                     )
                 ).first()
-                stored = json.loads(row[0]).get("objects", {}) if row and row[0] else {}
+                stored_payload = json.loads(row[0]) if row and row[0] else {}
+                stored = stored_payload.get("objects", {})
+                counts = stored_payload.get("missing_runs", {})
                 objects = {object_type: dict(entries) for object_type, entries in stored.items()}
                 for object_type, entries in state.items():
                     stored_objects = objects.setdefault(object_type, {})
                     for fqn, tags in entries.items():
                         stored_objects[fqn] = {**stored_objects.get(fqn, {}), **tags}
             payload = {"version": 1, "prefix": prefix, "objects": objects}
+            if counts:
+                payload["missing_runs"] = counts
             # Use CURRENT_TIMESTAMP for better database compatibility
             conn.execute(
                 text(
@@ -1581,6 +1615,10 @@ class SyncResult:
     # When every one is missing, the run fails (see all_linked_objects_missing).
     linked_attempted: int = 0
     linked_missing: List[str] = field(default_factory=list)
+    # Not-found counts to store (see MissingRuns), for the records kept this run.
+    missing_runs: MissingRuns = field(
+        default_factory=lambda: {t: {} for t in DELIVERY_OBJECT_TYPES}
+    )
     # Objects ("TYPE fqn") that had at least one tag error this run.
     failed_objects: List[str] = field(default_factory=list)
     # Things worth a look that did not stop a tag from being written.
@@ -2010,6 +2048,7 @@ def sync_tags(
     partial: bool = False,
     result: Optional[SyncResult] = None,
     object_done: Optional[Callable[[SyncResult], None]] = None,
+    missing_runs: Optional[MissingRuns] = None,
 ) -> SyncResult:
     """Reconcile UC tags for every linked object, then clean up lost links.
 
@@ -2026,9 +2065,15 @@ def sync_tags(
     was delivered when the run stops part way (see with_unvisited_records). An error on
     one object is counted and the run goes on; that object keeps its previous record.
     ``object_done`` is called after each object (see DeliveryStateWriter.object_done).
+    ``missing_runs`` holds the not-found counts the last full run stored: a full run
+    with a readable state counts on, and drops a record once it reaches
+    MISSING_RUNS_BEFORE_DROP.
     """
     if result is None:
         result = SyncResult()
+    # Only a full run that read the state counts runs in a row an object is missing.
+    counting = not partial and previous is not None and not isinstance(
+        previous, CorruptDeliveryState)
 
     def skip_missing(object_type: str, fqn: str,
                      written: Optional[Dict[str, Optional[str]]] = None,
@@ -2042,7 +2087,16 @@ def sync_tags(
         # not bound to the workspace). Keep what an earlier run delivered there, and
         # what this run wrote before the object went missing (``written``), so the
         # tags are still removed once the object is reachable again.
-        kept = {**(previous or {}).get(object_type, {}).get(fqn, {}), **(written or {})}
+        recorded = (previous or {}).get(object_type, {}).get(fqn, {})
+        if recorded and not written and counting:
+            runs = (missing_runs or {}).get(object_type, {}).get(fqn, 0) + 1
+            if runs >= MISSING_RUNS_BEFORE_DROP:
+                print(f"[INFO] Dropped the delivery record of {object_type} {fqn}: not "
+                      f"found in {runs} runs in a row. Tags it recorded there, if the "
+                      f"object comes back, are left as they are.")
+                return
+            result.missing_runs[object_type][fqn] = runs
+        kept = {**recorded, **(written or {})}
         if kept:
             result.delivered[object_type][fqn] = kept
 
@@ -2387,15 +2441,18 @@ class DeliveryStateWriter:
     """
 
     def __init__(self, engine: Engine, previous: Optional[DeliveryState],
-                 ownership: TagOwnership, is_partial_read: bool):
+                 ownership: TagOwnership, is_partial_read: bool,
+                 missing_runs: Optional[MissingRuns] = None):
         self.engine = engine
         self.previous = previous
+        self.missing_runs_before: MissingRuns = missing_runs or {}
         self.ownership = ownership
         self.replace = previous is not None and not is_partial_read
         self.backed_up = False
         self.objects = 0
 
-    def save(self, state: DeliveryState) -> Optional[str]:
+    def save(self, state: DeliveryState,
+             missing_runs: Optional[MissingRuns] = None) -> Optional[str]:
         """Store ``state``. Returns an error message on failure."""
         if (self.replace and isinstance(self.previous, CorruptDeliveryState)
                 and not self.backed_up):
@@ -2404,11 +2461,24 @@ class DeliveryStateWriter:
                 return backup_error
             self.backed_up = True
         return save_delivery_state(self.engine, state, self.ownership.describe(),
-                                   replace=self.replace)
+                                   replace=self.replace, missing_runs=missing_runs)
 
     def save_part_way(self, result: SyncResult) -> Optional[str]:
-        """Save mid-run: the objects not reached yet keep their previous record."""
-        return self.save(with_unvisited_records(result, self.previous))
+        """Save mid-run: the objects not reached yet keep their previous record and
+        not-found count."""
+        state = with_unvisited_records(result, self.previous)
+        counts: MissingRuns = {}
+        for object_type, entries in state.items():
+            before = self.missing_runs_before.get(object_type, {})
+            now = result.missing_runs.get(object_type, {})
+            visited = result.delivered.get(object_type, {})
+            kept = {fqn: now.get(fqn) if fqn in visited else before.get(fqn)
+                    for fqn in entries}
+            counts[object_type] = {fqn: n for fqn, n in kept.items() if n}
+        return self.save(state, counts)
+
+    def save_at_end(self, result: SyncResult) -> Optional[str]:
+        return self.save(result.delivered, result.missing_runs)
 
     def object_done(self, result: SyncResult) -> None:
         self.objects += 1
@@ -2541,7 +2611,9 @@ def main() -> None:
 
     print(f"\nProcessing {len(datasets)} datasets (merged)...")
     result = SyncResult()
-    writer = DeliveryStateWriter(engine, previous, ownership, is_partial_read)
+    missing_runs = read_missing_runs(engine) if previous is not None else {}
+    writer = DeliveryStateWriter(engine, previous, ownership, is_partial_read,
+                                 missing_runs=missing_runs)
     sigterm_handled = True
     try:
         # A SIGTERM to the process is turned into SystemExit, so the state is saved.
@@ -2562,6 +2634,7 @@ def main() -> None:
             partial=is_partial_read,
             result=result,
             object_done=None if dry_run else writer.object_done,
+            missing_runs=missing_runs,
         )
     except BaseException:
         # Also a cancel, timeout or SIGTERM: the tags written so far must not be lost
@@ -2577,7 +2650,7 @@ def main() -> None:
     all_errors: List[str] = list(result.errors)
 
     if not dry_run:
-        save_error = writer.save(result.delivered)
+        save_error = writer.save_at_end(result)
         if save_error:
             all_errors.append(save_error)
 

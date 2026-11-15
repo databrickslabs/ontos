@@ -493,6 +493,20 @@ class VolumeInvalidError(CodedValueError):
     code = 'volume_invalid'
 
 
+def canonical_volume_value(value: Optional[str]) -> Optional[str]:
+    """The volume setting as it is stored: trimmed, and for a path with repeated
+    slashes collapsed and no trailing slash. None when empty.
+
+    The Git export decides local directory or volume from the raw text
+    (``startswith('/Volumes/')``), while ``resolve_volume`` skips empty parts, so
+    ``//Volumes/c/s/v`` passed one and was treated as the other.
+    """
+    raw = (value or '').strip()
+    if raw.startswith('/'):
+        raw = '/' + '/'.join(part for part in raw.split('/') if part)
+    return raw or None
+
+
 def is_local_volume_path(value: Optional[str]) -> bool:
     """True for a volume setting that is a local directory (development).
 

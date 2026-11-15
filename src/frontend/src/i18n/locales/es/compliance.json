@@ -174,6 +174,7 @@
   "runErrors": {
     "entities_load_failed": "No se pudieron cargar las entidades {{entityType}}, por lo que no se pudo evaluar la regla.",
     "rule_parse_failed": "No se pudo interpretar la regla: {{detail}}",
+    "user_token_required": "Esta regla comprueba objetos de Unity Catalog, que se leen con tu inicio de sesión en Databricks, y la solicitud no lo tenía, por lo que no se pudo ejecutar.",
     "workspace_client_unavailable": "El workspace de Databricks no está disponible y esta regla comprueba objetos de Unity Catalog, por lo que no se pudo ejecutar.",
     "tags_load_failed": "No se pudieron cargar las etiquetas de las entidades {{entityType}}, por lo que no se pudo evaluar la regla."
   },

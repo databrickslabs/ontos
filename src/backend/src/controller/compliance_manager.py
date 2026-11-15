@@ -27,6 +27,8 @@ from src.common.compliance_entities import (
     EntityFilter,
     TableEnrichment,
 )
+from src.common.api_errors import UserTokenRequiredError
+from src.common.run_identity import RunIdentity
 from src.common.uc_table_enrichment import (
     FIELD_GROUP,
     WarehouseSqlRunner,
@@ -698,25 +700,31 @@ class ComplianceManager:
                 })
         return objs
 
-    def _workspace_client_for(self, entity_types: List[str], policy: CompliancePolicyDb):
+    def _workspace_client_for(
+        self, entity_types: List[str], policy: CompliancePolicyDb,
+        identity: Optional[RunIdentity] = None,
+    ):
         """Workspace client for a run, or None when the rule doesn't need one.
 
         Rules whose MATCH covers Unity Catalog types (including ``Object``,
         which covers every type) need the client: without it the run fails
         instead of passing after evaluating only part of its scope. Rules on
-        app entities alone run without it.
+        app entities alone run without it. The client is the identity's: the
+        user's own for a run they start, the app's for a scheduled run.
         """
         from src.common.compliance_entities import UnityCatalogLoader
-        from src.common.workspace_client import get_workspace_client
 
+        identity = identity or RunIdentity.app()
         needs_uc = any(t in UnityCatalogLoader.SUPPORTED_TYPES for t in entity_types)
         try:
-            ws = get_workspace_client()
+            ws = identity.workspace_client()
         except Exception as e:
             if needs_uc:
                 # A code the UI translates; the exception text stays in the
                 # stored message and the log, not in what the UI shows
-                e.error_code, e.error_params = 'workspace_client_unavailable', {}
+                code = ('user_token_required' if isinstance(e, UserTokenRequiredError)
+                        else 'workspace_client_unavailable')
+                e.error_code, e.error_params = code, {}
                 raise
             logger.warning(
                 "Workspace client unavailable, policy '%s' (%s) only matches app entities "
@@ -781,11 +789,16 @@ class ComplianceManager:
         policy: CompliancePolicyDb, 
         limit: Optional[int] = None,
         current_user: Optional[str] = None,
+        run_identity: Optional[RunIdentity] = None,
     ) -> ComplianceRunDb:
         """Run a compliance policy with enhanced DSL support.
 
         This method supports both the old simple DSL syntax and the new enhanced syntax
         with MATCH, WHERE, ASSERT, ON_PASS, and ON_FAIL clauses.
+
+        ``run_identity``: whose permissions Unity Catalog is read with (the
+        tables listed, their tags and lineage). A run a user starts passes
+        theirs; the default, the app's, is for scheduled runs.
         """
         run = self.create_run(db, policy_id=policy.id)
         success = 0
@@ -808,7 +821,7 @@ class ComplianceManager:
             entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)
 
             # Create entity iterator
-            ws = self._workspace_client_for(entity_filter.entity_types, policy)
+            ws = self._workspace_client_for(entity_filter.entity_types, policy, run_identity)
             entity_iterator = create_entity_iterator(
                 db=db, workspace_client=ws,
                 table_enrichment=self._table_enrichment_for(

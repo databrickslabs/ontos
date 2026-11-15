@@ -238,6 +238,24 @@ def test_docs_viewer_merges_fragments_without_touching_the_file(tmp_path, monkey
     assert manager.get_documentation_content("plain")["content"] == "plain"
 
 
+@pytest.mark.parametrize("absolute", [False, True])
+def test_docs_viewer_ignores_a_fragment_folder_outside_the_docs_directory(
+    tmp_path, monkeypatch, absolute
+):
+    manager = _manager(tmp_path, monkeypatch)
+    docs = tmp_path / "docs"
+    outside = tmp_path / "outside"
+    _write(outside, "features", "f.md", "- **f**: from outside")
+    folder = str(outside) if absolute else "../outside"
+    yaml_path = docs / "docs.yaml"
+    yaml_path.write_text(
+        yaml_path.read_text(encoding="utf-8").replace("release-notes/unreleased", folder),
+        encoding="utf-8",
+    )
+    content = manager.get_documentation_content("release-notes")["content"]
+    assert content == NOTES
+
+
 def test_docs_viewer_without_fragments_serves_the_file_as_is(tmp_path, monkeypatch):
     manager = _manager(tmp_path, monkeypatch)
     assert manager.get_documentation_content("release-notes")["content"] == NOTES

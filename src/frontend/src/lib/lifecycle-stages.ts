@@ -241,6 +241,18 @@ export function stageColorClass(
   return STAGE_COLORS[color];
 }
 
+/**
+ * The URL of a group's save (PUT): carries the `updated_at` the caller read as
+ * `expected_updated_at`, so a group saved since is refused (409
+ * `lifecycle_group_changed`) instead of overwritten.
+ */
+export function groupSaveUrl(group: Pick<LifecycleStageGroup, 'id' | 'updated_at'>): string {
+  const base = `/api/lifecycle-stage-groups/${group.id}`;
+  return group.updated_at
+    ? `${base}?expected_updated_at=${encodeURIComponent(group.updated_at)}`
+    : base;
+}
+
 /** The stages of a group in their order. */
 export function orderedStages(group: Pick<LifecycleStageGroup, 'stages'>): LifecycleStage[] {
   return [...group.stages].sort((a, b) => a.order - b.order);
@@ -267,6 +279,11 @@ export function lifecycleErrorText(
   }
   if (code === 'lifecycle_stage_invalid_category' && typeof params.category === 'string') {
     params.category = categoryLabel(params.category, t);
+  }
+  if (code === 'lifecycle_stage_category_in_use') {
+    for (const name of ['fromCategory', 'toCategory']) {
+      if (typeof params[name] === 'string') params[name] = categoryLabel(params[name] as string, t);
+    }
   }
   if (code === 'invalid_status_transition' && !params.allowed) {
     params.allowed = t('lifecycle:errors.none', { defaultValue: 'none' });

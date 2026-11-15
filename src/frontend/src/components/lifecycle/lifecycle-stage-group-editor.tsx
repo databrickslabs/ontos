@@ -46,6 +46,7 @@ import { cn } from '@/lib/utils';
 import {
   STAGE_COLORS,
   categoryLabel,
+  groupSaveUrl,
   lifecycleErrorText,
   orderedStages,
   stageColorClass,
@@ -469,7 +470,7 @@ export default function LifecycleStageGroupEditor({
     setError(null);
     setInvalidKeys(new Set());
     const response = group?.id
-      ? await put<LifecycleStageGroup>(`/api/lifecycle-stage-groups/${group.id}`, write)
+      ? await put<LifecycleStageGroup>(groupSaveUrl(group), write)
       : await post<LifecycleStageGroup>('/api/lifecycle-stage-groups', write);
     setSaving(false);
     if (response.error) {

@@ -10,7 +10,7 @@ import type { LifecycleStageGroup } from '@/types/lifecycle-stage-groups';
 
 const LOOP: LifecycleStageGroup = {
   id: 'g-loop', name: 'Authority resolution', entity_type: 'data_product',
-  is_default_for_type: false,
+  is_default_for_type: false, updated_at: '2026-11-15T10:00:00+00:00',
   stages: [
     { key: 'draft', label: 'Draft', category: 'draft', color: 'gray', order: 0, is_initial: true },
     {
@@ -129,7 +129,10 @@ describe('LifecycleStageGroupEditor', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [url, init] = lastCall(fetchMock);
-    expect(url).toBe('/api/lifecycle-stage-groups/g-loop');
+    // The save carries the updated_at that was read, so a concurrent save is refused
+    expect(url).toBe(
+      '/api/lifecycle-stage-groups/g-loop?expected_updated_at=2026-11-15T10%3A00%3A00%2B00%3A00',
+    );
     expect(init.method).toBe('PUT');
     expect(sentBody(fetchMock).stages.map((s: any) => [s.key, s.order, s.is_initial])).toEqual([
       ['draft', 0, false],
@@ -157,6 +160,24 @@ describe('LifecycleStageGroupEditor', () => {
     );
     expect(screen.getByTestId('stage-row-needs_review')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByTestId('stage-row-active')).not.toHaveAttribute('aria-invalid');
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('shows a group saved since it was read as a conflict, in the user language', async () => {
+    fetchMock.mockImplementation(() => response(409, {
+      detail: {
+        code: 'lifecycle_group_changed',
+        message: "'Authority resolution' was changed since it was read; reload it first",
+        params: { groupId: 'g-loop', updatedBy: 'bob' },
+      },
+    }));
+    const onSaved = renderEditor(LOOP);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This lifecycle was changed by someone else since you opened it. Close it and open it again to see their changes.',
+    );
     expect(onSaved).not.toHaveBeenCalled();
   });
 

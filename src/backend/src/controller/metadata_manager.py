@@ -54,11 +54,26 @@ def _drop_pending_files(session: Session, previous_transaction) -> None:
         logger.info("Rolled back: %d document file(s) kept in the volume", len(pending))
 
 
+def _within(transaction, ancestor) -> bool:
+    while transaction is not None:
+        if transaction is ancestor:
+            return True
+        transaction = transaction.parent
+    return False
+
+
 def _drop_pending_unindex(session: Session, previous_transaction) -> None:
-    """On a rollback the document rows come back: keep them in the search index."""
-    if previous_transaction.nested:
+    """On a rollback the document rows come back: keep them in the search index.
+
+    A savepoint rollback drops only the ids queued inside that savepoint.
+    """
+    if not previous_transaction.nested:
+        session.info.pop(_PENDING_UNINDEX_KEY, None)
         return
-    session.info.pop(_PENDING_UNINDEX_KEY, None)
+    pending = session.info.get(_PENDING_UNINDEX_KEY)
+    if pending:
+        pending[:] = [(document_id, transaction) for document_id, transaction in pending
+                      if not _within(transaction, previous_transaction)]
 
 
 # Where the search result of an imported document leads: the page of its entity.
@@ -413,18 +428,23 @@ class MetadataManager(SearchableAsset):
 
         As ``delete_document_files_after_commit``: the ids wait in ``db.info``,
         and a rollback of the session's transaction drops them (the rows and
-        their index entries stay).
+        their index entries stay); a rolled-back savepoint drops the ids
+        queued inside it.
         """
         if not document_ids:
             return
-        db.info.setdefault(_PENDING_UNINDEX_KEY, []).extend(document_ids)
+        # With the (innermost) transaction they were queued in: a savepoint
+        # rolled back drops its own ids.
+        transaction = db.get_nested_transaction() or db.get_transaction()
+        db.info.setdefault(_PENDING_UNINDEX_KEY, []).extend(
+            (document_id, transaction) for document_id in document_ids)
         if not db.info.get(_PENDING_UNINDEX_LISTENING):
             db.info[_PENDING_UNINDEX_LISTENING] = True
             event.listen(db, 'after_commit', self._unindex_pending_documents)
             event.listen(db, 'after_soft_rollback', _drop_pending_unindex)
 
     def _unindex_pending_documents(self, session: Session) -> None:
-        for document_id in session.info.pop(_PENDING_UNINDEX_KEY, []):
+        for document_id, _ in session.info.pop(_PENDING_UNINDEX_KEY, []):
             self.remove_document_from_index(document_id)
 
     def delete_document_files(

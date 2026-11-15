@@ -180,3 +180,24 @@ def test_a_rolled_back_delete_keeps_the_documents_in_search(client, db_session):
 
     # (The index itself: the rollback also undid this test's rows.)
     assert f'document::{doc_id}' in {item.id for item in app.state.search_manager.index}
+
+
+def test_a_rolled_back_savepoint_keeps_its_documents_in_search(client, db_session):
+    """As when an asset's delete savepoint fails and the cascade goes on to commit."""
+    domain = DataDomain(name='Saved', created_by='test@example.com')
+    gone = DataDomain(name='Gone', created_by='test@example.com')
+    db_session.add_all([domain, gone])
+    db_session.flush()
+    _seed(db_session, 'data_domain', domain.id, 'wobblequark')
+    _seed(db_session, 'data_domain', gone.id, 'fizzlebrook')
+    manager = app.state.metadata_manager
+
+    with db_session.begin_nested():  # a sibling savepoint, released
+        manager.remove_all_for_entity(db_session, entity_type='data_domain', entity_id=gone.id)
+    savepoint = db_session.begin_nested()
+    manager.remove_all_for_entity(db_session, entity_type='data_domain', entity_id=domain.id)
+    savepoint.rollback()
+    db_session.commit()
+
+    assert len(_document_hits(client, 'wobblequark')) == 1
+    assert _document_hits(client, 'fizzlebrook') == []

@@ -163,6 +163,9 @@ class Settings(BaseSettings):
     WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS: int = Field(
         0, env='WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS',
     )
+    # Scheduled runs run on a pool of this many threads per instance, so one long
+    # run doesn't hold up the other scheduled workflows.
+    WORKFLOW_SCHEDULER_MAX_WORKERS: int = Field(4, env='WORKFLOW_SCHEDULER_MAX_WORKERS')
 
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')

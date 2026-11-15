@@ -3,6 +3,7 @@ import os
 
 os.environ['TESTING'] = 'true'
 
+from concurrent.futures import Executor, Future
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -72,8 +73,21 @@ def sessions(db_session):
     return _Sessions(db_session)
 
 
-def _scheduler(sessions, name='a'):
-    return WorkflowScheduler(sessions, instance_id=name)
+class _Inline(Executor):
+    """Runs each submitted run at once, so a test sees its outcome after run_once."""
+
+    def submit(self, fn, *args, **kwargs):
+        future = Future()
+        try:
+            future.set_result(fn(*args, **kwargs))
+        except BaseException as e:  # noqa: BLE001 - handed to the future
+            future.set_exception(e)
+        return future
+
+
+def _scheduler(sessions, name='a', **kwargs):
+    kwargs.setdefault('run_executor', _Inline())
+    return WorkflowScheduler(sessions, instance_id=name, **kwargs)
 
 
 def _executions(db, workflow_id):
@@ -101,8 +115,9 @@ def test_no_database_access_while_no_workflow_is_scheduled(db_session, sessions)
 
     _create(db_session, name='Now scheduled')  # create_workflow notifies the scheduler
     scheduler.run_once(_at(minute=31))
-    # Look again, then the 10:30 slot: re-read the definitions, claim and run.
-    assert sessions.opened == 4
+    # Look again, then the 10:30 slot: re-read the definitions, claim, then run
+    # (on the pool, with its own session).
+    assert sessions.opened == 5
 
 
 @pytest.mark.parametrize('change', ['update', 'toggle', 'delete'])
@@ -265,7 +280,7 @@ def test_a_change_during_a_refresh_is_not_lost(db_session, sessions):
 
 def test_an_idle_scheduler_rechecks_slowly_for_other_instances_schedules(
         db_session, sessions):
-    scheduler = WorkflowScheduler(sessions, idle_recheck_seconds=900, instance_id='idle')
+    scheduler = _scheduler(sessions, 'idle', idle_recheck_seconds=900)
     scheduler.run_once(_at(minute=0))
     assert sessions.opened == 1 and scheduler._has_scheduled is False
     # Created through another instance: no notification reaches this one.
@@ -280,7 +295,7 @@ def test_an_idle_scheduler_rechecks_slowly_for_other_instances_schedules(
 
 
 def test_the_opt_in_recheck_is_a_deadline_of_the_sleep(db_session, sessions):
-    scheduler = WorkflowScheduler(sessions, idle_recheck_seconds=900, instance_id='idle')
+    scheduler = _scheduler(sessions, 'idle', idle_recheck_seconds=900)
     assert scheduler.run_once(_at(minute=0)) == pytest.approx(900.5)
     # The saving instance re-reads at once; the re-check counts from that look.
     _create(db_session, schedule='0 0 * * * ?', name='Hourly', changed=_at(minute=1))
@@ -293,7 +308,7 @@ def test_the_idle_recheck_is_off_by_default(db_session, sessions):
     from src.common.config import Settings
 
     assert Settings.model_fields['WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS'].default == 0
-    scheduler = WorkflowScheduler(sessions, instance_id='default')
+    scheduler = _scheduler(sessions, 'default')
     scheduler.run_once(_at(minute=0))
     with patch('src.controller.workflows_manager._schedules_changed'):
         _create(db_session, changed=_at(minute=1))
@@ -303,7 +318,7 @@ def test_the_idle_recheck_is_off_by_default(db_session, sessions):
 
 
 def test_the_idle_recheck_can_be_turned_off(db_session, sessions):
-    scheduler = WorkflowScheduler(sessions, idle_recheck_seconds=0, instance_id='off')
+    scheduler = _scheduler(sessions, 'off', idle_recheck_seconds=0)
     scheduler.run_once(_at(minute=0))
     with patch('src.controller.workflows_manager._schedules_changed'):
         _create(db_session, changed=_at(minute=1))
@@ -440,6 +455,70 @@ def test_the_loop_waits_the_retry_delay_after_a_failed_pass_and_goes_on(sessions
     scheduler._wake = _Wake()
     scheduler._loop()
     assert waits == [ERROR_RETRY_SECONDS, 42.0]
+
+
+class _Deferred(Executor):
+    """Keeps the submitted runs until ``finish()``: runs still in progress."""
+
+    def __init__(self):
+        self.pending = []
+
+    def submit(self, fn, *args, **kwargs):
+        future = Future()
+        self.pending.append((future, fn, args, kwargs))
+        return future
+
+    def finish(self, index=None):
+        """End every run in progress, or only the one at ``index``."""
+        if index is None:
+            pending, self.pending = self.pending, []
+        else:
+            pending = [self.pending.pop(index)]
+        for future, fn, args, kwargs in pending:
+            future.set_result(fn(*args, **kwargs))
+
+    def workflow_id(self, index):
+        return self.pending[index][2][0]
+
+
+def test_a_run_in_progress_holds_up_neither_the_pass_nor_other_workflows(db_session, sessions):
+    slow = _create(db_session, name='Slow', changed=_at(hour=9, minute=58))
+    other = _create(db_session, name='Other', changed=_at(hour=9, minute=58))
+    pool = _Deferred()
+    scheduler = _scheduler(sessions, run_executor=pool)
+    scheduler.run_once(_at(minute=0, second=1))
+    # Both 10:00 slots are claimed and handed to the pool in the same pass.
+    assert len(pool.pending) == 2
+    assert len(_claims(db_session, slow.id)) == len(_claims(db_session, other.id)) == 1
+    still_running = slow if pool.workflow_id(0) == slow.id else other
+    done = other if still_running is slow else slow
+    pool.finish(1)
+    # The first run is still going at 10:05: only the other workflow's slot is claimed.
+    scheduler.run_once(_at(minute=5, second=1))
+    assert len(_claims(db_session, still_running.id)) == 1
+    assert len(_claims(db_session, done.id)) == 2
+    # Its run ends (waking the thread): the 10:05 slot it waited for runs then.
+    pool.finish()
+    assert scheduler._wake.is_set()
+    scheduler.run_once(_at(minute=5, second=50))
+    pool.finish()
+    assert len(_claims(db_session, still_running.id)) == 2
+    assert len(_executions(db_session, still_running.id)) == 2
+
+
+def test_the_sleep_counts_from_the_time_after_the_claims(db_session, sessions):
+    _create(db_session, changed=_at(hour=9, minute=58))
+    clock = _Clock(_at(minute=0, second=1))
+    scheduler = _scheduler(sessions, clock=clock)
+    original = scheduler_claims_repo.claim
+
+    def slow_claim(*args, **kwargs):
+        clock.now = _at(minute=0, second=41)  # the claims took 40 seconds
+        return original(*args, **kwargs)
+
+    with patch.object(scheduler_claims_repo, 'claim', side_effect=slow_claim):
+        delay = scheduler.run_once()
+    assert delay == pytest.approx(4 * 60 + 19 + 0.5)  # until 10:05, from 10:00:41
 
 
 def test_a_failing_run_records_an_error_outcome(db_session, sessions):
@@ -596,7 +675,7 @@ def test_database_activity_makes_another_instance_pick_up_a_new_schedule(
     from src.controller.workflow_scheduler import note_database_activity
 
     clock = _Clock(_at(minute=0))
-    scheduler = WorkflowScheduler(sessions, clock=clock, instance_id='other')
+    scheduler = _scheduler(sessions, 'other', clock=clock)
     scheduler.run_once(clock.now)
     assert sessions.opened == 1 and scheduler._has_scheduled is False
     clock.now = _at(minute=2)
@@ -615,8 +694,7 @@ def test_database_activity_makes_another_instance_pick_up_a_new_schedule(
 
 def test_the_change_check_is_rate_limited_and_cheap_without_changes(db_session, sessions):
     clock = _Clock(_at(minute=0))
-    scheduler = WorkflowScheduler(sessions, clock=clock, change_check_seconds=60,
-                                  instance_id='other')
+    scheduler = _scheduler(sessions, 'other', clock=clock, change_check_seconds=60)
     scheduler.run_once(clock.now)
     for second in (10, 30, 59):  # within a minute of the last look: ignored
         clock.now = _at(minute=0, second=second)
@@ -634,7 +712,7 @@ def test_the_change_check_sees_edits_and_deletes_made_elsewhere(
         db_session, sessions, change):
     workflow = _create(db_session)
     clock = _Clock(_at(minute=1))
-    scheduler = WorkflowScheduler(sessions, clock=clock, instance_id='other')
+    scheduler = _scheduler(sessions, 'other', clock=clock)
     scheduler.run_once(clock.now)
     assert scheduler._has_scheduled is True
     query = db_session.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == workflow.id)

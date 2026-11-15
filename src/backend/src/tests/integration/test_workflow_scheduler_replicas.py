@@ -134,6 +134,7 @@ def _run_together(schedulers, now):
         try:
             barrier.wait(timeout=10)
             scheduler.run_once(now)
+            assert scheduler.wait_for_runs(timeout=30)  # the runs go to a pool
         except Exception as e:  # pragma: no cover - reported below
             errors.append(e)
 
@@ -168,7 +169,9 @@ def test_two_schedulers_fire_a_slot_exactly_once(database):
 def test_a_restart_after_a_gap_fires_once_with_the_coalesced_count(database):
     observer = database.sessions()
     workflow_id = _create_workflow(observer)
-    WorkflowScheduler(database.sessions(), instance_id='before').run_once(_at(0))
+    before = WorkflowScheduler(database.sessions(), instance_id='before')
+    before.run_once(_at(0))
+    assert before.wait_for_runs(timeout=30)
 
     # Down from 10:01 to 10:31; two instances come back at the same time.
     restarted = [WorkflowScheduler(database.sessions(), instance_id=f'after-{n}')

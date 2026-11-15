@@ -1,7 +1,10 @@
 """Runs active workflows with a ``scheduled`` trigger (#941).
 
 One thread per app process, like the job poller (``JobsManager.start_background_
-polling``). Exactly-once across processes comes from ``scheduler_claims``: for
+polling``), claims the due slots; the runs go to a small thread pool
+(``max_workers``), each with its own session, so a long run doesn't hold up the
+other scheduled workflows. A workflow whose previous run is still going on this
+instance waits for it before its next slot is claimed. Exactly-once across processes comes from ``scheduler_claims``: for
 each due slot every instance inserts ``(workflow:<id>, slot)`` with ``ON CONFLICT
 DO NOTHING`` and only the instance whose insert wrote the row runs the workflow.
 
@@ -38,6 +41,8 @@ import os
 import socket
 import threading
 import weakref
+from concurrent.futures import Executor, Future, ThreadPoolExecutor
+from concurrent.futures import wait as wait_futures
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, List, Optional
@@ -64,6 +69,8 @@ MAX_GRACE = timedelta(hours=24)
 COALESCE_COUNT_LIMIT = 10_000
 # After a failed pass (e.g. the database is unreachable), try again this much later.
 ERROR_RETRY_SECONDS = 60
+# Scheduled runs run on a pool, so one long run doesn't hold up the other workflows.
+DEFAULT_MAX_WORKERS = 4
 
 _schedulers: 'weakref.WeakSet[WorkflowScheduler]' = weakref.WeakSet()
 _schedulers_lock = threading.Lock()
@@ -121,8 +128,16 @@ class WorkflowScheduler:
         idle_recheck_seconds: int = 0,
         clock: Optional[Callable[[], datetime]] = None,
         instance_id: Optional[str] = None,
+        max_workers: int = DEFAULT_MAX_WORKERS,
+        run_executor: Optional[Executor] = None,
     ):
         self._session_factory = session_factory
+        # Runs go to this pool; the scheduler thread only claims slots.
+        self._max_workers = max(1, int(max_workers))
+        self._pool: Optional[Executor] = run_executor
+        self._pool_lock = threading.Lock()
+        # Workflow id -> the future of its run in progress on this instance.
+        self._in_flight: Dict[str, Future] = {}
         # Shortest time between two request-triggered checks for changes.
         self._change_check = timedelta(seconds=max(0, int(change_check_seconds)))
         # 0 = never: then only requests and local changes make the scheduler look.
@@ -171,6 +186,10 @@ class WorkflowScheduler:
         self._stop.set()
         self._wake.set()
         self._thread.join(timeout=10)
+        with self._pool_lock:
+            pool = self._pool
+        if pool is not None:
+            pool.shutdown(wait=False)
         logger.info("Stopped the workflow scheduler")
 
     def invalidate(self) -> None:
@@ -207,6 +226,7 @@ class WorkflowScheduler:
     def run_once(self, now: Optional[datetime] = None) -> Optional[float]:
         """Fire the due slots; return the seconds until the next deadline (None: none)."""
         with self._run_lock:
+            explicit_now = now
             now = _utc(now) if now else self._clock()
             check_requested, self._change_check_requested = self._change_check_requested, False
             if self._has_scheduled is None:
@@ -219,9 +239,15 @@ class WorkflowScheduler:
                 self._refresh(now)  # current definitions before running anything
                 retry = False
                 for schedule in list(self._schedules.values()):
+                    if schedule.workflow_id in self._in_flight:
+                        # Its previous run is still going: the slot waits for it (the
+                        # run's end wakes the thread), within the grace period.
+                        continue
                     slot = self._due_slot(schedule, now)
                     if slot is not None and not self._fire(schedule, slot):
                         retry = True
+                # Claims take time: sleep from the time now, not the pass's start.
+                now = self._clock() if explicit_now is None else now
                 delay = self._sleep_seconds(now)
                 if retry and (delay is None or delay > ERROR_RETRY_SECONDS):
                     # A slot failed before its claim: try it again soon (the grace
@@ -359,20 +385,15 @@ class WorkflowScheduler:
         return max(1, count)
 
     def _fire(self, schedule: _Schedule, slot: datetime) -> bool:
-        """Claim ``slot`` and, if this instance got it, run the workflow.
+        """Claim ``slot`` and, if this instance got it, hand the run to the pool.
 
         Returns False when it failed before the claim was written (e.g. a
         transient database error): the slot is not handled and is tried again.
         After the claim, a failure is recorded as the outcome ``error`` and the
         slot is not run again.
         """
-        from src.common.workflow_executor import WorkflowExecutor
-        from src.controller.workflows_manager import WorkflowsManager
-
         key = task_key(schedule.workflow_id)
         db = self._session()
-        claimed = False
-        coalesced = 1
         try:
             last = _utc(scheduler_claims_repo.latest_slot(db, task_key=key))
             if last is not None and last < slot and slot - last < MIN_INTERVAL:
@@ -389,17 +410,73 @@ class WorkflowScheduler:
                 db, task_key=key, slot=slot, claimed_by=self._claimed_by,
                 outcome={'status': 'claimed', 'coalesced_slots': coalesced},
             )
-            schedule.handled_slot = slot
-            if not claimed:
-                logger.info(f"Slot {slot.isoformat()} of {key} was claimed by another instance")
-                return True
-            workflow = WorkflowsManager(db).get_workflow(schedule.workflow_id)
+        except Exception as e:
+            logger.error(f"Claiming {key} for {slot.isoformat()} failed: {e}", exc_info=True)
+            db.rollback()
+            return False  # nothing written: run_once retries the slot
+        finally:
+            db.close()
+        schedule.handled_slot = slot
+        if not claimed:
+            logger.info(f"Slot {slot.isoformat()} of {key} was claimed by another instance")
+            return True
+        workflow_id = schedule.workflow_id
+        try:
+            future = self._executor().submit(self._run, workflow_id, slot, coalesced)
+        except Exception as e:  # e.g. the pool is shut down
+            logger.error(f"Could not start the run of {key} for {slot.isoformat()}: {e}")
+            self._record(key, slot, {'status': 'error', 'coalesced_slots': coalesced})
+            return True
+        if not future.done():
+            self._in_flight[workflow_id] = future
+            future.add_done_callback(lambda _f, wid=workflow_id: self._run_ended(wid))
+        return True
+
+    def wait_for_runs(self, timeout: Optional[float] = None) -> bool:
+        """Wait until the runs in progress on this instance end; False on a timeout."""
+        _, pending = wait_futures(list(self._in_flight.values()), timeout=timeout)
+        return not pending
+
+    def _executor(self) -> Executor:
+        with self._pool_lock:
+            if self._pool is None:
+                self._pool = ThreadPoolExecutor(
+                    max_workers=self._max_workers, thread_name_prefix='WorkflowRun',
+                )
+            return self._pool
+
+    def _run_ended(self, workflow_id: str) -> None:
+        self._in_flight.pop(workflow_id, None)
+        self._wake.set()  # a slot that waited for this run can go now
+
+    def _record(self, key: str, slot: datetime, outcome: dict,
+                execution_id: Optional[str] = None) -> None:
+        db = self._session()
+        try:
+            scheduler_claims_repo.record_outcome(
+                db, task_key=key, slot=slot, outcome=outcome, execution_id=execution_id,
+            )
+        except Exception as e:
+            logger.error(f"Could not record the outcome of {key} for {slot.isoformat()}: {e}")
+            db.rollback()
+        finally:
+            db.close()
+
+    def _run(self, workflow_id: str, slot: datetime, coalesced: int) -> None:
+        """Run a claimed slot (on the pool, with its own session) and record its outcome."""
+        from src.common.workflow_executor import WorkflowExecutor
+        from src.controller.workflows_manager import WorkflowsManager
+
+        key = task_key(workflow_id)
+        db = self._session()
+        try:
+            workflow = WorkflowsManager(db).get_workflow(workflow_id)
             if workflow is None or not workflow.is_active:
                 scheduler_claims_repo.record_outcome(
                     db, task_key=key, slot=slot,
                     outcome={'status': 'skipped', 'coalesced_slots': coalesced},
                 )
-                return True
+                return
             scheduled_for = slot.isoformat()
             entity = {
                 'type': SCHEDULE_ENTITY_TYPE, 'id': workflow.id, 'name': workflow.name,
@@ -431,8 +508,6 @@ class WorkflowScheduler:
             logger.error(f"Scheduled run of {key} for {slot.isoformat()} failed: {e}",
                          exc_info=True)
             db.rollback()
-            if not claimed:
-                return False  # nothing written: run_once retries the slot
             try:
                 scheduler_claims_repo.record_outcome(
                     db, task_key=key, slot=slot,
@@ -442,4 +517,3 @@ class WorkflowScheduler:
                 db.rollback()
         finally:
             db.close()
-        return True

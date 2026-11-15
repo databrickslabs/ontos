@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AccessCollection, OdrlProfile, RuleKind } from '@/types/access-policy';
 import ConstraintEditor from './constraint-editor';
+import { actionLabel } from '@/lib/access-policy-text';
 import { DUTY_ACTIONS, REMEDY_ACTIONS, RULE_KINDS, emptyRule, type FormRule } from './odrl-helpers';
 
 interface RuleBuilderProps {
@@ -30,7 +31,7 @@ export default function RuleBuilder({ profile, audiences, assetCollections, valu
   const { t } = useTranslation(['access-policies']);
   const actions = profile?.actions || [];
   const dataActions = actions.filter((a) => !DUTY_ACTIONS.includes(a.key));
-  const labelFor = (key: string) => actions.find((a) => a.key === key)?.label || key;
+  const labelFor = (key: string) => actionLabel(t, key, actions.find((a) => a.key === key)?.label);
 
   const update = (key: string, patch: Partial<FormRule>) =>
     onChange(value.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -80,7 +81,7 @@ export default function RuleBuilder({ profile, audiences, assetCollections, valu
                     <SelectContent>
                       {actionChoices.map((a) => (
                         <SelectItem key={a.key} value={a.key}>
-                          {a.label}
+                          {actionLabel(t, a.key, a.label)}
                           {a.included_in ? <span className="ml-1 text-xs text-muted-foreground">⊂ {labelFor(a.included_in)}</span> : null}
                         </SelectItem>
                       ))}

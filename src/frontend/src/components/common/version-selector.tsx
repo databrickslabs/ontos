@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -90,6 +91,7 @@ export default function VersionSelector({
   triggerClassName,
 }: VersionSelectorProps) {
   const { toast } = useToast()
+  const { t } = useTranslation(['common'])
   const [versions, setVersions] = useState<EntityVersionRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
@@ -111,8 +113,8 @@ export default function VersionSelector({
         console.error('Error fetching versions:', err)
         if (!cancelled) {
           toast({
-            title: 'Error',
-            description: `Failed to load ${entityKind} versions`,
+            title: t('common:error'),
+            description: t('common:errors.versionsLoadFailed', { kind: entityKind }),
             variant: 'destructive',
           })
           setVersions([])
@@ -126,7 +128,7 @@ export default function VersionSelector({
     return () => {
       cancelled = true
     }
-  }, [entityKind, currentEntityId, endpointOverride, toast])
+  }, [entityKind, currentEntityId, endpointOverride, toast, t])
 
   if (versions.length <= 1) {
     // Family-of-one: nothing to switch between. Render nothing so the

@@ -1,5 +1,5 @@
 """API routes for Access Policies (W3C ODRL 2.2): policies, audiences, asset collections, targets."""
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -67,9 +67,13 @@ def _email(user: Any) -> Optional[str]:
 
 
 def _http(e: AccessPolicyError) -> HTTPException:
-    detail: Any = str(e)
+    """``detail: {code, message, params[, problems, problem_details]}`` — clients translate the code."""
+    detail: Dict[str, Any] = {"code": getattr(e, "code", "access_policy_error"), "message": str(e),
+                              "params": getattr(e, "params", {}) or {}}
     if e.details:
-        detail = {"message": str(e), "problems": e.details}
+        detail["problems"] = [str(p) for p in e.details] if isinstance(e.details, list) else e.details
+        if isinstance(e.details, list):
+            detail["problem_details"] = odrl.problem_dicts(e.details)
     return HTTPException(status_code=e.status_code, detail=detail)
 
 
@@ -189,10 +193,12 @@ async def policy_validation(entity_id: str, request: Request, db: DBSessionDep, 
     except AccessPolicyError as e:
         raise _http(e)
     issues = manager.validate_body(db, row.policy_type, row.conflict, row.inherit_from or [], row.body or {})
+    problems = manager.activation_problems(db, KIND_POLICY, row)
     return {
         "valid": not any(i["severity"] == "error" for i in issues),
         "issues": issues,
-        "activation_problems": manager.activation_problems(db, KIND_POLICY, row),
+        "activation_problems": problems,
+        "activation_problem_details": odrl.problem_dicts(problems),
     }
 
 
@@ -372,7 +378,8 @@ def deliver_release(release_id: str, db: DBSessionDep, current_user: AuditCurren
     try:
         row = releases.deliver(db, release_id, _email(current_user), delivery_service, payload.modes)
     except (AccessPolicyError, ValueError) as e:
-        raise _http(e if isinstance(e, AccessPolicyError) else AccessPolicyError(str(e)))
+        raise _http(e if isinstance(e, AccessPolicyError) else AccessPolicyError(
+            str(e), code="delivery_failed", params={"reason": str(e)}))
     return releases.to_read_dict(row)
 
 

@@ -26,6 +26,7 @@ import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import ReleaseStatusBadge from '@/components/access-policies/release-status-badge';
+import { errorText, issueText, ruleLabel } from '@/lib/access-policy-text';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
@@ -84,7 +85,7 @@ function GrantTable({ grants, empty }: { grants: UcGrant[]; empty: string }) {
               </TableCell>
               <TableCell className="text-xs">—</TableCell>
               <TableCell className="text-xs text-muted-foreground">
-                {(g.sources || []).map((s) => `${s.policy_name} · ${s.rule_kind} #${s.rule_index + 1}`).join('; ')}
+                {(g.sources || []).map((s) => ruleLabel(t, s)).join('; ')}
               </TableCell>
             </TableRow>
           ) : (
@@ -106,7 +107,7 @@ function GrantTable({ grants, empty }: { grants: UcGrant[]; empty: string }) {
             </TableCell>
             <TableCell className="text-xs">{g.expires_at ? new Date(g.expires_at).toLocaleString() : '—'}</TableCell>
             <TableCell className="text-xs text-muted-foreground">
-              {(g.sources || []).map((s) => `${s.policy_name} · ${s.rule_kind} #${s.rule_index + 1}`).join('; ')}
+              {(g.sources || []).map((s) => ruleLabel(t, s)).join('; ')}
             </TableCell>
           </TableRow>
           ),
@@ -172,7 +173,7 @@ export default function AccessPolicyReleaseDetails() {
     const res = await post<AccessRelease>(`${base}/${path}`, body);
     setBusy(false);
     if (res.error || !res.data) {
-      toast({ title: t('access-policies:releases.actionFailed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:releases.actionFailed'), description: errorText(t, res), variant: 'destructive' });
       return false;
     }
     setRelease(res.data);
@@ -195,7 +196,7 @@ export default function AccessPolicyReleaseDetails() {
     const res = await post<LiveDiffReport>(`${base}/live-diff`, {});
     setBusy(false);
     if (res.error || !res.data) {
-      toast({ title: t('access-policies:releases.liveDiffFailed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:releases.liveDiffFailed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     setRelease((r) => (r ? { ...r, live_diff: res.data } : r));
@@ -341,7 +342,7 @@ export default function AccessPolicyReleaseDetails() {
                 <Badge variant={ISSUE_VARIANT[i.severity]} className="shrink-0 text-[10px]">
                   {t(`access-policies:releases.severity.${i.severity}`)}
                 </Badge>
-                <span>{i.message}</span>
+                <span>{issueText(t, i)}</span>
               </div>
             ))}
           </CardContent>
@@ -421,7 +422,7 @@ export default function AccessPolicyReleaseDetails() {
                 </Badge>
                 <span>
                   <span className="font-medium">
-                    {g.source.policy_name} · {g.source.rule_kind} #{g.source.rule_index + 1}
+                    {ruleLabel(t, g.source)}
                   </span>
                   : {g.reason}
                 </span>

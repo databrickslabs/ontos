@@ -104,10 +104,14 @@ _TARGET_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{1,39}$")
 class AccessPolicyError(ValueError):
     """Author-visible validation / lifecycle error (routes map it to 400/409)."""
 
-    def __init__(self, message: str, status_code: int = 400, details: Optional[Any] = None):
+    def __init__(self, message: str, status_code: int = 400, details: Optional[Any] = None, *,
+                 code: str = "access_policy_error", params: Optional[Dict[str, Any]] = None):
         super().__init__(message)
         self.status_code = status_code
         self.details = details
+        # Stable code + params for clients to translate; ``message`` stays the English fallback.
+        self.code = code
+        self.params = dict(params or {})
 
 
 # ----------------------------------------------------------- principal attributes
@@ -214,7 +218,7 @@ class AccessPoliciesManager:
     @staticmethod
     def spec(kind: str) -> KindSpec:
         if kind not in KINDS:
-            raise AccessPolicyError(f"Unknown kind '{kind}'", 404)
+            raise AccessPolicyError(f"Unknown kind '{kind}'", 404, code="unknown_kind", params={"kind": kind})
         return KINDS[kind]
 
     def _log_timeline(self, db: Session, kind: str, entity_id: str, message: str, user: Optional[str] = None) -> None:
@@ -271,10 +275,12 @@ class AccessPoliciesManager:
             doc, known_party=self._known_ref(db, KIND_AUDIENCE), known_asset=self._known_ref(db, KIND_ASSET_COLLECTION))]
         for parent in inherit_from or []:
             if not repo_for(KIND_POLICY).get_family_by_uid(db, parent):
-                issues.append({"severity": "error", "path": "inheritFrom", "message": f"Parent policy {parent} not found"})
+                issues.append({"severity": "error", "path": "inheritFrom", "message": f"Parent policy {parent} not found",
+                               "code": "parent_not_found", "params": {"parent": parent}})
         if conflict == odrl.SPEC_DEFAULT_CONFLICT:
             issues.append({"severity": "warning", "path": "conflict",
-                           "message": "conflict=invalid voids the whole policy if any permission and prohibition clash"})
+                           "message": "conflict=invalid voids the whole policy if any permission and prohibition clash",
+                           "code": "conflict_invalid_voids", "params": {}})
         return issues
 
     def _rebuild_index(self, db: Session, policy: AccessPolicyDb) -> None:
@@ -300,10 +306,10 @@ class AccessPoliciesManager:
         if kind == KIND_POLICY:
             ptype = data.get("policy_type") or "Set"
             if ptype not in odrl.POLICY_TYPES:
-                raise AccessPolicyError(f"Unsupported policy type '{ptype}'")
+                raise AccessPolicyError(f"Unsupported policy type '{ptype}'", code="unsupported_policy_type", params={"type": ptype})
             conflict = data.get("conflict") or odrl.DEFAULT_AUTHORED_CONFLICT
             if conflict not in odrl.CONFLICT_TERMS:
-                raise AccessPolicyError(f"Unknown conflict strategy '{conflict}'")
+                raise AccessPolicyError(f"Unknown conflict strategy '{conflict}'", code="unknown_conflict", params={"conflict": conflict})
             fields.update(self._subject(db, ptype, data.get("subject_entity_type"), data.get("subject_entity_id"),
                                         can_manage_subject))
             fields.update({
@@ -334,16 +340,17 @@ class AccessPoliciesManager:
             return {"subject_entity_type": None, "subject_entity_id": None}
         from src.models.access_policies import SUBJECT_ENTITY_TYPES
         if policy_type != "Offer":
-            raise AccessPolicyError("Only an Offer can state the terms for an entity")
+            raise AccessPolicyError("Only an Offer can state the terms for an entity", code="subject_offer_only")
         if entity_type not in SUBJECT_ENTITY_TYPES or not entity_id:
-            raise AccessPolicyError(f"A policy subject needs a type ({', '.join(SUBJECT_ENTITY_TYPES)}) and an id")
+            raise AccessPolicyError(f"A policy subject needs a type ({', '.join(SUBJECT_ENTITY_TYPES)}) and an id",
+                                    code="subject_incomplete", params={"types": ", ".join(SUBJECT_ENTITY_TYPES)})
         from src.repositories.data_products_repository import data_product_repo
         product = data_product_repo.get(db, entity_id)
         if product is None:
-            raise AccessPolicyError(f"Data product '{entity_id}' not found", 404)
+            raise AccessPolicyError(f"Data product '{entity_id}' not found", 404, code="subject_not_found", params={"id": entity_id})
         if can_manage is not None and not can_manage(product):
             raise AccessPolicyError("Only the product's owners (owner team / project) or an admin can state its "
-                                    "terms of use", 403)
+                                    "terms of use", 403, code="subject_forbidden")
         return {"subject_entity_type": entity_type, "subject_entity_id": entity_id}
 
     def offers_for(self, db: Session, entity_type: str, entity_id: str, *, active_only: bool = True) -> List[AccessPolicyDb]:
@@ -357,14 +364,16 @@ class AccessPoliciesManager:
     def require(self, db: Session, kind: str, entity_id: str) -> Any:
         row = self.get(db, kind, entity_id)
         if not row:
-            raise AccessPolicyError(f"{self.spec(kind).label} not found", 404)
+            raise AccessPolicyError(f"{self.spec(kind).label} not found", 404, code="not_found",
+                                    params={"kind": kind})
         return row
 
     def require_visible(self, db: Session, kind: str, entity_id: str, viewer: Optional[str], is_admin: bool) -> Any:
         """Like :meth:`require`, but other users' personal drafts are reported as not found."""
         row = self.require(db, kind, entity_id)
         if not self._visible(row, viewer, is_admin):
-            raise AccessPolicyError(f"{self.spec(kind).label} not found", 404)
+            raise AccessPolicyError(f"{self.spec(kind).label} not found", 404, code="not_found",
+                                    params={"kind": kind})
         return row
 
     def list(self, db: Session, kind: str, *, include_history: bool = False, status: Optional[str] = None,
@@ -388,18 +397,21 @@ class AccessPoliciesManager:
                         "subject_entity_type", "subject_entity_id", *TARGET_FIELDS}
         if content_keys & set(data) and row.status not in EDITABLE_STATUSES:
             raise AccessPolicyError(
-                f"A {row.status} {self.spec(kind).label.lower()} can't be edited — create a new version instead.", 409)
+                f"A {row.status} {self.spec(kind).label.lower()} can't be edited — create a new version instead.", 409,
+                code="not_editable", params={"status": row.status, "kind": kind})
         for f in ("name", "description", "owner_team_id", "project_id", "change_summary"):
             if f in data:
                 setattr(row, f, data[f])
         if kind == KIND_POLICY:
             if "policy_type" in data and data["policy_type"]:
                 if data["policy_type"] not in odrl.POLICY_TYPES:
-                    raise AccessPolicyError(f"Unsupported policy type '{data['policy_type']}'")
+                    raise AccessPolicyError(f"Unsupported policy type '{data['policy_type']}'",
+                                            code="unsupported_policy_type", params={"type": data["policy_type"]})
                 row.policy_type = data["policy_type"]
             if "conflict" in data and data["conflict"]:
                 if data["conflict"] not in odrl.CONFLICT_TERMS:
-                    raise AccessPolicyError(f"Unknown conflict strategy '{data['conflict']}'")
+                    raise AccessPolicyError(f"Unknown conflict strategy '{data['conflict']}'",
+                                            code="unknown_conflict", params={"conflict": data["conflict"]})
                 row.conflict = data["conflict"]
             if "inherit_from" in data and data["inherit_from"] is not None:
                 row.inherit_from = data["inherit_from"]
@@ -419,7 +431,7 @@ class AccessPoliciesManager:
             if "key" in changes and changes["key"] != row.key and len(
                     repo_for(kind).get_family_versions(db, family_id=row.version_family_id)) > 1:
                 # Releases and the Grant Ledger reference the key: renaming it would orphan tracked grants.
-                raise AccessPolicyError("The key of a target with several versions can't change", 409)
+                raise AccessPolicyError("The key of a target with several versions can't change", 409, code="target_key_locked")
             for f, v in changes.items():
                 setattr(row, f, v)
         else:
@@ -439,13 +451,15 @@ class AccessPoliciesManager:
         row = self.require(db, kind, entity_id)
         if row.status not in DELETABLE_STATUSES:
             raise AccessPolicyError(
-                f"Only draft or retired versions can be deleted (this one is {row.status}).", 409)
+                f"Only draft or retired versions can be deleted (this one is {row.status}).", 409,
+                code="delete_status", params={"status": row.status})
         if kind in COLLECTION_KINDS:
             users = self.policies_referencing(db, row.uid)
             live = [p for p in users if p.status not in (STATUS_RETIRED,)]
             if live and len(repo_for(kind).get_family_versions(db, family_id=row.version_family_id)) <= 1:
                 raise AccessPolicyError(
-                    f"Still referenced by {len(live)} policy version(s): " + ", ".join(p.name for p in live[:5]), 409)
+                    f"Still referenced by {len(live)} policy version(s): " + ", ".join(p.name for p in live[:5]), 409,
+                    code="still_referenced", params={"count": len(live), "names": ", ".join(p.name for p in live[:5])})
         entity_domain_repo.set_domains_for_entity(
             db, entity_type=self.spec(kind).entity_type, entity_id=row.id, domain_ids=[], assigned_by=current_user)
         repo_for(kind).remove(db, id=row.id)
@@ -465,7 +479,8 @@ class AccessPoliciesManager:
         src = self.require(db, kind, entity_id)
         family = repo_for(kind).get_family_versions(db, family_id=src.version_family_id or src.id)
         if any(v.version == new_version for v in family):
-            raise AccessPolicyError(f"Version {new_version} already exists in this family", 409)
+            raise AccessPolicyError(f"Version {new_version} already exists in this family", 409,
+                                    code="version_exists", params={"version": new_version})
         fields = {f: getattr(src, f) for f in _LIFECYCLE_COPY + _KIND_COPY[kind]}
         fields.update({
             "status": STATUS_DRAFT, "version": new_version, "change_summary": change_summary,
@@ -505,31 +520,38 @@ class AccessPoliciesManager:
         allowed = TRANSITIONS.get(row.status, ())
         if new_status not in allowed:
             raise AccessPolicyError(
-                f"Can't move from {row.status} to {new_status} (allowed: {', '.join(allowed) or 'none'}).", 409)
+                f"Can't move from {row.status} to {new_status} (allowed: {', '.join(allowed) or 'none'}).", 409,
+                code="transition_not_allowed",
+                params={"from": row.status, "to": new_status, "allowed": ", ".join(allowed) or "none"})
         if new_status == STATUS_APPROVED and not is_admin:
             # Separation of duties: whoever submitted (or authored) a version can't approve it.
             me = (current_user or "").lower()
             authors = {(row.submitted_by or "").lower(), (row.created_by or "").lower()} - {""}
             if not me or me in authors:
                 raise AccessPolicyError(
-                    "A version can't be approved by its author or submitter — ask another steward.", 403)
+                    "A version can't be approved by its author or submitter — ask another steward.", 403,
+                    code="separation_of_duties")
         if new_status == STATUS_ACTIVE:
             problems = self.activation_problems(db, kind, row)
             if problems:
-                raise AccessPolicyError("Not ready to activate: " + "; ".join(problems), 409, details=problems)
+                raise AccessPolicyError("Not ready to activate: " + "; ".join(problems), 409, details=problems,
+                                    code="not_ready_to_activate",
+                                    params={"count": len(problems), "problems": odrl.problem_dicts(problems)})
         if new_status == STATUS_RETIRED and kind == KIND_TARGET and not self._other_active_version(db, kind, row):
             # A retired target is never compiled or swept again: whatever it still tracks would never be revoked.
             tracked = self.tracked_grants(db, row.key)
             if tracked:
                 raise AccessPolicyError(f"Target '{row.key}' still tracks {tracked} grant(s) — revoke them or "
-                                        "release them from tracking first", 409)
+                                        "release them from tracking first", 409,
+                                        code="target_tracks_grants", params={"key": row.key, "count": tracked})
         if new_status in (STATUS_DEPRECATED, STATUS_RETIRED) and kind in COLLECTION_KINDS:
             # Taking an audience/collection out of service silently disables every rule that uses it.
             live = [p for p in self.policies_referencing(db, row.uid) if p.status == STATUS_ACTIVE]
             if live and not self._other_active_version(db, kind, row):
                 raise AccessPolicyError(
                     "Still used by active policies (deprecate or re-point them first): "
-                    + ", ".join(p.name for p in live[:5]), 409)
+                    + ", ".join(p.name for p in live[:5]), 409,
+                    code="used_by_active", params={"names": ", ".join(p.name for p in live[:5])})
         old = row.status
         row.status = new_status
         row.updated_by = current_user
@@ -575,37 +597,44 @@ class AccessPoliciesManager:
         adapter = targets_mod.get_adapter(row.system or "")
         if adapter is None:
             names = ", ".join(a.system for a in targets_mod.adapters())
-            return [f"Unknown system '{row.system}' (available: {names})"]
+            return [odrl.Problem(f"Unknown system '{row.system}' (available: {names})", "unknown_system",
+                                 {"system": row.system, "available": names})]
         problems: List[str] = []
         if not _TARGET_KEY_RE.match(row.key or ""):
-            problems.append("The key must be 2–40 lower-case letters, digits, '-' or '_', starting with a letter")
+            problems.append(odrl.Problem("The key must be 2–40 lower-case letters, digits, '-' or '_', starting with a letter",
+                                         "target_key_invalid"))
         problems += adapter.scope_problems(row.scope or [])
         problems += adapter.validate_connection(row.connection or {})
         from src.controller.delivery_service import DeliveryMode
         valid = {m.value for m in DeliveryMode}
-        problems += [f"Unknown delivery mode '{m}'" for m in row.delivery_modes or [] if m not in valid]
+        problems += [odrl.Problem(f"Unknown delivery mode '{m}'", "unknown_delivery_mode", {"mode": m})
+                     for m in row.delivery_modes or [] if m not in valid]
         if DeliveryMode.DIRECT.value in (row.delivery_modes or []) and targets_mod.CAP_APPLY_GRANTS not in adapter.capabilities:
-            problems.append(f"{adapter.label} targets can't be delivered directly — allow Indirect or Manual")
+            problems.append(odrl.Problem(f"{adapter.label} targets can't be delivered directly — allow Indirect or Manual",
+                                         "direct_unsupported", {"system": adapter.label}))
         if (row.drift_policy or targets_mod.DRIFT_REPORT) not in targets_mod.DRIFT_POLICIES:
-            problems.append(f"Drift policy '{row.drift_policy}' is not supported (report only)")
+            problems.append(odrl.Problem(f"Drift policy '{row.drift_policy}' is not supported (report only)",
+                                         "drift_policy_unsupported", {"policy": row.drift_policy}))
         if (cron := targets_mod.cron_problem(row.reconcile_schedule)):
             problems.append(cron)
         # Deprecated targets still deliver pending releases and revoke what they track: they count.
         others = [t for t in repo_for(KIND_TARGET).list_all(db) if t.version_family_id != row.version_family_id
                   and t.status in (STATUS_ACTIVE, STATUS_NEEDS_REVIEW, STATUS_DEPRECATED)]
         if any(t.key == row.key for t in others):
-            problems.append(f"Another target (active or deprecated) already uses the key '{row.key}'")
+            problems.append(odrl.Problem(f"Another target (active or deprecated) already uses the key '{row.key}'",
+                                         "target_key_taken", {"key": row.key}))
         clash = [t.name for t in others if t.system == row.system
                  and targets_mod.scopes_overlap(row.scope or [], t.scope or [])]
         if clash:
             # One securable, one tracking target: otherwise two ledgers would grant and revoke the same thing.
-            problems.append(f"Scope overlaps active or deprecated {adapter.label} target(s): {', '.join(clash)} "
-                            "— retire them first")
+            problems.append(odrl.Problem(f"Scope overlaps active or deprecated {adapter.label} target(s): {', '.join(clash)} "
+                                         "— retire them first", "scope_overlap", {"system": adapter.label, "targets": ", ".join(clash)}))
         builtin = targets_mod.BUILTIN_UC.key
         if (row.system == builtin and row.key != builtin and not any(t.system == builtin for t in others)
                 and self.tracked_grants(db, builtin)):
-            problems.append(f"Grants tracked by the built-in '{builtin}' target would be orphaned — "
-                            f"use the key '{builtin}' for the first Unity Catalog target to adopt them")
+            problems.append(odrl.Problem(f"Grants tracked by the built-in '{builtin}' target would be orphaned — "
+                                         f"use the key '{builtin}' for the first Unity Catalog target to adopt them",
+                                         "builtin_orphaned", {"key": builtin}))
         return problems
 
     def activation_problems(self, db: Session, kind: str, row: Any) -> List[str]:
@@ -613,17 +642,19 @@ class AccessPoliciesManager:
             return self._target_problems(db, row)
         if kind != KIND_POLICY:
             if kind == KIND_AUDIENCE and not row.members and not row.refinement:
-                return ["An audience needs members or a refinement (an empty audience means everyone)"]
+                return [odrl.Problem("An audience needs members or a refinement (an empty audience means everyone)",
+                                     "audience_empty")]
             if kind == KIND_ASSET_COLLECTION and not row.members and not row.refinement:
-                return ["An asset collection needs members or a refinement"]
+                return [odrl.Problem("An asset collection needs members or a refinement", "collection_empty")]
             return []
-        problems = [i["message"] for i in self.validate_body(
+        problems = [odrl.Problem(i["message"], i.get("code") or "message", i.get("params")) for i in self.validate_body(
             db, row.policy_type, row.conflict, row.inherit_from or [], row.body or {}) if i["severity"] == "error"]
         for ref_kind, prefix in ((KIND_AUDIENCE, odrl.AUDIENCE_IRI_PREFIX),
                                  (KIND_ASSET_COLLECTION, odrl.ASSET_COLLECTION_IRI_PREFIX)):
             for value in {v for _, _, v in odrl.index_terms(row.body or {}) if v.startswith(prefix)}:
                 if not repo_for(ref_kind).get_active_by_uid(db, value):
-                    problems.append(f"{KINDS[ref_kind].label} {value} has no active version")
+                    problems.append(odrl.Problem(f"{KINDS[ref_kind].label} {value} has no active version", "ref_not_active",
+                                                 {"kind": ref_kind, "ref": value}))
         return problems
 
     def _fire_review_requested(self, db: Session, kind: str, row: Any, user: Optional[str], comment: Optional[str]) -> None:
@@ -661,11 +692,13 @@ class AccessPoliciesManager:
     def import_jsonld(self, db: Session, request: Any, current_user: Optional[str]) -> AccessPolicyDb:
         doc = request.document or {}
         norm = odrl.normalize_policy(doc)
-        profile_errors = [i.message for i in odrl.validate_policy(norm) if "profile" in i.path]
+        profile_errors = [i for i in odrl.validate_policy(norm) if "profile" in i.path]
         if profile_errors:
-            raise AccessPolicyError(profile_errors[0])
+            first = profile_errors[0]
+            raise AccessPolicyError(first.message, code=first.code, params=first.params)
         if norm["type"] not in odrl.POLICY_TYPES:
-            raise AccessPolicyError(f"Unsupported policy type '{norm['type']}'")
+            raise AccessPolicyError(f"Unsupported policy type '{norm['type']}'", code="unsupported_policy_type",
+                                    params={"type": norm["type"]})
         from src.models.access_policies import AccessPolicyCreate
         payload = AccessPolicyCreate(
             name=request.name or doc.get("dc:title") or doc.get("title") or norm.get("uid") or "Imported policy",
@@ -866,7 +899,8 @@ def target_fields(data: Dict[str, Any], *, partial: bool) -> Dict[str, Any]:
         system = (data.get("system") or "").strip()
         if not targets_mod.get_adapter(system):
             names = ", ".join(a.system for a in targets_mod.adapters())
-            raise AccessPolicyError(f"Unknown system '{system}' (available: {names})")
+            raise AccessPolicyError(f"Unknown system '{system}' (available: {names})", code="unknown_system",
+                                    params={"system": system, "available": names})
         out["system"] = system
     if not partial or "connection" in data:
         out["connection"] = dict(data.get("connection") or {})

@@ -211,7 +211,8 @@
     "permissionDenied": "Permission denied",
     "notFound": "Not found",
     "required": "This field is required",
-    "invalidDate": "Invalid Date"
+    "invalidDate": "Invalid Date",
+    "versionsLoadFailed": "Failed to load {{kind}} versions"
   },
   "tooltips": {
     "zoomIn": "Zoom In",

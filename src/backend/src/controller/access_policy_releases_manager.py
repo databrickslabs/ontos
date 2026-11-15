@@ -26,6 +26,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from src.common import odrl
 from src.common import policy_targets as pt
 from src.common import uc_policy_adapter as uc
 from src.common.logging import get_logger
@@ -201,7 +202,8 @@ class PolicyReleaseManager:
         options = self.targets(db, include_deprecated=include_deprecated)
         found = next((t for t in options if t.key == key), None)
         if found is None:
-            raise AccessPolicyError(f"Unknown target '{key}'. Available: {', '.join(t.key for t in options)}", 400)
+            raise AccessPolicyError(f"Unknown target '{key}'. Available: {', '.join(t.key for t in options)}", 400,
+                                    code="unknown_target", params={"key": key, "available": ", ".join(t.key for t in options)})
         return found
 
     def target_for(self, db: Session, system: str, name: str, *,
@@ -215,7 +217,7 @@ class PolicyReleaseManager:
     def require(self, db: Session, release_id: str) -> AccessPolicyReleaseDb:
         row = db.get(AccessPolicyReleaseDb, release_id)
         if not row:
-            raise AccessPolicyError("Release not found", 404)
+            raise AccessPolicyError("Release not found", 404, code="release_not_found")
         return row
 
     def _log_timeline(self, db: Session, row: AccessPolicyReleaseDb, message: str, user: Optional[str]) -> None:
@@ -274,7 +276,7 @@ class PolicyReleaseManager:
             owns=adapter.owns,
         )
         for w in warnings:
-            plan.issue("error", "inheritance", w)
+            plan.issue("error", "inheritance", w, params={"detail": w})
         self._note_untargeted(db, plan)
         pt.restrict(plan, resolved)
         # The object-kind resolver reads Unity Catalog: only meaningful for UC names.
@@ -297,11 +299,11 @@ class PolicyReleaseManager:
             diff.untrack = sorted(diff.untrack + untrack, key=lambda g: g.key)
             plan.issue("warning", "untracked_outside_scope",
                        f"{len(untrack)} tracked grant(s) are outside the target's scope and will no longer be "
-                       "tracked (they stay on the platform)")
+                       "tracked (they stay on the platform)", params={"count": len(untrack)})
         if expiring:
             plan.issue("warning", "expiring_outside_scope",
                        f"{len(expiring)} time-bound grant(s) are outside the target's scope; they stay tracked "
-                       "here until they expire and are revoked")
+                       "here until they expire and are revoked", params={"count": len(expiring)})
         changes = diff.to_dict()
         changes["sql"] = adapter.render_sql(diff, resolved)
         ir = plan.to_dict()
@@ -322,9 +324,9 @@ class PolicyReleaseManager:
         lost = sorted(ref for ref in plan.elsewhere
                       if (a := pt.adapter_for_ref(ref)) is None or a.system not in covered)
         if lost:
-            plan.issue("warning", "no_target",
+            plan.issue("warning", "no_target_more" if len(lost) > 5 else "no_target",
                        f"No active target compiles {', '.join(lost[:5])}{' …' if len(lost) > 5 else ''} — "
-                       "configure an Access Target for that platform")
+                       "configure an Access Target for that platform", params={"refs": ", ".join(lost[:5]), "more": max(0, len(lost) - 5)})
 
     @staticmethod
     def _insert(db: Session, row: AccessPolicyReleaseDb, attempts: int = 5) -> AccessPolicyReleaseDb:
@@ -339,7 +341,7 @@ class PolicyReleaseManager:
                 return row
             except IntegrityError:
                 continue
-        raise AccessPolicyError("Could not allocate a release number — please retry", 409)
+        raise AccessPolicyError("Could not allocate a release number — please retry", 409, code="release_number")
 
     def create_release(self, db: Session, target: str, user: Optional[str], notes: Optional[str] = None, *,
                        resolve_object_kind: Optional[uc.ObjectKindResolver] = None) -> AccessPolicyReleaseDb:
@@ -358,7 +360,7 @@ class PolicyReleaseManager:
                   resolve_object_kind: Optional[uc.ObjectKindResolver] = None) -> AccessPolicyReleaseDb:
         row = self.require(db, release_id)
         if row.status != R_DRAFT or row.release_kind != KIND_POLICY_RELEASE:
-            raise AccessPolicyError("Only draft policy releases can be recompiled", 409)
+            raise AccessPolicyError("Only draft policy releases can be recompiled", 409, code="recompile_draft_only")
         compiled = self.compile(db, row.target, resolve_object_kind=resolve_object_kind)
         row.plan, row.changes, row.issues = compiled["plan"], compiled["changes"], compiled["issues"]
         row.source_policies, row.ledger_fingerprint = compiled["source_policies"], compiled["ledger_fingerprint"]
@@ -372,17 +374,21 @@ class PolicyReleaseManager:
                       comment: Optional[str] = None, *, is_admin: bool = False) -> AccessPolicyReleaseDb:
         row = self.require(db, release_id)
         if new_status not in RELEASE_TRANSITIONS.get(row.status, ()):
-            raise AccessPolicyError(f"Cannot move a release from '{row.status}' to '{new_status}'", 409)
+            raise AccessPolicyError(f"Cannot move a release from '{row.status}' to '{new_status}'", 409,
+                                    code="release_transition", params={"from": row.status, "to": new_status})
         if new_status == R_UNDER_REVIEW:
             if any(i.get("severity") == "error" for i in row.issues or []):
                 raise AccessPolicyError("Release has compile errors — fix the policies and recompile", 409,
-                                        [i["message"] for i in row.issues if i.get("severity") == "error"])
+                                        [odrl.Problem(i["message"], i.get("code") or "message", i.get("params"))
+                                         for i in row.issues if i.get("severity") == "error"],
+                                        code="release_has_errors")
             if self._is_empty(row):
-                raise AccessPolicyError("Release has no changes to deliver", 409)
+                raise AccessPolicyError("Release has no changes to deliver", 409, code="release_empty")
             row.submitted_by = user
         if new_status == R_APPROVED:
             if not is_admin and user and user.lower() in {(row.created_by or "").lower(), (row.submitted_by or "").lower()}:
-                raise AccessPolicyError("Separation of duties: the author or submitter can't approve this release", 403)
+                raise AccessPolicyError("Separation of duties: the author or submitter can't approve this release", 403,
+                                        code="release_separation_of_duties")
             self._rebase_if_stale(db, row, user)
             row.approved_by = user
         if new_status == R_DRAFT:
@@ -451,30 +457,33 @@ class PolicyReleaseManager:
         from src.controller.delivery_service import DeliveryMode
 
         if delivery_service is None:
-            raise AccessPolicyError("Delivery service is not configured", 503)
+            raise AccessPolicyError("Delivery service is not configured", 503, code="delivery_not_configured")
         active = delivery_service.get_active_modes()
         if adapter is not None and pt.CAP_APPLY_GRANTS not in adapter.capabilities:
             # Direct applies through the Databricks SDK: never for a platform it can't reach.
             if modes and DeliveryMode.DIRECT.value in modes:
-                raise AccessPolicyError(f"{adapter.label} targets can't be delivered directly — use Indirect or Manual", 400)
+                raise AccessPolicyError(f"{adapter.label} targets can't be delivered directly — use Indirect or Manual", 400,
+                                        code="direct_unsupported", params={"system": adapter.label})
             active = [m for m in active if m != DeliveryMode.DIRECT]
         if allowed:
             # The target restricts how its releases may ship (e.g. Indirect only: Git + CI apply).
             if modes and (bad := [m for m in modes if m not in allowed]):
-                raise AccessPolicyError(f"Delivery mode(s) not allowed for this target: {', '.join(bad)}", 400)
+                raise AccessPolicyError(f"Delivery mode(s) not allowed for this target: {', '.join(bad)}", 400,
+                                        code="modes_not_allowed", params={"modes": ", ".join(bad)})
             active = [m for m in active if m.value in allowed]
         if modes:
             try:
                 chosen = [DeliveryMode(m) for m in modes]
             except ValueError as e:
-                raise AccessPolicyError(str(e), 400) from e
+                raise AccessPolicyError(str(e), 400, code="unknown_delivery_modes", params={"modes": ", ".join(modes)}) from e
             not_enabled = [m.value for m in chosen if m not in active]
             if not_enabled:
-                raise AccessPolicyError(f"Delivery mode(s) not enabled in Settings: {', '.join(not_enabled)}", 400)
+                raise AccessPolicyError(f"Delivery mode(s) not enabled in Settings: {', '.join(not_enabled)}", 400,
+                                    code="modes_not_enabled", params={"modes": ", ".join(not_enabled)})
         else:
             chosen = active
         if not chosen:
-            raise AccessPolicyError("No delivery mode is enabled in Settings → Delivery", 409)
+            raise AccessPolicyError("No delivery mode is enabled in Settings → Delivery", 409, code="no_delivery_mode")
         return chosen
 
     def deliver(self, db: Session, release_id: str, user: Optional[str], delivery_service: Any,
@@ -488,7 +497,8 @@ class PolicyReleaseManager:
 
         row = self.require(db, release_id)
         if row.status not in DELIVERABLE_STATUSES:
-            raise AccessPolicyError(f"Only approved, delivered or failed releases can be delivered; this one is '{row.status}'", 409)
+            raise AccessPolicyError(f"Only approved, delivered or failed releases can be delivered; this one is '{row.status}'", 409,
+                                    code="deliver_status", params={"status": row.status})
         # Revocation / agreement releases are computed against the ledger at delivery time
         # (``_remaining``), so a moved ledger never makes them stale; policy releases are re-based.
         resolved = self.resolve(db, row.target, include_deprecated=True)
@@ -582,7 +592,7 @@ class PolicyReleaseManager:
         """An admin confirms an Indirect / Manual release was applied on the target → update the ledger."""
         row = self.require(db, release_id)
         if row.status != R_DELIVERED:
-            raise AccessPolicyError("Only delivered releases can be confirmed as applied", 409)
+            raise AccessPolicyError("Only delivered releases can be confirmed as applied", 409, code="confirm_status")
         adds, removes, untracks = self._remaining(db, row)
         last = (row.delivery_results or [{}])[-1]
         self._apply_to_ledger(db, row, adds, removes, untracks, set(last.get("preexisting") or []))
@@ -607,7 +617,8 @@ class PolicyReleaseManager:
 
         if any(not keys(new, cat) <= keys(old, cat) for cat in ("add", "remove", "update", "untrack")):
             raise AccessPolicyError("The Grant Ledger changed since this release was compiled and the release "
-                                    "would now ship unreviewed changes — send it back to draft and recompile", 409)
+                                    "would now ship unreviewed changes — send it back to draft and recompile", 409,
+                                    code="ledger_changed")
         row.plan, row.changes = compiled["plan"], new
         row.ledger_fingerprint = compiled["ledger_fingerprint"]
         self._log_timeline(db, row, f"Re-based onto the current Grant Ledger (subset of the reviewed changes): "
@@ -717,7 +728,8 @@ class PolicyReleaseManager:
         row = self.require(db, release_id)
         adapter = self.resolve(db, row.target, include_deprecated=True).adapter
         if pt.CAP_READ_GRANTS not in adapter.capabilities:
-            raise AccessPolicyError(f"Live grants can't be read from {adapter.label} yet", 409)
+            raise AccessPolicyError(f"Live grants can't be read from {adapter.label} yet", 409,
+                                    code="live_grants_unreadable", params={"system": adapter.label})
         desired = [uc.UCGrant.from_dict(d) for d in (row.plan or {}).get("grants") or []]
         managed = [_ledger_grant(r) for r in self.active_ledger(db, row.target)]
         securables = sorted({(g.securable_type, g.securable_name) for g in desired + managed
@@ -757,7 +769,8 @@ class PolicyReleaseManager:
         resolved = self.resolve(db, target, include_deprecated=True)
         reader = resolved.adapter.grant_reader(grant_manager)
         if pt.CAP_READ_GRANTS not in resolved.adapter.capabilities or reader is None:
-            raise AccessPolicyError(f"Live grants can't be read from {resolved.adapter.label} yet", 409)
+            raise AccessPolicyError(f"Live grants can't be read from {resolved.adapter.label} yet", 409,
+                                    code="live_grants_unreadable", params={"system": resolved.adapter.label})
         managed = [_ledger_grant(r) for r in self.active_ledger(db, target) if r.securable_type != uc.ABAC_POLICY]
         securables = sorted({(g.securable_type, g.securable_name) for g in managed})
         live: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
@@ -833,7 +846,7 @@ class PolicyReleaseManager:
     def drift_report(db: Session, report_id: str) -> AccessDriftReportDb:
         row = db.get(AccessDriftReportDb, report_id)
         if row is None:
-            raise AccessPolicyError("Drift report not found", 404)
+            raise AccessPolicyError("Drift report not found", 404, code="drift_not_found")
         return row
 
     @staticmethod

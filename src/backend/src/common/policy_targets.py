@@ -76,7 +76,8 @@ class TargetAdapter:
 
     def scope_problems(self, scope: Sequence[str]) -> List[str]:
         bad = [s for s in scope if not 1 <= len(s.split(".")) <= self.name_depth or "" in s.split(".")]
-        return [f"Scope entry '{s}' is not a {self.label} securable name" for s in bad]
+        return [odrl.Problem(f"Scope entry '{s}' is not a {self.label} securable name", "scope_entry_invalid",
+                             {"entry": s, "system": self.label}) for s in bad]
 
     def own_plan(self, plan: EntitlementPlan) -> None:
         """Keep only this platform's IR (in place): the compile covers every platform's refs."""
@@ -105,9 +106,11 @@ class TargetAdapter:
             names = [self.native_name(s) for s in rule.securables]
             above = [n for n in names if not any(inside(n, s) for s in scope) and any(inside(s, n) for s in scope)]
             if above:
+                label = rule.source.label() if rule.source else rule.kind
                 plan.issue(SEVERITY_ERROR, "abac_outside_scope",
-                           f"{rule.source.label() if rule.source else rule.kind}: restriction on {', '.join(above)} "
-                           f"reaches beyond this target's scope ({', '.join(scope)})", rule.source)
+                           f"{label}: restriction on {', '.join(above)} reaches beyond this target's scope "
+                           f"({', '.join(scope)})", rule.source,
+                           params={"rule": label, "securables": ", ".join(above), "scope": ", ".join(scope)})
             rule.securables = [s for s, n in zip(rule.securables, names, strict=True) if any(inside(n, p) for p in scope)]
             if rule.securables:
                 kept.append(rule)
@@ -307,7 +310,8 @@ def cron_problem(expr: Optional[str]) -> Optional[str]:
     try:
         _cron_sets(expr)
     except ValueError as e:
-        return f"'{expr}' is not a supported cron expression ({e})"
+        return odrl.Problem(f"'{expr}' is not a supported cron expression ({e})", "cron_unsupported",
+                            {"expr": expr, "reason": str(e)})
     return None
 
 
@@ -343,4 +347,4 @@ def restrict(plan: EntitlementPlan, target: ResolvedTarget) -> None:
     if dropped:
         plan.issue(SEVERITY_WARNING, "outside_scope",
                    f"{dropped} entitlement(s) are outside this target's scope ({', '.join(target.scope)}) "
-                   "and ship with the target that covers them")
+                   "and ship with the target that covers them", params={"count": dropped, "scope": ", ".join(target.scope)})

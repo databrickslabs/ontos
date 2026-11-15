@@ -6,10 +6,12 @@ import { TimerOff } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
+import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import TargetSelect from '@/components/access-policies/target-select';
+import { errorText } from '@/lib/access-policy-text';
 import { useCompileTargets } from '@/hooks/use-access-policies';
 import type { AccessRelease, LedgerEntry } from '@/types/access-policy';
 
@@ -20,7 +22,8 @@ export default function GrantLedgerPanel({ canAdmin }: { canAdmin: boolean }) {
   const { toast } = useToast();
   const [rows, setRows] = useState<LedgerEntry[]>([]);
   const [status, setStatus] = useState<LedgerEntry['status']>('active');
-  const [loading, setLoading] = useState(true);
+  // Skeleton until the first load returns; later reloads (filters, after actions) keep the rows.
+  const [loaded, setLoaded] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const compileTargets = useCompileTargets();
   const targets = compileTargets?.targets || [];
@@ -29,12 +32,11 @@ export default function GrantLedgerPanel({ canAdmin }: { canAdmin: boolean }) {
 
   const load = useCallback(async () => {
     if (!chosen) return; // wait for the targets: the ledger is per target
-    setLoading(true);
     const res = await get<LedgerEntry[]>(
       `/api/access-policies/ledger?status=${status}&target=${encodeURIComponent(chosen)}`,
     );
     setRows(Array.isArray(res.data) ? res.data : []);
-    setLoading(false);
+    setLoaded(true);
   }, [get, status, chosen]);
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export default function GrantLedgerPanel({ canAdmin }: { canAdmin: boolean }) {
     );
     setRevoking(false);
     if (res.error || !res.data) {
-      toast({ title: t('access-policies:ledger.revokeFailed'), description: res.error || '', variant: 'destructive' });
+      toast({ title: t('access-policies:ledger.revokeFailed'), description: errorText(t, res), variant: 'destructive' });
       return;
     }
     const rel = res.data.release;
@@ -135,6 +137,16 @@ export default function GrantLedgerPanel({ canAdmin }: { canAdmin: boolean }) {
     [t],
   );
 
+  // No target to choose once the targets are known: nothing to load, show the (empty) table.
+  if (!loaded && !(compileTargets && !chosen)) {
+    return (
+      <div>
+        <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:ledger.hint')}</p>
+        <ListViewSkeleton columns={7} rows={5} toolbarButtons={2} />
+      </div>
+    );
+  }
+
   return (
     <div>
       <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:ledger.hint')}</p>
@@ -142,7 +154,6 @@ export default function GrantLedgerPanel({ canAdmin }: { canAdmin: boolean }) {
         columns={columns}
         data={rows}
         searchColumn="principal"
-        isLoading={loading}
         storageKey="access-grant-ledger-list"
         toolbarActions={
           <div className="flex items-center gap-2">

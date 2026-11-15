@@ -454,5 +454,287 @@
     "unmanaged": "Presente sulla piattaforma, non tracciata da Ontos",
     "truncated": "Sono stati verificati solo i primi oggetti protetti.",
     "history": "Precedenti"
+  },
+  "issues": {
+    "abac_outside_scope": "{{rule}}: la restrizione su {{securables}} supera l'ambito di questa destinazione ({{scope}})",
+    "abac_unsupported_platform": "{{rule}}: le destinazioni Snowflake non possono ancora applicare questa restrizione ({{kind}})",
+    "abac_unsupported_target": "{{rule}}: le policy ABAC si applicano alle tabelle, non a un oggetto di tipo {{kind}} ({{name}})",
+    "access_policy_error": "Impossibile completare la richiesta",
+    "assignee_inexact": "{{rule}}: {{reason}} — vengono concesse solo le autorizzazioni ai principali risolvibili",
+    "audience_empty": "Un destinatario richiede membri o un raffinamento (un destinatario vuoto significa tutti)",
+    "broad_grant": "{{rule}}: 'use' viene compilato in ALL PRIVILEGES",
+    "builtin_orphaned": "Le autorizzazioni tracciate dalla destinazione integrata '{{key}}' resterebbero orfane — usa la chiave '{{key}}' per la prima destinazione Unity Catalog che deve adottarle",
+    "collection_empty": "Una collezione di asset richiede membri o un raffinamento",
+    "column_mask": "{{rule}} viene applicata come maschera di colonna",
+    "column_mask_now": "{{rule}} viene applicata come maschera di colonna (applicata subito — una maschera non può attendere il suo inizio alle {{at}})",
+    "confirm_status": "Solo i rilasci consegnati possono essere confermati come applicati",
+    "conflict_invalid_voids": "conflict=invalid annulla l'intera policy se un permesso e un divieto sono in conflitto",
+    "connection_user_name_case": "user_name_case deve essere uno tra: {{allowed}}",
+    "connection_user_names": "user_names deve associare ogni principale al NAME dell'utente Snowflake (testo)",
+    "connection_views": "views deve essere un elenco di nomi di oggetti",
+    "constraint_no_left_operand": "Al vincolo manca leftOperand",
+    "constraint_no_operator": "Al vincolo manca operator",
+    "constraint_not_object": "Il vincolo deve essere un oggetto",
+    "constraint_right_operand": "Il vincolo richiede esattamente uno tra rightOperand / rightOperandReference",
+    "cron_unsupported": "'{{expr}}' non è un'espressione cron supportata ({{reason}})",
+    "delete_status": "Solo le versioni in bozza o ritirate possono essere eliminate (questa è {{status}}).",
+    "deliver_status": "Solo i rilasci approvati, consegnati o non riusciti possono essere consegnati; questo è {{status}}",
+    "delivery_failed": "Consegna non riuscita: {{reason}}",
+    "delivery_not_configured": "Il servizio di consegna non è configurato",
+    "denied_by_prohibition": "{{principal}} {{action}} {{securable}} rimosso da {{rule}}",
+    "direct_unsupported": "Le destinazioni {{system}} non possono essere consegnate direttamente — usa Indiretta o Manuale",
+    "drift_not_found": "Report sugli scostamenti non trovato",
+    "drift_policy_unsupported": "La politica sugli scostamenti '{{policy}}' non è supportata (solo report)",
+    "duty_admin_only": "Solo un amministratore delle Policy di accesso diverso dall'assegnatario dell'Accordo può adempiere '{{action}}'",
+    "duty_assignee_only": "Solo l'assegnatario dell'Accordo può adempiere '{{action}}'",
+    "duty_fulfilled": "'{{action}}' è già adempiuto",
+    "duty_not_agreement": "I doveri vengono adempiuti sugli Accordi (l'intesa di una parte concreta)",
+    "duty_not_on_permission": "Solo i permessi possono prevedere doveri (usa 'remedy' sui divieti)",
+    "expired": "{{rule}} è scaduta alle {{at}} — non concessa",
+    "expires_at_prohibition": "{{principal}} {{action}} {{securable}} scade alle {{at}}, quando {{rule}} entra in vigore",
+    "expiring_outside_scope": "{{count}} autorizzazioni a tempo sono al di fuori dell'ambito della destinazione; restano tracciate qui finché non scadono e vengono revocate",
+    "foreign_target": "{{rule}}: {{target}} non è un oggetto protetto di Unity Catalog né di Snowflake — saltato",
+    "inheritance": "Ereditarietà: {{detail}}",
+    "ledger_changed": "Il Registro delle autorizzazioni è cambiato dopo la compilazione di questo rilascio e il rilascio consegnerebbe ora modifiche non riviste — riportalo in bozza e ricompila",
+    "live_grants_unreadable": "Le autorizzazioni attuali non possono ancora essere lette da {{system}}",
+    "logical_empty": "Il vincolo logico '{{operator}}' richiede almeno un operando",
+    "mask_overridden": "{{rule}}: il permesso della policy stessa prevale sulla maschera (conflict=perm)",
+    "modes_not_allowed": "Modalità di consegna non consentite per questa destinazione: {{modes}}",
+    "modes_not_enabled": "Modalità di consegna non abilitate in Impostazioni: {{modes}}",
+    "no_delivery_mode": "Nessuna modalità di consegna è abilitata in Impostazioni → Consegna",
+    "no_principals": "{{rule}}: l'assegnatario non corrisponde a nessuno",
+    "no_rules": "Una policy richiede almeno un permesso, un divieto o un obbligo",
+    "no_target": "Nessuna destinazione attiva compila {{refs}} — configura una destinazione di accesso per quella piattaforma",
+    "no_target_more": "Nessuna destinazione attiva compila {{refs}} e altri {{more}}: configura una destinazione di accesso per quella piattaforma",
+    "not_a_duty": "'{{action}}' non è un dovere di questo Accordo",
+    "not_editable": "Non è possibile modificare un elemento {{kind}} in stato {{status}} — crea invece una nuova versione.",
+    "not_found": "{{kind}} non trovato",
+    "not_ready_to_activate": "Non pronto per l'attivazione: {{problems}}",
+    "not_yet_active": "{{rule}} inizia alle {{at}} — non ancora concessa",
+    "offer_term": "{{rule}} vincola i consumatori tramite i loro Accordi",
+    "operand_subject_mismatch": "leftOperand '{{operand}}' descrive un elemento di tipo {{describes}}, non {{expected}}",
+    "outside_scope": "{{count}} autorizzazioni sono al di fuori dell'ambito di questa destinazione ({{scope}}) e vengono consegnate con la destinazione che le copre",
+    "parent_not_found": "Policy padre {{parent}} non trovata",
+    "policy_conflict_invalid": "{{policy}}: permesso e divieto sono in conflitto con la strategia 'invalid' — la policy è nulla e non ha effetto",
+    "prohibition_inactive": "{{rule}} è terminata alle {{at}}",
+    "prohibition_inexact": "{{rule}}: {{reason}}; una maschera di colonna deve indicare i propri principali e oggetti protetti",
+    "prohibition_inexact_assignee": "{{rule}}: assegnatario — {{reason}}; un divieto deve essere esatto per essere applicato",
+    "prohibition_inexact_target": "{{rule}}: oggetto — {{reason}}; un divieto deve essere esatto per essere applicato",
+    "prohibition_scheduled": "{{rule}} entra in vigore alle {{at}} — le autorizzazioni sovrapposte scadono in quel momento",
+    "prohibition_unconditional": "{{rule}}: i suoi vincoli non possono essere applicati staticamente — applicata senza condizioni",
+    "prohibition_unenforceable": "{{rule}} si sovrappone solo in parte all'autorizzazione {{principal}} {{action}} {{securable}} ({{overlap}}); la piattaforma non ha DENY — restringi il permesso o il divieto",
+    "recompile_draft_only": "Solo i rilasci di policy in bozza possono essere ricompilati",
+    "ref_not_active": "{{ref}} non ha una versione attiva",
+    "refined_collection_uid": "Una collezione raffinata deve usare 'source', non 'uid' (ODRL §2.5.5/§2.5.6)",
+    "release_empty": "Il rilascio non ha modifiche da consegnare",
+    "release_has_errors": "Il rilascio ha errori di compilazione — correggi le policy e ricompila",
+    "release_not_found": "Rilascio non trovato",
+    "release_number": "Impossibile assegnare un numero di rilascio — riprova",
+    "release_separation_of_duties": "Separazione dei compiti: l'autore o chi lo ha inviato non può approvare questo rilascio",
+    "release_transition": "Impossibile spostare un rilascio da {{from}} a {{to}}",
+    "remedy_not_on_prohibition": "Solo i divieti possono prevedere rimedi",
+    "rule_no_action": "Alla regola manca un'azione",
+    "rule_no_assignee": "Un Accordo richiede un assegnatario su ogni regola",
+    "rule_no_assigner": "Un elemento {{type}} richiede un assegnante su ogni regola",
+    "rule_no_target": "Un elemento {{kind}} richiede un asset oggetto",
+    "scope_entry_invalid": "La voce di ambito '{{entry}}' non è un nome di oggetto protetto {{system}}",
+    "scope_overlap": "L'ambito si sovrappone a destinazioni {{system}} attive o deprecate: {{targets}} — ritirale prima",
+    "separation_of_duties": "Una versione non può essere approvata dal suo autore o da chi l'ha inviata — chiedi a un altro steward.",
+    "snowflake_future_precedence": "{{count}} autorizzazioni future a livello di database ripetute su schemi con proprie autorizzazioni future (Snowflake applica lì solo quelle a livello di schema)",
+    "snowflake_objects_as_tables": "Gli oggetti Snowflake vengono concessi come tabelle; elenca le viste nella connessione della destinazione ('views') affinché vengano concesse ON VIEW",
+    "still_referenced": "Ancora referenziato da {{count}} versioni di policy: {{names}}",
+    "subject_forbidden": "Solo i proprietari del prodotto (team proprietario / progetto) o un amministratore possono definirne i termini d'uso",
+    "subject_incomplete": "Il soggetto di una policy richiede un tipo ({{types}}) e un id",
+    "subject_not_found": "Prodotto dati '{{id}}' non trovato",
+    "subject_offer_only": "Solo un'Offerta può definire i termini per un'entità",
+    "target_key_invalid": "La chiave deve avere da 2 a 40 caratteri tra lettere minuscole, cifre, '-' o '_', e iniziare con una lettera",
+    "target_key_locked": "La chiave di una destinazione con più versioni non può cambiare",
+    "target_key_taken": "Un'altra destinazione (attiva o deprecata) usa già la chiave '{{key}}'",
+    "target_tracks_grants": "La destinazione '{{key}}' traccia ancora {{count}} autorizzazioni — revocale o rimuovile dal tracciamento prima",
+    "transition_not_allowed": "Impossibile passare da {{from}} a {{to}} (consentiti: {{allowed}}).",
+    "unknown_action": "Azione '{{action}}' sconosciuta (non presente nel profilo Ontos)",
+    "unknown_collection_source": "Origine della collezione '{{ref}}' sconosciuta",
+    "unknown_conflict": "Strategia di conflitto '{{conflict}}' sconosciuta",
+    "unknown_delivery_mode": "Modalità di consegna '{{mode}}' sconosciuta",
+    "unknown_delivery_modes": "Modalità di consegna sconosciute: {{modes}}",
+    "unknown_kind": "Tipo '{{kind}}' sconosciuto",
+    "unknown_left_operand": "leftOperand '{{operand}}' sconosciuto (non presente nel profilo Ontos)",
+    "unknown_operator": "Operatore '{{operator}}' sconosciuto",
+    "unknown_profile": "Profilo ODRL '{{profile}}' non riconosciuto — la policy non può essere elaborata (ODRL §3.2)",
+    "unknown_reference": "Riferimento '{{ref}}' sconosciuto",
+    "unknown_system": "Sistema '{{system}}' sconosciuto (disponibili: {{available}})",
+    "unknown_target": "Destinazione '{{key}}' sconosciuta. Disponibili: {{available}}",
+    "unsupported_policy_type": "Tipo di policy '{{type}}' non supportato",
+    "untracked_outside_scope": "{{count}} autorizzazioni tracciate sono al di fuori dell'ambito della destinazione e non verranno più tracciate (restano sulla piattaforma)",
+    "used_by_active": "Ancora usato da policy attive (deprecale o reindirizzale prima): {{names}}",
+    "version_exists": "La versione {{version}} esiste già in questa famiglia"
+  },
+  "profile": {
+    "actions": {
+      "use": {
+        "label": "Usare",
+        "description": "Qualsiasi utilizzo dell'asset (azione ODRL di primo livello)."
+      },
+      "transfer": {
+        "label": "Trasferire",
+        "description": "Trasferimento della proprietà (azione ODRL di primo livello)."
+      },
+      "read": {
+        "label": "Leggere",
+        "description": "Leggere/interrogare i dati (UC SELECT, READ VOLUME, EXECUTE)."
+      },
+      "modify": {
+        "label": "Modificare",
+        "description": "Cambiare i dati (UC MODIFY, WRITE VOLUME)."
+      },
+      "ontos_browse": {
+        "label": "Sfogliare",
+        "description": "Vedere i metadati senza leggere i dati (UC BROWSE)."
+      },
+      "ontos_create": {
+        "label": "Creare",
+        "description": "Creare oggetti figli (UC CREATE TABLE/VIEW/FUNCTION/VOLUME)."
+      },
+      "ontos_manage": {
+        "label": "Gestire",
+        "description": "Gestire autorizzazioni e proprietà (UC MANAGE)."
+      },
+      "distribute": {
+        "label": "Distribuire",
+        "description": "Condividere i dati con terze parti."
+      },
+      "derive": {
+        "label": "Derivare",
+        "description": "Creare dati derivati dall'asset."
+      },
+      "aggregate": {
+        "label": "Aggregare",
+        "description": "Usare i dati solo in forma aggregata."
+      },
+      "ontos_acknowledgeTerms": {
+        "label": "Accettare i termini",
+        "description": "Accettare i termini d'uso dell'asset (workflow)."
+      },
+      "ontos_obtainApproval": {
+        "label": "Ottenere l'approvazione",
+        "description": "Ottenere un'approvazione o una decisione di un'autorità (workflow)."
+      },
+      "ontos_recertify": {
+        "label": "Ricertificare l'accesso",
+        "description": "Riconfermare periodicamente la necessità di accesso (workflow)."
+      },
+      "delete": {
+        "label": "Eliminare",
+        "description": "Rimuovere definitivamente tutte le copie dell'asset."
+      },
+      "anonymize": {
+        "label": "Anonimizzare",
+        "description": "Anonimizzare tutto o parte dell'asset."
+      },
+      "inform": {
+        "label": "Informare",
+        "description": "Informare una parte sull'utilizzo (notifica)."
+      }
+    },
+    "operands": {
+      "dateTime": {
+        "label": "Data/ora",
+        "description": "Momento di utilizzo; viene compilato in scadenza/attivazione dell'autorizzazione."
+      },
+      "elapsedTime": {
+        "label": "Tempo trascorso",
+        "description": "Durata dell'accesso; viene compilato in un'autorizzazione a tempo."
+      },
+      "purpose": {
+        "label": "Finalità",
+        "description": "Finalità dichiarata dell'utilizzo; attestata tramite workflow, non applicata tecnicamente."
+      },
+      "recipient": {
+        "label": "Destinatario",
+        "description": "Parte che riceve il risultato dell'utilizzo."
+      },
+      "spatial": {
+        "label": "Regione",
+        "description": "Regione geografica di utilizzo; viene compilata in un filtro di riga dove supportato."
+      },
+      "ontos_classification": {
+        "label": "Classificazione",
+        "description": "Classificazione dei dati dell'asset; viene compilata in ABAC basato su tag dove supportato."
+      },
+      "ontos_tag": {
+        "label": "Tag",
+        "description": "Tag dell'asset (namespace/key[=value]); viene compilato in ABAC basato su tag dove supportato."
+      },
+      "ontos_domain": {
+        "label": "Dominio",
+        "description": "Dominio Ontos dell'asset; materializzato in autorizzazioni concrete."
+      },
+      "ontos_dataProduct": {
+        "label": "Prodotto dati",
+        "description": "Prodotto dati a cui appartiene l'asset; materializzato in autorizzazioni concrete."
+      },
+      "ontos_columnTag": {
+        "label": "Tag di colonna",
+        "description": "Tag a livello di colonna; viene compilato in una maschera di colonna dove supportato."
+      },
+      "ontos_rowCondition": {
+        "label": "Condizione di riga",
+        "description": "Predicato a livello di riga; viene compilato in un filtro di riga dove supportato."
+      },
+      "ontos_businessRole": {
+        "label": "Ruolo aziendale",
+        "description": "Ruolo aziendale Ontos del principale (raffinamento del destinatario)."
+      },
+      "ontos_group": {
+        "label": "Gruppo",
+        "description": "Appartenenza del principale a un gruppo del provider di identità."
+      },
+      "ontos_principalAttribute": {
+        "label": "Attributo del principale",
+        "description": "Attributo di directory del principale (segnaposto: future fonti IdP/Lakebase)."
+      },
+      "ontos_remark": {
+        "label": "Nota",
+        "description": "Condizione in testo libero mostrata ai consumatori; non applicata."
+      }
+    },
+    "operators": {
+      "eq": "uguale a",
+      "neq": "diverso da",
+      "gt": "maggiore di",
+      "gteq": "maggiore o uguale a",
+      "lt": "minore di",
+      "lteq": "minore o uguale a",
+      "isA": "è un",
+      "hasPart": "ha come parte",
+      "isPartOf": "è parte di",
+      "isAllOf": "è tutti tra",
+      "isAnyOf": "è uno qualsiasi tra",
+      "isNoneOf": "non è nessuno tra"
+    }
+  },
+  "shacl": {
+    "thePolicy": "la policy",
+    "constraint": {
+      "MinCountConstraintComponent": "{{path}} è mancante",
+      "MaxCountConstraintComponent": "{{path}} ha troppi valori",
+      "InConstraintComponent": "{{path}} ha un valore al di fuori dell'elenco consentito",
+      "HasValueConstraintComponent": "{{path}} non ha il valore richiesto",
+      "NodeKindConstraintComponent": "{{path}} ha un tipo di valore errato (era atteso un IRI)",
+      "NodeConstraintComponent": "{{path}} non corrisponde alla propria forma",
+      "OrConstraintComponent": "{{path}} non corrisponde a nessuna delle forme consentite",
+      "XoneConstraintComponent": "{{path}} deve corrispondere esattamente a una delle forme consentite",
+      "NotConstraintComponent": "{{path}} corrisponde a una forma vietata"
+    }
+  },
+  "kinds": {
+    "policy": "Policy di accesso",
+    "audience": "Destinatario",
+    "asset_collection": "Collezione di asset",
+    "target": "Destinazione"
+  },
+  "abacKinds": {
+    "row_filter": "Filtro di riga",
+    "column_mask": "Maschera di colonna"
   }
 }

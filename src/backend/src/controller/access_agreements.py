@@ -311,7 +311,7 @@ def fulfill_duty(db: Session, agreement: AccessPolicyDb, action: str, user: Opti
     from src.controller.access_policies_manager import AccessPolicyError
 
     if agreement.policy_type != "Agreement":
-        raise AccessPolicyError("Duties are fulfilled on Agreements (a concrete party's deal)", 409)
+        raise AccessPolicyError("Duties are fulfilled on Agreements (a concrete party's deal)", 409, code="duty_not_agreement")
     action = odrl.term_key(action) or action
     if action not in odrl.ACTIONS and f"ontos:{action}" in odrl.ACTIONS:
         action = f"ontos:{action}"
@@ -320,13 +320,15 @@ def fulfill_duty(db: Session, agreement: AccessPolicyDb, action: str, user: Opti
                  .with_for_update().populate_existing().one())
     status = {d["action"]: d for d in duty_status(agreement, user, is_admin)}
     if action not in status:
-        raise AccessPolicyError(f"'{action}' is not a duty of this Agreement", 404)
+        raise AccessPolicyError(f"'{action}' is not a duty of this Agreement", 404, code="not_a_duty", params={"action": action})
     if status[action]["fulfilled"]:
-        raise AccessPolicyError(f"'{action}' is already fulfilled", 409)
+        raise AccessPolicyError(f"'{action}' is already fulfilled", 409, code="duty_fulfilled", params={"action": action})
     if not status[action]["can_fulfill"]:
         who = ("the Agreement's assignee" if action in ASSIGNEE_DUTIES
                else "an Access Policies admin other than the Agreement's assignee")
-        raise AccessPolicyError(f"Only {who} can fulfil '{action}'", 403)
+        raise AccessPolicyError(f"Only {who} can fulfil '{action}'", 403,
+                                code="duty_assignee_only" if action in ASSIGNEE_DUTIES else "duty_admin_only",
+                                params={"action": action})
     agreement.fulfilled_duties = list(agreement.fulfilled_duties or []) + [{
         "action": action, "fulfilled_by": user, "note": note,
         "fulfilled_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),

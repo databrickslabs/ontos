@@ -454,5 +454,287 @@
     "unmanaged": "Auf der Plattform, nicht von Ontos verfolgt",
     "truncated": "Nur die ersten Securables wurden geprüft.",
     "history": "Früher"
+  },
+  "issues": {
+    "abac_outside_scope": "{{rule}}: Einschränkung auf {{securables}} reicht über den Umfang dieses Ziels hinaus ({{scope}})",
+    "abac_unsupported_platform": "{{rule}}: Snowflake-Ziele können diese Einschränkung ({{kind}}) noch nicht erzwingen",
+    "abac_unsupported_target": "{{rule}}: ABAC-Richtlinien gelten für Tabellen, nicht für ein Objekt vom Typ {{kind}} ({{name}})",
+    "access_policy_error": "Die Anfrage konnte nicht abgeschlossen werden",
+    "assignee_inexact": "{{rule}}: {{reason}} — nur die auflösbaren Principals erhalten Berechtigungen",
+    "audience_empty": "Eine Zielgruppe benötigt Mitglieder oder eine Einschränkung (eine leere Zielgruppe bedeutet alle)",
+    "broad_grant": "{{rule}}: 'use' wird zu ALL PRIVILEGES kompiliert",
+    "builtin_orphaned": "Vom integrierten Ziel '{{key}}' verfolgte Berechtigungen würden verwaisen — verwenden Sie den Schlüssel '{{key}}' für das erste Unity-Catalog-Ziel, um sie zu übernehmen",
+    "collection_empty": "Eine Asset-Sammlung benötigt Mitglieder oder eine Einschränkung",
+    "column_mask": "{{rule}} wird als Spaltenmaske erzwungen",
+    "column_mask_now": "{{rule}} wird als Spaltenmaske erzwungen (sofort angewendet — eine Maske kann nicht bis zu ihrem Beginn am {{at}} warten)",
+    "confirm_status": "Nur ausgelieferte Releases können als angewendet bestätigt werden",
+    "conflict_invalid_voids": "conflict=invalid macht die gesamte Richtlinie ungültig, sobald sich eine Erlaubnis und ein Verbot widersprechen",
+    "connection_user_name_case": "user_name_case muss einer der folgenden Werte sein: {{allowed}}",
+    "connection_user_names": "user_names muss jeden Principal auf seinen Snowflake-Benutzer-NAME (Text) abbilden",
+    "connection_views": "views muss eine Liste von Objektnamen sein",
+    "constraint_no_left_operand": "Der Bedingung fehlt leftOperand",
+    "constraint_no_operator": "Der Bedingung fehlt operator",
+    "constraint_not_object": "Eine Bedingung muss ein Objekt sein",
+    "constraint_right_operand": "Eine Bedingung benötigt genau eines von rightOperand / rightOperandReference",
+    "cron_unsupported": "'{{expr}}' ist kein unterstützter cron-Ausdruck ({{reason}})",
+    "delete_status": "Nur Entwurfs- oder außer Betrieb genommene Versionen können gelöscht werden (diese hat den Status {{status}}).",
+    "deliver_status": "Nur genehmigte, ausgelieferte oder fehlgeschlagene Releases können ausgeliefert werden; dieses hat den Status {{status}}",
+    "delivery_failed": "Auslieferung fehlgeschlagen: {{reason}}",
+    "delivery_not_configured": "Der Auslieferungsdienst ist nicht konfiguriert",
+    "denied_by_prohibition": "{{principal}} {{action}} {{securable}} durch {{rule}} entfernt",
+    "direct_unsupported": "{{system}}-Ziele können nicht direkt ausgeliefert werden — verwenden Sie Indirekt oder Manuell",
+    "drift_not_found": "Drift-Bericht nicht gefunden",
+    "drift_policy_unsupported": "Die Drift-Richtlinie '{{policy}}' wird nicht unterstützt (nur melden)",
+    "duty_admin_only": "Nur ein Administrator der Zugriffsrichtlinien, der nicht der Empfänger der Vereinbarung ist, kann '{{action}}' erfüllen",
+    "duty_assignee_only": "Nur der Empfänger der Vereinbarung kann '{{action}}' erfüllen",
+    "duty_fulfilled": "'{{action}}' ist bereits erfüllt",
+    "duty_not_agreement": "Pflichten werden in Vereinbarungen erfüllt (dem Abkommen einer konkreten Partei)",
+    "duty_not_on_permission": "Nur Erlaubnisse dürfen Pflichten enthalten (bei Verboten 'remedy' verwenden)",
+    "expired": "{{rule}} ist am {{at}} abgelaufen — nicht gewährt",
+    "expires_at_prohibition": "{{principal}} {{action}} {{securable}} läuft am {{at}} ab, wenn {{rule}} in Kraft tritt",
+    "expiring_outside_scope": "{{count}} zeitlich begrenzte Berechtigung(en) liegen außerhalb des Ziel-Umfangs; sie bleiben hier verfolgt, bis sie ablaufen und widerrufen werden",
+    "foreign_target": "{{rule}}: {{target}} ist kein Unity-Catalog- oder Snowflake-Securable — übersprungen",
+    "inheritance": "Vererbung: {{detail}}",
+    "ledger_changed": "Das Berechtigungsbuch hat sich seit der Kompilierung dieses Releases geändert, und das Release würde nun ungeprüfte Änderungen ausliefern — setzen Sie es in den Entwurf zurück und kompilieren Sie es neu",
+    "live_grants_unreadable": "Live-Berechtigungen können von {{system}} noch nicht gelesen werden",
+    "logical_empty": "Die logische Bedingung '{{operator}}' benötigt mindestens einen Operanden",
+    "mask_overridden": "{{rule}}: Die eigene Erlaubnis der Richtlinie hebt die Maske auf (conflict=perm)",
+    "modes_not_allowed": "Zustellungsmodi für dieses Ziel nicht erlaubt: {{modes}}",
+    "modes_not_enabled": "Zustellungsmodi in den Einstellungen nicht aktiviert: {{modes}}",
+    "no_delivery_mode": "In den Einstellungen → Zustellungsmodi ist kein Zustellungsmodus aktiviert",
+    "no_principals": "{{rule}}: Der Empfänger wird zu niemandem aufgelöst",
+    "no_rules": "Eine Richtlinie benötigt mindestens eine Erlaubnis, ein Verbot oder eine Verpflichtung",
+    "no_target": "Kein aktives Ziel kompiliert {{refs}} — konfigurieren Sie ein Zugriffsziel für diese Plattform",
+    "no_target_more": "Kein aktives Ziel kompiliert {{refs}} und {{more}} weitere — konfigurieren Sie ein Zugriffsziel für diese Plattform",
+    "not_a_duty": "'{{action}}' ist keine Pflicht dieser Vereinbarung",
+    "not_editable": "Ein Objekt vom Typ {{kind}} mit Status {{status}} kann nicht bearbeitet werden — legen Sie stattdessen eine neue Version an.",
+    "not_found": "{{kind}} nicht gefunden",
+    "not_ready_to_activate": "Nicht bereit zur Aktivierung: {{problems}}",
+    "not_yet_active": "{{rule}} beginnt am {{at}} — noch nicht gewährt",
+    "offer_term": "{{rule}} bindet Konsumenten über deren Vereinbarungen",
+    "operand_subject_mismatch": "leftOperand '{{operand}}' beschreibt ein Objekt vom Typ {{describes}}, nicht {{expected}}",
+    "outside_scope": "{{count}} Berechtigung(en) liegen außerhalb des Umfangs dieses Ziels ({{scope}}) und werden mit dem Ziel ausgeliefert, das sie abdeckt",
+    "parent_not_found": "Übergeordnete Richtlinie {{parent}} nicht gefunden",
+    "policy_conflict_invalid": "{{policy}}: Erlaubnis und Verbot stehen unter der Strategie 'invalid' im Konflikt — die Richtlinie ist ungültig und wirkungslos",
+    "prohibition_inactive": "{{rule}} ist am {{at}} beendet",
+    "prohibition_inexact": "{{rule}}: {{reason}}; eine Spaltenmaske muss ihre Principals und Securables benennen",
+    "prohibition_inexact_assignee": "{{rule}}: Empfänger — {{reason}}; ein Verbot muss exakt sein, um erzwungen zu werden",
+    "prohibition_inexact_target": "{{rule}}: Ziel — {{reason}}; ein Verbot muss exakt sein, um erzwungen zu werden",
+    "prohibition_scheduled": "{{rule}} tritt am {{at}} in Kraft — sich überschneidende Berechtigungen laufen dann ab",
+    "prohibition_unconditional": "{{rule}}: Die Bedingungen können nicht statisch erzwungen werden — wird unbedingt angewendet",
+    "prohibition_unenforceable": "{{rule}} überschneidet sich nur teilweise mit der Berechtigung {{principal}} {{action}} {{securable}} ({{overlap}}); die Plattform kennt kein DENY — schränken Sie die Erlaubnis oder das Verbot weiter ein",
+    "recompile_draft_only": "Nur Richtlinien-Releases im Entwurf können neu kompiliert werden",
+    "ref_not_active": "{{ref}} hat keine aktive Version",
+    "refined_collection_uid": "Eine eingeschränkte Sammlung muss 'source' verwenden, nicht 'uid' (ODRL §2.5.5/§2.5.6)",
+    "release_empty": "Das Release enthält keine Änderungen zur Auslieferung",
+    "release_has_errors": "Das Release hat Kompilierungsfehler — korrigieren Sie die Richtlinien und kompilieren Sie neu",
+    "release_not_found": "Release nicht gefunden",
+    "release_number": "Release-Nummer konnte nicht vergeben werden — bitte erneut versuchen",
+    "release_separation_of_duties": "Funktionstrennung: Autor oder Einreicher können dieses Release nicht genehmigen",
+    "release_transition": "Ein Release kann nicht von {{from}} nach {{to}} verschoben werden",
+    "remedy_not_on_prohibition": "Nur Verbote dürfen Abhilfemaßnahmen enthalten",
+    "rule_no_action": "Der Regel fehlt eine Aktion",
+    "rule_no_assignee": "Eine Vereinbarung benötigt bei jeder Regel einen Empfänger",
+    "rule_no_assigner": "Ein Objekt vom Typ {{type}} benötigt bei jeder Regel einen Aussteller",
+    "rule_no_target": "Ein Objekt vom Typ {{kind}} benötigt ein Ziel-Asset",
+    "scope_entry_invalid": "Der Umfangseintrag '{{entry}}' ist kein gültiger {{system}}-Securable-Name",
+    "scope_overlap": "Der Umfang überschneidet sich mit aktiven oder veralteten {{system}}-Zielen: {{targets}} — nehmen Sie diese zuerst außer Betrieb",
+    "separation_of_duties": "Eine Version kann nicht von ihrem Autor oder Einreicher genehmigt werden — bitten Sie einen anderen Steward.",
+    "snowflake_future_precedence": "{{count}} Future-Berechtigung(en) auf Datenbankebene sind auf Schemas mit eigenen Future-Berechtigungen wiederholt (Snowflake wendet dort nur die auf Schemaebene an)",
+    "snowflake_objects_as_tables": "Snowflake-Objekte werden als Tabellen berechtigt; führen Sie Views in der Verbindung des Ziels auf ('views'), damit sie ON VIEW berechtigt werden",
+    "still_referenced": "Wird noch von {{count}} Richtlinienversion(en) referenziert: {{names}}",
+    "subject_forbidden": "Nur die Owner des Produkts (Owner-Team / Projekt) oder ein Administrator können dessen Nutzungsbedingungen festlegen",
+    "subject_incomplete": "Ein Richtliniengegenstand benötigt einen Typ ({{types}}) und eine ID",
+    "subject_not_found": "Datenprodukt '{{id}}' nicht gefunden",
+    "subject_offer_only": "Nur ein Angebot kann die Bedingungen für eine Entität festlegen",
+    "target_key_invalid": "Der Schlüssel muss aus 2–40 Kleinbuchstaben, Ziffern, '-' oder '_' bestehen und mit einem Buchstaben beginnen",
+    "target_key_locked": "Der Schlüssel eines Ziels mit mehreren Versionen kann nicht geändert werden",
+    "target_key_taken": "Ein anderes Ziel (aktiv oder veraltet) verwendet bereits den Schlüssel '{{key}}'",
+    "target_tracks_grants": "Das Ziel '{{key}}' verfolgt noch {{count}} Berechtigung(en) — widerrufen Sie sie oder nehmen Sie sie zuerst aus der Verfolgung",
+    "transition_not_allowed": "Wechsel von {{from}} nach {{to}} nicht möglich (erlaubt: {{allowed}}).",
+    "unknown_action": "Unbekannte Aktion '{{action}}' (nicht im Ontos-Profil)",
+    "unknown_collection_source": "Unbekannte Sammlungsquelle '{{ref}}'",
+    "unknown_conflict": "Unbekannte Konfliktstrategie '{{conflict}}'",
+    "unknown_delivery_mode": "Unbekannter Zustellungsmodus '{{mode}}'",
+    "unknown_delivery_modes": "Unbekannte Zustellungsmodi: {{modes}}",
+    "unknown_kind": "Unbekannter Typ '{{kind}}'",
+    "unknown_left_operand": "Unbekannter leftOperand '{{operand}}' (nicht im Ontos-Profil)",
+    "unknown_operator": "Unbekannter Operator '{{operator}}'",
+    "unknown_profile": "Unbekanntes ODRL-Profil '{{profile}}' — die Richtlinie kann nicht verarbeitet werden (ODRL §3.2)",
+    "unknown_reference": "Unbekannte Referenz '{{ref}}'",
+    "unknown_system": "Unbekanntes System '{{system}}' (verfügbar: {{available}})",
+    "unknown_target": "Unbekanntes Ziel '{{key}}'. Verfügbar: {{available}}",
+    "unsupported_policy_type": "Nicht unterstützter Richtlinientyp '{{type}}'",
+    "untracked_outside_scope": "{{count}} verfolgte Berechtigung(en) liegen außerhalb des Ziel-Umfangs und werden nicht mehr verfolgt (sie bleiben auf der Plattform)",
+    "used_by_active": "Wird noch von aktiven Richtlinien verwendet (zuerst als veraltet markieren oder umstellen): {{names}}",
+    "version_exists": "Version {{version}} existiert in dieser Familie bereits"
+  },
+  "profile": {
+    "actions": {
+      "use": {
+        "label": "Verwenden",
+        "description": "Jede Nutzung des Assets (ODRL-Aktion der obersten Ebene)."
+      },
+      "transfer": {
+        "label": "Übertragen",
+        "description": "Übertragung des Eigentums (ODRL-Aktion der obersten Ebene)."
+      },
+      "read": {
+        "label": "Lesen",
+        "description": "Die Daten lesen/abfragen (UC SELECT, READ VOLUME, EXECUTE)."
+      },
+      "modify": {
+        "label": "Ändern",
+        "description": "Die Daten ändern (UC MODIFY, WRITE VOLUME)."
+      },
+      "ontos_browse": {
+        "label": "Durchsuchen",
+        "description": "Metadaten ansehen, ohne Daten zu lesen (UC BROWSE)."
+      },
+      "ontos_create": {
+        "label": "Erstellen",
+        "description": "Untergeordnete Objekte erstellen (UC CREATE TABLE/VIEW/FUNCTION/VOLUME)."
+      },
+      "ontos_manage": {
+        "label": "Verwalten",
+        "description": "Berechtigungen und Eigenschaften verwalten (UC MANAGE)."
+      },
+      "distribute": {
+        "label": "Verteilen",
+        "description": "Die Daten an Dritte weitergeben."
+      },
+      "derive": {
+        "label": "Ableiten",
+        "description": "Aus dem Asset abgeleitete Daten erzeugen."
+      },
+      "aggregate": {
+        "label": "Aggregieren",
+        "description": "Die Daten nur in aggregierter Form verwenden."
+      },
+      "ontos_acknowledgeTerms": {
+        "label": "Bedingungen akzeptieren",
+        "description": "Die Nutzungsbedingungen des Assets akzeptieren (Workflow)."
+      },
+      "ontos_obtainApproval": {
+        "label": "Genehmigung einholen",
+        "description": "Eine Genehmigung oder Entscheidung einer Instanz einholen (Workflow)."
+      },
+      "ontos_recertify": {
+        "label": "Zugriff rezertifizieren",
+        "description": "Die Notwendigkeit des Zugriffs regelmäßig neu bestätigen (Workflow)."
+      },
+      "delete": {
+        "label": "Löschen",
+        "description": "Alle Kopien des Assets dauerhaft entfernen."
+      },
+      "anonymize": {
+        "label": "Anonymisieren",
+        "description": "Das Asset ganz oder teilweise anonymisieren."
+      },
+      "inform": {
+        "label": "Informieren",
+        "description": "Eine Partei über die Nutzung informieren (Benachrichtigung)."
+      }
+    },
+    "operands": {
+      "dateTime": {
+        "label": "Datum/Uhrzeit",
+        "description": "Zeitpunkt der Nutzung; wird zu Ablauf/Aktivierung der Berechtigung kompiliert."
+      },
+      "elapsedTime": {
+        "label": "Verstrichene Zeit",
+        "description": "Dauer des Zugriffs; wird zu einer zeitlich begrenzten Berechtigung kompiliert."
+      },
+      "purpose": {
+        "label": "Zweck",
+        "description": "Angegebener Nutzungszweck; per Workflow bestätigt, nicht technisch erzwungen."
+      },
+      "recipient": {
+        "label": "Empfänger",
+        "description": "Partei, die das Ergebnis der Nutzung erhält."
+      },
+      "spatial": {
+        "label": "Region",
+        "description": "Geografische Region der Nutzung; wird, wo unterstützt, zu einem Zeilenfilter kompiliert."
+      },
+      "ontos_classification": {
+        "label": "Klassifizierung",
+        "description": "Datenklassifizierung des Assets; wird, wo unterstützt, zu tag-basiertem ABAC kompiliert."
+      },
+      "ontos_tag": {
+        "label": "Tag",
+        "description": "Tag des Assets (Namespace/Schlüssel[=Wert]); wird, wo unterstützt, zu tag-basiertem ABAC kompiliert."
+      },
+      "ontos_domain": {
+        "label": "Domäne",
+        "description": "Ontos-Domäne des Assets; wird in konkrete Berechtigungen aufgelöst."
+      },
+      "ontos_dataProduct": {
+        "label": "Datenprodukt",
+        "description": "Datenprodukt, zu dem das Asset gehört; wird in konkrete Berechtigungen aufgelöst."
+      },
+      "ontos_columnTag": {
+        "label": "Spalten-Tag",
+        "description": "Tag auf Spaltenebene; wird, wo unterstützt, zu einer Spaltenmaske kompiliert."
+      },
+      "ontos_rowCondition": {
+        "label": "Zeilenbedingung",
+        "description": "Prädikat auf Zeilenebene; wird, wo unterstützt, zu einem Zeilenfilter kompiliert."
+      },
+      "ontos_businessRole": {
+        "label": "Geschäftsrolle",
+        "description": "Ontos-Geschäftsrolle des Principals (Einschränkung der Zielgruppe)."
+      },
+      "ontos_group": {
+        "label": "Gruppe",
+        "description": "Gruppenmitgliedschaft des Principals im Identity Provider."
+      },
+      "ontos_principalAttribute": {
+        "label": "Principal-Attribut",
+        "description": "Verzeichnisattribut des Principals (Platzhalter: künftige IdP-/Lakebase-Quellen)."
+      },
+      "ontos_remark": {
+        "label": "Anmerkung",
+        "description": "Freitext-Bedingung, die Konsumenten angezeigt wird; nicht erzwungen."
+      }
+    },
+    "operators": {
+      "eq": "gleich",
+      "neq": "ungleich",
+      "gt": "größer als",
+      "gteq": "größer oder gleich",
+      "lt": "kleiner als",
+      "lteq": "kleiner oder gleich",
+      "isA": "ist ein",
+      "hasPart": "hat Teil",
+      "isPartOf": "ist Teil von",
+      "isAllOf": "ist alles von",
+      "isAnyOf": "ist eines von",
+      "isNoneOf": "ist keines von"
+    }
+  },
+  "shacl": {
+    "thePolicy": "die Richtlinie",
+    "constraint": {
+      "MinCountConstraintComponent": "{{path}} fehlt",
+      "MaxCountConstraintComponent": "{{path}} hat zu viele Werte",
+      "InConstraintComponent": "{{path}} hat einen Wert außerhalb der erlaubten Liste",
+      "HasValueConstraintComponent": "{{path}} enthält den erforderlichen Wert nicht",
+      "NodeKindConstraintComponent": "{{path}} hat die falsche Art von Wert (IRI erwartet)",
+      "NodeConstraintComponent": "{{path}} entspricht nicht seiner Shape",
+      "OrConstraintComponent": "{{path}} entspricht keiner der erlaubten Shapes",
+      "XoneConstraintComponent": "{{path}} muss genau einer der erlaubten Shapes entsprechen",
+      "NotConstraintComponent": "{{path}} entspricht einer verbotenen Shape"
+    }
+  },
+  "kinds": {
+    "policy": "Zugriffsrichtlinie",
+    "audience": "Zielgruppe",
+    "asset_collection": "Asset-Sammlung",
+    "target": "Ziel"
+  },
+  "abacKinds": {
+    "row_filter": "Zeilenfilter",
+    "column_mask": "Spaltenmaske"
   }
 }

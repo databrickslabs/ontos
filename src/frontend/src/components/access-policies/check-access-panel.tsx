@@ -12,6 +12,7 @@ import { useApi } from '@/hooks/use-api';
 import { useOdrlProfile } from '@/hooks/use-access-policies';
 import type { AccessDecision } from '@/types/access-policy';
 import { DUTY_ACTIONS } from './odrl-helpers';
+import { actionLabel, errorText } from '@/lib/access-policy-text';
 
 interface Props {
   /** When set, evaluate only this policy (what-if, any status) instead of all active policies. */
@@ -70,7 +71,7 @@ export default function CheckAccessPanel({ policyId, defaultAsset }: Props) {
     });
     setLoading(false);
     if (res.error || !res.data) {
-      setError(res.error || t('access-policies:check.failed'));
+      setError(errorText(t, res, t('access-policies:check.failed')));
       setDecision(null);
       return;
     }
@@ -107,7 +108,7 @@ export default function CheckAccessPanel({ policyId, defaultAsset }: Props) {
               <SelectContent>
                 {dataActions.map((a) => (
                   <SelectItem key={a.key} value={a.key}>
-                    {a.label}
+                    {actionLabel(t, a.key, a.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -141,7 +142,7 @@ export default function CheckAccessPanel({ policyId, defaultAsset }: Props) {
                 checked={duties.includes(d)}
                 onChange={(e) => setDuties(e.target.checked ? [...duties, d] : duties.filter((x) => x !== d))}
               />
-              {profile?.actions.find((a) => a.key === d)?.label || d}
+              {actionLabel(t, d, profile?.actions.find((a) => a.key === d)?.label)}
             </label>
           ))}
           {policyId && (

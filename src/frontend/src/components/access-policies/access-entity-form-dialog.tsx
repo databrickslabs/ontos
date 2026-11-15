@@ -35,6 +35,7 @@ import type {
 import { KIND_SEGMENT } from '@/types/access-policy';
 import ConstraintEditor from './constraint-editor';
 import RuleBuilder from './rule-builder';
+import { errorText, issueText } from '@/lib/access-policy-text';
 import { constraintToForm, formRuleProblems, formToConstraint, formToRules, rulesToForm, type FormConstraint, type FormRule } from './odrl-helpers';
 
 interface Props {
@@ -304,7 +305,7 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
     try {
       const url = `/api/access-policies/${KIND_SEGMENT[kind]}${isEdit ? `/${entity!.id}` : ''}`;
       const res = isEdit ? await put<AccessEntity>(url, base) : await post<AccessEntity>(url, base);
-      if (res.error || !res.data) throw new Error(res.error || t('access-policies:form.saveFailed'));
+      if (res.error || !res.data) throw new Error(errorText(t, res, t('access-policies:form.saveFailed')));
       toast({ title: isEdit ? t('access-policies:form.updated') : t('access-policies:form.created') });
       onSaved(res.data);
       onOpenChange(false);
@@ -520,7 +521,7 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
                     validation.issues.map((i, idx) => (
                       <p key={idx} className={i.severity === 'error' ? 'text-destructive' : 'text-amber-700 dark:text-amber-400'}>
                         <AlertTriangle className="mr-1 inline h-3 w-3" />
-                        <code className="text-xs">{i.path || 'policy'}</code> — {i.message}
+                        <code className="text-xs">{i.path || 'policy'}</code> — {issueText(t, i)}
                       </p>
                     ))
                   )}

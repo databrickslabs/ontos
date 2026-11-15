@@ -430,3 +430,16 @@ def test_grant_manager_passes_string_securable_types():
     assert gm.get_grants("catalog", "c")["success"]
     assert calls == [("update", "table", "c.s.v"), ("get", "catalog", "c")]
     assert permissions_securable_type("model") == "function" and permissions_securable_type("SCHEMA") == "schema"
+
+
+def test_issues_and_problems_carry_codes_for_translation():
+    issues = odrl.validate_policy({"uid": "x", "@type": "Set", "profile": [odrl.ONTOS_PROFILE], "conflict": "prohibit",
+                                   "permission": [{"action": "fly", "target": "uc:a.b"}]})
+    unknown = [i.to_dict() for i in issues if i.code == "unknown_action"]
+    assert unknown and unknown[0]["params"] == {"action": "fly"} and "fly" in unknown[0]["message"]
+    assert all(i.code for i in issues)
+    p = odrl.Problem("An audience needs members", "audience_empty")
+    assert p == "An audience needs members" and "; ".join([p, p]).startswith("An audience")
+    assert odrl.problem_dicts([p, "plain"]) == [
+        {"code": "audience_empty", "params": {}, "message": "An audience needs members"},
+        {"code": "message", "params": {}, "message": "plain"}]

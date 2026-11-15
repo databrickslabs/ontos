@@ -454,5 +454,287 @@
     "unmanaged": "プラットフォームにあるが、Ontos は追跡していない",
     "truncated": "最初のセキュリティ対象のみチェックされました。",
     "history": "過去"
+  },
+  "issues": {
+    "abac_outside_scope": "{{rule}}: {{securables}} に対する制限がこのターゲットのスコープ（{{scope}}）を超えています",
+    "abac_unsupported_platform": "{{rule}}: Snowflake ターゲットではこの制限（{{kind}}）をまだ強制できません",
+    "abac_unsupported_target": "{{rule}}: ABAC ポリシーはテーブルに適用されます。{{kind}}（{{name}}）には適用できません",
+    "access_policy_error": "リクエストを完了できませんでした",
+    "assignee_inexact": "{{rule}}: {{reason}} — 解決できたプリンシパルにのみ付与されます",
+    "audience_empty": "オーディエンスにはメンバーまたは絞り込み条件が必要です（空のオーディエンスは全員を意味します）",
+    "broad_grant": "{{rule}}: 'use' は ALL PRIVILEGES にコンパイルされます",
+    "builtin_orphaned": "組み込みの '{{key}}' ターゲットが追跡している付与は孤立します — 最初の Unity Catalog ターゲットにキー '{{key}}' を使用して引き継いでください",
+    "collection_empty": "アセットコレクションにはメンバーまたは絞り込み条件が必要です",
+    "column_mask": "{{rule}} は列マスクとして強制されます",
+    "column_mask_now": "{{rule}} は列マスクとして強制されます（今すぐ適用 — マスクは {{at}} の開始まで待てません）",
+    "confirm_status": "適用済みとして確認できるのは配信済みのリリースのみです",
+    "conflict_invalid_voids": "conflict=invalid では、許可と禁止が1つでも競合すると、ポリシー全体が無効になります",
+    "connection_user_name_case": "user_name_case は次のいずれかにしてください: {{allowed}}",
+    "connection_user_names": "user_names は、各プリンシパルを Snowflake のユーザー NAME（テキスト）に対応付ける必要があります",
+    "connection_views": "views はオブジェクト名のリストにしてください",
+    "constraint_no_left_operand": "制約に leftOperand がありません",
+    "constraint_no_operator": "制約に operator がありません",
+    "constraint_not_object": "制約はオブジェクトにしてください",
+    "constraint_right_operand": "制約には rightOperand と rightOperandReference のどちらか一方だけが必要です",
+    "cron_unsupported": "'{{expr}}' はサポートされていない cron 式です（{{reason}}）",
+    "delete_status": "削除できるのは下書きまたは廃止のバージョンのみです（このバージョンは{{status}}です）。",
+    "deliver_status": "配信できるのは承認済み、配信済み、または失敗のリリースのみです。このリリースは{{status}}です",
+    "delivery_failed": "配信に失敗しました: {{reason}}",
+    "delivery_not_configured": "配信サービスが設定されていません",
+    "denied_by_prohibition": "{{principal}} の {{securable}} に対する {{action}} は {{rule}} によって除外されました",
+    "direct_unsupported": "{{system}} のターゲットには直接配信できません — 間接または手動を使用してください",
+    "drift_not_found": "ドリフトレポートが見つかりません",
+    "drift_policy_unsupported": "ドリフトポリシー '{{policy}}' はサポートされていません（レポートのみ）",
+    "duty_admin_only": "'{{action}}' を履行できるのは、アグリーメントの割り当て先以外のアクセスポリシー管理者のみです",
+    "duty_assignee_only": "'{{action}}' を履行できるのは、アグリーメントの割り当て先のみです",
+    "duty_fulfilled": "'{{action}}' はすでに履行されています",
+    "duty_not_agreement": "履行義務はアグリーメント（特定の当事者間の取り決め）で履行されます",
+    "duty_not_on_permission": "履行義務を持てるのは許可のみです（禁止には 'remedy' を使用してください）",
+    "expired": "{{rule}} は {{at}} に期限切れになりました — 付与されません",
+    "expires_at_prohibition": "{{principal}} の {{securable}} に対する {{action}} は、{{rule}} が有効になる {{at}} に失効します",
+    "expiring_outside_scope": "期限付きの付与 {{count}} 件がターゲットのスコープ外にあります。期限が切れて取り消されるまで、ここで追跡され続けます",
+    "foreign_target": "{{rule}}: {{target}} は Unity Catalog または Snowflake のセキュリティ対象ではないため、スキップしました",
+    "inheritance": "継承: {{detail}}",
+    "ledger_changed": "このリリースのコンパイル後に付与台帳が変更されており、このままではレビューされていない変更が配信されます — 下書きに戻して再コンパイルしてください",
+    "live_grants_unreadable": "{{system}} からライブの付与をまだ読み取れません",
+    "logical_empty": "論理制約 '{{operator}}' には少なくとも1つのオペランドが必要です",
+    "mask_overridden": "{{rule}}: ポリシー自身の許可がマスクを上書きします（conflict=perm）",
+    "modes_not_allowed": "このターゲットでは許可されていない配信モード: {{modes}}",
+    "modes_not_enabled": "設定で有効になっていない配信モード: {{modes}}",
+    "no_delivery_mode": "設定 → 配信で有効な配信モードがありません",
+    "no_principals": "{{rule}}: 割り当て先に該当するプリンシパルがいません",
+    "no_rules": "ポリシーには、許可・禁止・義務のいずれかが少なくとも1つ必要です",
+    "no_target": "{{refs}} をコンパイルできるアクティブなターゲットがありません — そのプラットフォーム用のアクセスターゲットを設定してください",
+    "no_target_more": "{{refs}} ほか {{more}} 件をコンパイルする有効なターゲットがありません — そのプラットフォーム用のアクセスターゲットを構成してください",
+    "not_a_duty": "'{{action}}' はこのアグリーメントの履行義務ではありません",
+    "not_editable": "{{status}}の{{kind}}は編集できません — 代わりに新しいバージョンを作成してください。",
+    "not_found": "{{kind}}が見つかりません",
+    "not_ready_to_activate": "有効化の準備ができていません: {{problems}}",
+    "not_yet_active": "{{rule}} は {{at}} に開始されます — まだ付与されていません",
+    "offer_term": "{{rule}} は、消費者をそのアグリーメントを通じて拘束します",
+    "operand_subject_mismatch": "leftOperand '{{operand}}' は {{describes}} を表しており、{{expected}} ではありません",
+    "outside_scope": "{{count}} 件の権限がこのターゲットのスコープ（{{scope}}）外にあり、それをカバーするターゲットで配信されます",
+    "parent_not_found": "親ポリシー {{parent}} が見つかりません",
+    "policy_conflict_invalid": "{{policy}}: 'invalid' 戦略の下で許可と禁止が競合しています — ポリシーは無効で、効力がありません",
+    "prohibition_inactive": "{{rule}} は {{at}} に終了しました",
+    "prohibition_inexact": "{{rule}}: {{reason}}。列マスクではプリンシパルとセキュリティ対象を明示する必要があります",
+    "prohibition_inexact_assignee": "{{rule}}: 割り当て先 — {{reason}}。禁止は、強制するために正確である必要があります",
+    "prohibition_inexact_target": "{{rule}}: 対象 — {{reason}}。禁止は、強制するために正確である必要があります",
+    "prohibition_scheduled": "{{rule}} は {{at}} に有効になります — 重複する付与はその時点で失効します",
+    "prohibition_unconditional": "{{rule}}: 制約を静的に強制できないため、無条件で適用されます",
+    "prohibition_unenforceable": "{{rule}} は、付与 {{principal}} の {{securable}} に対する {{action}}（{{overlap}}）と一部しか重複していません。プラットフォームには DENY がないため、許可または禁止の範囲を絞ってください",
+    "recompile_draft_only": "再コンパイルできるのは下書きのポリシーリリースのみです",
+    "ref_not_active": "{{ref}} にはアクティブなバージョンがありません",
+    "refined_collection_uid": "絞り込み付きコレクションでは 'uid' ではなく 'source' を使用する必要があります（ODRL §2.5.5/§2.5.6）",
+    "release_empty": "リリースに配信する変更がありません",
+    "release_has_errors": "リリースにコンパイルエラーがあります — ポリシーを修正して再コンパイルしてください",
+    "release_not_found": "リリースが見つかりません",
+    "release_number": "リリース番号を割り当てられませんでした — もう一度お試しください",
+    "release_separation_of_duties": "職務分掌: 作成者または提出者はこのリリースを承認できません",
+    "release_transition": "リリースを {{from}} から {{to}} に移行できません",
+    "remedy_not_on_prohibition": "是正措置を持てるのは禁止のみです",
+    "rule_no_action": "ルールにアクションがありません",
+    "rule_no_assignee": "アグリーメントでは、すべてのルールに割り当て先が必要です",
+    "rule_no_assigner": "{{type}}では、すべてのルールに割り当て元が必要です",
+    "rule_no_target": "{{kind}}には対象アセットが必要です",
+    "scope_entry_invalid": "スコープのエントリ '{{entry}}' は {{system}} のセキュリティ対象名ではありません",
+    "scope_overlap": "スコープがアクティブまたは非推奨の {{system}} ターゲットと重複しています: {{targets}} — 先にそれらを廃止してください",
+    "separation_of_duties": "バージョンは作成者または提出者が承認することはできません — 別のスチュワードに依頼してください。",
+    "snowflake_future_precedence": "データベースレベルの将来の付与 {{count}} 件が、独自の将来の付与を持つスキーマで重複しています（Snowflake ではスキーマレベルのものだけが適用されます）",
+    "snowflake_objects_as_tables": "Snowflake のオブジェクトはテーブルとして付与されます。ビューは ON VIEW で付与されるよう、ターゲットの接続設定（'views'）に列挙してください",
+    "still_referenced": "{{count}} 件のポリシーバージョンからまだ参照されています: {{names}}",
+    "subject_forbidden": "利用条件を定めることができるのは、プロダクトのオーナー（所有者チーム / プロジェクト）または管理者のみです",
+    "subject_incomplete": "ポリシーの対象には、種別（{{types}}）と ID が必要です",
+    "subject_not_found": "データプロダクト '{{id}}' が見つかりません",
+    "subject_offer_only": "エンティティの条件を定めることができるのはオファーのみです",
+    "target_key_invalid": "キーは、英小文字で始まる 2〜40 文字の英小文字・数字・'-'・'_' にしてください",
+    "target_key_locked": "複数のバージョンを持つターゲットのキーは変更できません",
+    "target_key_taken": "別のターゲット（アクティブまたは非推奨）がすでにキー '{{key}}' を使用しています",
+    "target_tracks_grants": "ターゲット '{{key}}' はまだ {{count}} 件の付与を追跡しています — 先に取り消すか、追跡対象から外してください",
+    "transition_not_allowed": "{{from}} から {{to}} には移行できません（許可: {{allowed}}）。",
+    "unknown_action": "不明なアクション '{{action}}' です（Ontos プロファイルにありません）",
+    "unknown_collection_source": "不明なコレクションのソース '{{ref}}' です",
+    "unknown_conflict": "不明な競合戦略 '{{conflict}}' です",
+    "unknown_delivery_mode": "不明な配信モード '{{mode}}' です",
+    "unknown_delivery_modes": "不明な配信モード: {{modes}}",
+    "unknown_kind": "不明な種別 '{{kind}}' です",
+    "unknown_left_operand": "不明な leftOperand '{{operand}}' です（Ontos プロファイルにありません）",
+    "unknown_operator": "不明な演算子 '{{operator}}' です",
+    "unknown_profile": "認識できない ODRL プロファイル '{{profile}}' です — ポリシーを処理できません（ODRL §3.2）",
+    "unknown_reference": "不明な参照 '{{ref}}' です",
+    "unknown_system": "不明なシステム '{{system}}' です（利用可能: {{available}}）",
+    "unknown_target": "不明なターゲット '{{key}}' です。利用可能: {{available}}",
+    "unsupported_policy_type": "サポートされていないポリシー種別 '{{type}}' です",
+    "untracked_outside_scope": "追跡中の付与 {{count}} 件がターゲットのスコープ外にあり、追跡されなくなります（プラットフォーム上には残ります）",
+    "used_by_active": "アクティブなポリシーからまだ使用されています（先に非推奨にするか、参照先を変更してください）: {{names}}",
+    "version_exists": "バージョン {{version}} はこのファミリーにすでに存在します"
+  },
+  "profile": {
+    "actions": {
+      "use": {
+        "label": "使用",
+        "description": "アセットのあらゆる利用（ODRL の最上位アクション）。"
+      },
+      "transfer": {
+        "label": "移転",
+        "description": "所有権の移転（ODRL の最上位アクション）。"
+      },
+      "read": {
+        "label": "読み取り",
+        "description": "データの読み取り・クエリ（UC SELECT, READ VOLUME, EXECUTE）。"
+      },
+      "modify": {
+        "label": "変更",
+        "description": "データの変更（UC MODIFY, WRITE VOLUME）。"
+      },
+      "ontos_browse": {
+        "label": "参照",
+        "description": "データを読まずにメタデータを表示（UC BROWSE）。"
+      },
+      "ontos_create": {
+        "label": "作成",
+        "description": "子オブジェクトの作成（UC CREATE TABLE/VIEW/FUNCTION/VOLUME）。"
+      },
+      "ontos_manage": {
+        "label": "管理",
+        "description": "付与とプロパティの管理（UC MANAGE）。"
+      },
+      "distribute": {
+        "label": "配布",
+        "description": "データを第三者と共有します。"
+      },
+      "derive": {
+        "label": "派生",
+        "description": "アセットから派生データを作成します。"
+      },
+      "aggregate": {
+        "label": "集計",
+        "description": "データを集計した形でのみ使用します。"
+      },
+      "ontos_acknowledgeTerms": {
+        "label": "利用規約への同意",
+        "description": "アセットの利用規約を承諾します（ワークフロー）。"
+      },
+      "ontos_obtainApproval": {
+        "label": "承認の取得",
+        "description": "承認または権限者の決定を取得します（ワークフロー）。"
+      },
+      "ontos_recertify": {
+        "label": "アクセスの再認定",
+        "description": "アクセスの必要性を定期的に再確認します（ワークフロー）。"
+      },
+      "delete": {
+        "label": "削除",
+        "description": "アセットのすべてのコピーを完全に削除します。"
+      },
+      "anonymize": {
+        "label": "匿名化",
+        "description": "アセットの全体または一部を匿名化します。"
+      },
+      "inform": {
+        "label": "通知",
+        "description": "利用について当事者に知らせます（通知）。"
+      }
+    },
+    "operands": {
+      "dateTime": {
+        "label": "日時",
+        "description": "利用する時点。付与の有効期限・開始にコンパイルされます。"
+      },
+      "elapsedTime": {
+        "label": "経過時間",
+        "description": "アクセスの継続時間。期限付きの付与にコンパイルされます。"
+      },
+      "purpose": {
+        "label": "目的",
+        "description": "宣言された利用目的。ワークフローで証明され、技術的には強制されません。"
+      },
+      "recipient": {
+        "label": "受領者",
+        "description": "利用結果を受け取る当事者。"
+      },
+      "spatial": {
+        "label": "地域",
+        "description": "利用する地理的な地域。対応している場合は行フィルターにコンパイルされます。"
+      },
+      "ontos_classification": {
+        "label": "分類",
+        "description": "アセットのデータ分類。対応している場合はタグベースの ABAC にコンパイルされます。"
+      },
+      "ontos_tag": {
+        "label": "タグ",
+        "description": "アセットのタグ（namespace/key[=value]）。対応している場合はタグベースの ABAC にコンパイルされます。"
+      },
+      "ontos_domain": {
+        "label": "ドメイン",
+        "description": "アセットの Ontos ドメイン。具体的な付与に展開されます。"
+      },
+      "ontos_dataProduct": {
+        "label": "データプロダクト",
+        "description": "アセットが属するデータプロダクト。具体的な付与に展開されます。"
+      },
+      "ontos_columnTag": {
+        "label": "列タグ",
+        "description": "列レベルのタグ。対応している場合は列マスクにコンパイルされます。"
+      },
+      "ontos_rowCondition": {
+        "label": "行条件",
+        "description": "行レベルの述語。対応している場合は行フィルターにコンパイルされます。"
+      },
+      "ontos_businessRole": {
+        "label": "ビジネスロール",
+        "description": "プリンシパルの Ontos ビジネスロール（オーディエンスの絞り込み条件）。"
+      },
+      "ontos_group": {
+        "label": "グループ",
+        "description": "プリンシパルの ID プロバイダーのグループメンバーシップ。"
+      },
+      "ontos_principalAttribute": {
+        "label": "プリンシパルの属性",
+        "description": "プリンシパルのディレクトリ属性（スタブ: 将来の IdP / Lakebase ソース）。"
+      },
+      "ontos_remark": {
+        "label": "備考",
+        "description": "消費者に表示される自由記述の条件。強制されません。"
+      }
+    },
+    "operators": {
+      "eq": "等しい",
+      "neq": "等しくない",
+      "gt": "より大きい",
+      "gteq": "以上",
+      "lt": "より小さい",
+      "lteq": "以下",
+      "isA": "次のいずれかの種類である",
+      "hasPart": "次を部分として持つ",
+      "isPartOf": "次の一部である",
+      "isAllOf": "次のすべてである",
+      "isAnyOf": "次のいずれかである",
+      "isNoneOf": "次のいずれでもない"
+    }
+  },
+  "shacl": {
+    "thePolicy": "ポリシー",
+    "constraint": {
+      "MinCountConstraintComponent": "{{path}} がありません",
+      "MaxCountConstraintComponent": "{{path}} の値が多すぎます",
+      "InConstraintComponent": "{{path}} に許可リスト外の値があります",
+      "HasValueConstraintComponent": "{{path}} に必須の値がありません",
+      "NodeKindConstraintComponent": "{{path}} の値の種類が正しくありません（IRI が必要です）",
+      "NodeConstraintComponent": "{{path}} がシェイプに一致しません",
+      "OrConstraintComponent": "{{path}} が許可されたどのシェイプにも一致しません",
+      "XoneConstraintComponent": "{{path}} は、許可されたシェイプのうちちょうど1つに一致する必要があります",
+      "NotConstraintComponent": "{{path}} が禁止されたシェイプに一致しています"
+    }
+  },
+  "kinds": {
+    "policy": "アクセスポリシー",
+    "audience": "オーディエンス",
+    "asset_collection": "アセットコレクション",
+    "target": "ターゲット"
+  },
+  "abacKinds": {
+    "row_filter": "行フィルター",
+    "column_mask": "列マスク"
   }
 }

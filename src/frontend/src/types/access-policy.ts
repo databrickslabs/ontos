@@ -146,18 +146,36 @@ export interface ValidationIssue {
   severity: 'error' | 'warning';
   path: string;
   message: string;
+  /** Stable code + params for the translated text (`message` is the English fallback). */
+  code?: string;
+  params?: Record<string, unknown>;
+}
+
+export interface CodedProblem {
+  code: string;
+  params: Record<string, unknown>;
+  message: string;
 }
 
 export interface PolicyValidation {
   valid: boolean;
   issues: ValidationIssue[];
   activation_problems?: string[];
+  activation_problem_details?: CodedProblem[];
 }
 
 /** pySHACL report of the policy's JSON-LD export against the Ontos ODRL shapes. */
 export interface ShaclReport {
   conforms: boolean;
-  results: { severity: string; message: string | null; focus: string | null; path: string | null; shape: string | null }[];
+  results: {
+    severity: string;
+    message: string | null;
+    focus: string | null;
+    path: string | null;
+    shape: string | null;
+    /** Local name of the failed constraint component, e.g. `MinCountConstraintComponent`. */
+    constraint?: string | null;
+  }[];
 }
 
 export interface ProfileAction {
@@ -290,6 +308,7 @@ export interface CompileIssue {
   severity: 'error' | 'warning' | 'info';
   code: string;
   message: string;
+  params?: Record<string, unknown>;
   source?: RuleSource;
 }
 

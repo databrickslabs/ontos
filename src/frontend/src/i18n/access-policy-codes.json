@@ -1,0 +1,320 @@
+{
+  "abac_outside_scope": [
+    "rule",
+    "scope",
+    "securables"
+  ],
+  "abac_unsupported_platform": [
+    "kind",
+    "rule"
+  ],
+  "abac_unsupported_target": [
+    "kind",
+    "name",
+    "rule"
+  ],
+  "access_policy_error": null,
+  "assignee_inexact": [
+    "reason",
+    "rule"
+  ],
+  "audience_empty": [],
+  "broad_grant": [
+    "rule"
+  ],
+  "builtin_orphaned": [
+    "key"
+  ],
+  "collection_empty": [],
+  "column_mask": [
+    "at",
+    "rule"
+  ],
+  "column_mask_now": [
+    "at",
+    "rule"
+  ],
+  "confirm_status": [],
+  "conflict_invalid_voids": [],
+  "connection_user_name_case": [
+    "allowed"
+  ],
+  "connection_user_names": [],
+  "connection_views": [],
+  "constraint_no_left_operand": [],
+  "constraint_no_operator": [],
+  "constraint_not_object": [],
+  "constraint_right_operand": [],
+  "cron_unsupported": [
+    "expr",
+    "reason"
+  ],
+  "delete_status": [
+    "status"
+  ],
+  "deliver_status": [
+    "status"
+  ],
+  "delivery_failed": [
+    "reason"
+  ],
+  "delivery_not_configured": [],
+  "denied_by_prohibition": [
+    "action",
+    "principal",
+    "rule",
+    "securable"
+  ],
+  "direct_unsupported": [
+    "system"
+  ],
+  "drift_not_found": [],
+  "drift_policy_unsupported": [
+    "policy"
+  ],
+  "duty_admin_only": [
+    "action"
+  ],
+  "duty_assignee_only": [
+    "action"
+  ],
+  "duty_fulfilled": [
+    "action"
+  ],
+  "duty_not_agreement": [],
+  "duty_not_on_permission": [],
+  "expired": [
+    "at",
+    "rule"
+  ],
+  "expires_at_prohibition": [
+    "action",
+    "at",
+    "principal",
+    "rule",
+    "securable"
+  ],
+  "expiring_outside_scope": [
+    "count"
+  ],
+  "foreign_target": [
+    "rule",
+    "target"
+  ],
+  "inheritance": [
+    "detail"
+  ],
+  "ledger_changed": [],
+  "live_grants_unreadable": [
+    "system"
+  ],
+  "logical_empty": [
+    "operator"
+  ],
+  "mask_overridden": [
+    "rule"
+  ],
+  "message": [],
+  "modes_not_allowed": [
+    "modes"
+  ],
+  "modes_not_enabled": [
+    "modes"
+  ],
+  "no_delivery_mode": [],
+  "no_principals": [
+    "rule"
+  ],
+  "no_rules": [],
+  "no_target": [
+    "more",
+    "refs"
+  ],
+  "no_target_more": [
+    "more",
+    "refs"
+  ],
+  "not_a_duty": [
+    "action"
+  ],
+  "not_editable": [
+    "kind",
+    "status"
+  ],
+  "not_found": [
+    "kind"
+  ],
+  "not_ready_to_activate": [
+    "count",
+    "problems"
+  ],
+  "not_yet_active": [
+    "at",
+    "rule"
+  ],
+  "offer_term": [
+    "rule"
+  ],
+  "operand_subject_mismatch": [
+    "describes",
+    "expected",
+    "operand"
+  ],
+  "outside_scope": [
+    "count",
+    "scope"
+  ],
+  "parent_not_found": [
+    "parent"
+  ],
+  "policy_conflict_invalid": [
+    "policy"
+  ],
+  "prohibition_inactive": [
+    "at",
+    "rule"
+  ],
+  "prohibition_inexact": [
+    "reason",
+    "rule"
+  ],
+  "prohibition_inexact_assignee": [
+    "reason",
+    "rule"
+  ],
+  "prohibition_inexact_target": [
+    "reason",
+    "rule"
+  ],
+  "prohibition_scheduled": [
+    "at",
+    "rule"
+  ],
+  "prohibition_unconditional": [
+    "rule"
+  ],
+  "prohibition_unenforceable": [
+    "action",
+    "overlap",
+    "principal",
+    "rule",
+    "securable"
+  ],
+  "recompile_draft_only": [],
+  "ref_not_active": [
+    "kind",
+    "ref"
+  ],
+  "refined_collection_uid": [
+    "kind"
+  ],
+  "release_empty": [],
+  "release_has_errors": [],
+  "release_not_found": [],
+  "release_number": [],
+  "release_separation_of_duties": [],
+  "release_transition": [
+    "from",
+    "to"
+  ],
+  "remedy_not_on_prohibition": [],
+  "rule_no_action": [],
+  "rule_no_assignee": [],
+  "rule_no_assigner": [
+    "type"
+  ],
+  "rule_no_target": [
+    "kind"
+  ],
+  "scope_entry_invalid": [
+    "entry",
+    "system"
+  ],
+  "scope_overlap": [
+    "system",
+    "targets"
+  ],
+  "separation_of_duties": [],
+  "snowflake_future_precedence": [
+    "count"
+  ],
+  "snowflake_objects_as_tables": [],
+  "still_referenced": [
+    "count",
+    "names"
+  ],
+  "subject_forbidden": [],
+  "subject_incomplete": [
+    "types"
+  ],
+  "subject_not_found": [
+    "id"
+  ],
+  "subject_offer_only": [],
+  "target_key_invalid": [],
+  "target_key_locked": [],
+  "target_key_taken": [
+    "key"
+  ],
+  "target_tracks_grants": [
+    "count",
+    "key"
+  ],
+  "transition_not_allowed": [
+    "allowed",
+    "from",
+    "to"
+  ],
+  "unknown_action": [
+    "action"
+  ],
+  "unknown_collection_source": [
+    "kind",
+    "ref"
+  ],
+  "unknown_conflict": [
+    "conflict"
+  ],
+  "unknown_delivery_mode": [
+    "mode"
+  ],
+  "unknown_delivery_modes": [
+    "modes"
+  ],
+  "unknown_kind": [
+    "kind"
+  ],
+  "unknown_left_operand": [
+    "operand"
+  ],
+  "unknown_operator": [
+    "operator"
+  ],
+  "unknown_profile": [
+    "profile"
+  ],
+  "unknown_reference": [
+    "kind",
+    "ref"
+  ],
+  "unknown_system": [
+    "available",
+    "system"
+  ],
+  "unknown_target": [
+    "available",
+    "key"
+  ],
+  "unsupported_policy_type": [
+    "type"
+  ],
+  "untracked_outside_scope": [
+    "count"
+  ],
+  "used_by_active": [
+    "names"
+  ],
+  "version_exists": [
+    "version"
+  ]
+}

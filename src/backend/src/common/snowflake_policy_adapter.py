@@ -139,9 +139,10 @@ class SnowflakeAdapter(TargetAdapter):
               target: Any = None) -> List[uc.UCGrant]:
         for rule in plan.abac:
             # A mask stands in for a denial, a row filter narrows a grant: dropping either fails open.
-            plan.issue(SEVERITY_ERROR, "abac_unsupported_target",
-                       f"{rule.source.label() if rule.source else rule.kind}: Snowflake targets can't enforce "
-                       f"{rule.kind.replace('_', ' ')}s yet", rule.source)
+            label = rule.source.label() if rule.source else rule.kind
+            plan.issue(SEVERITY_ERROR, "abac_unsupported_platform",
+                       f"{label}: Snowflake targets can't enforce {rule.kind.replace('_', ' ')}s yet", rule.source,
+                       params={"rule": label, "kind": rule.kind})
         key = target.key if target is not None else ""
         connection = (target.connection if target is not None else None) or {}
         views = {str(v).strip().lower() for v in connection.get("views") or []}
@@ -176,7 +177,7 @@ class SnowflakeAdapter(TargetAdapter):
                for e in plan.entitlements):
             plan.issue(SEVERITY_INFO, "snowflake_objects_as_tables",
                        "Snowflake objects are granted as tables; list views in the target's connection "
-                       "('views') so they are granted ON VIEW")
+                       "('views') so they are granted ON VIEW", params={})
         return acc.sorted()
 
     @staticmethod
@@ -199,20 +200,22 @@ class SnowflakeAdapter(TargetAdapter):
         if copied:
             plan.issue(SEVERITY_INFO, "snowflake_future_precedence",
                        f"{copied} database-level future grant(s) repeated on schemas with their own future grants "
-                       "(Snowflake applies only the schema-level ones there)")
+                       "(Snowflake applies only the schema-level ones there)", params={"count": copied})
 
     def validate_connection(self, connection: Dict[str, Any]) -> List[str]:
         problems = []
         names = connection.get("user_names")
         if names is not None and not (isinstance(names, dict) and all(
                 isinstance(k, str) and isinstance(v, str) and v.strip() for k, v in names.items())):
-            problems.append("user_names must map each principal to its Snowflake user NAME (text)")
+            problems.append(odrl.Problem("user_names must map each principal to its Snowflake user NAME (text)",
+                                         "connection_user_names"))
         case = connection.get("user_name_case")
         if case is not None and str(case).lower() not in USER_NAME_CASES:
-            problems.append(f"user_name_case must be one of: {', '.join(USER_NAME_CASES)}")
+            problems.append(odrl.Problem(f"user_name_case must be one of: {', '.join(USER_NAME_CASES)}",
+                                         "connection_user_name_case", {"allowed": ", ".join(USER_NAME_CASES)}))
         views = connection.get("views")
         if views is not None and not isinstance(views, list):
-            problems.append("views must be a list of object names")
+            problems.append(odrl.Problem("views must be a list of object names", "connection_views"))
         return problems
 
     def render_sql(self, diff: uc.GrantDiff, target: Any = None) -> List[str]:

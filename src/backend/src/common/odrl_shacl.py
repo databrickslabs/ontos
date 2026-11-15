@@ -228,10 +228,15 @@ def _local_contexts(node: Any) -> Any:
     return node
 
 
+def _local_name(node: Any) -> Any:
+    return None if node is None else str(node).rsplit("#", 1)[-1].rsplit("/", 1)[-1]
+
+
 def validate_jsonld(doc: Dict[str, Any]) -> Dict[str, Any]:
     """Validate an ODRL policy (JSON-LD, e.g. the app's export) against the shapes.
 
-    ``{"conforms": bool, "results": [{"severity", "message", "focus", "path", "shape"}]}``; offline.
+    ``{"conforms": bool, "results": [{"severity", "message", "focus", "path", "shape", "constraint"}]}``; offline.
+    ``constraint`` is the local name of the failed constraint component (e.g. ``MinCountConstraintComponent``).
     """
     import rdflib
     from pyshacl import validate
@@ -257,8 +262,9 @@ def validate_jsonld(doc: Dict[str, Any]) -> Dict[str, Any]:
             "focus": text(report.value(r, SH.focusNode)),
             "path": text(report.value(r, SH.resultPath)),
             "shape": text(report.value(r, SH.sourceShape)),
+            "constraint": _local_name(report.value(r, SH.sourceConstraintComponent)),
         }
-        key = tuple(item.values())
+        key = tuple(v for k, v in item.items() if k != "constraint")
         if key not in seen:
             seen.add(key)
             results.append(item)

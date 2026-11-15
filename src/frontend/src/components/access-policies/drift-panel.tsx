@@ -4,8 +4,10 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { errorText } from '@/lib/access-policy-text';
 import type { DriftGrant, DriftReport } from '@/types/access-policy';
 
 const VARIANT = { in_sync: 'secondary', drift: 'destructive', partial: 'outline', error: 'outline' } as const;
@@ -30,6 +32,8 @@ export default function DriftPanel({ targetKey, canRun, readable }: { targetKey:
   const [reports, setReports] = useState<DriftReport[]>([]);
   const [latest, setLatest] = useState<DriftReport | null>(null);
   const [running, setRunning] = useState(false);
+  // Until the first fetch returns, a skeleton — not "no report yet", which may be wrong.
+  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(
     async (isCurrent: () => boolean = () => true) => {
@@ -42,8 +46,12 @@ export default function DriftPanel({ targetKey, canRun, readable }: { targetKey:
         if (!isCurrent()) return; // another target's panel by now
         setReports(rows);
         setLatest(full?.data || null);
+        setLoaded(true);
       } catch {
-        if (isCurrent()) setLatest(null);
+        if (isCurrent()) {
+          setLatest(null);
+          setLoaded(true);
+        }
       }
     },
     [get, targetKey],
@@ -62,7 +70,7 @@ export default function DriftPanel({ targetKey, canRun, readable }: { targetKey:
     try {
       const res = await post<DriftReport>('/api/access-policies/drift-reports', { target: targetKey });
       if (res.error || !res.data) {
-        toast({ title: t('access-policies:drift.failed'), description: res.error || '', variant: 'destructive' });
+        toast({ title: t('access-policies:drift.failed'), description: errorText(t, res), variant: 'destructive' });
         return;
       }
       await load();
@@ -88,7 +96,13 @@ export default function DriftPanel({ targetKey, canRun, readable }: { targetKey:
         )}
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        {!latest ? (
+        {!loaded ? (
+          <div className="space-y-2" data-testid="drift-skeleton">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        ) : !latest ? (
           <p className="text-muted-foreground">{t('access-policies:drift.none')}</p>
         ) : (
           <>

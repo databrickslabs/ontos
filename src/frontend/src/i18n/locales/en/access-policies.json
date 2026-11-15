@@ -454,5 +454,287 @@
     "unmanaged": "On the platform, not tracked by Ontos",
     "truncated": "Only the first securables were checked.",
     "history": "Earlier"
+  },
+  "issues": {
+    "abac_outside_scope": "{{rule}}: restriction on {{securables}} reaches beyond this target's scope ({{scope}})",
+    "abac_unsupported_platform": "{{rule}}: Snowflake targets can't enforce this restriction ({{kind}}) yet",
+    "abac_unsupported_target": "{{rule}}: ABAC policies apply to tables, not to a {{kind}} ({{name}})",
+    "access_policy_error": "The request could not be completed",
+    "assignee_inexact": "{{rule}}: {{reason}} — only the resolvable principals are granted",
+    "audience_empty": "An audience needs members or a refinement (an empty audience means everyone)",
+    "broad_grant": "{{rule}}: 'use' compiles to ALL PRIVILEGES",
+    "builtin_orphaned": "Grants tracked by the built-in '{{key}}' target would be orphaned — use the key '{{key}}' for the first Unity Catalog target to adopt them",
+    "collection_empty": "An asset collection needs members or a refinement",
+    "column_mask": "{{rule}} is enforced as a column mask",
+    "column_mask_now": "{{rule}} is enforced as a column mask (applied now — a mask can't wait for its start at {{at}})",
+    "confirm_status": "Only delivered releases can be confirmed as applied",
+    "conflict_invalid_voids": "conflict=invalid voids the whole policy if any permission and prohibition clash",
+    "connection_user_name_case": "user_name_case must be one of: {{allowed}}",
+    "connection_user_names": "user_names must map each principal to its Snowflake user NAME (text)",
+    "connection_views": "views must be a list of object names",
+    "constraint_no_left_operand": "Constraint is missing leftOperand",
+    "constraint_no_operator": "Constraint is missing operator",
+    "constraint_not_object": "Constraint must be an object",
+    "constraint_right_operand": "Constraint needs exactly one of rightOperand / rightOperandReference",
+    "cron_unsupported": "'{{expr}}' is not a supported cron expression ({{reason}})",
+    "delete_status": "Only draft or retired versions can be deleted (this one is {{status}}).",
+    "deliver_status": "Only approved, delivered or failed releases can be delivered; this one is {{status}}",
+    "delivery_failed": "Delivery failed: {{reason}}",
+    "delivery_not_configured": "Delivery service is not configured",
+    "denied_by_prohibition": "{{principal}} {{action}} {{securable}} removed by {{rule}}",
+    "direct_unsupported": "{{system}} targets can't be delivered directly — use Indirect or Manual",
+    "drift_not_found": "Drift report not found",
+    "drift_policy_unsupported": "Drift policy '{{policy}}' is not supported (report only)",
+    "duty_admin_only": "Only an Access Policies admin other than the Agreement's assignee can fulfil '{{action}}'",
+    "duty_assignee_only": "Only the Agreement's assignee can fulfil '{{action}}'",
+    "duty_fulfilled": "'{{action}}' is already fulfilled",
+    "duty_not_agreement": "Duties are fulfilled on Agreements (a concrete party's deal)",
+    "duty_not_on_permission": "Only permissions may carry duties (use 'remedy' on prohibitions)",
+    "expired": "{{rule}} expired at {{at}} — not granted",
+    "expires_at_prohibition": "{{principal}} {{action}} {{securable}} expires at {{at}} when {{rule}} takes effect",
+    "expiring_outside_scope": "{{count}} time-bound grant(s) are outside the target's scope; they stay tracked here until they expire and are revoked",
+    "foreign_target": "{{rule}}: {{target}} is not a Unity Catalog or Snowflake securable — skipped",
+    "inheritance": "Inheritance: {{detail}}",
+    "ledger_changed": "The Grant Ledger changed since this release was compiled and the release would now ship unreviewed changes — send it back to draft and recompile",
+    "live_grants_unreadable": "Live grants can't be read from {{system}} yet",
+    "logical_empty": "Logical constraint '{{operator}}' needs at least one operand",
+    "mask_overridden": "{{rule}}: the policy's own permission overrides the mask (conflict=perm)",
+    "modes_not_allowed": "Delivery mode(s) not allowed for this target: {{modes}}",
+    "modes_not_enabled": "Delivery mode(s) not enabled in Settings: {{modes}}",
+    "no_delivery_mode": "No delivery mode is enabled in Settings → Delivery",
+    "no_principals": "{{rule}}: the assignee resolves to nobody",
+    "no_rules": "A policy needs at least one permission, prohibition or obligation",
+    "no_target": "No active target compiles {{refs}} — configure an Access Target for that platform",
+    "no_target_more": "No active target compiles {{refs}} and {{more}} more — configure an Access Target for that platform",
+    "not_a_duty": "'{{action}}' is not a duty of this Agreement",
+    "not_editable": "{{kind}} with status {{status}} can't be edited — create a new version instead.",
+    "not_found": "{{kind}} not found",
+    "not_ready_to_activate": "Not ready to activate: {{problems}}",
+    "not_yet_active": "{{rule}} starts at {{at}} — not granted yet",
+    "offer_term": "{{rule}} binds consumers via their Agreements",
+    "operand_subject_mismatch": "leftOperand '{{operand}}' describes a {{describes}}, not a {{expected}}",
+    "outside_scope": "{{count}} entitlement(s) are outside this target's scope ({{scope}}) and ship with the target that covers them",
+    "parent_not_found": "Parent policy {{parent}} not found",
+    "policy_conflict_invalid": "{{policy}}: permission and prohibition conflict under the 'invalid' strategy — the policy is void and has no effect",
+    "prohibition_inactive": "{{rule}} ended at {{at}}",
+    "prohibition_inexact": "{{rule}}: {{reason}}; a column mask must name its principals and securables",
+    "prohibition_inexact_assignee": "{{rule}}: assignee — {{reason}}; a prohibition must be exact to be enforced",
+    "prohibition_inexact_target": "{{rule}}: target — {{reason}}; a prohibition must be exact to be enforced",
+    "prohibition_scheduled": "{{rule}} takes effect at {{at}} — overlapping grants expire then",
+    "prohibition_unconditional": "{{rule}}: its constraints can't be enforced statically — applied unconditionally",
+    "prohibition_unenforceable": "{{rule}} only partly overlaps the grant {{principal}} {{action}} {{securable}} ({{overlap}}); the platform has no DENY — narrow the permission or the prohibition",
+    "recompile_draft_only": "Only draft policy releases can be recompiled",
+    "ref_not_active": "{{ref}} has no active version",
+    "refined_collection_uid": "A refined collection must use 'source', not 'uid' (ODRL §2.5.5/§2.5.6)",
+    "release_empty": "Release has no changes to deliver",
+    "release_has_errors": "Release has compile errors — fix the policies and recompile",
+    "release_not_found": "Release not found",
+    "release_number": "Could not allocate a release number — please retry",
+    "release_separation_of_duties": "Separation of duties: the author or submitter can't approve this release",
+    "release_transition": "Cannot move a release from {{from}} to {{to}}",
+    "remedy_not_on_prohibition": "Only prohibitions may carry remedies",
+    "rule_no_action": "Rule is missing an action",
+    "rule_no_assignee": "An Agreement needs an assignee on every rule",
+    "rule_no_assigner": "An {{type}} needs an assigner on every rule",
+    "rule_no_target": "A {{kind}} needs a target asset",
+    "scope_entry_invalid": "Scope entry '{{entry}}' is not a {{system}} securable name",
+    "scope_overlap": "Scope overlaps active or deprecated {{system}} target(s): {{targets}} — retire them first",
+    "separation_of_duties": "A version can't be approved by its author or submitter — ask another steward.",
+    "snowflake_future_precedence": "{{count}} database-level future grant(s) repeated on schemas with their own future grants (Snowflake applies only the schema-level ones there)",
+    "snowflake_objects_as_tables": "Snowflake objects are granted as tables; list views in the target's connection ('views') so they are granted ON VIEW",
+    "still_referenced": "Still referenced by {{count}} policy version(s): {{names}}",
+    "subject_forbidden": "Only the product's owners (owner team / project) or an admin can state its terms of use",
+    "subject_incomplete": "A policy subject needs a type ({{types}}) and an id",
+    "subject_not_found": "Data product '{{id}}' not found",
+    "subject_offer_only": "Only an Offer can state the terms for an entity",
+    "target_key_invalid": "The key must be 2–40 lower-case letters, digits, '-' or '_', starting with a letter",
+    "target_key_locked": "The key of a target with several versions can't change",
+    "target_key_taken": "Another target (active or deprecated) already uses the key '{{key}}'",
+    "target_tracks_grants": "Target '{{key}}' still tracks {{count}} grant(s) — revoke them or release them from tracking first",
+    "transition_not_allowed": "Can't move from {{from}} to {{to}} (allowed: {{allowed}}).",
+    "unknown_action": "Unknown action '{{action}}' (not in the Ontos profile)",
+    "unknown_collection_source": "Unknown collection source '{{ref}}'",
+    "unknown_conflict": "Unknown conflict strategy '{{conflict}}'",
+    "unknown_delivery_mode": "Unknown delivery mode '{{mode}}'",
+    "unknown_delivery_modes": "Unknown delivery mode(s): {{modes}}",
+    "unknown_kind": "Unknown kind '{{kind}}'",
+    "unknown_left_operand": "Unknown leftOperand '{{operand}}' (not in the Ontos profile)",
+    "unknown_operator": "Unknown operator '{{operator}}'",
+    "unknown_profile": "Unrecognised ODRL profile '{{profile}}' — policy cannot be processed (ODRL §3.2)",
+    "unknown_reference": "Unknown reference '{{ref}}'",
+    "unknown_system": "Unknown system '{{system}}' (available: {{available}})",
+    "unknown_target": "Unknown target '{{key}}'. Available: {{available}}",
+    "unsupported_policy_type": "Unsupported policy type '{{type}}'",
+    "untracked_outside_scope": "{{count}} tracked grant(s) are outside the target's scope and will no longer be tracked (they stay on the platform)",
+    "used_by_active": "Still used by active policies (deprecate or re-point them first): {{names}}",
+    "version_exists": "Version {{version}} already exists in this family"
+  },
+  "profile": {
+    "actions": {
+      "use": {
+        "label": "Use",
+        "description": "Any usage of the asset (ODRL top-level action)."
+      },
+      "transfer": {
+        "label": "Transfer",
+        "description": "Transfer of ownership (ODRL top-level action)."
+      },
+      "read": {
+        "label": "Read",
+        "description": "Read/query the data (UC SELECT, READ VOLUME, EXECUTE)."
+      },
+      "modify": {
+        "label": "Modify",
+        "description": "Change the data (UC MODIFY, WRITE VOLUME)."
+      },
+      "ontos_browse": {
+        "label": "Browse",
+        "description": "See metadata without reading data (UC BROWSE)."
+      },
+      "ontos_create": {
+        "label": "Create",
+        "description": "Create child objects (UC CREATE TABLE/VIEW/FUNCTION/VOLUME)."
+      },
+      "ontos_manage": {
+        "label": "Manage",
+        "description": "Manage grants and properties (UC MANAGE)."
+      },
+      "distribute": {
+        "label": "Distribute",
+        "description": "Share the data with third parties."
+      },
+      "derive": {
+        "label": "Derive",
+        "description": "Create derived data from the asset."
+      },
+      "aggregate": {
+        "label": "Aggregate",
+        "description": "Use the data only in aggregated form."
+      },
+      "ontos_acknowledgeTerms": {
+        "label": "Acknowledge terms",
+        "description": "Accept the asset's terms of use (workflow)."
+      },
+      "ontos_obtainApproval": {
+        "label": "Obtain approval",
+        "description": "Obtain an approval or authority decision (workflow)."
+      },
+      "ontos_recertify": {
+        "label": "Re-certify access",
+        "description": "Periodically re-confirm the need for access (workflow)."
+      },
+      "delete": {
+        "label": "Delete",
+        "description": "Permanently remove all copies of the asset."
+      },
+      "anonymize": {
+        "label": "Anonymize",
+        "description": "Anonymize all or part of the asset."
+      },
+      "inform": {
+        "label": "Inform",
+        "description": "Inform a party about the use (notification)."
+      }
+    },
+    "operands": {
+      "dateTime": {
+        "label": "Date/time",
+        "description": "Point in time of use; compiles to grant expiry/activation."
+      },
+      "elapsedTime": {
+        "label": "Elapsed time",
+        "description": "Duration of access; compiles to a time-bound grant."
+      },
+      "purpose": {
+        "label": "Purpose",
+        "description": "Declared purpose of use; attested via workflow, not technically enforced."
+      },
+      "recipient": {
+        "label": "Recipient",
+        "description": "Party receiving the result of the use."
+      },
+      "spatial": {
+        "label": "Region",
+        "description": "Geographic region of use; compiles to a row filter where supported."
+      },
+      "ontos_classification": {
+        "label": "Classification",
+        "description": "Asset data classification; compiles to tag-based ABAC where supported."
+      },
+      "ontos_tag": {
+        "label": "Tag",
+        "description": "Asset tag (namespace/key[=value]); compiles to tag-based ABAC where supported."
+      },
+      "ontos_domain": {
+        "label": "Domain",
+        "description": "Ontos domain of the asset; materialized into concrete grants."
+      },
+      "ontos_dataProduct": {
+        "label": "Data product",
+        "description": "Data product the asset belongs to; materialized into concrete grants."
+      },
+      "ontos_columnTag": {
+        "label": "Column tag",
+        "description": "Column-level tag; compiles to a column mask where supported."
+      },
+      "ontos_rowCondition": {
+        "label": "Row condition",
+        "description": "Row-level predicate; compiles to a row filter where supported."
+      },
+      "ontos_businessRole": {
+        "label": "Business role",
+        "description": "Ontos Business Role of the principal (Audience refinement)."
+      },
+      "ontos_group": {
+        "label": "Group",
+        "description": "Identity-provider group membership of the principal."
+      },
+      "ontos_principalAttribute": {
+        "label": "Principal attribute",
+        "description": "Directory attribute of the principal (stub: future IdP/Lakebase sources)."
+      },
+      "ontos_remark": {
+        "label": "Remark",
+        "description": "Free-text condition shown to consumers; not enforced."
+      }
+    },
+    "operators": {
+      "eq": "equal to",
+      "neq": "not equal to",
+      "gt": "greater than",
+      "gteq": "greater than or equal to",
+      "lt": "less than",
+      "lteq": "less than or equal to",
+      "isA": "is a",
+      "hasPart": "has part",
+      "isPartOf": "is part of",
+      "isAllOf": "is all of",
+      "isAnyOf": "is any of",
+      "isNoneOf": "is none of"
+    }
+  },
+  "shacl": {
+    "thePolicy": "the policy",
+    "constraint": {
+      "MinCountConstraintComponent": "{{path}} is missing",
+      "MaxCountConstraintComponent": "{{path}} has too many values",
+      "InConstraintComponent": "{{path}} has a value outside the allowed list",
+      "HasValueConstraintComponent": "{{path}} lacks the required value",
+      "NodeKindConstraintComponent": "{{path}} has the wrong kind of value (IRI expected)",
+      "NodeConstraintComponent": "{{path}} doesn't match its shape",
+      "OrConstraintComponent": "{{path}} matches none of the allowed shapes",
+      "XoneConstraintComponent": "{{path}} must match exactly one of the allowed shapes",
+      "NotConstraintComponent": "{{path}} matches a forbidden shape"
+    }
+  },
+  "kinds": {
+    "policy": "Access policy",
+    "audience": "Audience",
+    "asset_collection": "Asset collection",
+    "target": "Target"
+  },
+  "abacKinds": {
+    "row_filter": "Row filter",
+    "column_mask": "Column mask"
   }
 }

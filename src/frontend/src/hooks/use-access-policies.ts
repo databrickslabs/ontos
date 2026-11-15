@@ -62,7 +62,9 @@ export function useCompileTargets() {
   useEffect(() => {
     let cancelled = false;
     get<ReleaseTargets>('/api/access-policies/compile-targets').then((res) => {
-      if (!cancelled && res.data && !res.error) setData(res.data);
+      if (cancelled) return;
+      // Unreadable targets count as none, so callers waiting on them don't wait forever.
+      setData(res.data && !res.error ? res.data : { targets: [], systems: [], delivery_modes: [] });
     });
     return () => {
       cancelled = true;

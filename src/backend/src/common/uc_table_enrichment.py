@@ -3,9 +3,8 @@
 ``tables.list`` returns columns (see ``uc_table_columns``) but no tags and no
 lineage. This module adds, for the tables of one catalog at a time:
 
-- ``tags`` (``{tag_name: value}``, True for a tag without a value) and
-  ``columns[].tags``, from ``system.information_schema.table_tags`` and
-  ``column_tags``, in one statement per catalog;
+- ``tags`` (``{tag_name: value}``, True for a tag without a value), from
+  ``system.information_schema.table_tags``, in one statement per catalog;
 - ``upstream_count`` / ``downstream_count``: distinct source / target tables in
   ``system.access.table_lineage`` over the last ``LINEAGE_WINDOW_DAYS`` days,
   in one statement per catalog.
@@ -29,7 +28,6 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 TABLE_TAGS_SOURCE = 'system.information_schema.table_tags'
-COLUMN_TAGS_SOURCE = 'system.information_schema.column_tags'
 LINEAGE_SOURCE = 'system.access.table_lineage'
 
 # Lineage events older than this are not counted. system.access.table_lineage
@@ -45,7 +43,7 @@ GROUP_FIELDS = {
     LINEAGE: ('upstream_count', 'downstream_count'),
 }
 GROUP_SOURCE = {
-    TAGS: f'{TABLE_TAGS_SOURCE}, {COLUMN_TAGS_SOURCE}',
+    TAGS: TABLE_TAGS_SOURCE,
     LINEAGE: LINEAGE_SOURCE,
 }
 FIELD_GROUP = {field: group for group, fields in GROUP_FIELDS.items() for field in fields}
@@ -159,17 +157,18 @@ def _scope(catalog: str, schemas: Iterable[str]) -> Tuple[str, Dict[str, str]]:
 
 
 def tags_statement(catalog: str, schemas: Iterable[str]) -> Tuple[str, Dict[str, str]]:
-    """Table and column tags of the given schemas of one catalog."""
+    """Table tags of the given schemas of one catalog.
+
+    Column tags are not read: no rule can reach them (the DSL has no
+    quantifier over ``columns``).
+    """
     placeholders, params = _scope(catalog, schemas)
     # Both sides lowered, as in the lineage statement: the parameters are
     # lowercase and the system table may keep the names' case
     where = f"lower(catalog_name) = :catalog AND lower(schema_name) IN ({placeholders})"
     statement = (
-        f"SELECT schema_name, table_name, CAST(NULL AS STRING) AS column_name, "
-        f"tag_name, tag_value FROM {TABLE_TAGS_SOURCE} WHERE {where} "
-        f"UNION ALL "
-        f"SELECT schema_name, table_name, column_name, tag_name, tag_value "
-        f"FROM {COLUMN_TAGS_SOURCE} WHERE {where}"
+        f"SELECT schema_name, table_name, tag_name, tag_value "
+        f"FROM {TABLE_TAGS_SOURCE} WHERE {where}"
     )
     return statement, params
 
@@ -212,30 +211,17 @@ def _table_key(entity: Dict[str, Any]) -> Tuple[str, str]:
 
 
 def apply_tag_rows(entities: List[Dict[str, Any]], rows: Iterable[Dict[str, Any]]) -> None:
-    """Set ``tags`` and ``columns[].tags`` on each entity (empty when it has none)."""
+    """Set ``tags`` on each entity (empty when it has none)."""
     by_key = {_table_key(e): e for e in entities}
     for entity in entities:
         entity['tags'] = {}
-        for column in entity.get('columns') or []:
-            column['tags'] = {}
-    columns_by_key = {
-        key: {str(c.get('name') or '').lower(): c for c in e.get('columns') or []}
-        for key, e in by_key.items()
-    }
     for row in rows:
         key = (str(row.get('schema_name') or '').lower(),
                str(row.get('table_name') or '').lower())
         entity = by_key.get(key)
         if entity is None or not row.get('tag_name'):
             continue
-        value = _tag_value(row.get('tag_value'))
-        column_name = row.get('column_name')
-        if column_name is None:
-            entity['tags'][row['tag_name']] = value
-            continue
-        column = columns_by_key[key].get(str(column_name).lower())
-        if column is not None:
-            column['tags'][row['tag_name']] = value
+        entity['tags'][row['tag_name']] = _tag_value(row.get('tag_value'))
 
 
 def apply_lineage_rows(entities: List[Dict[str, Any]], rows: Iterable[Dict[str, Any]]) -> None:

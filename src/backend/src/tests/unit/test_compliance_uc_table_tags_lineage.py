@@ -61,9 +61,8 @@ class FakeRunner:
         return self.tag_rows if source == TAGS else self.lineage_rows
 
 
-def _tag(table, tag, value='', column=None, schema='sales'):
-    return {'schema_name': schema, 'table_name': table, 'column_name': column,
-            'tag_name': tag, 'tag_value': value}
+def _tag(table, tag, value='', schema='sales'):
+    return {'schema_name': schema, 'table_name': table, 'tag_name': tag, 'tag_value': value}
 
 
 def _lineage(direction, full_name, count):
@@ -97,9 +96,9 @@ def test_rule_needs_only_the_groups_it_reads(rule, groups):
 def test_tags_statement_is_scoped_by_catalog_and_schemas_with_parameters():
     statement, params = enr.tags_statement('Main', {'sales', 'Ops'})
 
-    assert enr.TABLE_TAGS_SOURCE in statement and enr.COLUMN_TAGS_SOURCE in statement
+    assert enr.TABLE_TAGS_SOURCE in statement and 'column_tags' not in statement
     assert statement.count(
-        'lower(catalog_name) = :catalog AND lower(schema_name) IN (:s0, :s1)') == 2
+        'lower(catalog_name) = :catalog AND lower(schema_name) IN (:s0, :s1)') == 1
     assert params == {'catalog': 'main', 's0': 'ops', 's1': 'sales'}
 
 
@@ -107,8 +106,8 @@ def test_tags_statement_matches_mixed_case_names_and_rows_map_without_case():
     statement, params = enr.tags_statement('Main', ['Sales'])
 
     assert params == {'catalog': 'main', 's0': 'sales'}
-    assert statement.count('lower(catalog_name) = :catalog') == 2
-    assert statement.count('lower(schema_name) IN (:s0)') == 2
+    assert 'lower(catalog_name) = :catalog' in statement
+    assert 'lower(schema_name) IN (:s0)' in statement
     entity = enr.table_entity(_table('Orders', schema='Sales', catalog='Main'))
     enr.apply_tag_rows([entity], [_tag('ORDERS', 'pii', schema='SALES')])
     assert entity['tags'] == {'pii': True}
@@ -126,7 +125,7 @@ def test_lineage_statement_has_a_bounded_window_and_counts_distinct_tables():
 
 # --- rows to fields ----------------------------------------------------------------
 
-def test_tag_rows_fill_table_and_column_tags():
+def test_tag_rows_fill_table_tags_only():
     entities = [
         {'schema': 'sales', 'name': 'orders', 'full_name': 'main.sales.orders',
          'columns': [{'name': 'Email'}, {'name': 'id'}]},
@@ -137,15 +136,14 @@ def test_tag_rows_fill_table_and_column_tags():
     enr.apply_tag_rows(entities, [
         _tag('orders', 'data_classification', 'internal'),
         _tag('ORDERS', 'certified'),  # key-only tag: '' in UC
-        _tag('orders', 'pii', 'email', column='email'),
         _tag('other_table', 'x'),
     ])
 
     orders, untagged = entities
     assert orders['tags'] == {'data_classification': 'internal', 'certified': True}
-    assert orders['columns'][0]['tags'] == {'pii': 'email'}
-    assert orders['columns'][1]['tags'] == {}
-    assert untagged['tags'] == {} and untagged['columns'][0]['tags'] == {}
+    assert untagged['tags'] == {}
+    # Column tags are not read: no rule can reach them
+    assert all('tags' not in c for e in entities for c in e['columns'])
 
 
 def test_tag_not_empty_passes_untagged_tables_so_rules_use_has_tag():
@@ -199,7 +197,7 @@ def test_loader_reads_tags_and_lineage_once_per_catalog_and_rules_see_them():
     assert [_rule_eval(has_tag, entities[n]) for n in ('orders', 'raw_orders')] == [True, False]
     assert [_rule_eval(upstream, entities[n]) for n in ('orders', 'raw_orders')] == [True, False]
     assert entities['v_orders']['type'] == 'view' and entities['v_orders']['tags'] == {}
-    assert entities['orders']['columns'][0]['tags'] == {}
+    assert 'tags' not in entities['orders']['columns'][0]
 
 
 def test_loader_without_enrichment_makes_no_statement_and_adds_no_fields():

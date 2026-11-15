@@ -42,8 +42,8 @@ def _answer(statement, **_):
     if 'system.access.table_lineage' in statement:
         return _statement(['direction', 'table_full_name', 'table_count'],
                           [['upstream', 'main.sales.orders', '2']])
-    return _statement(['schema_name', 'table_name', 'column_name', 'tag_name', 'tag_value'],
-                      [['sales', 'orders', None, 'data_classification', 'internal']])
+    return _statement(['schema_name', 'table_name', 'tag_name', 'tag_value'],
+                      [['sales', 'orders', 'data_classification', 'internal']])
 
 
 def _policy(db: Session) -> CompliancePolicyDb:

@@ -361,6 +361,7 @@
       "terminalStepHasNext": "ステップ「{{step}}」はワークフローを終了するため、「{{target}}」へのリンクは無視され、保存時に削除されます。",
       "conditionalBranchMissing": "条件「{{step}}」の{{branch}}の分岐にステップがありません。条件が{{branch}}のとき、ワークフローは成功として終了します。",
       "unreachableSteps": "最初のステップからたどれないステップがあります: {{steps}}。",
+      "assignTagKeyUnknown": "ステップ \"{{step}}\" はタグ \"{{key}}\" を割り当てますが、このタグはタグカタログにありません。タグを作成するまでこのステップは失敗します。",
       "storedEntityTypeUnknown": "トリガーには、もう存在しないエンティティタイプ「{{entityType}}」が含まれています。このタイプでは一度も起動しません。",
       "storedEntityTypeUnsupported": "{{trigger}} トリガーは {{entity}} では一度も起動しません。"
     }

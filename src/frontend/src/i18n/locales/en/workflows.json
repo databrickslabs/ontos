@@ -361,6 +361,7 @@
       "terminalStepHasNext": "Step \"{{step}}\" ends the workflow, so its link to \"{{target}}\" is ignored and removed on save.",
       "conditionalBranchMissing": "Conditional \"{{step}}\" has no step on its {{branch}} branch. When the condition is {{branch}}, the workflow ends as succeeded.",
       "unreachableSteps": "These steps can't be reached from the first step: {{steps}}.",
+      "assignTagKeyUnknown": "Step \"{{step}}\" assigns the tag \"{{key}}\", which is not in the tag catalog. The step fails until the tag is created.",
       "storedEntityTypeUnknown": "The trigger lists \"{{entityType}}\", an entity type that no longer exists. It never fires for it.",
       "storedEntityTypeUnsupported": "The {{trigger}} trigger never fires for {{entity}}."
     }

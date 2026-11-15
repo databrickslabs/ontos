@@ -792,6 +792,7 @@ class WorkflowsManager:
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
         errors.extend(self.changed_schedule_errors(workflow.trigger, stored_trigger))
+        warnings.extend(self._unknown_assign_tag_keys(workflow))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,
@@ -1048,6 +1049,36 @@ class WorkflowsManager:
                 'schedule' not in sent or (new.schedule or '') == (stored.schedule or '')):
             kept['timezone'] = stored.timezone
         return new.model_copy(update=kept) if kept else new
+
+    def _unknown_assign_tag_keys(self, workflow: ProcessWorkflowCreate) -> List[CodedMessage]:
+        """Warnings for Assign Tag steps whose key is not in the tag catalog.
+
+        Such a step fails at run time with ``tag_not_found``. A warning, not an
+        error: the tag may be created before the workflow runs.
+        """
+        keys = {
+            step.step_id: (step.config or {}).get('key')
+            for step in workflow.steps
+            if step.step_type == StepType.ASSIGN_TAG and (step.config or {}).get('key')
+        }
+        if not keys:
+            return []
+        from src.controller.tags_manager import TagsManager
+        tags_mgr = TagsManager()
+        warnings = []
+        for step_id, key in keys.items():
+            try:
+                found = tags_mgr.get_tag_by_fqn(db=self._db, fqn=str(key))
+            except Exception:
+                logger.warning("Could not look up tag %s while validating", key, exc_info=True)
+                continue
+            if not found:
+                warnings.append(CodedMessage(
+                    f"Step '{step_id}': tag '{key}' is not in the tag catalog; "
+                    "the step fails until it is created",
+                    'assign_tag_key_unknown', step=step_id, key=str(key),
+                ))
+        return warnings
 
     def _validate_gate_exemptions(self, trigger: WorkflowTrigger) -> List[str]:
         """``disabled_for`` is for status gates only, and must name existing entities."""

@@ -361,6 +361,7 @@
       "terminalStepHasNext": "Il passo \"{{step}}\" termina il workflow, quindi il suo collegamento a \"{{target}}\" viene ignorato e rimosso al salvataggio.",
       "conditionalBranchMissing": "La condizione \"{{step}}\" non ha un passo sul ramo {{branch}}. Se la condizione è {{branch}}, il workflow termina con successo.",
       "unreachableSteps": "Questi passi non sono raggiungibili dal primo passo: {{steps}}.",
+      "assignTagKeyUnknown": "Il passaggio \"{{step}}\" assegna il tag \"{{key}}\", che non è nel catalogo dei tag. Il passaggio non riesce finché il tag non viene creato.",
       "storedEntityTypeUnknown": "Il trigger elenca \"{{entityType}}\", un tipo di entità che non esiste più. Non si attiva mai per esso.",
       "storedEntityTypeUnsupported": "Il trigger {{trigger}} non si attiva mai per {{entity}}."
     }

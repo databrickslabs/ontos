@@ -361,6 +361,7 @@
       "terminalStepHasNext": "El paso \"{{step}}\" finaliza el flujo, así que su enlace a \"{{target}}\" se ignora y se elimina al guardar.",
       "conditionalBranchMissing": "La condición \"{{step}}\" no tiene ningún paso en su rama {{branch}}. Si la condición es {{branch}}, el flujo termina como correcto.",
       "unreachableSteps": "Estos pasos no se pueden alcanzar desde el primer paso: {{steps}}.",
+      "assignTagKeyUnknown": "El paso \"{{step}}\" asigna la etiqueta \"{{key}}\", que no está en el catálogo de etiquetas. El paso falla hasta que se cree la etiqueta.",
       "storedEntityTypeUnknown": "El disparador incluye \"{{entityType}}\", un tipo de entidad que ya no existe. Nunca se activa para él.",
       "storedEntityTypeUnsupported": "El disparador {{trigger}} nunca se activa para {{entity}}."
     }

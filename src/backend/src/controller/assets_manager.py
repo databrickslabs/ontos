@@ -448,10 +448,11 @@ class AssetsManager(SearchableAsset):
                 _from, update_data['status'] = lifecycle_service.check_transition(
                     db, 'asset', db_asset, requested,
                 )
-        if update_data.get('properties') is not None:
-            # Clients never see the internal keys, so they can't send them back
+        if 'properties' in update_data:
+            # Clients never see the internal keys, so they can't send them back; null
+            # clears the public properties like {} and keeps the internal ones
             update_data['properties'] = with_internal_properties(
-                update_data['properties'], db_asset.properties)
+                update_data['properties'] or {}, db_asset.properties)
         domains_provided = 'domain_ids' in update_data
         domain_ids = update_data.pop('domain_ids', None) or []
         primary_domain_id = update_data.pop('primary_domain_id', None)

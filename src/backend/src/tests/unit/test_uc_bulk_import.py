@@ -311,3 +311,43 @@ def test_the_job_writes_timezone_aware_timestamps(engine):
     event.remove(engine, 'before_cursor_execute', capture)
 
     assert seen and all(v.tzinfo is not None for v in seen)
+
+
+def _postgres_engine(lock_free):
+    conn = MagicMock()
+    conn.execute.return_value.scalar.return_value = lock_free
+    engine = MagicMock()
+    engine.dialect.name = 'postgresql'
+    engine.connect.return_value = conn
+    return engine, conn
+
+
+def _statements(conn):
+    return [str(call.args[0]) for call in conn.execute.call_args_list]
+
+
+def test_a_run_holds_the_advisory_lock_and_releases_it():
+    engine, conn = _postgres_engine(lock_free=True)
+
+    with job.single_flight(engine) as acquired:
+        assert acquired is True
+        assert [s for s in _statements(conn) if 'unlock' in s] == []
+
+    assert 'pg_try_advisory_lock' in _statements(conn)[0]
+    assert 'pg_advisory_unlock' in _statements(conn)[-1]
+    conn.close.assert_called_once()
+
+
+def test_an_overlapping_run_does_not_get_the_lock():
+    engine, conn = _postgres_engine(lock_free=False)
+
+    with job.single_flight(engine) as acquired:
+        assert acquired is False
+
+    assert all('unlock' not in s for s in _statements(conn))
+    conn.close.assert_called_once()
+
+
+def test_databases_without_advisory_locks_always_run(engine):
+    with job.single_flight(engine) as acquired:
+        assert acquired is True

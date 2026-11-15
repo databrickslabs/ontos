@@ -13,6 +13,7 @@ import argparse
 import traceback
 from typing import List, Dict, Any, Optional, Set, Tuple
 from datetime import datetime, timezone
+from contextlib import contextmanager
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -123,6 +124,36 @@ def create_engine_from_params(
     
     url, auth_user = build_db_url(host, db, port, schema, instance_name, ws_client)
     return create_engine(url, pool_pre_ping=True)
+
+
+# Lock key of the job: ``data_products.name`` has no unique constraint and the
+# job finds then inserts, so two overlapping runs could insert duplicates.
+IMPORT_LOCK_NAME = "ontos.uc_bulk_import"
+
+
+@contextmanager
+def single_flight(engine: Engine):
+    """Yield True when this run holds the job's Postgres advisory lock (session
+    level, held on its own connection until the block ends), False when another
+    run holds it. Other databases (the unit tests) have no such lock: True."""
+    if engine.dialect.name != "postgresql":
+        yield True
+        return
+    conn = engine.connect()
+    try:
+        acquired = bool(conn.execute(
+            text("SELECT pg_try_advisory_lock(hashtext(:name))"), {"name": IMPORT_LOCK_NAME}
+        ).scalar())
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                conn.execute(
+                    text("SELECT pg_advisory_unlock(hashtext(:name))"),
+                    {"name": IMPORT_LOCK_NAME},
+                )
+    finally:
+        conn.close()
 
 
 # ============================================================================
@@ -897,6 +928,14 @@ def main():
     )
     print("  Database connection established")
     
+    with single_flight(engine) as acquired:
+        if not acquired:
+            print("\nAnother UC Bulk Import run holds the lock: skipping this run")
+            return
+        run_import(args, ws, engine, patterns, dry_run, verbose, current_user)
+
+
+def run_import(args, ws, engine, patterns, dry_run, verbose, current_user):
     # Scan Unity Catalog
     print("\n" + "=" * 80)
     print("Phase 1: Scanning Unity Catalog Tags")

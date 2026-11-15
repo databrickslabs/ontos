@@ -247,7 +247,8 @@
       "llm_check_test_rate_limited": "Te veel tests in korte tijd. Probeer het over {{retryAfter}} seconden opnieuw.",
       "llm_check_entity_read_required": "Deze regel gebruikt LLM_CHECK op {{entityType}}-entiteiten. Voor uitvoeren of testen is leestoegang daartoe nodig.",
       "llm_check_admin_required": "Deze regel gebruikt LLM_CHECK. Opslaan, uitvoeren of testen vereist beheerderstoegang tot compliance.",
-      "llm_check_daily_quota_exceeded": "U hebt uw {{limit}} LLM_CHECK-modelaanroepen voor vandaag gebruikt. Probeer het over {{retryAfter}} seconden opnieuw (de telling begint om middernacht UTC opnieuw)."
+      "llm_check_daily_quota_exceeded": "U hebt uw {{limit}} LLM_CHECK-modelaanroepen voor vandaag gebruikt. Probeer het over {{retryAfter}} seconden opnieuw (de telling begint om middernacht UTC opnieuw).",
+      "llm_check_policy_in_use": "Dit beleid wordt gebruikt door {{workflowSteps}} beleidscontroles in workflows en {{maturityGates}} volwassenheidspoorten. Die kunnen LLM_CHECK niet evalueren, dus daar zou elke entiteit mislukken. Verwijder het beleid daar eerst, of gebruik LLM_CHECK in een apart beleid."
     },
     "usage": "LLM_CHECK: {{calls}} modelaanroepen, {{cached}} oordelen uit de cache."
   }

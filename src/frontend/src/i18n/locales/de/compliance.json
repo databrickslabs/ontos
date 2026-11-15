@@ -247,7 +247,8 @@
       "llm_check_test_rate_limited": "Zu viele Tests in kurzer Zeit. Versuchen Sie es in {{retryAfter}} Sekunden erneut.",
       "llm_check_entity_read_required": "Diese Regel verwendet LLM_CHECK für {{entityType}}-Entitäten. Zum Ausführen oder Testen ist Lesezugriff darauf nötig.",
       "llm_check_admin_required": "Diese Regel verwendet LLM_CHECK. Speichern, Ausführen oder Testen erfordert Administratorzugriff auf Compliance.",
-      "llm_check_daily_quota_exceeded": "Sie haben Ihre {{limit}} LLM_CHECK-Modellaufrufe für heute aufgebraucht. Versuchen Sie es in {{retryAfter}} Sekunden erneut (die Zählung beginnt um Mitternacht UTC neu)."
+      "llm_check_daily_quota_exceeded": "Sie haben Ihre {{limit}} LLM_CHECK-Modellaufrufe für heute aufgebraucht. Versuchen Sie es in {{retryAfter}} Sekunden erneut (die Zählung beginnt um Mitternacht UTC neu).",
+      "llm_check_policy_in_use": "Diese Richtlinie wird von {{workflowSteps}} Workflow-Richtlinienprüfungen und {{maturityGates}} Reifegrad-Gates verwendet. Diese können LLM_CHECK nicht auswerten, daher würde dort jede Entität abgelehnt. Entfernen Sie die Richtlinie zuerst dort, oder verwenden Sie LLM_CHECK in einer eigenen Richtlinie."
     },
     "usage": "LLM_CHECK: {{calls}} Modellaufrufe, {{cached}} Urteile aus dem Cache."
   }

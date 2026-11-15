@@ -211,13 +211,17 @@ export default function MaturityLevelsSettings() {
     if (!selectedPolicyId) return;
     const level = levels.find(l => l.id === levelId);
     const maxOrder = level?.gates?.length ? Math.max(...level.gates.map(g => g.display_order)) + 1 : 0;
-    const { error } = await post(`/api/maturity-levels/${levelId}/gates`, {
+    const { error, errorCode } = await post(`/api/maturity-levels/${levelId}/gates`, {
       compliance_policy_id: selectedPolicyId,
       required: gateRequired,
       display_order: maxOrder,
     });
     if (error) {
-      toast({ title: t('common:status.error'), description: error, variant: 'destructive' });
+      // A coded refusal (a policy with LLM_CHECK) in the user's language
+      const description = errorCode
+        ? t(`settings:maturityLevels.gateErrors.${errorCode}`, { defaultValue: error })
+        : error;
+      toast({ title: t('common:status.error'), description, variant: 'destructive' });
     } else {
       setAddingGateToLevel(null);
       setSelectedPolicyId('');

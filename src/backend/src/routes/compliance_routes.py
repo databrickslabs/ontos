@@ -164,6 +164,28 @@ def _username(current_user) -> str:
     return current_user.username if current_user else 'unknown'
 
 
+class LlmCheckPolicyInUseError(CodedValueError):
+    """An LLM_CHECK rule for a policy that a workflow step or a maturity gate evaluates."""
+
+    code = 'llm_check_policy_in_use'
+
+
+def refuse_llm_check_where_it_cannot_run(db, policy_id: str, rule: Optional[str]) -> None:
+    """409 when a policy that workflow policy_check steps or maturity gates use gets a
+    rule with LLM_CHECK: they evaluate it without a model, so it would fail every
+    entity there (a policy check would block every update)."""
+    if not rule_uses_llm_check(rule):
+        return
+    uses = manager.policy_gate_uses(db, policy_id)
+    if uses['workflowSteps'] or uses['maturityGates']:
+        error = LlmCheckPolicyInUseError(
+            f"This policy is used by {uses['workflowSteps']} workflow policy checks and "
+            f"{uses['maturityGates']} maturity gates, which can't evaluate LLM_CHECK",
+            **uses,
+        )
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
 class LlmCheckReadRequiredError(CodedValueError):
     """A user ran an LLM_CHECK rule over app entities they can't read."""
 
@@ -269,6 +291,7 @@ async def update_policy(
     if rule_changed:
         require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
         require_compliance_admin_for_llm_check(policy.rule, auth_manager, current_user, request)
+        refuse_llm_check_where_it_cannot_run(db, policy_id, policy.rule)
     # The name is the title of the notifications NOTIFY sends: renaming is gated too
     if rule_changed or existing.name != policy.name:
         require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)

@@ -743,6 +743,27 @@ class ComplianceManager:
         return objs
 
     @staticmethod
+    def policy_gate_uses(db: Session, policy_id: str) -> Dict[str, int]:
+        """Where a policy is evaluated without a model: workflow policy_check steps
+        and maturity gates (counts). ``LLM_CHECK`` always fails there."""
+        from src.common.workflow_step_config import policy_id_of
+        from src.db_models.maturity import MaturityGateDb
+        from src.db_models.process_workflows import WorkflowStepDb
+
+        steps = 0
+        for step in db.query(WorkflowStepDb).filter(WorkflowStepDb.step_type == 'policy_check'):
+            try:
+                config = json.loads(step.config) if isinstance(step.config, str) else step.config
+            except (TypeError, ValueError):
+                continue
+            if isinstance(config, dict) and policy_id_of(config) == policy_id:
+                steps += 1
+        gates = db.query(MaturityGateDb).filter(
+            MaturityGateDb.compliance_policy_id == policy_id,
+        ).count()
+        return {'workflowSteps': steps, 'maturityGates': gates}
+
+    @staticmethod
     def _settings():
         from src.common.config import get_settings
 

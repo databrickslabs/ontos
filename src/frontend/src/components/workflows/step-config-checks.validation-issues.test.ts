@@ -8,6 +8,20 @@ describe('workflowValidationIssueText', () => {
     await i18n.changeLanguage('en');
   });
 
+  it('translates a policy check on a policy that uses LLM_CHECK', async () => {
+    const issue = {
+      code: 'policy_check_policy_uses_llm_check',
+      message: "Step 'grain': the policy 'p1' uses LLM_CHECK",
+      params: { step: 'grain', policyId: 'p1' },
+    };
+    await i18n.changeLanguage('pt');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'A etapa "grain" verifica uma política que usa LLM_CHECK. LLM_CHECK só é avaliado em '
+      + 'execuções de conformidade, então a etapa reprovaria todas as entidades. Selecione '
+      + 'uma política sem LLM_CHECK.',
+    );
+  });
+
   it('translates a step pointing at a step that is not in the workflow', async () => {
     const issue = {
       code: 'step_unknown_reference',

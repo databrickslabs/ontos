@@ -430,11 +430,13 @@ class WorkflowsManager:
         return process_workflow_repo.delete(self._db, workflow_id)
 
     def policy_reference_errors(self, steps: Iterable[Any]) -> List[CodedMessage]:
-        """Errors for ``policy_check`` steps whose policy doesn't exist.
+        """Errors for ``policy_check`` steps whose policy doesn't exist or uses LLM_CHECK.
 
         An active workflow with such a step fails at run time ("Policy not
         found") on every event it handles, so it can't be activated. A step
         with no ``policy_id`` (a template still to be configured) counts too.
+        So does a policy with ``LLM_CHECK``: a policy check evaluates it without
+        a model (``llm_check_not_available``), so the step fails every entity.
         """
         from src.common.workflow_step_config import policy_id_of
 
@@ -447,23 +449,33 @@ class WorkflowsManager:
             return []
         from src.db_models.compliance import CompliancePolicyDb
 
+        from src.controller.compliance_manager import rule_uses_llm_check
+
         wanted = {policy_id for _, policy_id in checks if policy_id}
-        found = set()
+        rules: Dict[str, str] = {}
         if wanted:
-            found = {
-                row[0] for row in
-                self._db.query(CompliancePolicyDb.id)
+            rules = {
+                row[0]: row[1] for row in
+                self._db.query(CompliancePolicyDb.id, CompliancePolicyDb.rule)
                 .filter(CompliancePolicyDb.id.in_(wanted)).all()
             }
-        return [
-            CodedMessage(
-                f"Step '{step_id}': the policy to check "
-                + (f"'{policy_id}' does not exist" if policy_id else "is not selected"),
-                'policy_check_policy_missing', step=step_id, policyId=policy_id,
-            )
-            for step_id, policy_id in checks
-            if policy_id not in found
-        ]
+        errors = []
+        for step_id, policy_id in checks:
+            if policy_id not in rules:
+                errors.append(CodedMessage(
+                    f"Step '{step_id}': the policy to check "
+                    + (f"'{policy_id}' does not exist" if policy_id else "is not selected"),
+                    'policy_check_policy_missing', step=step_id, policyId=policy_id,
+                ))
+            elif rule_uses_llm_check(rules[policy_id]):
+                # LLM_CHECK isn't evaluated in a policy check (llm_check_not_available):
+                # the step would fail, and block, every entity it checks
+                errors.append(CodedMessage(
+                    f"Step '{step_id}': the policy '{policy_id}' uses LLM_CHECK, which is only "
+                    "evaluated in compliance runs, so the step would fail every entity",
+                    'policy_check_policy_uses_llm_check', step=step_id, policyId=policy_id,
+                ))
+        return errors
 
     def toggle_active(
         self,

@@ -247,7 +247,8 @@
       "llm_check_test_rate_limited": "Testes demais em pouco tempo. Tente de novo em {{retryAfter}} segundos.",
       "llm_check_entity_read_required": "Esta regra usa LLM_CHECK em entidades {{entityType}}. Executá-la ou testá-la exige acesso de leitura a elas.",
       "llm_check_admin_required": "Esta regra usa LLM_CHECK. Salvá-la, executá-la ou testá-la exige acesso de administrador à conformidade.",
-      "llm_check_daily_quota_exceeded": "Você usou suas {{limit}} chamadas ao modelo de LLM_CHECK de hoje. Tente de novo em {{retryAfter}} segundos (a contagem recomeça à meia-noite UTC)."
+      "llm_check_daily_quota_exceeded": "Você usou suas {{limit}} chamadas ao modelo de LLM_CHECK de hoje. Tente de novo em {{retryAfter}} segundos (a contagem recomeça à meia-noite UTC).",
+      "llm_check_policy_in_use": "Esta política é usada por {{workflowSteps}} verificações de política de workflows e {{maturityGates}} gates de maturidade. Eles não avaliam LLM_CHECK, então lá todas as entidades seriam reprovadas. Remova a política deles primeiro, ou use LLM_CHECK em uma política separada."
     },
     "usage": "LLM_CHECK: {{calls}} chamadas ao modelo, {{cached}} veredictos do cache."
   }

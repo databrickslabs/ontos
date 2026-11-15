@@ -363,6 +363,9 @@
       "unreachableSteps": "Diese Schritte sind vom ersten Schritt aus nicht erreichbar: {{steps}}.",
       "storedEntityTypeUnknown": "Der Trigger enthält \"{{entityType}}\", einen Entity-Typ, den es nicht mehr gibt. Er löst dafür nie aus.",
       "storedEntityTypeUnsupported": "Der Trigger-Typ „{{trigger}}“ löst nie für {{entity}} aus."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "Schritt \"{{step}}\" prüft eine Richtlinie, die LLM_CHECK verwendet. LLM_CHECK wird nur in Compliance-Läufen ausgewertet, daher würde der Schritt jede Entität ablehnen. Wählen Sie eine Richtlinie ohne LLM_CHECK."
     }
   },
   "approvalResponse": {

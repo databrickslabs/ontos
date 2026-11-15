@@ -1277,6 +1277,9 @@
       "created": "Volwassenheidsniveau \"{{name}}\" aangemaakt.",
       "deleted": "Volwassenheidsniveau \"{{name}}\" verwijderd.",
       "cannotDeleteTitle": "Kan niet verwijderen"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Dit beleid gebruikt LLM_CHECK, dat alleen in compliance-runs wordt geëvalueerd, dus een volwassenheidspoort zou elke entiteit laten mislukken. Selecteer een beleid zonder LLM_CHECK."
     }
   },
   "directory": {

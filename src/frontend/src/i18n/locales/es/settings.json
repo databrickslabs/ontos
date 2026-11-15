@@ -1259,6 +1259,9 @@
       "created": "Nivel de madurez \"{{name}}\" creado.",
       "deleted": "Nivel de madurez \"{{name}}\" eliminado.",
       "cannotDeleteTitle": "No se puede eliminar"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Esta política usa LLM_CHECK, que solo se evalúa en ejecuciones de cumplimiento, así que una puerta de madurez haría fallar todas las entidades. Selecciona una política sin LLM_CHECK."
     }
   },
   "directory": {

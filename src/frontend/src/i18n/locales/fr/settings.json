@@ -1259,6 +1259,9 @@
       "created": "Niveau de maturité « {{name}} » créé.",
       "deleted": "Niveau de maturité « {{name}} » supprimé.",
       "cannotDeleteTitle": "Suppression impossible"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Cette politique utilise LLM_CHECK, qui n’est évalué que dans les exécutions de conformité ; un seuil de maturité ferait donc échouer chaque entité. Sélectionnez une politique sans LLM_CHECK."
     }
   },
   "directory": {

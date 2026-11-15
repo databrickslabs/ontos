@@ -102,6 +102,11 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
         step: params.step,
         defaultValue: fallback,
       });
+    case 'policy_check_policy_uses_llm_check':
+      return t('workflows:designer.llmCheckIssues.policyCheckUsesLlmCheck', {
+        step: params.step,
+        defaultValue: fallback,
+      });
     default:
       if (!(issue.code.startsWith('condition_') || issue.code.startsWith('script_'))) {
         // An error the designer has no text for: the backend's English text.

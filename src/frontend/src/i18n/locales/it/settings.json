@@ -700,6 +700,10 @@
     "errorCodes": {
       "brandingPathTraversal": "Il percorso non può contenere segmenti \"..\""
     },
+    "loadFailed": {
+      "title": "Impossibile caricare le impostazioni attuali",
+      "description": "Il branding salvato non è stato caricato, quindi il salvataggio è disattivato per non sovrascriverlo con i valori predefiniti. Ricarica la pagina per riprovare."
+    },
     "messages": {
       "saveSuccess": "Impostazioni di personalizzazione salvate",
       "saveError": "Impossibile salvare le impostazioni",

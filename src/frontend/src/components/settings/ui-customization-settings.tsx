@@ -87,6 +87,8 @@ export default function UICustomizationSettings() {
     showPoweredBy: true,
   });
   const [isLoading, setIsLoading] = useState(true);
+  // A failed load leaves the defaults in the form; saving them would overwrite the stored values.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [previewTab, setPreviewTab] = useState<'edit' | 'preview'>('edit');
   const [logoError, setLogoError] = useState(false);
@@ -98,7 +100,9 @@ export default function UICustomizationSettings() {
       setIsLoading(true);
       try {
         const response = await fetch('/api/settings');
-        if (response.ok) {
+        if (!response.ok) {
+          setLoadFailed(true);
+        } else {
           const data = await response.json();
           setSettings({
             i18nEnabled: data.ui_i18n_enabled ?? true,
@@ -119,6 +123,7 @@ export default function UICustomizationSettings() {
         }
       } catch (error) {
         console.error('Failed to fetch settings:', error);
+        setLoadFailed(true);
       } finally {
         setIsLoading(false);
       }
@@ -127,6 +132,7 @@ export default function UICustomizationSettings() {
   }, []);
 
   const handleSaveSettings = async () => {
+    if (loadFailed) return;
     setIsSaving(true);
     try {
       const response = await fetch('/api/settings', {
@@ -273,6 +279,20 @@ export default function UICustomizationSettings() {
 
   return (
     <>
+      {loadFailed && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>
+            {t('settings:uiCustomization.loadFailed.title', 'Could not load the current settings')}
+          </AlertTitle>
+          <AlertDescription>
+            {t(
+              'settings:uiCustomization.loadFailed.description',
+              'The stored branding was not loaded, so saving is disabled to avoid overwriting it with defaults. Reload the page to try again.',
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <Palette className="w-8 h-8" />
@@ -782,7 +802,7 @@ export default function UICustomizationSettings() {
         </div>
         {hasWriteAccess && (
           <div className="pt-4">
-            <Button onClick={handleSaveSettings} disabled={isSaving}>
+            <Button onClick={handleSaveSettings} disabled={isSaving || loadFailed}>
               {isSaving ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (

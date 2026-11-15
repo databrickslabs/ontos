@@ -700,6 +700,10 @@
     "errorCodes": {
       "brandingPathTraversal": "La ruta no puede contener segmentos \"..\""
     },
+    "loadFailed": {
+      "title": "No se pudo cargar la configuración actual",
+      "description": "No se cargó la marca guardada, por lo que se desactivó el guardado para no sobrescribirla con valores predeterminados. Recargue la página para intentarlo de nuevo."
+    },
     "messages": {
       "saveSuccess": "Configuración de personalización guardada",
       "saveError": "Error al guardar la configuración",

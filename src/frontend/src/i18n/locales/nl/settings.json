@@ -718,6 +718,10 @@
     "errorCodes": {
       "brandingPathTraversal": "Het pad mag geen \"..\"-segmenten bevatten"
     },
+    "loadFailed": {
+      "title": "De huidige instellingen konden niet worden geladen",
+      "description": "De opgeslagen branding is niet geladen, dus opslaan is uitgeschakeld om te voorkomen dat deze met standaardwaarden wordt overschreven. Laad de pagina opnieuw om het nogmaals te proberen."
+    },
     "messages": {
       "saveSuccess": "UI-aanpassingsinstellingen opgeslagen",
       "saveError": "Kon instellingen niet opslaan",

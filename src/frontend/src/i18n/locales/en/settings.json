@@ -718,6 +718,10 @@
     "errorCodes": {
       "brandingPathTraversal": "The path must not contain \"..\" segments"
     },
+    "loadFailed": {
+      "title": "Could not load the current settings",
+      "description": "The stored branding was not loaded, so saving is disabled to avoid overwriting it with defaults. Reload the page to try again."
+    },
     "messages": {
       "saveSuccess": "UI customization settings saved",
       "saveError": "Failed to save UI customization settings",

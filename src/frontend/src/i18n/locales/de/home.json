@@ -49,8 +49,7 @@
       "noRequests": "Keine offenen Anfragen.",
       "openMyRequests": "Meine Anfragen öffnen",
       "myReviews": "Meine offenen Asset-Prüfungen ({{count}})",
-      "noReviews": "Keine offenen Asset-Prüfungen.",
-      "nothing": "Nichts nachzuverfolgen."
+      "noReviews": "Keine offenen Asset-Prüfungen."
     },
     "notices": {
       "reviewsTruncated": "Es werden nur die {{count}} zuletzt erstellten Prüfanfragen gelesen, daher können diese Zahlen und Lücken unvollständig sein.",

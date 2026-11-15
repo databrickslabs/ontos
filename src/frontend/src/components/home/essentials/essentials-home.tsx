@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import SearchBar from '@/components/ui/search-bar';
 import { UnityCatalogLogo } from '@/components/unity-catalog-logo';
 import ConnectedOverviewTile from '@/components/home/connected-overview-tile';
@@ -180,6 +181,9 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
   const showFind = searchShown || !!catalog;
   const showUnderstand = !!assets || !!conceptsTile;
   const showTrust = !!reviews;
+  // The producer part only shows what the user can use: no empty heading or card.
+  const showMaintain = !!myRequests || !!reviews;
+  const showProducer = !!assetsWrite || showMaintain || approvals;
   const statusLabel = (s: string) => t(`data-asset-reviews:status.${s}`);
   const catalogLink = (fqn: string) =>
     catalog ? `${catalog.path}/${encodeURIComponent(fqn)}` : null;
@@ -305,170 +309,175 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
         </section>
       )}
 
-      <section className="mb-8" data-testid="essentials-journey-producer">
-        <h2 className="text-2xl font-semibold mb-1">{t('home:essentials.producer.title')}</h2>
-        <p className="text-muted-foreground mb-4">{t('home:essentials.producer.description')}</p>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {assetsWrite && (
-            <JourneyCard
-              id="publish"
-              icon={<UploadCloud className="h-5 w-5" />}
-              title={t('home:essentials.publish.title')}
-              description={t('home:essentials.publish.description')}
-            >
-              {owned.error && <LoadError onRetry={owned.retry} />}
-              {owned.loading || (owned.error && owned.data.length === 0) ? null
-                : owned.data.length === 0 ? (
-                <Empty>{t('home:essentials.publish.noAssets')}</Empty>
-              ) : gaps.length === 0 ? (
-                <Empty>
-                  {owned.hasMore
-                    ? t('home:essentials.publish.noGapsLoaded')
-                    : t('home:essentials.publish.allDone')}
-                </Empty>
-              ) : (
-                <ul className="space-y-2 text-sm" data-testid="essentials-publish-gaps">
-                  {gaps.map((g) => (
-                    <li key={g.asset.id} className="flex flex-wrap items-center gap-2">
-                      <Link
-                        to={`${assetsWrite.path}/${g.asset.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {g.asset.name}
-                      </Link>
-                      {renderAssetBadge?.(g.asset)}
-                      {g.missingDescription && (
-                        <Badge variant="outline">
-                          {t('home:essentials.publish.noDescription')}
-                        </Badge>
-                      )}
-                      {g.missingReview && (
-                        <Badge variant="outline">{t('home:essentials.publish.noReview')}</Badge>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {owned.total > 0 && (
-                <div className="flex flex-wrap items-center gap-3 text-sm"
-                  data-testid="essentials-publish-paging">
-                  <span className="text-muted-foreground">
-                    {t('home:essentials.publish.more', {
-                      shown: owned.data.length, total: owned.total,
-                    })}
-                  </span>
-                  {owned.hasMore && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={owned.loadingMore}
-                      onClick={owned.loadMore}
-                    >
-                      {t('home:essentials.publish.loadMore')}
-                    </Button>
-                  )}
-                  <label className="ml-auto flex items-center gap-2 text-muted-foreground">
-                    {t('home:essentials.publish.pageSize')}
-                    <Select
-                      value={String(pageSize)}
-                      onValueChange={(v) => setPageSize(Number(v))}
-                    >
-                      <SelectTrigger
-                        className="h-8 w-[72px]"
-                        aria-label={t('home:essentials.publish.pageSize')}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PUBLISH_PAGE_SIZES.map((n) => (
-                          <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                </div>
-              )}
-              {reviewsWrite && (
-                <Button size="sm" onClick={() => setReviewDialogOpen(true)}>
-                  <ClipboardCheck className="h-4 w-4 mr-2" />
-                  {t('home:essentials.publish.requestReview')}
-                </Button>
-              )}
-            </JourneyCard>
-          )}
-
-          <JourneyCard
-            id="maintain"
-            icon={<Inbox className="h-5 w-5" />}
-            title={t('home:essentials.maintain.title')}
-            description={t('home:essentials.maintain.description')}
-          >
-            {myRequests && (
-              <div data-testid="essentials-maintain-requests">
-                <h3 className="text-sm font-semibold mb-1">
-                  {t('home:essentials.maintain.myRequests', {
-                    count: accessRequests.error ? '-' : accessRequests.total,
-                  })}
-                </h3>
-                {accessRequests.error ? (
-                  <LoadError onRetry={accessRequests.retry} />
-                ) : !accessRequests.loading && accessRequests.total === 0 ? (
-                  <Empty>{t('home:essentials.maintain.noRequests')}</Empty>
+      {showProducer && (
+        <section className="mb-8" data-testid="essentials-journey-producer">
+          <h2 className="text-2xl font-semibold mb-1">{t('home:essentials.producer.title')}</h2>
+          <p className="text-muted-foreground mb-4">{t('home:essentials.producer.description')}</p>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {assetsWrite && (
+              <JourneyCard
+                id="publish"
+                icon={<UploadCloud className="h-5 w-5" />}
+                title={t('home:essentials.publish.title')}
+                description={t('home:essentials.publish.description')}
+              >
+                {owned.error && <LoadError onRetry={owned.retry} />}
+                {owned.loading || (owned.error && owned.data.length === 0) ? null
+                  : owned.data.length === 0 ? (
+                  <Empty>{t('home:essentials.publish.noAssets')}</Empty>
+                ) : gaps.length === 0 ? (
+                  <Empty>
+                    {owned.hasMore
+                      ? t('home:essentials.publish.noGapsLoaded')
+                      : t('home:essentials.publish.allDone')}
+                  </Empty>
                 ) : (
-                  <ul className="space-y-1 text-sm">
-                    {accessRequests.data.slice(0, LIST_LIMIT).map((r) => (
-                      <li key={r.id} className="truncate">{r.entity_name || r.entity_id}</li>
-                    ))}
-                  </ul>
-                )}
-                <Link to={myRequests.path} className="text-sm text-primary hover:underline">
-                  {t('home:essentials.maintain.openMyRequests')}
-                </Link>
-              </div>
-            )}
-            {reviews && (
-              <div data-testid="essentials-maintain-reviews">
-                <h3 className="text-sm font-semibold mb-1">
-                  {t('home:essentials.maintain.myReviews', {
-                    count: reviewList.error ? '-' : openReviews.length,
-                  })}
-                </h3>
-                {reviewList.error ? (
-                  <LoadError onRetry={reviewList.retry} />
-                ) : !reviewList.loading && openReviews.length === 0 ? (
-                  <Empty>{t('home:essentials.maintain.noReviews')}</Empty>
-                ) : (
-                  <ul className="space-y-1 text-sm">
-                    {openReviews.slice(0, LIST_LIMIT).map((r) => (
-                      <li key={r.id} className="flex items-center justify-between gap-2">
+                  <ul className="space-y-2 text-sm" data-testid="essentials-publish-gaps">
+                    {gaps.map((g) => (
+                      <li key={g.asset.id} className="flex flex-wrap items-center gap-2">
                         <Link
-                          to={`${reviews.path}/${r.id}`}
-                          className="truncate hover:underline"
+                          to={`${assetsWrite.path}/${g.asset.id}`}
+                          className="font-medium hover:underline"
                         >
-                          {r.title || r.id}
+                          {g.asset.name}
                         </Link>
-                        <Badge variant="secondary">{statusLabel(r.status)}</Badge>
+                        {renderAssetBadge?.(g.asset)}
+                        {g.missingDescription && (
+                          <Badge variant="outline">
+                            {t('home:essentials.publish.noDescription')}
+                          </Badge>
+                        )}
+                        {g.missingReview && (
+                          <Badge variant="outline">{t('home:essentials.publish.noReview')}</Badge>
+                        )}
                       </li>
                     ))}
                   </ul>
                 )}
-              </div>
+                {owned.total > 0 && (
+                  <div className="flex flex-wrap items-center gap-3 text-sm"
+                    data-testid="essentials-publish-paging">
+                    <span className="text-muted-foreground">
+                      {t('home:essentials.publish.more', {
+                        shown: owned.data.length, total: owned.total,
+                      })}
+                    </span>
+                    {owned.hasMore && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={owned.loadingMore}
+                        onClick={owned.loadMore}
+                      >
+                        {t('home:essentials.publish.loadMore')}
+                      </Button>
+                    )}
+                    <div className="ml-auto flex items-center gap-2 text-muted-foreground">
+                      <Label
+                        htmlFor="essentials-publish-page-size"
+                        className="font-normal"
+                      >
+                        {t('home:essentials.publish.pageSize')}
+                      </Label>
+                      <Select
+                        value={String(pageSize)}
+                        onValueChange={(v) => setPageSize(Number(v))}
+                      >
+                        <SelectTrigger id="essentials-publish-page-size" className="h-8 w-[72px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PUBLISH_PAGE_SIZES.map((n) => (
+                            <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+                {reviewsWrite && (
+                  <Button size="sm" onClick={() => setReviewDialogOpen(true)}>
+                    <ClipboardCheck className="h-4 w-4 mr-2" />
+                    {t('home:essentials.publish.requestReview')}
+                  </Button>
+                )}
+              </JourneyCard>
             )}
-            {!myRequests && !reviews && <Empty>{t('home:essentials.maintain.nothing')}</Empty>}
-          </JourneyCard>
-        </div>
 
-        {approvals && (
-        <Card className="mt-4" data-testid="essentials-approvals">
-          <div className="px-6 py-4 border-b bg-muted/30">
-            <h3 className="font-semibold text-sm">{t('home:myActions.approvals')}</h3>
+            {showMaintain && (
+              <JourneyCard
+                id="maintain"
+                icon={<Inbox className="h-5 w-5" />}
+                title={t('home:essentials.maintain.title')}
+                description={t('home:essentials.maintain.description')}
+              >
+                {myRequests && (
+                  <div data-testid="essentials-maintain-requests">
+                    <h3 className="text-sm font-semibold mb-1">
+                      {t('home:essentials.maintain.myRequests', {
+                        count: accessRequests.error ? '-' : accessRequests.total,
+                      })}
+                    </h3>
+                    {accessRequests.error ? (
+                      <LoadError onRetry={accessRequests.retry} />
+                    ) : !accessRequests.loading && accessRequests.total === 0 ? (
+                      <Empty>{t('home:essentials.maintain.noRequests')}</Empty>
+                    ) : (
+                      <ul className="space-y-1 text-sm">
+                        {accessRequests.data.slice(0, LIST_LIMIT).map((r) => (
+                          <li key={r.id} className="truncate">{r.entity_name || r.entity_id}</li>
+                        ))}
+                      </ul>
+                  )}
+                  <Link to={myRequests.path} className="text-sm text-primary hover:underline">
+                    {t('home:essentials.maintain.openMyRequests')}
+                  </Link>
+                </div>
+              )}
+              {reviews && (
+                <div data-testid="essentials-maintain-reviews">
+                  <h3 className="text-sm font-semibold mb-1">
+                    {t('home:essentials.maintain.myReviews', {
+                      count: reviewList.error ? '-' : openReviews.length,
+                    })}
+                  </h3>
+                  {reviewList.error ? (
+                    <LoadError onRetry={reviewList.retry} />
+                  ) : !reviewList.loading && openReviews.length === 0 ? (
+                    <Empty>{t('home:essentials.maintain.noReviews')}</Empty>
+                  ) : (
+                    <ul className="space-y-1 text-sm">
+                      {openReviews.slice(0, LIST_LIMIT).map((r) => (
+                        <li key={r.id} className="flex items-center justify-between gap-2">
+                          <Link
+                            to={`${reviews.path}/${r.id}`}
+                            className="truncate hover:underline"
+                          >
+                            {r.title || r.id}
+                          </Link>
+                          <Badge variant="secondary">{statusLabel(r.status)}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </JourneyCard>
+            )}
           </div>
-          <CardContent className="p-0 max-h-[400px] overflow-auto">
-            <RequiredActionsSection fetchQueue={approvals} />
-          </CardContent>
-        </Card>
-        )}
-      </section>
+
+          {approvals && (
+          <Card className="mt-4" data-testid="essentials-approvals">
+            <div className="px-6 py-4 border-b bg-muted/30">
+              <h3 className="font-semibold text-sm">{t('home:myActions.approvals')}</h3>
+            </div>
+            <CardContent className="p-0 max-h-[400px] overflow-auto">
+              <RequiredActionsSection fetchQueue={approvals} />
+            </CardContent>
+          </Card>
+          )}
+        </section>
+      )}
 
       {reviewDialogOpen && (
         <CreateReviewRequestDialog

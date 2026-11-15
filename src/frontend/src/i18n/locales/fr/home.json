@@ -49,8 +49,7 @@
       "noRequests": "Aucune demande en attente.",
       "openMyRequests": "Ouvrir Mes demandes",
       "myReviews": "Mes revues d'actifs en cours ({{count}})",
-      "noReviews": "Aucune revue d'actif en cours.",
-      "nothing": "Rien à suivre."
+      "noReviews": "Aucune revue d'actif en cours."
     },
     "notices": {
       "reviewsTruncated": "Seules les {{count}} demandes de revue les plus récemment créées sont lues, ces totaux et lacunes peuvent donc être incomplets.",

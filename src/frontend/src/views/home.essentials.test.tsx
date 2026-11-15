@@ -226,7 +226,11 @@ describe('Home by role home section', () => {
     expect(screen.queryByTestId('essentials-section-publish')).not.toBeInTheDocument();
     expect(screen.queryByTestId('essentials-maintain-requests')).not.toBeInTheDocument();
     expect(screen.queryByTestId('essentials-maintain-reviews')).not.toBeInTheDocument();
-    expect(screen.getByText('Nothing to follow up.')).toBeInTheDocument();
+    // A consumer-only user gets no producer part: no heading, Maintain card or approvals.
+    expect(screen.queryByTestId('essentials-journey-producer')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('essentials-section-maintain')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('essentials-approvals')).not.toBeInTheDocument();
+    expect(screen.queryByText('Share data')).not.toBeInTheDocument();
     expect(screen.queryByText('Browse the Data Catalog')).not.toBeInTheDocument();
     await waitFor(() => expect(state.calls).toContain('/api/assets?limit=1'));
     expect(state.calls.some((u) => u.startsWith('/api/data-asset-reviews'))).toBe(false);
@@ -274,7 +278,11 @@ describe('Home by role home section', () => {
     expect(within(paging).getByText('Showing 25 of your 30 assets.')).toBeInTheDocument();
     expect(state.calls).toContain('/api/assets?owned_by_me=true&skip=0&limit=25');
     expect(state.calls.some((u) => /^\/api\/assets\/m\d/.test(u))).toBe(false);
+    // The page-size label is bound to its select (no label wrapping the select).
     expect(within(paging).getByRole('combobox', { name: 'Per page' })).toHaveTextContent('25');
+    expect(within(paging).getByText('Per page').tagName).toBe('LABEL');
+    expect(within(paging).getByText('Per page').closest('label')).toHaveAttribute(
+      'for', 'essentials-publish-page-size');
 
     await act(async () => {
       within(paging).getByRole('button', { name: 'Load more' }).click();

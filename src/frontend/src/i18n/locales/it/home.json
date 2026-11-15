@@ -49,8 +49,7 @@
       "noRequests": "Nessuna richiesta in sospeso.",
       "openMyRequests": "Apri Le mie richieste",
       "myReviews": "Le mie revisioni di asset aperte ({{count}})",
-      "noReviews": "Nessuna revisione di asset aperta.",
-      "nothing": "Niente da seguire."
+      "noReviews": "Nessuna revisione di asset aperta."
     },
     "notices": {
       "reviewsTruncated": "Vengono lette solo le {{count}} richieste di revisione create più di recente, quindi questi conteggi e lacune potrebbero essere incompleti.",

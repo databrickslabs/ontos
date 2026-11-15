@@ -49,8 +49,7 @@
       "noRequests": "No pending requests.",
       "openMyRequests": "Open My Requests",
       "myReviews": "My open asset reviews ({{count}})",
-      "noReviews": "No open asset reviews.",
-      "nothing": "Nothing to follow up."
+      "noReviews": "No open asset reviews."
     },
     "notices": {
       "reviewsTruncated": "Only the {{count}} most recently created review requests are read, so these counts and gaps may be incomplete.",

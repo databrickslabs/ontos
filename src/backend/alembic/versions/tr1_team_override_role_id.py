@@ -1,7 +1,7 @@
 """Store team member role overrides by role id
 
-Revision ID: s2_team_override_role_id
-Revises: r2_canonical_relationship_types
+Revision ID: tr1_team_override_role_id
+Revises: o2_step_execution_message
 Create Date: 2026-11-12
 
 Team entries stored the role name, so renaming or deleting a role dropped its
@@ -20,8 +20,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = 's2_team_override_role_id'
-down_revision: Union[str, None] = 'r2_canonical_relationship_types'
+revision: str = 'tr1_team_override_role_id'
+down_revision: Union[str, None] = 'o2_step_execution_message'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

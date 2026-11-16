@@ -209,6 +209,30 @@ def test_run_now_clicks_do_not_count_misses(db_session, sync, importer, source):
     assert workbook.properties[MISSED_PROPERTY] == 1 and workbook.status == "active"
 
 
+def test_a_failed_retirement_leaves_no_partial_changes_behind(db_session, sync, importer, source, monkeypatch):
+    sync.retire_after_misses = 1
+    _run(db_session, sync, importer)
+    workbook, view = _asset(db_session, WB), _asset(db_session, f"{WB}.v~v1")
+    source.workbooks.pop()
+    saves = []
+    original_save = ConnectorSyncManager._save
+
+    def failing_save(db, asset, props):
+        if len(saves) == 1:  # the first asset is already retired in the session when the second fails
+            raise RuntimeError("disk full")
+        saves.append(asset.id)
+        original_save(db, asset, props)
+
+    monkeypatch.setattr(ConnectorSyncManager, "_save", staticmethod(failing_save))
+    summary = _run(db_session, sync, importer)
+
+    assert summary["status"] == "failed" and len(saves) == 1
+    db_session.expire_all()
+    assert (workbook.status, view.status) == ("active", "active")
+    assert MISSED_PROPERTY not in workbook.properties and MISSED_PROPERTY not in view.properties
+    assert sync.last_status == "failed"
+
+
 def test_a_field_dropped_from_a_changed_data_source_counts_a_miss(db_session, sync, importer, source):
     _run(db_session, sync, importer)
     source.datasources[0]["updatedAt"] = T1

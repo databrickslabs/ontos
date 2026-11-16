@@ -202,6 +202,7 @@
       "tag_entity_without_id": "Das Objekt hat keine ID",
       "notification_manager_unavailable": "Benachrichtigungen sind in diesem Lauf nicht verfügbar",
       "notify_no_recipients": "{{recipients}} ergibt keinen Empfänger",
+      "notify_unknown_recipient": "{{recipient}} ist kein bekannter Empfänger: Verwenden Sie eine E-Mail-Adresse, group:<Name>, eine App-Rolle oder ein Empfänger-Schlüsselwort",
       "action_failed": "Die Aktion ist fehlgeschlagen"
     }
   }

@@ -202,6 +202,7 @@
       "tag_entity_without_id": "エンティティに ID がありません",
       "notification_manager_unavailable": "この実行では通知を利用できません",
       "notify_no_recipients": "{{recipients}} に該当する受信者がいません",
+      "notify_unknown_recipient": "{{recipient}} は既知の受信者ではありません。メールアドレス、group:<名前>、アプリロール、または受信者キーワードを使用してください",
       "action_failed": "アクションに失敗しました"
     }
   }

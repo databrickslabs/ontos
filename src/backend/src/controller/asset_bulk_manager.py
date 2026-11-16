@@ -19,6 +19,7 @@ from openpyxl import load_workbook
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from src.common.errors import ValidationError
 from src.common.logging import get_logger
 from src.controller.assets_manager import AssetsManager
 from src.db_models.assets import AssetDb, AssetRelationshipDb
@@ -153,6 +154,42 @@ class AssetBulkManager:
         self._asset_repo = asset_repo
         self._rel_repo = asset_relationship_repo
         logger.debug("AssetBulkManager initialized.")
+
+    def _validate_row_properties(
+        self, db: Session, type_id: UUID, properties: Optional[Dict[str, Any]],
+    ) -> None:
+        """Check a row's properties against the type's JSON schema, as POST/PUT /api/assets do.
+
+        Needs the wired AssetsManager (it carries the ontology); without one
+        there is nothing to check.
+        Raises ValidationError (422) on a violation.
+        """
+        if self._assets_manager is None or not properties:
+            return
+        self._assets_manager._validate_properties(db, type_id, properties)
+
+    def index_committed_import(self, db: Session, result: "ImportResult") -> None:
+        """Index the assets an import wrote, in one batch. Call only after the DB commit.
+
+        Indexing inside execute_import ran before the request committed: a rollback
+        left index entries for assets that do not exist. Failures here are logged,
+        not raised: the data is already committed.
+        """
+        if self._assets_manager is None:
+            return
+        asset_ids = [
+            UUID(item.asset_id)
+            for item in result.items
+            if item.asset_id and item.action in (ImportAction.CREATE, ImportAction.UPDATE)
+        ]
+        if not asset_ids:
+            return
+        try:
+            self._assets_manager.upsert_search_index_for(db, asset_ids)
+        except Exception:
+            logger.warning(
+                "Failed to index %d assets after bulk import", len(asset_ids), exc_info=True,
+            )
 
     def _set_asset_domains(self, db, asset_id, domain_ids, primary_domain_id, user):
         """Replace an asset's domain assignments from a bulk-import row (no-op if empty)."""
@@ -497,11 +534,18 @@ class AssetBulkManager:
                 result.items.append(item)
                 continue
 
-            # Validate properties JSON
+            # Validate properties JSON and the type's schema
             try:
-                _parse_properties(row.get("properties", ""))
+                preview_props = _parse_properties(row.get("properties", ""))
             except ValueError as e:
                 item.message = str(e)
+                result.errors += 1
+                result.items.append(item)
+                continue
+            try:
+                self._validate_row_properties(db, type_id, preview_props)
+            except ValidationError as e:
+                item.message = str(e.detail)
                 result.errors += 1
                 result.items.append(item)
                 continue
@@ -609,11 +653,18 @@ class AssetBulkManager:
                 result.items.append(item)
                 continue
 
-            # Parse properties
+            # Parse properties, then check them against the type's schema (as the single routes do)
             try:
                 properties = _parse_properties(row.get("properties", ""))
             except ValueError as e:
                 item.message = str(e)
+                result.errors += 1
+                result.items.append(item)
+                continue
+            try:
+                self._validate_row_properties(db, type_id, properties)
+            except ValidationError as e:
+                item.message = str(e.detail)
                 result.errors += 1
                 result.items.append(item)
                 continue

@@ -1,11 +1,11 @@
 import uuid # Import uuid
-from datetime import datetime # Import datetime
 from typing import Dict, Optional, List
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 
+from src.common.timestamps import utc_now
 from src.models.users import UserInfo
 from src.models.users import UserPermissions, UserNavigation
 from src.models.notifications import Notification, NotificationType
@@ -444,7 +444,7 @@ async def request_role_access(
 
     # Fallback to direct notification if no workflow configured
     placeholder_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = utc_now()
 
     try:
         approver_list = ", ".join(approver_role_names)

@@ -414,6 +414,12 @@ def get_db_url(settings: Settings) -> str:
     else:
         logger.info("No specific PostgreSQL schema configured, using default (public).")
     
+    # Timestamp columns are timestamptz: a naive datetime written into one is read in the
+    # session's time zone, so pin it to UTC. Naive UTC values (datetime.utcnow(), column
+    # defaults) are then stored as what they are instead of shifted by the server's offset
+    # (#1449). The schema has no timestamp-without-time-zone columns.
+    options_list.append("-ctimezone=UTC")
+
     # Add statement timeout to prevent indefinite locks (30 seconds)
     # This helps prevent stuck transactions when operations fail
     options_list.append("-cstatement_timeout=30000")

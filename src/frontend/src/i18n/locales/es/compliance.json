@@ -202,6 +202,7 @@
       "tag_entity_without_id": "La entidad no tiene id",
       "notification_manager_unavailable": "Las notificaciones no están disponibles en esta ejecución",
       "notify_no_recipients": "{{recipients}} no corresponde a ningún destinatario",
+      "notify_unknown_recipient": "{{recipient}} no es un destinatario conocido: use un correo electrónico, group:<nombre>, un rol de la aplicación o una palabra clave de destinatario",
       "action_failed": "La acción falló"
     }
   }

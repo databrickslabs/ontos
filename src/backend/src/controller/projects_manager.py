@@ -288,13 +288,17 @@ class ProjectsManager(SearchableAsset):
             logger.warning(f"visible_project_ids check failed; denying by default: {e}")
             return set()
 
-    def get_user_projects(self, db: Session, user_identifier: str, user_groups: List[str]) -> UserProjectAccess:
-        """Gets all projects that a user has access to through team membership."""
+    def get_user_projects(
+        self, db: Session, user_identifier: str, user_groups: List[str], is_admin: bool = False,
+    ) -> UserProjectAccess:
+        """Gets all projects that a user has access to through team membership.
+
+        ``is_admin`` (the configured admin groups, ``is_user_admin``) returns every
+        project. A group name containing "admin" doesn't make the user an admin.
+        """
         logger.debug(f"Fetching accessible projects for user: {user_identifier}")
 
         try:
-            # Check if user is admin
-            is_admin = any("admin" in group.lower() for group in user_groups) if user_groups else False
             logger.debug(f"User {user_identifier} admin status: {is_admin}")
 
             if is_admin:

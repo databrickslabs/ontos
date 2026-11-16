@@ -36,8 +36,8 @@ jobs:
           # PRs only; leave issues alone.
           days-before-issue-stale: -1
           days-before-issue-close: -1
-          days-before-pr-stale: 30
-          days-before-pr-close: 30
+          days-before-pr-stale: 15
+          days-before-pr-close: 15
           stale-pr-label: stale
           exempt-pr-labels: keep-open
           remove-pr-stale-when-updated: true

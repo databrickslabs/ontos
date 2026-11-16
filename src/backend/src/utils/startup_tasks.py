@@ -63,7 +63,6 @@ from src.repositories.tags_repository import (
     tag_namespace_repo, tag_repo, tag_namespace_permission_repo, entity_tag_repo
 )
 
-from src.common.search_registry import SEARCHABLE_ASSET_MANAGERS
 
 # Import connector registry and connectors for pluggable asset support
 from src.connectors import get_registry
@@ -560,8 +559,7 @@ def initialize_managers(app: FastAPI):
                 # entity_assoc_repo will be used when integrating with other features
             )
             app.state.tags_manager = tags_manager
-            SEARCHABLE_ASSET_MANAGERS.append(tags_manager) # Register for search
-            logger.info("TagsManager initialized and registered for search.")
+            logger.info("TagsManager initialized.")
 
             # Now instantiate DataProductsManager with TagsManager dependency
             app.state.data_products_manager = DataProductsManager(

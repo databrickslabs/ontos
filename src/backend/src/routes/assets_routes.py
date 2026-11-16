@@ -10,7 +10,8 @@ from src.models.assets import (
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteRequest, CascadeDeleteResult,
 )
-from src.controller.assets_manager import assets_manager
+from src.common import manager_dependencies
+from src.controller.assets_manager import AssetsManager, assets_manager
 from src.controller.metric_views_manager import (
     MetricViewNotFoundError, MetricViewsManager, UserClientUnavailableError, UserTokenRequiredError,
 )
@@ -41,8 +42,17 @@ assets_router = APIRouter(prefix="/api/assets", tags=["Assets"])
 FEATURE_ID = "assets"
 
 
-def get_assets_manager():
-    return assets_manager
+def get_assets_manager(request: Request = None) -> AssetsManager:
+    """The AssetsManager wired at startup (``app.state.assets_manager``).
+
+    That instance has the search manager and the ontology; the module-level
+    singleton has neither, so using it would silently skip the search index
+    update. With a request and no wired manager this raises 503 (same as every
+    other manager dependency). The singleton is returned only without a request.
+    """
+    if request is None:
+        return assets_manager
+    return manager_dependencies.get_assets_manager(request)
 
 
 def _get_data_products_manager(request: Request):

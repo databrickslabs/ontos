@@ -741,6 +741,8 @@ class WorkflowStepExecutionResult(BaseModel):
     passed: Optional[bool] = None
     result_data: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
+    # The step's message (results recorded before it was stored have none)
+    message: Optional[str] = None
     duration_ms: Optional[float] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None

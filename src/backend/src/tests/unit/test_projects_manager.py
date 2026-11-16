@@ -240,6 +240,19 @@ class TestProjectsManager:
         # User with no groups and project with no team should have no access
         assert result is False
 
+    def test_get_user_projects_group_named_admin_is_not_admin(
+        self, manager, db_session, sample_project_db
+    ):
+        """A group whose name contains "admin" gets only its team projects; the
+        data product routes also resolve a caller's project scope this way."""
+        result = manager.get_user_projects(
+            db_session, "user@example.com", ["billing-admin-viewers"]
+        )
+        assert sample_project_db.id not in {p.id for p in result.projects}
+
+        admin = manager.get_user_projects(db_session, "user@example.com", ["admins"], is_admin=True)
+        assert sample_project_db.id in {p.id for p in admin.projects}
+
     # =====================================================================
     # Summary Tests
     # =====================================================================

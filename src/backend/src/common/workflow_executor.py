@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.db_models.process_workflows import WorkflowStepDb, WorkflowExecutionDb
 from src.models.process_workflows import (
     ProcessWorkflow,
@@ -249,6 +250,13 @@ APPROVAL_CANCELLED_BY_ADMIN = 'cancelled_by_admin'
 def approver_key(target: str, role_id: Optional[str]) -> str:
     """Identifies one resolved notification target of an approval step (#1119)."""
     return f"role:{role_id}" if role_id else f"principal:{str(target).strip().lower()}"
+
+
+# Keys of a decided approval's step record that are not the approver's fields:
+# the entry later steps see has ``decision`` and the fields the approver sent.
+_APPROVAL_RECORD_KEYS = frozenset({
+    'approval_result', 'responded_by', 'decisions', 'error_code', 'error_params',
+})
 
 
 def _json_object(text: Optional[str]) -> Dict[str, Any]:
@@ -1105,7 +1113,7 @@ class ApprovalStepHandler(StepHandler):
 
                     notification = Notification(
                         id=str(uuid4()),
-                        created_at=datetime.utcnow(),
+                        created_at=utc_now(),
                         type=NotificationType.ACTION_REQUIRED,
                         title="Approval Required",
                         subtitle=subtitle,
@@ -1258,7 +1266,7 @@ class NotificationStepHandler(StepHandler):
                     try:
                         notification = Notification(
                             id=str(uuid4()),
-                            created_at=datetime.utcnow(),
+                            created_at=utc_now(),
                             type=notification_type,
                             title=title,
                             subtitle=subtitle,
@@ -2028,7 +2036,6 @@ class CreateAssetReviewStepHandler(StepHandler):
                 ReviewRequestStatus, ReviewedAssetStatus, AssetType, app_entity_asset_type,
             )
             from uuid import uuid4
-            from datetime import datetime
             
             review_id = str(uuid4())
             
@@ -2043,10 +2050,11 @@ class CreateAssetReviewStepHandler(StepHandler):
                     asset_fqn=fqn,
                     asset_type=asset_type,
                     status=ReviewedAssetStatus.PENDING,
-                    updated_at=datetime.utcnow(),
+                    updated_at=utc_now(),
                 ))
             
             # Create full request model
+            now = utc_now()
             full_request = DataAssetReviewRequest(
                 id=review_id,
                 requester_email=requester_email,
@@ -2054,8 +2062,8 @@ class CreateAssetReviewStepHandler(StepHandler):
                 title=title,
                 status=ReviewRequestStatus.QUEUED,
                 notes=full_notes,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=now,
+                updated_at=now,
                 assets=assets_to_review,
             )
             
@@ -3161,7 +3169,7 @@ class WorkflowExecutor:
                 raise ValueError(f"Execution {execution_id} not found")
             # Reset execution state for retry
             db_execution.status = ExecutionStatus.RUNNING.value
-            db_execution.started_at = datetime.now()
+            db_execution.started_at = utc_now()
             db_execution.finished_at = None
             db_execution.error_message = None
             db_execution.current_step_id = None
@@ -3233,6 +3241,7 @@ class WorkflowExecutor:
                 passed=result.passed,
                 result_data=result.data,
                 error_message=result.error,
+                message=result.message,
                 duration_ms=duration_ms,
             )
             
@@ -3278,7 +3287,7 @@ class WorkflowExecutor:
                 success_count=success_count,
                 failure_count=failure_count,
                 error_message=error_message,
-                finished_at=datetime.utcnow(),
+                finished_at=utc_now(),
             )
         
         # Return execution with results
@@ -3543,6 +3552,64 @@ class WorkflowExecutor:
             'rejection': rejection,
         }
 
+    def _restored_step_results(
+        self, execution_id: str, steps_by_id: Dict[str, Any],
+    ) -> Dict[str, Dict[str, Any]]:
+        """``step_results`` of the steps an execution ran before it paused (#1437).
+
+        Each step's last run gives the entry ``execute_workflow`` built for it:
+        ``passed``, ``message`` and ``data``, plus a conditional's ``branch``. A
+        decided approval gives the entry ``resume_workflow`` built: ``passed``,
+        ``decision`` and the approver's fields. An approval's pause record is
+        skipped: its decision, when there is one, is the result later steps saw.
+        Rows are read in insertion order (``started_at``, and SQLite keeps whole
+        seconds), so a later run of a step replaces an earlier one. Results
+        stored before messages were kept have no message. Wizard fields merged
+        into an earlier approval's entry are not restored: only the approval
+        being resumed merges them.
+        """
+        from src.db_models.process_workflows import WorkflowStepExecutionDb
+
+        # Only the columns the entries need: result_data can be large, and this
+        # runs while the execution's row is locked
+        rows = (
+            self._db.query(
+                WorkflowStepExecutionDb.step_key,
+                WorkflowStepExecutionDb.passed,
+                WorkflowStepExecutionDb.message,
+                WorkflowStepExecutionDb.result_data,
+            )
+            .filter(WorkflowStepExecutionDb.execution_id == execution_id)
+            .order_by(WorkflowStepExecutionDb.started_at.asc())
+            .all()
+        )
+        restored: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            key = row.step_key
+            if not key:
+                continue
+            data = _json_object(row.result_data) if row.result_data else None
+            step = steps_by_id.get(key)
+            step_type = getattr(step, 'step_type', None) if step is not None else None
+            if data and 'approval_result' in data:
+                restored[key] = {
+                    'passed': row.passed,
+                    'decision': data['approval_result'],
+                    **{
+                        k: v for k, v in data.items()
+                        if k not in _APPROVAL_RECORD_KEYS
+                    },
+                }
+                continue
+            if step_type == StepType.APPROVAL:
+                continue  # the pause record of an undecided round
+            entry: Dict[str, Any] = {'passed': row.passed, 'message': row.message, 'data': data}
+            if is_conditional_step_type(step_type) and isinstance(data, dict) \
+                    and data.get('branch') in ('true', 'false'):
+                entry['branch'] = data['branch']
+            restored[key] = entry
+        return restored
+
     def resume_workflow(
         self,
         execution_id: str,
@@ -3685,12 +3752,16 @@ class WorkflowExecutor:
             execution_id=execution_id,
             workflow_id=workflow.id,
             workflow_name=workflow.name,
-            step_results={current_step_id: {
-                'passed': step_result,
-                'decision': 'approved' if step_result else 'rejected',
-                # Flatten result_data so ${step_results.approve.reason} works directly
-                **(result_data or {}),
-            }},
+            # The steps that ran before the pause, then this decision (#1437)
+            step_results={
+                **self._restored_step_results(execution_id, steps_by_id),
+                current_step_id: {
+                    'passed': step_result,
+                    'decision': 'approved' if step_result else 'rejected',
+                    # Flatten result_data so ${step_results.approve.reason} works directly
+                    **(result_data or {}),
+                },
+            },
             on_behalf_of=on_behalf_of,
         )
 
@@ -3825,6 +3896,7 @@ class WorkflowExecutor:
                 passed=result.passed,
                 result_data=result.data,
                 error_message=result.error,
+                message=result.message,
                 duration_ms=duration_ms,
             )
             
@@ -3871,7 +3943,7 @@ class WorkflowExecutor:
                 success_count=success_count,
                 failure_count=failure_count,
                 error_message=error_message,
-                finished_at=datetime.utcnow(),
+                finished_at=utc_now(),
             )
             
             # Handle entity status updates based on workflow outcome
@@ -4046,7 +4118,7 @@ class WorkflowExecutor:
 
         notification_repo.create(db=self._db, obj_in=Notification(
             id=str(uuid4()),
-            created_at=datetime.utcnow(),
+            created_at=utc_now(),
             type=NotificationType.WARNING,
             title="Contract status not changed",
             subtitle=trigger_context.entity_name or trigger_context.entity_id,
@@ -4612,7 +4684,7 @@ class WorkflowExecutor:
             sent.add(recipient)
             notification_repo.create(db=self._db, obj_in=Notification(
                 id=str(uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
                 type=NotificationType.WARNING,
                 title="Status change not applied",
                 subtitle=trigger_context.entity_name or product_id,
@@ -4678,6 +4750,7 @@ class WorkflowExecutor:
                 passed=se.passed,
                 result_data=json.loads(se.result_data) if se.result_data else None,
                 error_message=se.error_message,
+                message=se.message,
                 duration_ms=se.duration_ms,
                 started_at=se.started_at,
                 finished_at=se.finished_at,

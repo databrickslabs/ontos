@@ -688,3 +688,98 @@ class TestCancelNotAtAnApproval:
         assert _requester_notices(db_session) == []
         audits = _cancel_audits(db_session, paused_id)
         assert len(audits) == 1 and 'override' not in audits[0]
+
+
+def _shared_role_execution(client, as_user, db_session, *, loop_back=False):
+    """A require_all step for Carl and a role Carl and Dora are assigned to (#1552).
+
+    ``loop_back``: a rejection asks the same step again (a new round).
+    """
+    role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+    as_user(ADMIN)
+    response = client.post('/api/workflows', json={
+        'name': f'Shared role {uuid.uuid4().hex[:8]}',
+        'trigger': {'type': 'manual', 'entity_types': ['data_product']},
+        'is_active': True,
+        'steps': [
+            {
+                'step_id': 'approve', 'name': 'Approve', 'step_type': 'approval',
+                'config': {'approvers': f'carl@example.com,{role.id}', 'require_all': True},
+                'on_pass': 'ok', 'on_fail': 'approve' if loop_back else 'no',
+            },
+            {'step_id': 'ok', 'name': 'Approved', 'step_type': 'pass'},
+            {'step_id': 'no', 'name': 'Rejected', 'step_type': 'fail'},
+        ],
+    })
+    assert response.status_code == 200, response.text
+    response = client.post(
+        f"/api/workflows/{response.json()['id']}/execute",
+        params={'entity_type': 'data_product', 'entity_id': str(uuid.uuid4())},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()['status'] == 'paused', response.json()
+    return role, response.json()['id']
+
+
+def _my_actions(client, as_user, identity, execution_id):
+    """The open approvals of the execution the user is listed: target -> count."""
+    as_user(identity)
+    response = client.get('/api/notifications')
+    assert response.status_code == 200, response.text
+    targets = {}
+    for n in response.json():
+        payload = n.get('action_payload') or {}
+        if (
+            n.get('action_type') == 'workflow_approval'
+            and payload.get('execution_id') == execution_id and not payload.get('handled')
+        ):
+            target = n.get('recipient_role_id') or n.get('recipient')
+            targets[target] = targets.get(target, 0) + 1
+    return targets
+
+
+class TestSharedTargetDecidedByTheUser:
+    """#1552: a role or group target is one shared row. Who decided the step through
+    another target is recorded on it, and the row leaves only that user's list."""
+
+    def test_the_user_who_decided_no_longer_lists_the_role_row(
+        self, client, as_user, db_session,
+    ):
+        role, execution_id = _shared_role_execution(client, as_user, db_session)
+        assert _my_actions(client, as_user, CARL, execution_id) == {
+            'carl@example.com': 1, role.id: 1,
+        }
+
+        # Carl fills his own user target; the role still waits for a member
+        first = _decide(client, as_user, CARL, execution_id)
+        assert first.json()['status'] == 'paused', first.text
+
+        assert _my_actions(client, as_user, CARL, execution_id) == {}
+
+    def test_another_member_of_the_role_still_lists_it(self, client, as_user, db_session):
+        role, execution_id = _shared_role_execution(client, as_user, db_session)
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+
+        assert _my_actions(client, as_user, DORA, execution_id) == {role.id: 1}
+        response = _decide(client, as_user, DORA, execution_id)
+        assert response.json()['status'] == 'succeeded', response.text
+
+    def test_a_loop_back_round_is_listed_again_for_the_user_who_decided(
+        self, client, as_user, db_session,
+    ):
+        """The new round of the same step has rows of its own: Carl's earlier
+        decision doesn't hide them."""
+        role, execution_id = _shared_role_execution(
+            client, as_user, db_session, loop_back=True,
+        )
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+        assert _my_actions(client, as_user, CARL, execution_id) == {}
+
+        # Dora rejects for the role: the step fails and asks the same step again
+        again = _decide(client, as_user, DORA, execution_id, approved=False, reason='Redo')
+        assert again.json()['status'] == 'paused', again.text
+
+        assert _my_actions(client, as_user, CARL, execution_id) == {
+            'carl@example.com': 1, role.id: 1,
+        }
+        assert _my_actions(client, as_user, DORA, execution_id) == {role.id: 1}

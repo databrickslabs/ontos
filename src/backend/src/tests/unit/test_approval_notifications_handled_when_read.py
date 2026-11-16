@@ -79,3 +79,22 @@ def test_require_all_handles_the_read_notification_of_the_target_that_decided(db
     assert _payload(db_session, group)['handled_by'] == 'cleo@example.com'
     # Ben's target is still pending: his opened notification stays open
     assert 'handled' not in _payload(db_session, other)
+
+
+def test_require_all_records_who_decided_on_the_targets_still_open(db_session):
+    """#1552: Carl filled his own target. The group row stays open for the other
+    members, and records that Carl decided the step."""
+    execution_id = f'exec-{uuid.uuid4().hex[:8]}'
+    own = _approval(db_session, execution_id, read=False, recipient='carl@example.com')
+    group = _approval(db_session, execution_id, read=False, recipient='team-x')
+
+    _mark_decided_approver_notifications(db_session, execution_id, 'approve', [{
+        'target': 'carl@example.com', 'role_id': None, 'decided_by': 'Carl@Example.com',
+        'decision': 'approved', 'at': '2026-11-16T09:00:00',
+    }])
+
+    assert _payload(db_session, own)['handled'] is True
+    payload = _payload(db_session, group)
+    assert 'handled' not in payload
+    assert payload['decided_by'] == ['carl@example.com']
+    assert group.read is False

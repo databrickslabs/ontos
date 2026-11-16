@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session # Import Session for type hinting
 from pydantic import ValidationError # Import for error handling
 
 from src.common.timestamps import utc_now
+from src.common.workflow_approvals import has_decided
 from src.models.notifications import Notification, NotificationType # Import the enum too
 # Import SettingsManager for role lookups
 from typing import TYPE_CHECKING
@@ -160,6 +161,10 @@ class NotificationsManager:
                 n.recipient_role_name = target_role.name
             # Broadcast: no recipient and no known role
             broadcast = not n.recipient and membership.role_of(None, n.recipient_role_id) is None
+            # A role or group approval shared with others: not this user's once they
+            # decided its step through another target (one decision per person, #1552)
+            if n.action_type == 'workflow_approval' and has_decided(n, user_info):
+                continue
             if broadcast or membership.is_recipient(n.recipient, n.recipient_role_id):
                 # Admins can delete any notification they can see
                 if membership.is_admin:

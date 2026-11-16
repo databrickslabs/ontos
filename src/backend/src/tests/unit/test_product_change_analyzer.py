@@ -201,6 +201,24 @@ class TestOutputPortChanges:
         assert result.change_type == ChangeType.BREAKING
         assert result.version_bump == "major"
 
+    @pytest.mark.parametrize("stored, sent", [
+        ('{"host": "kafka-a", "port": null}', {"host": "kafka-a"}),
+        ('{bad', '{bad'),
+    ])
+    def test_a_server_stored_as_json_text_compares_by_value(self, stored, sent):
+        old = _with_ports("outputPorts", [_out(server=stored)])
+        new = _with_ports("outputPorts", [_out(server=sent)])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.NONE
+
+    def test_a_server_stored_as_json_text_that_changed_is_breaking(self):
+        old = _with_ports("outputPorts", [_out(server='{"host": "kafka-a"}')])
+        new = _with_ports("outputPorts", [_out(server={"host": "kafka-b"})])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.BREAKING
+
     @pytest.mark.parametrize("over", [
         {"status": "deprecated"},
         {"containsPii": True},

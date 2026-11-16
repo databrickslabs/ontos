@@ -237,6 +237,20 @@ class TestDataProductRoutes:
         assert detail["requires_versioning"] is True
         assert any("b" in c for c in detail["change_analysis"]["breaking_changes"])
 
+    def test_update_active_product_removing_output_port_with_force_header_applies(
+        self, client, sample_product_data
+    ):
+        """X-Force-Update (the dialog's "update in place") applies the breaking edit."""
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a", "b"])
+        kept = sample_product_data["outputPorts"][:1]
+        update = {**sample_product_data, "id": product_id, "outputPorts": kept}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update,
+                              headers={"X-Force-Update": "true"})
+
+        assert response.status_code == 200, response.text
+        assert [p["name"] for p in response.json()["outputPorts"]] == ["a"]
+
     def test_update_active_product_adding_output_port_is_not_breaking(
         self, client, sample_product_data
     ):

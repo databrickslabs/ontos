@@ -126,10 +126,26 @@ describe('DataProductTypesSettings', () => {
 
     const deleteButton = (key: string) => within(row(key)).getByRole('button', { name: /^Delete / });
     expect(deleteButton('source-aligned')).toBeDisabled();
-    expect(deleteButton('source-aligned')).toHaveAttribute('title', expect.stringMatching(/Built-in types can't be deleted/));
     expect(deleteButton('golden-record')).toBeDisabled();
-    expect(deleteButton('golden-record')).toHaveAttribute('title', 'Used by 2 data products. Deactivate it instead.');
     expect(deleteButton('scratch')).not.toBeDisabled();
+    // An enabled delete has no reason around it
+    expect(within(row('scratch')).queryByLabelText(/Deactivate it instead/)).not.toBeInTheDocument();
+  });
+
+  it('explains a blocked delete in a tooltip (a disabled button gets no hover)', async () => {
+    setupFetch();
+    await renderPage();
+
+    fireEvent.focus(within(row('golden-record')).getByLabelText('Used by 2 data products. Deactivate it instead.'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Used by 2 data products. Deactivate it instead.');
+  });
+
+  it('explains a built-in type that cannot be deleted', async () => {
+    setupFetch();
+    await renderPage();
+
+    fireEvent.focus(within(row('source-aligned')).getByLabelText(/Built-in types can't be deleted/));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/Built-in types can't be deleted/);
   });
 
   it('deletes an unused custom type after confirming', async () => {
@@ -149,6 +165,8 @@ describe('DataProductTypesSettings', () => {
     await renderPage();
 
     expect(within(row('source-aligned')).getByRole('switch')).toBeDisabled();
+    fireEvent.focus(within(row('source-aligned')).getByLabelText(/default type can't be deactivated/));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/default type can't be deactivated/);
 
     fireEvent.click(within(row('golden-record')).getByRole('switch'));
 

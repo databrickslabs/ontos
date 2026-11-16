@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, Loader2, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Dialog,
   DialogContent,
@@ -68,6 +69,25 @@ const keyFromLabel = (label: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 100);
+
+/**
+ * Shows `reason` in a tooltip around a control. A disabled button gets no
+ * pointer events (and `title` never shows), so the tooltip hangs on a
+ * focusable wrapper instead. Without a reason the control is returned as is.
+ */
+function WithReason({ reason, children }: { reason: string | null; children: ReactElement }) {
+  if (!reason) return children;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} className="inline-flex" aria-label={reason}>
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{reason}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 interface FormState {
   key: string;
@@ -309,13 +329,16 @@ export default function DataProductTypesSettings() {
                 <TableCell className="text-sm text-muted-foreground">{type.description || '—'}</TableCell>
                 <TableCell className="text-right tabular-nums">{type.usage_count}</TableCell>
                 <TableCell>
-                  <Switch
-                    checked={type.is_active}
-                    disabled={!canEdit || type.is_default}
-                    title={type.is_default ? t('settings:dataProductTypes.defaultCannotBeInactive') : undefined}
-                    aria-label={t('settings:dataProductTypes.actions.toggleActive', { name: label })}
-                    onCheckedChange={(checked) => update(type, { is_active: checked })}
-                  />
+                  <WithReason
+                    reason={canEdit && type.is_default ? t('settings:dataProductTypes.defaultCannotBeInactive') : null}
+                  >
+                    <Switch
+                      checked={type.is_active}
+                      disabled={!canEdit || type.is_default}
+                      aria-label={t('settings:dataProductTypes.actions.toggleActive', { name: label })}
+                      onCheckedChange={(checked) => update(type, { is_active: checked })}
+                    />
+                  </WithReason>
                 </TableCell>
                 {canEdit && (
                   <TableCell>
@@ -340,17 +363,18 @@ export default function DataProductTypesSettings() {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive"
-                        disabled={blocked !== null}
-                        title={blocked ?? undefined}
-                        aria-label={t('settings:dataProductTypes.actions.delete', { name: label })}
-                        onClick={() => setDeleting(type)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <WithReason reason={blocked}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive"
+                          disabled={blocked !== null}
+                          aria-label={t('settings:dataProductTypes.actions.delete', { name: label })}
+                          onClick={() => setDeleting(type)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </WithReason>
                     </div>
                   </TableCell>
                 )}

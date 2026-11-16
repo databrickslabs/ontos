@@ -112,6 +112,23 @@ describe('EntityDiffDialog', () => {
     await waitFor(() => expect(screen.getAllByText(/No differences/).length).toBeGreaterThan(0));
   });
 
+  it('labels a change from its rule id, and falls back to the message for an unknown rule', async () => {
+    mockFetch(diffResponse({
+      changes: [
+        { path: 'description.purpose', op: 'modified', bump: 'patch', rule_id: 'description',
+          message: 'Some English text from the server', old: 'a', new: 'b' },
+        { path: 'x.y', op: 'added', bump: 'minor', rule_id: 'a-rule-we-do-not-know', message: 'Fallback label' },
+        { path: 'z', op: 'removed', bump: 'patch', rule_id: 'default', message: 'Removed' },
+      ],
+    }));
+    renderDialog();
+
+    expect(await screen.findByText('Description changed')).toBeInTheDocument();
+    expect(screen.queryByText('Some English text from the server')).not.toBeInTheDocument();
+    expect(screen.getByText('Fallback label')).toBeInTheDocument();
+    expect(screen.getByText('Removed', { selector: 'span.font-medium' })).toBeInTheDocument();
+  });
+
   it('shows changes a page at a time and reveals the rest on Show more', async () => {
     const many = Array.from({ length: 150 }, (_, i) => ({
       path: `properties[p${i}]`, op: 'removed' as const, bump: 'major' as const,

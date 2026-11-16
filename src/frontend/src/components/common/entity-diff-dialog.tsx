@@ -216,6 +216,12 @@ export default function EntityDiffDialog({
   const yamlLines = useMemo(() => (diff?.unified_diff ?? '').split('\n'), [diff])
   const totalChanges = diff?.changes_total ?? diff?.changes.length ?? 0
 
+  /** The change's label in the UI language; the backend's English message when the rule is unknown. */
+  const changeMessage = (c: EntityDiffChange) =>
+    c.rule_id === 'default'
+      ? t(`entityDiff.rules.default.${c.op}`, { defaultValue: c.message })
+      : t(`entityDiff.rules.${c.rule_id}`, { defaultValue: c.message })
+
   const versionLabel = (v: EntityVersionRow) =>
     `${v.version || t('entityDiff.unknownVersion')}${v.status ? ` · ${v.status}` : ''}`
 
@@ -312,7 +318,7 @@ export default function EntityDiffDialog({
                         {grouped[bump].map((c) => (
                           <li key={`${c.op}:${c.path}`} className="rounded border px-3 py-2 text-sm">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium">{c.message}</span>
+                              <span className="font-medium">{changeMessage(c)}</span>
                               <span className="text-xs text-muted-foreground">{t(`entityDiff.op.${c.op}`)}</span>
                             </div>
                             <code className="block text-xs text-muted-foreground break-all">{c.path}</code>

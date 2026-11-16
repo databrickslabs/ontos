@@ -237,6 +237,22 @@ def _assert_approval_refused(response, reason: str) -> None:
 
 
 class TestApprovedRequest:
+    def test_a_non_admin_cannot_approve_a_certified_product_request(
+        self, client, db_session, monkeypatch,
+    ):
+        product_id = _product(db_session)
+        _request(client, 'data-products', product_id)
+
+        async def _not_admin(*args, **kwargs):
+            return False
+
+        monkeypatch.setattr(
+            'src.routes.data_product_routes.has_feature_permission', _not_admin,
+        )
+        refused = _decide(client, 'data-products', product_id)
+
+        _assert_approval_refused(refused, 'not_admin')
+
     def test_an_approved_product_request_deprecates_it(self, client, db_session):
         WorkflowsManager(db=db_session).load_from_yaml()
         product_id = _product(db_session)

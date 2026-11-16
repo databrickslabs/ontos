@@ -127,6 +127,36 @@ class TestRequestRoutes:
 
 
 class TestHandleRoutes:
+    def test_non_admin_cannot_decide_an_uncertified_product_request(
+        self, client, db_session, monkeypatch,
+    ):
+        product_id = _product(db_session, status='draft')
+        change_log_manager.log_change_with_details(
+            db_session, entity_type='data_product', entity_id=product_id,
+            action='status_change_requested', username='requester@example.com',
+            details={'requester_email': 'requester@example.com', 'request_id': 'req-1',
+                     'from_status': 'draft', 'target_status': 'proposed'},
+        )
+
+        async def _not_admin(*args, **kwargs):
+            return False
+
+        monkeypatch.setattr(
+            'src.routes.data_product_routes.has_feature_permission', _not_admin,
+        )
+        monkeypatch.setattr(
+            'src.controller.data_products_manager.DataProductsManager.'
+            'handle_status_change_response',
+            lambda *args, **kwargs: pytest.fail('manager must not run for a non-admin'),
+        )
+        response = client.post(
+            f'/api/data-products/{product_id}/handle-status-change',
+            json={'decision': 'approve', 'target_status': 'proposed'},
+        )
+
+        assert response.status_code == 403, response.text
+        assert response.json()['detail'] == 'Admin permission required'
+
     def test_product_requester_cannot_decide_own_request(
         self, client, db_session, mock_test_user,
     ):
@@ -149,7 +179,7 @@ class TestHandleRoutes:
         )
 
     def test_product_payload_cannot_redirect_decision_notification(
-        self, client, db_session,
+        self, client, db_session, caplog,
     ):
         product_id = _product(db_session, status='draft')
         change_log_manager.log_change_with_details(
@@ -172,6 +202,7 @@ class TestHandleRoutes:
         }
         assert 'requester@example.com' in recipients
         assert 'victim@example.com' not in recipients
+        assert 'Ignoring requester mismatch' in caplog.text
 
     def test_product_decision_without_pending_request_is_rejected(
         self, client, db_session,

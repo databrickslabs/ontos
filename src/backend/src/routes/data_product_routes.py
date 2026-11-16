@@ -2867,6 +2867,10 @@ async def handle_status_change_response(
     a certified product this way needs Admin on data products (certified guard).
     """
     from src.controller.certified_deprecation_guard import (
+        NO_PENDING_REQUEST,
+        NOT_ADMIN,
+        SELF_APPROVAL,
+        TARGET_MISMATCH,
         approved_status_change,
         handle_decision_refusal,
         pending_request,
@@ -2875,9 +2879,11 @@ async def handle_status_change_response(
     by_admin = await has_feature_permission(
         DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN, current_user, request,
     )
-    if not by_admin:
-        raise HTTPException(status_code=403, detail="Admin permission required")
     try:
+        refusal = handle_decision_refusal(
+            db, 'data_product', product_id, payload.target_status, by_admin,
+            current_user.email, current_user.username,
+        )
         status_request = pending_request(db, 'data_product', product_id)
     except Exception as e:
         logger.exception(
@@ -2888,32 +2894,37 @@ async def handle_status_change_response(
             status_code=500,
             detail="Failed to read pending status change request",
         ) from e
-    if status_request is None:
-        raise HTTPException(status_code=409, detail="No pending status change request")
-    requested_target = str(status_request.get('target_status') or '').lower()
-    if requested_target != payload.target_status.lower():
-        raise HTTPException(
-            status_code=409,
-            detail="Target status does not match the pending request",
-        )
-    requester = str(status_request.get('requester_email') or '').strip().lower()
-    approver_identities = {
-        str(value).strip().lower()
-        for value in (current_user.email, current_user.username)
-        if value
-    }
-    if requester and requester in approver_identities:
-        raise HTTPException(
-            status_code=403,
-            detail="Requesters cannot decide their own status change request",
-        )
-    # Counts for the certified guard only as an admin's approval of a pending
-    # request made by someone else
-    refusal = handle_decision_refusal(
-        db, 'data_product', product_id, payload.target_status, by_admin,
-        current_user.email, current_user.username,
+    from src.db_models.data_products import DataProductDb
+
+    product = db.get(DataProductDb, product_id)
+    is_certified_deprecation_approval = (
+        payload.decision.lower() == 'approve'
+        and payload.target_status.lower() == 'deprecated'
+        and product is not None
+        and product.certification_level is not None
     )
-    request_id = status_request.get('request_id')
+    # Certified deprecation approvals keep the guard's established coded 400
+    # refusals. Other direct decisions fail here before manager side effects.
+    if refusal and not is_certified_deprecation_approval:
+        refusal_responses = {
+            NOT_ADMIN: (403, "Admin permission required"),
+            NO_PENDING_REQUEST: (409, "No pending status change request"),
+            TARGET_MISMATCH: (409, "Target status does not match the pending request"),
+            SELF_APPROVAL: (403, "Requesters cannot decide their own status change request"),
+        }
+        status_code, detail = refusal_responses.get(
+            refusal, (403, "Status change decision refused"),
+        )
+        raise HTTPException(status_code=status_code, detail=detail)
+
+    requester = str((status_request or {}).get('requester_email') or '').strip()
+    payload_requester = str(payload.requester_email or '').strip()
+    if requester and payload_requester and requester.lower() != payload_requester.lower():
+        logger.warning(
+            "Ignoring requester mismatch for product status change %s; using stored requester",
+            product_id,
+        )
+    request_id = (status_request or {}).get('request_id')
     try:
         with approved_status_change('data_product', product_id, refusal):
             result = manager.handle_status_change_response(

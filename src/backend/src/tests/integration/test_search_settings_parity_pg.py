@@ -212,4 +212,6 @@ def test_disabling_a_type_applies_live_and_reenabling_restores(seeded):
 def test_facets_include_owner_and_count_matches(seeded):
     res = repo.search(seeded, "customer", config=VARIANTS["shipped"], limit=100)
     assert res["facets"]["owner"]
-    assert sum(res["facets"]["type"].values()) == res["total_count"]
+    # Facets count the filtered candidates, as the in-memory backend does.
+    assert sum(res["facets"]["type"].values()) == len(_memory_items(VARIANTS["shipped"]))
+

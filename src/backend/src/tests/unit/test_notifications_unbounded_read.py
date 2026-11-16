@@ -249,6 +249,35 @@ class TestPendingIsSemantic:
         assert pending['id'] in [n.id for n in listed]
 
 
+    def test_an_opened_approval_without_the_marker_stays_pending(self, db_session: Session):
+        # Read decides requests, not approvals: opening one in the bell sets read
+        _insert(db_session, _history())
+        opened = _approval(recipient='ana@example.com', read=True)
+        _insert(db_session, [opened])
+
+        listed = _manager().get_notifications(db_session, ANA)
+
+        assert opened['id'] in [n.id for n in listed]
+
+    def test_the_handle_path_writes_the_marker_and_keeps_the_payload(self, db_session: Session):
+        rows = [
+            _row(type='action_required', title=f'Run job {i}',
+                 action_type='request_background_job', read=read, created_at=OLD,
+                 action_payload=json.dumps({'job': 'compliance', 'extra': i}))
+            for i, read in enumerate((False, True))
+        ]
+        _insert(db_session, rows)
+
+        assert _manager().handle_actionable_notification(
+            db_session, 'request_background_job', {'job': 'compliance'}) is True
+
+        for i, row in enumerate(rows):
+            stored = db_session.get(NotificationDb, row['id'])
+            assert stored.read is True
+            assert json.loads(stored.action_payload) == {
+                'job': 'compliance', 'extra': i, 'handled': True,
+            }
+
     def test_more_than_500_informational_rows_with_an_action_type_stay_capped(
         self, db_session: Session,
     ):

@@ -7,7 +7,7 @@ Handles mapping between API models (Pydantic) and DB models (SQLAlchemy).
 
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select, distinct, or_, and_
-from typing import Iterable, List, Optional, Any, Dict, Set, Union
+from typing import Iterable, List, Optional, Any, Dict, Set, Tuple, Union
 import json
 
 from src.common.repository import CRUDBase, coerce_uuid
@@ -74,6 +74,31 @@ def _port_type_of(port: Dict[str, Any], default: Optional[str]) -> Optional[str]
     """
     value = port.get('port_type', port.get('type'))
     return default if value is None else value
+
+
+def _nth_name(seen: Dict[str, int], name: str) -> Tuple[str, int]:
+    """(name, n) for the n-th port of that name in a list, counting from 0."""
+    n = seen.get(name, 0)
+    seen[name] = n + 1
+    return name, n
+
+
+def _ports_by_name(ports, keys: Iterable[str]) -> Dict[Tuple[str, int], Dict[str, Any]]:
+    """The stored ports' values of ``keys``, read before the ports are replaced."""
+    seen: Dict[str, int] = {}
+    return {
+        _nth_name(seen, port.name): {key: getattr(port, key) for key in keys}
+        for port in ports
+    }
+
+
+def _sent_or_stored(
+    port_dict: Dict[str, Any], key: str, stored: Optional[Dict[str, Any]],
+) -> Any:
+    """The sent value (null included), else the stored port's, else None."""
+    if key in port_dict:
+        return port_dict[key]
+    return (stored or {}).get(key)
 
 
 class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProductUpdate]):
@@ -358,16 +383,22 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                     )
                     db_obj.custom_properties.append(prop_obj)
 
-            # 5. Update Input Ports (replace all)
+            # 5. Update Input Ports (replace all). A port left out of the list is
+            # removed; a field left out of a port keeps the value of the stored port
+            # of that name (the n-th of a repeated name), as for output ports.
             if 'input_ports' in update_data:
+                stored_ports = _ports_by_name(
+                    db_obj.input_ports, ('asset_type', 'asset_identifier'))
                 db_obj.input_ports.clear()
+                incoming_names: Dict[str, int] = {}
                 for port_dict in update_data['input_ports'] or []:
+                    stored = stored_ports.get(_nth_name(incoming_names, port_dict['name']))
                     port_obj = InputPortDb(
                         name=port_dict['name'],
                         version=port_dict['version'],
                         contract_id=port_dict['contract_id'],
-                        asset_type=port_dict.get('asset_type'),
-                        asset_identifier=port_dict.get('asset_identifier')
+                        asset_type=_sent_or_stored(port_dict, 'asset_type', stored),
+                        asset_identifier=_sent_or_stored(port_dict, 'asset_identifier', stored),
                     )
                     db_obj.input_ports.append(port_obj)
 

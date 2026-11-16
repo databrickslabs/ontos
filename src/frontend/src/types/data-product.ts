@@ -97,8 +97,9 @@ export interface InputPort {
   authoritativeDefinitions?: AuthoritativeDefinition[];
 
   // Databricks extensions
-  assetType?: string; // table, notebook, job
-  assetIdentifier?: string; // catalog.schema.table, /path/to/notebook, job_id
+  // null clears them on update (an omitted field is kept)
+  assetType?: string | null; // table, notebook, job
+  assetIdentifier?: string | null; // catalog.schema.table, /path/to/notebook, job_id
   sourceSystemId?: string;
   type?: string;
   description?: string;

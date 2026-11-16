@@ -725,7 +725,14 @@ export default function DataProductDetails() {
         scope: selectedPublishScope,
       });
       if (response.error) {
-        throw new Error(typeof response.error === 'string' ? response.error : 'Publish scope update failed');
+        // The publish gate: mandatory compliance fields missing, named in the user's language
+        const message = response.errorCode === 'compliance_incomplete'
+          ? t('data-products:details.errors.complianceIncomplete', {
+              missing: String(response.errorParams?.missing ?? ''),
+              defaultValue: response.error,
+            })
+          : (typeof response.error === 'string' ? response.error : 'Publish scope update failed');
+        throw new Error(message);
       }
       toast({ title: t('data-products:details.toasts.publishTitle'), description: t('data-products:details.toasts.publishSuccess') });
       setPublishDialogOpen(false);

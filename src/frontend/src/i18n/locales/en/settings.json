@@ -1379,5 +1379,87 @@
       "clearTitleError": "Failed to clear title",
       "clearError": "Failed to clear"
     }
+  },
+  "complianceTemplates": {
+    "title": "Compliance Templates",
+    "intro": "Define typed, grouped governance fields bound to an entity type. Exactly one template can be active per entity type.",
+    "addTemplate": "Add Template",
+    "columns": {
+      "name": "Name",
+      "entityType": "Entity Type",
+      "fields": "Fields",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "entityTypes": {
+      "data_product": "Data Products"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "actions": {
+      "edit": "Edit",
+      "activate": "Activate",
+      "deactivate": "Deactivate"
+    },
+    "emptyState": "No compliance templates configured. Click \"Add Template\" to create one.",
+    "dialog": {
+      "editTitle": "Edit Compliance Template",
+      "createTitle": "Add Compliance Template",
+      "editDescription": "Edit fields, defaults, hints and mandatory flags. Changing a field’s type or removing a field/enum value is blocked when products have already stored values.",
+      "createDescription": "Create a template and optionally add fields. Activate it to make it available on the bound entity type.",
+      "name": "Name",
+      "namePlaceholder": "e.g., Terms of Use",
+      "description": "Description",
+      "descriptionPlaceholder": "What this template captures...",
+      "entityType": "Entity Type",
+      "fields": "Fields",
+      "addField": "Add Field",
+      "noFields": "No fields yet. Click \"Add Field\" to define one.",
+      "fieldLabelPlaceholder": "Field label",
+      "groupPlaceholder": "Group (optional)",
+      "optionsPlaceholder": "Options (comma-separated)",
+      "hintPlaceholder": "Hint text (optional)",
+      "defaultPlaceholder": "Default (optional)",
+      "referencePlaceholder": "Reference id (auto)",
+      "mandatory": "Mandatory",
+      "mandatoryWithDefault": "This field is mandatory but has a default — the default will satisfy the requirement, so owners can publish without changing it.",
+      "cancel": "Cancel",
+      "saveChanges": "Save changes",
+      "create": "Create"
+    },
+    "valueTypes": {
+      "string": "Text",
+      "numeric": "Number",
+      "boolean": "Yes/No",
+      "date": "Date",
+      "enum": "Single choice",
+      "multi_enum": "Multiple choice",
+      "range": "Range (low–high)"
+    },
+    "deleteDialog": {
+      "title": "Delete compliance template?",
+      "description": "Are you sure you want to delete \"{{name}}\"? Its fields will be removed. A template whose products already have stored values can't be deleted. This cannot be undone.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    },
+    "toast": {
+      "created": "Created",
+      "createdDescription": "Template \"{{name}}\" created.",
+      "saved": "Saved",
+      "savedDescription": "Template \"{{name}}\" updated.",
+      "activated": "Activated",
+      "activatedDescription": "Template \"{{name}}\" is now active.",
+      "deactivated": "Deactivated",
+      "deactivatedDescription": "Template \"{{name}}\" deactivated.",
+      "deleted": "Deleted",
+      "deletedDescription": "Template \"{{name}}\" deleted.",
+      "cannotDelete": "Cannot delete",
+      "saveFailed": "Failed to save",
+      "cannotAdd": "Cannot add \"{{label}}\": {{error}}",
+      "cannotUpdate": "Cannot update \"{{label}}\": {{error}}",
+      "cannotRemove": "Cannot remove \"{{label}}\": {{error}}"
+    }
   }
 }

@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from src.controller.compliance_templates_manager import (
+    ComplianceConflictError,
     ComplianceTemplateError,
     ComplianceTemplatesManager,
 )
@@ -326,3 +327,74 @@ class TestReorderFieldsRepositoryLogic(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestUpdateFieldPersistsVocabulary(unittest.TestCase):
+    """Regression: value_type / possible_values sent by the editor were silently dropped."""
+
+    def setUp(self):
+        self.manager = ComplianceTemplatesManager()
+        self.field_id = uuid4()
+
+    def _field(self, value_type="enum", possible_values=("a", "b"), default_value=None):
+        return ComplianceTemplateFieldDb(
+            id=self.field_id,
+            template_id=uuid4(),
+            key="k",
+            label="Label",
+            reference_id="k",
+            value_type=value_type,
+            possible_values=list(possible_values) if possible_values is not None else None,
+            default_value=default_value,
+            is_mandatory=False,
+            group_title="",
+            group_order=0,
+            field_order=0,
+        )
+
+    def _update(self, field, payload, stored_values):
+        db = MagicMock()
+        with patch.object(compliance_templates_repo, "get_field", return_value=field), \
+             patch.object(compliance_templates_repo, "count_field_values", return_value=stored_values), \
+             patch.object(compliance_templates_repo, "update_field", return_value=field) as repo_update:
+            self.manager.update_field(db, field_id=self.field_id, payload=payload)
+        return repo_update.call_args.kwargs["update_data"], db
+
+    def test_adding_enum_value_is_persisted_with_stored_values(self):
+        field = self._field(possible_values=("a", "b"), default_value="c")
+        payload = {"value_type": "enum", "possible_values": ["a", "b", "c"], "default_value": "c"}
+
+        update, db = self._update(field, payload, stored_values=3)
+
+        self.assertEqual(update["possible_values"], ["a", "b", "c"])
+        self.assertEqual(update["default_value"], "c")
+        db.commit.assert_called_once()
+
+    def test_adding_enum_value_is_persisted_without_stored_values(self):
+        field = self._field(possible_values=("a", "b"))
+        update, _ = self._update(field, {"possible_values": ["a", "b", "c"]}, stored_values=0)
+        self.assertEqual(update["possible_values"], ["a", "b", "c"])
+
+    def test_value_type_change_is_persisted_when_no_values_exist(self):
+        field = self._field(value_type="string", possible_values=None)
+        update, _ = self._update(field, {"value_type": ComplianceValueType.ENUM, "possible_values": ["x"]}, stored_values=0)
+        self.assertEqual(update["value_type"], "enum")
+        self.assertEqual(update["possible_values"], ["x"])
+
+    def test_removing_enum_value_with_stored_values_is_a_conflict(self):
+        field = self._field(possible_values=("a", "b", "c"))
+        with self.assertRaises(ComplianceConflictError):
+            self._update(field, {"possible_values": ["a", "b"]}, stored_values=2)
+
+    def test_clearing_vocabulary_with_stored_values_is_a_conflict(self):
+        field = self._field(possible_values=("a", "b"))
+        with self.assertRaises(ComplianceConflictError):
+            self._update(field, {"possible_values": None}, stored_values=2)
+
+    def test_value_type_change_with_stored_values_is_a_conflict(self):
+        field = self._field(value_type="string", possible_values=None)
+        with self.assertRaises(ComplianceConflictError):
+            self._update(field, {"value_type": "numeric"}, stored_values=2)
+
+    def test_conflict_is_a_template_error_for_existing_callers(self):
+        self.assertTrue(issubclass(ComplianceConflictError, ComplianceTemplateError))

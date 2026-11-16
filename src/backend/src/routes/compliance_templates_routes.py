@@ -14,6 +14,8 @@ from src.common.dependencies import CurrentUserDep, DBSessionDep
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.controller.compliance_templates_manager import (
+    ComplianceConflictError,
+    ComplianceNotFoundError,
     ComplianceTemplateError,
     compliance_templates_manager,
 )
@@ -177,12 +179,18 @@ async def update_template_field(
     db: DBSessionDep,
     _: None = Depends(PermissionChecker(ADMIN_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
-    """Update a field's safe attributes or add an enum value. Guards against destructive edits."""
+    """Update a field. Destructive edits (value_type change, enum removal with values) answer 409."""
     try:
         return compliance_templates_manager.update_field(db, field_id=field_id, payload=body)
-    except ComplianceTemplateError as e:
+    except ComplianceNotFoundError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ComplianceConflictError as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ComplianceTemplateError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating field: {e}", exc_info=True)

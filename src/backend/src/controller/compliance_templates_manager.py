@@ -30,6 +30,14 @@ class ComplianceTemplateError(ValueError):
     """Raised for validation failures; routes convert to HTTP 4xx."""
 
 
+class ComplianceNotFoundError(ComplianceTemplateError):
+    """A template or field that does not exist (HTTP 404)."""
+
+
+class ComplianceConflictError(ComplianceTemplateError):
+    """A change that would destroy or contradict stored values (HTTP 409)."""
+
+
 class ComplianceIncompleteError(CodedValueError):
     """A publish refused because mandatory compliance fields are unset. ``missing`` lists their labels."""
 
@@ -186,40 +194,40 @@ class ComplianceTemplatesManager:
         return ComplianceFieldRead.model_validate(field)
 
     def update_field(self, db: Session, *, field_id: UUID, payload: dict) -> ComplianceFieldRead:
-        """Update a field's safe attributes (label, hint, default, mandatory, group order).
+        """Update a field's attributes: safe ones always, value_type / vocabulary when they are safe.
 
-        Cannot change value_type or narrow possible_values if stored values exist.
+        Safe (persisted): label, hint, default, mandatory, group order, adding enum values,
+        and any value_type / vocabulary change while no stored values exist.
+        Unsafe (``ComplianceConflictError``, 409): changing value_type, or removing enum
+        values, while stored values exist.
         """
         field = compliance_templates_repo.get_field(db, field_id)
         if not field:
-            raise ComplianceTemplateError("Field not found")
+            raise ComplianceNotFoundError("Field not found")
 
         # Detect destructive changes: value_type change or possible_values narrowing
         has_stored_values = compliance_templates_repo.count_field_values(db, field_id=field_id) > 0
 
+        # The route passes a raw JSON dict, so value_type may be a plain string OR a ComplianceValueType enum.
+        new_value_type = payload.get("value_type")
+        if new_value_type is not None:
+            payload["value_type"] = getattr(new_value_type, "value", new_value_type)
+
         if has_stored_values:
-            # Check if value_type is changing. The route passes a raw JSON dict,
-            # so value_type may be a plain string OR a ComplianceValueType enum.
-            new_value_type = payload.get("value_type")
-            new_value_type_str = getattr(new_value_type, "value", new_value_type)
-            if new_value_type is not None and new_value_type_str != field.value_type:
-                raise ComplianceTemplateError(
+            if payload.get("value_type") is not None and payload["value_type"] != field.value_type:
+                raise ComplianceConflictError(
                     f"Cannot change field value type when stored values exist. "
                     f"Either delete stored values or use a new field."
                 )
-            # Check if enum values are being removed (narrowing possible_values)
-            new_possible_values = payload.get("possible_values")
-            if new_possible_values is not None and field.possible_values is not None:
-                old_set = set(field.possible_values)
-                new_set = set(new_possible_values)
-                removed = old_set - new_set
+            # Removing enum values is unsafe while values exist; adding them is not.
+            # An explicit null clears the whole vocabulary, which removes every value.
+            if "possible_values" in payload and field.possible_values:
+                removed = set(field.possible_values) - set(payload["possible_values"] or [])
                 if removed:
-                    raise ComplianceTemplateError(
-                        f"Cannot remove enum values {removed} when stored values exist. "
+                    raise ComplianceConflictError(
+                        f"Cannot remove enum values {sorted(removed)} when stored values exist. "
                         f"Edit the stored values first."
                     )
-                # Safe: adding new values to an enum (payload only contains new_value_type and new_possible_values)
-                payload["possible_values"] = new_possible_values
 
         # Re-coerce default if value_type or possible_values changed
         if "value_type" in payload or "possible_values" in payload or "default_value" in payload:
@@ -232,8 +240,14 @@ class ComplianceTemplatesManager:
             except ValueTypeError as e:
                 raise ComplianceTemplateError(f"Default value error: {e}")
 
-        # Apply safe update
-        safe_update = {k: v for k, v in payload.items() if k in {"label", "hint_text", "default_value", "is_mandatory", "group_title", "group_order", "field_order"}}
+        # Apply the update: safe attributes, and value_type / vocabulary (already checked above)
+        safe_update = {
+            k: v for k, v in payload.items()
+            if k in {
+                "label", "hint_text", "default_value", "is_mandatory", "group_title", "group_order",
+                "field_order", "value_type", "possible_values",
+            }
+        }
         updated = compliance_templates_repo.update_field(db, field_id=field_id, update_data=safe_update)
         db.commit()
         return ComplianceFieldRead.model_validate(updated)
@@ -242,7 +256,7 @@ class ComplianceTemplatesManager:
         """Delete a field. Guarded: cannot delete if stored values exist."""
         field = compliance_templates_repo.get_field(db, field_id)
         if not field:
-            raise ComplianceTemplateError("Field not found")
+            raise ComplianceNotFoundError("Field not found")
 
         # Guard: check for stored values
         has_stored_values = compliance_templates_repo.count_field_values(db, field_id=field_id) > 0

@@ -247,6 +247,16 @@ _RENDER_FAILURES = (
 )
 
 
+def check_secret_access(workspace_client: Any, secret_name: Optional[str]) -> None:
+    """Raise ConnectorAuthenticationError unless ``workspace_client`` can read the Tableau secret.
+
+    Used to check that the person creating or running a sync holds READ_SECRET:
+    the scheduled job reads the secret as the app's service principal, so the
+    check happens on the caller's own client.
+    """
+    TableauConnector(TableauConnectorConfig(secret_name=secret_name, workspace_client=workspace_client))._read_secret()
+
+
 class TableauConnector(AssetConnector):
     """Asset connector for Tableau Cloud and Tableau Server."""
 

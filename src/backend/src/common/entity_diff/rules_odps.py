@@ -108,7 +108,7 @@ def _became_true(change: FieldChange) -> Bump:
 ODPS_RULES = RuleSet(rules=[
     # Lifecycle / format bookkeeping
     Rule("status", "status", Bump.NONE, "Status changed (lifecycle, not content)"),
-    Rule("api-version", "apiVersion", Bump.NONE, "ODPS format version changed"),
+    Rule("api-version", "apiVersion", Bump.NONE, "Format version changed"),
 
     # Output ports — what consumers read
     Rule("output-port-removed", "outputPorts[]", Bump.MAJOR, "Output port removed", ops=("removed",)),

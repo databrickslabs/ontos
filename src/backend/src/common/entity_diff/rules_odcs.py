@@ -181,7 +181,7 @@ def _sla_value_bump(change: FieldChange) -> Bump:
 ODCS_RULES = RuleSet(rules=[
     # Lifecycle / format bookkeeping
     Rule("status", "status", Bump.NONE, "Status changed (lifecycle, not content)"),
-    Rule("api-version", "apiVersion", Bump.NONE, "ODCS format version changed"),
+    Rule("api-version", "apiVersion", Bump.NONE, "Format version changed"),
 
     # Schema objects
     Rule("schema-removed", "schema[]", Bump.MAJOR, "Schema object removed", ops=("removed",)),

@@ -4351,48 +4351,28 @@ async def get_diff_from_parent(
         raise HTTPException(status_code=500, detail="Failed to get diff from parent")
 
 
-def _caller_can_read_contract_version(contract, current_user, is_admin: bool) -> bool:
-    """Personal drafts are visible only to their owner and data-contracts admins.
-
-    ``draft_owner_id`` stores the username (clone-for-editing) or the email,
-    so either identity matches.
-    """
-    owner = getattr(contract, "draft_owner_id", None)
-    if not owner or is_admin:
-        return True
-    return bool(current_user) and owner in {current_user.username, current_user.email}
-
-
 @router.get('/data-contracts/{base_id}/diff/{target_id}', response_model=EntityDiffResponse)
 async def diff_contract_versions(
     base_id: str,
     target_id: str,
-    request: Request,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
+    scope: dict = Depends(contract_read_scope),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
 ):
     """Diff two versions of a contract family on their ODCS documents (PRD #1086).
 
     Returns field-level changes, each classified major/minor/patch/none, the
     suggested next version from ``base``, whether ``target``'s version reflects
-    the changes, and a unified YAML diff. Another user's personal draft is
-    reported as not found (404) so its existence isn't disclosed.
+    the changes, and a unified YAML diff. Both contracts must be readable by the
+    caller (same rule as GET /data-contracts/{id}); a miss is a 404.
     """
-    from src.common.authorization import is_user_feature_admin
     from src.common.entity_diff import EntityNotFound, VersionFamilyMismatch
 
-    is_admin = await is_user_feature_admin(
-        user_email=current_user.email if current_user else None,
-        user_groups=current_user.groups if current_user else [],
-        feature_id='data-contracts',
-        request=request,
-    )
     rows = []
     for contract_id in (base_id, target_id):
         contract = data_contract_repo.get_with_all(db, id=contract_id)
-        if not contract or not _caller_can_read_contract_version(contract, current_user, is_admin):
+        if not contract or not manager.can_read_contract(db, contract, **scope):
             raise HTTPException(status_code=404, detail="Contract not found")
         rows.append(contract)
 

@@ -6,10 +6,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from src.common.authorization import PermissionChecker
+from src.common.config import get_settings
 from src.common.dependencies import AuditCurrentUserDep, AuditManagerDep, DBSessionDep
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.common.manager_dependencies import get_jobs_manager
+from src.common.workspace_client import get_obo_workspace_client
+from src.connectors.base import ConnectorAuthenticationError
+from src.connectors.tableau import check_secret_access
 from src.controller.connector_sync_manager import connector_sync_manager
 from src.db_models.connections import ConnectionDb
 from src.db_models.connector_syncs import ConnectorSyncDb
@@ -69,6 +73,25 @@ def _job_warning(request: Request, db) -> Optional[str]:
                 "An administrator can enable the 'Connector Sync' workflow in Settings → Jobs.")
 
 
+def _require_secret_access(request: Request, connection: ConnectionDb) -> None:
+    """The caller must be able to read the connection's secret themselves.
+
+    The scheduled job reads it as the app's service principal, so without this a
+    user could import a source they cannot read by way of a sync. Checked on the
+    caller's own (OBO) client, the same way an interactive import reads it.
+    """
+    if connection.connector_type != "tableau":
+        return
+    try:
+        check_secret_access(get_obo_workspace_client(request, get_settings()), (connection.config or {}).get("secret_name"))
+    except ConnectorAuthenticationError as exc:
+        logger.info(f"Sync refused for connection {connection.id}: {exc}")
+        raise HTTPException(status_code=403, detail="You need READ_SECRET on the Tableau secret to create or run this sync")
+    except Exception as exc:
+        logger.warning(f"Could not check secret access for connection {connection.id}: {exc}", exc_info=True)
+        raise HTTPException(status_code=403, detail="Could not verify READ_SECRET on the Tableau secret")
+
+
 def _audit(audit_manager, current_user, request: Request, action: str, details: dict) -> None:
     if audit_manager and current_user:
         audit_manager.log_action(
@@ -96,8 +119,10 @@ def create_sync(
     audit_manager: AuditManagerDep,
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
-    if db.get(ConnectionDb, payload.connection_id) is None:
+    connection = db.get(ConnectionDb, payload.connection_id)
+    if connection is None:
         raise HTTPException(status_code=404, detail="Connection not found")
+    _require_secret_access(request, connection)
     sync = connector_sync_manager.create(
         db, name=payload.name, connection_id=payload.connection_id,
         request=payload.model_dump(mode="json", include={"selected_paths", "depth", "excluded_paths"}),
@@ -134,6 +159,10 @@ def update_sync(
     changes = payload.model_dump(exclude_unset=True, mode="json")
     selection = {k: changes.pop(k) for k in ("selected_paths", "depth", "excluded_paths") if k in changes}
     if selection:
+        # Widening what a sync imports is an import: the caller must be able to read the source
+        connection = db.get(ConnectionDb, sync.connection_id)
+        if connection is not None:
+            _require_secret_access(request, connection)
         changes["request"] = {**(sync.request or {}), **selection}
     was_enabled = sync.enabled
     connector_sync_manager.update(db, sync, **changes)
@@ -168,6 +197,9 @@ def run_sync_now(
 ):
     """Start the connector_sync job for this sync now (the job runs it even when it isn't due)."""
     sync = _get(db, sync_id)
+    connection = db.get(ConnectionDb, sync.connection_id)
+    if connection is not None:
+        _require_secret_access(request, connection)
     try:
         job_id = _ensure_job(request, db)
         run_id = get_jobs_manager(request).run_job(

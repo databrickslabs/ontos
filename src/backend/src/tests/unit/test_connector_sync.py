@@ -404,3 +404,62 @@ def test_a_listing_failure_makes_the_walk_incomplete(db_session, sync, importer,
     assert summary["status"] == STATUS_INCOMPLETE and summary["missed"] == 0
     assert any("could not be listed" in r for r in summary["incomplete_reasons"])
     assert MISSED_PROPERTY not in _asset(db_session, WB).properties
+
+
+# --- Review: who may read the secret a sync imports with -----------------------------
+
+
+def _secret_client(error=None):
+    from databricks.sdk.errors import PermissionDenied
+    client = MagicMock()
+    if error == "denied":
+        client.secrets_uc.get_secret.side_effect = PermissionDenied("no READ_SECRET")
+    else:
+        client.secrets_uc.get_secret.return_value = MagicMock(effective_value="secret-value")
+    return client
+
+
+def test_the_caller_must_read_the_tableau_secret_to_create_or_run_a_sync(monkeypatch):
+    from fastapi import HTTPException
+
+    from src.routes import connector_sync_routes as routes
+
+    connection = ConnectionDb(id=uuid4(), name="t", connector_type="tableau",
+                              config={"secret_name": "cat.sch.tableau"})
+    monkeypatch.setattr(routes, "get_obo_workspace_client", lambda request, settings: _secret_client("denied"))
+    with pytest.raises(HTTPException) as refused:
+        routes._require_secret_access(MagicMock(), connection)
+    assert refused.value.status_code == 403 and "cat.sch.tableau" not in str(refused.value.detail)
+
+    monkeypatch.setattr(routes, "get_obo_workspace_client", lambda request, settings: _secret_client())
+    routes._require_secret_access(MagicMock(), connection)  # no raise
+
+
+def test_non_tableau_connections_skip_the_secret_check(monkeypatch):
+    from src.routes import connector_sync_routes as routes
+
+    def boom(request, settings):
+        raise AssertionError("no OBO client needed")
+
+    monkeypatch.setattr(routes, "get_obo_workspace_client", boom)
+    routes._require_secret_access(MagicMock(), ConnectionDb(id=uuid4(), name="b", connector_type="bigquery", config={}))
+
+
+def test_only_administrators_set_up_tableau_connections(monkeypatch):
+    from fastapi import HTTPException
+
+    from src.models.users import UserInfo
+    from src.routes import connection_routes as routes
+
+    user = UserInfo(email="writer@example.com", username="writer", user="writer", ip=None, groups=["writers"])
+    auth = MagicMock()
+    auth.has_permission.return_value = False
+    monkeypatch.setattr(routes, "user_has_feature_level",
+                        lambda auth_manager, u, feature, level: False)
+    with pytest.raises(HTTPException) as refused:
+        routes._require_admin_for_secret_sources(auth, user, "tableau")
+    assert refused.value.status_code == 403
+
+    routes._require_admin_for_secret_sources(auth, user, "bigquery", None)  # other connectors are unaffected
+    monkeypatch.setattr(routes, "user_has_feature_level", lambda auth_manager, u, feature, level: True)
+    routes._require_admin_for_secret_sources(auth, user, None, "tableau")

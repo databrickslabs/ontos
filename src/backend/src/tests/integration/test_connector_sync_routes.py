@@ -34,6 +34,12 @@ def jobs(monkeypatch):
     return fake
 
 
+@pytest.fixture(autouse=True)
+def caller_reads_the_secret(monkeypatch):
+    # The caller's READ_SECRET check needs an OBO client; it is covered in the unit tests
+    monkeypatch.setattr(routes, "_require_secret_access", lambda request, connection: None)
+
+
 @pytest.fixture
 def connection(db_session):
     conn = ConnectionDb(id=uuid4(), name=f"tableau-{uuid4().hex[:6]}", connector_type="tableau", config={})

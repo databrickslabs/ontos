@@ -1,5 +1,7 @@
 """Repository for data_product_types operations."""
 
+import json
+import re
 from uuid import UUID
 
 from sqlalchemy import func
@@ -53,6 +55,38 @@ SEEDED_TYPES = [
     },
 ]
 SEEDED_TYPE_KEYS = frozenset(t["key"] for t in SEEDED_TYPES)
+
+_KEY_MAX = 100
+_LABEL_MAX = 255
+
+
+def type_label_for(raw) -> str | None:
+    """A stored or imported productType value without JSON quotes or whitespace."""
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        try:
+            decoded = json.loads(value)
+        except ValueError:
+            decoded = None
+        if isinstance(decoded, str):
+            value = decoded.strip()
+    return value or None
+
+
+def normalize_type_key(raw) -> str | None:
+    """Turn a productType value into a type key: ``sourceAligned``, ``"source-aligned"``,
+    ``Source Aligned`` and ``SOURCE_ALIGNED`` all become ``source-aligned``.
+
+    Same rules as the b12 migration, which keeps its own copy.
+    """
+    value = type_label_for(raw)
+    if value is None:
+        return None
+    value = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", value)
+    value = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return value[:_KEY_MAX].rstrip("-") or None
 
 
 class DataProductTypesRepository:
@@ -116,6 +150,25 @@ class DataProductTypesRepository:
         db.refresh(obj)
         logger.info(f"Created data product type '{key}' at order {sort_order}")
         return obj
+
+    def resolve_or_create_imported(self, db: Session, raw) -> DataProductTypeDb | None:
+        """The type a productType value names, creating an active type flagged
+        ``is_imported`` when no type has that key. None for an empty value."""
+        key = normalize_type_key(raw)
+        if key is None:
+            return None
+        existing = self.get_by_key(db, key)
+        if existing is not None:
+            return existing
+        created = self.create(
+            db,
+            key=key,
+            label=(type_label_for(raw) or key)[:_LABEL_MAX],
+            sort_order=self.get_max_order(db) + 1,
+            is_imported=True,
+        )
+        logger.info("Created imported data product type '%s'", key)
+        return created
 
     def update(self, db: Session, *, db_obj: DataProductTypeDb, update_data: dict) -> DataProductTypeDb:
         for field, value in update_data.items():

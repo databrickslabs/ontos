@@ -101,6 +101,8 @@ class DataProductDb(Base):
         nullable=True,
         index=True,
     )
+    # Loaded with the product so reads (API, ODPS export) don't query per product.
+    product_type = relationship("DataProductTypeDb", lazy="selectin")
 
     # ==================== Maturity ====================
     maturity_level_order = Column(Integer, nullable=True)

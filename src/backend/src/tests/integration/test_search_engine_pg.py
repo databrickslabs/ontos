@@ -130,8 +130,8 @@ def test_typo_falls_back_to_trigram(seeded, config):
     ids = [r["id"] for r in res["results"]]
     assert set(ids) == {"1", "2"} and res["total_count"] == 2
     assert all(0 < r["relevance_score"] <= 1 for r in res["results"])
-    # Facets count the filtered candidates, as the in-memory backend does.
-    assert res["facets"]["type"] == {"data-product": 2, "data-contract": 1, "team": 1}
+    # Facets count the matched results (the fallback rows), as the scored path does.
+    assert res["facets"]["type"] == {"data-product": 2}
 
 
 def test_fallback_only_when_nothing_matches(seeded, config):

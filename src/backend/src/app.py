@@ -118,6 +118,28 @@ STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 
 # --- Application Lifecycle Events ---
 
+def _seed_reference_data() -> None:
+    """Seed the reference data that alembic data-migrations insert but that
+    create_all()+stamp (a fresh database) cannot: certification levels, data
+    product types and maturity levels. Idempotent: each no-ops when rows exist.
+    A failure is logged and doesn't stop the app.
+    """
+    try:
+        from src.common.database import get_session_factory
+        from src.repositories.certification_levels_repository import certification_levels_repo
+        from src.repositories.data_product_types_repository import data_product_types_repo
+        from src.repositories.maturity_repository import maturity_repo
+
+        with get_session_factory()() as db:
+            certification_levels_repo.seed_defaults(db)
+            data_product_types_repo.seed_defaults(db)
+            maturity_repo.seed_defaults(db)
+            db.commit()
+        logger.info("Reference data seed step complete.")
+    except Exception as e:
+        logger.warning("Failed seeding reference data: %s", e, exc_info=True)
+
+
 def _seed_default_workflows() -> None:
     """Create the default workflows that don't exist yet; existing ones are left
     untouched, except for entity types a default gained since
@@ -206,21 +228,7 @@ async def startup_event():
         logger.critical(f"Database init failed — entering maintenance mode: {e}", exc_info=True)
         return  # Skip manager init; MaintenanceMiddleware will serve the maintenance page
 
-    # Seed reference data that alembic data-migrations would have inserted but
-    # that create_all()+stamp cannot.  Idempotent — no-ops when rows exist.
-    try:
-        from src.repositories.certification_levels_repository import certification_levels_repo
-        from src.repositories.maturity_repository import maturity_repo
-        from src.common.database import get_session_factory
-        _sf = get_session_factory()
-        with _sf() as _db:
-            certification_levels_repo.seed_defaults(_db)
-            maturity_repo.seed_defaults(_db)
-            _db.commit()
-        logger.info("Reference data seed step complete.")
-    except Exception as e:
-        logger.warning(f"Failed seeding reference data: {e}", exc_info=True)
-
+    _seed_reference_data()
     _seed_default_workflows()
 
     initialize_managers(app)  # Soft-fails internally for ws_client; sets health["ws_ok"]

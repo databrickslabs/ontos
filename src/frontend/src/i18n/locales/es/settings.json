@@ -111,6 +111,7 @@
     "uiCustomization": "Personalización UI",
     "connectors": "Conectores",
     "schemaImporter": "Importador de esquemas",
+    "dataProductTypes": "Tipos de producto de datos",
     "certificationLevels": "Niveles de certificación",
     "maturityLevels": "Niveles de madurez"
   },
@@ -1166,6 +1167,71 @@
     },
     "saveButton": "Configuración de entrega guardada correctamente",
     "title": "Modos de entrega"
+  },
+  "dataProductTypes": {
+    "title": "Tipos de producto de datos",
+    "description": "Defina los tipos que puede tener un producto de datos. Los tipos integrados se pueden renombrar o desactivar, pero no eliminar.",
+    "addType": "Añadir tipo",
+    "table": {
+      "label": "Etiqueta",
+      "key": "Clave",
+      "products": "Productos",
+      "active": "Activo"
+    },
+    "badges": {
+      "default": "Predeterminado",
+      "builtIn": "Integrado",
+      "imported": "Importado"
+    },
+    "actions": {
+      "moveUp": "Subir {{name}}",
+      "moveDown": "Bajar {{name}}",
+      "toggleActive": "Activo: {{name}}",
+      "makeDefault": "Establecer como predeterminado",
+      "makeDefaultFor": "Establecer {{name}} como predeterminado",
+      "edit": "Editar {{name}}",
+      "delete": "Eliminar {{name}}"
+    },
+    "emptyState": "Aún no hay tipos de producto de datos. Haga clic en \"Añadir tipo\" para crear uno.",
+    "defaultCannotBeInactive": "El tipo predeterminado no se puede desactivar. Establezca primero otro tipo como predeterminado.",
+    "dialog": {
+      "editTitle": "Editar tipo de producto de datos",
+      "createTitle": "Añadir tipo de producto de datos",
+      "editDescription": "Cambie cómo se muestra este tipo. La clave no cambia.",
+      "createDescription": "Cree un tipo que los productores puedan elegir para sus productos de datos."
+    },
+    "form": {
+      "label": "Etiqueta",
+      "labelPlaceholder": "p. ej., Golden Record",
+      "seededLabelHint": "Los tipos integrados se muestran traducidos hasta que cambie la etiqueta.",
+      "key": "Clave",
+      "keyHint": "Palabras en minúsculas unidas por guiones, p. ej. golden-record. No se puede cambiar después y es el valor usado en los archivos ODPS.",
+      "keyImmutable": "La clave no se puede cambiar.",
+      "color": "Color"
+    },
+    "delete": {
+      "title": "¿Eliminar el tipo de producto de datos?",
+      "description": "¿Seguro que desea eliminar \"{{name}}\"? Esta acción no se puede deshacer."
+    },
+    "deleteBlocked": {
+      "seeded": "Los tipos integrados no se pueden eliminar. Desactívelo en su lugar.",
+      "inUse_one": "Lo usa {{count}} producto de datos. Desactívelo en su lugar.",
+      "inUse_other": "Lo usan {{count}} productos de datos. Desactívelo en su lugar."
+    },
+    "messages": {
+      "updated": "Tipo de producto de datos \"{{name}}\" actualizado.",
+      "created": "Tipo de producto de datos \"{{name}}\" creado.",
+      "deleted": "Tipo de producto de datos \"{{name}}\" eliminado.",
+      "reorderFailed": "No se pudo reordenar"
+    },
+    "errors": {
+      "data_product_type_not_found": "Este tipo de producto de datos ya no existe.",
+      "data_product_type_key_exists": "Ya existe un tipo de producto de datos con la clave \"{{key}}\".",
+      "data_product_type_in_use_one": "\"{{key}}\" lo usa {{count}} producto de datos. Desactívelo en lugar de eliminarlo.",
+      "data_product_type_in_use_other": "\"{{key}}\" lo usan {{count}} productos de datos. Desactívelo en lugar de eliminarlo.",
+      "data_product_type_seeded": "\"{{key}}\" es un tipo integrado y no se puede eliminar. Desactívelo en su lugar.",
+      "data_product_type_default_inactive": "\"{{key}}\" no puede ser predeterminado e inactivo a la vez. Establezca primero otro tipo como predeterminado."
+    }
   },
   "certificationLevels": {
     "title": "Niveles de certificación",

@@ -111,6 +111,7 @@
     "uiCustomization": "UIカスタマイズ",
     "connectors": "コネクタ",
     "schemaImporter": "スキーマインポーター",
+    "dataProductTypes": "データプロダクトタイプ",
     "certificationLevels": "認定レベル",
     "maturityLevels": "成熟度レベル"
   },
@@ -1166,6 +1167,69 @@
     },
     "saveButton": "配信設定を正常に保存しました",
     "title": "配信モード"
+  },
+  "dataProductTypes": {
+    "title": "データプロダクトタイプ",
+    "description": "データプロダクトに設定できるタイプを定義します。組み込みタイプは名前の変更や無効化はできますが、削除はできません。",
+    "addType": "タイプを追加",
+    "table": {
+      "label": "ラベル",
+      "key": "キー",
+      "products": "プロダクト",
+      "active": "有効"
+    },
+    "badges": {
+      "default": "デフォルト",
+      "builtIn": "組み込み",
+      "imported": "インポート済み"
+    },
+    "actions": {
+      "moveUp": "{{name}} を上へ移動",
+      "moveDown": "{{name}} を下へ移動",
+      "toggleActive": "有効: {{name}}",
+      "makeDefault": "デフォルトにする",
+      "makeDefaultFor": "{{name}} をデフォルトにする",
+      "edit": "{{name}} を編集",
+      "delete": "{{name}} を削除"
+    },
+    "emptyState": "データプロダクトタイプはまだありません。「タイプを追加」をクリックして作成してください。",
+    "defaultCannotBeInactive": "デフォルトのタイプは無効にできません。先に別のタイプをデフォルトにしてください。",
+    "dialog": {
+      "editTitle": "データプロダクトタイプを編集",
+      "createTitle": "データプロダクトタイプを追加",
+      "editDescription": "このタイプの表示を変更します。キーは変わりません。",
+      "createDescription": "プロデューサーがデータプロダクトに選択できるタイプを作成します。"
+    },
+    "form": {
+      "label": "ラベル",
+      "labelPlaceholder": "例: Golden Record",
+      "seededLabelHint": "組み込みタイプは、ラベルを変更するまで翻訳されて表示されます。",
+      "key": "キー",
+      "keyHint": "小文字の単語をハイフンでつないだもの (例: golden-record)。後から変更できず、ODPS ファイルで使われる値になります。",
+      "keyImmutable": "キーは変更できません。",
+      "color": "色"
+    },
+    "delete": {
+      "title": "データプロダクトタイプを削除しますか?",
+      "description": "「{{name}}」を削除してもよろしいですか? この操作は元に戻せません。"
+    },
+    "deleteBlocked": {
+      "seeded": "組み込みタイプは削除できません。代わりに無効にしてください。",
+      "inUse_other": "{{count}} 個のデータプロダクトで使用中です。代わりに無効にしてください。"
+    },
+    "messages": {
+      "updated": "データプロダクトタイプ「{{name}}」を更新しました。",
+      "created": "データプロダクトタイプ「{{name}}」を作成しました。",
+      "deleted": "データプロダクトタイプ「{{name}}」を削除しました。",
+      "reorderFailed": "並べ替えに失敗しました"
+    },
+    "errors": {
+      "data_product_type_not_found": "このデータプロダクトタイプはもう存在しません。",
+      "data_product_type_key_exists": "キー「{{key}}」のデータプロダクトタイプは既に存在します。",
+      "data_product_type_in_use_other": "「{{key}}」は {{count}} 個のデータプロダクトで使用中です。削除せずに無効にしてください。",
+      "data_product_type_seeded": "「{{key}}」は組み込みタイプのため削除できません。代わりに無効にしてください。",
+      "data_product_type_default_inactive": "「{{key}}」をデフォルトかつ無効にすることはできません。先に別のタイプをデフォルトにしてください。"
+    }
   },
   "certificationLevels": {
     "title": "認定レベル",

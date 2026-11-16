@@ -194,6 +194,21 @@ def test_items_missing_from_three_complete_syncs_are_retired_and_come_back(db_se
     assert RETIRED_BY_SYNC_PROPERTY not in view.properties
 
 
+def test_run_now_clicks_do_not_count_misses(db_session, sync, importer, source):
+    _run(db_session, sync, importer)
+    workbook = _asset(db_session, WB)
+    source.workbooks.pop()
+
+    for _ in range(3):
+        clear_listing_cache()
+        summary = ConnectorSyncManager().run(db_session, sync, importer, trigger="manual")
+        assert summary["status"] == STATUS_COMPLETED and summary["retired"] == 0
+    assert workbook.status == "active" and MISSED_PROPERTY not in workbook.properties
+
+    _run(db_session, sync, importer)  # a scheduled run is the one that counts
+    assert workbook.properties[MISSED_PROPERTY] == 1 and workbook.status == "active"
+
+
 def test_a_field_dropped_from_a_changed_data_source_counts_a_miss(db_session, sync, importer, source):
     _run(db_session, sync, importer)
     source.datasources[0]["updatedAt"] = T1

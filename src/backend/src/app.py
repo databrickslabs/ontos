@@ -62,6 +62,7 @@ from src.routes import (
     connection_routes,
     schema_import_routes,
     dashboard_snapshot_routes,
+    connector_sync_routes,
     domain_sync_routes,
     asset_bulk_routes,
     costs_routes,
@@ -491,6 +492,7 @@ directory_routes.register_routes(app)
 connection_routes.register_routes(app)
 schema_import_routes.register_routes(app)
 dashboard_snapshot_routes.register_routes(app)
+connector_sync_routes.register_routes(app)
 domain_sync_routes.register_routes(app)
 term_mapping_routes.register_routes(app)
 

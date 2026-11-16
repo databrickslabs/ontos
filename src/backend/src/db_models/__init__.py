@@ -50,6 +50,7 @@ from . import workflow_installations
 from . import workflow_job_runs
 from . import ontology_generation_runs
 from . import schema_import_runs
+from . import connector_syncs
 from . import term_mappings
 from . import search_documents
 from . import metric_view_baselines

@@ -802,6 +802,28 @@
       "caBundlePathHelp": "Optional. PEM-Bundle für Tableau Server mit privater Zertifizierungsstelle.",
       "defaultCatalog": "Standardkatalog",
       "defaultCatalogHelp": "Optional. Unity-Catalog-Katalog für Databricks-Tabellen, die Tableau nur als schema.tabelle benennt."
+    },
+    "syncs": {
+      "menu": "Synchronisierungen",
+      "title": "Synchronisierungen von {{name}}",
+      "description": "Auswahlen dieser Verbindung, die der Job „Connector Sync“ regelmäßig erneut importiert.",
+      "none": "Noch keine Synchronisierungen. Importieren Sie im Schema-Importer aus dieser Verbindung und wählen Sie „Synchron halten“.",
+      "everyMinutes": "Alle {{count}} Minuten",
+      "retireAfter": "Stilllegung nach verpassten Synchronisierungen: {{count}}",
+      "status": {
+        "completed": "Abgeschlossen",
+        "incomplete": "Unvollständig (nichts stillgelegt)",
+        "failed": "Fehlgeschlagen"
+      },
+      "lastRun": "Letzter Lauf",
+      "neverRun": "Noch nicht gelaufen",
+      "enabled": "Aktiviert",
+      "runNow": "Jetzt ausführen",
+      "runStarted": "Synchronisierung „{{name}}“ gestartet",
+      "runFailed": "Synchronisierung konnte nicht gestartet werden",
+      "updateFailed": "Synchronisierung konnte nicht aktualisiert werden",
+      "deleteFailed": "Synchronisierung konnte nicht gelöscht werden",
+      "jobWarningTitle": "Geplanter Job läuft nicht"
     }
   },
   "schemaImporter": {

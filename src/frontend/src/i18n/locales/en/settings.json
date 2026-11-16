@@ -820,6 +820,28 @@
       "caBundlePathHelp": "Optional. PEM bundle for Tableau Server with a private certificate authority.",
       "defaultCatalog": "Default catalog",
       "defaultCatalogHelp": "Optional. Unity Catalog catalog for Databricks tables Tableau names as schema.table only."
+    },
+    "syncs": {
+      "menu": "Syncs",
+      "title": "Syncs of {{name}}",
+      "description": "Selections of this connection that are imported again on a schedule by the Connector Sync job.",
+      "none": "No syncs yet. Import from this connection in the Schema Importer and choose “Keep in sync”.",
+      "everyMinutes": "Every {{count}} minutes",
+      "retireAfter": "Retired after missed syncs: {{count}}",
+      "status": {
+        "completed": "Completed",
+        "incomplete": "Incomplete (nothing retired)",
+        "failed": "Failed"
+      },
+      "lastRun": "Last run",
+      "neverRun": "Not run yet",
+      "enabled": "Enabled",
+      "runNow": "Run now",
+      "runStarted": "Sync \"{{name}}\" started",
+      "runFailed": "Could not start the sync",
+      "updateFailed": "Could not update the sync",
+      "deleteFailed": "Could not delete the sync",
+      "jobWarningTitle": "Scheduled job not running"
     }
   },
   "schemaImporter": {

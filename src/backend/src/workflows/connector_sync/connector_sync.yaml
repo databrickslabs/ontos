@@ -1,0 +1,82 @@
+name: "Connector Sync"
+description: "Import connector selections again (e.g. Tableau projects): refresh what changed, retire what the source dropped"
+format: "MULTI_TASK"
+deploy_backend_source: true
+environments:
+  - environment_key: "connector-sync-env"
+    spec:
+      dependencies:
+        - "databricks-sdk>=0.148.0"
+        - "alembic"
+        - "bcrypt"
+        - "fastapi"
+        - "gitpython"
+        - "pydantic[email]"
+        - "pydantic-settings"
+        - "python-dotenv"
+        - "python-multipart"
+        - "pyyaml"
+        - "requests"
+        - "sqlalchemy"
+        - "psycopg2-binary"
+tasks:
+  - task_key: "connector_sync"
+    spark_python_task:
+      python_file: "connector_sync.py"
+      parameters:
+        - "--sync_id"
+        - "{{job.parameters.sync_id}}"
+        - "--backend_source_path"
+        - "{{job.parameters.backend_source_path}}"
+        - "--databricks_volume"
+        - "{{job.parameters.databricks_volume}}"
+        - "--databricks_catalog"
+        - "{{job.parameters.databricks_catalog}}"
+        - "--databricks_schema"
+        - "{{job.parameters.databricks_schema}}"
+        - "--lakebase_instance_name"
+        - "{{job.parameters.lakebase_instance_name}}"
+        - "--postgres_host"
+        - "{{job.parameters.postgres_host}}"
+        - "--postgres_db"
+        - "{{job.parameters.postgres_db}}"
+        - "--postgres_port"
+        - "{{job.parameters.postgres_port}}"
+        - "--postgres_schema"
+        - "{{job.parameters.postgres_schema}}"
+        - "--product_name"
+        - "{{job.parameters.product_name}}"
+        - "--product_version"
+        - "{{job.parameters.product_version}}"
+    environment_key: "connector-sync-env"
+
+# Hourly; each sync has its own interval and only runs when due. Paused until
+# the first sync is created (the app unpauses it).
+schedule:
+  quartz_cron_expression: "0 0 * * * ?"
+  timezone_id: "UTC"
+  pause_status: "PAUSED"
+
+# Standard runtime parameters. sync_id empty: run all due syncs; set by "Run now".
+parameters:
+  sync_id: ""
+  backend_source_path: ""
+  databricks_volume: ""
+  databricks_catalog: ""
+  databricks_schema: ""
+  lakebase_instance_name: ""
+  postgres_host: ""
+  postgres_db: ""
+  postgres_port: "5432"
+  postgres_schema: "public"
+  product_name: "ontos"
+  product_version: "0.0.0"
+
+timeout_seconds: 7200
+max_concurrent_runs: 1
+
+tags:
+  environment: "production"
+  team: "data_governance"
+  workflow_type: "sync"
+  owner: "ontos"

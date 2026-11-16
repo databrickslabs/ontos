@@ -247,6 +247,16 @@ _RENDER_FAILURES = (
 )
 
 
+def check_secret_access(workspace_client: Any, secret_name: Optional[str]) -> None:
+    """Raise ConnectorAuthenticationError unless ``workspace_client`` can read the Tableau secret.
+
+    Used to check that the person creating or running a sync holds READ_SECRET:
+    the scheduled job reads the secret as the app's service principal, so the
+    check happens on the caller's own client.
+    """
+    TableauConnector(TableauConnectorConfig(secret_name=secret_name, workspace_client=workspace_client))._read_secret()
+
+
 class TableauConnector(AssetConnector):
     """Asset connector for Tableau Cloud and Tableau Server."""
 
@@ -545,6 +555,7 @@ class TableauConnector(AssetConnector):
                     description=wb.get("description") or None,
                     path=f"{path}.{make_segment(WORKBOOK, wb['id'])}",
                     url=wb.get("webpageUrl"),
+                    updated_at=_parse_ts(wb.get("updatedAt")),
                 ))
             for ds in self._datasources():
                 if (ds.get("project") or {}).get("id") != luid:
@@ -557,6 +568,7 @@ class TableauConnector(AssetConnector):
                     description=ds.get("description") or None,
                     path=f"{path}.{make_segment(DATASOURCE, ds['id'])}",
                     url=ds.get("webpageUrl"),
+                    updated_at=_parse_ts(ds.get("updatedAt")),
                 ))
         elif kind == WORKBOOK:
             kinds = self._view_kinds(luid)
@@ -569,6 +581,7 @@ class TableauConnector(AssetConnector):
                     connector_type=self.connector_type,
                     path=f"{path}.{make_segment(VIEW, view['id'])}",
                     url=self._view_url(view),
+                    updated_at=_parse_ts(view.get("updatedAt")),
                 ))
 
         if search:

@@ -802,6 +802,28 @@
       "caBundlePathHelp": "Opcional. Paquete PEM para Tableau Server con una autoridad de certificación privada.",
       "defaultCatalog": "Catálogo predeterminado",
       "defaultCatalogHelp": "Opcional. Catálogo de Unity Catalog para las tablas de Databricks que Tableau nombra solo como esquema.tabla."
+    },
+    "syncs": {
+      "menu": "Sincronizaciones",
+      "title": "Sincronizaciones de {{name}}",
+      "description": "Selecciones de esta conexión que el job Connector Sync vuelve a importar de forma programada.",
+      "none": "Aún no hay sincronizaciones. Importe desde esta conexión en el Schema Importer y elija «Mantener sincronizado».",
+      "everyMinutes": "Cada {{count}} minutos",
+      "retireAfter": "Retirado tras sincronizaciones sin el elemento: {{count}}",
+      "status": {
+        "completed": "Completada",
+        "incomplete": "Incompleta (nada retirado)",
+        "failed": "Fallida"
+      },
+      "lastRun": "Última ejecución",
+      "neverRun": "Aún sin ejecutar",
+      "enabled": "Activada",
+      "runNow": "Ejecutar ahora",
+      "runStarted": "Sincronización \"{{name}}\" iniciada",
+      "runFailed": "No se pudo iniciar la sincronización",
+      "updateFailed": "No se pudo actualizar la sincronización",
+      "deleteFailed": "No se pudo eliminar la sincronización",
+      "jobWarningTitle": "El job programado no se está ejecutando"
     }
   },
   "schemaImporter": {

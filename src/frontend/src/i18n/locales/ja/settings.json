@@ -802,6 +802,28 @@
       "caBundlePathHelp": "任意。プライベート認証局を使用する Tableau Server 用の PEM バンドル。",
       "defaultCatalog": "既定のカタログ",
       "defaultCatalogHelp": "任意。Tableau が schema.table とだけ表記する Databricks テーブルの Unity Catalog カタログ。"
+    },
+    "syncs": {
+      "menu": "同期",
+      "title": "{{name}} の同期",
+      "description": "Connector Sync ジョブがスケジュールに従って再インポートする、この接続の選択内容です。",
+      "none": "同期はまだありません。スキーマインポーターでこの接続からインポートし、「同期を維持」を選択してください。",
+      "everyMinutes": "{{count}} 分ごと",
+      "retireAfter": "同期で見つからない回数による廃止: {{count}}",
+      "status": {
+        "completed": "完了",
+        "incomplete": "不完全（廃止なし）",
+        "failed": "失敗"
+      },
+      "lastRun": "前回の実行",
+      "neverRun": "未実行",
+      "enabled": "有効",
+      "runNow": "今すぐ実行",
+      "runStarted": "同期「{{name}}」を開始しました",
+      "runFailed": "同期を開始できませんでした",
+      "updateFailed": "同期を更新できませんでした",
+      "deleteFailed": "同期を削除できませんでした",
+      "jobWarningTitle": "スケジュールされたジョブが実行されていません"
     }
   },
   "schemaImporter": {

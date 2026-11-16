@@ -86,5 +86,21 @@
     },
     "warningsTitle": "Avisos ({{count}})",
     "moreWarnings": "+{{count}} a mais"
+  },
+  "sync": {
+    "keepInSync": "Manter sincronizado",
+    "description": "Importar esta seleção novamente de forma agendada: as alterações na origem são aplicadas e os itens que a origem não tem mais são retirados.",
+    "interval": "Frequência",
+    "intervals": {
+      "60": "A cada hora",
+      "1440": "Diariamente",
+      "10080": "Semanalmente"
+    },
+    "retireAfter": "Retirar após sincronizações sem o item",
+    "retireAfterHint": "Itens ausentes deste número de sincronizações completas seguidas são retirados (nunca excluídos).",
+    "save": "Salvar sincronização",
+    "saved": "Sincronização \"{{name}}\" salva",
+    "nextRun": "Próxima execução",
+    "saveFailed": "Não foi possível salvar a sincronização"
   }
 }

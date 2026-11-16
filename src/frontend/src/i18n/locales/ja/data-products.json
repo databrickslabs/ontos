@@ -377,7 +377,10 @@
       "unlinkContract": "このデリバラブルから契約のリンクを解除しますか？",
       "createGenieSpace": "\"{{name}}\" の Genie Space を作成しますか？"
     },
-    "contractDangling": "契約はもう存在しません"
+    "contractDangling": "契約はもう存在しません",
+    "errors": {
+      "complianceIncomplete": "__TODO__ Cannot publish: required compliance fields are missing: {{missing}}."
+    }
   },
   "form": {
     "createTitle": "データ製品を作成",
@@ -1215,5 +1218,28 @@
     "consumer-aligned": "コンシューマー指向",
     "source": "ソース",
     "sink": "シンク"
+  },
+  "compliance": {
+    "modal": {
+      "defaultTitle": "__TODO__ Compliance",
+      "descriptionWrite": "__TODO__ Complete the compliance information for this item.",
+      "descriptionReadOnly": "__TODO__ Compliance information for this item (read-only).",
+      "noTemplate": "__TODO__ No active compliance template for this item.",
+      "loadFailed": "__TODO__ Failed to load compliance data",
+      "saved": "__TODO__ Saved",
+      "savedDescription": "__TODO__ Compliance information updated.",
+      "saveFailed": "__TODO__ Failed to save",
+      "yes": "__TODO__ Yes",
+      "no": "__TODO__ No",
+      "selectPlaceholder": "__TODO__ Select…",
+      "noOptions": "__TODO__ No options defined.",
+      "low": "__TODO__ Low",
+      "high": "__TODO__ High",
+      "rangeLowLabel": "__TODO__ {{label}} low",
+      "rangeHighLabel": "__TODO__ {{label}} high",
+      "cancel": "__TODO__ Cancel",
+      "close": "__TODO__ Close",
+      "save": "__TODO__ Save"
+    }
   }
 }

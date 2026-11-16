@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useTranslation } from 'react-i18next';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 
@@ -111,6 +112,7 @@ function FieldInput({
   onChange: (value: unknown) => void;
 }) {
   const id = `cf-${field.id}`;
+  const { t } = useTranslation('data-products');
 
   switch (field.value_type) {
     case 'numeric':
@@ -135,7 +137,7 @@ function FieldInput({
             onCheckedChange={(checked) => onChange(checked === true)}
           />
           <label htmlFor={id} className="text-sm text-muted-foreground">
-            {value === true ? 'Yes' : 'No'}
+            {value === true ? t('compliance.modal.yes') : t('compliance.modal.no')}
           </label>
         </div>
       );
@@ -159,7 +161,7 @@ function FieldInput({
           onValueChange={(v) => onChange(v)}
         >
           <SelectTrigger id={id}>
-            <SelectValue placeholder={field.hint_text || 'Select…'} />
+            <SelectValue placeholder={field.hint_text || t('compliance.modal.selectPlaceholder')} />
           </SelectTrigger>
           <SelectContent>
             {(field.possible_values || []).map((opt) => (
@@ -193,7 +195,7 @@ function FieldInput({
             </div>
           ))}
           {(field.possible_values || []).length === 0 && (
-            <p className="text-xs text-muted-foreground">No options defined.</p>
+            <p className="text-xs text-muted-foreground">{t('compliance.modal.noOptions')}</p>
           )}
         </div>
       );
@@ -211,21 +213,21 @@ function FieldInput({
           <Input
             id={`${id}-low`}
             type="number"
-            aria-label={`${field.label} low`}
+            aria-label={t('compliance.modal.rangeLowLabel', { label: field.label })}
             value={range.low == null ? '' : String(range.low)}
             disabled={disabled}
             onChange={(e) => update('low', e.target.value)}
-            placeholder="Low"
+            placeholder={t('compliance.modal.low')}
           />
           <span className="text-muted-foreground">–</span>
           <Input
             id={`${id}-high`}
             type="number"
-            aria-label={`${field.label} high`}
+            aria-label={t('compliance.modal.rangeHighLabel', { label: field.label })}
             value={range.high == null ? '' : String(range.high)}
             disabled={disabled}
             onChange={(e) => update('high', e.target.value)}
-            placeholder="High"
+            placeholder={t('compliance.modal.high')}
           />
         </div>
       );
@@ -254,6 +256,7 @@ export default function ComplianceModal({
   canWrite,
   onSaved,
 }: ComplianceModalProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { toast } = useToast();
   const { get, put } = useApi();
 
@@ -280,11 +283,15 @@ export default function ComplianceModal({
       }
       setDraft(seeded);
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Failed to load compliance data', variant: 'destructive' });
+      toast({
+        title: t('common:toast.error'),
+        description: err?.message || t('compliance.modal.loadFailed'),
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
-  }, [get, entityType, entityId, toast]);
+  }, [get, entityType, entityId, toast, t]);
 
   useEffect(() => {
     if (open) fetchData();
@@ -307,11 +314,15 @@ export default function ComplianceModal({
         { values },
       );
       if (error) throw new Error(error);
-      toast({ title: 'Saved', description: 'Compliance information updated.' });
+      toast({ title: t('compliance.modal.saved'), description: t('compliance.modal.savedDescription') });
       onOpenChange(false);
       onSaved?.();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Failed to save', variant: 'destructive' });
+      toast({
+        title: t('common:toast.error'),
+        description: err?.message || t('compliance.modal.saveFailed'),
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }
@@ -323,11 +334,11 @@ export default function ComplianceModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{data?.template?.name || 'Compliance'}</DialogTitle>
+          <DialogTitle>{data?.template?.name || t('compliance.modal.defaultTitle')}</DialogTitle>
           <DialogDescription>
             {canWrite
-              ? 'Complete the compliance information for this item.'
-              : 'Compliance information for this item (read-only).'}
+              ? t('compliance.modal.descriptionWrite')
+              : t('compliance.modal.descriptionReadOnly')}
           </DialogDescription>
         </DialogHeader>
 
@@ -337,7 +348,7 @@ export default function ComplianceModal({
           </div>
         ) : !data?.template ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No active compliance template for this item.
+            {t('compliance.modal.noTemplate')}
           </p>
         ) : (
           <div className="space-y-6 py-2">
@@ -370,12 +381,12 @@ export default function ComplianceModal({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {canWrite ? 'Cancel' : 'Close'}
+            {canWrite ? t('compliance.modal.cancel') : t('compliance.modal.close')}
           </Button>
           {canWrite && data?.template && (
             <Button onClick={handleSave} disabled={saving || loading}>
               {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-              Save
+              {t('compliance.modal.save')}
             </Button>
           )}
         </DialogFooter>

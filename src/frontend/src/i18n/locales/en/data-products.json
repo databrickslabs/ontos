@@ -377,7 +377,10 @@
       "unlinkContract": "Unlink contract from this deliverable?",
       "createGenieSpace": "Create a Genie Space for \"{{name}}\"?"
     },
-    "contractDangling": "Contract no longer exists"
+    "contractDangling": "Contract no longer exists",
+    "errors": {
+      "complianceIncomplete": "Cannot publish: required compliance fields are missing: {{missing}}."
+    }
   },
   "form": {
     "createTitle": "Create Data Product",
@@ -1215,5 +1218,28 @@
     "consumer-aligned": "Consumer-Aligned",
     "source": "Source",
     "sink": "Sink"
+  },
+  "compliance": {
+    "modal": {
+      "defaultTitle": "Compliance",
+      "descriptionWrite": "Complete the compliance information for this item.",
+      "descriptionReadOnly": "Compliance information for this item (read-only).",
+      "noTemplate": "No active compliance template for this item.",
+      "loadFailed": "Failed to load compliance data",
+      "saved": "Saved",
+      "savedDescription": "Compliance information updated.",
+      "saveFailed": "Failed to save",
+      "yes": "Yes",
+      "no": "No",
+      "selectPlaceholder": "Select…",
+      "noOptions": "No options defined.",
+      "low": "Low",
+      "high": "High",
+      "rangeLowLabel": "{{label}} low",
+      "rangeHighLabel": "{{label}} high",
+      "cancel": "Cancel",
+      "close": "Close",
+      "save": "Save"
+    }
   }
 }

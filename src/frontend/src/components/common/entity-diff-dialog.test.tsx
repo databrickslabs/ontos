@@ -112,6 +112,42 @@ describe('EntityDiffDialog', () => {
     await waitFor(() => expect(screen.getAllByText(/No differences/).length).toBeGreaterThan(0));
   });
 
+  it('shows changes a page at a time and reveals the rest on Show more', async () => {
+    const many = Array.from({ length: 150 }, (_, i) => ({
+      path: `properties[p${i}]`, op: 'removed' as const, bump: 'major' as const,
+      rule_id: 'property-removed', message: 'Property removed', old: { name: `p${i}` },
+    }));
+    mockFetch(diffResponse({ changes: many, changes_total: 150, counts: { major: 150, minor: 0, patch: 0, none: 0 } }));
+    renderDialog();
+
+    expect(await screen.findByText('properties[p0]')).toBeInTheDocument();
+    expect(screen.queryByText('properties[p120]')).not.toBeInTheDocument();
+    expect(screen.getByText('Showing 100 of 150')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show more' }));
+
+    expect(await screen.findByText('properties[p120]')).toBeInTheDocument();
+    expect(screen.queryByText('Showing 100 of 150')).not.toBeInTheDocument();
+  });
+
+  it('says when the response cut the change list at the cap', async () => {
+    mockFetch(diffResponse({ changes_total: 5000, changes_truncated: true }));
+    renderDialog();
+
+    expect(await screen.findByText('Output port removed')).toBeInTheDocument();
+    expect(screen.getByText(/too many changes/i)).toBeInTheDocument();
+  });
+
+  it('shows a notice instead of the YAML when the text diff was skipped', async () => {
+    mockFetch(diffResponse({ unified_diff: '', unified_diff_truncated: true }));
+    renderDialog();
+    await screen.findByText('Output port removed');
+
+    await userEvent.click(screen.getByRole('tab', { name: /YAML/ }));
+
+    expect(await screen.findByText(/too large to show/i)).toBeInTheDocument();
+  });
+
   it('shows an error when the comparison fails to load', async () => {
     mockFetch({}, false);
     renderDialog();

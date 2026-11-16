@@ -190,3 +190,18 @@ class TestProductDiffRoutes:
 
         assert resp.status_code == 400
         assert 'different version families' in resp.json()['detail']
+
+
+class TestDiffSizeCap:
+    def test_an_oversized_version_answers_413(self, client, db_session, diff_routes, monkeypatch):
+        from src.common.entity_diff import engine
+
+        monkeypatch.setattr(engine, "MAX_DIFF_NODES", 5)
+        family = str(uuid.uuid4())
+        v1 = _contract(db_session, family, '1.0.0')
+        v2 = _contract(db_session, family, '1.0.1')
+        _as_caller(_scope())
+
+        resp = client.get(f'/api/data-contracts/{v1.id}/diff/{v2.id}')
+
+        assert resp.status_code == 413

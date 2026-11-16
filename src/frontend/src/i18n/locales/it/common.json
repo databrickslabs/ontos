@@ -704,7 +704,11 @@
     "compareWithPrevious": "Confronta con la precedente (v{{version}})",
     "compareWithCurrent": "Confronta con la versione corrente",
     "viewFullDiff": "Vedi diff completo",
-    "viewChanges": "Vedi modifiche"
+    "viewChanges": "Vedi modifiche",
+    "showMore": "Mostra altro",
+    "showingOf": "Mostrati {{shown}} di {{total}}",
+    "changesCapped": "Troppe modifiche per elencarle tutte ({{total}} in totale). I conteggi sopra includono tutte le modifiche.",
+    "yamlCapped": "Il diff YAML è troppo grande per essere mostrato qui. Le modifiche sopra sono complete."
   },
   "versioning": {
     "recommendedBump": "Incremento di versione consigliato:",

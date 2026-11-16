@@ -2649,7 +2649,7 @@ async def get_diff_from_parent(
 
 
 @router.get('/data-products/{base_id}/diff/{target_id}', response_model=EntityDiffResponse)
-async def diff_product_versions(
+def diff_product_versions(
     base_id: str,
     target_id: str,
     request: Request,
@@ -2665,7 +2665,7 @@ async def diff_product_versions(
     the changes, and a unified YAML diff. Both products must be readable by the
     caller (same rule as GET /data-products/{id}); a miss is a 404.
     """
-    from src.common.entity_diff import EntityNotFound, VersionFamilyMismatch
+    from src.common.entity_diff import EntityNotFound, EntityTooLarge, VersionFamilyMismatch
 
     products = []
     for product_id in (base_id, target_id):
@@ -2681,6 +2681,8 @@ async def diff_product_versions(
         raise HTTPException(status_code=400, detail="Products belong to different version families")
     except EntityNotFound:
         raise HTTPException(status_code=404, detail="Data product not found")
+    except EntityTooLarge as e:
+        raise HTTPException(status_code=413, detail=str(e))
     except Exception:
         logger.error("Error diffing products %s and %s", base_id, target_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to diff product versions")

@@ -4237,7 +4237,7 @@ async def get_diff_from_parent(
 
 
 @router.get('/data-contracts/{base_id}/diff/{target_id}', response_model=EntityDiffResponse)
-async def diff_contract_versions(
+def diff_contract_versions(
     base_id: str,
     target_id: str,
     db: DBSessionDep,
@@ -4252,7 +4252,7 @@ async def diff_contract_versions(
     the changes, and a unified YAML diff. Both contracts must be readable by the
     caller (same rule as GET /data-contracts/{id}); a miss is a 404.
     """
-    from src.common.entity_diff import EntityNotFound, VersionFamilyMismatch
+    from src.common.entity_diff import EntityNotFound, EntityTooLarge, VersionFamilyMismatch
 
     rows = []
     for contract_id in (base_id, target_id):
@@ -4267,6 +4267,8 @@ async def diff_contract_versions(
         raise HTTPException(status_code=400, detail="Contracts belong to different version families")
     except EntityNotFound:
         raise HTTPException(status_code=404, detail="Contract not found")
+    except EntityTooLarge as e:
+        raise HTTPException(status_code=413, detail=str(e))
     except Exception:
         logger.error("Error diffing contracts %s and %s", base_id, target_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to diff contract versions")

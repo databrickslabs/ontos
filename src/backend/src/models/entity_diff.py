@@ -28,7 +28,9 @@ class EntityDiffResponse(BaseModel):
     entity_type: Literal["data_contract", "data_product"]
     base: EntityVersionRef
     target: EntityVersionRef
-    changes: List[EntityDiffChange]
+    changes: List[EntityDiffChange] = Field(..., description="Up to 1000 changes; see changes_total")
+    changes_total: int = Field(0, description="Number of changes before the response cap")
+    changes_truncated: bool = Field(False, description="True when changes was cut at the response cap")
     counts: Dict[BumpLabel, int]
     suggested_bump: BumpLabel = Field(..., description="Highest bump across all changes")
     suggested_version: str = Field(..., description="base.version bumped by suggested_bump")
@@ -38,3 +40,4 @@ class EntityDiffResponse(BaseModel):
                     "null when it can't be judged (unparseable, or target not newer than base)",
     )
     unified_diff: str = Field(..., description="Unified diff of the two normalized file-model documents (YAML)")
+    unified_diff_truncated: bool = Field(False, description="True when unified_diff was cut at the line cap")

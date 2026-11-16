@@ -183,3 +183,52 @@ class TestVersionHelpers:
         assert is_version_consistent("1.0.0", "1.0.0", Bump.NONE) is True
         # Older-vs-newer or unparseable: can't judge
         assert is_version_consistent("2.0.0", "1.0.0", Bump.MAJOR) is None
+
+
+class TestSizeCaps:
+    def test_a_document_over_the_node_cap_is_refused_before_diffing(self, monkeypatch):
+        from src.common.entity_diff import EntityTooLarge
+        from src.common.entity_diff import engine
+
+        monkeypatch.setattr(engine, "MAX_DIFF_NODES", 50)
+        big = {"items": [{"name": f"i{n}", "v": n} for n in range(100)]}
+
+        with pytest.raises(EntityTooLarge):
+            diff_documents(big, {}, BY_NAME)
+
+    def test_a_document_at_the_node_cap_is_compared(self, monkeypatch):
+        from src.common.entity_diff import engine
+
+        monkeypatch.setattr(engine, "MAX_DIFF_NODES", 1000)
+        changes, _, _ = diff_documents({"a": 1}, {"a": 2}, BY_NAME)
+
+        assert _ops(changes) == {("a", "modified")}
+
+    def test_the_response_caps_changes_but_counts_all_of_them(self, monkeypatch):
+        from src.common.entity_diff import render
+        from src.common.entity_diff.rules_odcs import ODCS_PROFILE, ODCS_RULES
+
+        monkeypatch.setattr(render, "MAX_RESPONSE_CHANGES", 3)
+        old = {"schema": [{"name": "t", "properties": [{"name": f"p{n}", "logicalType": "string"} for n in range(10)]}]}
+        new = {"schema": [{"name": "t", "properties": [{"name": f"p{n}", "logicalType": "integer"} for n in range(10)]}]}
+
+        out = render.build_diff_response(
+            "data_contract", {"id": "a", "version": "1.0.0"}, {"id": "b", "version": "2.0.0"},
+            old, new, ODCS_PROFILE, ODCS_RULES,
+        )
+
+        assert len(out["changes"]) == 3
+        assert out["changes_total"] == 10
+        assert out["changes_truncated"] is True
+        assert sum(out["counts"].values()) == 10
+
+    def test_the_unified_diff_is_cut_at_the_line_cap(self):
+        from src.common.entity_diff.render import bounded_unified_yaml_diff
+
+        old = {"items": [f"v{n}" for n in range(200)]}
+        new = {"items": [f"w{n}" for n in range(200)]}
+
+        text, cut = bounded_unified_yaml_diff(old, new, "a", "b", max_lines=20)
+
+        assert cut is True
+        assert len(text.splitlines()) == 20

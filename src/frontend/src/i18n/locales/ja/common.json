@@ -704,7 +704,11 @@
     "compareWithPrevious": "前のバージョンと比較 (v{{version}})",
     "compareWithCurrent": "現在のバージョンと比較",
     "viewFullDiff": "差分をすべて表示",
-    "viewChanges": "変更を表示"
+    "viewChanges": "変更を表示",
+    "showMore": "さらに表示",
+    "showingOf": "{{total}} 件中 {{shown}} 件を表示",
+    "changesCapped": "変更が多すぎるため全件を表示できません（全 {{total}} 件）。上の件数はすべての変更を含みます。",
+    "yamlCapped": "YAML の差分が大きすぎて表示できません。上の変更一覧は完全です。"
   },
   "versioning": {
     "recommendedBump": "推奨されるバージョンアップ:",

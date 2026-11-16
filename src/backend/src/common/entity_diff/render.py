@@ -1,8 +1,9 @@
 """Turn a comparison into the API response (structured changes + YAML diff)."""
 
 import difflib
+import itertools
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 
 import yaml
 
@@ -21,18 +22,49 @@ def to_yaml(doc: Dict[str, Any]) -> str:
     return yaml.safe_dump(doc, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
 
-def unified_yaml_diff(base_doc: Dict[str, Any], target_doc: Dict[str, Any],
-                      base_label: str, target_label: str, context: int = 3) -> str:
-    """Unified diff of two documents rendered as YAML. Callers pass the
-    normalized documents with ignored fields removed, so the text view agrees
-    with the structural changes."""
-    return "".join(difflib.unified_diff(
-        to_yaml(base_doc).splitlines(keepends=True),
-        to_yaml(target_doc).splitlines(keepends=True),
+# Output caps: the response carries at most this many changes and YAML lines.
+# The counts still cover every change; the flags say when a list was cut.
+MAX_RESPONSE_CHANGES = 1000
+MAX_UNIFIED_DIFF_LINES = 5000
+# difflib is quadratic in the YAML line count (about 0.3 s at 4000 lines a side,
+# 5 s at 16000), so a text diff of a bigger document is skipped; the structural
+# changes are still returned.
+MAX_YAML_INPUT_LINES = 4000
+
+
+def bounded_unified_yaml_diff(base_doc: Dict[str, Any], target_doc: Dict[str, Any],
+                              base_label: str, target_label: str, context: int = 3,
+                              max_lines: Optional[int] = None,
+                              max_input_lines: Optional[int] = None) -> Tuple[str, bool]:
+    """Unified diff of two documents rendered as YAML, cut after ``max_lines``.
+
+    Returns the text and whether it was cut (or skipped, when a side has more
+    than ``max_input_lines`` YAML lines). Callers pass the normalized documents
+    with ignored fields removed, so the text view agrees with the structural
+    changes.
+    """
+    base_yaml, target_yaml = to_yaml(base_doc), to_yaml(target_doc)
+    if max_input_lines is not None and max(base_yaml.count("\n"), target_yaml.count("\n")) > max_input_lines:
+        return "", True
+    lines = difflib.unified_diff(
+        base_yaml.splitlines(keepends=True),
+        target_yaml.splitlines(keepends=True),
         fromfile=base_label,
         tofile=target_label,
         n=context,
-    ))
+    )
+    if max_lines is None:
+        return "".join(lines), False
+    head = list(itertools.islice(lines, max_lines + 1))
+    if len(head) > max_lines:
+        return "".join(head[:max_lines]), True
+    return "".join(head), False
+
+
+def unified_yaml_diff(base_doc: Dict[str, Any], target_doc: Dict[str, Any],
+                      base_label: str, target_label: str, context: int = 3) -> str:
+    """Unified diff of two documents rendered as YAML (no line cap)."""
+    return bounded_unified_yaml_diff(base_doc, target_doc, base_label, target_label, context)[0]
 
 
 def _ref(meta: Dict[str, Any]) -> Dict[str, Any]:
@@ -51,20 +83,26 @@ def build_diff_response(entity_type: str, base_meta: Dict[str, Any], target_meta
     result: ComparisonResult = compare(to_plain(base_doc), to_plain(target_doc), profile, rule_set)
     result.base_version = base_meta.get("version")
     result.target_version = target_meta.get("version")
+    unified, unified_cut = bounded_unified_yaml_diff(
+        without_ignored(result.base_document, profile), without_ignored(result.target_document, profile),
+        f"{base_meta.get('name') or 'base'} {base_meta.get('version') or ''}".strip(),
+        f"{target_meta.get('name') or 'target'} {target_meta.get('version') or ''}".strip(),
+        max_lines=MAX_UNIFIED_DIFF_LINES,
+        max_input_lines=MAX_YAML_INPUT_LINES,
+    )
     return {
         "entity_type": entity_type,
         "base": _ref(base_meta),
         "target": _ref(target_meta),
-        "changes": [c.to_dict() for c in result.changes],
+        "changes": [c.to_dict() for c in result.changes[:MAX_RESPONSE_CHANGES]],
+        "changes_total": len(result.changes),
+        "changes_truncated": len(result.changes) > MAX_RESPONSE_CHANGES,
         "counts": result.classification.counts(),
         "suggested_bump": result.suggested_bump.label,
         "suggested_version": result.suggested_version,
         "version_consistent": result.version_consistent,
-        "unified_diff": unified_yaml_diff(
-            without_ignored(result.base_document, profile), without_ignored(result.target_document, profile),
-            f"{base_meta.get('name') or 'base'} {base_meta.get('version') or ''}".strip(),
-            f"{target_meta.get('name') or 'target'} {target_meta.get('version') or ''}".strip(),
-        ),
+        "unified_diff": unified,
+        "unified_diff_truncated": unified_cut,
     }
 
 

@@ -728,7 +728,11 @@
     "compareWithPrevious": "Comparer avec la précédente (v{{version}})",
     "compareWithCurrent": "Comparer avec la version actuelle",
     "viewFullDiff": "Voir le diff complet",
-    "viewChanges": "Voir les changements"
+    "viewChanges": "Voir les changements",
+    "showMore": "Afficher plus",
+    "showingOf": "{{shown}} sur {{total}} affichés",
+    "changesCapped": "Trop de modifications pour les afficher toutes ({{total}} au total). Les compteurs ci-dessus couvrent toutes les modifications.",
+    "yamlCapped": "Le diff YAML est trop volumineux pour être affiché ici. Les modifications ci-dessus sont complètes."
   },
   "versioning": {
     "recommendedBump": "Incrément de version recommandé :",

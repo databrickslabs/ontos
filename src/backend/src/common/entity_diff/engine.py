@@ -207,13 +207,43 @@ def _walk(old: Any, new: Any, path: str, shape: str, profile: DiffProfile,
         out.append(FieldChange(path, shape, "modified", old=old, new=new))
 
 
+# Input cap, counted in nodes (containers and scalars) before anything is
+# normalized, rendered as YAML or run through difflib. A contract with
+# thousands of properties is far above any real one; the bound keeps a request
+# to a few seconds of CPU, not minutes.
+MAX_DIFF_NODES = 50_000
+
+
+class EntityTooLarge(ValueError):
+    """A version has more fields than one comparison can handle."""
+
+
+def _exceeds_nodes(doc: Any, limit: int) -> bool:
+    count, stack = 0, [doc]
+    while stack:
+        node = stack.pop()
+        count += 1
+        if count > limit:
+            return True
+        if isinstance(node, dict):
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return False
+
+
 def diff_documents(old: Dict[str, Any], new: Dict[str, Any],
                    profile: DiffProfile) -> Tuple[List[FieldChange], Dict[str, Any], Dict[str, Any]]:
     """Diff two documents.
 
     Returns the changes plus both normalized documents (callers render the
     normalized forms as YAML so the text diff agrees with the structural one).
+
+    Raises:
+        EntityTooLarge: either document has more than ``MAX_DIFF_NODES`` nodes
     """
+    if _exceeds_nodes(old or {}, MAX_DIFF_NODES) or _exceeds_nodes(new or {}, MAX_DIFF_NODES):
+        raise EntityTooLarge(f"Too many fields to compare (limit {MAX_DIFF_NODES} per version)")
     old_n = normalize(old or {}, profile)
     new_n = normalize(new or {}, profile)
     changes: List[FieldChange] = []

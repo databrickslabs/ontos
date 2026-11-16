@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -46,14 +47,21 @@ export type EntityDiffResponse = {
   base: { id: string; name?: string; version?: string; status?: string }
   target: { id: string; name?: string; version?: string; status?: string }
   changes: EntityDiffChange[]
+  /** All changes, also when `changes` was cut at the response cap. */
+  changes_total?: number
+  changes_truncated?: boolean
   counts: Record<BumpLabel, number>
   suggested_bump: BumpLabel
   suggested_version: string
   version_consistent: boolean | null
   unified_diff: string
+  unified_diff_truncated?: boolean
 }
 
 const BUMP_ORDER: BumpLabel[] = ['major', 'minor', 'patch', 'none']
+/** Changes and YAML lines are shown in pages so a big comparison stays responsive. */
+const CHANGE_PAGE = 100
+const YAML_PAGE = 500
 
 export function diffEndpointFor(kind: EntityKind, baseId: string, targetId: string): string {
   const base = kind === 'product' ? '/api/data-products' : '/api/data-contracts'
@@ -134,6 +142,8 @@ export default function EntityDiffDialog({
   const [diff, setDiff] = useState<EntityDiffResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [changeLimit, setChangeLimit] = useState(CHANGE_PAGE)
+  const [yamlLimit, setYamlLimit] = useState(YAML_PAGE)
   const [fetchedVersions, setFetchedVersions] = useState<EntityVersionRow[]>([])
   const versions = providedVersions ?? fetchedVersions
 
@@ -176,7 +186,10 @@ export default function EntityDiffDialog({
         return (await res.json()) as EntityDiffResponse
       })
       .then((data) => {
-        if (!cancelled) setDiff(data)
+        if (cancelled) return
+        setChangeLimit(CHANGE_PAGE)
+        setYamlLimit(YAML_PAGE)
+        setDiff(data)
       })
       .catch(() => {
         if (!cancelled) {
@@ -192,11 +205,16 @@ export default function EntityDiffDialog({
     }
   }, [open, entityKind, baseId, targetId, t])
 
+  const shownChanges = useMemo(() => (diff?.changes ?? []).slice(0, changeLimit), [diff, changeLimit])
+
   const grouped = useMemo(() => {
     const groups: Record<BumpLabel, EntityDiffChange[]> = { major: [], minor: [], patch: [], none: [] }
-    for (const change of diff?.changes ?? []) groups[change.bump].push(change)
+    for (const change of shownChanges) groups[change.bump].push(change)
     return groups
-  }, [diff])
+  }, [shownChanges])
+
+  const yamlLines = useMemo(() => (diff?.unified_diff ?? '').split('\n'), [diff])
+  const totalChanges = diff?.changes_total ?? diff?.changes.length ?? 0
 
   const versionLabel = (v: EntityVersionRow) =>
     `${v.version || t('entityDiff.unknownVersion')}${v.status ? ` · ${v.status}` : ''}`
@@ -272,7 +290,7 @@ export default function EntityDiffDialog({
           <Tabs defaultValue="changes" className="flex-1 min-h-0 flex flex-col">
             <TabsList className="self-start">
               <TabsTrigger value="changes">
-                {t('entityDiff.tabs.changes', { count: diff.changes.length })}
+                {t('entityDiff.tabs.changes', { count: totalChanges })}
               </TabsTrigger>
               <TabsTrigger value="yaml">{t('entityDiff.tabs.yaml')}</TabsTrigger>
             </TabsList>
@@ -310,14 +328,31 @@ export default function EntityDiffDialog({
                       </ul>
                     </section>
                   ))}
+                  {diff.changes.length > changeLimit && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-muted-foreground">
+                        {t('entityDiff.showingOf', { shown: changeLimit, total: diff.changes.length })}
+                      </span>
+                      <Button variant="outline" size="sm"
+                        onClick={() => setChangeLimit((n) => n + CHANGE_PAGE)}>
+                        {t('entityDiff.showMore')}
+                      </Button>
+                    </div>
+                  )}
+                  {diff.changes_truncated && (
+                    <p className="text-sm text-muted-foreground">
+                      {t('entityDiff.changesCapped', { total: totalChanges })}
+                    </p>
+                  )}
                 </div>
               )}
             </TabsContent>
 
             <TabsContent value="yaml" className="flex-1 min-h-0 overflow-auto">
               {diff.unified_diff ? (
+                <div className="space-y-3">
                 <pre className="rounded border bg-muted/30 p-3 text-xs leading-5 overflow-x-auto">
-                  {diff.unified_diff.split('\n').map((line, i) => (
+                  {yamlLines.slice(0, yamlLimit).map((line, i) => (
                     <div
                       key={i}
                       className={cn(
@@ -331,6 +366,20 @@ export default function EntityDiffDialog({
                     </div>
                   ))}
                 </pre>
+                {yamlLines.length > yamlLimit && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-muted-foreground">
+                      {t('entityDiff.showingOf', { shown: yamlLimit, total: yamlLines.length })}
+                    </span>
+                    <Button variant="outline" size="sm"
+                      onClick={() => setYamlLimit((n) => n + YAML_PAGE)}>
+                      {t('entityDiff.showMore')}
+                    </Button>
+                  </div>
+                )}
+                </div>
+              ) : diff.unified_diff_truncated ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">{t('entityDiff.yamlCapped')}</p>
               ) : (
                 <p className="text-sm text-muted-foreground py-6 text-center">{t('entityDiff.noChanges')}</p>
               )}

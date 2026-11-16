@@ -7,7 +7,7 @@ Entity-agnostic structural diff (``engine``), semver rule machinery
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from .engine import DiffProfile, FieldChange, diff_documents
+from .engine import MAX_DIFF_NODES, DiffProfile, EntityTooLarge, FieldChange, diff_documents
 from .semver import (
     Bump,
     Classification,
@@ -77,8 +77,10 @@ __all__ = [
     "Classification",
     "ClassifiedChange",
     "ComparisonResult",
+    "MAX_DIFF_NODES",
     "DiffProfile",
     "EntityNotFound",
+    "EntityTooLarge",
     "FieldChange",
     "Rule",
     "RuleSet",

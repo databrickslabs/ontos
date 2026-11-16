@@ -34,7 +34,12 @@ def _no_recipient():
 
 
 def _is_actionable():
-    return and_(NotificationDb.action_type.isnot(None), NotificationDb.action_type != '')
+    """An approval, request or delivery: ``action_required`` with an action type. An action
+    type alone is not enough: informational rows carry one too (``agreement_completed``)."""
+    return and_(
+        NotificationDb.type == NotificationType.ACTION_REQUIRED.value,
+        NotificationDb.action_type.isnot(None), NotificationDb.action_type != '',
+    )
 
 
 def _is_decided():
@@ -96,7 +101,7 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
     ) -> List[NotificationDb]:
         """Rows that may be addressed to one user, newest first.
 
-        Every pending actionable row (an action type, not decided yet) is returned, so an
+        Every pending actionable row (``action_required``, not decided yet) is returned, so an
         approval or request never drops out of My actions or the bell. The other rows, decided
         actionable ones included, are capped at the newest ``history_limit``. ``keys=None``:
         the rows with no recipient.

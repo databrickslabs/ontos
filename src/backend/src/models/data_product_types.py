@@ -50,6 +50,9 @@ class DataProductTypeRead(BaseModel):
     is_imported: bool
     # One of the five types every install starts with; these can't be deleted.
     is_seeded: bool = False
+    # A seeded type whose label hasn't been changed; the UI then shows the
+    # translated label (`dataProductType.<key>`) instead of `label`.
+    has_seeded_label: bool = False
     # Number of data products using this type; a type in use can't be deleted.
     usage_count: int = 0
     created_at: datetime | None = None

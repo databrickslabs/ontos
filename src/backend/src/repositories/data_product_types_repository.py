@@ -55,6 +55,7 @@ SEEDED_TYPES = [
     },
 ]
 SEEDED_TYPE_KEYS = frozenset(t["key"] for t in SEEDED_TYPES)
+SEEDED_TYPE_LABELS = {t["key"]: t["label"] for t in SEEDED_TYPES}
 
 _KEY_MAX = 100
 _LABEL_MAX = 255

@@ -22,6 +22,7 @@ from src.models.data_product_types import (
 )
 from src.repositories.data_product_types_repository import (
     SEEDED_TYPE_KEYS,
+    SEEDED_TYPE_LABELS,
     DataProductTypesRepository,
     data_product_types_repo,
 )
@@ -179,6 +180,7 @@ class DataProductTypesManager:
     def _to_read(db_obj: DataProductTypeDb, usage_count: int) -> DataProductTypeRead:
         read = DataProductTypeRead.model_validate(db_obj)
         read.is_seeded = db_obj.key in SEEDED_TYPE_KEYS
+        read.has_seeded_label = SEEDED_TYPE_LABELS.get(db_obj.key) == db_obj.label
         read.usage_count = usage_count
         return read
 

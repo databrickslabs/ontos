@@ -65,6 +65,19 @@ def test_list_marks_seeded_types_and_counts_usage(manager, db_session, seeded):
     assert not by_key["custom"].is_seeded
 
 
+def test_list_flags_seeded_labels_until_renamed(manager, db_session, seeded):
+    manager.update_type(
+        db_session, _type(db_session, "aggregate").id, DataProductTypeUpdate(label="Composite")
+    )
+    manager.create_type(db_session, DataProductTypeCreate(key="custom", label="Custom"))
+
+    flags = {t.key: t.has_seeded_label for t in manager.list_types(db_session)}
+
+    assert flags["source-aligned"] and flags["sink"]
+    assert not flags["aggregate"]  # renamed
+    assert not flags["custom"]  # not a seeded type
+
+
 def test_list_active_only_hides_inactive_types(manager, db_session, seeded):
     manager.update_type(db_session, _type(db_session, "sink").id, DataProductTypeUpdate(is_active=False))
 

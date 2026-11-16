@@ -21,7 +21,7 @@ from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
 from src.models.notifications import Notification
 from src.common.workflow_approvals import (
-    is_handled, open_approval_ids, open_execution_approvals,
+    add_decided_by, is_handled, open_approval_ids, open_execution_approvals,
 )
 from src.common.logging import get_logger
 from src.controller.workflows_manager import WorkflowsManager
@@ -1729,11 +1729,14 @@ def _mark_decided_approver_notifications(
 
     For a require_all step still waiting for others (#1119): the notification
     of each decided target (a user, a group, a role) is handled, the others
-    stay open.
+    stay open. The open ones record who decided the step (``decided_by``,
+    #1552): one person decides once per step, so a role or group row shared
+    with the other members leaves only the lists of those who decided.
     """
     from src.common.workflow_executor import approver_key
 
     by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
+    deciders = [d.get('decided_by') for d in decisions]
     for notif in open_execution_approvals(db, execution_id):
         try:
             payload = json.loads(notif.action_payload or '{}')
@@ -1745,6 +1748,9 @@ def _mark_decided_approver_notifications(
             notif.recipient or notif.recipient_role_id or '', notif.recipient_role_id,
         ))
         if decision is None:
+            if add_decided_by(payload, deciders):
+                notif.action_payload = json.dumps(payload)
+                db.add(notif)
             continue
         notif.read = True
         payload.update({

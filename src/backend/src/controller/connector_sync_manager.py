@@ -136,10 +136,13 @@ class ConnectorSyncManager:
             # created before a failure stays, and the next run picks up from there
             result: ImportResult = importer.execute_import(db, request, current_user_id=SYNC_USER)
             connector_type = self._connector_type(db, sync)
-            # Only scheduled runs count misses: "Run now" clicks would otherwise retire in a burst
-            retirement = self.apply_retirement(
-                db, sync, connector_type, result, count_misses=trigger == "schedule",
-            )
+            # Retirement runs in a savepoint: a failure part-way reverts what it already changed
+            # (the run is recorded as failed and the session is committed after this)
+            with db.begin_nested():
+                # Only scheduled runs count misses: "Run now" clicks would otherwise retire in a burst
+                retirement = self.apply_retirement(
+                    db, sync, connector_type, result, count_misses=trigger == "schedule",
+                )
         except Exception as exc:
             logger.error(f"Connector sync '{sync.name}' ({sync.id}) failed: {exc}", exc_info=True)
             if not db.is_active:

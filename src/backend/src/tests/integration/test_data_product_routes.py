@@ -361,6 +361,54 @@ class TestDataProductRoutes:
         assert not stored.get("containsPii") and not stored.get("autoApprove")
         assert not stored.get("sbom") and not stored.get("inputContracts")
 
+    @staticmethod
+    def _product_with_input_ports(client, sample_product_data, status="active"):
+        sample_product_data["status"] = status
+        sample_product_data["inputPorts"] = [
+            {"name": "orders", "version": "1.0.0", "contractId": "contract-orders",
+             "assetType": "table", "assetIdentifier": "main.sales.orders"},
+            {"name": "clicks", "version": "1.0.0", "contractId": "contract-clicks",
+             "assetType": "table", "assetIdentifier": "main.web.clicks"},
+        ]
+        response = client.post("/api/data-products", json=sample_product_data)
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    @staticmethod
+    def _input_assets(client, product_id):
+        ports = client.get(f"/api/data-products/{product_id}").json().get("inputPorts") or []
+        return {p["name"]: (p.get("assetType"), p.get("assetIdentifier")) for p in ports}
+
+    def test_update_keeps_input_port_fields_it_leaves_out(self, client, sample_product_data):
+        """Input ports are rewritten on update; a port sent without its asset keeps it."""
+        product_id = self._product_with_input_ports(client, sample_product_data)
+        sent = [{"name": "orders", "version": "1.0.0", "contractId": "contract-orders"},
+                {"name": "clicks", "version": "1.0.0", "contractId": "contract-clicks",
+                 "assetType": "view", "assetIdentifier": None}]
+        update = {**sample_product_data, "id": product_id, "inputPorts": sent}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        assert self._input_assets(client, product_id) == {
+            "orders": ("table", "main.sales.orders"),  # left out: kept
+            "clicks": ("view", None),  # sent: replaced, null clears
+        }
+
+    def test_update_without_an_input_port_in_the_list_removes_it(
+        self, client, sample_product_data
+    ):
+        """Leaving a whole port out of the list is how the UI deletes it."""
+        product_id = self._product_with_input_ports(client, sample_product_data, "draft")
+        sent = [{"name": "orders", "version": "1.0.0", "contractId": "contract-orders"}]
+        update = {**sample_product_data, "id": product_id, "inputPorts": sent}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        assert self._input_assets(client, product_id) == {
+            "orders": ("table", "main.sales.orders")}
+
     def test_update_active_product_clearing_a_port_asset_requires_new_version(
         self, client, sample_product_data
     ):

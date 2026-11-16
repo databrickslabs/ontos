@@ -44,3 +44,25 @@ describe('InputPortFormDialog submit outcome', () => {
     expect(toast).not.toHaveBeenCalled();
   });
 });
+
+describe('InputPortFormDialog payload', () => {
+  it('sends null for a cleared asset, since an omitted field is kept', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    renderWithProviders(
+      <InputPortFormDialog
+        isOpen
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        initial={{ ...initial, assetType: 'table', assetIdentifier: 'main.sales.orders' }}
+      />,
+    );
+    fireEvent.change(document.getElementById('assetType')!, { target: { value: '' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /save|update|submit/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      assetType: null, assetIdentifier: 'main.sales.orders',
+    });
+  });
+});

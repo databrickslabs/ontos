@@ -68,8 +68,9 @@ export default function InputPortFormDialog({ isOpen, onOpenChange, onSubmit, in
         name: name.trim(),
         version: version.trim(),
         contractId: contractId.trim(),
-        assetType: assetType.trim() || undefined,
-        assetIdentifier: assetIdentifier.trim() || undefined,
+        // null clears: the backend keeps a field left out
+        assetType: assetType.trim() || null,
+        assetIdentifier: assetIdentifier.trim() || null,
       };
 
       const saved = await onSubmit(port);

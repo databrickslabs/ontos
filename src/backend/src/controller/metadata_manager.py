@@ -120,6 +120,8 @@ class MetadataManager:
 
     # --- Rich Text ---
     def create_rich_text(self, db: Session, *, data: RichTextCreate, user_email: Optional[str]) -> RichText:
+        # A row of an entity: shared rows come only from create_shared_rich_text.
+        data = data.model_copy(update={'is_shared': False})
         db_obj = self._rich_text_repo.create(db, obj_in=data)
         db.commit()
         db.refresh(db_obj)
@@ -158,6 +160,8 @@ class MetadataManager:
 
     # --- Link ---
     def create_link(self, db: Session, *, data: LinkCreate, user_email: Optional[str]) -> Link:
+        # A row of an entity: shared rows come only from create_shared_link.
+        data = data.model_copy(update={'is_shared': False})
         db_obj = self._link_repo.create(db, obj_in=data)
         db.commit()
         db.refresh(db_obj)

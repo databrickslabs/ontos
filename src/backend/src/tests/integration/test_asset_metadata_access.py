@@ -702,6 +702,57 @@ def test_a_steward_attaches_a_shared_row_typed_asset_to_a_product(client, db_ses
     assert response.status_code == 201, response.text
 
 
+# --- is_shared in a per-entity body: the row stays the entity's ----------------
+
+SHARED_FLAG_ROUTES = [
+    ('rich-texts', 'rich_texts', {'title': 'N', 'content_markdown': 'B'}),
+    ('links', 'links', {'title': 'L', 'url': 'https://example.com'}),
+]
+
+
+def _shared_ids(client, listing):
+    response = client.get('/api/metadata/shared')
+    assert response.status_code == 200, response.text
+    return {row['id'] for row in response.json()[listing]}
+
+
+@pytest.mark.parametrize('kind, listing, body', SHARED_FLAG_ROUTES)
+def test_is_shared_in_a_per_entity_create_is_ignored(
+        client, asset, act_as, kind, listing, body):
+    """Shared rows come only from /api/metadata/shared/*, which has its own gate."""
+    act_as('Admin')
+    url = f'/api/entities/asset/{kind}'
+    params = {'entity_id': str(asset.id)}
+
+    created = client.post(url, params=params, json={
+        'entity_type': 'asset', 'entity_id': str(asset.id), 'is_shared': True, **body})
+
+    assert created.status_code == 201, created.text
+    row = created.json()
+    assert row['is_shared'] is False
+    assert row['entity_id'] == str(asset.id)
+    assert row['id'] not in _shared_ids(client, listing)
+    assert row['id'] in {r['id'] for r in client.get(url, params=params).json()}
+
+
+@pytest.mark.parametrize('kind, listing, body', SHARED_FLAG_ROUTES)
+def test_is_shared_in_an_update_is_ignored(client, asset, act_as, kind, listing, body):
+    act_as('Admin')
+    url = f'/api/entities/asset/{kind}'
+    params = {'entity_id': str(asset.id)}
+    created = client.post(url, params=params, json={
+        'entity_type': 'asset', 'entity_id': str(asset.id), **body})
+    assert created.status_code == 201, created.text
+    row_id = created.json()['id']
+
+    updated = client.put(f'/api/{kind}/{row_id}', json={'title': 'T2', 'is_shared': True})
+
+    assert updated.status_code == 200, updated.text
+    assert updated.json()['is_shared'] is False
+    assert row_id not in _shared_ids(client, listing)
+    assert row_id in {r['id'] for r in client.get(url, params=params).json()}
+
+
 # --- Entity type in the path: exact, from the supported list -------------------
 
 @pytest.mark.parametrize('entity_type', ['Asset', 'ASSET', ' asset', 'assets', 'unknown'])

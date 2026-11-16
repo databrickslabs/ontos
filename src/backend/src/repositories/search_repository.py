@@ -390,7 +390,7 @@ def _trgm_ids(
         db.execute(text("SELECT set_config('pg_trgm.word_similarity_threshold', :trgm_thr, true)"), fparams)
         return [r[0] for r in db.execute(text(f"SELECT r.id FROM {_trgm_rel(where, engine)} AS r"), fparams)]
     except Exception as e:  # pg_trgm missing/not on search_path, etc.
-        logger.warning(f"Trigram fallback unavailable, skipping: {e}")
+        logger.warning("Trigram fallback unavailable (%s), skipping", type(e).__name__)
         db.rollback()
         return []
 
@@ -424,7 +424,7 @@ def _trgm_fallback(
             total = int(db.execute(text(f"SELECT count(*) FROM {rel} AS r"), fparams).scalar() or 0)
         return rows, total, rel, fparams
     except Exception as e:  # pg_trgm missing/not on search_path, etc.
-        logger.warning(f"Trigram fallback unavailable, skipping: {e}")
+        logger.warning("Trigram fallback unavailable (%s), skipping", type(e).__name__)
         db.rollback()
         return None
 

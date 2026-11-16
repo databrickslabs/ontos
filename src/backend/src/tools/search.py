@@ -49,6 +49,8 @@ class GlobalSearchTool(BaseTool):
         "sentences — each term is matched independently, so 'customer churn' finds items "
         "matching either word. Prefer narrowing with the 'type' filter and paginating with "
         "'offset' over broadening the query. Leave 'query' empty (or '*') to list everything; "
+        "Typo tolerance (e.g. 'custmer' finds 'customer') runs only on the Postgres search backend "
+        "with pg_trgm; the in-memory backend returns nothing for a misspelled term. "
         "the response is always paginated and includes 'total_count' and 'facets' (available "
         "types/domains/statuses/tags) so you can refine instead of fetching all results. "
         "For data products and contracts: " + vis.VISIBILITY_DESCRIPTION

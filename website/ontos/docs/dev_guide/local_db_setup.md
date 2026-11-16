@@ -79,7 +79,7 @@ SEARCH_TRGM_THRESHOLD=0.45  # typo fallback; lower = more permissive
 
 At startup the app checks which extensions the database has and logs the engine it picked. Locally that's the portable `pg` engine. The `lakebase` engine is only selected on a Lakebase project with Lakebase Search enabled.
 
-- **`pg_trgm`** (typo-tolerant fallback when a query has no matches) ships with Postgres. It's a trusted extension, so the app creates it itself when the app user has `CREATE` on the database, which the grants above include.
+- **`pg_trgm`** (typo-tolerant fallback when a query has no matches) ships with Postgres. The in-memory backend has no typo fallback, so the two backends differ for misspelled queries: Postgres finds "custmer" as "customer", memory returns nothing. It's a trusted extension, so the app creates it itself when the app user has `CREATE` on the database, which the grants above include.
 - **`pgvector`** (vector search, coming in a later release) needs a separate install: `brew install pgvector`.
 
 To run the Postgres search tests against your local server:

@@ -166,6 +166,15 @@ class ComplianceTemplatesRepository:
             db.flush()
             logger.info(f"Deleted compliance field '{field.label}' (id={field_id})")
 
+    def count_template_values(self, db: Session, *, template_id: UUID) -> int:
+        """Count the stored values across all fields of a template."""
+        return (
+            db.query(ComplianceTemplateValueDb)
+            .join(ComplianceTemplateFieldDb, ComplianceTemplateValueDb.field_id == ComplianceTemplateFieldDb.id)
+            .filter(ComplianceTemplateFieldDb.template_id == template_id)
+            .count()
+        )
+
     def count_field_values(self, db: Session, *, field_id: UUID) -> int:
         """Count how many entities have stored values for this field."""
         return db.query(ComplianceTemplateValueDb).filter(ComplianceTemplateValueDb.field_id == field_id).count()

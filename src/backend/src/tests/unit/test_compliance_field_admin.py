@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from src.controller.compliance_templates_manager import (
     ComplianceConflictError,
+    ComplianceNotFoundError,
     ComplianceTemplateError,
     ComplianceTemplatesManager,
 )
@@ -398,3 +399,42 @@ class TestUpdateFieldPersistsVocabulary(unittest.TestCase):
 
     def test_conflict_is_a_template_error_for_existing_callers(self):
         self.assertTrue(issubclass(ComplianceConflictError, ComplianceTemplateError))
+
+
+class TestDeleteTemplateGuard(unittest.TestCase):
+    """Regression: delete_template cascaded and wiped every product's values, even for the active template."""
+
+    def setUp(self):
+        self.manager = ComplianceTemplatesManager()
+        self.template_id = uuid4()
+
+    def test_delete_template_is_refused_while_values_exist(self):
+        db = MagicMock()
+        template = MagicMock(name="Product Governance")
+        template.name = "Product Governance"
+        with patch.object(compliance_templates_repo, "get_template", return_value=template), \
+             patch.object(compliance_templates_repo, "count_template_values", return_value=4), \
+             patch.object(compliance_templates_repo, "delete_template") as repo_delete:
+            with self.assertRaises(ComplianceConflictError) as ctx:
+                self.manager.delete_template(db, template_id=self.template_id)
+
+        self.assertIn("stored values exist", str(ctx.exception))
+        repo_delete.assert_not_called()
+        db.commit.assert_not_called()
+
+    def test_delete_template_succeeds_when_no_values_exist(self):
+        db = MagicMock()
+        template = MagicMock()
+        with patch.object(compliance_templates_repo, "get_template", return_value=template), \
+             patch.object(compliance_templates_repo, "count_template_values", return_value=0), \
+             patch.object(compliance_templates_repo, "delete_template") as repo_delete:
+            self.manager.delete_template(db, template_id=self.template_id)
+
+        repo_delete.assert_called_once()
+        db.commit.assert_called_once()
+
+    def test_delete_template_reports_missing_template_as_not_found(self):
+        db = MagicMock()
+        with patch.object(compliance_templates_repo, "get_template", return_value=None):
+            with self.assertRaises(ComplianceNotFoundError):
+                self.manager.delete_template(db, template_id=self.template_id)

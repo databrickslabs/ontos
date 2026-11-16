@@ -153,6 +153,15 @@ class Settings(BaseSettings):
     # query has no lexical matches). Lower = more permissive.
     SEARCH_TRGM_THRESHOLD: float = Field(0.45, env='SEARCH_TRGM_THRESHOLD')
 
+    @field_validator('SEARCH_TRGM_THRESHOLD')
+    @classmethod
+    def validate_search_trgm_threshold(cls, v: float) -> float:
+        # A word-similarity threshold outside (0, 1] silently disables the typo
+        # fallback or matches everything, so reject it at startup.
+        if not (0 < v <= 1):
+            raise ValueError('SEARCH_TRGM_THRESHOLD must be greater than 0 and at most 1')
+        return v
+
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')
 

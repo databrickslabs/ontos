@@ -50,3 +50,17 @@ def test_unqualified_when_schema_unknown():
     e = choose_engine("auto", {"pg_trgm"})
     assert e.trgm("gin_trgm_ops") == "gin_trgm_ops"
     assert e.trgm_op("<%") == "<%"
+
+
+@pytest.mark.parametrize("value", [0, -0.1, 1.01, 2])
+def test_trgm_threshold_must_be_in_zero_to_one(value):
+    from pydantic import ValidationError
+    from src.common.config import Settings
+    with pytest.raises(ValidationError, match="SEARCH_TRGM_THRESHOLD"):
+        Settings(_env_file=None, SEARCH_TRGM_THRESHOLD=value)
+
+
+@pytest.mark.parametrize("value", [0.01, 0.45, 1.0])
+def test_trgm_threshold_accepts_the_useful_range(value):
+    from src.common.config import Settings
+    assert Settings(_env_file=None, SEARCH_TRGM_THRESHOLD=value).SEARCH_TRGM_THRESHOLD == value

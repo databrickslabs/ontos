@@ -409,6 +409,43 @@ class TestDataProductRoutes:
         assert self._input_assets(client, product_id) == {
             "orders": ("table", "main.sales.orders")}
 
+    @staticmethod
+    def _product_with_management_ports(client, sample_product_data):
+        sample_product_data["managementPorts"] = [
+            {"name": "health", "content": "observability", "type": "topic",
+             "url": "https://example.com/health", "channel": "#ops", "description": "Probe"},
+            {"name": "docs", "content": "discoverability",
+             "url": "https://example.com/docs", "channel": "#docs", "description": "Docs"},
+            {"name": "control", "content": "control", "url": "https://example.com/ctl"},
+        ]
+        response = client.post("/api/data-products", json=sample_product_data)
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    @staticmethod
+    def _management_fields(client, product_id):
+        ports = client.get(f"/api/data-products/{product_id}").json().get("managementPorts") or []
+        return {p["name"]: (p.get("type"), p.get("url"), p.get("channel"), p.get("description"))
+                for p in ports}
+
+    def test_update_keeps_management_port_fields_it_leaves_out(
+        self, client, sample_product_data
+    ):
+        """As for input ports: a left-out field is kept, null clears, a left-out port goes."""
+        product_id = self._product_with_management_ports(client, sample_product_data)
+        sent = [{"name": "health", "content": "observability"},
+                {"name": "docs", "content": "discoverability", "url": None,
+                 "channel": "#docs-2"}]
+        update = {**sample_product_data, "id": product_id, "managementPorts": sent}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        assert self._management_fields(client, product_id) == {
+            "health": ("topic", "https://example.com/health", "#ops", "Probe"),
+            "docs": ("rest", None, "#docs-2", "Docs"),
+        }
+
     def test_update_active_product_clearing_a_port_asset_requires_new_version(
         self, client, sample_product_data
     ):

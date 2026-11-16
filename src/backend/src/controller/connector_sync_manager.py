@@ -136,7 +136,10 @@ class ConnectorSyncManager:
             # created before a failure stays, and the next run picks up from there
             result: ImportResult = importer.execute_import(db, request, current_user_id=SYNC_USER)
             connector_type = self._connector_type(db, sync)
-            retirement = self.apply_retirement(db, sync, connector_type, result)
+            # Only scheduled runs count misses: "Run now" clicks would otherwise retire in a burst
+            retirement = self.apply_retirement(
+                db, sync, connector_type, result, count_misses=trigger == "schedule",
+            )
         except Exception as exc:
             logger.error(f"Connector sync '{sync.name}' ({sync.id}) failed: {exc}", exc_info=True)
             if not db.is_active:
@@ -187,6 +190,7 @@ class ConnectorSyncManager:
 
     def apply_retirement(
         self, db: Session, sync: ConnectorSyncDb, connector_type: str, result: ImportResult,
+        *, count_misses: bool = True,
     ) -> Dict[str, Any]:
         """Count misses of in-scope assets a complete walk did not see; retire after N.
 
@@ -194,6 +198,8 @@ class ConnectorSyncManager:
         path and not excluded. An incomplete walk changes nothing (it may have
         missed assets that are still there). Assets someone retired by hand stay
         retired; the ones a sync retired come back when the source has them again.
+        ``count_misses=False`` (manual runs) still reactivates what the source has
+        again, but counts no misses.
         """
         counts = {"retired": 0, "reactivated": 0, "missed": 0, "counted": not result.incomplete_reasons}
         if result.incomplete_reasons:
@@ -231,7 +237,7 @@ class ConnectorSyncManager:
                     self._log(db, asset, "REACTIVATED_BY_SYNC", sync)
                 self._save(db, asset, props)
                 continue
-            if by_sync:
+            if by_sync or not count_misses:
                 continue
             missed = int(props.get(MISSED_PROPERTY) or 0) + 1
             props[MISSED_PROPERTY] = missed

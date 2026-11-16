@@ -82,7 +82,7 @@ class TestPublishWithCompliance:
 
             # Verify the error message contains the missing fields
             error_msg = str(exc_info.value)
-            assert "Cannot publish product: Missing mandatory compliance fields" in error_msg
+            assert "required compliance fields are incomplete" in error_msg
             assert "Data Owner" in error_msg
             assert "Retention Policy" in error_msg
 
@@ -226,3 +226,27 @@ class TestSetPublicationScopeWithCompliance:
 
             mock_mgr.check_completeness.assert_not_called()
             assert mock_product_db.publication_scope == "none"
+
+
+class TestRaiseIfIncomplete:
+    """The shared publish gate: one decision and one coded error for every publish path."""
+
+    def test_passing_result_does_not_raise(self):
+        from src.controller.compliance_templates_manager import raise_if_incomplete
+        raise_if_incomplete(CompletenessResult(passed=True))
+
+    def test_failing_result_raises_coded_error_with_missing_labels(self):
+        from src.controller.compliance_templates_manager import (
+            ComplianceIncompleteError,
+            raise_if_incomplete,
+        )
+        result = CompletenessResult(
+            passed=False,
+            missing=["Data Owner", "Retention Policy"],
+            messages=["'Data Owner' is required but has no value.", "'Retention Policy' is required but has no value."],
+        )
+        with pytest.raises(ComplianceIncompleteError) as exc_info:
+            raise_if_incomplete(result)
+        assert exc_info.value.code == "compliance_incomplete"
+        assert exc_info.value.params == {"missing": "Data Owner, Retention Policy"}
+        assert isinstance(exc_info.value, ValueError)

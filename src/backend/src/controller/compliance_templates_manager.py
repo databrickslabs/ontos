@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.compliance_completeness import CompletenessResult, FieldSpec, check_completeness
 from src.common.compliance_reconcile import FieldDesc, reconcile
 from src.common.compliance_value_types import ValueTypeError, coerce_value
@@ -27,6 +28,25 @@ _REFERENCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 class ComplianceTemplateError(ValueError):
     """Raised for validation failures; routes convert to HTTP 4xx."""
+
+
+class ComplianceIncompleteError(CodedValueError):
+    """A publish refused because mandatory compliance fields are unset. ``missing`` lists their labels."""
+
+    code = 'compliance_incomplete'
+
+
+def raise_if_incomplete(result: CompletenessResult) -> None:
+    """The publish gate, shared by every publish path (routes, publish_product, workflow steps).
+
+    Raises ``ComplianceIncompleteError`` unless ``result`` passed.
+    """
+    if result.passed:
+        return
+    raise ComplianceIncompleteError(
+        "Cannot publish: required compliance fields are incomplete. " + " ".join(result.messages),
+        missing=", ".join(result.missing),
+    )
 
 
 def _validate_reference_id(reference_id: str) -> None:

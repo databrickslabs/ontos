@@ -265,6 +265,50 @@ class TestDataProductRoutes:
         assert response.status_code == 409
         assert response.json()["detail"]["requires_versioning"] is True
 
+    @staticmethod
+    def _active_product_with_a_pointed_port(client, sample_product_data):
+        sample_product_data["status"] = "active"
+        sample_product_data["outputPorts"] = [{
+            "name": "a", "version": "1.0.0", "contractId": "contract-a",
+            "assetType": "table", "assetIdentifier": "main.sales.orders",
+            "server": {"host": "kafka-a"},
+        }]
+        response = client.post("/api/data-products", json=sample_product_data)
+        assert response.status_code == 201, response.text
+        [port] = response.json()["outputPorts"]
+        assert port["assetIdentifier"] == "main.sales.orders"
+        return response.json()["id"], port
+
+    def test_update_active_product_keeps_port_fields_it_leaves_out(
+        self, client, sample_product_data
+    ):
+        """A port sent without its asset type, identifier or server keeps them."""
+        product_id, port = self._active_product_with_a_pointed_port(client, sample_product_data)
+        left_out = ("assetType", "assetIdentifier", "server")
+        partial = {k: v for k, v in port.items() if k not in left_out}
+        update = {**sample_product_data, "id": product_id, "outputPorts": [partial]}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        [stored] = client.get(f"/api/data-products/{product_id}").json()["outputPorts"]
+        assert (stored.get("assetType"), stored.get("assetIdentifier")) == (
+            "table", "main.sales.orders")
+        assert (stored.get("server") or {}).get("host") == "kafka-a"
+
+    def test_update_active_product_clearing_a_port_asset_requires_new_version(
+        self, client, sample_product_data
+    ):
+        """An explicit null still unpoints the port: that is breaking."""
+        product_id, port = self._active_product_with_a_pointed_port(client, sample_product_data)
+        update = {**sample_product_data, "id": product_id,
+                  "outputPorts": [{**port, "assetIdentifier": None}]}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["requires_versioning"] is True
+
     def test_update_active_product_without_ports_in_body_keeps_ports(
         self, client, sample_product_data
     ):

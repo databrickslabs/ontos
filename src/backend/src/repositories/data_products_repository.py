@@ -401,10 +401,15 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         if 'delivery_method_id' in port_dict:
                             port_obj.delivery_method_id = coerce_uuid(
                                 port_dict.get('delivery_method_id'))
-                        port_obj.asset_type = port_dict.get('asset_type')
-                        port_obj.asset_identifier = port_dict.get('asset_identifier')
+                        # Where the port points: kept when the caller leaves it out, as the
+                        # versioning check reads it (an explicit null still clears it).
+                        if 'asset_type' in port_dict:
+                            port_obj.asset_type = port_dict.get('asset_type')
+                        if 'asset_identifier' in port_dict:
+                            port_obj.asset_identifier = port_dict.get('asset_identifier')
                         port_obj.status = port_dict.get('status')
-                        port_obj.server = server_json
+                        if 'server' in port_dict:
+                            port_obj.server = server_json
                         port_obj.contains_pii = port_dict.get('contains_pii', False)
                         port_obj.auto_approve = port_dict.get('auto_approve', False)
 

@@ -304,7 +304,12 @@ def search(
         "offset": offset,
         "limit": limit,
         "has_more": (offset + len(results)) < total,
-        "facets": _facets(db, prefix, rel, params) if include_facets else {},
+        # Facets count the filtered candidates (not only the scored matches), as
+        # search_scoring.search_index does, so both backends agree.
+        "facets": (
+            _facets(db, "", f"(SELECT * FROM search_documents{where})", params)
+            if include_facets else {}
+        ),
         "query": query,
     }
 

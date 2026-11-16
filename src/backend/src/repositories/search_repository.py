@@ -341,26 +341,31 @@ def match_ids(
     filters: Optional[Dict[str, Optional[str]]] = None,
     allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
     config: Optional[SearchConfig] = None,
+    engine: Optional[SearchEngine] = None,
+    trgm_threshold: float = 0.45,
 ) -> List[str]:
     """Document ids that ``search`` would match (same scorer, same WHERE), unpaginated.
 
     Used by the visibility resolver to pick the newest matching version without
-    building result rows.
+    building result rows. Applies the same typo fallback as ``search`` when the
+    engine has pg_trgm and the query matches nothing, so a typo'd product name
+    still resolves for ``search_data_products`` / ``search_data_contracts``.
     """
     config = config or _default_config()
     disabled, dparams = search_scoring_sql.disabled_where_only(config)
     where, params = _where(type_filter, filters, None, disabled, allowed_ids_by_type)
     params.update(dparams)
     if is_list_query(query):
-        sql = f"SELECT id FROM search_documents{where}"
-    else:
-        tokens = tokenize(query)
-        if not tokens:
-            return []
-        prefix, sparams, _order_by = _matches_cte(config, tokens, where)
-        params.update(sparams)
-        sql = f"{prefix}SELECT id FROM matches"
-    return [r[0] for r in db.execute(text(sql), params)]
+        return [r[0] for r in db.execute(text(f"SELECT id FROM search_documents{where}"), params)]
+    tokens = tokenize(query)
+    if not tokens:
+        return []
+    prefix, sparams, _order_by = _matches_cte(config, tokens, where)
+    params.update(sparams)
+    ids = [r[0] for r in db.execute(text(f"{prefix}SELECT id FROM matches"), params)]
+    if not ids and engine is not None and engine.has_trgm:
+        ids = _trgm_ids(db, query, where, params, trgm_threshold, engine=engine)
+    return ids
 def _trgm_rel(where: str, engine: SearchEngine) -> str:
     """Rows whose title is word-similar to the query (pg_trgm ``<%``), over the
     same filtered candidates. Uses the GIN trigram index on ``lower(title)``."""
@@ -369,6 +374,25 @@ def _trgm_rel(where: str, engine: SearchEngine) -> str:
         f"(SELECT {_COLS}, CAST({engine.trgm('word_similarity')}(:trgm_q, lower(title)) AS float8) AS score "
         f"FROM search_documents{where}{' AND ' if where else ' WHERE '}{cond})"
     )
+
+
+def _trgm_ids(
+    db: Session, query: str, where: str, params: Dict[str, Any], threshold: float,
+    *, engine: SearchEngine,
+) -> List[str]:
+    """Unpaginated ids for the typo fallback (``match_ids``). Empty when pg_trgm
+    can't be used here (logged by class only; the caller sees no matches)."""
+    tq = " ".join(tokenize(query))
+    if not tq:
+        return []
+    fparams = {**params, "trgm_q": tq, "trgm_thr": str(float(threshold))}
+    try:
+        db.execute(text("SELECT set_config('pg_trgm.word_similarity_threshold', :trgm_thr, true)"), fparams)
+        return [r[0] for r in db.execute(text(f"SELECT r.id FROM {_trgm_rel(where, engine)} AS r"), fparams)]
+    except Exception as e:  # pg_trgm missing/not on search_path, etc.
+        logger.warning(f"Trigram fallback unavailable, skipping: {e}")
+        db.rollback()
+        return []
 
 
 def _trgm_fallback(

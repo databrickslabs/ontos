@@ -180,3 +180,22 @@ def test_auto_detects_lakebase_on_lakebase_search_branch():
         assert engine.has_trgm
     finally:
         teardown()
+
+
+def test_match_ids_typo_fallback_through_the_backend(seeded, config):
+    """search_data_products resolves a typo through match_ids (visibility path)."""
+    from src.controller.search_backend import PostgresBackend
+    backend = PostgresBackend(seeded, config_provider=lambda: config)
+    backend.prepare()
+    assert backend.engine is not None and backend.engine.has_trgm
+    assert sorted(backend.match_ids("custmer")) == ["product::1", "product::2"]
+
+
+def test_match_ids_typo_fallback_respects_the_allow_list(seeded, config):
+    from src.controller.search_backend import PostgresBackend
+    backend = PostgresBackend(seeded, config_provider=lambda: config)
+    backend.prepare()
+    allowed = {"data-product": ["product::1"]}
+    assert backend.match_ids("custmer", allowed_ids_by_type=allowed) == ["product::1"]
+    # Nothing allowed: the fallback can't resurrect a product outside the list.
+    assert backend.match_ids("custmer", allowed_ids_by_type={"data-product": []}) == []

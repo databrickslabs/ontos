@@ -81,6 +81,27 @@ def test_require_all_handles_the_read_notification_of_the_target_that_decided(db
     assert 'handled' not in _payload(db_session, other)
 
 
+
+def _carl(groups=('team-x',)):
+    from src.models.users import UserInfo
+
+    return UserInfo(
+        email='Carl@Example.com', username='carl', user='carl', ip='127.0.0.1',
+        groups=list(groups),
+    )
+
+
+def _carl_decides_for(recipient, role_id):
+    """Carl's recipient check: his own user and the team-x group."""
+    return (recipient or '').lower() in ('carl@example.com', 'team-x')
+
+
+_CARL_DECISION = {
+    'target': 'carl@example.com', 'role_id': None, 'decided_by': 'Carl@Example.com',
+    'decision': 'approved', 'at': '2026-11-16T09:00:00',
+}
+
+
 def test_require_all_records_who_decided_on_the_targets_still_open(db_session):
     """#1552: Carl filled his own target. The group row stays open for the other
     members, and records that Carl decided the step."""
@@ -88,13 +109,32 @@ def test_require_all_records_who_decided_on_the_targets_still_open(db_session):
     own = _approval(db_session, execution_id, read=False, recipient='carl@example.com')
     group = _approval(db_session, execution_id, read=False, recipient='team-x')
 
-    _mark_decided_approver_notifications(db_session, execution_id, 'approve', [{
-        'target': 'carl@example.com', 'role_id': None, 'decided_by': 'Carl@Example.com',
-        'decision': 'approved', 'at': '2026-11-16T09:00:00',
-    }])
+    _mark_decided_approver_notifications(
+        db_session, execution_id, 'approve', [_CARL_DECISION],
+        decider=_carl(), decides_for=_carl_decides_for,
+    )
 
     assert _payload(db_session, own)['handled'] is True
     payload = _payload(db_session, group)
     assert 'handled' not in payload
     assert payload['decided_by'] == ['carl@example.com']
     assert group.read is False
+
+
+def test_another_approvers_own_row_does_not_record_who_decided(db_session):
+    """Only the shared rows the decider is a member of record them: Ben's own
+    row, and a group Carl isn't in, don't learn who decided."""
+    execution_id = f'exec-{uuid.uuid4().hex[:8]}'
+    _approval(db_session, execution_id, read=False, recipient='carl@example.com')
+    ben = _approval(db_session, execution_id, read=False, recipient='ben@example.com')
+    other_group = _approval(db_session, execution_id, read=False, recipient='team-y')
+    group = _approval(db_session, execution_id, read=False, recipient='team-x')
+
+    _mark_decided_approver_notifications(
+        db_session, execution_id, 'approve', [_CARL_DECISION],
+        decider=_carl(), decides_for=_carl_decides_for,
+    )
+
+    assert 'decided_by' not in _payload(db_session, ben)
+    assert 'decided_by' not in _payload(db_session, other_group)
+    assert _payload(db_session, group)['decided_by'] == ['carl@example.com']

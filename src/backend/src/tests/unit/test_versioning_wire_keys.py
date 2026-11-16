@@ -42,7 +42,16 @@ class TestProductWireDict:
         assert VERSIONING_KEYS <= data.keys()
         assert data["draftOwnerId"] == "jane@example.com"
         assert data["parentProductId"] == "p1"
-        assert not {"draft_owner_id", "parent_product_id", "version_family_id"} & data.keys()
+
+    def test_snake_case_keys_stay_for_existing_clients(self):
+        """The GET routes sent these as snake_case before; they are still sent."""
+        data = _product().to_wire_dict()
+
+        assert data["draft_owner_id"] == data["draftOwnerId"] == "jane@example.com"
+        assert data["parent_product_id"] == data["parentProductId"] == "p1"
+        assert data["version_family_id"] == data["versionFamilyId"] == "fam"
+        assert data["base_name"] == data["baseName"] == "Orders"
+        assert data["change_summary"] == data["changeSummary"] == "wip"
 
     def test_other_fields_keep_their_field_names(self):
         """Ports must stay camelCase field names (not the snake_case aliases)."""

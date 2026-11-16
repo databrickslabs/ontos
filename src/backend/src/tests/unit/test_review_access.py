@@ -284,7 +284,7 @@ class TestPendingApproval:
             recipient=None, recipient_role_id=ROLE_ID, action_type='workflow_approval',
             action_payload=json.dumps({
                 'execution_id': execution.id, 'step_id': 'approve',
-                'decided_by': ['approver@example.com'],
+                'decided_by_users': ['approver@example.com'],
             }),
         ))
         db_session.flush()

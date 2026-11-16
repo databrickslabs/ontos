@@ -21,7 +21,7 @@ from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
 from src.models.notifications import Notification
 from src.common.workflow_approvals import (
-    add_decided_by, has_decided, is_handled, open_approval_ids, open_execution_approvals,
+    add_decided_by_users, has_decided, is_handled, open_approval_ids, open_execution_approvals,
 )
 from src.common.logging import get_logger
 from src.controller.workflows_manager import WorkflowsManager
@@ -1641,7 +1641,7 @@ def _assert_caller_authorized_for_execution(
     ``for_read``: the check that lets a pending approver read the entity
     (``caller_is_pending_reviewer``, #1117). Notifications already handled
     (an approver who decided while the step waits for others) don't count,
-    nor a shared role or group row whose ``decided_by`` names the caller
+    nor a shared role or group row whose ``decided_by_users`` names the caller
     (they decided the step through another target, #1552).
 
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
@@ -1745,7 +1745,7 @@ def _mark_decided_approver_notifications(
     of each decided target (a user, a group, a role) is handled, the others
     stay open. The open group and role rows ``decider`` is a member of
     (``decides_for``, not their own user row) record that they decided the
-    step (``decided_by``, #1552): one person decides once per step, so a row
+    step (``decided_by_users``, #1552): one person decides once per step, so a row
     shared with the other members leaves only the lists of those who decided.
     Other approvers' own rows don't learn who decided.
     """
@@ -1777,7 +1777,7 @@ def _mark_decided_approver_notifications(
             notif.recipient or notif.recipient_role_id or '', notif.recipient_role_id,
         ))
         if decision is None:
-            if shared_with_decider(notif) and add_decided_by(payload, [decided_by]):
+            if shared_with_decider(notif) and add_decided_by_users(payload, [decided_by]):
                 notif.action_payload = json.dumps(payload)
                 db.add(notif)
             continue

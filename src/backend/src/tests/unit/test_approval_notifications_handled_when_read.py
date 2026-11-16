@@ -117,7 +117,7 @@ def test_require_all_records_who_decided_on_the_targets_still_open(db_session):
     assert _payload(db_session, own)['handled'] is True
     payload = _payload(db_session, group)
     assert 'handled' not in payload
-    assert payload['decided_by'] == ['carl@example.com']
+    assert payload['decided_by_users'] == ['carl@example.com']
     assert group.read is False
 
 
@@ -135,6 +135,6 @@ def test_another_approvers_own_row_does_not_record_who_decided(db_session):
         decider=_carl(), decides_for=_carl_decides_for,
     )
 
-    assert 'decided_by' not in _payload(db_session, ben)
-    assert 'decided_by' not in _payload(db_session, other_group)
-    assert _payload(db_session, group)['decided_by'] == ['carl@example.com']
+    assert 'decided_by_users' not in _payload(db_session, ben)
+    assert 'decided_by_users' not in _payload(db_session, other_group)
+    assert _payload(db_session, group)['decided_by_users'] == ['carl@example.com']

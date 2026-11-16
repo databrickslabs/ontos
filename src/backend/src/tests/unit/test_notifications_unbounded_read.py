@@ -248,6 +248,26 @@ class TestPendingIsSemantic:
         assert pending['id'] in [n.id for n in listed]
 
 
+    def test_more_than_500_informational_rows_with_an_action_type_stay_capped(
+        self, db_session: Session,
+    ):
+        _insert(db_session, [
+            _row(recipient='ana@example.com', title=f'Agreement {i}',
+                 action_type='agreement_completed',
+                 action_payload=json.dumps({'agreement_id': f'a-{i}'}),
+                 created_at=NOW - timedelta(minutes=i))
+            for i in range(BELL_HISTORY_LIMIT + 100)
+        ])
+        pending = _approval(recipient='ana@example.com')
+        _insert(db_session, [pending])
+
+        listed = _manager().get_notifications(db_session, ANA)
+
+        assert pending['id'] in [n.id for n in listed]
+        agreements = [n.title for n in listed if n.action_type == 'agreement_completed']
+        assert agreements == [f'Agreement {i}' for i in range(BELL_HISTORY_LIMIT)]
+
+
 class TestActionTypeLookupsAreNotCapped:
 
     def test_unread_request_older_than_5000_rows_is_found_for_dedup(self, db_session: Session):

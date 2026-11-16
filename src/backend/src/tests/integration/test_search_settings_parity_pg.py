@@ -215,3 +215,13 @@ def test_facets_include_owner_and_count_matches(seeded):
     # Facets count the filtered candidates, as the in-memory backend does.
     assert sum(res["facets"]["type"].values()) == len(_memory_items(VARIANTS["shipped"]))
 
+
+@pytest.mark.parametrize("query", ["customer", "*"])
+def test_facets_expose_no_user_identifiers(seeded, query):
+    """Owner facets carry the owning team, never a username or email, on both backends."""
+    config = VARIANTS["shipped"]
+    pg = repo.search(seeded, query, config=config, limit=100)["facets"]
+    mem = search_scoring.search_index(_memory_items(config), query, config, limit=100)["facets"]
+    for facets in (pg, mem):
+        assert not [v for counts in facets.values() for v in counts if "@" in str(v)]
+    assert pg.get("owner") == mem.get("owner")

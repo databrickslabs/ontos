@@ -191,3 +191,20 @@ class TestIsSet:
     def test_numeric_bool_not_counted_as_set(self):
         # A stray bool must not read as a numeric "set".
         assert is_set("numeric", True) is False
+
+
+class TestNonFiniteNumbers:
+    """Regression: 'nan' / '1e400' were accepted and then failed the JSON write with a 500."""
+
+    @pytest.mark.parametrize("raw", ["nan", "NaN", "inf", "-inf", "Infinity", "1e400", "-1e400", float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_numeric_is_rejected(self, raw):
+        with pytest.raises(ValueTypeError):
+            coerce_value("numeric", raw)
+
+    def test_non_finite_bound_of_range_is_rejected(self):
+        with pytest.raises(ValueTypeError):
+            coerce_value("range", {"low": "1e400", "high": 10})
+
+    def test_finite_numbers_still_accepted(self):
+        assert coerce_value("numeric", "1e3") == 1000
+        assert coerce_value("numeric", "-2.5") == -2.5

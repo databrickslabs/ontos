@@ -27,6 +27,7 @@ Coercion normalizes each accepted input to a canonical stored shape:
 """
 from __future__ import annotations
 
+import math
 from datetime import date, datetime
 from enum import Enum
 from typing import Any, Optional
@@ -68,6 +69,9 @@ def _coerce_numeric(value: Any) -> float | int:
             raise ValueTypeError(f"'{value}' is not a valid number.")
     else:
         raise ValueTypeError(f"Expected a numeric value, got {type(value).__name__}.")
+    # NaN and infinities can't be stored as JSON (Postgres rejects them): reject them here.
+    if not math.isfinite(num):
+        raise ValueTypeError(f"'{value}' is not a finite number.")
     # Normalize integral floats to int (2.0 -> 2).
     if num.is_integer():
         return int(num)

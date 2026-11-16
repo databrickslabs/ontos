@@ -201,7 +201,7 @@ ODCS_RULES = RuleSet(rules=[
 
     # Quality checks (contract-, schema- or property-level)
     Rule("quality-added", "*quality[]", Bump.MAJOR, "Quality check added", ops=("added",)),
-    Rule("quality-removed", "*quality[]", Bump.PATCH, "Quality check removed", ops=("removed",)),
+    Rule("quality-removed", "*quality[]", Bump.MAJOR, "Quality check removed", ops=("removed",)),
     Rule("quality-metadata", "*quality[].*", Bump.PATCH, "Quality check metadata changed", when=_quality_is_cosmetic),
     Rule("quality-changed", "*quality[].*", Bump.MAJOR, "Quality check definition changed"),
 

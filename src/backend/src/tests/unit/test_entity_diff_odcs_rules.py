@@ -103,7 +103,7 @@ CASES = [
      Bump.MAJOR, "property-type-options"),
     ("quality-added", lambda d: _prop(d, "email").update(quality=[{"rule": "notNull", "type": "library"}]),
      Bump.MAJOR, "quality-added"),
-    ("quality-removed", lambda d: _prop(d, "customer_id").pop("quality"), Bump.PATCH, "quality-removed"),
+    ("quality-removed", lambda d: _prop(d, "customer_id").pop("quality"), Bump.MAJOR, "quality-removed"),
     ("quality-metadata", lambda d: _prop(d, "customer_id")["quality"][0].update(description="reworded"),
      Bump.PATCH, "quality-metadata"),
     ("quality-threshold", lambda d: d["schema"][0]["quality"][0].update(mustBeGreaterThan=100),

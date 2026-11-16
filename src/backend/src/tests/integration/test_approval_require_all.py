@@ -817,3 +817,119 @@ class TestSharedTargetDecidedByTheUser:
         assert _my_actions(client, as_user, CARL, execution_id) == {}
         assert _my_actions(client, as_user, DORA, execution_id) == {second_role.id: 1}
         assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'succeeded'
+
+
+def _bell(client, as_user, identity, execution_id):
+    """Every approval row of the execution in the user's bell, handled or not: target -> count."""
+    as_user(identity)
+    response = client.get('/api/notifications')
+    assert response.status_code == 200, response.text
+    targets = {}
+    for n in response.json():
+        payload = n.get('action_payload') or {}
+        if (
+            n.get('action_type') == 'workflow_approval'
+            and payload.get('execution_id') == execution_id
+        ):
+            target = n.get('recipient_role_id') or n.get('recipient')
+            targets[target] = targets.get(target, 0) + 1
+    return targets
+
+
+class TestSharedTargetDecidedInReverseOrder:
+    """#1552 review: another member fills a shared role B first, then Carl decides through A.
+    B was already handled, so it must still record Carl, or Carl keeps it in the bell."""
+
+    def test_a_shared_row_another_member_filled_first_leaves_the_bell_of_the_decider(
+        self, client, as_user, db_session,
+    ):
+        first_role = _role_with_users(db_session, ['carl@example.com'])
+        second_role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        execution_id = _paused_execution(
+            client, as_user, f'eve@example.com,{first_role.id},{second_role.id}',
+        )
+        assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'paused'
+
+        # Carl fills the first role; Eve still has to decide
+        first = _decide(client, as_user, CARL, execution_id)
+        assert first.json()['status'] == 'paused', first.text
+
+        assert _bell(client, as_user, CARL, execution_id) == {first_role.id: 1}
+        assert _bell(client, as_user, DORA, execution_id) == {second_role.id: 1}
+
+    def test_also_when_the_deciders_decision_ends_the_step(self, client, as_user, db_session):
+        first_role = _role_with_users(db_session, ['carl@example.com'])
+        second_role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        execution_id = _paused_execution(
+            client, as_user, f'{first_role.id},{second_role.id}',
+        )
+        assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'paused'
+
+        last = _decide(client, as_user, CARL, execution_id)
+        assert last.json()['status'] == 'succeeded', last.text
+
+        assert _bell(client, as_user, CARL, execution_id) == {first_role.id: 1}
+        assert _bell(client, as_user, DORA, execution_id) == {second_role.id: 1}
+
+    def test_a_decision_in_a_loop_back_round_leaves_the_earlier_round_alone(
+        self, client, as_user, db_session,
+    ):
+        """Dora's row of round 1 is not Carl's round: deciding round 2 doesn't record him on it."""
+        role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        as_user(ADMIN)
+        response = client.post('/api/workflows', json={
+            'name': f'Loop back {uuid.uuid4().hex[:8]}',
+            'trigger': {'type': 'manual', 'entity_types': ['data_product']},
+            'is_active': True,
+            'steps': [
+                {
+                    'step_id': 'approve', 'name': 'Approve', 'step_type': 'approval',
+                    'config': {'approvers': f'eve@example.com,{role.id}', 'require_all': True},
+                    'on_pass': 'ok', 'on_fail': 'approve',
+                },
+                {'step_id': 'ok', 'name': 'Approved', 'step_type': 'pass'},
+                {'step_id': 'no', 'name': 'Rejected', 'step_type': 'fail'},
+            ],
+        })
+        assert response.status_code == 200, response.text
+        response = client.post(
+            f"/api/workflows/{response.json()['id']}/execute",
+            params={'entity_type': 'data_product', 'entity_id': str(uuid.uuid4())},
+        )
+        execution_id = response.json()['id']
+        # Round 1: Dora fills the role, Eve rejects: the same step asks again
+        assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'paused'
+        again = _decide(client, as_user, EVE, execution_id, approved=False, reason='Redo')
+        assert again.json()['status'] == 'paused', again.text
+
+        # Round 2: Carl fills the role, Eve still has to decide
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+
+        # Round 1's role row (Dora's) and round 2's (Carl's own decision)
+        assert _bell(client, as_user, CARL, execution_id) == {role.id: 2}
+
+    def test_a_member_who_decided_nothing_is_not_recorded(self, client, as_user, db_session):
+        """Carl's call ends the step on a stored rejection, his role already filled by Dora:
+        he decided nothing, so the role row stays in his bell."""
+        from src.db_models.process_workflows import WorkflowStepExecutionDb
+
+        role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        execution_id = _paused_execution(client, as_user, f'ana@example.com,{role.id}')
+        db_session.expire_all()
+        record = db_session.query(WorkflowStepExecutionDb).filter_by(
+            execution_id=execution_id, step_key='approve',
+        ).one()
+        data = json.loads(record.result_data)
+        data['decisions'] = [
+            {'target': 'ana@example.com', 'role_id': None, 'decided_by': 'ana@example.com',
+             'decision': 'rejected', 'at': '2026-11-04T10:00:00', 'reason': 'No'},
+            {'target': role.id, 'role_id': role.id, 'decided_by': 'dora@example.com',
+             'decision': 'approved', 'at': '2026-11-04T10:01:00', 'reason': None},
+        ]
+        record.result_data = json.dumps(data)
+        db_session.commit()
+
+        response = _decide(client, as_user, CARL, execution_id)
+        assert response.json()['status'] == 'failed', response.text
+
+        assert _bell(client, as_user, CARL, execution_id) == {role.id: 1}

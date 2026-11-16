@@ -783,3 +783,37 @@ class TestSharedTargetDecidedByTheUser:
             'carl@example.com': 1, role.id: 1,
         }
         assert _my_actions(client, as_user, DORA, execution_id) == {role.id: 1}
+
+    def test_a_group_target_leaves_the_list_of_the_member_who_decided(
+        self, client, as_user, db_session,
+    ):
+        """The group's row (``recipient`` = the group name) is shared like a role's."""
+        execution_id = _paused_execution(client, as_user, 'carl@example.com,team-x')
+        assert _my_actions(client, as_user, CARL, execution_id) == {
+            'carl@example.com': 1, 'team-x': 1,
+        }
+
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+
+        assert _my_actions(client, as_user, CARL, execution_id) == {}
+        assert _my_actions(client, as_user, DORA, execution_id) == {'team-x': 1}
+
+    def test_a_member_of_two_roles_who_decided_through_one_no_longer_lists_the_other(
+        self, client, as_user, db_session,
+    ):
+        first_role = _role_with_users(db_session, ['carl@example.com'])
+        second_role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        execution_id = _paused_execution(
+            client, as_user, f'{first_role.id},{second_role.id}',
+        )
+        assert _my_actions(client, as_user, CARL, execution_id) == {
+            first_role.id: 1, second_role.id: 1,
+        }
+
+        # Carl fills the first role; the second still waits for a member
+        first = _decide(client, as_user, CARL, execution_id)
+        assert first.json()['status'] == 'paused', first.text
+
+        assert _my_actions(client, as_user, CARL, execution_id) == {}
+        assert _my_actions(client, as_user, DORA, execution_id) == {second_role.id: 1}
+        assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'succeeded'

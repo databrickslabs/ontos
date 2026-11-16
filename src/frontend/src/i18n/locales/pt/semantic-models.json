@@ -394,7 +394,7 @@
     "noneRootCollection": "Nenhum (esquema de conceitos raiz)",
     "editable": "Editável",
     "editableHelp": "Permitir criar e editar conceitos neste esquema de conceitos",
-    "createTitle": "Criar esquema"
+    "createTitle": "Criar esquema de conceitos"
   },
   "promotion": {
     "promoteConcept": "Promover conceito",
@@ -586,6 +586,13 @@
     "requiresWrite": "Requer acesso de gravação",
     "builds": "Criações",
     "whatYouCanBuild": "O que você pode criar",
+    "rungs": {
+      "glossary": {"label": "Glossário", "blurb": "termos e definições acordados", "vocab": "SKOS. skos:Concept com skos:prefLabel / skos:altLabel / skos:definition; plano (sem hierarquia obrigatória)."},
+      "taxonomy": {"label": "Taxonomia", "blurb": "termos em uma hierarquia mais ampla ou específica", "vocab": "SKOS. skos:Concept organizado com skos:broader / skos:narrower (skos:related para vínculos cruzados)."},
+      "ontology": {"label": "Ontologia", "blurb": "relações tipadas que uma máquina pode interpretar", "vocab": "OWL + RDFS. owl:Class com rdfs:subClassOf, owl:ObjectProperty / owl:DatatypeProperty com rdfs:domain / rdfs:range, owl:NamedIndividual. Rótulos e definições continuam usando SKOS."}
+    },
+    "buildState": {"active": "Este caminho cria esse artefato.", "file": "Criado se estiver presente no arquivo enviado.", "none": "Não é criado por este caminho."},
+    "vocabularyAria": "Vocabulário de {{label}}",
     "schemeRdfNote": "Todo esquema é um skos:ConceptScheme.",
     "needsReview": "Requer revisão",
     "running": "Em execução",
@@ -594,13 +601,15 @@
       "title": "Criar",
       "tip": "Cria entradas skos:Concept em um novo esquema de conceitos (skos:ConceptScheme). À medida que o esquema amadurece, as entradas podem ser tipadas como owl:Class ou como uma propriedade OWL.",
       "desc": "Escreva os termos você mesmo.",
-      "cta": "Novo esquema de conceitos"
+      "cta": "Novo esquema de conceitos",
+      "buildsNote": "Comece como um glossário e evolua ao longo do tempo."
     },
     "generate": {
       "title": "Gerar",
       "tip": "Uma entrevista guiada gera o rascunho de uma ontologia OWL a partir das suas tabelas: classes (owl:Class, hierarquia via rdfs:subClassOf) e propriedades (owl:ObjectProperty / owl:DatatypeProperty). Cada candidato registra sua origem e é salvo como Rascunho para revisão.",
       "desc": "Responda a algumas perguntas; o Ontos gera o rascunho do esquema.",
-      "cta": "Iniciar criação guiada"
+      "cta": "Iniciar criação guiada",
+      "buildsNote": "Salvo como Rascunho para revisão."
     },
     "import": {
       "title": "Importar",
@@ -610,6 +619,7 @@
       "buildsNote": "* Tudo o que o arquivo contiver. Os termos importados permanecem somente leitura."
     },
     "inProgress": "Em andamento",
+    "runsLoading": "Carregando o trabalho de criação…",
     "noInProgress": "Nenhum trabalho de criação em andamento. Comece por um dos caminhos acima.",
     "generatorRun": "Execução do gerador",
     "draftPending": "Rascunho ainda não atribuído a um esquema de conceitos.",

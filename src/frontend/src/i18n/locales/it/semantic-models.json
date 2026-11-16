@@ -586,6 +586,13 @@
     "requiresWrite": "Richiede accesso in scrittura",
     "builds": "Produce",
     "whatYouCanBuild": "Cosa puoi creare",
+    "rungs": {
+      "glossary": {"label": "Glossario", "blurb": "termini e definizioni condivisi", "vocab": "SKOS. skos:Concept con skos:prefLabel / skos:altLabel / skos:definition; piatto (nessuna gerarchia obbligatoria)."},
+      "taxonomy": {"label": "Tassonomia", "blurb": "termini in una gerarchia più ampia o più specifica", "vocab": "SKOS. skos:Concept organizzato con skos:broader / skos:narrower (skos:related per collegamenti trasversali)."},
+      "ontology": {"label": "Ontologia", "blurb": "relazioni tipizzate interpretabili da una macchina", "vocab": "OWL + RDFS. owl:Class con rdfs:subClassOf, owl:ObjectProperty / owl:DatatypeProperty con rdfs:domain / rdfs:range, owl:NamedIndividual. Etichette e definizioni continuano a usare SKOS."}
+    },
+    "buildState": {"active": "Questo percorso lo crea.", "file": "Viene creato se è presente nel file caricato.", "none": "Non viene creato da questo percorso."},
+    "vocabularyAria": "Vocabolario di {{label}}",
     "schemeRdfNote": "Ogni schema è uno skos:ConceptScheme.",
     "needsReview": "Da rivedere",
     "running": "In esecuzione",
@@ -594,13 +601,15 @@
       "title": "Crea",
       "tip": "Crea voci skos:Concept in un nuovo schema di concetti (skos:ConceptScheme). Man mano che lo schema matura, le voci possono essere tipizzate come owl:Class o come proprietà OWL.",
       "desc": "Scrivi tu stesso i termini.",
-      "cta": "Nuovo schema di concetti"
+      "cta": "Nuovo schema di concetti",
+      "buildsNote": "Inizia come glossario e consolidalo nel tempo."
     },
     "generate": {
       "title": "Genera",
       "tip": "Un'intervista guidata redige un'ontologia OWL a partire dalle tue tabelle: classi (owl:Class, gerarchia tramite rdfs:subClassOf) e proprietà (owl:ObjectProperty / owl:DatatypeProperty). Ogni candidato riporta la propria fonte e viene salvato come Bozza per la revisione.",
       "desc": "Rispondi ad alcune domande; Ontos redige lo schema.",
-      "cta": "Avvia la creazione guidata"
+      "cta": "Avvia la creazione guidata",
+      "buildsNote": "Salvato come Bozza per la revisione."
     },
     "import": {
       "title": "Importa",
@@ -610,6 +619,7 @@
       "buildsNote": "* Qualunque cosa contenga il file. I termini importati restano in sola lettura."
     },
     "inProgress": "In corso",
+    "runsLoading": "Caricamento delle attività di creazione…",
     "noInProgress": "Nessuna attività di creazione in corso. Inizia con uno dei percorsi qui sopra.",
     "generatorRun": "Esecuzione del generatore",
     "draftPending": "Bozza non ancora assegnata a uno schema di concetti.",

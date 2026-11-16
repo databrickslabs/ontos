@@ -686,6 +686,13 @@
     "requiresWrite": "Nécessite un accès en écriture",
     "builds": "Résultat",
     "whatYouCanBuild": "Ce que vous pouvez créer",
+    "rungs": {
+      "glossary": {"label": "Glossaire", "blurb": "termes et définitions convenus", "vocab": "SKOS. skos:Concept avec skos:prefLabel / skos:altLabel / skos:definition ; à plat (aucune hiérarchie requise)."},
+      "taxonomy": {"label": "Taxonomie", "blurb": "termes dans une hiérarchie plus large ou plus précise", "vocab": "SKOS. skos:Concept organisé avec skos:broader / skos:narrower (skos:related pour les liens transversaux)."},
+      "ontology": {"label": "Ontologie", "blurb": "relations typées exploitables par une machine", "vocab": "OWL + RDFS. owl:Class avec rdfs:subClassOf, owl:ObjectProperty / owl:DatatypeProperty avec rdfs:domain / rdfs:range, owl:NamedIndividual. Les libellés et définitions utilisent toujours SKOS."}
+    },
+    "buildState": {"active": "Ce parcours le produit.", "file": "Produit si le fichier téléversé le contient.", "none": "Non produit par ce parcours."},
+    "vocabularyAria": "Vocabulaire de {{label}}",
     "schemeRdfNote": "Chaque schéma est un skos:ConceptScheme.",
     "needsReview": "Revue requise",
     "running": "En cours d'exécution",
@@ -694,13 +701,15 @@
       "title": "Rédiger",
       "tip": "Crée des entrées skos:Concept dans un nouveau schéma de concepts (skos:ConceptScheme). Les entrées pourront ensuite être typées comme owl:Class ou comme propriété OWL à mesure que le schéma mûrit.",
       "desc": "Rédigez vous-même les termes.",
-      "cta": "Nouveau schéma de concepts"
+      "cta": "Nouveau schéma de concepts",
+      "buildsNote": "Commencez par un glossaire, puis renforcez-le progressivement."
     },
     "generate": {
       "title": "Générer",
       "tip": "Un entretien guidé ébauche une ontologie OWL à partir de vos tables : classes (owl:Class, hiérarchie via rdfs:subClassOf) et propriétés (owl:ObjectProperty / owl:DatatypeProperty). Chaque candidat indique sa source et est enregistré comme brouillon pour revue.",
       "desc": "Répondez à quelques questions ; Ontos ébauche le schéma.",
-      "cta": "Lancer la création guidée"
+      "cta": "Lancer la création guidée",
+      "buildsNote": "Enregistré comme brouillon pour revue."
     },
     "import": {
       "title": "Importer",
@@ -710,6 +719,7 @@
       "buildsNote": "* Tout ce que contient le fichier. Les termes importés restent en lecture seule."
     },
     "inProgress": "En cours",
+    "runsLoading": "Chargement des créations en cours…",
     "noInProgress": "Aucune création en cours. Commencez par l'un des parcours ci-dessus.",
     "generatorRun": "Exécution du générateur",
     "draftPending": "Brouillon pas encore affecté à un schéma de concepts.",

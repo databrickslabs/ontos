@@ -182,7 +182,13 @@ export default function ReviewSuggestionsDialog({
               onNext={() => setActiveIndex((i) => Math.min(i + 1, suggestionRefs!.length - 1))}
             />
           ) : loading && !hasScheme && placeholders.length === 0 ? (
-            <div className="space-y-3 py-2" data-testid="review-suggestions-loading">
+            <div
+              className="space-y-3 py-2"
+              data-testid="review-suggestions-loading"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="sr-only">{t('concepts:enrich.review.loading')}</span>
               {[0, 1, 2].map((row) => (
                 <div key={row} className="rounded-md border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-3">

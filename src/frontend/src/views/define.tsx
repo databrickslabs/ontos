@@ -46,30 +46,39 @@ interface GenerationRunSummary {
   step_count?: number;
 }
 
-function formatDate(iso?: string | null): string {
+function localeForFormatting(locale?: string): string {
+  try {
+    return Intl.getCanonicalLocales(locale || 'en')[0] || 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+function formatDate(iso: string | null | undefined, locale: string): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
 // Compact relative time ("just now", "3 min ago", "2 h ago", "5 d ago"),
 // falling back to an absolute date for anything older than a week. Small local
 // helper — the shared RelativeDate component is date-only and localized
 // differently; these in-progress rows want minute/hour granularity.
-function relativeTime(iso?: string | null): string {
+function relativeTime(iso: string | null | undefined, locale: string): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
   const secs = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (secs < 45) return 'just now';
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' });
+  if (secs < 45) return formatter.format(0, 'second');
   const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60) return formatter.format(-mins, 'minute');
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} h ago`;
+  if (hours < 24) return formatter.format(-hours, 'hour');
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} d ago`;
-  return formatDate(iso);
+  if (days < 7) return formatter.format(-days, 'day');
+  return formatDate(iso, locale);
 }
 
 // The three output "rungs" — a glossary -> taxonomy -> ontology maturity ladder.
@@ -80,25 +89,15 @@ function relativeTime(iso?: string | null): string {
 const RUNGS = [
   {
     key: 'glossary',
-    label: 'Glossary',
     Icon: List,
-    blurb: 'agreed terms + definitions',
-    vocab: 'SKOS. skos:Concept with skos:prefLabel / skos:altLabel / skos:definition; flat (no hierarchy required).',
   },
   {
     key: 'taxonomy',
-    label: 'Taxonomy',
     Icon: ListTree,
-    blurb: 'terms in a broader/narrower hierarchy',
-    vocab: 'SKOS. skos:Concept arranged with skos:broader / skos:narrower (skos:related for cross-links).',
   },
   {
     key: 'ontology',
-    label: 'Ontology',
     Icon: Share2,
-    blurb: 'typed relationships a machine can reason over',
-    vocab:
-      'OWL + RDFS. owl:Class with rdfs:subClassOf, owl:ObjectProperty / owl:DatatypeProperty with rdfs:domain / rdfs:range, owl:NamedIndividual. Labels/definitions still use SKOS.',
   },
 ] as const;
 
@@ -119,6 +118,8 @@ function BuildsRow({ builds, note }: { builds: BuildsMap; note?: string }) {
       </div>
       <div className="flex items-center gap-2.5">
         {RUNGS.map((r) => {
+          const label = t(`semantic-models:define.rungs.${r.key}.label`);
+          const blurb = t(`semantic-models:define.rungs.${r.key}.blurb`);
           const state = builds[r.key];
           const active = state === 'yes';
           const fileDep = state === 'file';
@@ -136,17 +137,17 @@ function BuildsRow({ builds, note }: { builds: BuildsMap; note?: string }) {
                   }
                 >
                   <r.Icon className="h-4 w-4" />
-                  <span>{r.label}</span>
+                  <span>{label}</span>
                   {fileDep && <span className="text-[10px]">*</span>}
                 </span>
               </TooltipTrigger>
               <TooltipContent className="max-w-[220px] text-xs">
-                <span className="font-medium">{r.label}</span> — {r.blurb}.{' '}
+                <span className="font-medium">{label}</span> — {blurb}.{' '}
                 {active
-                  ? 'This path builds it.'
+                  ? t('semantic-models:define.buildState.active')
                   : fileDep
-                  ? 'Produced if the uploaded file contains it.'
-                  : 'Not produced by this path.'}
+                  ? t('semantic-models:define.buildState.file')
+                  : t('semantic-models:define.buildState.none')}
               </TooltipContent>
             </Tooltip>
           );
@@ -158,7 +159,8 @@ function BuildsRow({ builds, note }: { builds: BuildsMap; note?: string }) {
 }
 
 export default function DefineView() {
-  const { t } = useTranslation(['semantic-models', 'common']);
+  const { t, i18n } = useTranslation(['semantic-models', 'common', 'concepts']);
+  const formattingLocale = localeForFormatting(i18n.resolvedLanguage || i18n.language);
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
 
@@ -313,28 +315,37 @@ export default function DefineView() {
               <r.Icon className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-medium text-foreground">{r.label}</span>
+                  <span className="font-medium text-foreground">
+                    {t(`semantic-models:define.rungs.${r.key}.label`)}
+                  </span>
                   {/* The RDF vocabulary this rung is written in (shown in both modes). */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span
                         className="cursor-help text-xs text-muted-foreground border rounded-full h-4 w-4 inline-flex items-center justify-center"
-                        aria-label={`${r.label} vocabulary`}
+                        aria-label={t('semantic-models:define.vocabularyAria', {
+                          label: t(`semantic-models:define.rungs.${r.key}.label`),
+                        })}
                         data-testid={`rung-vocab-${r.key}`}
                       >
                         i
                       </span>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-[280px] text-xs">
-                      <span className="font-mono">{r.vocab}</span>
+                      <span className="font-mono">
+                        {t(`semantic-models:define.rungs.${r.key}.vocab`)}
+                      </span>
                       <span className="block mt-1 text-muted-foreground">
                         {t('semantic-models:define.schemeRdfNote')}
                       </span>
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                <div className="truncate text-muted-foreground" title={r.blurb}>
-                  {r.blurb}
+                <div
+                  className="truncate text-muted-foreground"
+                  title={t(`semantic-models:define.rungs.${r.key}.blurb`)}
+                >
+                  {t(`semantic-models:define.rungs.${r.key}.blurb`)}
                 </div>
               </div>
             </div>
@@ -383,7 +394,7 @@ export default function DefineView() {
             </Button>
             <BuildsRow
               builds={{ glossary: 'yes', taxonomy: 'yes', ontology: 'yes' }}
-              note="Start as a glossary, harden over time."
+              note={t('semantic-models:define.author.buildsNote')}
             />
           </CardContent>
         </Card>
@@ -423,7 +434,7 @@ export default function DefineView() {
             </Button>
             <BuildsRow
               builds={{ ontology: 'yes' }}
-              note="Saved as Draft for review."
+              note={t('semantic-models:define.generate.buildsNote')}
             />
           </CardContent>
         </Card>
@@ -476,7 +487,13 @@ export default function DefineView() {
         {t('semantic-models:define.inProgress', 'In progress')}
       </h3>
       {runsLoading ? (
-        <div className="space-y-2 py-1" data-testid="define-runs-loading">
+        <div
+          className="space-y-2 py-1"
+          data-testid="define-runs-loading"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="sr-only">{t('semantic-models:define.runsLoading')}</span>
           {[0, 1].map((row) => (
             <div key={row} className="flex items-center gap-3 rounded-lg border px-3 py-2">
               <Skeleton className="h-7 w-7 rounded-md" />
@@ -514,8 +531,11 @@ export default function DefineView() {
                     row, right-aligned before the action. */}
                 <div className="flex items-center gap-3 text-[11px] text-muted-foreground shrink-0">
                   {run.created_at && (
-                    <span title={new Date(run.created_at).toLocaleString()} className="whitespace-nowrap">
-                      {relativeTime(run.created_at)}
+                    <span
+                      title={new Date(run.created_at).toLocaleString(formattingLocale)}
+                      className="whitespace-nowrap"
+                    >
+                      {relativeTime(run.created_at, formattingLocale)}
                     </span>
                   )}
                   {typeof run.step_count === 'number' && run.step_count > 0 && (

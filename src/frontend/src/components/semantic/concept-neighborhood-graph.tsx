@@ -379,9 +379,15 @@ function ConceptNeighborhoodGraphInner({
     return () => clearTimeout(timer)
   }, [nodes, fitView])
 
-  if (isLoading && !layout) {
+  if ((isLoading || (Boolean(concept?.iri) && neighbors === null)) && !layout) {
     return (
-      <div className="relative h-52 rounded-md border" data-testid="concept-neighborhood-loading">
+      <div
+        className="relative h-52 rounded-md border"
+        data-testid="concept-neighborhood-loading"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="sr-only">{t('semantic-models:neighborhood.loading')}</span>
         <Skeleton className="absolute left-1/2 top-1/2 h-12 w-28 -translate-x-1/2 -translate-y-1/2 rounded-lg" />
         <Skeleton className="absolute left-6 top-8 h-10 w-24 rounded-lg" />
         <Skeleton className="absolute bottom-8 right-6 h-10 w-24 rounded-lg" />

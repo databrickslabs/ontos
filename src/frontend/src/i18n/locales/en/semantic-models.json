@@ -686,6 +686,13 @@
     "requiresWrite": "Requires write access",
     "builds": "Builds",
     "whatYouCanBuild": "What you can build",
+    "rungs": {
+      "glossary": {"label": "Glossary", "blurb": "agreed terms + definitions", "vocab": "SKOS. skos:Concept with skos:prefLabel / skos:altLabel / skos:definition; flat (no hierarchy required)."},
+      "taxonomy": {"label": "Taxonomy", "blurb": "terms in a broader/narrower hierarchy", "vocab": "SKOS. skos:Concept arranged with skos:broader / skos:narrower (skos:related for cross-links)."},
+      "ontology": {"label": "Ontology", "blurb": "typed relationships a machine can reason over", "vocab": "OWL + RDFS. owl:Class with rdfs:subClassOf, owl:ObjectProperty / owl:DatatypeProperty with rdfs:domain / rdfs:range, owl:NamedIndividual. Labels/definitions still use SKOS."}
+    },
+    "buildState": {"active": "This path builds it.", "file": "Produced if the uploaded file contains it.", "none": "Not produced by this path."},
+    "vocabularyAria": "{{label}} vocabulary",
     "schemeRdfNote": "Every scheme is a skos:ConceptScheme.",
     "needsReview": "Needs review",
     "running": "Running",
@@ -694,13 +701,15 @@
       "title": "Author",
       "tip": "Creates skos:Concept entries in a new concept scheme (skos:ConceptScheme). Entries can later be typed as owl:Class or an OWL property as the scheme matures.",
       "desc": "Write terms yourself.",
-      "cta": "New Concept Scheme"
+      "cta": "New Concept Scheme",
+      "buildsNote": "Start as a glossary, harden over time."
     },
     "generate": {
       "title": "Generate",
       "tip": "A guided interview drafts an OWL ontology from your tables: classes (owl:Class, hierarchy via rdfs:subClassOf) and properties (owl:ObjectProperty / owl:DatatypeProperty). Every candidate carries its source and is saved as Draft for review.",
       "desc": "Answer a few questions; Ontos drafts the scheme.",
-      "cta": "Start guided build"
+      "cta": "Start guided build",
+      "buildsNote": "Saved as Draft for review."
     },
     "import": {
       "title": "Import",
@@ -710,6 +719,7 @@
       "buildsNote": "* Whatever the file contains. Imported terms stay read-only."
     },
     "inProgress": "In progress",
+    "runsLoading": "Loading creation work…",
     "noInProgress": "No creation work in progress. Start with one of the paths above.",
     "generatorRun": "Generator run",
     "draftPending": "Draft not yet assigned to a concept scheme.",

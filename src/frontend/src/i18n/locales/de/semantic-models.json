@@ -686,6 +686,13 @@
     "requiresWrite": "Schreibzugriff erforderlich",
     "builds": "Erstellt",
     "whatYouCanBuild": "Was Sie erstellen können",
+    "rungs": {
+      "glossary": {"label": "Glossar", "blurb": "abgestimmte Begriffe und Definitionen", "vocab": "SKOS. skos:Concept mit skos:prefLabel / skos:altLabel / skos:definition; flach (keine Hierarchie erforderlich)."},
+      "taxonomy": {"label": "Taxonomie", "blurb": "Begriffe in einer Ober-/Unterbegriffshierarchie", "vocab": "SKOS. skos:Concept angeordnet mit skos:broader / skos:narrower (skos:related für Querverweise)."},
+      "ontology": {"label": "Ontologie", "blurb": "typisierte Beziehungen für maschinelle Schlussfolgerungen", "vocab": "OWL + RDFS. owl:Class mit rdfs:subClassOf, owl:ObjectProperty / owl:DatatypeProperty mit rdfs:domain / rdfs:range, owl:NamedIndividual. Beschriftungen und Definitionen verwenden weiterhin SKOS."}
+    },
+    "buildState": {"active": "Dieser Pfad erstellt dies.", "file": "Wird erstellt, wenn die hochgeladene Datei dies enthält.", "none": "Wird von diesem Pfad nicht erstellt."},
+    "vocabularyAria": "Vokabular für {{label}}",
     "schemeRdfNote": "Jedes Schema ist ein skos:ConceptScheme.",
     "needsReview": "Prüfung erforderlich",
     "running": "Läuft",
@@ -694,13 +701,15 @@
       "title": "Verfassen",
       "tip": "Erstellt skos:Concept-Einträge in einem neuen Konzeptschema (skos:ConceptScheme). Mit zunehmender Reife des Schemas können Einträge später als owl:Class oder als OWL-Property typisiert werden.",
       "desc": "Begriffe selbst verfassen.",
-      "cta": "Neues Konzeptschema"
+      "cta": "Neues Konzeptschema",
+      "buildsNote": "Als Glossar beginnen und schrittweise ausbauen."
     },
     "generate": {
       "title": "Generieren",
       "tip": "Ein geführtes Interview entwirft aus Ihren Tabellen eine OWL-Ontologie: Klassen (owl:Class, Hierarchie über rdfs:subClassOf) und Properties (owl:ObjectProperty / owl:DatatypeProperty). Jeder Kandidat führt seine Quelle mit und wird zur Prüfung als Entwurf gespeichert.",
       "desc": "Beantworten Sie einige Fragen; Ontos entwirft das Schema.",
-      "cta": "Geführten Aufbau starten"
+      "cta": "Geführten Aufbau starten",
+      "buildsNote": "Wird zur Prüfung als Entwurf gespeichert."
     },
     "import": {
       "title": "Importieren",
@@ -710,6 +719,7 @@
       "buildsNote": "* Je nach Dateiinhalt. Importierte Begriffe bleiben schreibgeschützt."
     },
     "inProgress": "In Bearbeitung",
+    "runsLoading": "Erstellungsaufgaben werden geladen…",
     "noInProgress": "Keine laufenden Erstellungsarbeiten. Beginnen Sie mit einem der obigen Wege.",
     "generatorRun": "Generatorlauf",
     "draftPending": "Entwurf noch keinem Konzeptschema zugewiesen.",

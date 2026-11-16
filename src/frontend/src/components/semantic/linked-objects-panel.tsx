@@ -131,7 +131,7 @@ export default function LinkedObjectsPanel({
   const bumpKnowledgeGraphRefresh = useKnowledgeGraphStore((s) => s.bumpRefreshNonce)
 
   const [links, setLinks] = useState<EnrichedSemanticLink[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(Boolean(conceptIri))
   const [open, setOpen] = useState(true)
 
   // Assign dialog state
@@ -600,7 +600,13 @@ export default function LinkedObjectsPanel({
             data-testid="linked-objects-list"
           >
             {isLoading && links.length === 0 ? (
-              <div className="space-y-2 py-2 px-2" data-testid="linked-objects-loading">
+              <div
+                className="space-y-2 py-2 px-2"
+                data-testid="linked-objects-loading"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="sr-only">{t('semantic-models:linkedObjects.loading')}</span>
                 <Skeleton className="h-8 w-full rounded-md" />
                 <Skeleton className="h-8 w-4/5 rounded-md" />
               </div>

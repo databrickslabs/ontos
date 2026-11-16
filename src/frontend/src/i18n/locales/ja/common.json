@@ -10,6 +10,7 @@
     "delete": "削除",
     "deleteSelected": "選択を削除 ({{count}})",
     "edit": "編集",
+    "rename": "名前を変更",
     "add": "追加",
     "create": "作成",
     "update": "更新",
@@ -359,7 +360,10 @@
       "job": "ジョブ",
       "subscription": "購読",
       "user": "ユーザー",
-      "metric_view": "メトリックビュー"
+      "metric_view": "メトリックビュー",
+      "ontology_concept": "コンセプト",
+      "ontology_collection": "コレクション",
+      "concept_changeset": "コンセプト変更セット"
     },
     "stepTypes": {
       "validation": "検証",

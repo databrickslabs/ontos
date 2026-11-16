@@ -586,6 +586,13 @@
     "requiresWrite": "Schrijftoegang vereist",
     "builds": "Resultaat",
     "whatYouCanBuild": "Wat u kunt bouwen",
+    "rungs": {
+      "glossary": {"label": "Woordenlijst", "blurb": "afgesproken termen en definities", "vocab": "SKOS. skos:Concept met skos:prefLabel / skos:altLabel / skos:definition; vlak (geen hiërarchie vereist)."},
+      "taxonomy": {"label": "Taxonomie", "blurb": "termen in een bredere of nauwere hiërarchie", "vocab": "SKOS. skos:Concept geordend met skos:broader / skos:narrower (skos:related voor dwarsverbanden)."},
+      "ontology": {"label": "Ontologie", "blurb": "getypeerde relaties waarover een machine kan redeneren", "vocab": "OWL + RDFS. owl:Class met rdfs:subClassOf, owl:ObjectProperty / owl:DatatypeProperty met rdfs:domain / rdfs:range, owl:NamedIndividual. Labels en definities blijven SKOS gebruiken."}
+    },
+    "buildState": {"active": "Dit pad bouwt dit.", "file": "Wordt gemaakt als het geüploade bestand dit bevat.", "none": "Wordt niet door dit pad gemaakt."},
+    "vocabularyAria": "Vocabulaire van {{label}}",
     "schemeRdfNote": "Elk schema is een skos:ConceptScheme.",
     "needsReview": "Beoordeling nodig",
     "running": "Bezig",
@@ -594,13 +601,15 @@
       "title": "Opstellen",
       "tip": "Maakt skos:Concept-items aan in een nieuw conceptschema (skos:ConceptScheme). Items kunnen later worden getypeerd als owl:Class of als OWL-eigenschap naarmate het schema volwassener wordt.",
       "desc": "Schrijf zelf termen.",
-      "cta": "Nieuw conceptschema"
+      "cta": "Nieuw conceptschema",
+      "buildsNote": "Begin als woordenlijst en bouw deze geleidelijk uit."
     },
     "generate": {
       "title": "Genereren",
       "tip": "Een begeleid interview stelt op basis van uw tabellen een OWL-ontologie op: klassen (owl:Class, hiërarchie via rdfs:subClassOf) en eigenschappen (owl:ObjectProperty / owl:DatatypeProperty). Elke kandidaat bevat de bron en wordt als Concept opgeslagen ter beoordeling.",
       "desc": "Beantwoord een paar vragen; Ontos stelt het schema op.",
-      "cta": "Begeleide opbouw starten"
+      "cta": "Begeleide opbouw starten",
+      "buildsNote": "Opgeslagen als Concept ter beoordeling."
     },
     "import": {
       "title": "Importeren",
@@ -610,6 +619,7 @@
       "buildsNote": "* Wat het bestand ook bevat. Geïmporteerde termen blijven alleen-lezen."
     },
     "inProgress": "In uitvoering",
+    "runsLoading": "Creatiewerk wordt geladen…",
     "noInProgress": "Er is niets in uitvoering. Begin met een van de bovenstaande paden.",
     "generatorRun": "Generatorrun",
     "draftPending": "Conceptversie nog niet toegewezen aan een conceptschema.",

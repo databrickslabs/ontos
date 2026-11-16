@@ -166,7 +166,12 @@ export function GuidedGenerateDialog({ open, onOpenChange }: GuidedGenerateDialo
               <div
                 className="space-y-2"
                 data-testid="guided-domains-loading"
+                role="status"
+                aria-live="polite"
               >
+                <span className="sr-only">
+                  {t('semantic-models:define.guided.domainsLoading')}
+                </span>
                 <Skeleton className="h-9 w-full rounded-md" />
                 <Skeleton className="h-3 w-2/3" />
               </div>

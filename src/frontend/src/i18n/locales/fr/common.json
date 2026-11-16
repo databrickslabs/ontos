@@ -10,6 +10,7 @@
     "delete": "Supprimer",
     "deleteSelected": "Supprimer sélectionnés ({{count}})",
     "edit": "Modifier",
+    "rename": "Renommer",
     "add": "Ajouter",
     "create": "Créer",
     "update": "Mettre à jour",
@@ -359,7 +360,10 @@
       "job": "Job",
       "subscription": "Abonnement",
       "user": "Utilisateur",
-      "metric_view": "Metric View"
+      "metric_view": "Metric View",
+      "ontology_concept": "Concept",
+      "ontology_collection": "Collection",
+      "concept_changeset": "Ensemble de modifications de concepts"
     },
     "stepTypes": {
       "validation": "Validation",

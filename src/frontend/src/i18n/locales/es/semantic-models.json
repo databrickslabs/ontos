@@ -686,6 +686,13 @@
     "requiresWrite": "Requiere acceso de escritura",
     "builds": "Resultados",
     "whatYouCanBuild": "Qué puedes crear",
+    "rungs": {
+      "glossary": {"label": "Glosario", "blurb": "términos y definiciones acordados", "vocab": "SKOS. skos:Concept con skos:prefLabel / skos:altLabel / skos:definition; plano (sin jerarquía obligatoria)."},
+      "taxonomy": {"label": "Taxonomía", "blurb": "términos en una jerarquía más amplia o específica", "vocab": "SKOS. skos:Concept organizado con skos:broader / skos:narrower (skos:related para vínculos cruzados)."},
+      "ontology": {"label": "Ontología", "blurb": "relaciones tipadas que una máquina puede razonar", "vocab": "OWL + RDFS. owl:Class con rdfs:subClassOf, owl:ObjectProperty / owl:DatatypeProperty con rdfs:domain / rdfs:range, owl:NamedIndividual. Las etiquetas y definiciones siguen usando SKOS."}
+    },
+    "buildState": {"active": "Esta ruta lo crea.", "file": "Se crea si el archivo subido lo contiene.", "none": "Esta ruta no lo crea."},
+    "vocabularyAria": "Vocabulario de {{label}}",
     "schemeRdfNote": "Cada esquema es un skos:ConceptScheme.",
     "needsReview": "Requiere revisión",
     "running": "En ejecución",
@@ -694,13 +701,15 @@
       "title": "Crear",
       "tip": "Crea entradas skos:Concept en un nuevo esquema de conceptos (skos:ConceptScheme). A medida que el esquema madure, las entradas pueden tiparse más adelante como owl:Class o como propiedad OWL.",
       "desc": "Escribe tú mismo los términos.",
-      "cta": "Nuevo esquema de conceptos"
+      "cta": "Nuevo esquema de conceptos",
+      "buildsNote": "Empieza como glosario y fortalécelo con el tiempo."
     },
     "generate": {
       "title": "Generar",
       "tip": "Una entrevista guiada redacta una ontología OWL a partir de tus tablas: clases (owl:Class, jerarquía mediante rdfs:subClassOf) y propiedades (owl:ObjectProperty / owl:DatatypeProperty). Cada candidato conserva su origen y se guarda como Borrador para su revisión.",
       "desc": "Responde a unas preguntas; Ontos redacta el esquema.",
-      "cta": "Iniciar creación guiada"
+      "cta": "Iniciar creación guiada",
+      "buildsNote": "Se guarda como Borrador para su revisión."
     },
     "import": {
       "title": "Importar",
@@ -710,6 +719,7 @@
       "buildsNote": "* Lo que contenga el archivo. Los términos importados son de solo lectura."
     },
     "inProgress": "En curso",
+    "runsLoading": "Cargando trabajo de creación…",
     "noInProgress": "No hay trabajo de creación en curso. Empieza por una de las rutas anteriores.",
     "generatorRun": "Ejecución del generador",
     "draftPending": "Borrador aún no asignado a un esquema de conceptos.",

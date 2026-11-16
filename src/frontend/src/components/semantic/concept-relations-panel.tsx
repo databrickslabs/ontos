@@ -272,8 +272,14 @@ export default function ConceptRelationsPanel({
       style={listMaxHeight}
       data-testid="concept-relations-list"
     >
-      {isLoading && relations.length === 0 ? (
-        <div className="space-y-2 py-2 px-2" data-testid="concept-relations-loading">
+      {(isLoading || (Boolean(conceptIri) && neighbors === null)) && relations.length === 0 ? (
+        <div
+          className="space-y-2 py-2 px-2"
+          data-testid="concept-relations-loading"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="sr-only">{t('semantic-models:relations.loading')}</span>
           <Skeleton className="h-8 w-full rounded-md" />
           <Skeleton className="h-8 w-3/4 rounded-md" />
         </div>

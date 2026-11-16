@@ -388,7 +388,12 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         port_obj = existing_by_id[port_id]
                         port_obj.name = port_dict['name']
                         port_obj.version = port_dict['version']
-                        port_obj.description = port_dict.get('description')
+                        # A field the caller leaves out keeps its stored value (the
+                        # port dialog sends only what it edits); null or [] clears it.
+                        # The contract is the exception: an omitted one is an unlink,
+                        # as the versioning check reads it.
+                        if 'description' in port_dict:
+                            port_obj.description = port_dict.get('description')
                         if 'port_type' in port_dict or 'type' in port_dict:
                             port_obj.port_type = _port_type_of(port_dict, None)
                         port_obj.contract_id = port_dict.get('contract_id')
@@ -401,27 +406,28 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         if 'delivery_method_id' in port_dict:
                             port_obj.delivery_method_id = coerce_uuid(
                                 port_dict.get('delivery_method_id'))
-                        # Where the port points: kept when the caller leaves it out, as the
-                        # versioning check reads it (an explicit null still clears it).
                         if 'asset_type' in port_dict:
                             port_obj.asset_type = port_dict.get('asset_type')
                         if 'asset_identifier' in port_dict:
                             port_obj.asset_identifier = port_dict.get('asset_identifier')
-                        port_obj.status = port_dict.get('status')
+                        if 'status' in port_dict:
+                            port_obj.status = port_dict.get('status')
                         if 'server' in port_dict:
                             port_obj.server = server_json
-                        port_obj.contains_pii = port_dict.get('contains_pii', False)
-                        port_obj.auto_approve = port_dict.get('auto_approve', False)
+                        if 'contains_pii' in port_dict:
+                            port_obj.contains_pii = bool(port_dict.get('contains_pii'))
+                        if 'auto_approve' in port_dict:
+                            port_obj.auto_approve = bool(port_dict.get('auto_approve'))
 
                         # Replace SBOM
-                        port_obj.sbom.clear()
-                        if port_dict.get('sbom'):
-                            for sbom_dict in port_dict['sbom']:
+                        if 'sbom' in port_dict:
+                            port_obj.sbom.clear()
+                            for sbom_dict in port_dict['sbom'] or []:
                                 port_obj.sbom.append(SBOMDb(type=sbom_dict.get('type', 'external'), url=sbom_dict['url']))
                         # Replace InputContracts
-                        port_obj.input_contracts.clear()
-                        if port_dict.get('input_contracts'):
-                            for contract_dict in port_dict['input_contracts']:
+                        if 'input_contracts' in port_dict:
+                            port_obj.input_contracts.clear()
+                            for contract_dict in port_dict['input_contracts'] or []:
                                 port_obj.input_contracts.append(InputContractDb(contract_id=contract_dict['id'], contract_version=contract_dict['version']))
 
                         incoming_ids.add(port_id)

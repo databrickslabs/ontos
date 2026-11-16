@@ -125,7 +125,7 @@ export interface OutputPort {
   version: string;
 
   // ODPS optional fields
-  description?: string;
+  description?: string | null; // null clears it on update (an omitted field is kept)
   type?: string;
   contractId?: string;
   contractName?: string;
@@ -142,7 +142,7 @@ export interface OutputPort {
   // Databricks extensions
   assetType?: string;
   assetIdentifier?: string;
-  status?: string;
+  status?: string | null; // null clears it on update
   server?: Server;
   containsPii?: boolean;
   autoApprove?: boolean;

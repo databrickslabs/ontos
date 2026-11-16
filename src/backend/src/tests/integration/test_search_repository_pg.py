@@ -181,3 +181,18 @@ def test_match_ids_uses_the_search_where(seeded):
     assert repo.match_ids(seeded, "churn") == ["product::1"]
     assert repo.match_ids(seeded, "*", allowed_ids_by_type={"data-product": ["product::2"]},
                           filters={"status": "draft"}) == ["product::2"]
+
+
+def test_allowed_ids_never_return_for_a_scored_query(seeded):
+    """An id outside the allow-list never comes back, even when it matches the
+    query best; the scoring CTE sees only the listed documents."""
+    # "sales" matches product::2 (title) and contract::3 (domain); product::2 is
+    # not allowed, so only the unrestricted contract may come back.
+    out = repo.search(seeded, "sales", allowed_ids_by_type={"data-product": ["product::1"]})
+    assert "2" not in [r["id"] for r in out["results"]]
+    assert [r["id"] for r in out["results"]] == ["3"]
+    assert out["total_count"] == 1
+
+    ids = repo.match_ids(seeded, "sales", allowed_ids_by_type={"data-product": ["product::1"]})
+    assert ids == ["contract::3"]
+    assert "product::2" not in ids

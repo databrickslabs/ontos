@@ -12,7 +12,7 @@ from src.db_models.data_products import DataProductDb
 logger = get_logger(__name__)
 
 
-# Seeded on new installs (and by the b8_data_product_types migration).
+# Seeded on new installs (and by the b11_data_product_types migration).
 # Seeded types cannot be hard-deleted.
 SEEDED_TYPES = [
     {

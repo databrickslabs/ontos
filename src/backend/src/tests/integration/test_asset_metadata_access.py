@@ -240,7 +240,7 @@ def test_without_assets_every_entity_route_is_403(
 
 
 def test_the_checks_use_the_startup_wired_assets_manager(
-        client, db_session, asset, act_as, monkeypatch):
+        client, db_session, asset, act_as):
     """Not the module-level singleton: the checks see the manager the app wired."""
     calls = []
 
@@ -249,7 +249,12 @@ def test_the_checks_use_the_startup_wired_assets_manager(
             calls.append(asset_id)
             return super().asset_exists(db, asset_id)
 
-    monkeypatch.setattr(app.state, 'assets_manager', Wired())
+    # Plain assignment: the client fixture puts app.state back on teardown.
+    # Not monkeypatch: from pytest 9.2 it takes the old value from the
+    # instance __dict__, where starlette's State has no 'assets_manager' (it
+    # lives in State._state), so its undo deletes the key after the client
+    # fixture has already restored app.state, and raises KeyError.
+    app.state.assets_manager = Wired()
     act_as('Admin')
 
     response = client.get('/api/entities/asset/rich-texts', params={'entity_id': str(asset.id)})

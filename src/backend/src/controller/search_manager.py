@@ -177,7 +177,8 @@ class SearchManager:
         query: str, 
         auth_manager: AuthorizationManager, 
         user: UserInfo, 
-        team_role_override: Optional[str] = None
+        team_role_override: Optional[str] = None,
+        effective_permissions: Optional[Dict[str, FeatureAccessLevel]] = None,
     ) -> List[SearchIndexItem]:
         """
         Performs a configurable search on indexed items.
@@ -198,6 +199,9 @@ class SearchManager:
             auth_manager: AuthorizationManager for permission checking
             user: Current user info
             team_role_override: Optional team role override
+            effective_permissions: The user's resolved permissions
+                (``resolve_effective_permissions``). When given, they're used as
+                they are and ``team_role_override`` is ignored.
             
         Returns:
             List of matching SearchIndexItem, sorted by relevance
@@ -212,7 +216,9 @@ class SearchManager:
         # Postgres backend: candidates come from the DB (ranked), then the SAME
         # per-item permission check is applied in Python — no auth logic in SQL.
         if self._uses_postgres():
-            return self._search_postgres(query_stripped, auth_manager, user, team_role_override)
+            return self._search_postgres(
+                query_stripped, auth_manager, user, team_role_override, effective_permissions,
+            )
 
         config = self.config
         matches: List[SearchMatch] = []
@@ -233,14 +239,16 @@ class SearchManager:
                     match_quality=1.0,
                 ))
 
-        # Filter based on permissions using AuthorizationManager
-        if not user.groups:
+        # Filter based on permissions using AuthorizationManager. Resolved permissions
+        # also cover email and team roles, so only the group-based fallback needs groups.
+        if effective_permissions is None and not user.groups:
              logger.warning(f"User {user.username} has no groups, returning empty search results.")
              return []
              
         filtered_matches: List[SearchMatch] = []
         try:
-             effective_permissions = auth_manager.get_user_effective_permissions(user.groups, team_role_override)
+             if effective_permissions is None:
+                 effective_permissions = auth_manager.get_user_effective_permissions(user.groups, team_role_override)
              for match in matches:
                  if auth_manager.has_permission(effective_permissions, match.item.feature_id, FeatureAccessLevel.READ_ONLY):
                      filtered_matches.append(match)
@@ -271,19 +279,21 @@ class SearchManager:
         auth_manager: AuthorizationManager,
         user: UserInfo,
         team_role_override: Optional[str],
+        effective_permissions: Optional[Dict[str, FeatureAccessLevel]] = None,
     ) -> List[SearchIndexItem]:
         """REST search via the Postgres backend: DB-ranked candidates, then the
         existing per-item permission filter (reused verbatim — no SQL auth)."""
         REST_CANDIDATE_LIMIT = 200
         candidates = self._backend.search_items(query, limit=REST_CANDIDATE_LIMIT)
 
-        if not user.groups:
+        if effective_permissions is None and not user.groups:
             logger.warning(f"User {user.username} has no groups, returning empty search results.")
             return []
         try:
-            effective_permissions = auth_manager.get_user_effective_permissions(
-                user.groups, team_role_override
-            )
+            if effective_permissions is None:
+                effective_permissions = auth_manager.get_user_effective_permissions(
+                    user.groups, team_role_override
+                )
         except Exception as e:
             logger.error(f"Error checking permissions during search for user {user.username}: {e}", exc_info=True)
             return []

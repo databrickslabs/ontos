@@ -6,7 +6,7 @@ Provides CRUD operations for workflow definitions and execution management.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Collection, Dict, List, Optional, Union
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,9 @@ from src.common.authorization import (
 from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
 from src.models.notifications import Notification
+from src.common.workflow_approvals import (
+    is_handled, open_approval_ids, open_execution_approvals,
+)
 from src.common.logging import get_logger
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.notifications_manager import NotificationsManager
@@ -1369,6 +1372,11 @@ async def resume_workflow_execution(
                 },
             )
 
+        # The step the resume decides, read before the resume moves on
+        decided_step = _pending_step_id(db, execution_id)
+        # Open before the resume: a loop-back into this step opens a new round
+        open_before = open_approval_ids(db, execution_id)
+
         # Resume the workflow
         result = executor.resume_workflow(
             execution_id=execution_id,
@@ -1380,13 +1388,20 @@ async def resume_workflow_execution(
             },
             user_email=user_email,
         )
-        
+
         if not result:
             raise HTTPException(
-                status_code=404, 
+                status_code=404,
                 detail="Execution not found or not in paused state"
             )
-        
+
+        # An approval resumed here (e.g. by an external system) is decided:
+        # close its notifications so My actions stops offering it
+        _mark_step_notifications_handled(
+            db, execution_id, decided_step, approved, user_email, only_ids=open_before,
+        )
+        db.commit()
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',
@@ -1518,17 +1533,6 @@ def _is_for_step(
     return step_id is None or notified_step is None or notified_step == step_id
 
 
-def _is_handled(notification: Union[Notification, NotificationDb]) -> bool:
-    """Whether the approval notification's decision was already recorded."""
-    payload = notification.action_payload
-    if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except ValueError:
-            return False
-    return isinstance(payload, dict) and bool(payload.get('handled'))
-
-
 def _is_own_owner_approval(
     db: Session, execution_id: str, step_id: Optional[str], user_info: UserInfo,
 ) -> bool:
@@ -1636,7 +1640,7 @@ def _assert_caller_authorized_for_execution(
     candidates = [
         n for n in _find_approval_notifications_for_execution(db, execution_id)
         if (n.recipient or n.recipient_role_id) and _is_for_step(n, pending_step)
-        and not (for_read and _is_handled(n))
+        and not (for_read and is_handled(n))
     ]
     if not candidates:
         raise HTTPException(
@@ -1679,19 +1683,21 @@ def _mark_step_notifications_handled(
     approved: bool,
     user_email: Optional[str],
     decision: Optional[str] = None,
+    only_ids: Optional[Collection[str]] = None,
 ) -> None:
-    """Mark the unread approval notifications of ``step_id`` as handled.
+    """Mark the approval notifications of ``step_id`` not yet handled as handled.
 
-    Notifications of later steps, created while the workflow resumed, stay
-    open for their approvers. ``decision`` overrides approved / rejected
-    (``cancelled`` when an admin cancels the step).
+    Read ones too: an approver who opened the notification in the bell still
+    sees it in My actions until it is handled. Notifications of later steps,
+    created while the workflow resumed, stay open for their approvers.
+    ``decision`` overrides approved / rejected (``cancelled`` when an admin
+    cancels the step). ``only_ids`` limits the marking to the notifications
+    open before a resume: a workflow that loops back into the same step opens
+    a new round that must stay open.
     """
-    notifications = db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'workflow_approval',
-        NotificationDb.read == False
-    ).all()
-
-    for notif in notifications:
+    for notif in open_execution_approvals(db, execution_id):
+        if only_ids is not None and notif.id not in only_ids:
+            continue
         try:
             payload = notif.action_payload
             if isinstance(payload, str):
@@ -1728,10 +1734,7 @@ def _mark_decided_approver_notifications(
     from src.common.workflow_executor import approver_key
 
     by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
-    for notif in db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'workflow_approval',
-        NotificationDb.read == False,  # noqa: E712
-    ).all():
+    for notif in open_execution_approvals(db, execution_id):
         try:
             payload = json.loads(notif.action_payload or '{}')
         except (TypeError, ValueError):
@@ -1948,6 +1951,7 @@ async def handle_workflow_approval(
         # Resuming may pause at the next approval step and notify its
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)
+        open_before = open_approval_ids(db, execution_id)
 
         # Resume the workflow. The caller passed the per-execution check, so
         # the decision counts as the approval step's (e.g. for the certified
@@ -1978,7 +1982,9 @@ async def handle_workflow_approval(
                 detail="Execution not found or not in paused state"
             )
 
-        _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
+        _mark_step_notifications_handled(
+            db, execution_id, decided_step, approved, user_email, only_ids=open_before,
+        )
 
         audit_manager.log_action(
             db=db,

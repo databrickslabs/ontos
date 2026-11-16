@@ -24,7 +24,7 @@ from src.controller.metric_view_change_requests_manager import (
 from src.models.metric_view_change_requests import (
     MetricViewChangeRequestCreate, MetricViewChangeRequestDetail, MetricViewChangeRequestRead,
 )
-from src.common.authorization import PermissionChecker
+from src.common.authorization import PermissionChecker, effective_permissions_for_request
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep,
@@ -73,23 +73,11 @@ def _user_has_assets_feature(request: Request, current_user, level: FeatureAcces
     """
     try:
         auth_manager = getattr(request.app.state, "authorization_manager", None)
-        settings_manager = getattr(request.app.state, "settings_manager", None)
         if not auth_manager or not current_user:
             return False
-        applied_role_id = None
-        if settings_manager:
-            try:
-                applied_role_id = settings_manager.get_applied_role_override_for_user(
-                    current_user.email
-                )
-            except Exception:
-                applied_role_id = None
-        if applied_role_id and settings_manager:
-            effective = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-        else:
-            effective = auth_manager.get_user_effective_permissions(
-                current_user.groups or [], None
-            )
+        effective = effective_permissions_for_request(
+            request, current_user.email, current_user.groups or [], auth_manager,
+        )
         return auth_manager.has_permission(effective, FEATURE_ID, level)
     except Exception:
         logger.exception("Failed to check assets feature for user")

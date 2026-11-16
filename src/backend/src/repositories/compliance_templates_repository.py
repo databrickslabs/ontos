@@ -138,14 +138,18 @@ class ComplianceTemplatesRepository:
     def update_field(self, db: Session, *, field_id: UUID, update_data: dict) -> ComplianceTemplateFieldDb | None:
         """Update a field's safe attributes (label, hint_text, default_value, is_mandatory, group metadata).
 
-        Does NOT support value_type or possible_values changes — those are destructive
-        edits guarded by the manager.
+        value_type and possible_values are written as given: the manager has already
+        rejected the destructive changes (value_type change, enum value removal) for
+        fields with stored values.
         """
         field = self.get_field(db, field_id)
         if not field:
             return None
         # Whitelist safe fields: label, hint_text, default_value, is_mandatory, group_title, group_order, field_order
-        safe_fields = {"label", "hint_text", "default_value", "is_mandatory", "group_title", "group_order", "field_order"}
+        safe_fields = {
+            "label", "hint_text", "default_value", "is_mandatory", "group_title", "group_order",
+            "field_order", "value_type", "possible_values",
+        }
         for key, value in update_data.items():
             if key in safe_fields and hasattr(field, key):
                 setattr(field, key, value)

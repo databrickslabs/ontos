@@ -66,6 +66,7 @@ import PublicationScopeBadge from '@/components/common/publication-scope-badge';
 import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/direct-lifecycle-dialogs';
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle';
 import { userHasApprovalPrivilege } from '@/lib/permissions';
+import { omitTags } from '@/lib/tag-payload';
 import { ApprovalEntity } from '@/types/settings';
 
 /**
@@ -955,7 +956,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
+        body: JSON.stringify({ ...omitTags(product), inputPorts: updatedPorts }),
       });
       if (!res.ok) throw new Error(`Failed to add consumable (${res.status})`);
       await fetchProductDetails();
@@ -972,7 +973,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
+        body: JSON.stringify({ ...omitTags(product), inputPorts: updatedPorts }),
       });
       if (!res.ok) throw new Error(`Failed to update consumable (${res.status})`);
       await fetchProductDetails();
@@ -992,7 +993,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
+        body: JSON.stringify({ ...omitTags(product), inputPorts: updatedPorts }),
       });
       if (!res.ok) throw new Error(`Failed to delete consumable (${res.status})`);
       await fetchProductDetails();
@@ -1009,7 +1010,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
+        body: JSON.stringify({ ...omitTags(product), outputPorts: updatedPorts }),
       });
       if (!res.ok) throw new Error(`Failed to add deliverable (${res.status})`);
       await fetchProductDetails();
@@ -1026,7 +1027,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
+        body: JSON.stringify({ ...omitTags(product), outputPorts: updatedPorts }),
       });
       if (!res.ok) throw new Error(`Failed to update deliverable (${res.status})`);
       await fetchProductDetails();
@@ -1046,7 +1047,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
+        body: JSON.stringify({ ...omitTags(product), outputPorts: updatedPorts }),
       });
       if (!res.ok) throw new Error(`Failed to delete deliverable (${res.status})`);
       await fetchProductDetails();
@@ -1063,7 +1064,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
+        body: JSON.stringify({ ...omitTags(product), managementPorts: updatedPorts }),
       });
       if (!res.ok) throw new Error(`Failed to add management port (${res.status})`);
       await fetchProductDetails();
@@ -1080,7 +1081,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
+        body: JSON.stringify({ ...omitTags(product), managementPorts: updatedPorts }),
       });
       if (!res.ok) throw new Error(`Failed to update management port (${res.status})`);
       await fetchProductDetails();
@@ -1100,7 +1101,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
+        body: JSON.stringify({ ...omitTags(product), managementPorts: updatedPorts }),
       });
       if (!res.ok) throw new Error(`Failed to delete management port (${res.status})`);
       await fetchProductDetails();
@@ -1118,7 +1119,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, team: updatedTeam }),
+        body: JSON.stringify({ ...omitTags(product), team: updatedTeam }),
       });
       if (!res.ok) throw new Error(`Failed to add team member (${res.status})`);
       await fetchProductDetails();
@@ -1145,7 +1146,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, team: updatedTeam }),
+        body: JSON.stringify({ ...omitTags(product), team: updatedTeam }),
       });
       if (!res.ok) throw new Error(`Failed to update team member (${res.status})`);
       await fetchProductDetails();
@@ -1171,7 +1172,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, support: updatedChannels }),
+        body: JSON.stringify({ ...omitTags(product), support: updatedChannels }),
       });
       if (!res.ok) throw new Error(`Failed to add support channel (${res.status})`);
       await fetchProductDetails();
@@ -1188,7 +1189,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, support: updatedChannels }),
+        body: JSON.stringify({ ...omitTags(product), support: updatedChannels }),
       });
       if (!res.ok) throw new Error(`Failed to update support channel (${res.status})`);
       await fetchProductDetails();
@@ -1208,7 +1209,7 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, support: updatedChannels }),
+        body: JSON.stringify({ ...omitTags(product), support: updatedChannels }),
       });
       if (!res.ok) throw new Error(`Failed to delete support channel (${res.status})`);
       await fetchProductDetails();
@@ -1231,17 +1232,12 @@ export default function DataProductDetails() {
       const updatedPorts = [...(product.outputPorts || [])];
       updatedPorts[portIndex] = { ...updatedPorts[portIndex], contractId: undefined };
       
-      // Normalize tags to FQN strings or tag_id objects for backend compatibility
-      const normalizedTags = product.tags?.map((tag: any) => 
-        typeof tag === 'string' ? tag : (tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value })
-      );
-      
+      // Tags are left out: the stored set stays as it is (#1435).
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          ...product, 
-          tags: normalizedTags,
+          ...omitTags(product), 
           outputPorts: updatedPorts 
         }),
       });

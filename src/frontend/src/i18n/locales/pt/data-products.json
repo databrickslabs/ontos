@@ -1062,7 +1062,7 @@
     "contractLabel": "Contrato:",
     "productNameLabel": "Nome do produto *",
     "productNamePlaceholder": "ex.: Produto de análise de clientes",
-    "productTypeLabel": "Tipo de produto *",
+    "productTypeLabel": "Tipo de produto",
     "productTypePlaceholder": "Selecione o tipo de produto",
     "versionLabel": "Versão *",
     "versionPlaceholder": "ex.: v1.0.0",
@@ -1074,7 +1074,6 @@
     "errors": {
       "nameRequired": "O nome do produto é obrigatório",
       "versionRequired": "A versão é obrigatória",
-      "typeRequired": "O tipo de produto é obrigatório",
       "createError": "Falha ao criar produto a partir do contrato"
     },
     "messages": {

@@ -1062,7 +1062,7 @@
     "contractLabel": "Contract:",
     "productNameLabel": "Product Name *",
     "productNamePlaceholder": "e.g., Customer Analytics Product",
-    "productTypeLabel": "Product Type *",
+    "productTypeLabel": "Product Type",
     "productTypePlaceholder": "Select product type",
     "versionLabel": "Version *",
     "versionPlaceholder": "e.g., v1.0.0",
@@ -1074,7 +1074,6 @@
     "errors": {
       "nameRequired": "Product name is required",
       "versionRequired": "Version is required",
-      "typeRequired": "Product type is required",
       "createError": "Failed to create product from contract"
     },
     "messages": {

@@ -1062,7 +1062,7 @@
     "contractLabel": "Contract:",
     "productNameLabel": "Productnaam *",
     "productNamePlaceholder": "bijv. Customer Analytics Product",
-    "productTypeLabel": "Producttype *",
+    "productTypeLabel": "Producttype",
     "productTypePlaceholder": "Selecteer producttype",
     "versionLabel": "Versie *",
     "versionPlaceholder": "bijv. v1.0.0",
@@ -1074,7 +1074,6 @@
     "errors": {
       "nameRequired": "Productnaam is verplicht",
       "versionRequired": "Versie is verplicht",
-      "typeRequired": "Producttype is verplicht",
       "createError": "Aanmaken van product vanuit contract mislukt"
     },
     "messages": {

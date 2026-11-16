@@ -265,6 +265,21 @@ _APPROVAL_RECORD_KEYS = frozenset({
 # rebuilds the entity from the trigger's snapshot
 _CONTEXT_TAGS_KEY = '_context_tags'
 
+# Reserved keys of result_data that are stored for the engine only: API
+# responses leave them out
+_RESERVED_RESULT_KEYS = frozenset({_CONTEXT_TAGS_KEY})
+
+
+def public_result_data(text: Optional[str]) -> Optional[Dict[str, Any]]:
+    """A step execution's stored result_data as the API returns it: the parsed
+    JSON without the reserved keys. None when nothing was stored."""
+    if not text:
+        return None
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        return data
+    return {k: v for k, v in data.items() if k not in _RESERVED_RESULT_KEYS}
+
 
 def _pause_result_data(result: 'StepResult', context: 'StepContext') -> Optional[Dict[str, Any]]:
     """The result_data stored for a step that paused the run: its data plus the
@@ -4796,7 +4811,7 @@ class WorkflowExecutor:
                 step_name=se.step_name,
                 status=StepExecutionStatus(se.status),
                 passed=se.passed,
-                result_data=json.loads(se.result_data) if se.result_data else None,
+                result_data=public_result_data(se.result_data),
                 error_message=se.error_message,
                 message=se.message,
                 duration_ms=se.duration_ms,

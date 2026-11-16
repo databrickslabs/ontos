@@ -285,3 +285,53 @@ def test_tags_changed_between_two_approvals_survive_both(db_session):
     _resume(last, paused.id)
 
     assert spy.tags['done'] == {'tier': 'gold'}
+
+
+def _paused_with_tags(db_session):
+    db_workflow = _create(db_session, [
+        _step('tier', StepType.ASSIGN_TAG, {'key': 'tier', 'value': 'gold'}, on_pass='approve'),
+        _approval('approve', on_pass='done'),
+        _step('done', StepType.PASS),
+    ])
+    paused = _run(db_session, db_workflow.id, WorkflowExecutor(db_session),
+                  entity={'id': 't-1', 'name': 'orders', 'tags': {'owner': 'pat'}})
+    assert paused.status.value == 'paused'
+    return paused
+
+
+def test_the_api_does_not_return_the_reserved_context_tags_key(db_session):
+    import asyncio
+    import json
+
+    from src.routes.workflows_routes import get_execution
+
+    paused = _paused_with_tags(db_session)
+
+    # The pause record still stores the tags for the resume
+    record = db_session.query(WorkflowStepExecutionDb).filter_by(
+        execution_id=paused.id, step_key='approve',
+    ).one()
+    assert json.loads(record.result_data)['_context_tags'] == {'owner': 'pat', 'tier': 'gold'}
+
+    details = asyncio.run(get_execution(paused.id, db_session, None))
+    approve = next(s for s in details['step_executions'] if s['step_key'] == 'approve')
+    assert '_context_tags' not in (approve['result_data'] or {})
+
+    # The execution model (self-service, notices) does not carry it either
+    assert all('_context_tags' not in (s.result_data or {}) for s in paused.step_executions)
+
+    # The resume still gets the tags back
+    after = WorkflowExecutor(db_session)
+    spy = _Spy(after)
+    _resume(after, paused.id)
+    assert spy.tags['done'] == {'owner': 'pat', 'tier': 'gold'}
+
+
+def test_public_result_data_only_drops_reserved_keys():
+    from src.common.workflow_executor import public_result_data
+
+    assert public_result_data(None) is None
+    assert public_result_data('') is None
+    assert public_result_data('{"_context_tags": {"a": 1}, "reason": "ok", "_other": 2}') == {
+        'reason': 'ok', '_other': 2,
+    }

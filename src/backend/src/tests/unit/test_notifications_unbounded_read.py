@@ -195,6 +195,32 @@ class TestPendingApprovalsSurviveTheRowCap:
         assert [n.title for n in listed] == ['Broadcast']
 
 
+def _history(count: int = BELL_HISTORY_LIMIT) -> list:
+    """Plain informational rows for ana, newer than the target rows: they fill the history."""
+    return [
+        _row(recipient='ana@example.com', title=f'History {i}',
+             created_at=NOW - timedelta(minutes=i))
+        for i in range(count)
+    ]
+
+
+class TestPendingIsSemantic:
+    """Only an undecided ``action_required`` row bypasses the history cap (#1527 review)."""
+
+    def test_an_informational_row_with_an_action_type_is_history(self, db_session: Session):
+        # agreement_wizard_manager writes INFO rows with action_type='agreement_completed'
+        _insert(db_session, _history())
+        completed = _row(recipient='ana@example.com', title='Agreement completed',
+                         action_type='agreement_completed', created_at=OLD,
+                         action_payload=json.dumps({'agreement_id': 'a-1'}))
+        _insert(db_session, [completed])
+
+        listed = _manager().get_notifications(db_session, ANA)
+
+        assert completed['id'] not in [n.id for n in listed]
+        assert len(listed) == BELL_HISTORY_LIMIT
+
+
 class TestActionTypeLookupsAreNotCapped:
 
     def test_unread_request_older_than_5000_rows_is_found_for_dedup(self, db_session: Session):

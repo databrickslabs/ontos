@@ -133,6 +133,9 @@ class ScoringSql:
     matched_expr: str         # number of tokens that matched
     order_by: str             # ORDER BY clause body (no keyword)
     params: dict[str, Any]
+    # Candidate pre-filter (AND-ed into the base WHERE before scoring). Empty when
+    # the config has a fuzzy field: fuzzy matches need no shared substring.
+    prefilter: str = ""
 
 
 def _branches(config: SearchConfig) -> list[tuple[str, dict[str, FieldConfig]]]:
@@ -239,6 +242,18 @@ def build_scoring_sql(config: SearchConfig, tokens: list[str]) -> ScoringSql:
             f"ORDER BY f.score DESC, f.ord ASC LIMIT 1) t{i} ON TRUE"
         )
 
+    # Pre-filter: every non-fuzzy match type (exact, prefix, substring) needs the
+    # token as a substring of some field value, and every scored field is read
+    # from title/description/id/type/tags/extra_data. So a row with no token in
+    # this haystack can't score and is dropped before the per-row scoring.
+    # Fuzzy fields (subsequence / char overlap) break that implication, so a
+    # config with any fuzzy field skips the pre-filter. Tokens are word
+    # characters only, so lower() on the concatenation matches per-field lower().
+    prefilter = ""
+    if toks and not _has_fuzzy(config):
+        hay = "lower(concat_ws(' ', title, description, id, type, tags::text, extra_data::text))"
+        prefilter = "(" + " OR ".join(f"strpos({hay}, {tok.t}) > 0" for tok in toks) + ")"
+
     n = len(toks)
     raw = " + ".join([_Q0] + [f"coalesce(s{i}, {_Q0})" for i in range(n)])
     matched = " + ".join(["0"] + [f"(CASE WHEN s{i} IS NOT NULL THEN 1 ELSE 0 END)" for i in range(n)])
@@ -255,7 +270,13 @@ def build_scoring_sql(config: SearchConfig, tokens: list[str]) -> ScoringSql:
         matched_expr=f"({matched})",
         order_by=order_by_sql(config),
         params=b.params,
+        prefilter=prefilter,
     )
+
+
+def _has_fuzzy(config: SearchConfig) -> bool:
+    """True when any effective field config (any type, incl. defaults) is fuzzy."""
+    return any(fc.match_type == MatchType.FUZZY for _, fcs in _branches(config) for fc in fcs.values())
 
 
 def list_order_sql() -> str:

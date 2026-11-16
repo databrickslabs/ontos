@@ -174,6 +174,8 @@ def _matches_cte(
     the ORDER BY body. ``matches`` has the base columns + ``score``/``priority``
     and only rows where at least one token matched (search_scoring.score_item)."""
     s = search_scoring_sql.build_scoring_sql(config, tokens)
+    if s.prefilter:
+        where = (where + " AND " if where else " WHERE ") + s.prefilter
     cte = (
         f"WITH b AS (SELECT {_COLS}, {s.base_select} FROM search_documents{where}), "
         f"scored AS (SELECT b.id, b.entity_id, b.type, b.title, b.description, b.link, b.tags, "

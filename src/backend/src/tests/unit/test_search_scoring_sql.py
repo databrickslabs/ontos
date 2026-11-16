@@ -101,3 +101,16 @@ def test_branch_order_mirrors_get_all_field_configs():
 def test_non_finite_boost_is_neutralised():
     assert ss._f8(float("inf")) == "CAST(0.0 AS float8)"
     assert ss._f8(1.5) == "CAST(1.5 AS float8)"
+
+
+def test_prefilter_applies_to_non_fuzzy_configs_only():
+    """Non-fuzzy match types need the token as a substring, so the pre-filter is
+    exact. A fuzzy field (subsequence / char overlap) has no such substring, so
+    a config with any fuzzy field must not get the pre-filter."""
+    s = ss.build_scoring_sql(_config(), ["customer"])
+    assert s.prefilter.startswith("(strpos(") and "> 0)" in s.prefilter
+
+    fuzzy = _config()
+    fuzzy.asset_types["data-product"].extra_fields["owner"] = FieldConfig(
+        indexed=True, match_type=MatchType.FUZZY, priority=4, boost=1.5)
+    assert ss.build_scoring_sql(fuzzy, ["customer"]).prefilter == ""

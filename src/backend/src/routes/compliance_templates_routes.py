@@ -122,9 +122,12 @@ async def delete_template(
     db: DBSessionDep,
     _: None = Depends(PermissionChecker(ADMIN_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
-    """Delete a template and its fields/values. Admin only."""
+    """Delete a template and its fields. Answers 409 while any product still has values for it. Admin only."""
     try:
         compliance_templates_manager.delete_template(db, template_id=template_id)
+    except ComplianceConflictError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ComplianceTemplateError as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

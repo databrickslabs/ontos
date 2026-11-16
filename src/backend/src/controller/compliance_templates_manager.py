@@ -134,9 +134,15 @@ class ComplianceTemplatesManager:
         return ComplianceTemplateRead.model_validate(t)
 
     def delete_template(self, db: Session, *, template_id: UUID) -> None:
+        """Delete a template with its fields. Guarded like delete_field: refused while any product has values."""
         t = compliance_templates_repo.get_template(db, template_id)
         if not t:
-            raise ComplianceTemplateError("Template not found")
+            raise ComplianceNotFoundError("Template not found")
+        if compliance_templates_repo.count_template_values(db, template_id=template_id) > 0:
+            raise ComplianceConflictError(
+                f"Cannot delete template '{t.name}': stored values exist. "
+                f"Delete the values first."
+            )
         compliance_templates_repo.delete_template(db, db_obj=t)
         db.commit()
 

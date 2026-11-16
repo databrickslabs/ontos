@@ -554,12 +554,14 @@ class DataProduct(BaseModel):
         return value or []
 
     def to_wire_dict(self, **dump_kwargs: Any) -> Dict[str, Any]:
-        """``model_dump(by_alias=False)`` with the versioning fields renamed to
-        the camelCase keys the frontend types expect."""
+        """``model_dump(by_alias=False)`` plus the versioning fields under their
+        camelCase keys (the frontend types). The snake_case keys stay too: the
+        GET routes have always sent them, so clients keep working; they are
+        dropped in a later release."""
         data = self.model_dump(by_alias=False, **dump_kwargs)
         for name in _PRODUCT_WIRE_CAMEL_FIELDS:
             if name in data:
-                data[type(self).model_fields[name].serialization_alias] = data.pop(name)
+                data[type(self).model_fields[name].serialization_alias] = data[name]
         return data
 
     model_config = {

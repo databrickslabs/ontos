@@ -33,3 +33,22 @@ def test_the_migration_history_has_a_single_head():
         "`alembic merge -m 'merge heads' <head_a> <head_b>` and the `alembic-branch` "
         "label (see .cursor/rules/11-database-migrations.mdc)."
     )
+
+
+# alembic_version.version_num is VARCHAR(32). A longer revision id passes on
+# SQLite (which ignores the length) but fails on Postgres when the database is
+# stamped or upgraded, and the app can't start.
+ALEMBIC_VERSION_NUM_LENGTH = 32
+
+
+def test_every_revision_id_fits_alembic_version():
+    too_long = sorted(
+        rev.revision
+        for rev in _script_directory().walk_revisions()
+        if len(rev.revision) > ALEMBIC_VERSION_NUM_LENGTH
+    )
+    assert too_long == [], (
+        f"Revision ids longer than {ALEMBIC_VERSION_NUM_LENGTH} characters don't fit "
+        f"alembic_version.version_num on Postgres: {', '.join(too_long)}. Shorten the "
+        "`revision` (and the file name / docstring to match)."
+    )

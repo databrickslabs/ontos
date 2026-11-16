@@ -15,13 +15,13 @@ _PATH = (
     Path(__file__).resolve().parents[3]
     / "alembic"
     / "versions"
-    / "b12_data_product_type_from_custom_props.py"
+    / "b12_product_type_from_props.py"
 )
 
 
 @pytest.fixture(scope="module")
 def migration():
-    spec = importlib.util.spec_from_file_location("b12_data_product_type_from_custom_props", _PATH)
+    spec = importlib.util.spec_from_file_location("b12_product_type_from_props", _PATH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

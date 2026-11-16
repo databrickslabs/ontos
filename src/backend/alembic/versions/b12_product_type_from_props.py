@@ -19,7 +19,7 @@ Downgrade writes the type keys back as ``productType`` custom properties (for
 products that don't have one) and clears the foreign key. Types created here
 are left in place; b11's downgrade drops the table.
 
-Revision ID: b12_data_product_type_from_custom_props
+Revision ID: b12_product_type_from_props
 Revises: b11_data_product_types
 Create Date: 2026-11-16 12:00:00.000000
 
@@ -36,7 +36,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 # revision identifiers, used by Alembic.
-revision: str = "b12_data_product_type_from_custom_props"
+revision: str = "b12_product_type_from_props"
 down_revision: str | None = "b11_data_product_types"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

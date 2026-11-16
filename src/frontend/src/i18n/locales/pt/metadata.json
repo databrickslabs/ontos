@@ -290,7 +290,8 @@
     "unresolved": {
       "notFound": "{{kind}} \"{{value}}\" não encontrado",
       "ambiguous": "{{kind}} \"{{value}}\" corresponde a várias entidades",
-      "forbidden": "{{kind}} \"{{value}}\": você não pode editar este tipo de entidade"
+      "forbidden": "{{kind}} \"{{value}}\": você não pode editar este tipo de entidade",
+      "lookupFailed": "{{kind}} \"{{value}}\" não pôde ser consultado; os documentos foram mantidos"
     },
     "reasons": {
       "too_large": "O arquivo tem mais de 1 MB.",

@@ -322,14 +322,16 @@ class _TargetResolver:
         return self._db.query(AssetDb).filter(func.lower(AssetDb.name) == lowered).all()
 
     def _concept(self, value: str) -> _Lookup:
-        iris: List[str] = []
-        if self._semantic is not None:
-            try:
-                if self._concept_index is None:
-                    self._concept_index = self._semantic.concept_name_index()
-                iris = self._concept_index.find(value)
-            except Exception:
-                logger.warning("Concept lookup failed during Markdown import", exc_info=True)
+        # A failed lookup is not "not found": the file's concept documents stay.
+        if self._semantic is None:
+            return None, 'lookup_failed'
+        try:
+            if self._concept_index is None:
+                self._concept_index = self._semantic.concept_name_index()
+            iris = self._concept_index.find(value)
+        except Exception:
+            logger.warning("Concept lookup failed during Markdown import", exc_info=True)
+            return None, 'lookup_failed'
         if not iris:
             return None, 'not_found'
         if len(iris) > 1:
@@ -603,10 +605,14 @@ class MarkdownImportManager:
         # A changed file no longer naming an entity takes its document off it.
         # Only changed files: an unchanged one keeps its documents even when a
         # name stops resolving (e.g. the entity was renamed).
+        # Nor when this file's lookup of that kind failed: the names may still resolve.
         wanted = {(target.entity_type, target.entity_id) for target in targets}
+        unknown = {u.kind for u in unresolved if u.reason == 'lookup_failed'}
         removed = 0
         for key, doc in existing.items():
-            if key not in wanted and doc.content_hash != digest and resolver.may_write(key[0]):
+            if key in wanted or doc.content_hash == digest or not resolver.may_write(key[0]):
+                continue
+            if _ENTITY_KINDS.get(key[0]) not in unknown:
                 log(doc, 'DELETE')
                 removed_ids.append(str(doc.id))
                 db.delete(doc)

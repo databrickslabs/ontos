@@ -290,7 +290,8 @@
     "unresolved": {
       "notFound": "{{kind}} „{{value}}“ nicht gefunden",
       "ambiguous": "{{kind}} „{{value}}“ passt zu mehreren Einträgen",
-      "forbidden": "{{kind}} „{{value}}“: Sie dürfen diese Art von Eintrag nicht bearbeiten"
+      "forbidden": "{{kind}} „{{value}}“: Sie dürfen diese Art von Eintrag nicht bearbeiten",
+      "lookupFailed": "{{kind}} „{{value}}“ konnte nicht gesucht werden; die Dokumente bleiben erhalten"
     },
     "reasons": {
       "too_large": "Die Datei ist größer als 1 MB.",

@@ -290,7 +290,8 @@
     "unresolved": {
       "notFound": "{{kind}}「{{value}}」が見つかりません",
       "ambiguous": "{{kind}}「{{value}}」が複数のエンティティに一致します",
-      "forbidden": "{{kind}}「{{value}}」: この種類のエンティティを編集する権限がありません"
+      "forbidden": "{{kind}}「{{value}}」: この種類のエンティティを編集する権限がありません",
+      "lookupFailed": "{{kind}}「{{value}}」を検索できませんでした。ドキュメントは保持されます"
     },
     "reasons": {
       "too_large": "ファイルが 1 MB を超えています。",

@@ -290,7 +290,8 @@
     "unresolved": {
       "notFound": "{{kind}} « {{value}} » introuvable",
       "ambiguous": "{{kind}} « {{value}} » correspond à plusieurs entités",
-      "forbidden": "{{kind}} « {{value}} » : vous ne pouvez pas modifier ce type d’entité"
+      "forbidden": "{{kind}} « {{value}} » : vous ne pouvez pas modifier ce type d’entité",
+      "lookupFailed": "{{kind}} « {{value}} » n’a pas pu être recherché ; ses documents sont conservés"
     },
     "reasons": {
       "too_large": "Le fichier dépasse 1 Mo.",

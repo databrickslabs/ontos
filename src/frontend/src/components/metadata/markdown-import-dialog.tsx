@@ -59,6 +59,7 @@ const UNRESOLVED_KEYS: Record<string, string> = {
   not_found: 'notFound',
   ambiguous: 'ambiguous',
   forbidden: 'forbidden',
+  lookup_failed: 'lookupFailed',
 };
 
 type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';

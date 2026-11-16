@@ -290,7 +290,8 @@
     "unresolved": {
       "notFound": "{{kind}} \"{{value}}\" not found",
       "ambiguous": "{{kind}} \"{{value}}\" matches several entities",
-      "forbidden": "{{kind}} \"{{value}}\": you can't edit this kind of entity"
+      "forbidden": "{{kind}} \"{{value}}\": you can't edit this kind of entity",
+      "lookupFailed": "{{kind}} \"{{value}}\" could not be looked up; its documents were kept"
     },
     "reasons": {
       "too_large": "The file is larger than 1 MB.",

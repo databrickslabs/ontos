@@ -348,6 +348,26 @@ def test_a_changed_file_that_drops_a_target_leaves_that_entity(
     assert not [hit for hit in hits if hit['type'] == 'document']
 
 
+def test_a_failed_concept_lookup_keeps_the_concept_documents_of_a_changed_file(
+        client, db_session, domain, concept, volume, monkeypatch):
+    _single_file(volume, "---\ndomain: Customer\nconcepts: [Customer]\n---\nv1\n")
+    assert _targets(_import(client).json())['status'] == 'added'
+
+    def broken_index():
+        raise RuntimeError('graph unavailable')
+
+    monkeypatch.setattr(app.state.semantic_models_manager, 'concept_name_index', broken_index)
+    volume[f'{ROOT}/only.md'] = "---\ndomain: Customer\nconcepts: [Customer]\n---\nv2\n"
+    entry = _targets(_import(client).json())
+
+    assert (entry['status'], entry['removed']) == ('updated', 0)
+    assert [(u['kind'], u['reason']) for u in entry['unresolved']] == [
+        ('concept', 'lookup_failed')]
+    docs = db_session.query(DocumentMetadataDb).filter(
+        DocumentMetadataDb.source_path == f'{ROOT}/only.md').all()
+    assert sorted(d.entity_type for d in docs) == ['concept', 'data_domain']
+
+
 def test_an_unchanged_file_keeps_its_documents_when_a_name_stops_resolving(
         client, db_session, domain, volume):
     _single_file(volume, "---\ndomain: Customer\n---\nbody\n")

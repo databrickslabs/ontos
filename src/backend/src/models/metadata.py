@@ -154,7 +154,8 @@ class MarkdownImportTarget(BaseModel):
 class MarkdownImportUnresolved(BaseModel):
     """A front matter value that names no entity it may link.
 
-    ``reason``: not_found | ambiguous | forbidden (no Read/Write on the kind's feature).
+    ``reason``: not_found | ambiguous | forbidden (no Read/Write on the kind's feature)
+    | lookup_failed (the lookup itself failed; the file's documents of that kind stay).
     """
     kind: str = Field(..., description="domain | asset | concept")
     value: str

@@ -438,3 +438,56 @@ class TestDeleteTemplateGuard(unittest.TestCase):
         with patch.object(compliance_templates_repo, "get_template", return_value=None):
             with self.assertRaises(ComplianceNotFoundError):
                 self.manager.delete_template(db, template_id=self.template_id)
+
+
+class TestCanEditValuesOfAProduct(unittest.TestCase):
+    """Regression: any Producer with the feature permission could clear another team's mandatory values."""
+
+    def setUp(self):
+        from src.routes import compliance_templates_routes as routes
+        self.routes = routes
+        self.request = MagicMock()
+        self.db = MagicMock()
+        self.user = MagicMock(email="producer@example.com", groups=["producers"])
+
+    def _check(self, product, *, is_admin=False, owns=False, entity_type="data_product"):
+        with patch("src.repositories.data_products_repository.data_product_repo") as repo, \
+             patch.object(self.routes.product_read_rule, "is_product_read_admin", return_value=is_admin), \
+             patch.object(self.routes.product_read_rule, "caller_owns_product", return_value=owns) as owns_check:
+            repo.get.return_value = product
+            self.routes._assert_can_edit_values(self.request, self.db, self.user, entity_type, "p-1")
+        return owns_check
+
+    def test_non_owner_producer_is_refused(self):
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException) as ctx:
+            self._check(MagicMock(), owns=False)
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    def test_owner_may_write(self):
+        owns_check = self._check(MagicMock(), owns=True)
+        owns_check.assert_called_once()
+        self.assertEqual(owns_check.call_args.kwargs["caller_email"], "producer@example.com")
+
+    def test_admin_may_write_without_ownership(self):
+        self._check(MagicMock(), is_admin=True, owns=False)
+
+    def test_unknown_product_is_not_found(self):
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException) as ctx:
+            self._check(None)
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_ownership_lookup_error_denies(self):
+        from fastapi import HTTPException
+        with patch("src.repositories.data_products_repository.data_product_repo") as repo, \
+             patch.object(self.routes.product_read_rule, "is_product_read_admin", return_value=False), \
+             patch.object(self.routes.product_read_rule, "caller_owns_product", side_effect=RuntimeError("db")):
+            repo.get.return_value = MagicMock()
+            with self.assertRaises(HTTPException) as ctx:
+                self.routes._assert_can_edit_values(self.request, self.db, self.user, "data_product", "p-1")
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    def test_other_entity_types_keep_feature_check_only(self):
+        owns_check = self._check(None, entity_type="other_entity")
+        owns_check.assert_not_called()

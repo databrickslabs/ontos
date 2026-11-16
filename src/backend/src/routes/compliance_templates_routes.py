@@ -7,10 +7,11 @@ Two RBAC surfaces:
 """
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.common.authorization import PermissionChecker
 from src.common.dependencies import CurrentUserDep, DBSessionDep
+from src.common import product_read_rule
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.controller.compliance_templates_manager import (
@@ -37,6 +38,40 @@ router = APIRouter(prefix="/api/compliance-templates", tags=["Compliance Templat
 
 ADMIN_FEATURE_ID = "settings-compliance-templates"
 VALUES_FEATURE_ID = "compliance-template-values"
+
+
+def _assert_can_edit_values(request: Request, db, current_user, entity_type: str, entity_id: str) -> None:
+    """Writing a product's compliance values needs the same edit rights as editing the product.
+
+    Admin, or an owner of the product (draft owner, owning team, project member), as the
+    product routes decide (``product_read_rule``). The feature-level permission alone is
+    not enough. Other entity types have no owner rule yet and keep the feature check.
+    """
+    if entity_type != "data_product":
+        return
+    from src.repositories.data_products_repository import data_product_repo
+
+    product = data_product_repo.get(db=db, id=entity_id)
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data product not found")
+    try:
+        if product_read_rule.is_product_read_admin(request, current_user):
+            return
+        owns = product_read_rule.caller_owns_product(
+            db,
+            product,
+            caller_email=current_user.email if current_user else None,
+            caller_groups=(current_user.groups if current_user else None) or [],
+        )
+    except Exception:
+        # Fail closed: an ownership lookup that errors denies the write
+        logger.exception("Ownership check failed for compliance values of product %s", entity_id)
+        owns = False
+    if not owns:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only fill compliance values for products you own",
+        )
 
 
 # ----- Admin: template definitions ----------------------------------------
@@ -255,11 +290,13 @@ async def replace_entity_values(
     entity_type: str,
     entity_id: str,
     body: ComplianceValuesReplace,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
     _: None = Depends(PermissionChecker(VALUES_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
-    """Replace-all write of an entity's values (the materialization event)."""
+    """Replace-all write of an entity's values (the materialization event). Owners and admins only."""
+    _assert_can_edit_values(request, db, current_user, entity_type, entity_id)
     try:
         return compliance_templates_manager.replace_values(
             db,

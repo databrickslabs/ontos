@@ -77,11 +77,12 @@ def _manager(roles=()) -> NotificationsManager:
 
 
 def _approval(**fields) -> dict:
-    return _row(
-        type='action_required', title='Approval required', action_type='workflow_approval',
-        action_payload=json.dumps({'execution_id': 'exec-1', 'step_id': 'approve'}),
-        created_at=OLD, **fields,
-    )
+    return _row(**{
+        'type': 'action_required', 'title': 'Approval required',
+        'action_type': 'workflow_approval',
+        'action_payload': json.dumps({'execution_id': 'exec-1', 'step_id': 'approve'}),
+        'created_at': OLD, **fields,
+    })
 
 
 class TestPendingApprovalsSurviveTheRowCap:
@@ -266,6 +267,24 @@ class TestPendingIsSemantic:
         assert pending['id'] in [n.id for n in listed]
         agreements = [n.title for n in listed if n.action_type == 'agreement_completed']
         assert agreements == [f'Agreement {i}' for i in range(BELL_HISTORY_LIMIT)]
+
+
+    def test_the_decided_markers_match_whatever_the_json_spacing(self, db_session: Session):
+        _insert(db_session, _history())
+        compact = _approval(recipient='ana@example.com', title='Compact',
+                            action_payload='{"execution_id":"exec-1","handled":true}')
+        indented = _row(type='action_required', title='Indented', recipient='ana@example.com',
+                        action_type='delivery_manual', created_at=OLD,
+                        action_payload=json.dumps({'change_type': 'grant', 'completed': True},
+                                                  indent=2))
+        undecided = _approval(recipient='ana@example.com', title='Undecided',
+                              action_payload='{"execution_id":"exec-2","handled":false}')
+        _insert(db_session, [compact, indented, undecided])
+
+        listed = {n.title for n in _manager().get_notifications(db_session, ANA)}
+
+        assert 'Compact' not in listed and 'Indented' not in listed
+        assert 'Undecided' in listed
 
 
 class TestActionTypeLookupsAreNotCapped:

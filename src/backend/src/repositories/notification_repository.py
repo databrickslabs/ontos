@@ -46,9 +46,19 @@ def _is_actionable():
 APPROVAL_ACTION_TYPE = 'workflow_approval'
 
 
+def _without_json_whitespace(column):
+    """``column`` without the four JSON whitespace characters. Outside strings they are only
+    formatting, and a quote inside a string is escaped, so ``"handled":true`` in the result is
+    that key with that value, whatever the spacing. ``replace`` works on SQLite and Postgres
+    alike and, unlike a JSON cast, does not fail the query on a payload that is not JSON."""
+    for char in (' ', '\t', '\n', '\r'):
+        column = func.replace(column, char, '')
+    return column
+
+
 def _is_decided():
     """Decided: the ``handled`` marker that approval and request decisions write into
-    ``action_payload``, or a delivery's ``completed`` marker (json.dumps spacing).
+    ``action_payload``, or a delivery's ``completed`` marker, with any JSON spacing.
 
     ``read`` decides every action type but approvals. Before the shared handle path wrote the
     marker, ``read`` was the only record of a decided request, and access-grant and job-enable
@@ -56,9 +66,9 @@ def _is_decided():
     a read row as done. An approval's decision has always written ``handled``, and opening it in
     the bell sets ``read``, so a read approval without the marker is still pending.
     """
-    payload = func.coalesce(NotificationDb.action_payload, '')
+    payload = _without_json_whitespace(func.coalesce(NotificationDb.action_payload, ''))
     return or_(
-        payload.contains('"handled": true'), payload.contains('"completed": true'),
+        payload.contains('"handled":true'), payload.contains('"completed":true'),
         and_(NotificationDb.read.is_(True), NotificationDb.action_type != APPROVAL_ACTION_TYPE),
     )
 

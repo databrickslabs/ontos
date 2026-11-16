@@ -50,6 +50,8 @@ def user_has_assets_feature(request: Request, current_user, level: FeatureAccess
 
     Used for branching: when a Data Consumer lacks the feature, we still
     allow DP-scoped reads of linked assets (issue #347), but block writes.
+    Resolved as ``PermissionChecker`` does (role switcher, groups, roles
+    assigned by email, team role overrides), so reads and writes agree.
     """
     try:
         auth_manager = getattr(request.app.state, "authorization_manager", None)

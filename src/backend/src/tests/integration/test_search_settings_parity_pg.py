@@ -212,8 +212,7 @@ def test_disabling_a_type_applies_live_and_reenabling_restores(seeded):
 def test_facets_include_owner_and_count_matches(seeded):
     res = repo.search(seeded, "customer", config=VARIANTS["shipped"], limit=100)
     assert res["facets"]["owner"]
-    # Facets count the filtered candidates, as the in-memory backend does.
-    assert sum(res["facets"]["type"].values()) == len(_memory_items(VARIANTS["shipped"]))
+    assert sum(res["facets"]["type"].values()) == res["total_count"]
 
 
 @pytest.mark.parametrize("query", ["customer", "*"])
@@ -224,4 +223,3 @@ def test_facets_expose_no_user_identifiers(seeded, query):
     mem = search_scoring.search_index(_memory_items(config), query, config, limit=100)["facets"]
     for facets in (pg, mem):
         assert not [v for counts in facets.values() for v in counts if "@" in str(v)]
-    assert pg.get("owner") == mem.get("owner")

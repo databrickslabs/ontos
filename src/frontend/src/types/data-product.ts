@@ -160,9 +160,10 @@ export interface ManagementPort {
 
   // ODPS optional fields
   type?: string; // rest or topic (default: "rest")
-  url?: string;
-  channel?: string;
-  description?: string;
+  // null clears these on update (an omitted field is kept)
+  url?: string | null;
+  channel?: string | null;
+  description?: string | null;
   tags?: string[];
   customProperties?: CustomProperty[];
   authoritativeDefinitions?: AuthoritativeDefinition[];

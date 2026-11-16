@@ -494,17 +494,26 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         db_obj.output_ports.remove(old_port)
                         db.delete(old_port)
 
-            # 7. Update Management Ports (replace all)
+            # 7. Update Management Ports (replace all), as input ports: a port left
+            # out of the list is removed, a field left out of a port is kept.
             if 'management_ports' in update_data:
+                stored_ports = _ports_by_name(
+                    db_obj.management_ports, ('port_type', 'url', 'channel', 'description'))
                 db_obj.management_ports.clear()
+                incoming_names = {}
                 for mgmt_dict in update_data['management_ports'] or []:
+                    stored = stored_ports.get(_nth_name(incoming_names, mgmt_dict['name']))
+                    if 'port_type' in mgmt_dict or 'type' in mgmt_dict or not stored:
+                        port_type = _port_type_of(mgmt_dict, 'rest')
+                    else:
+                        port_type = stored['port_type']
                     mgmt_obj = ManagementPortDb(
                         name=mgmt_dict['name'],
                         content=mgmt_dict['content'],
-                        port_type=_port_type_of(mgmt_dict, 'rest'),
-                        url=mgmt_dict.get('url'),
-                        channel=mgmt_dict.get('channel'),
-                        description=mgmt_dict.get('description')
+                        port_type=port_type,
+                        url=_sent_or_stored(mgmt_dict, 'url', stored),
+                        channel=_sent_or_stored(mgmt_dict, 'channel', stored),
+                        description=_sent_or_stored(mgmt_dict, 'description', stored),
                     )
                     db_obj.management_ports.append(mgmt_obj)
 

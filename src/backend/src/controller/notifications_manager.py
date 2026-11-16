@@ -377,7 +377,7 @@ class NotificationsManager:
                      all(item in payload_db.items() for item in action_payload.items())):
                     
                     # Decided: read, and the handled marker the decision paths share (#1526).
-                    # Reading alone is not a decision: opening a notification sets read too.
+                    # The marker records the decision; read alone may only mean opened.
                     if not notification_db.read or payload_db.get('handled') is not True:
                         self._repo.update(db=db, db_obj=notification_db, obj_in={
                             "read": True,

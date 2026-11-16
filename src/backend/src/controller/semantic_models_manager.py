@@ -5649,17 +5649,6 @@ class SemanticModelsManager(SearchableAsset):
         from src.repositories.concept_versions_repository import concept_versions_repo
         concept_versions_repo.delete_by_iri(self._db, concept_iri)
 
-        # Its notes, links and documents go too (as for assets and domains);
-        # uploaded files are deleted from the volume once this commits. Before
-        # remove_entity_data below, which deletes the same rows without the
-        # metadata manager's own cleanup of imported Markdown.
-        from src.controller.metadata_manager import MetadataManager
-        metadata_manager = MetadataManager()
-        _, document_paths = metadata_manager.remove_all_for_entity(
-            self._db, entity_type='concept', entity_id=concept_iri,
-        )
-        metadata_manager.delete_document_files_after_commit(self._db, document_paths)
-
         # And its notes, links, documents, cost items and tags (#1431). A concept
         # migrated to another collection has moved them to its new IRI first.
         from src.controller.entity_data_cleanup import remove_entity_data

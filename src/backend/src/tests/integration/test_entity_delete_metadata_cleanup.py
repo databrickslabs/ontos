@@ -148,6 +148,35 @@ def test_deleting_a_concept_removes_its_metadata(
     assert _document_hits(client, 'blorptastic') == []
 
 
+def _stored_texts(db, word: str) -> int:
+    return db.query(ImportedMarkdownFileDb).filter(
+        ImportedMarkdownFileDb.source_path == SOURCE.format(word=word)).count()
+
+
+def test_deleting_a_collection_keeps_the_source_files_of_its_concepts_documents(
+        client, db_session, files, semantic_models_manager):
+    collection = client.post('/api/knowledge/collections', json={
+        'label': f'Coll {uuid.uuid4().hex[:8]}', 'collection_type': 'glossary',
+        'scope_level': 'enterprise',
+    })
+    assert collection.status_code == 200, collection.text
+    collection_iri = collection.json()['iri']
+    client.post('/api/knowledge/concepts', json={
+        'collection_iri': collection_iri, 'label': 'Swept',
+    }).raise_for_status()
+    iri = f'{collection_iri}/swept'
+    upload = _seed(db_session, 'concept', iri, 'plinkerdoo')
+    assert len(_document_hits(client, 'plinkerdoo')) == 1
+
+    response = client.delete(f'/api/knowledge/collections/{collection_iri}')
+
+    assert response.status_code == 200, response.text
+    assert sum(_counts(db_session, 'concept', iri).values()) == 0
+    assert _deleted_paths(files) == {upload}  # never the imported source file
+    assert _document_hits(client, 'plinkerdoo') == []
+    assert _stored_texts(db_session, 'plinkerdoo') == 0
+
+
 def test_imported_documents_leave_search_only_once_the_delete_commits(client, db_session):
     domain = DataDomain(name='Pending', created_by='test@example.com')
     db_session.add(domain)

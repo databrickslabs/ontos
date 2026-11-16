@@ -233,6 +233,10 @@ def test_deleting_the_asset_keeps_the_source_file(
     assert db_session.query(DocumentMetadataDb).filter(
         DocumentMetadataDb.entity_id == str(asset.id)).count() == 0
     mock_workspace_client.files.delete.assert_not_called()
+    # Its search hit and the file's stored text go with the last document of the file
+    hits = client.get('/api/search', params={'search_term': 'zorbleflux'}).json()
+    assert [hit for hit in hits if hit['type'] == 'document'] == []
+    assert db_session.query(ImportedMarkdownFileDb).count() == 0
 
 
 @pytest.mark.parametrize('path, status, code', [

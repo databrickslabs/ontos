@@ -407,9 +407,6 @@ class MetadataManager(SearchableAsset):
         paths = self._document_repo.remove_all_for_entity(
             db, entity_type=entity_type, entity_id=entity_id,
         )
-        # The text of a file goes with the last document imported from it.
-        self._document_repo.remove_unreferenced_imported_files(
-            db, source_paths=[path for _, path in imported])
         attachments = self._attachment_repo.remove_all_for_entity(
             db, entity_type=entity_type, entity_id=entity_id,
         )
@@ -417,9 +414,23 @@ class MetadataManager(SearchableAsset):
             'rich_texts': rich_texts, 'links': links,
             'documents': len(paths) + len(imported_ids), 'attachments': attachments,
         }
-        # Not before the commit: if it fails, the rows stay and so must their hits.
-        self.remove_documents_from_index_after_commit(db, imported_ids)
+        self.release_imported_documents(db, imported)
         return counts, paths
+
+    def release_imported_documents(self, db: Session, imported: List[tuple]) -> None:
+        """After the rows of imported documents (``(id, source path)``) are deleted.
+
+        The text of a file goes with the last document imported from it; the
+        documents leave the search index once ``db`` commits. The source files
+        are the user's and stay.
+        """
+        if not imported:
+            return
+        self._document_repo.remove_unreferenced_imported_files(
+            db, source_paths=[path for _, path in imported])
+        # Not before the commit: if it fails, the rows stay and so must their hits.
+        self.remove_documents_from_index_after_commit(
+            db, [document_id for document_id, _ in imported])
 
     def remove_documents_from_index_after_commit(
         self, db: Session, document_ids: List[str],

@@ -310,6 +310,57 @@ class TestDataProductRoutes:
             "table", "main.sales.orders")
         assert (stored.get("server") or {}).get("host") == "kafka-a"
 
+    @staticmethod
+    def _active_product_with_a_described_port(client, sample_product_data):
+        sample_product_data["status"] = "active"
+        sample_product_data["outputPorts"] = [{
+            "name": "a", "version": "1.0.0", "contractId": "contract-a",
+            "description": "Daily orders", "status": "active",
+            "containsPii": True, "autoApprove": True,
+            "sbom": [{"type": "external", "url": "https://example.com/sbom.json"}],
+            "inputContracts": [{"id": "contract-up", "version": "1.0.0"}],
+        }]
+        response = client.post("/api/data-products", json=sample_product_data)
+        assert response.status_code == 201, response.text
+        [port] = response.json()["outputPorts"]
+        assert port.get("containsPii") is True and port.get("sbom")
+        return response.json()["id"], port
+
+    def test_update_active_product_keeps_other_port_fields_it_leaves_out(
+        self, client, sample_product_data
+    ):
+        """As the port dialog sends it: without SBOM, input contracts or flags it left alone."""
+        product_id, port = self._active_product_with_a_described_port(client, sample_product_data)
+        sent = {"id": port["id"], "name": "a", "version": "1.0.0", "contractId": "contract-a"}
+        update = {**sample_product_data, "id": product_id, "outputPorts": [sent]}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        [stored] = client.get(f"/api/data-products/{product_id}").json()["outputPorts"]
+        assert (stored.get("description"), stored.get("status")) == ("Daily orders", "active")
+        assert (stored.get("containsPii"), stored.get("autoApprove")) == (True, True)
+        assert [s["url"] for s in stored.get("sbom") or []] == ["https://example.com/sbom.json"]
+        assert [c["id"] for c in stored.get("inputContracts") or []] == ["contract-up"]
+
+    def test_update_active_product_explicit_port_values_still_override(
+        self, client, sample_product_data
+    ):
+        """A sent value, null or empty list replaces the stored one."""
+        product_id, port = self._active_product_with_a_described_port(client, sample_product_data)
+        sent = {"id": port["id"], "name": "a", "version": "1.0.0", "contractId": "contract-a",
+                "description": None, "status": None, "containsPii": False,
+                "autoApprove": False, "sbom": [], "inputContracts": []}
+        update = {**sample_product_data, "id": product_id, "outputPorts": [sent]}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        [stored] = client.get(f"/api/data-products/{product_id}").json()["outputPorts"]
+        assert (stored.get("description"), stored.get("status")) == (None, None)
+        assert not stored.get("containsPii") and not stored.get("autoApprove")
+        assert not stored.get("sbom") and not stored.get("inputContracts")
+
     def test_update_active_product_clearing_a_port_asset_requires_new_version(
         self, client, sample_product_data
     ):

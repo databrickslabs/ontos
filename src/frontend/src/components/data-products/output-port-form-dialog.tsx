@@ -152,11 +152,11 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
         id: initial?.id,
         name: name.trim(),
         version: version.trim(),
-        description: description.trim() || undefined,
+        description: description.trim() || null, // null clears: the backend keeps omitted fields
         type: type.trim() || undefined,
         contractId: contractId.trim() || undefined,
         deliveryMethodId: deliveryMethodId || undefined,
-        status: status.trim() || undefined,
+        status: status.trim() || null,
         containsPii,
         autoApprove,
       };

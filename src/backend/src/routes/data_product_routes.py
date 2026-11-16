@@ -30,7 +30,7 @@ from src.models.users import UserInfo
 from databricks.sdk.errors import PermissionDenied
 
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
-from src.common.authorization import has_feature_permission
+from src.common.authorization import effective_permissions_for_request, has_feature_permission
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
@@ -1170,19 +1170,12 @@ async def get_product_linked_assets(
     # DP is in the user's accessible set — unless they have admin-level
     # data-products access (admins / data-product admins see all).
     auth_manager = getattr(request.app.state, "authorization_manager", None)
-    settings_manager = getattr(request.app.state, "settings_manager", None)
     is_dp_admin = False
     try:
         if auth_manager and current_user:
-            applied_role_id = None
-            if settings_manager:
-                applied_role_id = settings_manager.get_applied_role_override_for_user(
-                    current_user.email
-                )
-            if applied_role_id and settings_manager:
-                eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-            else:
-                eff = auth_manager.get_user_effective_permissions(current_user.groups or [], None)
+            eff = effective_permissions_for_request(
+                request, current_user.email, current_user.groups or [], auth_manager,
+            )
             is_dp_admin = auth_manager.has_permission(
                 eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
             )
@@ -1539,7 +1532,7 @@ async def upload_data_products(
 
     try:
         if create_missing_domains and not user_has_feature_level(
-            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE, request
         ):
             raise HTTPException(
                 status_code=403,
@@ -1558,7 +1551,7 @@ async def upload_data_products(
         # Feature-admins may see the existing row's id/name on a skipped duplicate;
         # others get a generic skip so the response isn't an existence oracle.
         reveal_dup_detail = user_has_feature_level(
-            auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
+            auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN, request
         )
         capped = await read_uploads_capped(
             files,
@@ -2187,16 +2180,10 @@ async def update_data_product(
         is_feature_admin = False
         try:
             auth_manager = getattr(request.app.state, "authorization_manager", None)
-            settings_manager = getattr(request.app.state, "settings_manager", None)
             if auth_manager and current_user:
-                applied_role_id = (
-                    settings_manager.get_applied_role_override_for_user(current_user.email)
-                    if settings_manager else None
+                eff = effective_permissions_for_request(
+                    request, current_user.email, user_groups or [], auth_manager,
                 )
-                if applied_role_id and settings_manager:
-                    eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-                else:
-                    eff = auth_manager.get_user_effective_permissions(user_groups, None)
                 is_feature_admin = auth_manager.has_permission(
                     eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
                 )

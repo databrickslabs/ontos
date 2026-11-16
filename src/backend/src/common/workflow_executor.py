@@ -2844,6 +2844,19 @@ class EntityActionStepHandler(StepHandler):
                 error=f"Cannot publish {resolved_type} in status '{status}' "
                       f"(allowed: {', '.join(sorted(allowed))})",
             )
+        if scope != 'none':
+            # The publish gate of set_publication_scope / publish_product: mandatory
+            # compliance fields must be set (no-op when no template is active)
+            from src.common.api_errors import CodedValueError
+            from src.controller.compliance_templates_manager import (
+                compliance_templates_manager, raise_if_incomplete,
+            )
+            try:
+                raise_if_incomplete(compliance_templates_manager.check_completeness(
+                    self._db, entity_type=resolved_type, entity_id=entity_id,
+                ))
+            except CodedValueError as e:
+                return _rule_step_error(e)
         if scope != 'none' and resolved_type == 'data_product':
             # The same rule as set_publication_scope: every output port needs an
             # approved / active contract (approval can come after the contract changed)

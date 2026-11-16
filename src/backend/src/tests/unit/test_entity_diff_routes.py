@@ -118,3 +118,75 @@ class TestContractDiffReadGate:
         resp = client.get(f'/api/data-contracts/{v1.id}/diff/{proposed.id}')
 
         assert resp.status_code == 200, resp.text
+
+
+class TestContractDiffFamilies:
+    def test_versions_from_different_families_are_rejected(self, client, db_session, diff_routes):
+        a = _contract(db_session, str(uuid.uuid4()), '1.0.0')
+        b = _contract(db_session, str(uuid.uuid4()), '1.0.0')
+        _as_caller(_scope())
+
+        resp = client.get(f'/api/data-contracts/{a.id}/diff/{b.id}')
+
+        assert resp.status_code == 400
+        assert 'different version families' in resp.json()['detail']
+
+
+def _product(db, family_id, version, *, status='active'):
+    from src.models.data_products import DataProductCreate
+    from src.repositories.data_products_repository import data_product_repo
+
+    product = data_product_repo.create(db=db, obj_in=DataProductCreate(
+        id=str(uuid.uuid4()), apiVersion='v1.0.0', kind='DataProduct', name='orders',
+        version=version, status=status, version_family_id=family_id,
+        outputPorts=[{'name': 'orders_table', 'version': '1.0.0', 'contractId': 'c1',
+                      'type': 'table', 'server': {'location': 's3://lake/orders/v1', 'format': 'delta'},
+                      'containsPii': False}],
+    ))
+    db.commit()
+    return product
+
+
+@pytest.fixture
+def product_manager(db_session):
+    from unittest.mock import MagicMock
+
+    from databricks.sdk import WorkspaceClient
+
+    from src.controller.data_products_manager import DataProductsManager
+    from src.routes.data_product_routes import get_data_products_manager
+
+    manager = DataProductsManager(db=db_session, ws_client=MagicMock(spec=WorkspaceClient))
+    app.dependency_overrides[get_data_products_manager] = lambda: manager
+    yield manager
+    app.dependency_overrides.pop(get_data_products_manager, None)
+
+
+class TestProductDiffRoutes:
+    def test_product_diff_of_two_published_versions(self, client, db_session, diff_routes, product_manager):
+        family = str(uuid.uuid4())
+        v1 = _product(db_session, family, '1.0.0')
+        v2 = _product(db_session, family, '1.0.1')
+
+        resp = client.get(f'/api/data-products/{v1.id}/diff/{v2.id}')
+
+        assert resp.status_code == 200, resp.text
+
+    def test_product_diff_hides_an_unpublished_version(self, client, db_session, diff_routes, product_manager):
+        family = str(uuid.uuid4())
+        v1 = _product(db_session, family, '1.0.0')
+        proposed = _product(db_session, family, '1.1.0', status='proposed')
+
+        resp = client.get(f'/api/data-products/{v1.id}/diff/{proposed.id}')
+
+        assert resp.status_code == 404
+        assert resp.json()['detail'] == 'Data product not found'
+
+    def test_product_versions_from_different_families_are_rejected(self, client, db_session, diff_routes, product_manager):
+        a = _product(db_session, str(uuid.uuid4()), '1.0.0')
+        b = _product(db_session, str(uuid.uuid4()), '1.0.0')
+
+        resp = client.get(f'/api/data-products/{a.id}/diff/{b.id}')
+
+        assert resp.status_code == 400
+        assert 'different version families' in resp.json()['detail']

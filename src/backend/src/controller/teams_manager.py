@@ -460,7 +460,8 @@ class TeamsManager(SearchableAsset):
         db_obj_data['team_id'] = team_id
         db_obj_data['added_by'] = current_user_id
         role_name = (member_in.app_role_override or "").strip() or None
-        db_obj_data['app_role_override_id'] = self._role_id(self._role_ids_by_name(db, [role_name]), role_name)
+        role_id = self._role_id(self._role_ids_by_name(db, [role_name]), role_name)
+        db_obj_data['app_role_override_id'] = role_id
 
         db_member = TeamMemberDb(**db_obj_data)
 

@@ -171,6 +171,7 @@ class PostgresBackend(SearchBackend):
             return search_repository.match_ids(
                 db, query, type_filter=type_filter, filters=filters,
                 allowed_ids_by_type=allowed_ids_by_type, config=self._config(),
+                engine=self.engine, trgm_threshold=self._trgm_threshold,
             )
 
     def search_items(self, query, *, limit=200) -> List[SearchIndexItem]:

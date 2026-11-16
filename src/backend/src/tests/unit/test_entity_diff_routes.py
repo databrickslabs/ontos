@@ -15,6 +15,7 @@ import pytest
 
 from src.app import app
 from src.common.authorization import PermissionChecker
+from src.common.dependencies import get_db as request_db
 from src.controller.data_contracts_manager import DataContractsManager
 from src.db_models.data_contracts import DataContractDb, SchemaObjectDb, SchemaPropertyDb
 from src.routes.data_contracts_routes import contract_read_scope, get_data_contracts_manager
@@ -42,8 +43,16 @@ def _scope(*, is_admin=False, email='reader@example.com'):
 
 
 @pytest.fixture
-def diff_routes():
-    """Let the feature-level permission pass on the diff routes; the read gate is under test."""
+def diff_routes(db_session):
+    """Let the feature-level permission pass on the diff routes; the read gate is under test.
+
+    The request's session is the test's: the app's own ``get_db`` commits after a
+    successful request, which would persist these rows past the test's rollback.
+    """
+    def request_session():
+        yield db_session
+
+    app.dependency_overrides[request_db] = request_session
     permission_keys = []
     for route in app.routes:
         if '/diff/' not in getattr(route, 'path', ''):
@@ -57,6 +66,7 @@ def diff_routes():
     yield
     for key in permission_keys:
         app.dependency_overrides.pop(key, None)
+    app.dependency_overrides.pop(request_db, None)
     app.dependency_overrides.pop(get_data_contracts_manager, None)
     app.dependency_overrides.pop(contract_read_scope, None)
 
@@ -143,7 +153,7 @@ def _product(db, family_id, version, *, status='active'):
                       'type': 'table', 'server': {'location': 's3://lake/orders/v1', 'format': 'delta'},
                       'containsPii': False}],
     ))
-    db.commit()
+    db.flush()
     return product
 
 
@@ -171,6 +181,7 @@ class TestProductDiffRoutes:
         resp = client.get(f'/api/data-products/{v1.id}/diff/{v2.id}')
 
         assert resp.status_code == 200, resp.text
+        assert resp.json()['entity_type'] == 'data_product'
 
     def test_product_diff_hides_an_unpublished_version(self, client, db_session, diff_routes, product_manager):
         family = str(uuid.uuid4())

@@ -27,7 +27,7 @@ from src.common.workflow_approvals import (
 from src.common.logging import get_logger
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.notifications_manager import NotificationsManager
-from src.common.workflow_executor import WorkflowExecutor
+from src.common.workflow_executor import WorkflowExecutor, public_result_data
 from src.repositories.process_workflows_repository import process_workflow_repo, workflow_execution_repo
 from src.db_models.compliance import CompliancePolicyDb
 from src.db_models.notifications import NotificationDb
@@ -2445,7 +2445,7 @@ async def get_execution(
             'step_name': se.step_name,
             'status': se.status,
             'passed': se.passed,
-            'result_data': json.loads(se.result_data) if se.result_data else None,
+            'result_data': public_result_data(se.result_data),
             'error_message': se.error_message,
             'message': se.message,
             'duration_ms': se.duration_ms,

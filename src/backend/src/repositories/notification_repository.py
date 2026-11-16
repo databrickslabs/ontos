@@ -42,12 +42,25 @@ def _is_actionable():
     )
 
 
+# The only action type whose decisions have always written the ``handled`` marker
+APPROVAL_ACTION_TYPE = 'workflow_approval'
+
+
 def _is_decided():
     """Decided: the ``handled`` marker that approval and request decisions write into
-    ``action_payload``, or a delivery's ``completed`` marker (json.dumps spacing). Opening a
-    notification sets ``read`` too, so ``read`` alone does not say a request is decided (#1526)."""
+    ``action_payload``, or a delivery's ``completed`` marker (json.dumps spacing).
+
+    ``read`` decides every action type but approvals. Before the shared handle path wrote the
+    marker, ``read`` was the only record of a decided request, and access-grant and job-enable
+    requests have no decision path at all; the dedup and pending-delivery lookups already treat
+    a read row as done. An approval's decision has always written ``handled``, and opening it in
+    the bell sets ``read``, so a read approval without the marker is still pending.
+    """
     payload = func.coalesce(NotificationDb.action_payload, '')
-    return or_(payload.contains('"handled": true'), payload.contains('"completed": true'))
+    return or_(
+        payload.contains('"handled": true'), payload.contains('"completed": true'),
+        and_(NotificationDb.read.is_(True), NotificationDb.action_type != APPROVAL_ACTION_TYPE),
+    )
 
 
 def _is_pending_actionable():

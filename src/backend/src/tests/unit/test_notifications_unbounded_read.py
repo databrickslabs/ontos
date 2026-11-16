@@ -221,6 +221,33 @@ class TestPendingIsSemantic:
         assert len(listed) == BELL_HISTORY_LIMIT
 
 
+    def test_a_request_read_before_the_handled_marker_existed_is_history(
+        self, db_session: Session,
+    ):
+        # Before the shared handle path wrote ``handled``, deciding a request set only read
+        _insert(db_session, _history())
+        legacy = _row(type='action_required', title='Role request', recipient='ana@example.com',
+                      action_type='handle_role_request', read=True, created_at=OLD,
+                      action_payload=json.dumps({'requester_email': 'bob@example.com'}))
+        _insert(db_session, [legacy])
+
+        listed = _manager().get_notifications(db_session, ANA)
+
+        assert legacy['id'] not in [n.id for n in listed]
+        assert len(listed) == BELL_HISTORY_LIMIT
+
+    def test_an_unread_request_without_the_marker_is_still_pending(self, db_session: Session):
+        _insert(db_session, _history())
+        pending = _row(type='action_required', title='Access request', recipient='ana@example.com',
+                       action_type='handle_access_grant_request', created_at=OLD,
+                       action_payload=json.dumps({'request_id': 'r-1'}))
+        _insert(db_session, [pending])
+
+        listed = _manager().get_notifications(db_session, ANA)
+
+        assert pending['id'] in [n.id for n in listed]
+
+
 class TestActionTypeLookupsAreNotCapped:
 
     def test_unread_request_older_than_5000_rows_is_found_for_dedup(self, db_session: Session):

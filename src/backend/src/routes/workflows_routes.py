@@ -21,7 +21,7 @@ from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
 from src.models.notifications import Notification
 from src.common.workflow_approvals import (
-    add_decided_by, is_handled, open_approval_ids, open_execution_approvals,
+    add_decided_by, has_decided, is_handled, open_approval_ids, open_execution_approvals,
 )
 from src.common.logging import get_logger
 from src.controller.workflows_manager import WorkflowsManager
@@ -1640,7 +1640,9 @@ def _assert_caller_authorized_for_execution(
 
     ``for_read``: the check that lets a pending approver read the entity
     (``caller_is_pending_reviewer``, #1117). Notifications already handled
-    (an approver who decided while the step waits for others) don't count.
+    (an approver who decided while the step waits for others) don't count,
+    nor a shared role or group row whose ``decided_by`` names the caller
+    (they decided the step through another target, #1552).
 
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
@@ -1649,7 +1651,7 @@ def _assert_caller_authorized_for_execution(
     candidates = [
         n for n in _find_approval_notifications_for_execution(db, execution_id)
         if (n.recipient or n.recipient_role_id) and _is_for_step(n, pending_step)
-        and not (for_read and is_handled(n))
+        and not (for_read and (is_handled(n) or has_decided(n, user_info)))
     ]
     if not candidates:
         raise HTTPException(

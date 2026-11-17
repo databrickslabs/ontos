@@ -101,4 +101,32 @@ describe('CreateFromContractDialog — product type', () => {
     expect(body).not.toHaveProperty('product_type');
     expect(body.product_name).toBe('Orders Product');
   });
+
+  it('shows a refused type in the user\'s language', async () => {
+    const fetchMock = setupFetchMock();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.startsWith('/api/data-product-types')) return Promise.resolve(json(PRODUCT_TYPES));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            detail: {
+              code: 'unknown_data_product_type',
+              message: "Unknown or inactive data product type: 'source-aligned'",
+              params: { key: 'source-aligned' },
+            },
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    });
+    renderDialog();
+
+    await waitFor(() => expect(typeTrigger()).toHaveTextContent('Source-Aligned'));
+    fillAndSubmit();
+
+    expect(
+      await screen.findByText(/The product type "source-aligned" doesn't exist or has been deactivated/),
+    ).toBeInTheDocument();
+  });
 });

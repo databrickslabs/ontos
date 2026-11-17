@@ -1074,7 +1074,8 @@
     "errors": {
       "nameRequired": "Il nome del prodotto è obbligatorio",
       "versionRequired": "La versione è obbligatoria",
-      "createError": "Impossibile creare il prodotto dal contratto"
+      "createError": "Impossibile creare il prodotto dal contratto",
+      "unknown_data_product_type": "Il tipo di prodotto \"{{key}}\" non esiste o è stato disattivato. Scegli un altro tipo."
     },
     "messages": {
       "productCreated": "Prodotto creato",

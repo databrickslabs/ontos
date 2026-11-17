@@ -1074,7 +1074,8 @@
     "errors": {
       "nameRequired": "Product name is required",
       "versionRequired": "Version is required",
-      "createError": "Failed to create product from contract"
+      "createError": "Failed to create product from contract",
+      "unknown_data_product_type": "The product type \"{{key}}\" doesn't exist or has been deactivated. Choose another type."
     },
     "messages": {
       "productCreated": "Product Created",

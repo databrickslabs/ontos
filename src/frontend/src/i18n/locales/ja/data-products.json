@@ -1074,7 +1074,8 @@
     "errors": {
       "nameRequired": "製品名は必須です",
       "versionRequired": "バージョンは必須です",
-      "createError": "契約からの製品作成に失敗しました"
+      "createError": "契約からの製品作成に失敗しました",
+      "unknown_data_product_type": "製品タイプ「{{key}}」は存在しないか、無効化されています。別のタイプを選択してください。"
     },
     "messages": {
       "productCreated": "製品を作成しました",

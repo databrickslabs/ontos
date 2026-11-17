@@ -86,7 +86,15 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
       });
 
       if (response.error) {
-        throw new Error(response.error);
+        // A coded refusal (e.g. the type was deactivated meanwhile) in the user's language
+        throw new Error(
+          response.errorCode
+            ? t(`data-products:createFromContract.errors.${response.errorCode}`, {
+                ...(response.errorParams || {}),
+                defaultValue: response.error,
+              })
+            : response.error,
+        );
       }
 
       toast({

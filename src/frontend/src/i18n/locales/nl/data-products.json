@@ -1074,7 +1074,8 @@
     "errors": {
       "nameRequired": "Productnaam is verplicht",
       "versionRequired": "Versie is verplicht",
-      "createError": "Aanmaken van product vanuit contract mislukt"
+      "createError": "Aanmaken van product vanuit contract mislukt",
+      "unknown_data_product_type": "Het producttype \"{{key}}\" bestaat niet of is gedeactiveerd. Kies een ander type."
     },
     "messages": {
       "productCreated": "Product Aangemaakt",

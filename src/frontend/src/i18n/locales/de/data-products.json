@@ -1074,7 +1074,8 @@
     "errors": {
       "nameRequired": "Produktname ist erforderlich",
       "versionRequired": "Version ist erforderlich",
-      "createError": "Produkt konnte nicht aus dem Vertrag erstellt werden"
+      "createError": "Produkt konnte nicht aus dem Vertrag erstellt werden",
+      "unknown_data_product_type": "Der Produkttyp „{{key}}“ existiert nicht oder wurde deaktiviert. Wählen Sie einen anderen Typ."
     },
     "messages": {
       "productCreated": "Produkt erstellt",

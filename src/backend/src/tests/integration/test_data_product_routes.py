@@ -15,6 +15,9 @@ from fastapi.testclient import TestClient
 
 from src.models.data_products import DataProduct
 
+# Products are created with productType: sourceAligned
+pytestmark = pytest.mark.usefixtures("seeded_product_types")
+
 
 class TestDataProductRoutes:
     """Integration test suite for /api/data-products endpoints"""

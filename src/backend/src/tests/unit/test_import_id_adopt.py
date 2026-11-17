@@ -22,6 +22,9 @@ from src.controller.data_products_manager import (
 from src.db_models.data_products import DataProductDb
 from src.db_models.data_contracts import DataContractDb
 
+# Products are created with productType: sourceAligned
+pytestmark = pytest.mark.usefixtures("seeded_product_types")
+
 
 @pytest.fixture
 def product_manager(db_session: Session) -> DataProductsManager:

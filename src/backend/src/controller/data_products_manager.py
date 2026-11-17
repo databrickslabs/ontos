@@ -174,7 +174,11 @@ from src.common import genie_client
 from src.common.delivery_mixin import DeliveryMixin
 from src.repositories.entity_relationships_repository import entity_relationship_repo
 from src.repositories.assets_repository import asset_repo
-from src.repositories.data_product_types_repository import data_product_types_repo
+from src.repositories.data_product_types_repository import (
+    data_product_types_repo,
+    normalize_type_key,
+    type_label_for,
+)
 
 logger = get_logger(__name__)
 
@@ -241,9 +245,28 @@ def _apply_product_type(product_api: DataProductApi, db_obj: Any) -> DataProduct
     return product_api
 
 
-def _set_product_type(db: Session, db_obj: Any, value: Any) -> None:
-    """Point ``db_obj`` at the type ``value`` names (created if unknown); None clears it."""
-    product_type = data_product_types_repo.resolve_or_create_imported(db, value)
+def _set_product_type(db: Session, db_obj: Any, value: Any, *, create_missing: bool = False) -> None:
+    """Point ``db_obj`` at the type ``value`` names; an empty value clears it.
+
+    Only an import (``create_missing``) adds a type that doesn't exist yet,
+    flagged ``is_imported``. Otherwise the type must be active, or be the one
+    the product already has, so that writing a product doesn't create or reuse
+    reference data the ``settings-data-product-types`` feature manages.
+
+    Raises:
+        UnknownDataProductTypeError: Without ``create_missing``, for a type that
+            doesn't exist, or is deactivated and isn't the product's current one.
+    """
+    if create_missing:
+        product_type = data_product_types_repo.resolve_or_create_imported(db, value)
+    else:
+        key = normalize_type_key(value)
+        product_type = data_product_types_repo.get_by_key(db, key) if key is not None else None
+        if key is not None and (
+            product_type is None
+            or (not product_type.is_active and product_type.id != db_obj.product_type_id)
+        ):
+            raise UnknownDataProductTypeError(type_label_for(value) or key)
     db_obj.product_type_id = product_type.id if product_type is not None else None
     db_obj.product_type = product_type
     db.flush()
@@ -382,6 +405,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         adopt_ids: bool = True,
         import_links: Optional[ImportLinks] = None,
         workflow_user: Optional[str] = None,
+        create_missing_type: bool = False,
     ) -> DataProductApi:
         """Creates a new ODPS v1.0.0 data product via the repository.
 
@@ -410,6 +434,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 those columns only change through a status transition.
             workflow_user: Who the ``on_create`` workflows run for; defaults to ``user``
                 (the REST routes stamp the username and fire for the email).
+            create_missing_type: Set by the imports (batch upload, ODPS files): an
+                unknown productType becomes a new imported type. Otherwise the type
+                must exist and be active (UnknownDataProductTypeError).
         """
         from src.controller.delivery_service import DeliveryChangeType
 
@@ -515,7 +542,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 set_lifecycle_columns(created_db_obj, lifecycle_columns)
                 db_session.flush()
             if product_type_value is not None:
-                _set_product_type(db_session, created_db_obj, product_type_value)
+                _set_product_type(
+                    db_session, created_db_obj, product_type_value, create_missing=create_missing_type,
+                )
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
             # or legacy single `domain` id/name).
@@ -2287,7 +2316,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             try:
                 # create_product() always generates a UUID; preserve_source_id=True
                 # stores any non-UUID original id as a sourceId custom property
-                created_product = self.create_product(product_data, preserve_source_id=True)
+                created_product = self.create_product(
+                    product_data, preserve_source_id=True, create_missing_type=True,
+                )
                 created_products.append(created_product)
                 logger.info(f"Successfully created product {created_product.id} from batch upload")
 
@@ -2584,7 +2615,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # commits them. Any failure from the product flush on rolls all of them back.
             try:
                 if product_type_value is not None:
-                    _set_product_type(self._db, created_db_obj, product_type_value)
+                    # The source product's type: it exists, and the new version keeps
+                    # it even when it's been deactivated since.
+                    _set_product_type(self._db, created_db_obj, product_type_value, create_missing=True)
 
                 # Carry the source product's domain assignments onto the new version.
                 d_ids, d_primary = self._resolve_product_domain_assignment(new_product_data)
@@ -3606,7 +3639,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         """
         savepoint = self._db.begin_nested()
         try:
-            created = self.create_product(product_data, **kwargs)
+            created = self.create_product(product_data, create_missing_type=True, **kwargs)
             if savepoint.is_active:
                 savepoint.commit()
             else:

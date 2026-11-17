@@ -128,3 +128,20 @@ def test_delete_type_in_use_returns_409(client, db_session, seeded):
 
     assert response.status_code == 409
     assert response.json()["detail"]["params"] == {"key": "custom", "count": 1}
+
+
+def test_product_create_with_unknown_type_returns_400(client, db_session, seeded):
+    """Writing a product doesn't create types; only imports do."""
+    response = client.post("/api/data-products", json={
+        "apiVersion": "v1.0.0",
+        "kind": "DataProduct",
+        "id": str(uuid.uuid4()),
+        "name": "Typo Product",
+        "version": "1.0.0",
+        "status": "draft",
+        "customProperties": [{"property": "productType", "value": "Typo Tyep"}],
+    })
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"]["code"] == "unknown_data_product_type"
+    assert data_product_types_repo.get_by_key(db_session, "typo-tyep") is None

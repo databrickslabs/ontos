@@ -10,7 +10,7 @@ import jsonschema
 import pytest
 from sqlalchemy.orm import Session
 
-from src.controller.data_products_manager import DataProductsManager
+from src.controller.data_products_manager import DataProductsManager, UnknownDataProductTypeError
 from src.db_models.data_products import CustomPropertyDb, DataProductDb
 from src.models.data_products import NewVersionRequest
 from src.repositories.data_product_types_repository import (
@@ -116,8 +116,28 @@ def test_create_without_type_leaves_it_empty(manager, db_session, seeded):
     assert _product_type_props(created) == []
 
 
-def test_create_with_unknown_type_creates_imported_type(manager, db_session, seeded):
-    created = manager.create_product(_product(product_type="Golden Record"), db=db_session)
+def test_create_with_unknown_type_is_rejected(manager, db_session, seeded):
+    """A plain create doesn't add reference data (settings-data-product-types does)."""
+    with pytest.raises(UnknownDataProductTypeError) as err:
+        manager.create_product(_product(product_type="Typo Tyep"), db=db_session)
+
+    assert err.value.code == "unknown_data_product_type"
+    assert err.value.params == {"key": "Typo Tyep"}
+    assert data_product_types_repo.get_by_key(db_session, "typo-tyep") is None
+
+
+def test_create_with_deactivated_type_is_rejected(manager, db_session, seeded):
+    data_product_types_repo.get_by_key(db_session, "sink").is_active = False
+    db_session.flush()
+
+    with pytest.raises(UnknownDataProductTypeError):
+        manager.create_product(_product(product_type="sink"), db=db_session)
+
+
+def test_import_with_unknown_type_creates_imported_type(manager, db_session, seeded):
+    created = manager.create_product(
+        _product(product_type="Golden Record"), db=db_session, create_missing_type=True,
+    )
 
     imported = data_product_types_repo.get_by_key(db_session, "golden-record")
     assert imported.is_imported and imported.is_active and not imported.is_default
@@ -141,6 +161,35 @@ def test_update_changes_type(manager, db_session, seeded):
     assert _type_key(db_session, created.id) == "sink"
     assert _product_type_props(updated) == ["sink"]
     assert _stored_product_type_rows(db_session, created.id) == 0
+
+
+@pytest.mark.parametrize("value", ["Typo Tyep", "sink"])
+def test_update_to_unknown_or_deactivated_type_is_rejected(manager, db_session, seeded, value):
+    created = manager.create_product(_product(product_type="aggregate"), db=db_session)
+    data_product_types_repo.get_by_key(db_session, "sink").is_active = False
+    db_session.flush()
+
+    # update_product rolls the session back on the error, so nothing is written
+    with pytest.raises(UnknownDataProductTypeError):
+        manager.update_product(
+            created.id,
+            {"customProperties": [{"property": "productType", "value": value}]},
+            db=db_session,
+        )
+
+
+def test_update_keeps_the_current_type_after_it_is_deactivated(manager, db_session, seeded):
+    created = manager.create_product(_product(product_type="sink"), db=db_session)
+    data_product_types_repo.get_by_key(db_session, "sink").is_active = False
+    db_session.flush()
+
+    manager.update_product(
+        created.id,
+        {"customProperties": [{"property": "productType", "value": "sink"}]},
+        db=db_session,
+    )
+
+    assert _type_key(db_session, created.id) == "sink"
 
 
 def test_update_custom_properties_without_type_clears_it(manager, db_session, seeded):
@@ -223,12 +272,22 @@ def test_odps_import_of_unknown_type_into_another_install(manager, db_session, s
     """A type made on one install arrives as an imported type on another."""
     document = _product(name="Foreign Product", product_type="golden-record")
 
-    created = manager.create_product(document, db=db_session)
+    created = manager.create_product(document, db=db_session, create_missing_type=True)
 
     assert data_product_types_repo.get_by_key(db_session, "golden-record").is_imported
     assert _product_type_props(manager.build_odps_export(created.id, db=db_session)) == [
         "golden-record"
     ]
+
+
+def test_batch_upload_of_unknown_type_creates_imported_type(manager, db_session, seeded):
+    content = json.dumps([_product(name="Uploaded", product_type="Golden Record")]).encode()
+
+    created, errors = manager.upload_products_batch(content, "products.json")
+
+    assert errors == []
+    assert data_product_types_repo.get_by_key(db_session, "golden-record").is_imported
+    assert _type_key(db_session, created[0].id) == "golden-record"
 
 
 # --- new version / clone ---

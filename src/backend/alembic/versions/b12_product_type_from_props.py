@@ -19,6 +19,11 @@ Downgrade writes the type keys back as ``productType`` custom properties (for
 products that don't have one) and clears the foreign key. Types created here
 are left in place; b11's downgrade drops the table.
 
+The value written back is the normalised key, not the original text:
+``Data Mesh Node`` comes back as ``data-mesh-node``. After a downgrade past
+b11 and a new upgrade, such an imported type is re-created with the key as
+its label (rename it on the Data Product Types page if needed).
+
 Revision ID: b12_product_type_from_props
 Revises: b11_data_product_types
 Create Date: 2026-11-16 12:00:00.000000

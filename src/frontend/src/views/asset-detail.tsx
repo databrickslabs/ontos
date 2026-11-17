@@ -30,7 +30,6 @@ import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { CommentSidebar } from '@/components/comments';
 import { RatingPanel } from '@/components/ratings';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
-import EntityCostsPanel from '@/components/costs/entity-costs-panel';
 import EntityQualityPanel from '@/components/quality/entity-quality-panel';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
@@ -605,9 +604,6 @@ export default function AssetDetailView() {
         showDistribution
         allowSubmit
       />
-
-      {/* Costs Panel */}
-      <EntityCostsPanel entityId={assetId!} entityType="asset" />
 
       {/* Quality Panel */}
       <EntityQualityPanel entityId={assetId!} entityType="asset" />

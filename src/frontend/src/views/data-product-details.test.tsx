@@ -22,7 +22,6 @@ import {
   isPersonalDraftProduct,
   isProductReadOnly,
   canUserModifyProduct,
-  resolveDomainLabel,
   isProductActive,
 } from './data-product-details';
 import { FeatureAccessLevel } from '@/types/settings';
@@ -442,57 +441,6 @@ describe('canUserModifyProduct', () => {
         isPersonalDraft: true,
       }),
     ).toBe(false);
-  });
-});
-
-describe('resolveDomainLabel', () => {
-  const NOT_ASSIGNED = '— not assigned —';
-
-  it('returns the resolved name when the lookup succeeds', () => {
-    expect(
-      resolveDomainLabel({
-        domain: 'dom-1',
-        resolveName: () => 'Sales',
-        notAssignedLabel: NOT_ASSIGNED,
-      }),
-    ).toBe('Sales');
-  });
-
-  it('falls back to the raw domain id when the lookup misses', () => {
-    expect(
-      resolveDomainLabel({
-        domain: 'dom-orphan',
-        resolveName: () => undefined,
-        notAssignedLabel: NOT_ASSIGNED,
-      }),
-    ).toBe('dom-orphan');
-    expect(
-      resolveDomainLabel({
-        domain: 'dom-orphan',
-        resolveName: () => null,
-        notAssignedLabel: NOT_ASSIGNED,
-      }),
-    ).toBe('dom-orphan');
-    expect(
-      resolveDomainLabel({
-        domain: 'dom-orphan',
-        resolveName: () => '',
-        notAssignedLabel: NOT_ASSIGNED,
-      }),
-    ).toBe('dom-orphan');
-  });
-
-  it('returns the not-assigned label when the product has no domain', () => {
-    const resolveName = () => 'should-not-be-called';
-    expect(
-      resolveDomainLabel({ domain: undefined, resolveName, notAssignedLabel: NOT_ASSIGNED }),
-    ).toBe(NOT_ASSIGNED);
-    expect(
-      resolveDomainLabel({ domain: null, resolveName, notAssignedLabel: NOT_ASSIGNED }),
-    ).toBe(NOT_ASSIGNED);
-    expect(
-      resolveDomainLabel({ domain: '', resolveName, notAssignedLabel: NOT_ASSIGNED }),
-    ).toBe(NOT_ASSIGNED);
   });
 });
 

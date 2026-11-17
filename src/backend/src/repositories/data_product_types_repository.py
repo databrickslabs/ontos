@@ -149,7 +149,7 @@ class DataProductTypesRepository:
         db.add(obj)
         db.flush()
         db.refresh(obj)
-        logger.info(f"Created data product type '{key}' at order {sort_order}")
+        logger.info("Created data product type '%s' at order %s", key, sort_order)
         return obj
 
     def resolve_or_create_imported(self, db: Session, raw) -> DataProductTypeDb | None:
@@ -233,7 +233,7 @@ class DataProductTypesRepository:
             return self.get_all_ordered(db)
 
         created = [self.create(db, **t) for t in SEEDED_TYPES]
-        logger.info(f"Seeded default data product types: {', '.join(sorted(SEEDED_TYPE_KEYS))}")
+        logger.info("Seeded default data product types: %s", ", ".join(sorted(SEEDED_TYPE_KEYS)))
         return created
 
 

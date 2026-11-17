@@ -7,7 +7,10 @@ import uuid
 
 import pytest
 
+from src.app import app
+from src.common.authorization import get_user_details_from_sdk
 from src.db_models.data_products import DataProductDb
+from src.models.users import UserInfo
 from src.repositories.data_product_types_repository import data_product_types_repo
 
 BASE = "/api/data-product-types"
@@ -128,6 +131,37 @@ def test_delete_type_in_use_returns_409(client, db_session, seeded):
 
     assert response.status_code == 409
     assert response.json()["detail"]["params"] == {"key": "custom", "count": 1}
+
+
+def _act_as_data_products_editor(client):
+    """Send the next requests as a user with Read/Write on data products only."""
+    role = client.post("/api/settings/roles", json={
+        "name": f"Product editor {uuid.uuid4().hex[:6]}",
+        "description": "test",
+        "assigned_groups": ["product_editors"],
+        "feature_permissions": {"data-products": "Read/Write"},
+    })
+    assert role.status_code == 201, role.text
+    user = UserInfo(
+        username="editor", email="editor@example.com", user="editor",
+        ip="127.0.0.1", groups=["product_editors"],
+    )
+
+    async def _user():
+        return user
+
+    app.dependency_overrides[get_user_details_from_sdk] = _user
+
+
+def test_writes_need_the_settings_permission(client, db_session, seeded):
+    type_id = _id(db_session, "aggregate")
+    _act_as_data_products_editor(client)
+
+    assert client.get(BASE).status_code == 200
+    assert client.post(BASE, json={"key": "custom", "label": "Custom"}).status_code == 403
+    assert client.put(f"{BASE}/{type_id}", json={"label": "Composite"}).status_code == 403
+    assert client.put(f"{BASE}/reorder", json={"types": []}).status_code == 403
+    assert client.delete(f"{BASE}/{type_id}").status_code == 403
 
 
 def test_product_create_with_unknown_type_returns_400(client, db_session, seeded):

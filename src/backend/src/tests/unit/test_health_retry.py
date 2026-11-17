@@ -6,6 +6,7 @@ works, and must re-initialize the managers only once the workspace is back.
 """
 
 import asyncio
+import gc
 import threading
 import time
 from types import SimpleNamespace
@@ -128,13 +129,21 @@ async def test_health_answers_while_a_retry_runs(running_app_without_workspace):
             # Before the fix, the retry re-ran the whole startup on the event loop.
             app_module, "initialize_managers", side_effect=lambda app: time.sleep(1.0)
         ), patch.object(app_module, "_seed_default_workflows"):
-            started = time.monotonic()
-            retry = asyncio.create_task(client.post("/api/health/retry"))
-            await asyncio.sleep(0.1)
-            health = await client.get("/api/health")
-            # Measured from the retry's start: a retry blocking the event loop
-            # would hold this request for the whole second.
-            elapsed = time.monotonic() - started
+            # A gen2 GC pause (0.2-0.5 s on a large suite) must not land in the timed window.
+            gc_was_enabled = gc.isenabled()
+            gc.collect()
+            gc.disable()
+            try:
+                started = time.monotonic()
+                retry = asyncio.create_task(client.post("/api/health/retry"))
+                await asyncio.sleep(0.1)
+                health = await client.get("/api/health")
+                # Measured from the retry's start: a retry blocking the event loop
+                # would hold this request for the whole second.
+                elapsed = time.monotonic() - started
+            finally:
+                if gc_was_enabled:
+                    gc.enable()
             retry_response = await retry
 
     assert health.status_code == 200

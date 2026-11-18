@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Import, Loader2, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,8 @@ import { useUICustomizationStore } from '@/stores/ui-customization-store';
 import { useToast } from '@/hooks/use-toast';
 
 export default function SchemaImporterView() {
-  const { t } = useTranslation(['database-schema', 'settings', 'common']);
+  const { t } = useTranslation(['database-schema', 'settings', 'assets', 'concepts', 'common']);
+  const { pathname } = useLocation();
   const appName = useUICustomizationStore((s) => s.getAppName());
   const { get: apiGet } = useApi();
   const { toast } = useToast();
@@ -41,14 +42,24 @@ export default function SchemaImporterView() {
   // Result-only view for a completed run reopened from its notification (?runId=).
   const [runResult, setRunResult] = useState<ImportResult | null>(null);
 
+  // Anchor the trail to whichever shell opened the importer:
+  // Concepts > Define (/concepts/import) or Assets (/schema-importer).
+  const inConceptsShell = pathname.startsWith('/concepts');
   useEffect(() => {
-    setStaticSegments([]);
+    setStaticSegments(
+      inConceptsShell
+        ? [
+            { label: t('concepts:title'), path: '/concepts/browser' },
+            { label: t('concepts:sections.define'), path: '/concepts/define' },
+          ]
+        : [{ label: t('assets:title'), path: '/assets' }],
+    );
     setDynamicTitle(t('settings:schemaImporter.title', 'Schema Importer'));
     return () => {
       setStaticSegments([]);
       setDynamicTitle(null);
     };
-  }, [t, setStaticSegments, setDynamicTitle]);
+  }, [t, inConceptsShell, setStaticSegments, setDynamicTitle]);
 
   const fetchConnections = useCallback(async () => {
     setIsLoadingConnections(true);

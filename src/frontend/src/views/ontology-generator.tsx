@@ -101,7 +101,7 @@ const STATUS_CONFIG: Record<string, { icon: typeof Loader2; variant: 'default' |
 };
 
 export default function OntologyGeneratorView() {
-  const { t } = useTranslation(['semantic-models', 'common']);
+  const { t } = useTranslation(['semantic-models', 'concepts', 'common']);
   const { get: apiGet, post, delete: apiDelete } = useApi();
   const { toast } = useToast();
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
@@ -147,10 +147,10 @@ export default function OntologyGeneratorView() {
     // Generator is reached from Define, so anchor the trail there:
     // Concepts > Define > Ontology Generator.
     setStaticSegments([
-      { label: 'Concepts', path: '/concepts/browser' },
-      { label: 'Define', path: '/concepts/define' },
+      { label: t('concepts:title'), path: '/concepts/browser' },
+      { label: t('concepts:sections.define'), path: '/concepts/define' },
     ]);
-    setDynamicTitle('Ontology Generator');
+    setDynamicTitle(t('semantic-models:ontologyGenerator.title'));
     return () => {
       setStaticSegments([]);
       setDynamicTitle(null);

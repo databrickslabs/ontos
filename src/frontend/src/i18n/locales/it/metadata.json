@@ -176,7 +176,10 @@
       "updated": "Costo aggiornato",
       "deleted": "Costo eliminato",
       "deleteFailed": "Eliminazione non riuscita",
-      "saveFailed": "Salvataggio non riuscito"
+      "saveFailed": "Salvataggio non riuscito",
+      "requestFailed": "Impossibile completare la richiesta.",
+      "validationFailed": "Controlla i valori inseriti e riprova.",
+      "invalidResponse": "Il server ha restituito una risposta non valida."
     }
   },
   "quality": {

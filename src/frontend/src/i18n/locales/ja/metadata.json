@@ -176,7 +176,10 @@
       "updated": "コストを更新しました",
       "deleted": "コストを削除しました",
       "deleteFailed": "削除に失敗しました",
-      "saveFailed": "保存に失敗しました"
+      "saveFailed": "保存に失敗しました",
+      "requestFailed": "リクエストを完了できませんでした。",
+      "validationFailed": "入力した値を確認して、もう一度お試しください。",
+      "invalidResponse": "サーバーから無効な応答が返されました。"
     }
   },
   "quality": {

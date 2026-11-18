@@ -61,6 +61,7 @@ def test_cost_item_accepts_supported_entity_types(entity_type):
     assert _cost_item(entity_type).entity_type == entity_type
 
 
-def test_cost_item_rejects_unknown_entity_type():
+@pytest.mark.parametrize("entity_type", ["asset", "not_an_entity"])
+def test_cost_item_rejects_unsupported_entity_type(entity_type):
     with pytest.raises(ValidationError):
-        _cost_item("not_an_entity")
+        _cost_item(entity_type)

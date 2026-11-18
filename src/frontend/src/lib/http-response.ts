@@ -1,3 +1,9 @@
+export type HttpResponseMessages = {
+  requestFailed: string;
+  validationFailed: string;
+  invalidResponse: string;
+};
+
 function detailText(detail: unknown): string | null {
   if (typeof detail === 'string' && detail.trim()) return detail;
   if (detail && typeof detail === 'object') {
@@ -7,24 +13,28 @@ function detailText(detail: unknown): string | null {
   return null;
 }
 
-export async function responseErrorMessage(response: Response): Promise<string> {
+export async function responseErrorMessage(
+  response: Response,
+  messages: HttpResponseMessages,
+): Promise<string> {
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
   if (contentType.includes('application/json')) {
     const body = (await response.json().catch(() => null)) as { detail?: unknown } | null;
     const message = detailText(body?.detail);
     if (message) return message;
-  } else {
-    const text = await response.text().catch(() => '');
-    if (text.trim()) return text.trim();
+    if (Array.isArray(body?.detail)) return messages.validationFailed;
   }
-  return `Request failed (${response.status})`;
+  return messages.requestFailed;
 }
 
-export async function readJsonResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) throw new Error(await responseErrorMessage(response));
+export async function readJsonResponse<T>(
+  response: Response,
+  messages: HttpResponseMessages,
+): Promise<T> {
+  if (!response.ok) throw new Error(await responseErrorMessage(response, messages));
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
   if (!contentType.includes('application/json')) {
-    throw new Error(`Expected a JSON response (${response.status})`);
+    throw new Error(messages.invalidResponse);
   }
   return response.json() as Promise<T>;
 }

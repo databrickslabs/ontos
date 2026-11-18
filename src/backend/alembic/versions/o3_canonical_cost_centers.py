@@ -24,15 +24,26 @@ def upgrade() -> None:
         sa.text("""
         UPDATE cost_items
         SET cost_center = CASE
-            WHEN upper(trim(cost_center)) IN ('INFRASTRUCTURE', 'HR', 'STORAGE', 'MAINTENANCE', 'OTHER')
+            WHEN upper(trim(cost_center)) IN (
+                'INFRASTRUCTURE', 'HR', 'STORAGE', 'MAINTENANCE', 'OTHER'
+            )
                 THEN upper(trim(cost_center))
             ELSE 'OTHER'
         END,
         custom_center_name = CASE
-            WHEN upper(trim(cost_center)) IN ('INFRASTRUCTURE', 'HR', 'STORAGE', 'MAINTENANCE', 'OTHER')
+            WHEN upper(trim(cost_center)) IN (
+                'INFRASTRUCTURE', 'HR', 'STORAGE', 'MAINTENANCE', 'OTHER'
+            )
                 THEN custom_center_name
-            ELSE coalesce(custom_center_name, initcap(trim(cost_center)))
+            ELSE initcap(trim(cost_center)) || CASE
+                WHEN nullif(trim(custom_center_name), '') IS NULL THEN ''
+                ELSE ': ' || trim(custom_center_name)
+            END
         END
+        WHERE cost_center <> upper(trim(cost_center))
+           OR upper(trim(cost_center)) NOT IN (
+               'INFRASTRUCTURE', 'HR', 'STORAGE', 'MAINTENANCE', 'OTHER'
+           )
     """)
     )
     op.create_check_constraint(

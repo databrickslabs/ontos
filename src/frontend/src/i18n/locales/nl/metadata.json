@@ -176,7 +176,10 @@
       "updated": "Kosten bijgewerkt",
       "deleted": "Kosten verwijderd",
       "deleteFailed": "Verwijderen mislukt",
-      "saveFailed": "Opslaan mislukt"
+      "saveFailed": "Opslaan mislukt",
+      "requestFailed": "De aanvraag kon niet worden voltooid.",
+      "validationFailed": "Controleer de ingevoerde waarden en probeer het opnieuw.",
+      "invalidResponse": "De server heeft een ongeldig antwoord geretourneerd."
     }
   },
   "quality": {

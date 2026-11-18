@@ -16,7 +16,7 @@ class CostCenter(str):
 
 class CostItemBase(BaseModel):
     entity_id: str
-    entity_type: str = Field(..., pattern=r"^(data_domain|data_product|data_contract|asset)$")
+    entity_type: str = Field(..., pattern=r"^(data_domain|data_product|data_contract)$")
     title: str | None = Field(None, max_length=255)
     description: str | None = Field(None, max_length=2000)
     cost_center: str = Field(..., pattern=r"^(INFRASTRUCTURE|HR|STORAGE|MAINTENANCE|OTHER)$")

@@ -6,6 +6,14 @@ import ProductDomainBadges from './product-domain-badges';
 const domainNames: Record<string, string> = {
   'domain-primary': 'Primary domain',
   'domain-secondary': 'Secondary domain',
+  ...Object.fromEntries(
+    Array.from({ length: 10 }, (_, index) => [
+      `domain-${index + 1}`,
+      index < 2
+        ? `Domain ${index + 1} with a very long name that must be truncated`
+        : `Domain ${index + 1}`,
+    ])
+  ),
 };
 
 vi.mock('@/hooks/use-domains', () => ({
@@ -71,6 +79,34 @@ describe('ProductDomainBadges', () => {
 
     expect(onDomainClick).toHaveBeenNthCalledWith(1, 'domain-primary');
     expect(onDomainClick).toHaveBeenNthCalledWith(2, 'domain-secondary');
+  });
+
+  it('bounds many domains to two rows and exposes the remaining domains', async () => {
+    const user = userEvent.setup();
+    const domainIds = Array.from({ length: 10 }, (_, index) => `domain-${index + 1}`);
+    render(
+      <ProductDomainBadges
+        product={{ domain_ids: domainIds, primary_domain_id: 'domain-1' }}
+        onDomainClick={onDomainClick}
+      />
+    );
+
+    expect(
+      screen.getByTitle('Domain 1 with a very long name that must be truncated (primary domain)')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Domain 2 with a very long name that must be truncated')).toHaveClass(
+      'truncate'
+    );
+    expect(screen.getByRole('button', { name: '+7' })).toHaveAttribute(
+      'title',
+      expect.stringContaining('Domain 9')
+    );
+    expect(screen.queryByText('Domain 9')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '+7' }));
+    await user.click(await screen.findByText('Domain 9'));
+
+    expect(onDomainClick).toHaveBeenCalledWith('domain-9');
   });
 
   it('preserves navigation for products that only carry the legacy primary-domain name', async () => {

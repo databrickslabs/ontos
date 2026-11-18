@@ -18,7 +18,7 @@ export default function ProductDomainBadges({ product, onDomainClick }: ProductD
   const hasDomains = Boolean(product.domains?.length || domainIds.length);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 items-start gap-2 md:col-span-2">
       <Label className="text-xs text-muted-foreground min-w-[4rem]">
         {t('data-products:form.fields.domains')}:
       </Label>
@@ -28,6 +28,8 @@ export default function ProductDomainBadges({ product, onDomainClick }: ProductD
           domainIds={domainIds}
           primaryDomainId={primaryDomainId}
           onDomainClick={onDomainClick}
+          maxVisible={4}
+          className="w-full max-w-[20rem] min-w-0"
         />
       ) : product.domain ? (
         <span className="text-xs text-muted-foreground truncate">{product.domain}</span>

@@ -1057,3 +1057,39 @@ def test_the_attachment_list_keeps_rows_of_a_readable_asset(
     assert response.status_code == 200, response.text
     assert {a['asset_id'] for a in response.json()} == {ids['note'], ids['link'], ids['doc']}
 
+
+def _timeline_calls(asset, kind):
+    entity_type = f'asset:{kind}'
+    return [
+        (f'/api/entities/{entity_type}/{asset.id}/timeline', {}),
+        (f'/api/entities/{entity_type}/{asset.id}/timeline/count', {}),
+        (f'/api/entities/{entity_type}/by-iri/timeline', {'params': {'entity_id': str(asset.id)}}),
+        (f'/api/entities/{entity_type}/by-iri/timeline/count',
+         {'params': {'entity_id': str(asset.id)}}),
+    ]
+
+
+@pytest.mark.parametrize('kind', ['rich_text', 'link'])
+def test_the_change_log_of_an_unreadable_assets_metadata_is_empty(
+        client, db_session, asset, act_as, kind):
+    """Answered as for an entity with no entries (the asset may not exist)."""
+    _seed(db_session, 'asset', str(asset.id))  # logs asset:rich_text and asset:link
+    act_as('Data Steward')
+
+    for url, kwargs in _timeline_calls(asset, kind):
+        response = client.get(url, **kwargs)
+        assert response.status_code == 200, (url, response.text)
+        assert response.json()['total_count'] == 0, url
+        assert response.json().get('timeline', []) == [], url
+
+
+@pytest.mark.parametrize('role', ['Admin', 'Data Steward'])
+def test_the_change_log_of_a_readable_assets_metadata_is_listed(
+        client, db_session, asset, act_as, linked_to_an_accessible_product, role):
+    _seed(db_session, 'asset', str(asset.id))
+    act_as(role)
+
+    for url, kwargs in _timeline_calls(asset, 'rich_text'):
+        response = client.get(url, **kwargs)
+        assert response.status_code == 200, (url, response.text)
+        assert response.json()['total_count'] >= 1, url

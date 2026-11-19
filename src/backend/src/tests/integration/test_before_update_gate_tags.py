@@ -377,3 +377,52 @@ def test_a_tag_list_that_cannot_be_written_keeps_the_rest_of_the_update(
     assert passed.status_code == 200, passed.text
     assert client.get(f'/api/data-contracts/{contract_id}').json()['name'] == 'Renamed'
     assert _contract_tags(db_session, contract_id, pii_id) == []
+
+
+SCHEMA_WITH_CONCEPTS = [{
+    'name': 'orders', 'physicalType': 'table', 'authoritativeDefinitions': [CONCEPT],
+    'properties': [{
+        'name': 'id', 'logicalType': 'string', 'authoritativeDefinitions': [CONCEPT],
+    }],
+}]
+
+
+def test_the_schema_semantic_links_of_the_update_are_written_in_its_commit(
+    client, db_session, write_order,
+):
+    _tag_then_check_gate(db_session, "MATCH (c:data_contract) ASSERT c.name = 'Gated'")
+    contract_id = _new_contract(client)
+
+    passed = client.put(
+        f'/api/data-contracts/{contract_id}', json={'schema': SCHEMA_WITH_CONCEPTS},
+    )
+
+    # Before, the schema and property links were added (and committed) as the schema
+    # was recreated, before the gate's tag was written
+    assert passed.status_code == 200, passed.text
+    assert sorted(write_order) == [('link', False), ('link', False), ('tag', False)]
+
+
+def test_a_refused_update_adds_no_schema_semantic_link(
+    client, db_session, monkeypatch, write_order,
+):
+    from src.controller.tags_manager import TagsManager
+
+    _tag_then_check_gate(db_session, "MATCH (c:data_contract) ASSERT c.name = 'Gated'")
+    contract_id = _new_contract(client)
+
+    def broken(self, db, **kwargs):
+        write_order.append(('tag', 'failed'))
+        raise RuntimeError('tag table down')
+
+    monkeypatch.setattr(TagsManager, 'add_tag_to_entity', broken)
+
+    refused = client.put(f'/api/data-contracts/{contract_id}', json={
+        'description': {'purpose': 'changed'}, 'schema': SCHEMA_WITH_CONCEPTS,
+    })
+
+    # Before: [('link', True), ('link', True), ('tag', 'failed')], the description
+    # and the schema committed with the links although the update was refused
+    assert refused.status_code == 400, refused.text
+    assert refused.json()['detail']['code'] == 'update_gate_tag_write_failed'
+    assert [kind for kind in write_order if kind[1] is True] == []

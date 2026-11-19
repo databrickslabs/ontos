@@ -146,6 +146,30 @@ class Settings(BaseSettings):
     # (Lakebase Search BM25/vector) is layered on the "postgres" backend later.
     SEARCH_BACKEND: str = Field("memory", env='SEARCH_BACKEND')
 
+    # Workflow scheduler (#941): runs active workflows with a `scheduled` trigger.
+    # No fixed polling: the thread sleeps until the next known slot and reads the
+    # database only when a slot is due or a workflow changed, so Lakebase can idle.
+    # The instance that saves a workflow picks the change up at once. Every other
+    # instance checks for changes (one small query) when one of its requests is
+    # using the database anyway, at most once per CHANGE_CHECK_SECONDS; without
+    # requests it notices at its next due slot.
+    WORKFLOW_SCHEDULER_ENABLED: bool = Field(True, env='WORKFLOW_SCHEDULER_ENABLED')
+    WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS: int = Field(
+        60, env='WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS',
+    )
+    # Opt-in fallback: also check for changes made through other instances every
+    # N seconds, with or without requests. Each check can wake an idle Lakebase.
+    # 0 (default) = never.
+    WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS: int = Field(
+        0, env='WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS',
+    )
+    # Scheduled runs run on a pool of this many threads per instance, so one long
+    # run doesn't hold up the other scheduled workflows.
+    WORKFLOW_SCHEDULER_MAX_WORKERS: int = Field(4, env='WORKFLOW_SCHEDULER_MAX_WORKERS')
+    # On shutdown, wait up to this many seconds for scheduled runs in progress. A
+    # run cut off by the exit is not run again (each slot runs at most once).
+    WORKFLOW_SCHEDULER_DRAIN_SECONDS: int = Field(30, env='WORKFLOW_SCHEDULER_DRAIN_SECONDS')
+
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')
 

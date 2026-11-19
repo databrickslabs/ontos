@@ -131,6 +131,7 @@ def _build_search_index():
 def client(db_session, test_settings, mock_workspace_client, mock_test_user, monkeypatch):
     """A TestClient whose app has its managers, on the test database."""
     from src.controller.jobs_manager import JobsManager
+    from src.controller.workflow_scheduler import WorkflowScheduler
     from src.utils import startup_tasks
 
     test_sessions = sessionmaker(bind=db_session.get_bind(), autoflush=False)
@@ -139,6 +140,8 @@ def client(db_session, test_settings, mock_workspace_client, mock_test_user, mon
 
     monkeypatch.setattr(startup_tasks, 'get_settings', lambda: test_settings)
     monkeypatch.setattr(JobsManager, 'start_background_polling', lambda self, **kwargs: None)
+    # No scheduler thread on the shared test connection (tests run it with run_once).
+    monkeypatch.setattr(WorkflowScheduler, 'start', lambda self: None)
 
     saved_state = dict(app.state._state)
     app.state.health = {'db_ok': True, 'ws_ok': True, 'seed_ok': True, 'warnings': []}

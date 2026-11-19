@@ -30,6 +30,7 @@ from src.models.process_workflows import (
     WorkflowExecution,
     WorkflowExecutionCreate,
     TriggerContext,
+    TriggerType,
     StepType,
     ExecutionStatus,
     StepExecutionStatus,
@@ -602,9 +603,21 @@ def _requester_email(context: 'StepContext') -> Optional[str]:
     requester = getattr(trigger_context, 'user_email', None)
     if requester:
         return requester
+    if _started_by_no_user(trigger_context):
+        # A scheduled run: nobody made the request. After an approval the acting
+        # user is the approver, who must not stand in for the requester.
+        return None
     if context.user_email:
         _log_requester_fallback(context)
     return context.user_email
+
+
+def _started_by_no_user(trigger_context: Optional[TriggerContext]) -> bool:
+    """True for a run no user started (a ``scheduled`` trigger without a user)."""
+    if trigger_context is None or getattr(trigger_context, 'user_email', None):
+        return False
+    trigger_type = getattr(trigger_context, 'trigger_type', None)
+    return getattr(trigger_type, 'value', trigger_type) == TriggerType.SCHEDULED.value
 
 
 def _log_requester_fallback(context: 'StepContext') -> None:
@@ -1964,6 +1977,13 @@ class CreateAssetReviewStepHandler(StepHandler):
             # Get requester from trigger context (TriggerContext is a Pydantic model, not a dict)
             tc = context.trigger_context
             requester_email = tc.user_email if tc else None
+            if not requester_email and _started_by_no_user(tc):
+                # A scheduled run has no requester; a review needs one, and a
+                # made-up identity must not end up in the review record.
+                return StepResult(
+                    passed=False,
+                    error="A run no user started has no requester to create an asset review for",
+                )
             if not requester_email:
                 requester_email = 'system@app.local'
             
@@ -2088,14 +2108,15 @@ class CreateAssetReviewStepHandler(StepHandler):
             return StepResult(passed=False, error=str(e))
     
     def _resolve_reviewer(
-        self, reviewer_role: str, context: StepContext, requester_email: str,
+        self, reviewer_role: str, context: StepContext, requester_email: Optional[str],
     ) -> Optional[str]:
         """The reviewer's email: the one named in the request, else the first
         person ``reviewer_role`` resolves to other than the requester (as the
         approval steps resolve it), else a member of the groups of the role it
         resolves to (or of ``reviewer_role`` itself), else an admin."""
         tc = context.trigger_context
-        requester = requester_email.lower()
+        # No requester (a run no user started): nobody is left out
+        requester = (requester_email or '').lower()
         requested = (tc.entity_data or {}).get('reviewer_email') if tc else None
         if requested and requested.lower() != requester:
             return requested
@@ -3145,6 +3166,7 @@ class WorkflowExecutor:
         trigger_context: Optional[TriggerContext] = None,
         blocking: bool = True,
         execution_id: Optional[str] = None,
+        triggered_by: Optional[str] = None,
     ) -> WorkflowExecution:
         """Execute a workflow against an entity.
         
@@ -3158,6 +3180,9 @@ class WorkflowExecutor:
             trigger_context: Full trigger context
             blocking: If True, run synchronously; if False, queue for async execution
             execution_id: Optional existing execution ID to reuse (for retries)
+            triggered_by: Recorded as the execution's ``triggered_by`` instead of
+                ``user_email``, for runs no user started (``system:scheduler``);
+                ``user_email`` stays the requester the steps resolve
             
         Returns:
             WorkflowExecution with results
@@ -3179,7 +3204,7 @@ class WorkflowExecutor:
             execution_create = WorkflowExecutionCreate(
                 workflow_id=workflow.id,
                 trigger_context=trigger_context,
-                triggered_by=user_email,
+                triggered_by=triggered_by or user_email,
             )
             db_execution = workflow_execution_repo.create(self._db, execution_create)
         

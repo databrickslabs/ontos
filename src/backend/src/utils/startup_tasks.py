@@ -381,6 +381,27 @@ def initialize_database():
         logger.critical(f"An unexpected error occurred during database initialization: {e}", exc_info=True)
         raise RuntimeError("Application cannot start due to database initialization error.") from e
 
+def start_workflow_scheduler(app: FastAPI, settings) -> None:
+    """Start the workflow scheduler (#941) with its settings, unless it is turned off.
+
+    A failure is logged and doesn't stop the startup.
+    """
+    try:
+        if not settings.WORKFLOW_SCHEDULER_ENABLED:
+            return
+        from src.controller.workflow_scheduler import WorkflowScheduler
+
+        app.state.workflow_scheduler = WorkflowScheduler(
+            change_check_seconds=settings.WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS,
+            idle_recheck_seconds=settings.WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS,
+            max_workers=settings.WORKFLOW_SCHEDULER_MAX_WORKERS,
+            drain_seconds=settings.WORKFLOW_SCHEDULER_DRAIN_SECONDS,
+        )
+        app.state.workflow_scheduler.start()
+    except Exception as e:
+        logger.error(f"Failed to start the workflow scheduler: {e}", exc_info=True)
+
+
 def initialize_managers(app: FastAPI):
     """Initializes and stores manager instances directly in app.state."""
     logger.info("Initializing manager singletons...")
@@ -700,6 +721,9 @@ def initialize_managers(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to start background job polling: {e}", exc_info=True)
             # Don't fail startup if polling fails to start
+
+        # --- Start the workflow scheduler (#941) ---
+        start_workflow_scheduler(app, settings)
 
         # --- Load demo data if conditions are met ---
         # Only load demo data when:

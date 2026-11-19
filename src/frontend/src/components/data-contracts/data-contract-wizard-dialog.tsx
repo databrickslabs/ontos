@@ -13,7 +13,9 @@ import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
-import { hasDateConstraints, takesTimezoneFlag, takesTimezoneName } from './odcs-logical-types'
+import {
+  hasDateConstraints, takesTimezoneFlag, takesTimezoneName, timezoneForType,
+} from './odcs-logical-types'
 import { Checkbox } from '@/components/ui/checkbox'
 
 type WizardProps = {
@@ -181,6 +183,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     dataGranularityDescription?: string;
   }
   const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>(initial?.schemaObjects || [])
+  // a type change drops a timezone the new type doesn't take (a zone name on a timestamp)
+  const setColumnLogicalType = (objIndex: number, colIndex: number, logicalType: string) => {
+    setSchemaObjects((prev) => prev.map((x, i) => (i !== objIndex ? x : {
+      ...x,
+      properties: x.properties.map((y, j) => (j === colIndex ? {
+        ...y, logicalType, timezone: timezoneForType(logicalType, (y as any).timezone),
+      } : y)),
+    })))
+  }
   const setColumnTimezone = (objIndex: number, colIndex: number, timezone: boolean | undefined) => {
     setSchemaObjects((prev) => prev.map((x, i) => (i !== objIndex ? x : {
       ...x,
@@ -924,7 +935,12 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                 </div>
                                 <div className="lg:col-span-3">
                                   <Label className="text-[11px]">{t('data-contracts:wizard.fields.logicalType', 'Logical Type *')}</Label>
-                                  <Select value={(col as any).logicalType} onValueChange={(v) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, logicalType: v } : y) } : x))}>
+                                  <Select
+                                    value={(col as any).logicalType}
+                                    onValueChange={(v) => (
+                                      setColumnLogicalType(objIndex, colIndex, v)
+                                    )}
+                                  >
                                     <SelectTrigger className="mt-0.5 h-8 text-xs">
                                       <SelectValue placeholder={t('common:placeholders.selectType', 'Select type')} />
                                     </SelectTrigger>

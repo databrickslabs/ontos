@@ -1569,6 +1569,7 @@ def run_status_gates(
     entity_data: Optional[Dict[str, Any]] = None,
     user_email: Optional[str] = None,
     before_gates: Optional[Callable[[], None]] = None,
+    close_requests: bool = True,
 ) -> None:
     """Run the ``before_status_change`` gates of a transition; raise when it must not proceed.
 
@@ -1591,7 +1592,8 @@ def run_status_gates(
     asked for details, and an invalid change starts no gate approval either.
     When the transition may proceed, the entity's
     open status change requests are closed (``close_open_requests``), so none
-    can be approved after the entity left the status it was made from.
+    can be approved after the entity left the status it was made from;
+    ``close_requests=False`` leaves that to the caller's later status write.
     """
     event = TriggerEvent(
         trigger_type=TriggerType.BEFORE_STATUS_CHANGE,
@@ -1611,7 +1613,7 @@ def run_status_gates(
         before_gates()
 
     def proceed() -> None:
-        if entity_type in (EntityType.DATA_PRODUCT, EntityType.DATA_CONTRACT):
+        if close_requests and entity_type in (EntityType.DATA_PRODUCT, EntityType.DATA_CONTRACT):
             close_open_requests(db, entity_type.value, str(entity_id), to_status, user_email)
 
     try:

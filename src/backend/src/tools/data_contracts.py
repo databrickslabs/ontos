@@ -117,6 +117,26 @@ def _transition_status(
     return updated
 
 
+def _check_transition(
+    ctx: ToolContext, tool_name: str, contract_id: str, from_status: str, status: str,
+    deprecation: Any,
+) -> None:
+    """A status change's checks and gates before the call writes its fields
+    (``check_transition_gates``); a refusal is audited as ``_transition_status``
+    audits it, and raised."""
+    try:
+        ctx.data_contracts_manager.check_transition_gates(
+            db=ctx.db, contract_id=contract_id, new_status=status,
+            current_user=caller_email(ctx), deprecation=deprecation,
+        )
+    except Exception:
+        action = LIFECYCLE_AUDIT_ACTIONS.get(status.lower(), "CHANGE_STATUS")
+        audit_change(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, action, False, {
+            "contract_id": contract_id, "from": from_status,
+        })
+        raise
+
+
 def _update_refusal(
     ctx: ToolContext, tool_name: str, contract: Any, changes: Dict[str, Any]
 ) -> Tuple[Optional[ToolResult], List[Any]]:
@@ -420,10 +440,13 @@ class UpdateDataContractTool(BaseTool):
                 else:
                     updated = current
 
-            # A field change runs the before_update gates of PUT
-            # /data-contracts/{id}, then the update, before the status change, so
-            # a refused or failed update writes nothing. A status change alone
-            # runs only the before_status_change gates, as the change-status route.
+            # With fields, the status change's checks and before_status_change gates
+            # run first (a refusal writes nothing), then the before_update gates of
+            # PUT /data-contracts/{id} and the update, then the status write, so a
+            # refused or failed update writes no status either. A status change
+            # alone runs only the before_status_change gates, as change-status.
+            if transition is not None and update_data:
+                _check_transition(ctx, self.name, contract_id, *transition)
             gate_executions: List[Any] = []
             if update_data:
                 if not target:
@@ -462,7 +485,7 @@ class UpdateDataContractTool(BaseTool):
                 from_status, to_status, deprecation = transition
                 updated = _transition_status(
                     ctx, self.name, contract_id, from_status, to_status,
-                    deprecation=deprecation,
+                    deprecation=deprecation, gates_checked=bool(update_data),
                 )
             
             if not updated:

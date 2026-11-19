@@ -182,7 +182,7 @@ class TestBlockingGates:
         _workflow(world.db, 'before_update', step_type='fail')
         res = run(_ctx(world), 'update_data_contract',
                   {'contract_id': world.row.id, 'description': 'changed',
-                   'status': 'deprecated'})
+                   'status': 'deprecated', 'deprecation_reason': 'Replaced'})
         assert res.error_code == UPDATE_BLOCKED_CODE
         stored = _stored(world)
         assert stored.status == 'active'
@@ -337,6 +337,39 @@ class TestBlockingGates:
         assert res.success is True, res.error
         stored = _stored(world)
         assert (stored.description_purpose, stored.status) == ('changed', 'deprecated')
+
+    def test_a_blocked_status_change_with_fields_writes_nothing(self, world, run):
+        status_gate = _workflow(world.db, 'before_status_change', step_type='fail',
+                                from_status='active', to_status='deprecated')
+        update_gate = _workflow(world.db, 'before_update')
+        on_update = _workflow(world.db, 'on_update')
+        res = run(_ctx(world), 'update_data_contract', {
+            'contract_id': world.row.id, 'description': 'changed', 'status': 'deprecated',
+            'deprecation_reason': 'Replaced',
+        })
+
+        # The status gates run before the fields are written. Before, the fields
+        # were committed (and on_update fired) before the status change was refused
+        assert res.success is False
+        assert res.error_code == 'status_change_blocked'
+        stored = _stored(world)
+        assert (stored.description_purpose, stored.status) == (None, 'active')
+        assert len(_runs(world.db, status_gate)) == 1
+        assert _runs(world.db, update_gate) == []
+        assert _runs(world.db, on_update) == []
+        assert _actions(world) == [('DEPRECATE', False)]
+
+    def test_a_status_change_with_fields_runs_its_gates_once(self, world, run):
+        status_gate = _workflow(world.db, 'before_status_change',
+                                from_status='active', to_status='deprecated')
+        res = run(_ctx(world), 'update_data_contract', {
+            'contract_id': world.row.id, 'description': 'changed', 'status': 'deprecated',
+            'deprecation_reason': 'Replaced',
+        })
+
+        assert res.success is True, res.error
+        assert len(_runs(world.db, status_gate)) == 1
+        assert _actions(world) == [('UPDATE', True), ('DEPRECATE', True)]
 
     def test_run_update_gates_returns_pass_when_the_registry_raises(self, world, monkeypatch):
         import src.common.workflow_triggers as triggers

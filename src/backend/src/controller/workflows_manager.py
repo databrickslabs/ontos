@@ -743,6 +743,7 @@ class WorkflowsManager:
         step_ids = [s.step_id for s in workflow.steps]
         if len(step_ids) != len(set(step_ids)):
             errors.append(CodedMessage("Duplicate step IDs found", 'duplicate_step_ids'))
+        errors.extend(_update_gate_step_errors(workflow))
 
         # Check step references
         step_id_set = set(step_ids)
@@ -811,7 +812,6 @@ class WorkflowsManager:
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
         errors.extend(self.changed_schedule_errors(workflow.trigger, stored_trigger))
-        errors.extend(_update_gate_step_errors(workflow))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,

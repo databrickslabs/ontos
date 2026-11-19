@@ -4750,6 +4750,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         current_user: Optional[str] = None,
         deprecation: Optional[DeprecationDetails] = None,
         also_set: Optional[Dict[str, Any]] = None,
+        gates_checked: bool = False,
     ) -> DataContractDb:
         """
         Transition contract status. Validates contract exists and transition is valid.
@@ -4765,6 +4766,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             also_set: Other fields written in the same commit as the status,
                 only once the gates passed (e.g. a review request clears
                 ``draft_owner_id`` with its draft -> proposed change)
+            gates_checked: the caller already ran the transition's gates
+                (``check_transition_gates``) in this request: they don't run
+                again, the deprecation fields are still checked
             
         Returns:
             Updated DataContractDb instance
@@ -4772,35 +4776,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid status transition
         """
-        contract = data_contract_repo.get(db, id=contract_id)
-        if not contract:
-            raise ValueError("Contract not found")
-        
-        # The contract's lifecycle stage group allows the move (coded
-        # InvalidStatusTransitionError otherwise). Lowercase and strict: a status
-        # that isn't a stage of the group allows no transition.
-        current_status, new_status = lifecycle_service.check_transition(
-            db, 'data_contract', contract, new_status
+        contract, current_status, new_status = self._transition_target(
+            db, contract_id, new_status,
         )
-
-        # Run before_status_change workflows (gating)
-        # (a gate that errors refuses the transition when it is fail_closed, #1103);
-        # the deprecation fields are checked after the certified guard, before the gates
-        from src.common.workflow_triggers import run_status_gates
-        from src.models.process_workflows import EntityType as WFEntityType
-        run_status_gates(
-            db,
-            entity_type=WFEntityType.DATA_CONTRACT,
-            entity_id=contract_id,
-            from_status=current_status,
-            to_status=new_status,
-            entity_name=contract.name,
-            entity_data={"name": contract.name, "status": current_status},
-            user_email=current_user,
-            before_gates=lambda: check_lifecycle_fields(
-                db, 'data_contract', contract_id, new_status, deprecation
-            ),
-        )
+        if gates_checked:
+            check_lifecycle_fields(db, 'data_contract', contract_id, new_status, deprecation)
+            from src.controller.certified_deprecation_guard import close_open_requests
+            close_open_requests(db, 'data_contract', contract_id, new_status, current_user)
+        else:
+            self._run_transition_gates(
+                db, contract, current_status, new_status, current_user, deprecation,
+            )
         
         try:
             lifecycle_changes = apply_lifecycle_fields(
@@ -4851,6 +4837,65 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             "data_contract", contract_id, current_status, new_status
         )
         return updated
+
+    @staticmethod
+    def _transition_target(db, contract_id: str, new_status: str) -> tuple:
+        """``(contract, current status, new status)``; ValueError when missing or not allowed."""
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError("Contract not found")
+
+        # The contract's lifecycle stage group allows the move (coded
+        # InvalidStatusTransitionError otherwise). Lowercase and strict: a status
+        # that isn't a stage of the group allows no transition.
+        current_status, new_status = lifecycle_service.check_transition(
+            db, 'data_contract', contract, new_status
+        )
+        return contract, current_status, new_status
+
+    @staticmethod
+    def _run_transition_gates(
+        db, contract, current_status: str, new_status: str, current_user: Optional[str],
+        deprecation: Optional[DeprecationDetails], close_requests: bool = True,
+    ) -> None:
+        """The before_status_change gates of a transition (``run_status_gates``)."""
+        # (a gate that errors refuses the transition when it is fail_closed, #1103);
+        # the deprecation fields are checked after the certified guard, before the gates
+        from src.common.workflow_triggers import run_status_gates
+        from src.models.process_workflows import EntityType as WFEntityType
+        contract_id = str(contract.id)
+        run_status_gates(
+            db,
+            entity_type=WFEntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            from_status=current_status,
+            to_status=new_status,
+            entity_name=contract.name,
+            entity_data={"name": contract.name, "status": current_status},
+            user_email=current_user,
+            before_gates=lambda: check_lifecycle_fields(
+                db, 'data_contract', contract_id, new_status, deprecation
+            ),
+            close_requests=close_requests,
+        )
+
+    def check_transition_gates(
+        self, db, contract_id: str, new_status: str, current_user: Optional[str] = None,
+        deprecation: Optional[DeprecationDetails] = None,
+    ) -> None:
+        """Run a transition's checks and before_status_change gates without writing it.
+
+        For a caller that writes other changes first and the status after them
+        (``transition_status(gates_checked=True)``), so a refused transition
+        leaves those changes unwritten too. Raises as ``transition_status`` does.
+        """
+        contract, current_status, new_status = self._transition_target(
+            db, contract_id, new_status,
+        )
+        self._run_transition_gates(
+            db, contract, current_status, new_status, current_user, deprecation,
+            close_requests=False,
+        )
 
     # --- DQX Profiling Methods ---
     

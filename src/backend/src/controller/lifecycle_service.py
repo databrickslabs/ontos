@@ -1101,15 +1101,22 @@ class LifecycleService:
                     raise LifecycleGroupNotFoundError(
                         f"Lifecycle stage group '{group_id}' not found", groupId=group_id,
                     )
-                # The token as stored now, read under a row lock (``FOR UPDATE`` on
-                # Postgres, held until the commit): a save committed since the row was
-                # loaded is seen, and a concurrent save waits for this one, then sees
-                # the token it wrote
-                stored_token = db.execute(
-                    select(LifecycleStageGroupDb.updated_at)
+                # The row as stored now, read under a lock (``FOR UPDATE`` on Postgres,
+                # held until the commit) and refreshed, so a save committed since the
+                # first read is seen, a concurrent save waits for this one, and every
+                # check below sees current values
+                locked = db.execute(
+                    select(LifecycleStageGroupDb)
                     .where(LifecycleStageGroupDb.id == group_id)
                     .with_for_update()
-                ).scalar_one()
+                    .execution_options(populate_existing=True)
+                ).scalar_one_or_none()
+                if locked is None:  # deleted since the first read
+                    raise LifecycleGroupNotFoundError(
+                        f"Lifecycle stage group '{group_id}' not found", groupId=group_id,
+                    )
+                row = locked
+                stored_token = row.updated_at
                 if expected_updated_at is not None and \
                         _utc(stored_token) != _utc(expected_updated_at):
                     raise LifecycleGroupConflictError(

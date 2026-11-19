@@ -93,7 +93,7 @@ export type ColumnProperty = {
   precision?: number
   // Date constraints
   format?: string
-  timezone?: string
+  timezone?: string | boolean
   customFormat?: string
   // Array constraints
   itemType?: string

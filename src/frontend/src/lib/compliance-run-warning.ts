@@ -18,3 +18,40 @@ export function complianceRunWarningText(t: TFunction, run: ComplianceRunWarning
     defaultValue: run.warning_code,
   }) as string;
 }
+
+/** The score and coverage of a run, as the API returns them. */
+export interface ComplianceRunScoreFields {
+  score?: number | null;
+  coverage?: { evaluated?: number; not_evaluated?: number } | null;
+}
+
+/**
+ * The score of a run ("85%"), or "No score" for a run that has none: it failed,
+ * or evaluated no object (all not evaluated, or none matched).
+ */
+export function complianceRunScoreText(t: TFunction, run: ComplianceRunScoreFields): string {
+  if (run.score === null || run.score === undefined) {
+    return t('compliance:runScoreCoverage.noScore') as string;
+  }
+  return `${run.score}%`;
+}
+
+/**
+ * How many objects the score is measured on, when some were not evaluated
+ * ("50 of 5000 objects evaluated"); an empty string when all were.
+ */
+export function complianceRunCoverageText(t: TFunction, run: ComplianceRunScoreFields): string {
+  const evaluated = run.coverage?.evaluated ?? 0;
+  const notEvaluated = run.coverage?.not_evaluated ?? 0;
+  if (!notEvaluated) return '';
+  return t('compliance:runScoreCoverage.coverage', {
+    evaluated,
+    total: evaluated + notEvaluated,
+  }) as string;
+}
+
+/** The note for results on objects the viewer can't read; empty when there are none. */
+export function complianceHiddenResultsText(t: TFunction, hiddenCount?: number | null): string {
+  if (!hiddenCount) return '';
+  return t('compliance:runScoreCoverage.hiddenResults', { count: hiddenCount }) as string;
+}

@@ -178,6 +178,11 @@
     "workspace_client_unavailable": "De Databricks-workspace is niet beschikbaar en deze regel controleert Unity Catalog-objecten, dus kon hij niet worden uitgevoerd.",
     "tags_load_failed": "De tags van de {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd."
   },
+  "runScoreCoverage": {
+    "noScore": "Geen score",
+    "coverage": "{{evaluated}} van {{total}} objecten geëvalueerd; de overige tellen niet mee in de score.",
+    "hiddenResults": "{{count}} resultaten gaan over Unity Catalog-objecten die u niet kunt lezen en worden daarom niet getoond."
+  },
   "saveErrors": {
     "rule_trailing_input": "De regel bevat ongeldige invoer, vanaf regel {{line}}, kolom {{column}} ('{{text}}'). Alles vanaf dat punt zou worden genegeerd, waardoor de regel minder controleert dan er staat. Verwijder het of corrigeer de syntaxis.",
     "llm_check_criterion_not_literal": "LLM_CHECK verwacht een tekst en een criterium als string-literal, bijvoorbeeld LLM_CHECK(t.comment, 'states the grain of the table')."

@@ -178,6 +178,11 @@
     "workspace_client_unavailable": "El workspace de Databricks no está disponible y esta regla comprueba objetos de Unity Catalog, por lo que no se pudo ejecutar.",
     "tags_load_failed": "No se pudieron cargar las etiquetas de las entidades {{entityType}}, por lo que no se pudo evaluar la regla."
   },
+  "runScoreCoverage": {
+    "noScore": "Sin puntuación",
+    "coverage": "{{evaluated}} de {{total}} objetos evaluados; los demás no cuentan en la puntuación.",
+    "hiddenResults": "{{count}} resultados son de objetos de Unity Catalog que no puede leer, por lo que no se muestran."
+  },
   "saveErrors": {
     "rule_trailing_input": "La regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Todo lo que sigue se ignoraría, y la regla comprobaría menos de lo que dice. Elimínelo o corrija la sintaxis.",
     "llm_check_criterion_not_literal": "LLM_CHECK recibe un texto y un criterio escrito como literal de cadena, por ejemplo LLM_CHECK(t.comment, 'states the grain of the table')."

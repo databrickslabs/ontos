@@ -178,6 +178,11 @@
     "workspace_client_unavailable": "Il workspace Databricks non è disponibile e questa regola controlla oggetti di Unity Catalog, quindi non è stato possibile eseguirla.",
     "tags_load_failed": "Non è stato possibile caricare i tag delle entità {{entityType}}, quindi non è stato possibile valutare la regola."
   },
+  "runScoreCoverage": {
+    "noScore": "Nessun punteggio",
+    "coverage": "{{evaluated}} oggetti valutati su {{total}}; gli altri non rientrano nel punteggio.",
+    "hiddenResults": "{{count}} risultati riguardano oggetti di Unity Catalog che non puoi leggere, quindi non sono elencati."
+  },
   "saveErrors": {
     "rule_trailing_input": "La regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Tutto ciò che segue verrebbe ignorato e la regola verificherebbe meno di quanto dichiara. Rimuovila o correggi la sintassi.",
     "llm_check_criterion_not_literal": "LLM_CHECK accetta un testo e un criterio scritto come stringa letterale, ad esempio LLM_CHECK(t.comment, 'states the grain of the table')."

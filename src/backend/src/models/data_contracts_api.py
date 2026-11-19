@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
-from src.common.odcs_api_version import normalized_api_version
+from src.common.odcs_api_version import normalize_odcs_api_version, normalized_api_version
 
 if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed
@@ -424,7 +424,8 @@ class DataContractBase(BaseModel):
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
     # Required by ODCS. Read as ``apiVersion`` (the documented spelling) or ``api_version``
-    # (the name wins when both are sent)
+    # (the name wins when both are sent); refused outside the ODCS versions, null included
+    # (coded 422 odcs_api_version_unsupported)
     apiVersion: str = Field(
         'v3.1.0', alias='api_version',
         validation_alias=AliasChoices('apiVersion', 'api_version'),
@@ -448,8 +449,7 @@ class DataContractBase(BaseModel):
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
 
-    # Spelling only ('3.0.2' -> 'v3.0.2'); a value outside ODCS is stored as sent
-    _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
+    _api_version = field_validator('apiVersion', mode='before')(normalize_odcs_api_version)
 
     class Config:
         # The create dialogs and the wizard send the field names (dataProduct, tenant,
@@ -588,7 +588,7 @@ class DataContractUpdate(BaseModel):
     class Config:
         populate_by_name = True
 
-    # Spelling only ('3.0.2' -> 'v3.0.2'), as on create
+    # Spelling only: the manager refuses a change to a value outside ODCS
     _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
 
 

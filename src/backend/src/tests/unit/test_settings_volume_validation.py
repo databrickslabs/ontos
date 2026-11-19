@@ -196,3 +196,26 @@ def test_clearing_the_volume_checks_the_volume_in_the_env_file(db_session, tmp_p
 
     with pytest.raises(VolumeInvalidError):
         _save(manager, {"databricks_volume": ""})
+
+
+def test_an_old_stored_volume_is_normalised_on_load(db_session, tmp_path, monkeypatch):
+    monkeypatch.delenv("DATABRICKS_VOLUME", raising=False)
+    db_session.add(AppSettingDb(key="DATABRICKS_VOLUME", value="//Volumes/c/s/v/"))
+    db_session.flush()
+
+    manager = _real_manager(db_session, tmp_path, "")
+
+    assert manager._settings.DATABRICKS_VOLUME == "/Volumes/c/s/v"
+
+
+def test_an_old_env_volume_is_normalised_at_startup_and_on_clear(
+    db_session, tmp_path, monkeypatch
+):
+    monkeypatch.delenv("DATABRICKS_VOLUME", raising=False)
+    manager = _real_manager(db_session, tmp_path, "DATABRICKS_VOLUME=//Volumes/c/s/v\n")
+    assert manager._settings.DATABRICKS_VOLUME == "/Volumes/c/s/v"
+    _save(manager, {"databricks_volume": "other_vol"})
+
+    _save(manager, {"databricks_volume": ""})
+
+    assert manager._settings.DATABRICKS_VOLUME == "/Volumes/c/s/v"

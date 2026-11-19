@@ -189,7 +189,12 @@ class SettingsManager:
         self._client = workspace_client
         # DATABRICKS_VOLUME as loaded at startup (environment or .env), before any stored
         # override is applied: what clearing the override returns to
-        self._startup_volume: Optional[str] = getattr(settings, 'DATABRICKS_VOLUME', None) or None
+        # (in its canonical form, so an old '//Volumes/c/s/v' resolves as a volume)
+        self._startup_volume: Optional[str] = canonical_volume_value(
+            getattr(settings, 'DATABRICKS_VOLUME', None))
+        if self._startup_volume and self._startup_volume != getattr(
+                settings, 'DATABRICKS_VOLUME', None):
+            self._settings.DATABRICKS_VOLUME = self._startup_volume
         # Available jobs derive from workflows on disk
         self._available_jobs: List[str] = []
         self._installations: Dict[str, WorkflowInstallation] = {}
@@ -321,8 +326,13 @@ class SettingsManager:
                 logger.debug(f"Loaded DATABRICKS_SCHEMA from database: {all_settings['DATABRICKS_SCHEMA']}")
             
             if 'DATABRICKS_VOLUME' in all_settings and all_settings['DATABRICKS_VOLUME']:
-                self._settings.DATABRICKS_VOLUME = all_settings['DATABRICKS_VOLUME']
-                logger.debug(f"Loaded DATABRICKS_VOLUME from database: {all_settings['DATABRICKS_VOLUME']}")
+                # Stored values from before the canonical form (e.g. '//Volumes/c/s/v') are
+                # normalised on load, as `_validate_volume_settings` skips unchanged values
+                self._settings.DATABRICKS_VOLUME = (
+                    canonical_volume_value(all_settings['DATABRICKS_VOLUME'])
+                    or all_settings['DATABRICKS_VOLUME'])
+                logger.debug(
+                    f"Loaded DATABRICKS_VOLUME from database: {self._settings.DATABRICKS_VOLUME}")
             
             # Audit log directory
             if 'APP_AUDIT_LOG_DIR' in all_settings and all_settings['APP_AUDIT_LOG_DIR']:

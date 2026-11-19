@@ -36,6 +36,6 @@
     }
   },
   "branding": {
-    "poweredBy": "Powered by {{name}}"
+    "poweredBy": "Propulsé par {{name}}"
   }
 }

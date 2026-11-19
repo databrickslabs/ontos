@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from typing import Any, Dict, FrozenSet, Union, Optional, List
 import json # For handling JSON strings
@@ -46,30 +47,55 @@ def _is_actionable():
 APPROVAL_ACTION_TYPE = 'workflow_approval'
 
 
+# The JSON whitespace characters, also what the recipient match strips (Python's strip() in
+# NotificationsManager strips them too; it also strips \v, \f and Unicode spaces, which no
+# recipient written by the app carries)
+WHITESPACE = (' ', '\t', '\n', '\r')
+
+# Rows created before this instant count as decided once read, for every action type but
+# approvals. Older builds recorded a decided request only as read; this fix (#1526) has every
+# request decision write the ``handled`` marker, so a request created from this instant on is
+# decided only by the marker, and one that was merely opened in the bell stays pending. A
+# request that an older build (still running after this date) decided stays in My actions, as
+# it did before the fix; it is never dropped.
+LEGACY_READ_DECIDED_BEFORE = datetime(2026, 11, 20, tzinfo=timezone.utc)
+
+
 def _without_json_whitespace(column):
     """``column`` without the four JSON whitespace characters. Outside strings they are only
     formatting, and a quote inside a string is escaped, so ``"handled":true`` in the result is
     that key with that value, whatever the spacing. ``replace`` works on SQLite and Postgres
     alike and, unlike a JSON cast, does not fail the query on a payload that is not JSON."""
-    for char in (' ', '\t', '\n', '\r'):
+    for char in WHITESPACE:
         column = func.replace(column, char, '')
     return column
+
+
+def without_whitespace(value: str) -> str:
+    """The Python side of ``_without_json_whitespace``, for the values a column is compared to."""
+    for char in WHITESPACE:
+        value = value.replace(char, '')
+    return value
 
 
 def _is_decided():
     """Decided: the ``handled`` marker that approval and request decisions write into
     ``action_payload``, or a delivery's ``completed`` marker, with any JSON spacing.
 
-    ``read`` decides every action type but approvals. Before the shared handle path wrote the
-    marker, ``read`` was the only record of a decided request, and access-grant and job-enable
-    requests have no decision path at all; the dedup and pending-delivery lookups already treat
-    a read row as done. An approval's decision has always written ``handled``, and opening it in
-    the bell sets ``read``, so a read approval without the marker is still pending.
+    ``read`` also decides a legacy row (created before ``LEGACY_READ_DECIDED_BEFORE``) of any
+    action type but approvals: before every request decision wrote the marker, ``read`` was the
+    only record of a decided request. A newer row needs the marker, since the bell sets ``read``
+    on click, so a request that was only opened stays pending. An approval's decision has always
+    written ``handled``, so a read approval without the marker is pending whatever its age.
     """
     payload = _without_json_whitespace(func.coalesce(NotificationDb.action_payload, ''))
     return or_(
         payload.contains('"handled":true'), payload.contains('"completed":true'),
-        and_(NotificationDb.read.is_(True), NotificationDb.action_type != APPROVAL_ACTION_TYPE),
+        and_(
+            NotificationDb.read.is_(True),
+            NotificationDb.action_type != APPROVAL_ACTION_TYPE,
+            NotificationDb.created_at < LEGACY_READ_DECIDED_BEFORE,
+        ),
     )
 
 
@@ -85,7 +111,12 @@ def _addressed_to(keys: Optional[RecipientKeys]):
         return _no_recipient()
     clauses = []
     if keys.identities:
-        clauses.append(func.lower(func.trim(NotificationDb.recipient)).in_(sorted(keys.identities)))
+        # Every space, tab and line break removed on both sides: a superset of the manager's
+        # strip(), which removes them at the ends only
+        identities = sorted({without_whitespace(identity) for identity in keys.identities})
+        clauses.append(
+            func.lower(_without_json_whitespace(NotificationDb.recipient)).in_(identities)
+        )
     if keys.names:
         clauses.append(NotificationDb.recipient.in_(sorted(keys.names)))
     if keys.role_ids:
@@ -122,20 +153,24 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
     def get_addressed_to(
         self, db: Session, *, keys: Optional[RecipientKeys], history_limit: int,
     ) -> List[NotificationDb]:
-        """Rows that may be addressed to one user, newest first.
+        """Rows that may be addressed to one user: the pending ones, then the history.
 
         Every pending actionable row (``action_required``, not decided yet) is returned, so an
         approval or request never drops out of My actions or the bell. The other rows, decided
-        actionable ones included, are capped at the newest ``history_limit``. ``keys=None``:
-        the rows with no recipient.
+        actionable ones included, are capped at the newest ``history_limit``. Each part is
+        newest first (``id`` breaks a tie); the split only serves the cap: the manager orders
+        the whole list newest first, and no client relies on pending rows coming first
+        (My actions selects them by type, the bell lists by date). ``keys=None``: the rows
+        with no recipient.
         """
         visible = _addressed_to(keys)
+        newest_first = (NotificationDb.created_at.desc(), NotificationDb.id.desc())
         pending = db.query(NotificationDb).filter(
             visible, _is_pending_actionable(),
-        ).order_by(NotificationDb.created_at.desc()).all()
+        ).order_by(*newest_first).all()
         history = db.query(NotificationDb).filter(
             visible, not_(_is_pending_actionable()),
-        ).order_by(NotificationDb.created_at.desc()).limit(history_limit).all()
+        ).order_by(*newest_first).limit(history_limit).all()
         return pending + history
 
     def get_by_action_type(
@@ -148,7 +183,7 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
         query = db.query(NotificationDb).filter(NotificationDb.action_type == action_type)
         if unread_only:
             query = query.filter(NotificationDb.read == False)  # noqa: E712
-        return query.order_by(NotificationDb.created_at.desc()).all()
+        return query.order_by(NotificationDb.created_at.desc(), NotificationDb.id.desc()).all()
 
     # Override create and update to handle potential JSON string conversion for payload
     # and explicit Enum -> String conversion for the 'type' field.

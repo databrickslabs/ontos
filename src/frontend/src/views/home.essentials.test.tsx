@@ -353,6 +353,35 @@ describe('Home by role home section', () => {
     expect(within(list).queryByText('No review request')).not.toBeInTheDocument();
   });
 
+  it('a failed later page keeps the rows, shows an alert and retries it', async () => {
+    owned = Array.from({ length: 30 }, (_, i) => ({
+      id: `m${i}`, name: `table_${i}`, location: `main.s.t${i}`, description: '',
+    }));
+    useEssentialsHomePreferencesStore.setState({ publishPageSize: 25 });
+    applyJourneyRole();
+    renderWithProviders(<Home />);
+    const publish = screen.getByTestId('essentials-section-publish');
+    const paging = await screen.findByTestId('essentials-publish-paging');
+    state.failures = { '/api/assets?owned_by_me=true&skip=25': 500 };
+    await act(async () => {
+      within(paging).getByRole('button', { name: 'Load more' }).click();
+    });
+    expect(await within(publish).findByRole('alert')).toBeInTheDocument();
+    const rows = () => within(screen.getByTestId('essentials-publish-gaps'))
+      .getAllByText('No description');
+    expect(rows()).toHaveLength(25);
+
+    state.failures = {};
+    state.calls = [];
+    await act(async () => {
+      within(publish).getByRole('button', { name: 'Retry' }).click();
+    });
+    await waitFor(() => expect(rows()).toHaveLength(30));
+    expect(state.calls).toContain('/api/assets?owned_by_me=true&skip=25&limit=25');
+    expect(within(publish).queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Showing 30 of your 30 assets.')).toBeInTheDocument();
+  });
+
   it('the pending count is the server total, not the size of the page read', async () => {
     state.routes['/api/access-grants/my-requests'] = {
       requests: [{ id: 'g1', entity_name: 'Sales tables', entity_id: 'e1',

@@ -36,18 +36,31 @@ class RunIdentity:
 
     @classmethod
     def for_request(cls, request: Any, settings: Optional[Any] = None) -> 'RunIdentity':
-        """The requesting user's identity (their OBO token), for runs they start."""
+        """The requesting user's identity (their OBO token), for runs they start.
+
+        Without a token, where the app's client may stand in
+        (``sp_fallback_allowed``), the client is the app's and
+        ``on_behalf_of_user`` turns False once it is built.
+        """
+        identity = cls(lambda: None, on_behalf_of_user=True)
+
         def user_client() -> Any:
             from fastapi import HTTPException
             from src.common.workspace_client import get_obo_workspace_client
             try:
-                return get_obo_workspace_client(request, settings)
+                client = get_obo_workspace_client(request, settings)
             except HTTPException as e:
                 # No token: the coded error itself, not the HTTP answer of a route
                 if isinstance(e.__cause__, UserTokenRequiredError):
                     raise e.__cause__ from None
                 raise
-        return cls(user_client, on_behalf_of_user=True)
+            if not request.headers.get('x-forwarded-access-token'):
+                # The service principal fallback: report the client it really is
+                identity.on_behalf_of_user = False
+            return client
+
+        identity._factory = user_client
+        return identity
 
     def workspace_client(self) -> Any:
         """The client, built on first use; raises what building it raises

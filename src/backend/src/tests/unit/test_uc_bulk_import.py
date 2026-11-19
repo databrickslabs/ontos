@@ -649,3 +649,38 @@ def test_update_adds_nothing_to_a_personal_draft_when_it_is_the_only_row_with_th
         assert conn.execute(text(
             "SELECT COUNT(*) FROM data_product_output_ports WHERE product_id = 'newer'"
         )).scalar() == 0
+
+
+def _dead_connection(engine, conn):
+    from sqlalchemy.exc import OperationalError
+
+    def execute(statement, *_args, **_kwargs):
+        if 'pg_advisory_unlock' in str(statement):
+            raise OperationalError('SELECT pg_advisory_unlock', {}, Exception('server closed'))
+        return MagicMock(scalar=MagicMock(return_value=True))
+
+    conn.execute.side_effect = execute
+
+
+def test_a_lock_connection_that_died_does_not_mask_a_successful_run(capsys):
+    engine, conn = _postgres_engine(lock_free=True)
+    _dead_connection(engine, conn)
+
+    with job.single_flight(engine) as acquired:
+        assert acquired is True
+
+    assert 'lock was lost' in capsys.readouterr().out
+    conn.close.assert_called_once()
+
+
+@pytest.mark.parametrize('code', [1, 3])
+def test_a_lock_connection_that_died_keeps_the_exit_code_of_the_run(code, capsys):
+    engine, conn = _postgres_engine(lock_free=True)
+    _dead_connection(engine, conn)
+
+    with pytest.raises(SystemExit) as exited:
+        with job.single_flight(engine):
+            sys.exit(code)
+
+    assert exited.value.code == code
+    assert 'lock was lost' in capsys.readouterr().out

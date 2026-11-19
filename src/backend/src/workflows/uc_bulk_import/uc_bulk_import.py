@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import DBAPIError
 
 from databricks.sdk import WorkspaceClient
 from sqlalchemy import create_engine
@@ -158,10 +159,15 @@ def single_flight(engine: Engine):
             yield acquired
         finally:
             if acquired:
-                released = conn.execute(
-                    text("SELECT pg_advisory_unlock(hashtext(:name))"),
-                    {"name": IMPORT_LOCK_NAME},
-                ).scalar()
+                try:
+                    released = conn.execute(
+                        text("SELECT pg_advisory_unlock(hashtext(:name))"),
+                        {"name": IMPORT_LOCK_NAME},
+                    ).scalar()
+                except DBAPIError:
+                    # The connection died: the server dropped the lock with it. Raising
+                    # here would mask the run's result or exit code.
+                    released = False
                 if not released:
                     print("  ⚠ The import lock was lost during the run (its connection ended)")
     finally:

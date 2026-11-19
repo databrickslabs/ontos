@@ -102,6 +102,23 @@ def test_the_lock_is_held_outside_a_transaction(admin, lock_name):
         engine.dispose()
 
 
+def test_a_run_whose_lock_connection_was_terminated_finishes_normally(admin, lock_name, capsys):
+    engine = create_engine(_PG_URL)
+    try:
+        with job.single_flight(engine) as acquired:
+            assert acquired is True
+            with admin.begin() as conn:
+                conn.execute(text("""
+                    SELECT pg_terminate_backend(l.pid) FROM pg_locks l
+                    WHERE l.locktype = 'advisory' AND l.granted AND l.objsubid = 1
+                      AND ((l.classid::bigint << 32) | l.objid::bigint) = hashtext(:name)::bigint
+                """), {'name': lock_name})
+        # Reaching here: the unlock error did not mask the run
+        assert 'lock was lost' in capsys.readouterr().out
+    finally:
+        engine.dispose()
+
+
 def test_an_overlapping_run_does_not_get_the_lock(admin, lock_name):
     first, second = create_engine(_PG_URL), create_engine(_PG_URL)
     try:

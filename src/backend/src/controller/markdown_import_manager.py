@@ -77,6 +77,9 @@ _ENTITY_KINDS = {'data_domain': 'domain', 'asset': 'asset', 'concept': 'concept'
 MAX_FRONT_MATTER_BYTES = 32 * 1024
 # Entities one file may name (all kinds together); more fails the file.
 MAX_TARGETS_PER_FILE = 50
+# A file whose path is longer fails alone: the btree on source_path cannot index keys
+# over ~2.7 KB, so the insert would fail (``path_too_long``).
+MAX_SOURCE_PATH_BYTES = 1024
 
 
 class MarkdownImportPathInvalidError(CodedValueError):
@@ -254,6 +257,8 @@ class _TargetResolver:
         self._cache: Dict[Tuple[str, str], _Lookup] = {}
         # Built on the first concept name, once per import (one graph pass).
         self._concept_index: Any = None
+        # The index could not be built: not retried for the rest of the import
+        self._concept_index_failed = False
 
     def may_write(self, entity_type: str) -> bool:
         """Whether the caller may change documents on an entity of this type."""
@@ -323,11 +328,15 @@ class _TargetResolver:
 
     def _concept(self, value: str) -> _Lookup:
         # A failed lookup is not "not found": the file's concept documents stay.
-        if self._semantic is None:
+        if self._semantic is None or self._concept_index_failed:
             return None, 'lookup_failed'
         try:
             if self._concept_index is None:
-                self._concept_index = self._semantic.concept_name_index()
+                try:
+                    self._concept_index = self._semantic.concept_name_index()
+                except Exception:
+                    self._concept_index_failed = True
+                    raise
             iris = self._concept_index.find(value)
         except Exception:
             logger.warning("Concept lookup failed during Markdown import", exc_info=True)
@@ -563,6 +572,8 @@ class MarkdownImportManager:
         def failed(reason: str) -> MarkdownImportFileResult:
             return MarkdownImportFileResult(path=path, status='failed', reason=reason)
 
+        if len(path.encode('utf-8')) > MAX_SOURCE_PATH_BYTES:
+            return failed('path_too_long')
         if size is not None and size > MAX_FILE_BYTES:
             return failed('too_large')
         try:

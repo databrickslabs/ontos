@@ -83,6 +83,10 @@ _ENTITY_LINKS = {
     'concept': '/concepts/browser?concept={id}',
 }
 _DOCUMENT_ITEM_PREFIX = 'document::'
+# The search index keeps this much of an imported document's text (characters). A file
+# naming 50 entities has 50 rows in the index, each loaded at startup; the document's
+# content route serves the full text from the database.
+MAX_INDEXED_DESCRIPTION_CHARS = 16_000
 # Search shows an imported document to readers of its entity's feature, and
 # its content route serves it to them.
 ENTITY_FEATURES = {
@@ -328,7 +332,7 @@ class MetadataManager(SearchableAsset):
             type="document",
             feature_id=ENTITY_FEATURES[doc.entity_type],
             title=doc.title,
-            description=strip_front_matter(text),
+            description=strip_front_matter(text)[:MAX_INDEXED_DESCRIPTION_CHARS],
             link=link.format(id=urllib.parse.quote(str(doc.entity_id), safe='')),
             tags=[],
             extra_data={

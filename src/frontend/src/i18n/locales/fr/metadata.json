@@ -301,7 +301,8 @@
       "gone": "Le fichier n’est plus dans le dossier : ses documents ont été retirés de {{count}} entités.",
       "not_text": "Le fichier contient des caractères NUL ; ce n’est pas du texte.",
       "import_error": "Le fichier n'a pas pu être importé ; les autres l'ont été.",
-      "too_many_targets": "Le front matter nomme plus de 50 entités."
+      "too_many_targets": "Le front matter nomme plus de 50 entités.",
+      "path_too_long": "Le chemin du fichier est trop long pour être importé."
     },
     "errors": {
       "markdown_import_path_invalid": "« {{path}} » n’est pas un chemin dans un volume Unity Catalog. Utilisez /Volumes/<catalog>/<schema>/<volume>/<folder>.",
@@ -309,7 +310,8 @@
       "markdown_import_access_denied": "Vous ne pouvez pas lire « {{path}} ». Demandez READ VOLUME sur le volume.",
       "markdown_import_too_many_files": "« {{path}} » contient plus de {{max}} fichiers Markdown. Importez un dossier plus petit.",
       "failed": "L’importation a échoué.",
-      "markdown_import_in_progress": "Une autre importation Markdown est en cours. Réessayez lorsqu'elle sera terminée."
+      "markdown_import_in_progress": "Une autre importation Markdown est en cours. Réessayez lorsqu'elle sera terminée.",
+      "user_token_required": "Cet import nécessite votre jeton utilisateur Databricks, et la requête n'en a pas."
     },
     "warnings": {
       "empty_folder": "Aucun fichier Markdown trouvé ici : les documents importés auparavant depuis ce dossier ont été conservés."

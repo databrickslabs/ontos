@@ -53,6 +53,7 @@ const ERROR_CODES = new Set([
   'markdown_import_access_denied',
   'markdown_import_too_many_files',
   'markdown_import_in_progress',
+  'user_token_required',
 ]);
 
 const UNRESOLVED_KEYS: Record<string, string> = {

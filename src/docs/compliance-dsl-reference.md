@@ -372,8 +372,11 @@ tables; never one per table), restricted to the catalogs and schemas selected by
 `AND`-ed parts of the rule's `WHERE` that don't read these fields. A chunk is read only when
 the run gets to it, so a run that stops at its `limit` reads no more. The policies of one
 compliance-checks job run share the statements: a later policy that needs the same tags or
-lineage reuses them. A run sends at most 100 statements (a job run, 100 for all its
-policies); past that, the fields are not read (reason `budget_exceeded`):
+lineage reuses them. Each policy run sends at most 100 statements (in a job run, each
+policy has its own 100, and statements already read for an earlier policy don't count);
+past that, the fields are not read (reason `budget_exceeded`). A policy run spends at most
+15 minutes on these statements, from its start; past that, the statements still to send
+and the one running are not waited for (reason `timed_out`):
 
 - `tags` - The table's governed tags as `{key: value}`, read with `HAS_TAG` / `TAG`. Source:
   `system.information_schema.table_tags`. Column tags are not read
@@ -398,7 +401,12 @@ MATCH (v:view) ASSERT v.downstream_count > 0 OR HAS_TAG('deprecated')
 ```
 
 A statement that is still running after 50 seconds keeps running and is polled; one still
-running after 5 minutes is cancelled (reason `timed_out`).
+running after 5 minutes, or at the run's 15 minutes, is cancelled (reason `timed_out`), as is
+one whose polling fails, before it is retried.
+
+Only tables and views have tags in rules. On catalogs, schemas, functions and volumes, `tags`
+is not loaded: a rule that reads it (`MATCH (s:schema) ASSERT NOT HAS_TAG('x')`) reports
+each of them as not evaluated (reason `not_loaded`) instead of passing it.
 
 A transient error (the warehouse busy or starting, a rate limit, a network timeout) is
 retried twice with backoff before the source is reported as unavailable (reason
@@ -412,6 +420,16 @@ and its `ON_PASS` / `ON_FAIL` actions don't run. When the `WHERE` reads a missin
 entity is kept only if the `AND`-ed parts of the `WHERE` that don't read it hold. The run ends
 with the warning `rule_fields_unavailable` and the number of such entities. Fields from a
 source that could be read are still evaluated.
+
+A run that evaluated nothing (every entity not evaluated, or none matched), or that failed,
+has no score: the API returns `score: null` and the UI shows "No score". Each run also has
+`coverage` (`evaluated`, `not_evaluated`), shown when some entities were not evaluated, so a
+score measured on a few of many tables says so. The policy list, the stats and the trend use
+the policy's latest run that has a score.
+
+The results of a run list only the Unity Catalog objects the viewer can read: they are
+checked with the viewer's own token when the results are opened (one listing per schema),
+whoever started the run. The others are counted (`hidden_count`), not listed.
 
 ### Application Entities
 - `type` - Entity type
@@ -477,7 +495,7 @@ Extend the evaluator to support custom functions by modifying `evaluate_function
 - **WHERE Filtering**: Applied before ASSERT to reduce evaluations
 - **Tags and Lineage**: Read from system tables only when the rule uses them, once per
   chunk of a catalog's tables, only for the schemas a `WHERE` on catalog or schema selects,
-  and at most 100 statements per run
+  and at most 100 statements and 15 minutes per policy run
 - **Limits**: Use the `limit` parameter when testing rules
 
 ## Integration

@@ -21,6 +21,7 @@ import {
 import { useApi } from '@/hooks/use-api';
 import SchemaBrowser from '@/components/schema-importer/schema-browser';
 import type { Connection } from '@/types/connections';
+import { catalogMetadataUrl } from '@/components/data-contracts/odcs-logical-types';
 
 export interface CatalogSchemaResult {
   name: string;
@@ -41,12 +42,15 @@ interface InferFromCatalogDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onInfer: (schemas: CatalogSchemaResult[]) => void;
+  /** ODCS apiVersion of the target contract (decides timestamp / time column types). */
+  apiVersion?: string | null;
 }
 
 export default function InferFromCatalogDialog({
   isOpen,
   onOpenChange,
   onInfer,
+  apiVersion,
 }: InferFromCatalogDialogProps) {
   const { get: apiGet } = useApi();
   const { t } = useTranslation(['data-contracts', 'common']);
@@ -96,9 +100,7 @@ export default function InferFromCatalogDialog({
 
     try {
       for (const path of selectedPaths) {
-        const resp = await fetch(
-          `/api/schema-import/metadata/${selectedConnectionId}?path=${encodeURIComponent(path)}`
-        );
+        const resp = await fetch(catalogMetadataUrl(selectedConnectionId, path, apiVersion));
         if (!resp.ok) continue;
         const metadata = await resp.json();
 

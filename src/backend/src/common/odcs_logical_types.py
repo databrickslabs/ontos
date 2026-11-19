@@ -99,6 +99,13 @@ def logical_type_for_version(logical_type: str, api_version: Optional[str]) -> s
     return _V31_ONLY_FALLBACK.get(logical_type, logical_type)
 
 
+def odcs_column_logical_type(
+    stored: Optional[str], physical_type: Optional[str], api_version: Optional[str],
+) -> str:
+    """ODCS logical type of a column for a contract with ``api_version``."""
+    return logical_type_for_version(column_logical_type(stored, physical_type), api_version)
+
+
 def schemas_for_version(
     schemas: List[Dict[str, Any]], api_version: Optional[str],
 ) -> List[Dict[str, Any]]:

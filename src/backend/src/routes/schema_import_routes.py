@@ -8,7 +8,7 @@ and import selected resources as persisted Ontos assets.
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from src.common.database import get_db
@@ -22,6 +22,7 @@ from src.common.workspace_client import (
     get_obo_workspace_client, raise_user_token_required, sp_fallback_allowed,
 )
 from src.common.logging import get_logger
+from src.common.odcs_logical_types import odcs_column_logical_type
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.controller.connections_manager import ConnectionsManager
@@ -104,6 +105,16 @@ async def browse(
 async def get_asset_metadata(
     connection_id: UUID,
     path: str,
+    odcs: bool = Query(
+        False,
+        description="Return each column's logical_type as an ODCS logical type "
+        "(the connector's raw type name otherwise).",
+    ),
+    api_version: Optional[str] = Query(
+        None,
+        description="With odcs=true: ODCS apiVersion of the target contract; below v3.1.0, "
+        "timestamp columns become date and time columns string. Default: v3.1.0.",
+    ),
     db: DBSessionDep = None,
     manager: SchemaImportManager = Depends(_get_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
@@ -116,6 +127,11 @@ async def get_asset_metadata(
         metadata = connector.get_asset_metadata(path)
         if metadata is None:
             raise HTTPException(status_code=404, detail=f"No metadata found for path '{path}'")
+        if odcs and metadata.schema_info:
+            for column in metadata.schema_info.columns:
+                column.logical_type = odcs_column_logical_type(
+                    column.logical_type, column.data_type, api_version
+                )
         return metadata
     except HTTPException:
         raise

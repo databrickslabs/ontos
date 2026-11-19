@@ -3286,6 +3286,7 @@ export default function DataContractDetails() {
         isOpen={isInferFromCatalogOpen}
         onOpenChange={setIsInferFromCatalogOpen}
         onInfer={handleInferFromCatalog}
+        apiVersion={contract?.apiVersion}
       />
 
       <InferFromAssetDialog

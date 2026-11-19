@@ -342,7 +342,7 @@
       "assignTagValueSourceUnknown": "L’étape « {{step}} » utilise la source de valeur inconnue « {{source}} ».",
       "policyCheckPolicyMissing": "L'étape « {{step}} » nécessite une politique de conformité existante. Sélectionnez-en une dans les paramètres de l'étape.",
       "updateGate": {
-        "entityAction": "L'étape « {{step}} » est une action d'entité, qui ne peut pas s'exécuter dans un gate before update : elle resterait effectuée si la mise à jour est refusée. Supprimez l'étape ou déplacez-la dans un workflow on update."
+        "stepNotAllowed": "L'étape « {{step}} » ({{type}}) ne peut pas s'exécuter dans un gate before update : ce qu'elle fait resterait effectué si la mise à jour est refusée. Supprimez l'étape ou déplacez-la dans un workflow on update."
       },
       "branch": {
         "on_pass": "de réussite",
@@ -549,7 +549,7 @@
     "removedStepsHint": "Ces étapes ont été exécutées dans cette exécution, puis supprimées du workflow.",
     "stepErrors": {
       "rule_where_evaluation_failed": "La clause WHERE de la politique '{{policyName}}' n'a pas pu être évaluée sur {{entityType}} {{entityId}}",
-      "update_gate_entity_action": "Une action d'entité ne peut pas s'exécuter dans un gate before update : elle resterait effectuée si la mise à jour est refusée. Supprimez l'étape ou déplacez-la dans un workflow on update.",
+      "update_gate_step_not_allowed": "Une étape {{stepType}} ne peut pas s'exécuter dans un gate before update : ce qu'elle fait resterait effectué si la mise à jour est refusée. Supprimez l'étape ou déplacez-la dans un workflow on update.",
       "approval_rejected": "Demande refusée",
       "output_port_contracts_missing": "Publication impossible : les ports de sortie {{ports}} doivent avoir des contrats de données assignés",
       "output_port_contracts_unapproved": "Publication impossible : ces ports de sortie ont des contrats non approuvés : {{ports}}. Les contrats doivent d'abord être approuvés.",

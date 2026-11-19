@@ -119,22 +119,29 @@ ASSIGN_TAG_VALUE_SOURCES = ('current_user', 'project_name', 'entity_name', 'time
 
 
 def _update_gate_step_errors(workflow: ProcessWorkflowCreate) -> List[str]:
-    """Entity action steps in a ``before_update`` gate are refused.
+    """Steps a ``before_update`` gate can't have are refused.
 
-    They certify, publish or unpublish the entity and commit it as the gate runs,
-    so a later step, or another gate, that refuses the update would leave the
-    action done. Tag steps are fine: the update writes their change (#1403).
+    Entity actions, asset reviews, deliveries and UC grants commit or act outside
+    the database as the gate runs, so a later step, or another gate, that refuses
+    the update would leave them done (``UPDATE_GATE_REFUSED_STEP_TYPES``). Tag
+    steps are fine: the update writes their change (#1403).
     """
+    from src.common.workflow_executor import (
+        UPDATE_GATE_REFUSED_STEP_TYPES, UPDATE_GATE_STEP_NOT_ALLOWED,
+    )
+
     if workflow.trigger is None or workflow.trigger.type != TriggerType.BEFORE_UPDATE:
         return []
-    return [
-        CodedMessage(
-            f"Step '{step.step_id}': an entity action can't run in a before_update gate, "
-            "since it would stay done when the update is refused",
-            'update_gate_entity_action', step=step.step_id,
-        )
-        for step in workflow.steps if step.step_type == StepType.ENTITY_ACTION
-    ]
+    errors = []
+    for step in workflow.steps:
+        step_type = getattr(step.step_type, 'value', step.step_type)
+        if step_type in UPDATE_GATE_REFUSED_STEP_TYPES:
+            errors.append(CodedMessage(
+                f"Step '{step.step_id}': a {step_type} step can't run in a before_update "
+                "gate, since what it does would stay done when the update is refused",
+                UPDATE_GATE_STEP_NOT_ALLOWED, step=step.step_id, stepType=step_type,
+            ))
+    return errors
 
 
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:

@@ -67,21 +67,23 @@ describe('workflowValidationIssueText', () => {
     );
   });
 
-  it('translates an entity action step refused in a before_update gate', async () => {
+  it('translates a step a before_update gate cannot have', async () => {
     const issue = {
-      code: 'update_gate_entity_action',
-      message: "Step 'publish': an entity action can't run in a before_update gate",
-      params: { step: 'publish' },
+      code: 'update_gate_step_not_allowed',
+      message: "Step 'publish': a entity_action step can't run in a before_update gate",
+      params: { step: 'publish', stepType: 'entity_action' },
     };
     expect(workflowValidationIssueText(issue, i18n.t)).toBe(
-      'Step "publish" is an entity action, which can\'t run in a before update gate: '
-      + 'it would stay done when the update is refused. '
+      'Step "publish" (Entity Action) can\'t run in a before update gate: '
+      + 'what it does would stay done when the update is refused. '
       + 'Remove the step, or move it to an on update workflow.',
     );
     await i18n.changeLanguage('pt');
-    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
-      'A etapa "publish" é uma ação de entidade, que não pode rodar em um gate before update: '
-      + 'ela continuaria feita quando a atualização fosse recusada. '
+    expect(workflowValidationIssueText(
+      { ...issue, params: { step: 'ship', stepType: 'delivery' } }, i18n.t,
+    )).toBe(
+      'A etapa "ship" (Entrega) não pode rodar em um gate before update: '
+      + 'o que ela faz continuaria feito quando a atualização fosse recusada. '
       + 'Remova a etapa ou mova-a para um fluxo on update.',
     );
   });

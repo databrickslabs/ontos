@@ -342,7 +342,7 @@
       "assignTagValueSourceUnknown": "A etapa \"{{step}}\" usa a fonte de valor desconhecida \"{{source}}\".",
       "policyCheckPolicyMissing": "A etapa \"{{step}}\" precisa de uma política de conformidade existente. Selecione uma nas configurações da etapa.",
       "updateGate": {
-        "entityAction": "A etapa \"{{step}}\" é uma ação de entidade, que não pode rodar em um gate before update: ela continuaria feita quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update."
+        "stepNotAllowed": "A etapa \"{{step}}\" ({{type}}) não pode rodar em um gate before update: o que ela faz continuaria feito quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update."
       },
       "branch": {
         "on_pass": "sucesso",
@@ -549,7 +549,7 @@
     "removedStepsHint": "Estas etapas rodaram nesta execução e depois foram removidas do workflow.",
     "stepErrors": {
       "rule_where_evaluation_failed": "Não foi possível avaliar a cláusula WHERE da política '{{policyName}}' em {{entityType}} {{entityId}}",
-      "update_gate_entity_action": "Uma ação de entidade não pode rodar em um gate before update: ela continuaria feita quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update.",
+      "update_gate_step_not_allowed": "Uma etapa {{stepType}} não pode rodar em um gate before update: o que ela faz continuaria feito quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update.",
       "approval_rejected": "Solicitação negada",
       "output_port_contracts_missing": "Não é possível publicar: as portas de saída {{ports}} precisam ter contratos de dados atribuídos",
       "output_port_contracts_unapproved": "Não é possível publicar: estas portas de saída têm contratos não aprovados: {{ports}}. Os contratos precisam ser aprovados primeiro.",

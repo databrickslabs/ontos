@@ -342,7 +342,7 @@
       "assignTagValueSourceUnknown": "Stap \"{{step}}\" gebruikt de onbekende waardebron \"{{source}}\".",
       "policyCheckPolicyMissing": "Stap \"{{step}}\" heeft een bestaand compliancebeleid nodig. Selecteer er een in de instellingen van de stap.",
       "updateGate": {
-        "entityAction": "Stap \"{{step}}\" is een entiteitsactie, die niet in een before-update-gate kan draaien: die zou uitgevoerd blijven als de update wordt geweigerd. Verwijder de stap of verplaats hem naar een on-update-workflow."
+        "stepNotAllowed": "Stap \"{{step}}\" ({{type}}) kan niet in een before-update-gate draaien: wat hij doet zou blijven staan als de update wordt geweigerd. Verwijder de stap of verplaats hem naar een on-update-workflow."
       },
       "branch": {
         "on_pass": "succes",
@@ -549,7 +549,7 @@
     "removedStepsHint": "Deze stappen zijn in deze uitvoering uitgevoerd en later uit de workflow verwijderd.",
     "stepErrors": {
       "rule_where_evaluation_failed": "De WHERE-clausule van beleid '{{policyName}}' kon niet worden geëvalueerd op {{entityType}} {{entityId}}",
-      "update_gate_entity_action": "Een entiteitsactie kan niet in een before-update-gate draaien: die zou uitgevoerd blijven als de update wordt geweigerd. Verwijder de stap of verplaats hem naar een on-update-workflow.",
+      "update_gate_step_not_allowed": "Een {{stepType}}-stap kan niet in een before-update-gate draaien: wat hij doet zou blijven staan als de update wordt geweigerd. Verwijder de stap of verplaats hem naar een on-update-workflow.",
       "approval_rejected": "Verzoek afgewezen",
       "output_port_contracts_missing": "Publiceren niet mogelijk: de uitvoerpoorten {{ports}} moeten datacontracten toegewezen hebben",
       "output_port_contracts_unapproved": "Publiceren niet mogelijk: deze uitvoerpoorten hebben niet-goedgekeurde contracten: {{ports}}. De contracten moeten eerst worden goedgekeurd.",

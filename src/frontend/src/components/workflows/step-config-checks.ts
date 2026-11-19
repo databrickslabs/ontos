@@ -1,7 +1,9 @@
 import type { TFunction } from 'i18next';
 
-import type { EntityType, TriggerType, WorkflowStepCreate } from '@/types/process-workflow';
-import { getEntityTypeLabel, getTriggerTypeLabel } from '@/lib/workflow-labels';
+import type {
+  EntityType, StepType, TriggerType, WorkflowStepCreate,
+} from '@/types/process-workflow';
+import { getEntityTypeLabel, getStepTypeLabel, getTriggerTypeLabel } from '@/lib/workflow-labels';
 import { isScheduleIssue, scheduleIssueText } from './trigger-schedule-fields';
 
 // Checks of Conditional and Script step configs the designer runs before it
@@ -98,10 +100,11 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
         source: params.source,
         defaultValue: fallback,
       });
-    // An entity action commits as the gate runs, so a before_update gate can't have one (#1403)
-    case 'update_gate_entity_action':
-      return t('workflows:designer.validationIssues.updateGate.entityAction', {
+    // A step that commits or acts outside the app as the gate runs (#1403)
+    case 'update_gate_step_not_allowed':
+      return t('workflows:designer.validationIssues.updateGate.stepNotAllowed', {
         step: params.step,
+        type: getStepTypeLabel(String(params.stepType) as StepType, t),
         defaultValue: fallback,
       });
     case 'policy_check_policy_missing':

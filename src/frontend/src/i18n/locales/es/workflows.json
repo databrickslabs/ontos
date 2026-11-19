@@ -342,7 +342,7 @@
       "assignTagValueSourceUnknown": "El paso «{{step}}» usa la fuente de valor desconocida «{{source}}».",
       "policyCheckPolicyMissing": "El paso \"{{step}}\" necesita una política de cumplimiento existente. Seleccione una en la configuración del paso.",
       "updateGate": {
-        "entityAction": "El paso \"{{step}}\" es una acción de entidad, que no puede ejecutarse en un gate before update: quedaría hecha cuando se rechace la actualización. Elimine el paso o muévalo a un flujo on update."
+        "stepNotAllowed": "El paso \"{{step}}\" ({{type}}) no puede ejecutarse en un gate before update: lo que hace quedaría hecho cuando se rechace la actualización. Elimine el paso o muévalo a un flujo on update."
       },
       "branch": {
         "on_pass": "éxito",
@@ -549,7 +549,7 @@
     "removedStepsHint": "Estos pasos se ejecutaron en esta ejecución y luego se eliminaron del workflow.",
     "stepErrors": {
       "rule_where_evaluation_failed": "No se pudo evaluar la cláusula WHERE de la política '{{policyName}}' en {{entityType}} {{entityId}}",
-      "update_gate_entity_action": "Una acción de entidad no puede ejecutarse en un gate before update: quedaría hecha cuando se rechace la actualización. Elimine el paso o muévalo a un flujo on update.",
+      "update_gate_step_not_allowed": "Un paso {{stepType}} no puede ejecutarse en un gate before update: lo que hace quedaría hecho cuando se rechace la actualización. Elimine el paso o muévalo a un flujo on update.",
       "approval_rejected": "Solicitud denegada",
       "output_port_contracts_missing": "No se puede publicar: los puertos de salida {{ports}} deben tener contratos de datos asignados",
       "output_port_contracts_unapproved": "No se puede publicar: estos puertos de salida tienen contratos no aprobados: {{ports}}. Primero hay que aprobar los contratos.",

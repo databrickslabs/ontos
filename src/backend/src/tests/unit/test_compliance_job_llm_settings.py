@@ -9,6 +9,7 @@ environment variables before it reads its config.
 import argparse
 import os
 import re
+import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -122,6 +123,39 @@ def test_empty_parameters_keep_the_job_environment(monkeypatch):
 
     assert os.environ['LLM_ENDPOINT'] == 'env-endpoint'
     assert 'LLM_ENABLED' not in os.environ
+
+
+def test_main_sets_the_llm_arguments_as_env_before_the_config(monkeypatch):
+    """Scheduled runs get the app's LLM settings as --llm_* task arguments (#1479)."""
+    names = ('LLM_ENABLED', 'LLM_ENDPOINT', 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN')
+    for name in names:
+        monkeypatch.setenv(name, 'job-env')
+    seen = {}
+
+    class ConfigRead(Exception):
+        pass
+
+    def init_config(ws):
+        seen.update({name: os.environ.get(name) for name in names})
+        raise ConfigRead  # nothing after the config is needed here
+
+    monkeypatch.setattr(job, 'WorkspaceClient', lambda **_: SimpleNamespace())
+    monkeypatch.setattr(job, '_initialize_application_config', init_config)
+    monkeypatch.setattr(sys, 'argv', [
+        'compliance_checks.py', '--lakebase_instance_name', 'local',
+        '--postgres_host', 'localhost', '--postgres_db', 'db',
+        '--llm_enabled', 'true', '--llm_endpoint', 'db-endpoint',
+        '--llm_check_max_calls_per_run', '',
+    ])
+
+    with pytest.raises(ConfigRead):
+        job.main()
+
+    # An empty budget keeps the job's own env
+    assert seen == {
+        'LLM_ENABLED': 'true', 'LLM_ENDPOINT': 'db-endpoint',
+        'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN': 'job-env',
+    }
 
 
 def _settings_manager(db_session, cluster_id='test-cluster'):

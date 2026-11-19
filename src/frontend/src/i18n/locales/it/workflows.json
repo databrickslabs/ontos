@@ -549,6 +549,7 @@
     "removedStepsHint": "Questi passaggi sono stati eseguiti in questa esecuzione e poi rimossi dal workflow.",
     "stepErrors": {
       "rule_where_evaluation_failed": "Non è stato possibile valutare la clausola WHERE della policy '{{policyName}}' su {{entityType}} {{entityId}}",
+      "update_gate_entity_action": "Un'azione sull'entità non può essere eseguita in un gate before update: resterebbe eseguita quando l'aggiornamento viene rifiutato. Rimuovi il passaggio o spostalo in un workflow on update.",
       "approval_rejected": "Richiesta rifiutata",
       "output_port_contracts_missing": "Impossibile pubblicare: le porte di output {{ports}} devono avere contratti di dati assegnati",
       "output_port_contracts_unapproved": "Impossibile pubblicare: queste porte di output hanno contratti non approvati: {{ports}}. I contratti devono prima essere approvati.",

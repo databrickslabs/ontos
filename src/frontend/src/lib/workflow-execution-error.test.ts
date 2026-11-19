@@ -35,6 +35,22 @@ describe('workflowExecutionErrorText', () => {
     }
   });
 
+  it('translates an entity action refused in a before_update gate', async () => {
+    await i18n.changeLanguage('pt');
+    try {
+      expect(workflowExecutionErrorText(i18n.t, {
+        error_message: "An entity action can't run in a before_update gate",
+        error_code: 'update_gate_entity_action',
+        error_params: {},
+      }, asStored)).toBe(
+        'Uma ação de entidade não pode rodar em um gate before update: ela continuaria feita '
+        + 'quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update.',
+      );
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
   it('translates a WHERE clause that could not be evaluated', async () => {
     await i18n.changeLanguage('pt');
     try {

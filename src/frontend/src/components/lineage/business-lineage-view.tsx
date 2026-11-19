@@ -221,9 +221,13 @@ function BusinessLineageViewInner({
   // Focus re-lays out only the path; dim mode keeps the full layout
   const renderLayout = useMemo<LayoutResult | null>(() => {
     if (!layout || !filteredGraph || !highlight || !focusMode) return layout;
-    // Rows on the path always show, whatever the detail level
-    return layoutLineageGraph(focusGraph(filteredGraph, highlight), { ...layoutConfig, alwaysShow: highlight.nodes });
-  }, [layout, filteredGraph, highlight, focusMode, layoutConfig]);
+    // The detail level still applies; only the selected row is kept visible
+    // at Structure detail, not every field on the path
+    return layoutLineageGraph(focusGraph(filteredGraph, highlight), {
+      ...layoutConfig,
+      alwaysShow: selectedId ? new Set([selectedId]) : null,
+    });
+  }, [layout, filteredGraph, highlight, focusMode, layoutConfig, selectedId]);
 
   // A new graph (entity, direction, breadth) starts without a selection
   useEffect(() => { setSelectedId(null); }, [graph]);

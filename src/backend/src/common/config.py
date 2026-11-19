@@ -164,7 +164,9 @@ class Settings(BaseSettings):
         0, env='WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS',
     )
     # Scheduled runs run on a pool of this many threads per instance, so one long
-    # run doesn't hold up the other scheduled workflows.
+    # run doesn't hold up the other scheduled workflows. The scheduler and its runs
+    # use an engine of their own with MAX_WORKERS + 1 connections (no overflow), on
+    # top of DB_POOL_SIZE + DB_MAX_OVERFLOW: count them in the database's limit.
     WORKFLOW_SCHEDULER_MAX_WORKERS: int = Field(4, env='WORKFLOW_SCHEDULER_MAX_WORKERS')
     # On shutdown, wait up to this many seconds for scheduled runs in progress. A
     # run cut off by the exit is not run again (each slot runs at most once).

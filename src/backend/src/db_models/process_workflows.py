@@ -59,6 +59,8 @@ class ProcessWorkflowDb(Base):
     # When the trigger's type, schedule or timezone or ``is_active`` last changed (app
     # clock, set by ``_note_schedule_change``). The scheduler doesn't run a slot before
     # it, and other edits leave it, so a restart doesn't drop a due slot (#941).
+    # The listener reads the ORM's attribute history: a bulk ``query().update()`` (or
+    # raw SQL) of ``trigger_config`` / ``is_active`` must set this column itself.
     schedule_changed_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     # Relationships

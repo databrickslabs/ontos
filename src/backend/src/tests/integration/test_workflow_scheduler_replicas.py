@@ -235,6 +235,31 @@ def test_another_instance_picks_up_a_new_schedule_on_database_activity(database)
     assert len(executions) == 2 and len(claims) == 2  # 10:00 and 10:05, once each
 
 
+def test_pruning_keeps_recent_claims_and_each_tasks_latest(database):
+    """The correlated ``DELETE ... WHERE EXISTS (a newer claim)`` on each dialect."""
+    from datetime import timedelta
+
+    from src.repositories.scheduler_claims_repository import scheduler_claims_repo
+
+    sessions = database.sessions()
+    now = _at(0)
+    rows = [('workflow:a', 40), ('workflow:a', 31), ('workflow:a', 1), ('workflow:b', 60)]
+    db = sessions()
+    try:
+        for key, days in rows:
+            db.add(SchedulerClaimDb(task_key=key, slot=now - timedelta(days=days),
+                                    claimed_by='x', outcome={'status': 'succeeded'}))
+            db.commit()  # one by one: SQLite's batched insert can't match aware slots
+        assert scheduler_claims_repo.prune(db, before=now - timedelta(days=30)) == 2
+        left = sorted((c.task_key, c.slot.astimezone(UTC) if c.slot.tzinfo
+                       else c.slot.replace(tzinfo=UTC))
+                      for c in db.query(SchedulerClaimDb).all())
+    finally:
+        db.close()
+    assert left == [('workflow:a', now - timedelta(days=1)),
+                    ('workflow:b', now - timedelta(days=60))]
+
+
 def test_creating_a_workflow_with_an_invalid_schedule_answers_its_code(client):
     response = client.post('/api/workflows', json={
         'name': 'Too often',

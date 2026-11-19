@@ -425,7 +425,10 @@ A run that evaluated nothing (every entity not evaluated, or none matched), or t
 has no score: it stores null, the API returns `score: null` and the UI shows "No score". Each run also has
 `coverage` (`evaluated`, `not_evaluated`), shown when some entities were not evaluated, so a
 score measured on a few of many tables says so. The policy list, the stats and the trend use
-the policy's latest run that has a score.
+the policy's latest run that has a score. A policy with no such run among its last 20 has no
+score: it shows "No score", the overall compliance averages only the policies that have one
+(no score at all when none has), and it doesn't count as a critical issue, which is a critical
+policy scored below 70.
 
 The results of a run list only the Unity Catalog objects the viewer can read: they are
 checked with the viewer's own token when the results are opened (one listing per schema),

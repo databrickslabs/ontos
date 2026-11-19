@@ -6,6 +6,7 @@ import {
   complianceResultMessageText,
   complianceRunCoverageText,
   complianceRunScoreText,
+  complianceScoreColor,
 } from './compliance-run-warning';
 
 afterEach(async () => {
@@ -60,5 +61,15 @@ describe('a result whose tags are not loaded for its type', () => {
     });
 
     expect(text).toContain('tags are not read for this type of object yet');
+  });
+});
+
+describe('complianceScoreColor', () => {
+  it('colors a score by its band and leaves no score muted, not red', () => {
+    expect(complianceScoreColor(95)).toContain('green');
+    expect(complianceScoreColor(70)).toContain('yellow');
+    expect(complianceScoreColor(0)).toContain('red');
+    expect(complianceScoreColor(null)).toBe('text-muted-foreground');
+    expect(complianceScoreColor(undefined)).toBe('text-muted-foreground');
   });
 });

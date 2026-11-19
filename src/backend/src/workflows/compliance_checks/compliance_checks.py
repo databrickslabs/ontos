@@ -410,6 +410,21 @@ def _json_or_none(value: Optional[str]) -> Any:
         return None
 
 
+def _score_text(score) -> str:
+    """A run's score for the log: "85.0%", or "no score" for a run without one
+    (it failed, or evaluated no entity)."""
+    return "no score" if score is None else f"{score}%"
+
+
+def _needs_attention(result: dict) -> bool:
+    """A policy whose run errored or failed, or scored below 70 (a run without a
+    score that succeeded evaluated nothing: not a finding)."""
+    if result.get("status") in ("error", "failed"):
+        return True
+    score = result.get("score")
+    return score is not None and score < 70
+
+
 def run_policy(
     db: Session,
     policy: Dict[str, Any],
@@ -452,7 +467,7 @@ def run_policy(
         print(f"  Status: {run.status}")
         print(f"  Passed: {run.success_count}")
         print(f"  Failed: {run.failure_count}")
-        print(f"  Score: {run.score}%")
+        print(f"  Score: {_score_text(run.score)}")
         # A finished run can report something about its rule (e.g. an ignored tail)
         warning = None
         if run.warning_code:
@@ -628,13 +643,12 @@ def main() -> None:
             print(f"Overall score: {overall_score}%")
 
         # Show failed policies
-        failed_policies = [r for r in results if r.get("status") == "error" or r.get("score", 100) < 70]
+        failed_policies = [r for r in results if _needs_attention(r)]
         if failed_policies:
             print(f"\nPolicies requiring attention ({len(failed_policies)}):")
             for r in failed_policies:
                 status = r.get("status", "unknown")
-                score = r.get("score", 0)
-                print(f"  - {r['policy_name']}: {status} (score: {score}%)")
+                print(f"  - {r['policy_name']}: {status} (score: {_score_text(r.get('score'))})")
 
         warned = [r for r in results if r.get("warning")]
         if warned:

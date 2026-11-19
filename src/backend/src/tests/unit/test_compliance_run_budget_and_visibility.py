@@ -357,3 +357,19 @@ def test_a_viewer_without_a_client_sees_no_uc_result():
     )
 
     assert [r.object_type for r in shown] == ['domain'] and hidden == 1
+
+
+@pytest.mark.parametrize("headers, on_behalf_of_user", [
+    ({"x-forwarded-access-token": "user-token"}, True),
+    ({}, False),  # the service principal fallback (ENV=LOCAL, OBO_ALLOW_SP_FALLBACK)
+])
+def test_a_user_identity_reports_the_client_it_really_is(headers, on_behalf_of_user):
+    from src.common.run_identity import RunIdentity
+
+    request = SimpleNamespace(headers=headers)
+    with patch("src.common.workspace_client.get_obo_workspace_client", return_value=object()):
+        identity = RunIdentity.for_request(request)
+        assert identity.on_behalf_of_user is True  # until the client is built
+        identity.workspace_client()
+
+    assert identity.on_behalf_of_user is on_behalf_of_user

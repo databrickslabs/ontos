@@ -301,7 +301,8 @@
       "gone": "O arquivo não está mais na pasta: os documentos foram removidos de {{count}} entidades.",
       "not_text": "O arquivo contém caracteres NUL; não é texto.",
       "import_error": "Não foi possível importar o arquivo; os demais foram importados.",
-      "too_many_targets": "O front matter cita mais de 50 entidades."
+      "too_many_targets": "O front matter cita mais de 50 entidades.",
+      "path_too_long": "O caminho do arquivo é longo demais para importar."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" não é um caminho dentro de um volume do Unity Catalog. Use /Volumes/<catalog>/<schema>/<volume>/<folder>.",
@@ -309,7 +310,8 @@
       "markdown_import_access_denied": "Você não pode ler \"{{path}}\". Peça READ VOLUME no volume.",
       "markdown_import_too_many_files": "\"{{path}}\" tem mais de {{max}} arquivos Markdown. Importe uma pasta menor.",
       "failed": "A importação falhou.",
-      "markdown_import_in_progress": "Outra importação de Markdown está em andamento. Tente de novo quando ela terminar."
+      "markdown_import_in_progress": "Outra importação de Markdown está em andamento. Tente de novo quando ela terminar.",
+      "user_token_required": "Esta importação precisa do token de usuário do Databricks, e a requisição não tem um."
     },
     "warnings": {
       "empty_folder": "Nenhum arquivo Markdown foi encontrado aqui, então os documentos importados antes desta pasta foram mantidos."

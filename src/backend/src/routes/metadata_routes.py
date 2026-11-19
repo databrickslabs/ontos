@@ -28,7 +28,9 @@ from src.models.metadata import (
 from src.controller.markdown_import_manager import MarkdownImportManager, TARGET_FEATURES
 from src.common.api_errors import CodedValueError
 from src.common.config import get_settings, Settings
-from src.common.workspace_client import get_workspace_client, get_obo_workspace_client
+from src.common.workspace_client import (
+    get_workspace_client, get_obo_workspace_client, raise_user_token_required,
+)
 from databricks.sdk import WorkspaceClient
 
 logger = get_logger(__name__)
@@ -647,7 +649,15 @@ async def get_merged_metadata(
 # =========================================================================
 
 def _user_workspace_client(request: Request) -> WorkspaceClient:
-    """The caller's client: an import reads only files the user can read."""
+    """The caller's client: an import reads only files the user can read.
+
+    Never the app's own client, not even where ``get_obo_workspace_client`` would fall
+    back to it (ENV=LOCAL, OBO_ALLOW_SP_FALLBACK): a file the app can read but the user
+    can't would be copied into the database. A request without the user's token is
+    refused (403 ``user_token_required``).
+    """
+    if not request.headers.get('x-forwarded-access-token'):
+        raise_user_token_required()
     return get_obo_workspace_client(request)
 
 

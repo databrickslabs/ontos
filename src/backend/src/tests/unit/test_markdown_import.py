@@ -158,6 +158,18 @@ class TestConceptLookupPerImport:
         semantic.concept_name_index.assert_called_once()
         semantic.find_concept_iris.assert_not_called()
 
+    def test_a_failed_concept_index_is_not_rebuilt_for_every_value(self):
+        semantic = MagicMock()
+        semantic.concept_name_index.side_effect = RuntimeError('graph unavailable')
+        resolver = mim._TargetResolver(MagicMock(), semantic)
+
+        for names in (['A', 'B'], ['C'], ['A', 'D']):
+            targets, unresolved = resolver.resolve({'concepts': names})
+            assert targets == []
+            assert [u.reason for u in unresolved] == ['lookup_failed'] * len(names)
+
+        semantic.concept_name_index.assert_called_once()
+
 
 class TestListing:
     def _ws(self, tree):
@@ -308,6 +320,14 @@ class TestFileFailures:
         assert (entry.status, entry.reason) == ('failed', 'too_many_targets')
         resolver.resolve.assert_not_called()
 
+    def test_a_path_the_index_cannot_hold_fails_that_file_only(self):
+        ws = MagicMock()
+        long_path = '/Volumes/c/s/v/' + 'd' * mim.MAX_SOURCE_PATH_BYTES + '/a.md'
+        entry = MarkdownImportManager(MagicMock())._import_file(
+            MagicMock(), ws, long_path, None, MagicMock(), None, [], [])
+        assert (entry.status, entry.reason) == ('failed', 'path_too_long')
+        ws.files.download.assert_not_called()
+
     def test_a_read_error_is_read_failed(self):
         ws = MagicMock()
         ws.files.download.side_effect = PermissionDenied('no')
@@ -337,6 +357,13 @@ class TestSearchItem:
         assert item.description == 'Churn means no order.\n'
         assert item.link == '/concepts/browser?concept=http%3A%2F%2Fex.org%2Fonto%23Customer'
         assert item.extra_data['source_path'] == '/Volumes/c/s/v/t.md'
+
+    def test_the_indexed_text_is_capped_and_the_full_text_stays_in_the_database(self):
+        from src.controller.metadata_manager import MAX_INDEXED_DESCRIPTION_CHARS
+
+        body = 'x' * (MAX_INDEXED_DESCRIPTION_CHARS * 3)
+        item = MetadataManager().build_document_search_item(self._doc(), f'---\na: b\n---\n{body}')
+        assert item.description == body[:MAX_INDEXED_DESCRIPTION_CHARS]
 
     @pytest.mark.parametrize('entity_type, feature', [
         ('data_domain', 'data-domains'), ('asset', 'assets'), ('concept', 'semantic-models'),

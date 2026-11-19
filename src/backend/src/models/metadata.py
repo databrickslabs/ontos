@@ -168,7 +168,7 @@ class MarkdownImportFileResult(BaseModel):
     ``status``: added (new documents only), updated (a document changed or a
     target was added), unchanged, unlinked (no target resolved), failed
     (``reason``: too_large | not_utf8 | not_text | front_matter_invalid |
-    read_failed | import_error | too_many_targets), or
+    read_failed | import_error | too_many_targets | path_too_long), or
     removed (the file, imported before, is gone; its documents were removed).
     """
     path: str

@@ -1738,7 +1738,7 @@ async def create_data_product(
             validated_model = DataProduct(**validation_payload)
         except ValidationError as e:
             logger.error(f"Validation failed for payload (ID: {payload.get('id', 'N/A_Validation')}): {e}")
-            error_details = e.errors() if hasattr(e, 'errors') else str(e)
+            error_details = e.errors(include_context=False) if hasattr(e, 'errors') else str(e)
             details_for_audit["validation_error"] = error_details
             raise HTTPException(status_code=422, detail=error_details)
 

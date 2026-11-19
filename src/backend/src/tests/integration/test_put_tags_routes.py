@@ -98,3 +98,11 @@ def test_product_put_with_a_mixed_tag_list_is_refused(client, db_session, produc
     })
     assert resp.status_code == 422, resp.text
     assert _count(db_session, pid, 'data_product') == 1
+
+
+def test_product_post_with_a_mixed_tag_list_is_refused(client, product):
+    _, body = product
+    resp = client.post('/api/data-products', json={
+        **body, 'id': str(uuid.uuid4()), 'tags': [{'tag_fqn': 'ns/new'}, 123],
+    })
+    assert resp.status_code == 422, resp.text

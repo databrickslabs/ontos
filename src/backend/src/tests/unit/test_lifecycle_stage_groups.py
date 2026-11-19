@@ -1075,3 +1075,84 @@ class TestSqlFiltersOnAStaleCache:
             DataProductDb, 'data_product', db_session,
         )).all()
         assert pid in {r.id for r in rows}
+
+
+def _uncached(group_id):
+    """As on another worker: a group created less than the cache lifetime ago."""
+    lifecycle_service._groups.pop(group_id)
+
+
+class TestUncachedGroupLookups:
+    """Lookups without an explicit session (API models, ranking, the published-product
+    rule) read a group the cache doesn't know yet through the row's own session."""
+
+    def test_api_models_from_rows_get_the_category_of_an_uncached_group(self, db_session):
+        from src.models.data_contracts_api import DataContractRead
+        from src.models.data_products import DataProduct
+
+        group = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        contract_group = lifecycle_service.save_group(
+            db_session, _intake_group('data_contract'), 'admin',
+        )
+        pid = _product(db_session, 'live', group.id)
+        cid = str(uuid.uuid4())
+        db_session.add(DataContractDb(id=cid, name='C', version='1.0.0', status='live',
+                                      lifecycle_stage_group_id=contract_group.id,
+                                      version_family_id=cid))
+        db_session.commit()
+        _uncached(group.id)
+        _uncached(contract_group.id)
+
+        product = DataProduct.model_validate(db_session.get(DataProductDb, pid))
+        contract = DataContractRead.model_validate(
+            db_session.get(DataContractDb, cid), from_attributes=True,
+        )
+        assert (product.status_category, contract.status_category) == ('active', 'active')
+
+    def test_contract_summaries_get_the_category_of_an_uncached_group(self, db_session):
+        from pathlib import Path
+
+        from src.controller.data_contracts_manager import DataContractsManager
+
+        group = lifecycle_service.save_group(
+            db_session, _intake_group('data_contract'), 'admin',
+        )
+        cid = str(uuid.uuid4())
+        db_session.add(DataContractDb(id=cid, name='C', version='1.0.0', status='live',
+                                      lifecycle_stage_group_id=group.id,
+                                      version_family_id=cid))
+        db_session.commit()
+        _uncached(group.id)
+        mgr = DataContractsManager(data_dir=Path('/tmp'))
+        row = db_session.get(DataContractDb, cid)
+        [summary] = mgr._build_contract_summaries(db_session, [row])
+        assert summary.status_category == 'active'
+        _uncached(group.id)
+        assert mgr._build_contract_api_model(db_session, row).status_category == 'active'
+
+    def test_rank_and_the_published_rule_read_an_uncached_group(self, db_session):
+        from src.common.product_read_rule import is_published_product
+
+        group = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        pid = _product(db_session, 'live', group.id)
+        _uncached(group.id)
+        row = db_session.get(DataProductDb, pid)
+        assert is_published_product(row)
+        _uncached(group.id)
+        # (category rank, stage order): ``live`` is the group's third stage
+        assert compute_rank(row, has_elevated_access=True)[0] == (2, 2)
+
+    def test_an_uncached_group_without_a_session_logs_a_warning_once(
+        self, db_session, monkeypatch,
+    ):
+        from src.controller import lifecycle_service as lifecycle_module
+
+        group = lifecycle_service.save_group(db_session, _intake_group(), 'admin')
+        _uncached(group.id)
+        warning = MagicMock()
+        monkeypatch.setattr(lifecycle_module.logger, 'warning', warning)
+        row = SimpleNamespace(status='live', lifecycle_stage_group_id=group.id)
+        assert lifecycle_service.category_of_row(row) is None
+        assert lifecycle_service.category_of_row(row) is None
+        assert warning.call_count == 1
+        assert group.id in warning.call_args.args

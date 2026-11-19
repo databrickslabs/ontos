@@ -242,8 +242,8 @@ def run_score_fields(run: ComplianceRunDb, not_evaluated: int = 0) -> Dict[str, 
     """``score`` (None when the run has none, see ``_run_scored``) and ``coverage``.
 
     ``coverage``: entities evaluated (passed or failed) and not evaluated, so a
-    score measured on a few of many entities says so. The stored score of a run
-    without one stays 0 (the column is not nullable); the API shows None.
+    score measured on a few of many entities says so. A run without a score
+    stores None (``o3_compliance_run_score_nullable``).
     """
     evaluated = (run.success_count or 0) + (run.failure_count or 0)
     return {
@@ -666,8 +666,9 @@ class ComplianceManager:
 
     def complete_run(
         self, db: Session, run: ComplianceRunDb, *, success_count: int, failure_count: int,
-        score: float, error_message: Optional[str] = None, error_code: Optional[str] = None,
-        error_params: Optional[dict] = None, warning_code: Optional[str] = None,
+        score: Optional[float], error_message: Optional[str] = None,
+        error_code: Optional[str] = None, error_params: Optional[dict] = None,
+        warning_code: Optional[str] = None,
         warning_params: Optional[dict] = None,
     ) -> ComplianceRunDb:
         run.success_count = success_count
@@ -976,8 +977,9 @@ class ComplianceManager:
 
             notified = self._flush_notifications(db, notifier, policy, failed=failure, passed=success)
 
-            total = max(1, success + failure)
-            score = round(100.0 * (success / total), 2)
+            # No score without an evaluated entity (all not evaluated, or none matched)
+            evaluated = success + failure
+            score = round(100.0 * (success / evaluated), 2) if evaluated else None
             # A stored rule with trailing input keeps running with its tail ignored;
             # the run says so, so the policies that need a fix can be found. Entities
             # not evaluated and a failed notification flush are the other warnings, in
@@ -1024,7 +1026,7 @@ class ComplianceManager:
             from src.common.compliance_errors import run_error_code
             error_code, error_params = run_error_code(e)
             self.complete_run(
-                db, run, success_count=success, failure_count=failure, score=0.0,
+                db, run, success_count=success, failure_count=failure, score=None,
                 error_message=str(e), error_code=error_code, error_params=error_params,
             )
             

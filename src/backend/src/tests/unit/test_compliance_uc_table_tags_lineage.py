@@ -618,8 +618,8 @@ def test_policy_run_without_warehouse_reports_entities_not_evaluated(db_session)
     make_runner.assert_not_called()
     act.assert_not_called()  # no ON_FAIL for an entity that was not evaluated
     assert run.status == 'succeeded'
-    # Not evaluated is neither passed nor failed: out of the counts and the score
-    assert (run.success_count, run.failure_count, run.score) == (0, 0, 0.0)
+    # Not evaluated is neither passed nor failed: out of the counts, and no score stored
+    assert (run.success_count, run.failure_count, run.score) == (0, 0, None)
     assert run.warning_code == 'rule_fields_unavailable'
     assert json.loads(run.warning_params) == {
         'count': 2, 'sources': enr.GROUP_SOURCE[TAGS], 'reasons': 'no_warehouse',

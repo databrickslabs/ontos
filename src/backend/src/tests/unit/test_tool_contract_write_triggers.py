@@ -259,6 +259,54 @@ class TestBlockingGates:
         assert moved.success is True, moved.error
         assert unknown.error_code == UPDATE_BLOCKED_CODE
 
+    def _assign_tag_gate(self, world):
+        """A before_update gate whose one step assigns the tag ``tool-ns/reviewed``."""
+        from src.db_models.tags import TagDb, TagNamespaceDb
+
+        namespace = TagNamespaceDb(name=f'tool-{uuid.uuid4().hex[:6]}')
+        world.db.add(namespace)
+        world.db.flush()
+        tag = TagDb(name='reviewed', namespace_id=namespace.id, status='active')
+        world.db.add(tag)
+        gate = _workflow(world.db, 'before_update', step_type='assign_tag')
+        step = world.db.query(WorkflowStepDb).filter_by(workflow_id=gate).one()
+        step.config = json.dumps({'key': f'{namespace.name}/reviewed', 'value': 'yes'})
+        world.db.commit()
+        return tag.id
+
+    def test_the_update_writes_the_tag_of_a_passed_gate(self, world, run):
+        from src.db_models.tags import EntityTagAssociationDb
+
+        tag_id = self._assign_tag_gate(world)
+        res = run(_ctx(world), 'update_data_contract',
+                  {'contract_id': world.row.id, 'description': 'changed'})
+
+        assert res.success is True, res.error
+        world.db.expire_all()
+        assert [a.assigned_value for a in world.db.query(EntityTagAssociationDb).filter_by(
+            entity_id=world.row.id, tag_id=tag_id,
+        )] == ['yes']
+
+    def test_a_gate_tag_that_cannot_be_written_refuses_the_update(
+        self, world, run, monkeypatch
+    ):
+        # Whatever the gate's on_error (fail_open here): before, the failed write
+        # counted as a gate error, and fail_open let the update through without it
+        from src.controller.tags_manager import TagsManager
+
+        self._assign_tag_gate(world)
+
+        def broken(self, db, **kwargs):
+            raise RuntimeError('tag table down')
+
+        monkeypatch.setattr(TagsManager, 'add_tag_to_entity', broken)
+        res = run(_ctx(world), 'update_data_contract',
+                  {'contract_id': world.row.id, 'description': 'changed'})
+
+        # (the manager rolls the update back, with the test's shared session)
+        assert res.success is False
+        assert res.error_code == 'update_gate_tag_write_failed'
+
     def test_run_update_gates_returns_pass_when_the_registry_raises(self, world, monkeypatch):
         import src.common.workflow_triggers as triggers
 

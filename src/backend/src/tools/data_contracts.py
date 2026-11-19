@@ -5,7 +5,7 @@ Tools for searching, creating, updating, and deleting data contracts.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from src.common.features import FeatureAccessLevel
 from src.tools.write_audit import audit_change, audited, caller_email
 from src.tools import read_access
@@ -119,11 +119,13 @@ def _transition_status(
 
 def _update_refusal(
     ctx: ToolContext, tool_name: str, contract: Any, changes: Dict[str, Any]
-) -> Optional[ToolResult]:
-    """The PUT route's before_update gates (``run_update_gates``); None = may update.
+) -> Tuple[Optional[ToolResult], List[Any]]:
+    """The PUT route's before_update gates (``run_update_gates``).
 
-    A ``fail_closed`` gate that couldn't be evaluated raises its coded error,
-    audited here as a refused update.
+    ``(refusal, executions)``: the refusal is None when the contract may be
+    updated, and the update gets the executions (their tag steps' changes are
+    written with it). A ``fail_closed`` gate that couldn't be evaluated raises
+    its coded error, audited here as a refused update.
     """
     contract_id = str(contract.id)
     try:
@@ -136,7 +138,7 @@ def _update_refusal(
         })
         raise
     if passed:
-        return None
+        return None, executions
     from src.common.workflow_triggers import (
         describe_failed_executions, failed_execution_reasons,
     )
@@ -148,7 +150,7 @@ def _update_refusal(
         error=f"Update blocked by workflow: {describe_failed_executions(executions)}",
         error_code=UPDATE_BLOCKED_CODE,
         data={"contract_id": contract_id, "reasons": failed_execution_reasons(executions)},
-    )
+    ), executions
 
 
 class CreateDraftDataContractTool(BaseTool):
@@ -385,13 +387,14 @@ class UpdateDataContractTool(BaseTool):
             # /data-contracts/{id}, before the status change, so a refused call
             # writes nothing. A status change alone runs only the
             # before_status_change gates, as the change-status route.
+            gate_executions: List[Any] = []
             if update_data:
                 if not target:
                     return ToolResult(
                         success=False,
                         error=f"Data contract '{contract_id}' not found"
                     )
-                refusal = _update_refusal(ctx, self.name, target, update_data)
+                refusal, gate_executions = _update_refusal(ctx, self.name, target, update_data)
                 if refusal:
                     return refusal
 
@@ -444,6 +447,7 @@ class UpdateDataContractTool(BaseTool):
                         contract_id=contract_id,
                         contract_data=update_data,
                         current_user=caller_email(ctx),
+                        gate_executions=gate_executions,
                     )
                     if updated is not None:
                         details["updated_resource_id"] = contract_id

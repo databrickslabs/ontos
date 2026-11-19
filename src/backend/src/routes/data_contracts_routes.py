@@ -1560,6 +1560,8 @@ async def update_contract(
             contract_data=contract_data,
             current_user=current_user.username if current_user else None,
             background_tasks=background_tasks,
+            # The gates' tag steps write their changes with the update
+            gate_executions=pre_executions,
         )
 
         success = True

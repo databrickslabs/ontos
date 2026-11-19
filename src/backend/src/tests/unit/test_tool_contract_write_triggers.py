@@ -307,6 +307,37 @@ class TestBlockingGates:
         assert res.success is False
         assert res.error_code == 'update_gate_tag_write_failed'
 
+    def test_a_failed_field_update_leaves_the_status_unchanged(self, world, run, monkeypatch):
+        # The status change is written after the gated field update: before, the tool
+        # committed the transition first, so a refused or failed update left it done
+        transitions = []
+        monkeypatch.setattr(
+            DataContractsManager, 'transition_status',
+            lambda self, **kwargs: transitions.append(kwargs['new_status']),
+        )
+
+        def failing(self, **kwargs):
+            raise RuntimeError('update failed')
+
+        monkeypatch.setattr(DataContractsManager, 'update_contract_with_relations', failing)
+        res = run(_ctx(world), 'update_data_contract', {
+            'contract_id': world.row.id, 'description': 'changed', 'status': 'deprecated',
+            'deprecation_reason': 'Replaced',
+        })
+
+        assert res.success is False
+        assert transitions == []
+
+    def test_a_status_change_with_fields_is_written_after_them(self, world, run):
+        res = run(_ctx(world), 'update_data_contract', {
+            'contract_id': world.row.id, 'description': 'changed', 'status': 'deprecated',
+            'deprecation_reason': 'Replaced',
+        })
+
+        assert res.success is True, res.error
+        stored = _stored(world)
+        assert (stored.description_purpose, stored.status) == ('changed', 'deprecated')
+
     def test_run_update_gates_returns_pass_when_the_registry_raises(self, world, monkeypatch):
         import src.common.workflow_triggers as triggers
 

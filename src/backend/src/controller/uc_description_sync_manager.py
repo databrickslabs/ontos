@@ -26,8 +26,9 @@ from src.common.api_errors import CodedValueError
 from src.common.config import Settings
 from src.common.logging import get_logger
 from src.common.uc_comments import (
-    CommentWriteError, DEFAULT_TIMEOUT_SECONDS, NOT_FOUND, PERMISSION_DENIED, TIMED_OUT,
-    UNSUPPORTED_TEXT, read_comment, set_comment, split_column_location,
+    CommentWriteError, DEFAULT_TIMEOUT_SECONDS, NOT_FOUND, PERMISSION_DENIED,
+    SINGLE_READ_TIMEOUT_SECONDS, TIMED_OUT, UNSUPPORTED_TEXT, normalize_comment, read_comment,
+    set_comment, split_column_location,
 )
 from src.db_models.assets import AssetDb
 from src.models.assets import (
@@ -148,6 +149,11 @@ _REASON_CODES = {
 }
 
 
+def _read_timeout(time_left: Optional[Callable[[], float]]) -> float:
+    """How long a read of a comment may wait: the import's time left, else a short cap."""
+    return time_left() if time_left is not None else SINGLE_READ_TIMEOUT_SECONDS
+
+
 def _reason_code(reason: str, budgeted: bool) -> str:
     """The warning code of a ``CommentWriteError`` reason.
 
@@ -213,9 +219,12 @@ def guard_decision(uc_comment: Optional[str], text: Optional[str],
     It may when the comment is empty, the description before the save, or the
     comment Ontos agreed to (``agreed``, stored on the asset).
     """
+    # Compared as Unity Catalog may store them (line endings, trailing blanks)
+    uc_comment, text = normalize_comment(uc_comment), normalize_comment(text)
     if uc_comment == text:
         return GUARD_UNCHANGED
-    if uc_comment is not None and uc_comment not in ((previous_description or None), agreed):
+    known = (normalize_comment(previous_description), normalize_comment(agreed))
+    if uc_comment is not None and uc_comment not in known:
         return GUARD_KEEP
     return GUARD_WRITE
 
@@ -361,7 +370,7 @@ class UcDescriptionSyncManager:
         try:
             table_type, uc_comment = read_comment(
                 ws, table_fqn, column_name,
-                timeout_seconds=time_left() if time_left is not None else None)
+                timeout_seconds=_read_timeout(time_left))
         except CommentWriteError as e:
             logger.warning("Reading the comment of %s to write asset %s failed: %s",
                            label, asset.id, e.reason)
@@ -403,7 +412,7 @@ class UcDescriptionSyncManager:
         audit['outcome'] = 'written'
         after = self._read_back(ws, table_fqn, column_name, time_left)
         audit['verified'] = after is not _UNREAD
-        if after is _UNREAD or after == text:
+        if after is _UNREAD or normalize_comment(after) == normalize_comment(text):
             return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
         # Someone wrote another comment right after this write: theirs is kept
         logger.info("The Unity Catalog comment of %s changed right after Ontos wrote it "
@@ -421,7 +430,7 @@ class UcDescriptionSyncManager:
         try:
             _, comment = read_comment(
                 ws, table_fqn, column_name,
-                timeout_seconds=time_left() if time_left is not None else None)
+                timeout_seconds=_read_timeout(time_left))
         except CommentWriteError as e:
             logger.info("Reading back the comment of %s failed: %s", table_fqn, e.reason)
             return _UNREAD

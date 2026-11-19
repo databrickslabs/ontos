@@ -525,3 +525,69 @@ def test_the_permission_warning_names_select_and_modify(db_session):
 
     assert warning.code == CODE_PERMISSION_DENIED
     assert 'SELECT and MODIFY permissions' in warning.message
+
+
+def test_a_comment_unity_catalog_normalised_still_reads_back_as_written(db_session):
+    asset = _asset(db_session, description='Line one\r\nLine two  \n')
+    ws = _ws(comment=None)
+    ws.tables.get.side_effect = [
+        SimpleNamespace(comment=None, table_type=None, columns=[]),
+        SimpleNamespace(comment='Line one\nLine two', table_type=None, columns=[]),
+    ]
+
+    outcome = _sync_outcome(db_session, asset, ws)
+
+    assert outcome.in_sync and outcome.warning is None
+    assert outcome.state is None
+
+
+def test_the_guard_compares_normalised_comments(db_session):
+    # Unity Catalog holds the earlier text as it normalised it: still the agreed comment
+    asset = _asset(db_session, description='New text')
+    ws = _ws(comment='Old\nline')
+
+    outcome = _sync_outcome(db_session, asset, ws, previous='Old\r\nline  ')
+
+    assert outcome.in_sync and outcome.warning is None
+    assert _statements(ws) == ["COMMENT ON TABLE `main`.`sales`.`orders` IS 'New text'"]
+
+
+def test_a_single_save_read_does_not_wait_for_ever(db_session, monkeypatch):
+    import time
+    from src.controller import uc_description_sync_manager as manager
+
+    monkeypatch.setattr(manager, 'SINGLE_READ_TIMEOUT_SECONDS', 0.05)
+    asset = _asset(db_session)
+    ws = _ws(comment='Old text')
+    ws.tables.get.side_effect = lambda **kw: time.sleep(0.5)
+
+    started = time.monotonic()
+    outcome = _sync_outcome(db_session, asset, ws)
+
+    assert time.monotonic() - started < 0.4
+    assert outcome.warning.code == CODE_WRITE_FAILED
+    assert _statements(ws) == []
+
+
+def test_a_single_save_read_back_does_not_wait_for_ever(db_session, monkeypatch):
+    import time
+    from src.controller import uc_description_sync_manager as manager
+
+    monkeypatch.setattr(manager, 'SINGLE_READ_TIMEOUT_SECONDS', 0.05)
+    asset = _asset(db_session)
+    ws = _ws(comment='Old text')
+    answers = iter([SimpleNamespace(comment='Old text', table_type=None, columns=[]), None])
+
+    def get(**kw):
+        answer = next(answers)
+        if answer is None:
+            time.sleep(0.5)  # the read-back hangs
+        return answer
+
+    ws.tables.get.side_effect = get
+
+    started = time.monotonic()
+    outcome = _sync_outcome(db_session, asset, ws)
+
+    assert time.monotonic() - started < 0.4
+    assert outcome.in_sync and outcome.audit['verified'] is False

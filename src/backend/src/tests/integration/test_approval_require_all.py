@@ -908,6 +908,53 @@ class TestSharedTargetDecidedInReverseOrder:
         # Round 1's role row (Dora's) and round 2's (Carl's own decision)
         assert _bell(client, as_user, CARL, execution_id) == {role.id: 2}
 
+    @staticmethod
+    def _looping_execution(client, as_user, approvers):
+        """A require_all step whose rejection asks the same step again."""
+        as_user(ADMIN)
+        response = client.post('/api/workflows', json={
+            'name': f'Loop back {uuid.uuid4().hex[:8]}',
+            'trigger': {'type': 'manual', 'entity_types': ['data_product']},
+            'is_active': True,
+            'steps': [
+                {
+                    'step_id': 'approve', 'name': 'Approve', 'step_type': 'approval',
+                    'config': {'approvers': approvers, 'require_all': True},
+                    'on_pass': 'ok', 'on_fail': 'approve',
+                },
+                {'step_id': 'ok', 'name': 'Approved', 'step_type': 'pass'},
+            ],
+        })
+        assert response.status_code == 200, response.text
+        response = client.post(
+            f"/api/workflows/{response.json()['id']}/execute",
+            params={'entity_type': 'data_product', 'entity_id': str(uuid.uuid4())},
+        )
+        return response.json()['id']
+
+    @pytest.mark.parametrize('dora_fills_round_2', [False, True])
+    def test_a_decision_through_another_target_leaves_the_earlier_round_alone(
+        self, client, as_user, db_session, dora_fills_round_2,
+    ):
+        """Isaac review of #1553: Carl decides round 2 through his own user target, so only
+        the round's shared rows leave his bell; round 1's role row, which Dora filled, stays.
+        With ``dora_fills_round_2`` the role row of round 2 is handled too, at another time."""
+        role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        execution_id = self._looping_execution(
+            client, as_user, f'carl@example.com,eve@example.com,{role.id}',
+        )
+        # Round 1: Dora fills the role, Eve rejects: the same step asks again
+        assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'paused'
+        again = _decide(client, as_user, EVE, execution_id, approved=False, reason='Redo')
+        assert again.json()['status'] == 'paused', again.text
+        if dora_fills_round_2:
+            assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'paused'
+
+        # Round 2: Carl approves his own user target, Eve still has to decide
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+
+        assert _bell(client, as_user, CARL, execution_id).get(role.id) == 1
+
     def test_a_member_who_decided_nothing_is_not_recorded(self, client, as_user, db_session):
         """Carl's call ends the step on a stored rejection, his role already filled by Dora:
         he decided nothing, so the role row stays in his bell."""

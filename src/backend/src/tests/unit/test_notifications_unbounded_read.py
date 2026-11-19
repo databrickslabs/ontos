@@ -555,3 +555,34 @@ class TestEqualTimestamps:
         expected = sorted((row['id'] for row in rows), reverse=True)[:BELL_HISTORY_LIMIT]
         assert [n.id for n in listed] == expected
 
+
+class TestAccessGrantDecisionWritesTheMarker:
+    """Deciding an access request marks the admins' request notification handled, as the
+    other request decisions do; before, it stayed pending once the bell had opened it."""
+
+    @pytest.mark.parametrize('approved', [True, False])
+    def test_handle_request_marks_the_request_notification_handled(
+        self, db_session: Session, approved: bool,
+    ):
+        from src.controller.access_grants_manager import AccessGrantsManager
+        from src.models.access_grants import AccessGrantHandlePayload
+        from src.repositories.access_grants_repository import access_grant_request_repo
+
+        notifications = _manager()
+        manager = AccessGrantsManager(notifications_manager=notifications)
+        request = access_grant_request_repo.create(
+            db_session, requester_email='bob@example.com', entity_type='data_product',
+            entity_id='dp-1', requested_duration_days=30,
+        )
+        manager._notify_admins_new_request(db_session, request)
+        stored = db_session.query(NotificationDb).filter(
+            NotificationDb.action_type == 'handle_access_grant_request').one()
+        stored.read = True  # opened in the bell
+        db_session.flush()
+
+        manager.handle_request(db_session, 'admin@example.com', AccessGrantHandlePayload(
+            request_id=request.id, approved=approved,
+        ))
+
+        db_session.refresh(stored)
+        assert json.loads(stored.action_payload)['handled'] is True

@@ -369,8 +369,10 @@ class AccessGrantsManager:
             self._notify_requester_decision(db, request, approved=False, message=payload.message)
             
             logger.info(f"Denied access request {request.id}")
-        
+
         db.commit()
+        # After the commit: the handle path commits, and rolls back on an error
+        self._mark_request_notifications_handled(db, request)
         
         # Refresh request
         db.refresh(request)
@@ -769,6 +771,18 @@ class AccessGrantsManager:
         except Exception as e:
             logger.error(f"Failed to send admin notification for request {request.id}: {e}")
     
+    def _mark_request_notifications_handled(
+        self, db: Session, request: AccessGrantRequestDb,
+    ) -> None:
+        """The admins' request notification is decided: the ``handled`` marker, as the other
+        request decisions write it. Without it, a request notification that was opened in the
+        bell stays in My actions (#1526)."""
+        if not self._notifications_manager:
+            return
+        self._notifications_manager.handle_actionable_notification(
+            db, 'handle_access_grant_request', {'request_id': str(request.id)},
+        )
+
     def _notify_requester_decision(
         self,
         db: Session,

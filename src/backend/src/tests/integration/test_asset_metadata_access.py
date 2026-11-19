@@ -1021,3 +1021,39 @@ def test_merged_metadata_keeps_an_attached_row_of_a_readable_asset(
     asset_rows = {ids['note'], ids['link'], ids['doc']}
     assert asset_rows <= rows
     assert asset_rows <= sources
+
+
+# --- The attachment list and the change log of an asset's metadata -------------
+
+def test_the_attachment_list_leaves_out_rows_of_an_unreadable_asset(
+        client, db_session, asset, act_as):
+    """As merged metadata does: ids, authors and dates of the attachments."""
+    ids = _seed(db_session, 'asset', str(asset.id))
+    _attach_all(db_session, 'data_product', 'product-1', ids)
+    shared_note = _shared_asset_note(db_session)
+    MetadataManager().attach_shared_asset(
+        db_session, entity_type='data_product', entity_id='product-1',
+        data=MetadataAttachmentCreate(asset_type='rich_text', asset_id=shared_note),
+        user_email='seed@example.com',
+    )
+    act_as('Data Steward')
+
+    response = client.get('/api/entities/data_product/attachments',
+                          params={'entity_id': 'product-1'})
+
+    assert response.status_code == 200, response.text
+    assert {a['asset_id'] for a in response.json()} == {shared_note}
+
+
+def test_the_attachment_list_keeps_rows_of_a_readable_asset(
+        client, db_session, asset, act_as, linked_to_an_accessible_product):
+    ids = _seed(db_session, 'asset', str(asset.id))
+    _attach_all(db_session, 'data_product', 'product-1', ids)
+    act_as('Data Steward')
+
+    response = client.get('/api/entities/data_product/attachments',
+                          params={'entity_id': 'product-1'})
+
+    assert response.status_code == 200, response.text
+    assert {a['asset_id'] for a in response.json()} == {ids['note'], ids['link'], ids['doc']}
+

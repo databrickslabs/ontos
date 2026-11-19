@@ -579,12 +579,17 @@ async def attach_shared_asset(
 async def list_attachments(
     entity_type: str,
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
+    request: Request,
     db: DBSessionDep,
+    user_details=Depends(get_user_details_from_sdk),
     manager: MetadataManager = Depends(get_metadata_manager),
     _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     """List all shared asset attachments for an entity."""
-    return manager.list_attachments(db, entity_type=entity_type, entity_id=entity_id)
+    return manager.list_attachments(
+        db, entity_type=entity_type, entity_id=entity_id,
+        can_read_row=readable_row_filter(request, db, user_details),
+    )
 
 
 @router.delete("/entities/{entity_type}/attachments/{asset_type}/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)

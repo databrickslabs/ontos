@@ -26,7 +26,7 @@ from src.common.version_visibility import compute_rank, is_admin_only_status, is
 from src.controller.data_products_manager import DataProductsManager
 from src.controller.lifecycle_service import (
     LifecycleActionUnresolvedError, LifecycleGroupConflictError, LifecycleGroupInvalidError,
-    lifecycle_service,
+    LifecycleGroupNotFoundError, lifecycle_service,
 )
 from src.db_models.assets import AssetDb
 from src.db_models.change_log import ChangeLogDb
@@ -257,6 +257,99 @@ class TestConcurrentEdits:
             lifecycle_service.save_group(db_session, changed, 'bob', group_id=group.id,
                                          expected_updated_at=read_at)
         assert err.value.code == 'lifecycle_group_changed'
+
+
+class TestSaveUnderTheRowLock:
+    """The group is read again under the lock: the checks see what a concurrent save wrote."""
+
+    @staticmethod
+    def _concurrent(monkeypatch, **values):
+        from sqlalchemy import update
+
+        from src.db_models.lifecycle_stage_groups import LifecycleStageGroupDb
+
+        real_get = lifecycle_stage_groups_repo.get
+
+        def get_then_concurrent_write(db, group_id):
+            row = real_get(db, group_id)
+            db.execute(update(LifecycleStageGroupDb)
+                       .where(LifecycleStageGroupDb.id == group_id).values(**values)
+                       .execution_options(synchronize_session=False))
+            return row
+
+        monkeypatch.setattr(lifecycle_stage_groups_repo, 'get', get_then_concurrent_write)
+
+    def test_the_conflict_names_who_saved_last(self, db_session, monkeypatch):
+        from datetime import datetime, timezone
+
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'alice')
+        read_at = group.updated_at
+        self._concurrent(monkeypatch, updated_by='carol',
+                         updated_at=datetime(2030, 1, 1, tzinfo=timezone.utc))
+        with pytest.raises(LifecycleGroupConflictError) as err:
+            lifecycle_service.save_group(db_session, _looping_group(), 'bob',
+                                         group_id=group.id, expected_updated_at=read_at)
+        assert err.value.params['updatedBy'] == 'carol'
+
+    def test_a_save_without_a_token_checks_the_row_as_stored(self, db_session, monkeypatch):
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'alice')
+        self._concurrent(monkeypatch, entity_type='asset')
+        with pytest.raises(LifecycleGroupInvalidError) as err:
+            lifecycle_service.save_group(db_session, _looping_group(), 'bob', group_id=group.id)
+        assert err.value.code == 'lifecycle_group_entity_type_immutable'
+
+    def test_a_group_deleted_meanwhile_is_not_found(self, db_session, monkeypatch):
+        from sqlalchemy import delete
+
+        from src.db_models.lifecycle_stage_groups import LifecycleStageGroupDb
+
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'alice')
+        group_id = group.id
+        real_get = lifecycle_stage_groups_repo.get
+
+        def get_then_delete(db, gid):
+            row = real_get(db, gid)
+            db.execute(delete(LifecycleStageGroupDb).where(LifecycleStageGroupDb.id == gid)
+                       .execution_options(synchronize_session=False))
+            return row
+
+        monkeypatch.setattr(lifecycle_stage_groups_repo, 'get', get_then_delete)
+        with pytest.raises(LifecycleGroupNotFoundError):
+            lifecycle_service.save_group(db_session, _looping_group(), 'bob', group_id=group_id)
+
+
+class TestCustomDeprecatedStage:
+    """A custom stage of category ``deprecated`` takes the deprecation fields (#1213)."""
+
+    @pytest.fixture
+    def sunset_product(self, db_session, product_manager):
+        group = _looping_group('Sunsetting')
+        group['stages'][3] = _stage('sunset', 'deprecated', 3)
+        group['transitions'][3] = {'from_key': 'active', 'to_key': 'sunset'}
+        group['stages'].append(_stage('gone', 'retired', 4))
+        group['transitions'].append({'from_key': 'sunset', 'to_key': 'gone'})
+        saved = lifecycle_service.save_group(db_session, group, 'admin')
+        return _product(db_session, status='active', group_id=saved.id)
+
+    def test_a_reason_is_required(self, product_manager, sunset_product):
+        from src.controller.lifecycle_fields import LifecycleFieldError
+
+        with pytest.raises(LifecycleFieldError) as err:
+            product_manager.transition_status(sunset_product, 'sunset')
+        assert err.value.code == 'deprecation_reason_required'
+
+    def test_the_reason_and_sunset_date_are_stored(self, db_session, product_manager,
+                                                    sunset_product):
+        from datetime import timedelta
+
+        from src.controller.lifecycle_fields import DeprecationDetails, utc_today
+
+        day = utc_today() + timedelta(days=30)
+        product_manager.transition_status(
+            sunset_product, 'sunset',
+            deprecation=DeprecationDetails(reason='Replaced', sunset_date=day))
+        row = db_session.get(DataProductDb, sunset_product)
+        assert (row.status, row.deprecation_reason, row.sunset_date) == ('sunset', 'Replaced', day)
 
 
 class TestSaveValidation:

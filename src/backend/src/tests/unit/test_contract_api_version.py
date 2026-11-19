@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from src.common.odcs_versions import UnsupportedOdcsApiVersionError
+from src.common.odcs_api_version import UnsupportedOdcsApiVersionError
 from src.controller.data_contracts_manager import DataContractsManager
 from src.db_models.data_contracts import DataContractDb
 from src.models.data_contracts_api import DataContractCreate, DataContractUpdate
@@ -99,7 +99,7 @@ def test_the_update_route_answers_with_the_code_and_param():
     from starlette.exceptions import HTTPException as StarletteHTTPException
 
     from src.common.api_errors import CodedValueError, coded_http_exception_handler
-    from src.common.odcs_versions import check_api_version_change
+    from src.common.odcs_api_version import check_api_version_change
 
     app = FastAPI()
     app.add_exception_handler(StarletteHTTPException, coded_http_exception_handler)

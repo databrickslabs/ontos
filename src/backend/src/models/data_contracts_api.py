@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 from src.common.payload_spellings import CamelCaseSpellingWins
-from src.common.odcs_versions import normalize_odcs_api_version, normalized_api_version
+from src.common.odcs_api_version import normalize_odcs_api_version, normalized_api_version
 
 if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed

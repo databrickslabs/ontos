@@ -170,7 +170,7 @@ from src.controller.lifecycle_fields import (
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
 from src.common.api_errors import CodedValueError
-from src.common.odcs_versions import check_api_version_change, normalized_api_version
+from src.common.odcs_api_version import check_api_version_change, normalized_api_version
 
 logger = get_logger(__name__)
 

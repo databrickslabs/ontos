@@ -1113,3 +1113,35 @@ def test_no_dedicated_engine_when_the_session_factory_was_replaced(monkeypatch):
     assert database.create_dedicated_session_factory(5, 'test') is None
     monkeypatch.setattr(database, '_engine', None)
     assert database.create_dedicated_session_factory(5, 'test') is None
+
+
+@pytest.mark.parametrize('previous_minutes', [2, None])  # a short gap, and a normal claim
+def test_fire_returns_its_connection_on_every_path(tmp_path, previous_minutes):
+    """The dedicated pool is small and has no overflow: a leaked session blocks the next."""
+    from datetime import timedelta
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import QueuePool
+
+    from src.common.database import Base
+    from src.controller.workflow_scheduler import _Schedule
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'pool.db'}", poolclass=QueuePool,
+                           pool_size=2, max_overflow=0, pool_timeout=1)
+    Base.metadata.create_all(engine, tables=[Base.metadata.tables['scheduler_claims']])
+    scheduler = WorkflowScheduler(sessionmaker(bind=engine), instance_id='a',
+                                  run_executor=_Deferred())
+    schedule = _Schedule(workflow_id='w', cron=EVERY_5, tz=None, changed_at=CHANGED)
+    try:
+        for n in range(3):
+            slot = _at(minute=5 * (n + 1))
+            if previous_minutes is not None:
+                with sessionmaker(bind=engine)() as db:
+                    db.add(SchedulerClaimDb(task_key=task_key('w'),
+                                            slot=slot - timedelta(minutes=previous_minutes),
+                                            claimed_by='old'))
+                    db.commit()
+            assert scheduler._fire(schedule, slot, slot) is True
+            assert engine.pool.checkedout() == 0
+    finally:
+        engine.dispose()

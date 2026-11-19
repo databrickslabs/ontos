@@ -31,8 +31,7 @@ import { useApi } from '@/hooks/use-api';
 import { usePersistentState } from '@/hooks/use-persistent-state';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
-import { internalErrorText } from '@/lib/server-error-text'
-import { odcsApiVersionErrorText } from '@/lib/odcs-api-version-error';
+import { internalErrorText } from '@/lib/server-error-text';
 
 export default function DataContracts() {
   const { t } = useTranslation(['data-contracts', 'common']);
@@ -164,7 +163,7 @@ export default function DataContracts() {
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(t('data-contracts:messages.createErrorDetail', 'Failed to create contract: {{error}}', {
-          error: odcsApiVersionErrorText(errorText, t) ?? internalErrorText(errorText) ?? errorText,
+          error: internalErrorText(errorText) ?? errorText,
         }));
       }
       await fetchContracts();

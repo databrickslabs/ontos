@@ -26,6 +26,8 @@ const asset: AssetRead = {
   platform: 'databricks',
   location: 'main.sales.orders',
   status: 'active',
+  // A detail read carries the properties; a list row doesn't (the dialog reads them then)
+  properties: {},
   relationships: [],
   created_at: '2026-11-12T00:00:00Z',
   updated_at: '2026-11-12T00:00:00Z',

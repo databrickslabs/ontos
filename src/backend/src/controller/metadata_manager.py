@@ -1,5 +1,6 @@
 import urllib.parse
 from typing import List, Optional, Dict, Any, Tuple
+from collections.abc import Callable
 from uuid import UUID
 
 from sqlalchemy import event
@@ -659,6 +660,7 @@ class MetadataManager(SearchableAsset):
     def get_merged_metadata(
         self, db: Session, *,
         entity_type: str, entity_id: str,
+        can_read_row: Optional[Callable[[str, str], bool]] = None,
         contract_ids: Optional[List[str]] = None,
         max_level_inheritance: int = 99
     ) -> MergedMetadataResponse:
@@ -699,6 +701,14 @@ class MetadataManager(SearchableAsset):
         attached_rich_texts = self._rich_text_repo.get_by_ids(db, ids=attached_rt_ids)
         attached_links = self._link_repo.get_by_ids(db, ids=attached_link_ids)
         attached_docs = self._document_repo.get_by_ids(db, ids=attached_doc_ids)
+        # can_read_row(entity_type, entity_id): attached rows stored on an entity it
+        # refuses are left out (an asset's row the caller can't read, #1342).
+        if can_read_row is not None:
+            attached_rich_texts = [
+                r for r in attached_rich_texts if can_read_row(r.entity_type, r.entity_id)
+            ]
+            attached_links = [r for r in attached_links if can_read_row(r.entity_type, r.entity_id)]
+            attached_docs = [r for r in attached_docs if can_read_row(r.entity_type, r.entity_id)]
         
         for rt in attached_rich_texts:
             sources[str(rt.id)] = f"shared:{entity_id}"

@@ -13,7 +13,8 @@ from src.common.authorization import (
     PermissionChecker, get_user_details_from_sdk, resolve_effective_permissions,
 )
 from src.common.entity_metadata_access import (
-    EntityMetadataPermission, document_permission, link_permission, rich_text_permission,
+    EntityMetadataPermission, document_permission, link_permission, readable_row_filter,
+    rich_text_permission,
 )
 from src.models.users import UserInfo
 from src.common.logging import get_logger
@@ -628,9 +629,11 @@ async def detach_shared_asset(
 async def get_merged_metadata(
     entity_type: str,
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
+    request: Request,
     contract_ids: Optional[str] = Query(None, description="Comma-separated contract IDs for inheritance"),
     max_level: int = Query(99, ge=0, le=999, description="Maximum inheritance level"),
     db: DBSessionDep = None,
+    user_details=Depends(get_user_details_from_sdk),
     manager: MetadataManager = Depends(get_metadata_manager),
     _: None = Depends(EntityMetadataPermission(
         FeatureAccessLevel.READ_ONLY, contract_ids_need_domains=True,
@@ -645,7 +648,8 @@ async def get_merged_metadata(
     contract_id_list = [cid.strip() for cid in contract_ids.split(",")] if contract_ids else None
     return manager.get_merged_metadata(
         db, entity_type=entity_type, entity_id=entity_id,
-        contract_ids=contract_id_list, max_level_inheritance=max_level
+        contract_ids=contract_id_list, max_level_inheritance=max_level,
+        can_read_row=readable_row_filter(request, db, user_details),
     )
 
 

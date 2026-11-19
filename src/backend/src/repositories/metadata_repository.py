@@ -66,6 +66,8 @@ class RichTextRepository(CRUDBase[RichTextMetadataDb, RichTextCreate, RichTextUp
         """Get multiple rich texts by their IDs."""
         if not ids:
             return []
+        # As UUIDs: an attachment stores the id as text (SQLite binds only a UUID).
+        ids = [self._normalize_id(i) for i in ids]
         return db.query(RichTextMetadataDb).filter(RichTextMetadataDb.id.in_(ids)).all()
     
     def list_inheritable_for_entity(
@@ -120,6 +122,8 @@ class LinkRepository(CRUDBase[LinkMetadataDb, LinkCreate, LinkUpdate]):
         """Get multiple links by their IDs."""
         if not ids:
             return []
+        # As UUIDs: an attachment stores the id as text (SQLite binds only a UUID).
+        ids = [self._normalize_id(i) for i in ids]
         return db.query(LinkMetadataDb).filter(LinkMetadataDb.id.in_(ids)).all()
     
     def list_inheritable_for_entity(
@@ -276,6 +280,8 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
         """Get multiple documents by their IDs."""
         if not ids:
             return []
+        # As UUIDs: an attachment stores the id as text (SQLite binds only a UUID).
+        ids = [self._normalize_id(i) for i in ids]
         return db.query(DocumentMetadataDb).filter(DocumentMetadataDb.id.in_(ids)).all()
     
     def list_inheritable_for_entity(

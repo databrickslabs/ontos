@@ -104,25 +104,53 @@ def _read_denied() -> None:
     ))
 
 
+def _asset_readable(request: Request, db, user_details, entity_id: Optional[str]) -> bool:
+    """Whether the user may read the asset ``entity_id`` (see ``asset_access``).
+
+    A failing lookup raises (500), never answers yes.
+    """
+    asset_id = _asset_uuid(entity_id)
+    if asset_id is None:
+        # No asset has this id: only a user who may read every asset learns that.
+        return user_has_assets_feature(request, user_details, FeatureAccessLevel.READ_WRITE)
+    try:
+        ensure_asset_readable(request, db, user_details, get_assets_manager(request), asset_id)
+    except HTTPException as denied:
+        if denied.status_code != status.HTTP_403_FORBIDDEN:
+            raise
+        return False
+    return True
+
+
+def readable_row_filter(request: Request, db, user_details) -> Callable[[str, str], bool]:
+    """``(entity_type, entity_id) -> bool``: may the user read a row stored on that entity?
+
+    For the rows attached to an entity (merged metadata): a row that belongs to
+    an asset is kept only when the user may read that asset. The attach check
+    doesn't cover rows attached before it, or access revoked since. Other rows
+    are the shared library's or another entity's, which the route's
+    ``data-domains`` check covers. One asset lookup per asset and request.
+    """
+    readable = {}
+
+    def can_read(entity_type: str, entity_id: str) -> bool:
+        if not _is_asset_row((entity_type, entity_id)):
+            return True
+        if entity_id not in readable:
+            readable[entity_id] = _asset_readable(request, db, user_details, entity_id)
+        return readable[entity_id]
+
+    return can_read
+
+
 async def _ensure_asset(
     request: Request, db, user_details, auth_manager, entity_id: Optional[str],
     level: FeatureAccessLevel, *, require_asset: bool,
 ) -> None:
     asset_id = _asset_uuid(entity_id)
     if level == FeatureAccessLevel.READ_ONLY:
-        if asset_id is None:
-            # No asset has this id: only a user who may read every asset learns that.
-            if not user_has_assets_feature(request, user_details, FeatureAccessLevel.READ_WRITE):
-                _read_denied()
-        else:
-            try:
-                ensure_asset_readable(
-                    request, db, user_details, get_assets_manager(request), asset_id,
-                )
-            except HTTPException as denied:
-                if denied.status_code != status.HTTP_403_FORBIDDEN:
-                    raise
-                _read_denied()
+        if not _asset_readable(request, db, user_details, entity_id):
+            _read_denied()
     else:
         try:
             await _ASSETS_WRITE_CHECKER(request, user_details, auth_manager)

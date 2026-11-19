@@ -909,3 +909,75 @@ def test_the_shared_library_lists_only_shared_rows(client, db_session, asset, ac
     for listing, row_id in legacy.items():
         assert row_id not in listed[listing], listing
     assert library_note in listed['rich_texts']
+
+
+# --- Merged metadata leaves out attached rows of assets the caller can't read ----
+
+def _attach_all(db, entity_type, entity_id, ids):
+    for asset_type, key in (('rich_text', 'note'), ('link', 'link'), ('document', 'doc')):
+        MetadataManager().attach_shared_asset(
+            db, entity_type=entity_type, entity_id=entity_id,
+            data=MetadataAttachmentCreate(asset_type=asset_type, asset_id=ids[key]),
+            user_email='seed@example.com',
+        )
+
+
+def _merged_ids(response):
+    assert response.status_code == 200, response.text
+    body = response.json()
+    rows = {row['id'] for key in ('rich_texts', 'links', 'documents') for row in body[key]}
+    return rows, set(body['sources'])
+
+
+def test_merged_metadata_leaves_out_an_attached_row_of_an_unreadable_asset(
+        client, db_session, asset, act_as):
+    """Attached before the attach check, or the asset's access revoked since."""
+    ids = _seed(db_session, 'asset', str(asset.id))
+    _attach_all(db_session, 'data_product', 'product-1', ids)
+    shared_note = _shared_asset_note(db_session)
+    MetadataManager().attach_shared_asset(
+        db_session, entity_type='data_product', entity_id='product-1',
+        data=MetadataAttachmentCreate(asset_type='rich_text', asset_id=shared_note),
+        user_email='seed@example.com',
+    )
+    act_as('Data Steward')
+
+    rows, sources = _merged_ids(client.get(
+        '/api/entities/data_product/metadata/merged', params={'entity_id': 'product-1'},
+    ))
+
+    asset_rows = {ids['note'], ids['link'], ids['doc']}
+    assert not rows & asset_rows
+    assert not sources & asset_rows
+    assert shared_note in rows  # a shared library row stays
+
+
+def test_merged_metadata_of_an_asset_leaves_out_another_unreadable_assets_row(
+        client, db_session, asset, act_as, linked_to_an_accessible_product):
+    """The Steward reads ``asset`` through its product, not ``other``."""
+    other = AssetDb(name='other', asset_type_id=asset.asset_type_id, platform='databricks')
+    db_session.add(other)
+    db_session.flush()
+    ids = _seed(db_session, 'asset', str(other.id))
+    _attach_all(db_session, 'asset', str(asset.id), ids)
+    act_as('Data Steward')
+
+    rows, _sources = _merged_ids(_merged(client, asset))
+
+    assert not rows & {ids['note'], ids['link'], ids['doc']}
+
+
+@pytest.mark.parametrize('role', ['Admin', 'Data Steward'])
+def test_merged_metadata_keeps_an_attached_row_of_a_readable_asset(
+        client, db_session, asset, act_as, linked_to_an_accessible_product, role):
+    ids = _seed(db_session, 'asset', str(asset.id))
+    _attach_all(db_session, 'data_product', 'product-1', ids)
+    act_as(role)
+
+    rows, sources = _merged_ids(client.get(
+        '/api/entities/data_product/metadata/merged', params={'entity_id': 'product-1'},
+    ))
+
+    asset_rows = {ids['note'], ids['link'], ids['doc']}
+    assert asset_rows <= rows
+    assert asset_rows <= sources

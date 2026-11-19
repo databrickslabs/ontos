@@ -155,6 +155,33 @@ def test_ports_are_linked_to_the_contract_tagged_on_the_same_table(engine):
     assert linked == {_TABLES[0]: contract_id, _TABLES[1]: None}
 
 
+def _port_contracts(engine):
+    with engine.connect() as conn:
+        return dict(conn.execute(text(
+            'SELECT asset_identifier, contract_id FROM data_product_output_ports')).all())
+
+
+def test_linking_keeps_a_contract_the_user_linked_to_the_port(engine):
+    _, contracts = _import_contract(engine)
+    _import(engine)
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE data_product_output_ports SET contract_id = 'chosen-by-user'"))
+
+    discovered = {'product': _discovered(), 'contract': contracts}
+    assert job.link_products_to_contracts(engine, discovered) == 0
+    assert set(_port_contracts(engine).values()) == {'chosen-by-user'}
+
+
+def test_linking_uses_the_newest_version_of_the_contract(engine):
+    _, contracts = _import_contract(engine)
+    _import(engine)
+    _add_newer_draft(engine, 'data_contracts', 'orders')
+
+    discovered = {'product': _discovered(), 'contract': contracts}
+    assert job.link_products_to_contracts(engine, discovered) == 1
+    assert _port_contracts(engine) == {_TABLES[0]: 'newer', _TABLES[1]: None}
+
+
 def _port_assets(engine):
     with engine.connect() as conn:
         return sorted(conn.execute(text(

@@ -168,10 +168,12 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
     () => latestReviewedAssets(reviewList.data, LIST_LIMIT), [reviewList.data],
   );
   const truncated = reviewsTruncated(reviewList.data);
-  // With a truncated review list an asset's review can be in the part not read: unknown.
+  // Unknown (null) until the review list loaded without error; with a truncated list an
+  // asset's review can also be in the part not read.
+  const reviewsKnown = reviews && !reviewList.loading && !reviewList.error && !truncated;
   const gaps = useMemo(
-    () => assetGaps(owned.data, reviews && !truncated ? reviewList.data : null),
-    [owned.data, reviews, truncated, reviewList.data],
+    () => assetGaps(owned.data, reviewsKnown ? reviewList.data : null),
+    [owned.data, reviewsKnown, reviewList.data],
   );
   const openReviews = useMemo(
     () => myOpenReviews(reviewList.data, email), [reviewList.data, email],

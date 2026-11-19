@@ -339,6 +339,20 @@ describe('Home by role home section', () => {
     expect(state.calls).toContain('/api/data-asset-reviews?limit=500');
   });
 
+  it('does not flag "No review request" while the reviews load or when they fail', async () => {
+    state.failures = { '/api/data-asset-reviews': 500 };
+    applyJourneyRole();
+    renderWithProviders(<Home />);
+    const list = await screen.findByTestId('essentials-publish-gaps');
+    // Reviews still pending: the review state of an owned asset is unknown.
+    expect(within(list).queryByText('No review request')).not.toBeInTheDocument();
+    expect(within(list).getByText('No description')).toBeInTheDocument();
+    const trust = screen.getByTestId('essentials-section-trust');
+    expect(await within(trust).findByRole('alert')).toBeInTheDocument();
+    // Reviews failed (500): still unknown.
+    expect(within(list).queryByText('No review request')).not.toBeInTheDocument();
+  });
+
   it('the pending count is the server total, not the size of the page read', async () => {
     state.routes['/api/access-grants/my-requests'] = {
       requests: [{ id: 'g1', entity_name: 'Sales tables', entity_id: 'e1',

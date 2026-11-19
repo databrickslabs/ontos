@@ -1181,3 +1181,62 @@ def test_start_after_a_stop_whose_thread_outlived_the_join(sessions, monkeypatch
         scheduler._stop_join_seconds = 5
         scheduler.stop()
     assert not new.is_alive()
+
+
+def test_the_drain_cancels_a_run_queued_on_the_daemon_pool(db_session, sessions):
+    import threading
+
+    first = _create(db_session, name='First', changed=_at(hour=9, minute=58))
+    second = _create(db_session, name='Second', changed=_at(hour=9, minute=58))
+    release, running = threading.Event(), threading.Event()
+    started = []
+
+    def run(self, workflow_id, slot, coalesced, **_kwargs):
+        started.append(workflow_id)
+        running.set()
+        release.wait(timeout=10)
+
+    # The app's pool (run_executor=None) with one worker: the second run queues.
+    scheduler = _scheduler(sessions, run_executor=None, max_workers=1)
+    with patch.object(WorkflowScheduler, '_run', run):
+        scheduler.run_once(_at(minute=0, second=1))
+        assert running.wait(timeout=5)
+        pool = scheduler._pool
+        threading.Timer(0.3, release.set).start()
+        scheduler.drain(timeout=5)
+        release.set()
+        pool.shutdown(wait=True)  # the worker has gone through the queue
+        _until(lambda: not scheduler._in_flight)
+    assert len(started) == 1 and not scheduler._in_flight
+    [queued] = {first.id, second.id} - set(started)
+    [claim] = _claims(db_session, queued)
+    assert claim.outcome == {'status': 'not_started', 'coalesced_slots': 1}
+
+
+def _until(condition, timeout=2.0):
+    import time
+
+    deadline = time.monotonic() + timeout
+    while not condition() and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+
+def test_a_run_raising_on_the_daemon_pool_ends_and_frees_its_workflow(db_session, sessions):
+    _create(db_session, changed=_at(hour=9, minute=58))
+
+    def run(self, *args, **kwargs):
+        raise RuntimeError('boom')
+
+    scheduler = _scheduler(sessions, run_executor=None, max_workers=1)
+    with patch.object(WorkflowScheduler, '_run', run):
+        scheduler.run_once(_at(minute=0, second=1))
+        assert scheduler.wait_for_runs(timeout=5)
+        _until(lambda: not scheduler._in_flight)  # the done callback runs right after
+    assert not scheduler._runs and not scheduler._in_flight
+    # The worker survived the exception: the next slot runs on it.
+    ran = []
+    with patch.object(WorkflowScheduler, '_run', lambda self, *a, **k: ran.append(a[0])):
+        scheduler.run_once(_at(minute=5, second=1))
+        assert scheduler.wait_for_runs(timeout=5)
+    assert len(ran) == 1
+    scheduler.drain(timeout=1)

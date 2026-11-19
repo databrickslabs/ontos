@@ -242,6 +242,17 @@ def _entity_id(entity: Any) -> str:
     return str(getattr(entity, 'id', '') or '')
 
 
+def row_session(row: Any) -> Optional[Session]:
+    """The session an ORM ``row`` is attached to; None for anything else (API models,
+    dicts, detached rows)."""
+    if row is None or isinstance(row, (dict, str)):
+        return None
+    try:
+        return object_session(row)
+    except Exception:
+        return None
+
+
 # --------------------------------------------------------------------------- the service
 
 class LifecycleService:
@@ -251,6 +262,8 @@ class LifecycleService:
         self._loaded_at = 0.0
         self._groups: Dict[str, Group] = {}
         self._defaults: Dict[str, str] = {}
+        # Unknown group ids already logged by a lookup without a session
+        self._warned_unknown: set = set()
 
     # ---- cache
 
@@ -259,6 +272,7 @@ class LifecycleService:
             self._loaded_at = 0.0
             self._groups = {}
             self._defaults = {}
+            self._warned_unknown = set()
 
     def _load(self, db: Session) -> None:
         from src.db_models.lifecycle_stage_groups import LifecycleStageGroupDb
@@ -335,6 +349,35 @@ class LifecycleService:
                 logger.warning("Could not reload lifecycle stage groups: %s", e)
             found = self._groups.get(group_id)
         return found
+
+    def _row_group(self, row: Any, db: Optional[Session] = None) -> Optional[Group]:
+        """The group of ``row`` (None without one), loaded through ``db`` or the row's own
+        session. With neither, an id the cache doesn't know (a group another worker
+        created less than ``_CACHE_SECONDS`` ago) logs a warning once and returns None:
+        the caller falls back to the seeded stages."""
+        group_id = getattr(row, 'lifecycle_stage_group_id', None)
+        if not group_id:
+            return None
+        group_id = str(group_id)
+        if db is None:
+            db = row_session(row)
+        group = self.group(db, group_id)
+        if group is None and db is None and group_id not in DEFAULT_GROUP_IDS.values() \
+                and group_id not in self._warned_unknown:
+            if len(self._warned_unknown) < 1000:
+                self._warned_unknown.add(group_id)
+            logger.warning(
+                "Lifecycle stage group %s is not cached and no session is at hand; "
+                "using the seeded stage categories until the cache reloads", group_id,
+            )
+        return group
+
+    def fill_status_category(self, model: Any, source: Any = None) -> Any:
+        """For API model validators: set ``model.status_category`` from its group when
+        unset, through the session of ``source`` (the ORM row it was validated from)."""
+        if getattr(model, 'status_category', None) is None and getattr(model, 'status', None):
+            model.status_category = self.category_of_row(model, db=row_session(source))
+        return model
 
     def groups(self, db: Session, entity_type: Optional[str] = None) -> List[Group]:
         self._ensure(db)
@@ -538,16 +581,9 @@ class LifecycleService:
         or the row's own session), else the seeded categories of the stage key.
         """
         key = _normalized(getattr(row, 'status', None))
-        group_id = getattr(row, 'lifecycle_stage_group_id', None)
-        if group_id:
-            if db is None:
-                try:
-                    db = object_session(row)
-                except Exception:
-                    db = None
-            group = self.group(db, str(group_id))
-            if group is not None:
-                return group.category(key)
+        group = self._row_group(row, db)
+        if group is not None:
+            return group.category(key)
         return DEFAULT_STAGE_CATEGORIES.get(key)
 
     def keys_of_category_anywhere(self, category: str, db: Optional[Session] = None) -> set:
@@ -559,18 +595,15 @@ class LifecycleService:
             keys.update(s.key for s in group.stages.values() if s.category == category)
         return keys
 
-    def is_side_draft_stage(self, row: Any) -> bool:
+    def is_side_draft_stage(self, row: Any, db: Optional[Session] = None) -> bool:
         """A draft-category stage other than its group's first (``sandbox`` by default)."""
-        group_id = getattr(row, 'lifecycle_stage_group_id', None)
-        group = self.group(None, str(group_id)) if group_id else None
-        group = group or _BUILTIN['data_product']
+        group = self._row_group(row, db) or _BUILTIN['data_product']
         stage = group.stages.get(_normalized(getattr(row, 'status', None)))
         return bool(stage and stage.category == 'draft' and not stage.is_initial)
 
     def stage_order_of_row(self, row: Any, db: Optional[Session] = None) -> int:
-        group_id = getattr(row, 'lifecycle_stage_group_id', None)
         key = _normalized(getattr(row, 'status', None))
-        group = self.group(db, str(group_id)) if group_id else None
+        group = self._row_group(row, db)
         stages = group.stages if group else _BUILTIN['data_product'].stages
         stage = stages.get(key)
         return stage.order if stage else 999

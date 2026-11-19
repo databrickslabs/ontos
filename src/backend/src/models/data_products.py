@@ -551,12 +551,12 @@ class DataProduct(BaseModel):
             return []
         return value or []
 
-    @model_validator(mode='after')
-    def _fill_status_category(self):
-        if self.status_category is None and self.status:
-            from src.controller.lifecycle_service import lifecycle_service
-            self.status_category = lifecycle_service.category_of_row(self)
-        return self
+    @model_validator(mode='wrap')
+    @classmethod
+    def _fill_status_category(cls, data: Any, handler: Any):
+        # Through the session of the ORM row validated from, when there is one
+        from src.controller.lifecycle_service import lifecycle_service
+        return lifecycle_service.fill_status_category(handler(data), data)
 
     model_config = {
         "from_attributes": True,

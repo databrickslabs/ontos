@@ -24,11 +24,12 @@ def _status_of(product: Any) -> str:
 def is_published_product(product: Any) -> bool:
     """Whether every caller may read ``product`` (published lifecycle status)."""
     from src.common.version_visibility import is_visible_consumer
+    from src.controller.lifecycle_service import row_session
 
     return is_visible_consumer(SimpleNamespace(
         status=_status_of(product),
         lifecycle_stage_group_id=getattr(product, "lifecycle_stage_group_id", None),
-    ))
+    ), db=row_session(product))
 
 
 def is_product_read_admin(request: Any, user: Any) -> bool:

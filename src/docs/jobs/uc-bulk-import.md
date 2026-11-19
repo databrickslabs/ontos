@@ -206,6 +206,12 @@ To run immediately:
 - **Yellow warning**: Completed with warnings (some entities skipped)
 - **Blue spinner**: Currently running
 
+**Overlapping runs:** one run imports at a time. A run that starts while another
+one is importing (it can't take the job's database lock) imports nothing and
+fails with exit code `3`, so it shows as failed rather than green; errors while
+importing exit with `1`. The lock needs a direct database connection: a
+transaction-mode connection pooler doesn't support it.
+
 ## Examples
 
 ### Example 1: Simple Key-Based Contract Discovery

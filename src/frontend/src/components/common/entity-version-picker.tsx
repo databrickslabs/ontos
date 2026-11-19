@@ -120,7 +120,7 @@ export function EntityVersionPicker({
 }: EntityVersionPickerProps) {
   const { t } = useTranslation('common')
   const [open, setOpen] = useState(false)
-  const [rows, setRows] = useState<FamilyRow[]>([])
+  const [rawRows, setRawRows] = useState<FamilyRow[]>([])
   const [loading, setLoading] = useState(false)
   const [scope, setScope] = useState<'entity' | 'family'>(value?.scope ?? allowedScopes[0])
 
@@ -153,37 +153,10 @@ export function EntityVersionPicker({
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data: FamilyRow[] = await res.json()
         if (cancelled) return
-        const keep = filterRef.current
-        let filtered = keep ? data.filter((r) => keep(r)) : data
-        // Collapse client-side: one row per family, preferring the
-        // newest matching version. Family counts are computed BEFORE
-        // collapse so the badge still tells the user "this family has
-        // 3 versions" even when only the published one is selectable.
-        if (wantsHistory) {
-          const counts = new Map<string, number>()
-          for (const r of filtered) {
-            const fid = r.versionFamilyId || r.id
-            counts.set(fid, (counts.get(fid) || 0) + 1)
-          }
-          const picked = new Map<string, FamilyRow>()
-          for (const r of filtered) {
-            const fid = r.versionFamilyId || r.id
-            const cur = picked.get(fid)
-            // Lexicographic version compare is good enough here — every
-            // version in the same family is semver-y by convention.
-            if (!cur || (r.version || '') > (cur.version || '')) {
-              picked.set(fid, r)
-            }
-          }
-          filtered = Array.from(picked.values()).map((r) => ({
-            ...r,
-            versionCount: counts.get(r.versionFamilyId || r.id),
-          }))
-        }
-        setRows(filtered)
+        setRawRows(data)
       } catch (e) {
         console.warn(`[EntityVersionPicker] fetch failed for ${apiBase}`, e)
-        if (!cancelled) setRows([])
+        if (!cancelled) setRawRows([])
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -193,6 +166,38 @@ export function EntityVersionPicker({
       cancelled = true
     }
   }, [apiBase, hasRowFilter])
+
+  // Filtered again when the filter changes (a caller's lifecycle groups can arrive
+  // after the rows), not once at fetch time
+  const rows = useMemo(() => {
+    let filtered = rowFilter ? rawRows.filter((r) => rowFilter(r)) : rawRows
+    if (hasRowFilter) {
+      // Collapse client-side: one row per family, preferring the
+      // newest matching version. Family counts are computed BEFORE
+      // collapse so the badge still tells the user "this family has
+      // 3 versions" even when only the published one is selectable.
+      const counts = new Map<string, number>()
+      for (const r of filtered) {
+        const fid = r.versionFamilyId || r.id
+        counts.set(fid, (counts.get(fid) || 0) + 1)
+      }
+      const picked = new Map<string, FamilyRow>()
+      for (const r of filtered) {
+        const fid = r.versionFamilyId || r.id
+        const cur = picked.get(fid)
+        // Lexicographic version compare is good enough here — every
+        // version in the same family is semver-y by convention.
+        if (!cur || (r.version || '') > (cur.version || '')) {
+          picked.set(fid, r)
+        }
+      }
+      filtered = Array.from(picked.values()).map((r) => ({
+        ...r,
+        versionCount: counts.get(r.versionFamilyId || r.id),
+      }))
+    }
+    return filtered
+  }, [rawRows, rowFilter, hasRowFilter])
 
   // Resolve the currently-selected row for trigger display.
   const selectedRow = useMemo(() => {

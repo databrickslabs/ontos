@@ -103,4 +103,26 @@ describe('DataContractWizardDialog status', () => {
     fireEvent.click(statusSelect!)
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['live'])
   })
+
+  it('starts a new contract in the first stage of its group once the stages arrive', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve({
+      ok: true,
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      json: () => Promise.resolve(url.startsWith('/api/lifecycle-stage-groups') ? [{
+        id: 'g', name: 'Intake first', entity_type: 'data_contract',
+        is_default_for_type: true, transitions: [],
+        stages: ['intake', 'live'].map((key, order) => ({
+          key, label: key, category: order ? 'active' : 'draft', color: null, order,
+          is_initial: order === 0,
+        })),
+      }] : []),
+    })))
+    renderWithProviders(
+      <DataContractWizardDialog isOpen={true} onOpenChange={vi.fn()} onSubmit={vi.fn()} />,
+    )
+
+    await waitFor(() => expect(
+      screen.getAllByRole('combobox').some((el) => el.textContent === 'intake'),
+    ).toBe(true))
+  })
 })

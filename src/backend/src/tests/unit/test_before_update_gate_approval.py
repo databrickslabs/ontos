@@ -83,7 +83,9 @@ def test_approving_a_paused_gate_does_not_apply_the_update(db_session, monkeypat
     assert writes == []
 
 
-def test_a_tag_list_the_gates_passed_on_that_is_not_written_is_logged(db_session, caplog):
+def test_an_ungated_tag_list_that_is_not_written_is_logged(db_session, caplog):
+    # Without gates the update keeps its other fields (a gated one is refused,
+    # test_a_gated_update_whose_tag_list_cannot_be_written_is_refused)
     tags_manager = MagicMock()
     tags_manager.set_tags_for_entity.side_effect = RuntimeError('tag write failed')
     manager = DataContractsManager(data_dir=Path('/tmp'), tags_manager=tags_manager)
@@ -102,4 +104,4 @@ def test_a_tag_list_the_gates_passed_on_that_is_not_written_is_logged(db_session
         )
 
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert any('before_update gates passed' in r.getMessage() for r in warnings)
+    assert any('keeps its previous tags' in r.getMessage() for r in warnings)

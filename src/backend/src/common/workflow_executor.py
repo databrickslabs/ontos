@@ -360,6 +360,24 @@ class UpdateGateTagWriteError(CodedValueError):
         )
 
 
+class UpdateGateTagListWriteError(CodedValueError):
+    """The tag list of an update its before_update gates passed couldn't be written.
+
+    The gates evaluated the entity with that list (``_future_tags``), so the update
+    is refused (and rolled back) instead of being saved with the old tags. Without
+    gates the update keeps its other fields. ``params``: ``entityId``.
+    """
+
+    code = 'update_gate_tag_list_write_failed'
+
+    def __init__(self, entity_id: str):
+        super().__init__(
+            "Update refused: its tags, which its workflow gates checked, could not be "
+            "written. Ask an administrator to check the server log.",
+            entityId=entity_id,
+        )
+
+
 # Step types a before_update gate can't have: they commit (entity actions, asset
 # reviews) or act outside the database (delivery, UC grants) as the gate runs, so a
 # later step, or another gate, that refuses the update would leave them done.

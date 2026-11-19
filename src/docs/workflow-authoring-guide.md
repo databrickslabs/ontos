@@ -308,7 +308,7 @@ For a `before_update` gate this means: the `PUT` answers 400 "Pre-update validat
 
 **Tag steps in a `before_update` gate** don't write while the gate runs: the update writes their tag change, after its own `tags` list and in the same commit, so a refused or failed update leaves no tag assigned or removed. Later steps of the same gate already see the tag change (on top of the update's `tags` list, when it sends one). If the tag change can't be written, the update is refused (`update_gate_tag_write_failed`), whatever `on_error` says.
 
-**No entity actions in a `before_update` gate.** Certify, publish and unpublish steps commit as they run, so they would stay done when a later step refuses the update. Saving a `before_update` workflow with an entity action step is refused (`update_gate_entity_action`); one saved before fails at that step. Put the action in an `on_update` workflow instead.
+**No side-effect steps in a `before_update` gate.** Entity actions (certify, publish, unpublish), asset reviews, deliveries and permission grants commit, or act outside Ontos, as they run, so they would stay done when a later step refuses the update. Saving a `before_update` workflow with one of these steps is refused (`update_gate_step_not_allowed`, with the step type in `params.stepType`); one saved before fails at that step without running it. Put the step in an `on_update` workflow instead.
 
 ## Failures, Retries and Cancellation
 

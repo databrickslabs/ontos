@@ -103,7 +103,7 @@ def test_the_audit_records_what_happened_to_the_token_but_never_its_value(payloa
 
     background_tasks = MagicMock()
     settings_manager = MagicMock()
-    settings_manager.update_settings_with_warnings.return_value = (MagicMock(), [])
+    settings_manager.update_settings_off_loop.return_value = (MagicMock(), [])
     asyncio.run(update_settings(
         request=MagicMock(),
         background_tasks=background_tasks,
@@ -128,7 +128,7 @@ def test_a_settings_save_runs_off_the_event_loop():
     from src.routes import settings_routes
 
     settings_manager = MagicMock()
-    settings_manager.update_settings_with_warnings.return_value = (MagicMock(), [])
+    settings_manager.update_settings_off_loop.return_value = (MagicMock(), [])
     calls = []
     real = settings_routes.run_in_threadpool
 
@@ -149,4 +149,4 @@ def test_a_settings_save_runs_off_the_event_loop():
         ))
 
     payload = {"enabled_jobs": ["compliance_checks"]}
-    assert calls == [(settings_manager.update_settings_with_warnings, (payload,))]
+    assert calls == [(settings_manager.update_settings_off_loop, (payload,))]

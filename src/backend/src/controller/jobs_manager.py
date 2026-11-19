@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from src.common.timestamps import utc_now
 from src.common.logging import get_logger
+from src.common.thread_session import ThreadBoundDb
 from src import __version__
 from src.repositories.workflow_installations_repository import workflow_installation_repo
 from src.repositories.workflow_job_runs_repository import workflow_job_run_repo
@@ -90,7 +91,7 @@ def _llm_job_parameters(settings: Any) -> Dict[str, str]:
         ),
     }
 
-class JobsManager:
+class JobsManager(ThreadBoundDb):
     def __init__(self, db: Session, ws_client: WorkspaceClient, *, workflows_root: Optional[Path] = None, notifications_manager=None, settings=None, workspace_deployer=None):
         self._db = db
         self._client = ws_client

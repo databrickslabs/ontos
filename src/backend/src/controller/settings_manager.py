@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 import json
+import threading
 import uuid
 import yaml
 
@@ -32,6 +33,7 @@ from src.models.settings import JobCluster, AppRole, AppRoleCreate, AppRoleUpdat
 from src.models.workflow_installations import WorkflowInstallation
 from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES, ACCESS_LEVEL_ORDER
 from src.common.logging import get_logger
+from src.common.thread_session import ThreadBoundDb, thread_session
 from src.common.api_errors import CodedValueError
 from src.repositories.settings_repository import app_role_repo, role_hierarchy_repo
 from src.repositories.workflow_installations_repository import workflow_installation_repo
@@ -176,7 +178,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     },
 }
 
-class SettingsManager:
+class SettingsManager(ThreadBoundDb):
     def __init__(self, db: Session, settings: Settings, workspace_client: Optional[WorkspaceClient] = None):
         """Inject database session, settings, and optional workspace client."""
         self._db = db
@@ -1609,6 +1611,23 @@ class SettingsManager:
         """
         warnings: List[Dict[str, Any]] = []
         return self._update_settings(settings, warnings), warnings
+
+    # One settings save at a time: a save changes this instance and the installed jobs
+    _save_lock = threading.Lock()
+
+    def update_settings_off_loop(
+        self, settings: dict,
+    ) -> Tuple[Settings, List[Dict[str, Any]]]:
+        """``update_settings_with_warnings`` for a worker thread.
+
+        The save gets its own DB session (this manager's and the jobs manager's
+        ``_db`` on this thread), so it never shares the managers' Session with
+        handlers on the event loop; saves run one at a time.
+        """
+        from src.common.database import get_session_factory
+
+        with self._save_lock, thread_session(get_session_factory()):
+            return self.update_settings_with_warnings(settings)
 
     def _update_settings(self, settings: dict, warnings: List[Dict[str, Any]]) -> Settings:
         git_values_before = self._git_setting_values()

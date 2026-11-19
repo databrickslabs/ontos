@@ -127,9 +127,9 @@ async def update_settings(
             details['ontos_instance_name'] = settings_payload.get('ontos_instance_name')
 
         # Off the event loop: a save can install, remove or update Databricks jobs and
-        # deploy their code, all blocking calls
+        # deploy their code, all blocking calls. It uses its own DB session there.
         updated, warnings = await run_in_threadpool(
-            manager.update_settings_with_warnings, settings_payload,
+            manager.update_settings_off_loop, settings_payload,
         )
         success = True
         # Saved, with what didn't apply ({code, params, message}; the UI translates the code)

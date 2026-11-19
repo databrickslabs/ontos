@@ -399,7 +399,9 @@ def check_table_freshness(
         if isinstance(last_modified, str):
             last_modified = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
 
-        age = datetime.now() - last_modified.replace(tzinfo=None)
+        if last_modified.tzinfo is None:
+            last_modified = last_modified.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - last_modified
         age_hours = age.total_seconds() / 3600
 
         passed = age_hours <= max_age_hours

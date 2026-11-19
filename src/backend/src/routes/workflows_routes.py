@@ -5,7 +5,6 @@ Provides CRUD operations for workflow definitions and execution management.
 """
 
 import json
-from datetime import datetime
 from typing import Any, Collection, Dict, List, Optional, Union
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
@@ -24,6 +23,7 @@ from src.common.workflow_approvals import (
     is_handled, open_approval_ids, open_execution_approvals,
 )
 from src.common.logging import get_logger
+from src.common.timestamps import utc_now
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.notifications_manager import NotificationsManager
 from src.common.workflow_executor import WorkflowExecutor, public_result_data
@@ -1721,7 +1721,7 @@ def _mark_step_notifications_handled(
                 payload['handled'] = True
                 payload['decision'] = decision or ('approved' if approved else 'rejected')
                 payload['handled_by'] = user_email
-                payload['handled_at'] = datetime.utcnow().isoformat()
+                payload['handled_at'] = utc_now().isoformat()
                 notif.action_payload = json.dumps(payload)
                 db.add(notif)
         except (json.JSONDecodeError, TypeError):

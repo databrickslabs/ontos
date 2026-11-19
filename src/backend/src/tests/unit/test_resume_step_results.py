@@ -243,6 +243,67 @@ def test_runs_written_within_one_second_restore_the_later_one(db_session):
     assert restored['check']['message'] == 'second run'
 
 
+def test_runs_with_equal_timestamps_keep_their_insertion_order(db_session, monkeypatch):
+    """A coarse clock gives two runs the same instant. Ids are random, so the
+    row written last must still sort last (the repository bumps it by 1 us)."""
+    import src.repositories.process_workflows_repository as repo_module
+
+    frozen = repo_module.utc_now()
+    monkeypatch.setattr(repo_module, 'utc_now', lambda: frozen)
+    db_workflow = _create(db_session, [_step('check', StepType.VALIDATION, {'rule': RULE})])
+    workflow = WorkflowsManager(db_session).get_workflow(db_workflow.id)
+    steps_by_id = {s.step_id: s for s in workflow.steps}
+    execution = workflow_execution_repo.create(
+        db_session, WorkflowExecutionCreate(workflow_id=db_workflow.id),
+    )
+    stamps = [
+        workflow_execution_repo.add_step_execution(
+            db_session, execution_id=execution.id, step_id=steps_by_id['check'].id,
+            status='failed', passed=False, message=f'run {n}',
+        ).started_at
+        for n in range(6)
+    ]
+
+    assert stamps == sorted(set(stamps))  # strictly increasing: nothing left to a tie
+    restored = WorkflowExecutor(db_session)._restored_step_results(execution.id, steps_by_id)
+    assert restored['check']['message'] == 'run 5'
+
+
+def test_a_decided_pause_record_is_not_the_open_one(db_session, monkeypatch):
+    """Rounds are told apart by the ``status: decided`` marker, not by timestamps:
+    the decided round's pause record and its decision are skipped, even when the
+    new round's record carries the same instant."""
+    import src.repositories.process_workflows_repository as repo_module
+
+    frozen = repo_module.utc_now()
+    monkeypatch.setattr(repo_module, 'utc_now', lambda: frozen)
+    db_workflow = _create(db_session, [
+        _approval('approve', on_pass='done'), _step('done', StepType.PASS),
+    ])
+    workflow = WorkflowsManager(db_session).get_workflow(db_workflow.id)
+    approve = next(s for s in workflow.steps if s.step_id == 'approve')
+    execution = workflow_execution_repo.create(
+        db_session, WorkflowExecutionCreate(workflow_id=db_workflow.id),
+    )
+
+    def add(data):
+        return workflow_execution_repo.add_step_execution(
+            db_session, execution_id=execution.id, step_id=approve.id,
+            status='succeeded', passed=True, result_data=data,
+        )
+
+    add({'status': 'decided', 'approvers': 'round 1'})
+    add({'approval_result': 'approved'})
+    open_round = add({'status': 'pending', 'approvers': 'round 2'})
+
+    found = WorkflowExecutor(db_session)._approval_pause_record(execution.id, approve)
+
+    assert found is not None and found.id == open_round.id
+    db_session.delete(open_round)
+    db_session.commit()
+    assert WorkflowExecutor(db_session)._approval_pause_record(execution.id, approve) is None
+
+
 def test_tags_set_in_the_run_context_survive_the_approval(db_session):
     """Tags only in the run context (no tag with that name exists) are what a
     step after the approval sees, as it would without the pause."""

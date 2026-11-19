@@ -5,9 +5,10 @@ Provides CRUD operations for workflow definitions, steps, and executions.
 """
 
 import json
+from datetime import timedelta
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 
 from src.common.timestamps import utc_now
 from src.db_models.process_workflows import (
@@ -475,6 +476,20 @@ class WorkflowExecutionRepository:
             if db_step is not None:
                 step_key = step_key if step_key is not None else db_step.step_id
                 step_name = step_name if step_name is not None else db_step.name
+        started_at = utc_now()
+        # Rows are read back in started_at order and the ids are random, so two
+        # rows of one execution must never share a timestamp (coarse clocks, or
+        # two steps within one clock tick): the later row is bumped by 1 µs
+        latest = (
+            db.query(func.max(WorkflowStepExecutionDb.started_at))
+            .filter(WorkflowStepExecutionDb.execution_id == execution_id)
+            .scalar()
+        )
+        if latest is not None:
+            if latest.tzinfo is None:  # SQLite returns naive values
+                latest = latest.replace(tzinfo=started_at.tzinfo)
+            if started_at <= latest:
+                started_at = latest + timedelta(microseconds=1)
         db_step_exec = WorkflowStepExecutionDb(
             execution_id=execution_id,
             step_id=step_id,
@@ -488,7 +503,7 @@ class WorkflowExecutionRepository:
             duration_ms=duration_ms,
             # Set here, not left to func.now(): SQLite keeps whole seconds, so
             # runs of one step in the same second would not sort by when they ran
-            started_at=utc_now(),
+            started_at=started_at,
         )
         db.add(db_step_exec)
         db.commit()

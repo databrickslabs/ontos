@@ -187,3 +187,44 @@ def test_the_default_limits_are_conservative():
     assert fields['COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY'].default == 400
     # Settings without the field: the same per-run default
     assert llm.LlmChecker(SimpleNamespace(LLM_ENABLED=True)).max_calls == 100
+
+
+# --- a retry of a model call is charged to the daily quota ---
+
+def _transient_error():
+    import httpx
+    import openai
+
+    return openai.APIConnectionError(request=httpx.Request('POST', 'https://ws/serving'))
+
+
+def _used_today(db, user='w'):
+    from src.common.timestamps import utc_now
+
+    return repo.used(db, user, utc_now().date())
+
+
+def test_a_retry_takes_one_more_call_from_the_quota(db_session):
+    fake = FakeLlm(_transient_error(), llm_reply('PASS: ok'))
+    checker = _checker(db_session, fake, limit=3)
+    checker._sleep = lambda seconds: None
+
+    assert checker.check('One row per order.', GRAIN).passed
+
+    # The scan, the failed verdict call and its retry: all three on the quota
+    assert checker.calls == 3
+    assert _used_today(db_session) == 3
+
+
+def test_a_retry_past_the_quota_is_not_made(db_session):
+    fake = FakeLlm(_transient_error(), llm_reply('PASS: ok'))
+    checker = _checker(db_session, fake, limit=2)
+    checker._sleep = lambda seconds: None
+
+    with pytest.raises(llm.LlmCheckError) as raised:
+        checker.check('One row per order.', GRAIN)
+
+    assert raised.value.code == llm.CALL_FAILED
+    assert len(fake.calls) == 1  # the retry was not sent
+    assert _used_today(db_session) == 2
+

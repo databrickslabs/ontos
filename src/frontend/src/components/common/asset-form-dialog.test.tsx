@@ -65,8 +65,17 @@ const tableSchema = {
   }],
 };
 
+// The type's schema; the lifecycle reads of the status picker answer nothing here
+async function answerGets(url: string) {
+  return url.startsWith('/api/lifecycle')
+    ? { data: null, error: 'not found' }
+    : { data: tableSchema };
+}
+
 describe('AssetFormDialog - Unity Catalog description warning', () => {
   beforeEach(() => {
+    getMock.mockReset();
+    getMock.mockImplementation(answerGets);
     toastMock.mockClear();
     putMock.mockReset();
   });
@@ -112,7 +121,7 @@ describe('AssetFormDialog - Physical Path and Location', () => {
     toastMock.mockClear();
     putMock.mockReset();
     getMock.mockReset();
-    getMock.mockResolvedValue({ data: tableSchema });
+    getMock.mockImplementation(answerGets);
     putMock.mockResolvedValue({ data: { ...asset, warnings: [] } });
   });
 

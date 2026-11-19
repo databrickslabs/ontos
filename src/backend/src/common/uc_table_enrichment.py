@@ -284,7 +284,10 @@ class StatementCache:
     the same statement (same catalog, field group and schemas), and the budget
     of the current policy run.
 
-    A statement that failed is not sent again. Past ``max_statements`` sent by
+    A statement that failed is not sent again in the same policy run. A later
+    policy run of the job sends it again after a failure that may pass then
+    (``timed_out``, ``transient``, ``query_failed``); one that won't
+    (``no_access``, ``not_found``) is kept for the whole job. Past ``max_statements`` sent by
     the current policy run, a new statement is not sent and its group is
     unavailable (reason ``budget_exceeded``); past ``max_run_seconds`` since
     the policy run started, it is not sent either (reason ``timed_out``), and a
@@ -304,12 +307,16 @@ class StatementCache:
         self._clock = clock
         self._cached_rows = 0
         self._results: Dict[Any, Any] = {}
+        # Failures that may pass on a later try, kept for the current policy run only
+        self._run_failures: Dict[Any, SourceUnavailable] = {}
         self.start_run()
 
     def start_run(self) -> None:
-        """Begin a policy run: statements sent and the deadline start over."""
+        """Begin a policy run: statements sent and the deadline start over, and the
+        statements that failed for a passing reason are sent again."""
         self.sent = 0
         self.deadline = self._clock() + self.max_run_seconds
+        self._run_failures = {}
 
     def runner(self, inner: SqlRunner) -> SqlRunner:
         """``inner`` with this run's reuse and budget."""
@@ -317,6 +324,8 @@ class StatementCache:
 
     def rows(self, inner: SqlRunner, statement: str, parameters: Dict[str, str]):
         key = (statement, tuple(sorted(parameters.items())))
+        if key in self._run_failures:
+            raise self._run_failures[key]
         if key in self._results:
             result = self._results[key]
             if isinstance(result, SourceUnavailable):
@@ -338,14 +347,20 @@ class StatementCache:
             else:
                 result = inner.rows(statement, parameters)
         except SourceUnavailable as e:
-            # Cut short by the run's deadline: the next policy run may still send it
-            if not (e.reason == REASON_TIMED_OUT and self._clock() >= self.deadline):
-                self._results[key] = e
+            if e.reason in _LASTING_REASONS:
+                self._results[key] = e  # no grant or no table: the same for the whole job
+            elif not (e.reason == REASON_TIMED_OUT and self._clock() >= self.deadline):
+                # The next policy run tries again (also when cut short by the deadline)
+                self._run_failures[key] = e
             raise
         if self._cached_rows + len(result) <= self.max_cached_rows:
             self._cached_rows += len(result)
             self._results[key] = result
         return result
+
+
+# Statement failures a later policy run of the job would get too
+_LASTING_REASONS = (REASON_NO_ACCESS, REASON_NOT_FOUND)
 
 
 class _CachedRunner:

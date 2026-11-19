@@ -372,7 +372,9 @@ tables; never one per table), restricted to the catalogs and schemas selected by
 `AND`-ed parts of the rule's `WHERE` that don't read these fields. A chunk is read only when
 the run gets to it, so a run that stops at its `limit` reads no more. The policies of one
 compliance-checks job run share the statements: a later policy that needs the same tags or
-lineage reuses them. Each policy run sends at most 100 statements (in a job run, each
+lineage reuses them. A statement that failed with `timed_out`, `transient` or `query_failed`
+is sent again by the next policy that needs it; one that failed with `no_access` or
+`not_found` is not. Each policy run sends at most 100 statements (in a job run, each
 policy has its own 100, and statements already read for an earlier policy don't count);
 past that, the fields are not read (reason `budget_exceeded`). A policy run spends at most
 15 minutes on these statements, from its start; past that, the statements still to send

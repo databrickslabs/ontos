@@ -189,8 +189,14 @@
       "timed_out": "la requête était encore en cours à la limite de temps",
       "budget_exceeded": "l'exécution a atteint sa limite de requêtes sur le SQL warehouse",
       "transient": "le SQL warehouse était temporairement indisponible, même après de nouvelles tentatives",
-      "not_found": "la table système est introuvable (le schéma système est-il activé ?)"
+      "not_found": "la table système est introuvable (le schéma système est-il activé ?)",
+      "not_loaded": "les tags de ce type d'objet ne sont pas encore lus"
     }
+  },
+  "runScoreCoverage": {
+    "noScore": "Aucun score",
+    "coverage": "{{evaluated}} objets évalués sur {{total}} ; les autres ne comptent pas dans le score.",
+    "hiddenResults": "{{count}} résultats portent sur des objets Unity Catalog que vous ne pouvez pas lire ; ils ne sont pas affichés."
   },
   "saveErrors": {
     "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe."

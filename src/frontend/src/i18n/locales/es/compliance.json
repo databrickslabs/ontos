@@ -189,8 +189,14 @@
       "timed_out": "la consulta seguía en ejecución al alcanzar el límite de tiempo",
       "budget_exceeded": "la ejecución alcanzó su límite de consultas en el SQL warehouse",
       "transient": "el SQL warehouse no estuvo disponible temporalmente, ni siquiera tras los reintentos",
-      "not_found": "no se encontró la tabla del sistema (¿está habilitado el esquema del sistema?)"
+      "not_found": "no se encontró la tabla del sistema (¿está habilitado el esquema del sistema?)",
+      "not_loaded": "todavía no se leen las etiquetas de este tipo de objeto"
     }
+  },
+  "runScoreCoverage": {
+    "noScore": "Sin puntuación",
+    "coverage": "{{evaluated}} de {{total}} objetos evaluados; los demás no cuentan en la puntuación.",
+    "hiddenResults": "{{count}} resultados son de objetos de Unity Catalog que no puede leer, por lo que no se muestran."
   },
   "saveErrors": {
     "rule_trailing_input": "La regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Todo lo que sigue se ignoraría, y la regla comprobaría menos de lo que dice. Elimínelo o corrija la sintaxis."

@@ -17,8 +17,11 @@ import {
 } from '@/components/common/list-view-skeleton';
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
 import {
+  complianceHiddenResultsText,
   complianceResultMessageText,
   complianceResultStatus,
+  complianceRunCoverageText,
+  complianceRunScoreText,
   complianceRunWarningText,
 } from '@/lib/compliance-run-warning';
 import {
@@ -35,7 +38,8 @@ interface Run {
   finished_at?: string;
   success_count: number;
   failure_count: number;
-  score: number;
+  score: number | null;
+  coverage?: { evaluated?: number; not_evaluated?: number } | null;
   error_message?: string;
   error_code?: string | null;
   error_params?: Record<string, unknown> | null;
@@ -68,6 +72,7 @@ export default function ComplianceRunDetails() {
   const [run, setRun] = useState<Run | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   const [onlyFailed, setOnlyFailed] = useState(true);
+  const [hiddenCount, setHiddenCount] = useState(0);
 
   const columns: ColumnDef<Result>[] = useMemo(() => [
     { accessorKey: 'object_type', header: t('common:labels.type') },
@@ -116,6 +121,7 @@ export default function ComplianceRunDetails() {
       if (!res.data) throw new Error(res.error || t('compliance:errors.loadRunResultsFailed'));
       setRun(res.data.run);
       setResults(Array.isArray(res.data.results) ? res.data.results : []);
+      setHiddenCount(Number(res.data.hidden_count) || 0);
       setDynamicTitle(t('compliance:runDetails.runTitle', { id: runId }));
     } catch (e: any) {
       setError(e.message || t('compliance:errors.loadFailed'));
@@ -174,9 +180,19 @@ export default function ComplianceRunDetails() {
         <CardHeader>
           <CardTitle className="text-xl">{t('compliance:runDetails.runTitle', { id: run.id })}</CardTitle>
           <CardDescription>
-            {t('compliance:runDetails.statusLabel')} <span className="font-medium">{run.status}</span> • {t('compliance:runDetails.scoreLabel')} <span className="font-medium">{run.score}%</span> •
+            {t('compliance:runDetails.statusLabel')}{' '}
+            <span className="font-medium">{run.status}</span> •{' '}
+            {t('compliance:runDetails.scoreLabel')}{' '}
+            <span className="font-medium" data-testid="run-score">
+              {complianceRunScoreText(t, run)}
+            </span> •
             {' '}{t('compliance:runDetails.passedLabel')} <span className="font-medium text-green-600">{run.success_count}</span> / {t('compliance:runDetails.failedLabel')} <span className="font-medium text-red-600">{run.failure_count}</span>
           </CardDescription>
+          {complianceRunCoverageText(t, run) && (
+            <div className="text-sm text-muted-foreground" data-testid="run-coverage">
+              {complianceRunCoverageText(t, run)}
+            </div>
+          )}
           {run.status === 'failed' && run.error_message && (
             <div className="text-sm text-destructive">{t('compliance:runDetails.errorLabel')} {complianceRunErrorText(t, run)}</div>
           )}
@@ -194,6 +210,11 @@ export default function ComplianceRunDetails() {
               <Button size="sm" variant={!onlyFailed ? 'default' : 'outline'} onClick={() => setOnlyFailed(false)}>{t('compliance:results.showAll')}</Button>
             </div>
           </div>
+          {complianceHiddenResultsText(t, hiddenCount) && (
+            <div className="text-sm text-muted-foreground mb-3" data-testid="hidden-results">
+              {complianceHiddenResultsText(t, hiddenCount)}
+            </div>
+          )}
           <DataTable columns={columns} data={results} searchColumn="object_name" />
         </CardContent>
       </Card>

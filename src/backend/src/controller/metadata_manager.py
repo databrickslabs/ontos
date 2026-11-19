@@ -442,11 +442,25 @@ class MetadataManager:
         return removed
     
     def list_attachments(
-        self, db: Session, *, entity_type: str, entity_id: str
+        self, db: Session, *, entity_type: str, entity_id: str,
+        can_read_row: Optional[Callable[[str, str], bool]] = None,
     ) -> List[MetadataAttachment]:
-        """List all shared asset attachments for an entity."""
+        """List all shared asset attachments for an entity.
+
+        ``can_read_row(entity_type, entity_id)``: attachments of a row stored on an
+        entity it refuses are left out, as in ``get_merged_metadata`` (#1342).
+        """
         rows = self._attachment_repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id)
+        if can_read_row is not None:
+            rows = [r for r in rows if self._attached_row_readable(db, r, can_read_row)]
         return [MetadataAttachment.from_orm(r) for r in rows]
+
+    def _attached_row_readable(self, db: Session, attachment, can_read_row) -> bool:
+        if attachment.asset_type not in ('rich_text', 'link', 'document'):
+            return True
+        owner = self.get_row_owner(db, kind=attachment.asset_type, id=attachment.asset_id)
+        # A row that no longer exists tells nothing about an asset.
+        return owner is None or can_read_row(*owner)
 
     # =========================================================================
     # Merged Metadata with Inheritance

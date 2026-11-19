@@ -36,10 +36,13 @@ def process_contract_semantic_links(
     semantic_manager: SemanticLinksManager,
     contract_id: str,
     authoritative_definitions: List[Dict[str, Any]],
-    created_by: Optional[str] = None
+    created_by: Optional[str] = None,
+    commit: bool = True,
 ) -> int:
     """
     Process contract-level semantic assignments from authoritativeDefinitions.
+
+    ``commit=False`` writes the links in the caller's transaction (``SemanticLinksManager.add``).
 
     Args:
         semantic_manager: SemanticLinksManager instance
@@ -63,7 +66,7 @@ def process_contract_semantic_links(
                     iri=url,
                     label=iri_tail.replace('_', ' ') if iri_tail else None
                 )
-                semantic_manager.add(semantic_link, created_by=created_by)
+                semantic_manager.add(semantic_link, created_by=created_by, commit=commit)
                 created_count += 1
                 logger.debug(f"Created semantic link for contract {contract_id}: {url}")
             except Exception as e:

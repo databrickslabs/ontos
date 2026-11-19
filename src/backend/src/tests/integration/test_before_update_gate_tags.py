@@ -288,3 +288,92 @@ def test_a_gate_tag_that_cannot_be_written_refuses_the_update(client, db_session
     assert refused.status_code == 400, refused.text
     # (the refused request rolls back the test's shared session, the contract with it)
     assert refused.json()['detail']['code'] == 'update_gate_tag_write_failed'
+
+
+SEMANTIC = 'http://databricks.com/ontology/uc/semanticAssignment'
+CONCEPT = {'url': 'http://example.com/ontology#Customer', 'type': SEMANTIC}
+
+
+@pytest.fixture
+def write_order(monkeypatch):
+    """(kind, committed) of each gate tag write and semantic link add, in call order."""
+    from src.controller.semantic_links_manager import SemanticLinksManager
+    from src.controller.tags_manager import TagsManager
+
+    order = []
+    add_tag, add_link = TagsManager.add_tag_to_entity, SemanticLinksManager.add
+
+    def adding_tag(self, db, **kwargs):
+        order.append(('tag', kwargs.get('commit', True)))
+        return add_tag(self, db, **kwargs)
+
+    def adding_link(self, payload, created_by=None, **kwargs):
+        order.append(('link', kwargs.get('commit', True)))
+        return add_link(self, payload, created_by, **kwargs)
+
+    monkeypatch.setattr(TagsManager, 'add_tag_to_entity', adding_tag)
+    monkeypatch.setattr(SemanticLinksManager, 'add', adding_link)
+    return order
+
+
+def test_the_semantic_links_of_the_update_are_written_in_its_commit(
+    client, db_session, write_order,
+):
+    _tag_then_check_gate(db_session, "MATCH (c:data_contract) ASSERT c.name = 'Gated'")
+    contract_id = _new_contract(client)
+
+    passed = client.put(
+        f'/api/data-contracts/{contract_id}', json={'authoritativeDefinitions': [CONCEPT]},
+    )
+
+    # Before, the link was added (and committed) before the gate's tag was written,
+    # so a tag write that refused the update left the link behind
+    assert passed.status_code == 200, passed.text
+    assert write_order == [('tag', False), ('link', False)]
+
+
+def test_a_refused_update_adds_no_semantic_link(client, db_session, monkeypatch, write_order):
+    from src.controller.tags_manager import TagsManager
+
+    _tag_then_check_gate(db_session, "MATCH (c:data_contract) ASSERT c.name = 'Gated'")
+    contract_id = _new_contract(client)
+
+    def broken(self, db, **kwargs):
+        write_order.append(('tag', 'failed'))
+        raise RuntimeError('tag table down')
+
+    monkeypatch.setattr(TagsManager, 'add_tag_to_entity', broken)
+
+    refused = client.put(
+        f'/api/data-contracts/{contract_id}', json={'authoritativeDefinitions': [CONCEPT]},
+    )
+
+    assert refused.status_code == 400, refused.text
+    assert write_order == [('tag', 'failed')]
+
+
+def test_a_tag_list_that_cannot_be_written_keeps_the_rest_of_the_update(
+    client, db_session, monkeypatch,
+):
+    # The savepoint around the update's own tags: their failure undoes only them
+    from src.controller.tags_manager import TagsManager
+
+    contract_id = _new_contract(client)
+    pii_id = _tag_named(client, 'pii')
+
+    def broken(self, db, **kwargs):
+        db.add(EntityTagAssociationDb(
+            tag_id=pii_id, entity_id=contract_id, entity_type='data_contract',
+        ))
+        db.flush()
+        raise RuntimeError('tag table down')
+
+    monkeypatch.setattr(TagsManager, 'set_tags_for_entity', broken)
+
+    passed = client.put(
+        f'/api/data-contracts/{contract_id}', json={'name': 'Renamed', 'tags': ['pii']},
+    )
+
+    assert passed.status_code == 200, passed.text
+    assert client.get(f'/api/data-contracts/{contract_id}').json()['name'] == 'Renamed'
+    assert _contract_tags(db_session, contract_id, pii_id) == []

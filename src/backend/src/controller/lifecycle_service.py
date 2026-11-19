@@ -495,7 +495,12 @@ class LifecycleService:
         """In a review stage that awaits a decision: any review stage that the approve
         action doesn't move to from another review stage of the group (proposed /
         under_review by default, not approved; in ``draft -> review_a -> approved_x ->
-        active``, review_a)."""
+        active``, review_a).
+
+        Intended: a review stage reached by approving from another review stage is
+        decided, as ``approved`` is in the default groups, whatever its own approve
+        move: in ``draft -> review_a -> review_b -> active`` approve on review_b is
+        refused (409) and Publish moves it to active, so nothing gets stuck."""
         group = self.group_for(db, entity_type, entity)
         key = _normalized(getattr(entity, 'status', None))
         if group.category(key) != 'review':

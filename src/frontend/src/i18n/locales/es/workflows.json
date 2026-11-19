@@ -341,6 +341,9 @@
       "stepConfigMissing": "Al paso \"{{step}}\" le faltan ajustes obligatorios: {{fields}}.",
       "assignTagValueSourceUnknown": "El paso «{{step}}» usa la fuente de valor desconocida «{{source}}».",
       "policyCheckPolicyMissing": "El paso \"{{step}}\" necesita una política de cumplimiento existente. Seleccione una en la configuración del paso.",
+      "updateGate": {
+        "entityAction": "El paso \"{{step}}\" es una acción de entidad, que no puede ejecutarse en un gate before update: quedaría hecha cuando se rechace la actualización. Elimine el paso o muévalo a un flujo on update."
+      },
       "branch": {
         "on_pass": "éxito",
         "on_fail": "fallo"

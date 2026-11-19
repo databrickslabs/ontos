@@ -341,6 +341,9 @@
       "stepConfigMissing": "Al passaggio \"{{step}}\" mancano impostazioni obbligatorie: {{fields}}.",
       "assignTagValueSourceUnknown": "Il passaggio «{{step}}» usa la sorgente di valore sconosciuta «{{source}}».",
       "policyCheckPolicyMissing": "Il passaggio \"{{step}}\" richiede un criterio di conformità esistente. Selezionarne uno nelle impostazioni del passaggio.",
+      "updateGate": {
+        "entityAction": "Il passaggio \"{{step}}\" è un'azione sull'entità, che non può essere eseguita in un gate before update: resterebbe eseguita quando l'aggiornamento viene rifiutato. Rimuovi il passaggio o spostalo in un workflow on update."
+      },
       "branch": {
         "on_pass": "successo",
         "on_fail": "errore"

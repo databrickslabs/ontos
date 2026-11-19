@@ -2980,6 +2980,15 @@ class EntityActionStepHandler(StepHandler):
         action = self._config.get('action')
         if not action:
             return StepResult(passed=False, error="No action configured for entity_action step")
+        if _trigger_type(context) == 'before_update':
+            # Saving such a gate is refused; one stored before fails here, before it
+            # commits an action a later step, or another gate, could refuse the update for
+            return StepResult(
+                passed=False,
+                error="An entity action can't run in a before_update gate: "
+                      "it would stay done when the update is refused",
+                data={'error_code': 'update_gate_entity_action', 'error_params': {}},
+            )
 
         entity_type = context.entity_type
         entity_id = context.entity_id

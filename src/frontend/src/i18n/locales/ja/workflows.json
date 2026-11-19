@@ -341,6 +341,9 @@
       "stepConfigMissing": "ステップ「{{step}}」に必須の設定がありません: {{fields}}。",
       "assignTagValueSourceUnknown": "ステップ「{{step}}」は不明な値ソース「{{source}}」を使用しています。",
       "policyCheckPolicyMissing": "ステップ「{{step}}」には既存のコンプライアンスポリシーが必要です。ステップの設定で選択してください。",
+      "updateGate": {
+        "entityAction": "ステップ「{{step}}」はエンティティアクションのため、before update ゲートでは実行できません。更新が拒否されてもアクションは実行済みのまま残ります。ステップを削除するか、on update ワークフローに移してください。"
+      },
       "branch": {
         "on_pass": "成功時",
         "on_fail": "失敗時"

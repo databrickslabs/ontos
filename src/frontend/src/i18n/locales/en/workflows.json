@@ -341,6 +341,9 @@
       "stepConfigMissing": "Step \"{{step}}\" is missing required settings: {{fields}}.",
       "assignTagValueSourceUnknown": "Step \"{{step}}\" uses the unknown value source \"{{source}}\".",
       "policyCheckPolicyMissing": "Step \"{{step}}\" needs an existing compliance policy. Select one in the step's settings.",
+      "updateGate": {
+        "entityAction": "Step \"{{step}}\" is an entity action, which can't run in a before update gate: it would stay done when the update is refused. Remove the step, or move it to an on update workflow."
+      },
       "branch": {
         "on_pass": "pass",
         "on_fail": "fail"

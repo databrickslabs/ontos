@@ -118,6 +118,25 @@ def _stored_trigger(trigger: WorkflowTrigger | Dict[str, Any] | None) -> Optiona
 ASSIGN_TAG_VALUE_SOURCES = ('current_user', 'project_name', 'entity_name', 'timestamp')
 
 
+def _update_gate_step_errors(workflow: ProcessWorkflowCreate) -> List[str]:
+    """Entity action steps in a ``before_update`` gate are refused.
+
+    They certify, publish or unpublish the entity and commit it as the gate runs,
+    so a later step, or another gate, that refuses the update would leave the
+    action done. Tag steps are fine: the update writes their change (#1403).
+    """
+    if workflow.trigger is None or workflow.trigger.type != TriggerType.BEFORE_UPDATE:
+        return []
+    return [
+        CodedMessage(
+            f"Step '{step.step_id}': an entity action can't run in a before_update gate, "
+            "since it would stay done when the update is refused",
+            'update_gate_entity_action', step=step.step_id,
+        )
+        for step in workflow.steps if step.step_type == StepType.ENTITY_ACTION
+    ]
+
+
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
     """A step config error for required settings, with the step and fields as params."""
     return CodedMessage(f"Step '{step.step_id}': {text}", 'step_config_missing',
@@ -792,6 +811,7 @@ class WorkflowsManager:
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
         errors.extend(self.changed_schedule_errors(workflow.trigger, stored_trigger))
+        errors.extend(_update_gate_step_errors(workflow))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,

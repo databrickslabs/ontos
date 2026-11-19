@@ -67,6 +67,25 @@ describe('workflowValidationIssueText', () => {
     );
   });
 
+  it('translates an entity action step refused in a before_update gate', async () => {
+    const issue = {
+      code: 'update_gate_entity_action',
+      message: "Step 'publish': an entity action can't run in a before_update gate",
+      params: { step: 'publish' },
+    };
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Step "publish" is an entity action, which can\'t run in a before update gate: '
+      + 'it would stay done when the update is refused. '
+      + 'Remove the step, or move it to an on update workflow.',
+    );
+    await i18n.changeLanguage('pt');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'A etapa "publish" é uma ação de entidade, que não pode rodar em um gate before update: '
+      + 'ela continuaria feita quando a atualização fosse recusada. '
+      + 'Remova a etapa ou mova-a para um fluxo on update.',
+    );
+  });
+
   it('shows the English text of an error it has no text for', () => {
     const message = "disabled_for: unknown domain 'nope'";
     expect(workflowValidationIssueText(

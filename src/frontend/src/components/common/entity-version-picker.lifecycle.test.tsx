@@ -42,6 +42,23 @@ describe('EntityVersionPicker row filter', () => {
     expect(screen.queryByText('Vetting feed')).not.toBeInTheDocument();
   });
 
+  it('filters again when the filter changes after the rows arrived', async () => {
+    const strict = (r: { status?: string | null }) => r.status === 'approved';
+    const { rerender } = renderWithProviders(
+      <EntityVersionPicker entityKind="contract" value={null} onChange={vi.fn()}
+        rowFilter={strict} />,
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    // The caller's lifecycle groups arrived: a custom review stage now counts
+    rerender(
+      <EntityVersionPicker entityKind="contract" value={null} onChange={vi.fn()}
+        rowFilter={(r: { status?: string | null }) => r.status === 'vetting'} />,
+    );
+    fireEvent.click(screen.getByRole('combobox'));
+    expect(await screen.findByText('Vetting feed')).toBeInTheDocument();
+    expect(screen.queryByText('Approved feed')).not.toBeInTheDocument();
+  });
+
   it('fetches the family list without a filter', async () => {
     renderWithProviders(
       <EntityVersionPicker entityKind="contract" value={null} onChange={vi.fn()} />,

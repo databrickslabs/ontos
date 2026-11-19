@@ -50,6 +50,7 @@ const SEEDED_CATEGORIES: Record<string, string> = {
 export interface LifecycleRow {
   status?: string | null;
   lifecycle_stage_group_id?: string | null;
+  lifecycleStageGroupId?: string | null;
   status_category?: string | null;
   statusCategory?: string | null;
 }
@@ -70,7 +71,8 @@ export function groupOfRow(
   row: LifecycleRow, groups: LifecycleStageGroup[] | null | undefined,
 ): LifecycleStageGroup | null {
   const list = groups ?? [];
-  return list.find((g) => g.id && g.id === row.lifecycle_stage_group_id)
+  const groupId = row.lifecycle_stage_group_id ?? row.lifecycleStageGroupId
+  return list.find((g) => g.id && g.id === groupId)
     ?? list.find((g) => g.is_default_for_type) ?? list[0] ?? null;
 }
 
@@ -354,7 +356,6 @@ export function contractEditableInPlace(
   contract: LifecycleRow & { lifecycle_stage_group_id?: string | null },
   groups: LifecycleStageGroup[],
 ): boolean {
-  const group = groups.find((g) => g.id && g.id === contract.lifecycle_stage_group_id)
-    ?? groups.find((g) => g.is_default_for_type) ?? groups[0] ?? null;
+  const group = groupOfRow(contract, groups);
   return isContractEditableInPlace(contract, submitReviewStageOf(group));
 }

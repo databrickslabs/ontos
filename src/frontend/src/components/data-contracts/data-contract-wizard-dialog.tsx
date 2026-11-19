@@ -239,6 +239,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
   const [lookupOpen, setLookupOpen] = useState(false)
   const wasOpenRef = useRef(false)
+  // Whether the user picked a status: until then a new contract follows its group's first stage
+  const statusPickedRef = useRef(false)
 
   // Initialize wizard state only when the dialog transitions from closed -> open
   useEffect(() => {
@@ -249,6 +251,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         setStep(1)
         setName('')
         setVersion('1.0.0')
+        statusPickedRef.current = false
         setStatus(initialKey)
         setOwner('')
         setDomainIds([])
@@ -302,6 +305,17 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       wasOpenRef.current = false
     }
   }, [isOpen, initial])
+
+  // The group's stages arrive after the dialog opens: a new contract starts in the
+  // first one unless the user already chose a status
+  useEffect(() => {
+    if (isOpen && !initial && !statusPickedRef.current) setStatus(initialKey)
+  }, [isOpen, initial, initialKey])
+
+  const pickStatus = (value: string) => {
+    statusPickedRef.current = true
+    setStatus(value)
+  }
 
   const addObject = () => setSchemaObjects((prev) => [...prev, { name: '', properties: [] }])
   const removeObject = (idx: number) => setSchemaObjects((prev) => prev.filter((_, i) => i !== idx))
@@ -646,7 +660,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                   </div>
                   <div>
                     <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.status', 'Status *')}</Label>
-                    <Select value={status} onValueChange={setStatus}>
+                    <Select value={status} onValueChange={pickStatus}>
                       <SelectTrigger className="mt-1">
                         <SelectValue placeholder={t('common:placeholders.selectStatus', 'Select status')} />
                       </SelectTrigger>

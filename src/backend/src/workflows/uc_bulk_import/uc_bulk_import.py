@@ -129,6 +129,9 @@ def create_engine_from_params(
 # Lock key of the job: ``data_products.name`` has no unique constraint and the
 # job finds then inserts, so two overlapping runs could insert duplicates.
 IMPORT_LOCK_NAME = "ontos.uc_bulk_import"
+# Exit code of a run that finds another run holding the lock: the run fails, so a
+# scheduler shows it red rather than green, with a code distinct from errors (1).
+LOCK_HELD_EXIT_CODE = 3
 
 
 @contextmanager
@@ -939,8 +942,8 @@ def main():
     
     with single_flight(engine) as acquired:
         if not acquired:
-            print("\nAnother UC Bulk Import run holds the lock: skipping this run")
-            return
+            print("\nAnother UC Bulk Import run holds the lock: this run imported nothing")
+            sys.exit(LOCK_HELD_EXIT_CODE)
         run_import(args, ws, engine, patterns, dry_run, verbose, current_user)
 
 

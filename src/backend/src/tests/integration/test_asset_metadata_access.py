@@ -22,7 +22,7 @@ from src.controller.assets_manager import AssetsManager
 from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
 from src.db_models.assets import AssetDb, AssetTypeDb
-from src.db_models.metadata import DocumentMetadataDb, RichTextMetadataDb
+from src.db_models.metadata import DocumentMetadataDb, LinkMetadataDb, RichTextMetadataDb
 from src.models.costs import CostItem, CostItemCreate
 from src.models.metadata import (
     LinkCreate, MetadataAttachmentCreate, RichText, RichTextCreate,
@@ -875,3 +875,37 @@ def test_a_row_stored_under_another_casing_of_asset_gets_the_asset_rules(
 
     # The asset isn't readable: answered as an unknown row (see above).
     assert response.status_code == 404, response.text
+
+
+# --- Rows of an asset stored as shared before the per-entity routes ignored it ----
+
+def _legacy_shared_rows(db, asset):
+    """A note, link and document of an asset, stored with ``is_shared`` (before c419f2b)."""
+    owner = {'entity_type': 'asset', 'entity_id': str(asset.id), 'is_shared': True}
+    rows = {
+        'rich_texts': RichTextMetadataDb(**owner, title='Note', content_markdown='Body'),
+        'links': LinkMetadataDb(**owner, title='Link', url='https://example.com'),
+        'documents': DocumentMetadataDb(
+            **owner, title='Doc', original_filename='a.txt', content_type='text/plain',
+            size_bytes=4, storage_path='/Volumes/c/s/v/a.txt',
+        ),
+    }
+    db.add_all(rows.values())
+    db.commit()
+    return {listing: str(row.id) for listing, row in rows.items()}
+
+
+@pytest.mark.parametrize('params', [{}, {'entity_type': 'asset'}])
+def test_the_shared_library_lists_only_shared_rows(client, db_session, asset, act_as, params):
+    """A row stored on an asset with ``is_shared`` is the asset's: not in the library."""
+    legacy = _legacy_shared_rows(db_session, asset)
+    library_note = _shared_asset_note(db_session)
+    act_as('Data Steward')
+
+    response = client.get('/api/metadata/shared', params=params)
+
+    assert response.status_code == 200, response.text
+    listed = {listing: {row['id'] for row in rows} for listing, rows in response.json().items()}
+    for listing, row_id in legacy.items():
+        assert row_id not in listed[listing], listing
+    assert library_note in listed['rich_texts']

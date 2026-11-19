@@ -23,15 +23,13 @@ from src.models.metadata import (
 from src.repositories.metadata_repository import (
     rich_text_repo, link_repo, document_repo, attachment_repo,
     RichTextRepository, LinkRepository, DocumentRepository, MetadataAttachmentRepository,
+    SHARED_ENTITY_ID,
 )
 from src.repositories.change_log_repository import change_log_repo
 from src.db_models.change_log import ChangeLogDb
 from src.db_models.metadata import DocumentMetadataDb, MetadataAttachmentDb
 
 logger = get_logger(__name__)
-
-# Constant for shared asset entity_id
-SHARED_ENTITY_ID = "__shared__"
 
 # Session.info keys of the document files to delete once the session commits.
 _PENDING_FILES_KEY = "ontos_pending_document_files"

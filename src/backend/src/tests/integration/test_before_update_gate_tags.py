@@ -503,3 +503,30 @@ def test_a_later_gate_sees_an_earlier_gate_change_to_the_tag_list(client, db_ses
     refused = client.put(f'/api/data-contracts/{contract_id}', json={'tags': ['pii']})
 
     assert refused.status_code == 400, refused.text
+
+
+def test_a_gated_update_whose_tag_list_cannot_be_written_is_refused(
+    client, db_session, monkeypatch,
+):
+    from src.controller.tags_manager import TagsManager
+
+    policy_id = _policy(db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('pii')")
+    _gate(db_session, f'check-{uuid.uuid4().hex[:6]}', [
+        ('policy_check', {'policy_id': policy_id}),
+    ])
+    contract_id = _new_contract(client)
+    _tag_named(client, 'pii')
+
+    def broken(self, db, **kwargs):
+        raise RuntimeError('tag table down')
+
+    monkeypatch.setattr(TagsManager, 'set_tags_for_entity', broken)
+
+    refused = client.put(
+        f'/api/data-contracts/{contract_id}', json={'name': 'Renamed', 'tags': ['pii']},
+    )
+
+    # The gate passed on the pii the list adds. Before, the update was saved
+    # without it (the failed tag write was only logged)
+    assert refused.status_code == 400, refused.text
+    assert refused.json()['detail']['code'] == 'update_gate_tag_list_write_failed'

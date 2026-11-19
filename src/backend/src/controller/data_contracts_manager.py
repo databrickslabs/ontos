@@ -3126,12 +3126,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
                 except Exception as e:
                     logger.error(f"Failed to update tags for contract {contract_id}: {e}")
-                    # Don't fail the entire update if tags fail. The before_update
-                    # gates that let it through evaluated this tag list as written
+                    if gate_executions:
+                        # The before_update gates passed on this tag list as written:
+                        # saving the update with the old tags would bypass them
+                        from src.common.workflow_executor import UpdateGateTagListWriteError
+                        raise UpdateGateTagListWriteError(contract_id) from e
+                    # Without gates, don't fail the entire update if tags fail
                     logger.warning(
-                        "Contract %s keeps its previous tags: the before_update gates "
-                        "passed on the update's %d tag(s), which weren't written",
-                        contract_id, len(tags_data),
+                        "Contract %s keeps its previous tags: the update's %d tag(s) "
+                        "weren't written", contract_id, len(tags_data),
                     )
             
             # Servers (the contract page sends the whole list): replace them,

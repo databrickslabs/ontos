@@ -53,6 +53,8 @@ def normalize_comment(text: Optional[str]) -> Optional[str]:
 
     Line endings become a line feed, trailing blanks of each line and the blanks around
     the whole text go, so a comment Unity Catalog normalised still equals what was written.
+    Blanks are all Unicode whitespace (``str.isspace``), also a no-break space or U+2028, at the
+    end of a line or at either end of the text.
     """
     if not text:
         return None

@@ -52,6 +52,8 @@ CODE_WRITE_FAILED = 'uc_description_write_failed'
 CODE_UNSUPPORTED_TEXT = 'uc_description_unsupported_text'
 # Unity Catalog already has another comment on the object, which the save keeps
 CODE_EXISTING_COMMENT = 'uc_description_existing_comment'
+# The write succeeded but the comment could not be read back to check it
+CODE_WRITE_UNVERIFIED = 'uc_description_write_unverified'
 # Bulk import: a row over the import's cap on rows tried in Unity Catalog (params:
 # object, limit), a row after the import's time budget for Unity Catalog calls
 # (params: object), and the writes of a whole import not run (no params)
@@ -92,6 +94,10 @@ _MESSAGES = {
         "Unity Catalog already has another comment on {object}, so the description was not "
         "written there. Set the description to that comment, or change the comment in Unity "
         "Catalog, and save again."
+    ),
+    CODE_WRITE_UNVERIFIED: (
+        "The description of {object} was written to Unity Catalog, but the comment could not "
+        "be read back to check it. Save again to check it."
     ),
     CODE_IMPORT_WRITE_LIMIT: (
         "This import reached its limit of {limit} rows tried in Unity Catalog, "
@@ -412,7 +418,13 @@ class UcDescriptionSyncManager:
         audit['outcome'] = 'written'
         after = self._read_back(ws, table_fqn, column_name, time_left)
         audit['verified'] = after is not _UNREAD
-        if after is _UNREAD or normalize_comment(after) == normalize_comment(text):
+        if after is _UNREAD:
+            # Written, not checked: not reported as in sync. The text is what Unity Catalog most
+            # likely holds, so it is the agreed comment and a later save compares against it.
+            warning = _warning(CODE_WRITE_UNVERIFIED, label)
+            return SyncOutcome(warning, self._store_state(db, asset, warning, agreed=text),
+                               audit=audit)
+        if normalize_comment(after) == normalize_comment(text):
             return SyncOutcome(None, self._store_state(db, asset, None), in_sync=True, audit=audit)
         # Someone wrote another comment right after this write: theirs is kept
         logger.info("The Unity Catalog comment of %s changed right after Ontos wrote it "

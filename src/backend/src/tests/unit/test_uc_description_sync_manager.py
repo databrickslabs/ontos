@@ -11,6 +11,7 @@ from src.common.config import Settings
 from src.controller.uc_description_sync_manager import (
     CODE_EXISTING_COMMENT, CODE_IMPORT_TIME_BUDGET, CODE_NO_WAREHOUSE, CODE_NOT_FOUND,
     CODE_PERMISSION_DENIED, CODE_UNSUPPORTED_TEXT, CODE_USER_TOKEN_REQUIRED, CODE_WRITE_FAILED,
+    CODE_WRITE_UNVERIFIED,
     UcDescriptionSyncManager, uc_comment_target,
 )
 from src.db_models.assets import AssetDb, AssetTypeDb
@@ -474,9 +475,14 @@ def test_a_failed_read_back_keeps_the_write_unverified(db_session):
 
     outcome = _sync_outcome(db_session, asset, ws)
 
-    assert outcome.in_sync and outcome.warning is None
+    assert not outcome.in_sync
+    assert outcome.warning.code == CODE_WRITE_UNVERIFIED
+    assert outcome.state.code == CODE_WRITE_UNVERIFIED
     assert outcome.audit == {'before': 'Old text', 'after': 'New text', 'outcome': 'written',
                              'verified': False}
+    # The next save compares with what was written: unchanged text, nothing refused
+    db_session.refresh(asset)
+    assert asset.properties[DESCRIPTION_SYNC_PROPERTY]['agreed'] == 'New text'
 
 
 def test_two_saves_in_a_row_whose_writes_run_out_of_order_are_not_refused(db_session):
@@ -590,4 +596,5 @@ def test_a_single_save_read_back_does_not_wait_for_ever(db_session, monkeypatch)
     outcome = _sync_outcome(db_session, asset, ws)
 
     assert time.monotonic() - started < 0.4
-    assert outcome.in_sync and outcome.audit['verified'] is False
+    assert not outcome.in_sync and outcome.warning.code == CODE_WRITE_UNVERIFIED
+    assert outcome.audit['verified'] is False

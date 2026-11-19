@@ -47,6 +47,7 @@
       "uc_description_import_write_limit": "Questa importazione ha raggiunto il limite di {{limit}} righe tentate in Unity Catalog, quindi la descrizione di {{object}} non è stata scritta.",
       "uc_description_import_writes_failed": "Gli asset sono stati importati, ma le loro descrizioni non sono state scritte in Unity Catalog.",
       "uc_description_existing_comment": "Unity Catalog ha già un altro commento su {{object}}, quindi la descrizione non è stata scritta lì. Imposta la descrizione su quel commento, oppure cambia il commento in Unity Catalog e salva di nuovo.",
+      "uc_description_write_unverified": "La descrizione di {{object}} è stata scritta in Unity Catalog, ma non è stato possibile rileggere il commento per verificarla. Salva di nuovo per verificarla.",
       "uc_description_unsupported_text": "La descrizione di {{object}} contiene un carattere che Unity Catalog non può memorizzare, quindi non è stata scritta lì.",
       "uc_description_import_time_budget": "Questo import ha esaurito il tempo per le scritture in Unity Catalog, quindi la descrizione di {{object}} non è stata scritta lì.",
       "uc_description_import_writes_uc": "La descrizione di {{object}} verrà scritta in Unity Catalog. Se c'è già un altro commento, viene mantenuto e la riga riceve un avviso.",

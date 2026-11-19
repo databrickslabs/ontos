@@ -2075,7 +2075,7 @@ async def update_data_product(
         raise HTTPException(status_code=400, detail="Invalid JSON body.")
     except ValidationError as e:
         logger.error(f"Validation failed for PUT request body (ID: {product_id}): {e}")
-        raise HTTPException(status_code=422, detail=e.errors())
+        raise HTTPException(status_code=422, detail=e.errors(include_context=False))
 
     # Validate path ID matches body ID
     if product_id != product_update.id:

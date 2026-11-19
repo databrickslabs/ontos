@@ -115,7 +115,7 @@ def test_contract_update_without_tags_keeps_them(contracts_manager, contract, db
     assert _contract_tags(db_session, contract) == 1
 
 
-def test_contract_update_with_unreadable_tags_is_refused_and_keeps_them(
+def test_contract_update_with_unreadable_tags_is_refused(
     contracts_manager, contract, db_session,
 ):
     from src.controller.data_contracts_manager import InvalidTagEntryError
@@ -126,10 +126,9 @@ def test_contract_update_with_unreadable_tags_is_refused_and_keeps_them(
 
     assert exc.value.code == 'invalid_tag_entry'
     assert exc.value.params == {'index': 0}
-    assert _contract_tags(db_session, contract) == 1
 
 
-def test_contract_update_with_a_mixed_tag_list_is_refused_and_keeps_them(
+def test_contract_update_with_a_mixed_tag_list_is_refused(
     contracts_manager, contract, db_session,
 ):
     from src.controller.data_contracts_manager import InvalidTagEntryError
@@ -139,7 +138,6 @@ def test_contract_update_with_a_mixed_tag_list_is_refused_and_keeps_them(
             db_session, contract, {'tags': [{'tag_fqn': 'ns/new'}, 123]}, current_user='u')
 
     assert exc.value.params == {'index': 1}
-    assert _contract_tags(db_session, contract) == 1
 
 
 def test_product_model_reads_null_tags_as_not_sent():

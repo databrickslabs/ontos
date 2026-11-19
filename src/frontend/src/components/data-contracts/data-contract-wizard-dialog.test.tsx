@@ -55,6 +55,28 @@ vi.mock('@/components/business-concepts/business-concepts-display', () => ({
   default: () => <div data-testid="business-concepts-display" />
 }))
 
+// Radix Select doesn't run in jsdom: a plain list of options that call onValueChange
+vi.mock('@/components/ui/select', async () => {
+  const React = await import('react')
+  const Ctx = React.createContext<(v: string) => void>(() => {})
+  return {
+    Select: ({ onValueChange, children }: any) => (
+      <Ctx.Provider value={onValueChange || (() => {})}><div>{children}</div></Ctx.Provider>
+    ),
+    SelectTrigger: ({ children }: any) => <div>{children}</div>,
+    SelectValue: () => null,
+    SelectContent: ({ children }: any) => <div>{children}</div>,
+    SelectItem: ({ value, children }: any) => {
+      const change = React.useContext(Ctx)
+      return (
+        <button type="button" role="option" aria-selected={false} onClick={() => change(value)}>
+          {children}
+        </button>
+      )
+    },
+  }
+})
+
 const storageLocation = 's3://databricks-e2demofieldengwest/b169b504-4c54-49f2-bc3a-adf4b128f36d/tables/c39d273a-d87b-4a62-8792-0193f142fca7'
 
 const sampleInferredSchemas: InferredSchemaObject[] = [
@@ -439,5 +461,56 @@ describe('DataContractWizardDialog Schema Inference', () => {
     // with a boolean timezone (ODCS v3.1), not the free-text zone name
     expect(screen.getByRole('checkbox', { name: 'Timezone' })).not.toBeChecked()
     expect(screen.queryByPlaceholderText('UTC, America/New_York')).not.toBeInTheDocument()
+  })
+
+  const tsColumn = {
+    name: 'event_ts', physicalType: 'TIMESTAMP', logicalType: 'timestamp',
+    required: false, description: '', partitioned: false,
+  }
+
+  function renderSaving(properties: any[]) {
+    currentMockSchemas = [{
+      name: 'events', physicalName: '', description: '', physicalType: 'table', properties,
+    }]
+    renderWithProviders(
+      <DataContractWizardDialog
+        isOpen={true}
+        onOpenChange={mockOnOpenChange}
+        onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    fireEvent.click(screen.getByText(/Infer from Asset/i))
+    fireEvent.click(screen.getByTestId('select-dataset'))
+  }
+
+  async function savedColumn() {
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled())
+    return mockOnSubmit.mock.calls[0][0].schema[0].properties[0]
+  }
+
+  it('submits a ticked Timezone box on a timestamp column as timezone: true', async () => {
+    renderSaving([tsColumn])
+    await waitFor(() => expect(screen.getByDisplayValue('event_ts')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Timezone' }))
+
+    expect((await savedColumn()).timezone).toBe(true)
+  })
+
+  it('drops a zone name left from a date column when the type changes to timestamp', async () => {
+    renderSaving([{ ...tsColumn, name: 'day', logicalType: 'date' }])
+    await waitFor(() => expect(screen.getByDisplayValue('day')).toBeInTheDocument())
+    fireEvent.change(
+      screen.getByPlaceholderText('UTC, America/New_York'), { target: { value: 'UTC' } },
+    )
+    expect(screen.getByDisplayValue('UTC')).toBeInTheDocument()
+
+    // the mocked select lists one option per logical type for this column
+    fireEvent.click(screen.getAllByRole('option', { name: 'timestamp' })[0])
+
+    expect((await savedColumn()).timezone).toBeUndefined()
   })
 })

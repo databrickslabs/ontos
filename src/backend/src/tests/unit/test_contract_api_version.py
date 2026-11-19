@@ -73,12 +73,37 @@ def test_the_versions_follow_the_odcs_schema(monkeypatch, tmp_path):
     schema = tmp_path / "odcs.json"
     schema.write_text('{"properties": {"apiVersion": {"enum": ["v3.2.0", "v3.1.0"]}}}')
     monkeypatch.setattr(odcs_validation, "ODCS_SCHEMA_PATH", schema)
-    odcs_api_version.odcs_api_versions.cache_clear()
+    odcs_api_version._schema_api_versions.cache_clear()
     try:
         assert odcs_api_version.odcs_api_versions() == {"v3.2.0", "v3.1.0"}
         assert odcs_api_version.checked_api_version("3.2.0") == "v3.2.0"
     finally:
-        odcs_api_version.odcs_api_versions.cache_clear()
+        odcs_api_version._schema_api_versions.cache_clear()
+
+
+@pytest.mark.parametrize("content", [None, "not json", '{"properties": {}}'])
+def test_an_unreadable_schema_refuses_every_version(monkeypatch, tmp_path, content):
+    """Fail closed with the coded refusal (not a 500) when the schema is missing or
+    unreadable, and read the schema again once it is fixed."""
+    from src.common import odcs_api_version, odcs_validation
+
+    schema = tmp_path / "odcs.json"
+    if content is not None:
+        schema.write_text(content)
+    monkeypatch.setattr(odcs_validation, "ODCS_SCHEMA_PATH", schema)
+    odcs_api_version._schema_api_versions.cache_clear()
+    try:
+        assert odcs_api_version.odcs_api_versions() == frozenset()
+        with pytest.raises(UnsupportedOdcsApiVersionError):
+            odcs_api_version.checked_api_version("v3.1.0")
+        with pytest.raises(ValidationError) as err:
+            DataContractCreate.model_validate({"name": "Orders", "apiVersion": "v3.1.0"})
+        assert err.value.errors()[0]["type"] == "odcs_api_version_unsupported"
+
+        schema.write_text('{"properties": {"apiVersion": {"enum": ["v3.1.0"]}}}')
+        assert odcs_api_version.checked_api_version("v3.1.0") == "v3.1.0"
+    finally:
+        odcs_api_version._schema_api_versions.cache_clear()
 
 
 def test_api_version_defaults():

@@ -31,7 +31,7 @@ import { useApi } from '@/hooks/use-api';
 import { usePersistentState } from '@/hooks/use-persistent-state';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
-import { internalErrorText } from '@/lib/server-error-text'
+import { internalErrorText } from '@/lib/server-error-text';
 import { odcsApiVersionErrorText } from '@/lib/odcs-api-version-error';
 
 export default function DataContracts() {

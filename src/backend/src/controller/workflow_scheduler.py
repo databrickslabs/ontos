@@ -570,28 +570,28 @@ class WorkflowScheduler:
         now = now or self._clock()
         key = task_key(schedule.workflow_id)
         db = self._session()
-        try:
-            last = _utc(scheduler_claims_repo.latest_slot(db, task_key=key))
-            if last is not None and last < slot and slot - last < MIN_INTERVAL:
-                schedule.handled_slot = slot
-                if schedule.workflow_id not in self._short_gap_logged:
-                    self._short_gap_logged.add(schedule.workflow_id)
-                    logger.warning(
-                        f"Skipping slots of {key} less than "
-                        f"{int(MIN_INTERVAL.total_seconds() // 60)} minutes after the last run"
-                    )
-                return True
-            coalesced = self._coalesced_slots(schedule, slot, last)
-            claimed = scheduler_claims_repo.claim(
-                db, task_key=key, slot=slot, claimed_by=self._claimed_by,
-                outcome={'status': 'claimed', 'coalesced_slots': coalesced},
-            )
-        except Exception as e:
-            logger.error(f"Claiming {key} for {slot.isoformat()} failed: {e}", exc_info=True)
-            db.rollback()
-            db.close()
-            return False  # nothing written: run_once retries the slot
-        try:
+        try:  # the session is closed on every path: it may be one of few connections
+            try:
+                last = _utc(scheduler_claims_repo.latest_slot(db, task_key=key))
+                if last is not None and last < slot and slot - last < MIN_INTERVAL:
+                    schedule.handled_slot = slot
+                    if schedule.workflow_id not in self._short_gap_logged:
+                        self._short_gap_logged.add(schedule.workflow_id)
+                        logger.warning(
+                            f"Skipping slots of {key} less than "
+                            f"{int(MIN_INTERVAL.total_seconds() // 60)} minutes after the last run"
+                        )
+                    return True
+                coalesced = self._coalesced_slots(schedule, slot, last)
+                claimed = scheduler_claims_repo.claim(
+                    db, task_key=key, slot=slot, claimed_by=self._claimed_by,
+                    outcome={'status': 'claimed', 'coalesced_slots': coalesced},
+                )
+            except Exception as e:
+                logger.error(
+                    f"Claiming {key} for {slot.isoformat()} failed: {e}", exc_info=True)
+                db.rollback()
+                return False  # nothing written: run_once retries the slot
             if claimed:
                 self._prune_claims(db, now)
         finally:

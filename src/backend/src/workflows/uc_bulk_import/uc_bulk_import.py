@@ -135,11 +135,18 @@ IMPORT_LOCK_NAME = "ontos.uc_bulk_import"
 def single_flight(engine: Engine):
     """Yield True when this run holds the job's Postgres advisory lock (session
     level, held on its own connection until the block ends), False when another
-    run holds it. Other databases (the unit tests) have no such lock: True."""
+    run holds it. Other databases (the unit tests) have no such lock: True.
+
+    The lock connection runs in autocommit, so it sits ``idle`` (not ``idle in
+    transaction``) while the import runs on other connections: a server
+    ``idle_in_transaction_session_timeout`` can't end it and release the lock.
+    The lock needs a direct connection: a transaction-mode pooler (such as
+    Lakebase's PgBouncer, opt-in and not offered to OAuth roles) doesn't
+    support advisory locks."""
     if engine.dialect.name != "postgresql":
         yield True
         return
-    conn = engine.connect()
+    conn = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
     try:
         acquired = bool(conn.execute(
             text("SELECT pg_try_advisory_lock(hashtext(:name))"), {"name": IMPORT_LOCK_NAME}
@@ -148,10 +155,12 @@ def single_flight(engine: Engine):
             yield acquired
         finally:
             if acquired:
-                conn.execute(
+                released = conn.execute(
                     text("SELECT pg_advisory_unlock(hashtext(:name))"),
                     {"name": IMPORT_LOCK_NAME},
-                )
+                ).scalar()
+                if not released:
+                    print("  ⚠ The import lock was lost during the run (its connection ended)")
     finally:
         conn.close()
 

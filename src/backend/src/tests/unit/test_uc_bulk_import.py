@@ -329,7 +329,7 @@ def _postgres_engine(lock_free):
     conn.execute.return_value.scalar.return_value = lock_free
     engine = MagicMock()
     engine.dialect.name = 'postgresql'
-    engine.connect.return_value = conn
+    engine.connect.return_value.execution_options.return_value = conn
     return engine, conn
 
 
@@ -347,6 +347,9 @@ def test_a_run_holds_the_advisory_lock_and_releases_it():
     assert 'pg_try_advisory_lock' in _statements(conn)[0]
     assert 'pg_advisory_unlock' in _statements(conn)[-1]
     conn.close.assert_called_once()
+    # Autocommit: the lock connection is not left idle in a transaction
+    engine.connect.return_value.execution_options.assert_called_once_with(
+        isolation_level='AUTOCOMMIT')
 
 
 def test_an_overlapping_run_does_not_get_the_lock():

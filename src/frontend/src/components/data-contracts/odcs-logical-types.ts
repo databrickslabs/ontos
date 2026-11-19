@@ -30,3 +30,15 @@ export function logicalTypesForVersion(apiVersion?: string | null, current?: str
 export function inferSchemaQuery(apiVersion?: string | null): string {
   return apiVersion ? `?api_version=${encodeURIComponent(apiVersion)}` : ''
 }
+
+/**
+ * `GET /api/schema-import/metadata/{connection}` for a table, with each column's
+ * `logical_type` as an ODCS logical type for a contract's apiVersion.
+ */
+export function catalogMetadataUrl(
+  connectionId: string, path: string, apiVersion?: string | null,
+): string {
+  const version = apiVersion ? `&api_version=${encodeURIComponent(apiVersion)}` : ''
+  const query = `path=${encodeURIComponent(path)}&odcs=true${version}`
+  return `/api/schema-import/metadata/${connectionId}?${query}`
+}

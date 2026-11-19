@@ -134,7 +134,7 @@ Each step ends with a pass or a fail, which picks the next step. A step that rai
 Validation, conditional and policy check steps evaluate their rule on `obj`:
 
 - For data products and data contracts, `obj` is the **stored entity** (the fields maturity gates use, such as `status`, `has_owner`, `has_description`, `output_port_contract_count`, `certification_level`, `is_published`) merged with the trigger payload; payload fields win.
-- For `before_update` gates, `obj` is the contract **as it will be after the update**: the stored contract with the update's fields over it (a field the update leaves out or sends as `null` keeps its stored value), the tags it will have (a `tags` list replaces the stored ones, tag steps of the gate go on top), and the derived fields (`has_owner`, `schema_object_count`, the counts) for that future state. `c.domain` is the primary domain's name and `c.domain_id` its id, as on the other triggers, also when the update names the domain. Other request fields (`contract_schema`, `servers`, `team`, `sla`, ...) appear in the request's shape, which differs from what the other triggers see, so write rules on the fields above.
+- For `before_update` gates, `obj` is the contract **as it will be after the update**: the stored contract with the update's fields over it (a field the update leaves out or sends as `null` keeps its stored value), the tags it will have (a `tags` list replaces the stored ones, tag steps of the gate go on top), and the derived fields (`has_owner`, `has_purpose`, `schema_object_count`) for that future state; `quality_check_count` (the contract's quality items from the quality API, not its ODCS `qualityRules`) and the relationship counts keep their stored values, which a contract update doesn't change. `c.domain` is the primary domain's name and `c.domain_id` its id, whether or not the update changes the domain. Other request fields (`contract_schema`, `servers`, `team`, `sla`, ...) appear in the request's shape, which differs from what the other triggers see, so write rules on the fields above.
 - For other entity types, `obj` is the trigger payload only.
 - If the stored entity can't be loaded, the step fails with the code `rule_entity_load_failed` instead of evaluating the rule on the payload alone.
 
@@ -306,7 +306,9 @@ A `before_update` gate has the same `on_error` setting ("Refuse the update if th
 
 For a `before_update` gate this means: the `PUT` answers 400 "Pre-update validation failed" with the gate `paused`. Approving it runs the gate's remaining steps on the update as it was sent then, but nothing writes the update afterwards (and their tag steps write no tags). The user has to send the update again, which runs the gate again and starts a new approval round. A `before_update` gate with an approval step therefore never lets an update through.
 
-**Tag steps in a `before_update` gate** write their tags only once every gate passed, so a refused update leaves no tag assigned or removed. Later steps of the same gate already see the tag change.
+**Tag steps in a `before_update` gate** don't write while the gate runs: the update writes their tag change, after its own `tags` list and in the same commit, so a refused or failed update leaves no tag assigned or removed. Later steps of the same gate already see the tag change (on top of the update's `tags` list, when it sends one). If the tag change can't be written, the update is refused (`update_gate_tag_write_failed`), whatever `on_error` says.
+
+**No entity actions in a `before_update` gate.** Certify, publish and unpublish steps commit as they run, so they would stay done when a later step refuses the update. Saving a `before_update` workflow with an entity action step is refused (`update_gate_entity_action`); one saved before fails at that step. Put the action in an `on_update` workflow instead.
 
 ## Failures, Retries and Cancellation
 

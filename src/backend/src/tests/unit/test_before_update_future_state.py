@@ -560,3 +560,28 @@ def test_a_conditional_step_sees_the_stored_fields_an_update_does_not_resend(db_
     ).execute(_context(contract, _payload(name='Renamed')))
 
     assert result.branch is True
+
+
+def test_the_quality_check_count_is_the_stored_one_also_when_the_update_sends_rules(
+    db_session,
+):
+    # quality_check_count counts the contract's quality items (the quality API's
+    # results), not its ODCS qualityRules: a contract update doesn't write them, so
+    # the count after the update is the stored one (#1403 review)
+    from src.controller.entity_dict_builder import build_data_contract_dict
+    from src.db_models.quality import QualityItemDb
+
+    contract = _contract(db_session)
+    db_session.add(QualityItemDb(
+        entity_type='data_contract', entity_id=contract.id, dimension='completeness',
+        score_percent=99.0,
+    ))
+    db_session.flush()
+
+    gate = _gate(
+        db_session, "MATCH (c:data_contract) ASSERT c.quality_check_count = 1",
+        contract, _payload(qualityRules=[]),
+    )
+
+    assert gate.passed is True
+    assert build_data_contract_dict(db_session, contract.id)['quality_check_count'] == 1

@@ -698,7 +698,9 @@ def _future_contract_fields(
 
     What the rules of the other triggers see (``_rule_object``): the
     relationship and quality item counts, certification and publication flags
-    stay as stored (a contract update doesn't write them); ``has_owner``,
+    stay as stored (a contract update doesn't write them: ``quality_check_count``
+    counts quality items from the quality API, not the ODCS ``qualityRules`` an
+    update replaces); ``has_owner``,
     ``has_purpose`` / ``has_description`` and ``schema_object_count`` are
     computed from the update when it sends the field (a ``contract_schema``
     list replaces the schema objects), else from the stored row. Empty for

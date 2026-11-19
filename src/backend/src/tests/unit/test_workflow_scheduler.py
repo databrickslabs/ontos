@@ -1145,3 +1145,39 @@ def test_fire_returns_its_connection_on_every_path(tmp_path, previous_minutes):
             assert engine.pool.checkedout() == 0
     finally:
         engine.dispose()
+
+
+def test_start_after_a_stop_whose_thread_outlived_the_join(sessions, monkeypatch):
+    import threading
+
+    from src.common import database
+
+    monkeypatch.setattr(database, '_request_db_use_listeners', [])
+    release, in_pass = threading.Event(), threading.Event()
+    passes = []
+
+    def slow_pass(self, now=None):
+        passes.append(threading.current_thread())
+        if len(passes) == 1:  # the first pass is slow (a Lakebase cold start)
+            in_pass.set()
+            release.wait(timeout=10)
+        return None
+
+    scheduler = _scheduler(sessions)
+    scheduler._stop_join_seconds = 0.05
+    with patch.object(WorkflowScheduler, 'run_once', slow_pass):
+        scheduler.start()
+        old = scheduler._thread
+        assert in_pass.wait(timeout=5)
+        scheduler.stop()
+        assert old.is_alive()  # still in its pass after the join
+        scheduler.start()
+        new = scheduler._thread
+        assert new is not old and new.is_alive() and scheduler._closing is False
+        release.set()
+        old.join(timeout=5)
+        assert not old.is_alive()  # the old thread ended after its pass
+        assert new.is_alive()
+        scheduler._stop_join_seconds = 5
+        scheduler.stop()
+    assert not new.is_alive()

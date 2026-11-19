@@ -202,6 +202,9 @@ class _Schedule:
 class WorkflowScheduler:
     """Fires ``scheduled`` workflows once per slot; see the module docstring."""
 
+    # stop() waits this long for the scheduler thread before draining.
+    _stop_join_seconds: float = 10
+
     def __init__(
         self,
         session_factory: Optional[Callable[[], Session]] = None,
@@ -262,10 +265,16 @@ class WorkflowScheduler:
     # --- thread -----------------------------------------------------------------
 
     def start(self) -> None:
-        if self._thread and self._thread.is_alive():
+        if self._thread and self._thread.is_alive() and not self._stop.is_set():
             logger.warning("Workflow scheduler already running")
             return
-        self._stop.clear()
+        if self._thread and self._thread.is_alive():
+            # A stop() whose thread outlived the join (a slow pass): that thread ends
+            # after its pass, with its own stop event; a new one takes over.
+            logger.warning("Workflow scheduler: the stopped thread is still in its "
+                           "last pass; starting a new one")
+        # A new event per thread, so restarting doesn't revive the old thread.
+        self._stop = threading.Event()
         with self._pool_lock:
             self._closing = False
         self._use_dedicated_engine()
@@ -283,7 +292,7 @@ class WorkflowScheduler:
             return
         self._stop.set()
         self._wake.set()
-        self._thread.join(timeout=10)
+        self._thread.join(timeout=self._stop_join_seconds)
         self.drain()
         self._dispose_own_engine()
         logger.info("Stopped the workflow scheduler")
@@ -366,7 +375,8 @@ class WorkflowScheduler:
         self._wake.set()
 
     def _loop(self) -> None:
-        while not self._stop.is_set():
+        stop = self._stop  # this thread's event: start() gives a new thread a new one
+        while not stop.is_set():
             # Cleared before the pass, so a wake-up during it isn't lost.
             self._wake.clear()
             try:
@@ -374,7 +384,7 @@ class WorkflowScheduler:
             except Exception as e:
                 logger.error(f"Workflow scheduler pass failed: {e}", exc_info=True)
                 delay = ERROR_RETRY_SECONDS
-            if self._stop.is_set():
+            if stop.is_set():
                 break
             self._wake.wait(timeout=delay)  # None: until woken
 

@@ -866,71 +866,66 @@ def link_products_to_contracts(
 ) -> int:
     """
     Link products to contracts when same table has both tags.
-    Updates output_port.contract_id when matching contract found.
+    Sets output_port.contract_id to the newest version of the matching
+    contract, on draft products only, and only on ports with no contract: a
+    port a user linked to another contract keeps it.
     """
     linked = 0
-    
+
     if 'contract' not in discovered or 'product' not in discovered:
         return linked
-    
+
     contract_objects = discovered['contract']
     product_objects = discovered['product']
-    
+
     # Build table -> contract_name mapping
     table_to_contract: Dict[str, str] = {}
     for contract_name, objects in contract_objects.items():
         for obj in objects:
             if obj.object_type == 'TABLE':
                 table_to_contract[obj.full_name] = contract_name
-    
+
+    update_sql = text("""
+        UPDATE data_product_output_ports
+        SET contract_id = :contract_id
+        WHERE product_id IN (
+            SELECT id FROM data_products WHERE name = :product_name AND status = 'draft'
+        )
+          AND asset_identifier = :asset_identifier
+          AND contract_id IS NULL
+    """)
+
     # For each product table, check if contract exists
     for product_name, objects in product_objects.items():
         for obj in objects:
             if obj.object_type != 'TABLE':
                 continue
-            
+
             contract_name = table_to_contract.get(obj.full_name)
             if not contract_name:
                 continue
-            
+
             if dry_run:
                 print(f"  [DRY-RUN] Would link product '{product_name}' port '{obj.full_name}' to contract '{contract_name}'")
                 linked += 1
                 continue
-            
-            # Find contract ID
-            contract_sql = text("SELECT id FROM data_contracts WHERE name = :name")
-            with engine.connect() as conn:
-                result = conn.execute(contract_sql, {"name": contract_name})
-                contract_row = result.fetchone()
-            
-            if not contract_row:
+
+            # Versions share the contract's name: link the newest, as matching does
+            contract = find_existing(engine, "data_contracts", contract_name)
+            if not contract:
                 continue
-            
-            contract_id = contract_row[0]
-            
-            # Update output port
-            update_sql = text("""
-                UPDATE data_product_output_ports
-                SET contract_id = :contract_id
-                WHERE product_id IN (
-                    SELECT id FROM data_products WHERE name = :product_name AND status = 'draft'
-                )
-                  AND asset_identifier = :asset_identifier
-            """)
-            
-            with engine.connect() as conn:
+
+            with engine.begin() as conn:
                 result = conn.execute(update_sql, {
-                    "contract_id": contract_id,
+                    "contract_id": contract[0],
                     "product_name": product_name,
                     "asset_identifier": obj.full_name
                 })
-                conn.commit()
-                if result.rowcount > 0:
-                    linked += 1
-                    if verbose:
-                        print(f"  Linked product '{product_name}' port to contract '{contract_name}'")
-    
+            if result.rowcount > 0:
+                linked += 1
+                if verbose:
+                    print(f"  Linked product '{product_name}' port to contract '{contract_name}'")
+
     return linked
 
 

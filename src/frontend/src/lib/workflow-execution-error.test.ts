@@ -35,16 +35,17 @@ describe('workflowExecutionErrorText', () => {
     }
   });
 
-  it('translates an entity action refused in a before_update gate', async () => {
+  it('translates a step refused in a stored before_update gate', async () => {
     await i18n.changeLanguage('pt');
     try {
       expect(workflowExecutionErrorText(i18n.t, {
-        error_message: "An entity action can't run in a before_update gate",
-        error_code: 'update_gate_entity_action',
-        error_params: {},
+        error_message: "A delivery step can't run in a before_update gate",
+        error_code: 'update_gate_step_not_allowed',
+        error_params: { stepType: 'delivery' },
       }, asStored)).toBe(
-        'Uma ação de entidade não pode rodar em um gate before update: ela continuaria feita '
-        + 'quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update.',
+        'Uma etapa delivery não pode rodar em um gate before update: o que ela faz continuaria '
+        + 'feito quando a atualização fosse recusada. '
+        + 'Remova a etapa ou mova-a para um fluxo on update.',
       );
     } finally {
       await i18n.changeLanguage('en');

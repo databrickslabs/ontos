@@ -389,6 +389,32 @@ class UpdateGateTagWriteError(CodedValueError):
         )
 
 
+# Step types a before_update gate can't have: they commit (entity actions, asset
+# reviews) or act outside the database (delivery, UC grants) as the gate runs, so a
+# later step, or another gate, that refuses the update would leave them done.
+UPDATE_GATE_REFUSED_STEP_TYPES = (
+    'entity_action', 'delivery', 'create_asset_review', 'grant_permissions',
+)
+UPDATE_GATE_STEP_NOT_ALLOWED = 'update_gate_step_not_allowed'
+
+
+def update_gate_step_refusal(step_type: Any, context: 'StepContext') -> Optional['StepResult']:
+    """The failed result of such a step in a before_update gate, before it acts; else None.
+
+    Saving the gate is refused (``WorkflowsManager.validate_workflow``); this stops
+    one stored before. ``error_params``: ``stepType``.
+    """
+    step_type = getattr(step_type, 'value', step_type)
+    if step_type not in UPDATE_GATE_REFUSED_STEP_TYPES or _trigger_type(context) != 'before_update':
+        return None
+    return StepResult(
+        passed=False,
+        error=f"A {step_type} step can't run in a before_update gate: "
+              "what it does would stay done when the update is refused",
+        data={'error_code': UPDATE_GATE_STEP_NOT_ALLOWED, 'error_params': {'stepType': step_type}},
+    )
+
+
 def deferred_tag_writes(executions: List[WorkflowExecution]) -> List[Dict[str, Any]]:
     """The tag changes the tag steps of before_update gates recorded, in step order.
 
@@ -3066,16 +3092,6 @@ class EntityActionStepHandler(StepHandler):
         action = self._config.get('action')
         if not action:
             return StepResult(passed=False, error="No action configured for entity_action step")
-        if _trigger_type(context) == 'before_update':
-            # Saving such a gate is refused; one stored before fails here, before it
-            # commits an action a later step, or another gate, could refuse the update for
-            return StepResult(
-                passed=False,
-                error="An entity action can't run in a before_update gate: "
-                      "it would stay done when the update is refused",
-                data={'error_code': 'update_gate_entity_action', 'error_params': {}},
-            )
-
         entity_type = context.entity_type
         entity_id = context.entity_id
 
@@ -5217,6 +5233,10 @@ class WorkflowExecutor:
         if not handler_class:
             return StepResult(passed=False, error=f"Unknown step type: {step_type}")
         
+        refusal = update_gate_step_refusal(step_type, context)
+        if refusal is not None:
+            return refusal
+
         try:
             # Handle config - may be a JSON string from DB or already a dict
             config = step.config or {}

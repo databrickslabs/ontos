@@ -342,7 +342,7 @@
       "assignTagValueSourceUnknown": "Schritt „{{step}}“ verwendet die unbekannte Wertquelle „{{source}}“.",
       "policyCheckPolicyMissing": "Der Schritt \"{{step}}\" benötigt eine vorhandene Compliance-Richtlinie. Wählen Sie in den Schritteinstellungen eine aus.",
       "updateGate": {
-        "entityAction": "Schritt \"{{step}}\" ist eine Entitätsaktion, die nicht in einem before-update-Gate laufen kann: Sie bliebe ausgeführt, wenn die Aktualisierung abgelehnt wird. Entfernen Sie den Schritt oder verschieben Sie ihn in einen on-update-Workflow."
+        "stepNotAllowed": "Schritt \"{{step}}\" ({{type}}) kann nicht in einem before-update-Gate laufen: Was er tut, bliebe bestehen, wenn die Aktualisierung abgelehnt wird. Entfernen Sie den Schritt oder verschieben Sie ihn in einen on-update-Workflow."
       },
       "branch": {
         "on_pass": "Erfolgs",
@@ -555,7 +555,7 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "Die WHERE-Klausel der Richtlinie '{{policyName}}' konnte für {{entityType}} {{entityId}} nicht ausgewertet werden",
       "tag_not_found": "Die Tag '{{tag}}' wurde im Tag-Katalog nicht gefunden und daher nicht zugewiesen",
-      "update_gate_entity_action": "Eine Entitätsaktion kann nicht in einem before-update-Gate laufen: Sie bliebe ausgeführt, wenn die Aktualisierung abgelehnt wird. Entfernen Sie den Schritt oder verschieben Sie ihn in einen on-update-Workflow.",
+      "update_gate_step_not_allowed": "Ein {{stepType}}-Schritt kann nicht in einem before-update-Gate laufen: Was er tut, bliebe bestehen, wenn die Aktualisierung abgelehnt wird. Entfernen Sie den Schritt oder verschieben Sie ihn in einen on-update-Workflow.",
       "approval_rejected": "Anfrage abgelehnt",
       "output_port_contracts_missing": "Veröffentlichung nicht möglich: Den Ausgabeports {{ports}} müssen Datenverträge zugewiesen sein",
       "output_port_contracts_unapproved": "Veröffentlichung nicht möglich: Diese Ausgabeports haben nicht genehmigte Verträge: {{ports}}. Die Verträge müssen zuerst genehmigt werden.",

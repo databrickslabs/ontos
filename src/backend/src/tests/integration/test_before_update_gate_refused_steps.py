@@ -88,6 +88,6 @@ def test_saving_a_before_update_gate_with_an_entity_action_is_refused(client, db
     assert created.status_code == 400, created.text
     issues = created.json()['detail']['params']['issues']
     assert [(i['code'], i['params']) for i in issues] == [
-        ('update_gate_entity_action', {'step': 'publish'}),
+        ('update_gate_step_not_allowed', {'step': 'publish', 'stepType': 'entity_action'}),
     ]
     assert db_session.query(ProcessWorkflowDb).filter_by(name=body['name']).count() == 0

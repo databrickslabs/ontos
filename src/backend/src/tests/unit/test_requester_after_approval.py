@@ -181,3 +181,23 @@ def test_the_reviewer_resolver_accepts_no_requester(db_session):
     context.trigger_context.entity_data = {'reviewer_email': 'steward@example.com'}
 
     assert handler._resolve_reviewer('DataSteward', context, None) == 'steward@example.com'
+
+
+@pytest.mark.parametrize('trigger_type', [TriggerType.MANUAL, TriggerType.ON_REQUEST_REVIEW])
+def test_no_asset_review_for_any_trigger_without_a_user(db_session, trigger_type):
+    from src.common.workflow_executor import CreateAssetReviewStepHandler
+    from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
+
+    trigger = TriggerContext(
+        entity_type='data_product', entity_id='product-1', entity_name='E',
+        trigger_type=trigger_type, user_email=None,
+        entity_data={'reviewer_email': 'steward@example.com'},
+    )
+    context = _resumed_context(trigger_context=trigger, user_email=None)
+    handler = CreateAssetReviewStepHandler(db_session, {'reviewer_role': 'DataSteward'})
+
+    result = handler.execute(context)
+
+    assert result.passed is False
+    assert 'no requester' in (result.error or '')
+    assert db_session.query(DataAssetReviewRequestDb).count() == 0

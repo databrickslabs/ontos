@@ -452,6 +452,8 @@ class AccessGrantsManager:
         
         result = self._request_repo.cancel(db, request_id)
         db.commit()
+        # A cancelled request has nothing left to decide: after the commit, as in handle_request
+        self._mark_request_notifications_handled(db, request)
         return result
     
     # =========================================================================

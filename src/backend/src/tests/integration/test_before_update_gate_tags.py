@@ -552,3 +552,111 @@ def test_new_authoritative_definitions_replace_the_contract_links(client, db_ses
         entity_id=contract_id, entity_type='data_contract',
     ).all()
     assert [link.iri for link in links] == [other['url']]
+
+
+@pytest.fixture
+def graph(monkeypatch):
+    """The knowledge graph calls of the semantic links, and the commits around them.
+
+    ``events``: ('row', iri) when a link row is written, ('commit',) per session
+    commit, ('add' | 'remove', entity_type, iri) per graph call.
+    """
+    from sqlalchemy.orm import Session
+
+    from src.controller import semantic_links_manager as module
+
+    events = []
+
+    class FakeGraph:
+        def add_entity_semantic_link_to_graph(self, entity_type, entity_id, iri, created_by=None):
+            events.append(('add', entity_type, iri))
+
+        def remove_entity_semantic_link_from_graph(self, entity_type, entity_id, iri):
+            events.append(('remove', entity_type, iri))
+
+        def _invalidate_cache(self):
+            pass
+
+    fake = FakeGraph()
+    monkeypatch.setattr(module.SemanticLinksManager, '_models_manager', lambda self: fake)
+    create, commit = module.entity_semantic_links_repo.create, Session.commit
+
+    def creating(db, obj_in):
+        events.append(('row', obj_in.iri))
+        return create(db, obj_in=obj_in)
+
+    def committing(self):
+        events.append(('commit',))
+        return commit(self)
+
+    monkeypatch.setattr(module.entity_semantic_links_repo, 'create', creating)
+    monkeypatch.setattr(Session, 'commit', committing)
+    return events
+
+
+def _graph_calls(events):
+    return [event for event in events if event[0] in ('add', 'remove')]
+
+
+def _committed_before_graph(events):
+    """Every link row was followed by a commit before the first graph call."""
+    first_graph = next(i for i, event in enumerate(events) if event[0] in ('add', 'remove'))
+    last_row = max(i for i, event in enumerate(events) if event[0] == 'row')
+    return last_row < first_graph and ('commit',) in events[last_row:first_graph]
+
+
+def test_the_graph_gets_the_update_links_after_its_commit(client, db_session, graph):
+    _tag_then_check_gate(db_session, "MATCH (c:data_contract) ASSERT c.name = 'Gated'")
+    contract_id = _new_contract(client)
+    other = {'url': 'http://example.com/ontology#Order', 'type': SEMANTIC}
+    first = client.put(
+        f'/api/data-contracts/{contract_id}', json={'authoritativeDefinitions': [CONCEPT]},
+    )
+    assert first.status_code == 200, first.text
+    graph.clear()
+
+    replaced = client.put(
+        f'/api/data-contracts/{contract_id}', json={'authoritativeDefinitions': [other]},
+    )
+
+    assert replaced.status_code == 200, replaced.text
+    assert _graph_calls(graph) == [
+        ('remove', 'data_contract', CONCEPT['url']), ('add', 'data_contract', other['url']),
+    ]
+    assert _committed_before_graph(graph)
+
+
+def test_the_graph_gets_the_update_schema_links_after_its_commit(client, db_session, graph):
+    _tag_then_check_gate(db_session, "MATCH (c:data_contract) ASSERT c.name = 'Gated'")
+    contract_id = _new_contract(client)
+    graph.clear()
+
+    passed = client.put(
+        f'/api/data-contracts/{contract_id}', json={'schema': SCHEMA_WITH_CONCEPTS},
+    )
+
+    assert passed.status_code == 200, passed.text
+    assert sorted(_graph_calls(graph)) == [
+        ('add', 'data_contract_property', CONCEPT['url']),
+        ('add', 'data_contract_schema', CONCEPT['url']),
+    ]
+    assert _committed_before_graph(graph)
+
+
+def test_a_refused_update_leaves_the_graph_alone(client, db_session, monkeypatch, graph):
+    from src.controller.tags_manager import TagsManager
+
+    _tag_then_check_gate(db_session, "MATCH (c:data_contract) ASSERT c.name = 'Gated'")
+    contract_id = _new_contract(client)
+
+    def broken(self, db, **kwargs):
+        raise RuntimeError('tag table down')
+
+    monkeypatch.setattr(TagsManager, 'add_tag_to_entity', broken)
+
+    refused = client.put(f'/api/data-contracts/{contract_id}', json={
+        'authoritativeDefinitions': [CONCEPT], 'schema': SCHEMA_WITH_CONCEPTS,
+    })
+
+    assert refused.status_code == 400, refused.text
+    assert _graph_calls(graph) == []

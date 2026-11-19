@@ -1597,6 +1597,13 @@ class SettingsManager(ThreadBoundDb):
             }
         return None
 
+    def _llm_job_values(self) -> Tuple[Any, Any]:
+        """The LLM settings the installed compliance job gets as parameters."""
+        return (
+            getattr(self._settings, 'LLM_ENABLED', None),
+            getattr(self._settings, 'LLM_ENDPOINT', None),
+        )
+
     def update_settings(self, settings: dict) -> Settings:
         """Update settings"""
         return self.update_settings_with_warnings(settings)[0]
@@ -1728,6 +1735,8 @@ class SettingsManager(ThreadBoundDb):
             logger.info(f"Updated APP_AUDIT_LOG_DIR to: {value}")
         
         # Handle LLM settings
+        # The General form always sends both: the installed job is synced only on a change
+        llm_values_before = self._llm_job_values()
         if 'llm_enabled' in settings:
             value = settings.get('llm_enabled')
             # Convert to string for storage, then back to bool
@@ -1741,7 +1750,7 @@ class SettingsManager(ThreadBoundDb):
             self._settings.LLM_ENDPOINT = value
             logger.info(f"Updated LLM_ENDPOINT to: {value}")
 
-        if 'llm_enabled' in settings or 'llm_endpoint' in settings:
+        if self._llm_job_values() != llm_values_before:
             warning = self._refresh_llm_job_parameters()
             if warning:
                 warnings.append(warning)

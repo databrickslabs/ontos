@@ -134,6 +134,23 @@ def test_changing_the_llm_settings_syncs_the_installed_job(db_session):
     assert warnings == []
 
 
+def test_a_save_with_the_same_llm_settings_leaves_the_job_alone(db_session):
+    """The General form always sends llm_enabled and llm_endpoint: only a change syncs."""
+    manager = _settings_manager(db_session)
+    manager._settings.LLM_ENABLED = True
+    manager._settings.LLM_ENDPOINT = 'endpoint'
+
+    _, warnings = manager.update_settings_with_warnings({
+        'llm_enabled': True, 'llm_endpoint': 'endpoint', 'llm_system_prompt': 'Be brief.',
+    })
+
+    manager._jobs.sync_installed_workflow.assert_not_called()
+    assert warnings == []
+
+    manager.update_settings_with_warnings({'llm_enabled': False, 'llm_endpoint': 'endpoint'})
+    manager._jobs.sync_installed_workflow.assert_called_once()
+
+
 def test_a_job_the_app_cannot_update_is_a_coded_warning(db_session):
     from databricks.sdk.errors import PermissionDenied
 

@@ -119,3 +119,20 @@ def test_the_api_models_carry_no_score_as_none():
         id=uuid.uuid4(), name='p', description='d', rule='MATCH (p:data_product)',
     ).compliance is None
 
+
+
+def test_the_trend_averages_only_the_runs_that_have_a_score(db_session):
+    scored = _policy(db_session, 'scored')
+    other = _policy(db_session, 'other')
+    _run(db_session, scored, 'succeeded', 8, 2, 80.0, minutes_ago=0)
+    _run(db_session, other, 'succeeded', 6, 4, 60.0, minutes_ago=0)
+    # Stored as 0.0, but without a score: a failed run and one that evaluated nothing
+    _run(db_session, scored, 'failed', 2, 0, 0.0, minutes_ago=0)
+    _run(db_session, other, 'succeeded', 0, 0, 0.0, minutes_ago=0)
+
+    trend = ComplianceManager().get_compliance_trend(db_session, days=2)
+
+    # (80 + 60) / 2, not (80 + 60 + 0 + 0) / 4
+    assert trend[-1]['compliance'] == 70.0
+    assert trend[0]['compliance'] == 0.0  # no run yesterday
+

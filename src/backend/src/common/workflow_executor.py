@@ -213,6 +213,10 @@ def _next_step_id(workflow: 'ProcessWorkflow', step: 'WorkflowStep', result: Ste
     """
     if ends_process_run(getattr(workflow, 'workflow_type', None), step.step_type):
         return None
+    # So does a step a before_update gate can't run (update_gate_step_refusal),
+    # whatever its on_fail: a branch to a Pass step would let the update through
+    if (result.data or {}).get('error_code') == UPDATE_GATE_STEP_NOT_ALLOWED:
+        return None
     if is_conditional_step_type(step.step_type) and result.branch is None:
         return None
     return step.on_pass if result.takes_pass_branch() else step.on_fail

@@ -762,6 +762,29 @@ class TestAssetStatusChanges:
         with pytest.raises(InvalidStatusTransitionError):
             _bulk_status(db_session, asset, 'draft')
 
+    def test_a_bulk_create_takes_only_a_stage_of_the_default_group(self, db_session):
+        """A new asset starts in the default asset group: a custom group's stage is
+        refused for a create in the preview and the import, with the default's stages."""
+        from src.controller.asset_bulk_manager import AssetBulkManager, ImportAction
+        from src.db_models.assets import AssetTypeDb
+
+        if not db_session.query(AssetTypeDb).filter(AssetTypeDb.name == 'Table').first():
+            db_session.add(AssetTypeDb(name='Table', category='data'))
+            db_session.commit()
+        lifecycle_service.save_group(db_session, _looping_group(entity_type='asset'), 'admin')
+        csv = b'name,asset_type,status\norders,Table,needs_review\ncustomers,Table,draft\n'
+        mgr = AssetBulkManager()
+
+        preview = mgr.preview_import(db_session, file_bytes=csv, filename='assets.csv')
+        execute = mgr.execute_import(db_session, file_bytes=csv, filename='assets.csv',
+                                     current_user_id='u@example.com')
+        for result in (preview, execute):
+            refused, created = result.items
+            assert result.errors == 1
+            assert refused.message.startswith(
+                "Invalid status for a new asset: 'needs_review'. Must be one of: ")
+            assert created.action == ImportAction.CREATE and not created.message
+
 
 class TestIndependentReview:
     def test_changing_to_the_current_group_is_refused(self, db_session):

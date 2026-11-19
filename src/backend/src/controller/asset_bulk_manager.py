@@ -88,6 +88,20 @@ def _asset_stage_keys(db: Session) -> List[str]:
     return keys
 
 
+def _new_asset_status_error(db: Session, requested: Optional[str]) -> Optional[str]:
+    """Why a bulk row can't create an asset with ``requested``: a new asset starts in
+    the default asset group, so its status must be a stage of that group."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    keys = list(lifecycle_service.default_group(db, 'asset').stages)
+    if not requested or requested in keys:
+        return None
+    return (
+        f"Invalid status for a new asset: '{requested}'. "
+        f"Must be one of: {', '.join(keys)}"
+    )
+
+
 def _bulk_status(db: Session, existing: Any, requested: Optional[str]) -> str:
     """The status a bulk row gives an existing asset: unchanged without one, else a
     move its lifecycle stage group must allow (raises ``InvalidStatusTransitionError``)."""
@@ -632,6 +646,12 @@ class AssetBulkManager:
                     item.existing_asset_id = str(existing.id)
                     result.will_update += 1
                 else:
+                    create_error = _new_asset_status_error(db, status_raw)
+                    if create_error:
+                        item.message = create_error
+                        result.errors += 1
+                        result.items.append(item)
+                        continue
                     item.action = ImportAction.CREATE
                     result.will_create += 1
 
@@ -815,6 +835,12 @@ class AssetBulkManager:
                             created_assets[name.lower()] = updated.id
                         else:
                             previous_description = None
+                            create_error = _new_asset_status_error(db, status_val)
+                            if create_error:
+                                item.message = create_error
+                                result.errors += 1
+                                result.items.append(item)
+                                continue
                             create_data = {
                                 "name": name,
                                 "description": description,

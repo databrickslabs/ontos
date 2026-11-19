@@ -54,8 +54,9 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
   // Multi-domain filter (#520 story 10): the marketplace filters by one or MORE
   // domains and shows entities matching ANY of them (union). Empty = all domains.
   const [selectedDomainIds, setSelectedDomainIds] = useState<string[]>([]);
-  // Graph view focuses a single domain for the mini-graph; kept separate from the
-  // multi-select filter so browsing the graph doesn't collapse the filter to one.
+  // Graph view focuses a single domain for the mini-graph. A node click sets both
+  // the focus and the filter (see focusDomainInGraph), but the auto-focus on entering
+  // graph mode does not filter, so the two can differ until the first click.
   const [graphFocusId, setGraphFocusId] = useState<string | null>(null);
   const [scopeFilter, setScopeFilter] = useState<string>('all');
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevel[]>([]);

@@ -680,7 +680,13 @@ class AssetBase(BaseModel):
     tags: Optional[List[str]] = Field(None, description="Quick tags/classifications")
     # A stage key of the asset's lifecycle stage group (#1213); a new asset
     # without one starts in the group's first active stage
-    status: Optional[str] = Field(None, description="Lifecycle stage key")
+    # No enum: a custom asset group has its own stage keys
+    status: Optional[str] = Field(
+        None,
+        description="A stage key of the asset's lifecycle stage group; the default asset "
+                    "group's stages are draft, active, deprecated and retired",
+        examples=["draft", "active", "deprecated", "retired"],
+    )
     lifecycle_stage_group_id: Optional[str] = Field(
         None, description="Lifecycle Stage Group; None = the default asset group",
     )

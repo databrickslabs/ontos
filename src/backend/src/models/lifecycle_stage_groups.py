@@ -38,6 +38,13 @@ class LifecycleStageGroupWrite(BaseModel):
     transitions: List[LifecycleStageTransition] = Field(default_factory=list)
 
 
+class LifecycleStageGroupUpdate(LifecycleStageGroupWrite):
+    """``PUT`` body: the group, plus the ``updated_at`` the caller read."""
+    expected_updated_at: Optional[datetime] = Field(
+        None, description="The group's updated_at as read; 409 when it was saved since",
+    )
+
+
 class LifecycleStageGroupRead(LifecycleStageGroupWrite):
     id: Optional[str] = Field(
         None, description="None only for a built-in default that isn't stored yet",

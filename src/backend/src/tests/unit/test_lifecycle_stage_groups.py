@@ -762,6 +762,15 @@ class TestAssetStatusChanges:
         with pytest.raises(InvalidStatusTransitionError):
             _bulk_status(db_session, asset, 'draft')
 
+    def test_the_openapi_status_names_the_default_stages(self):
+        """No enum (custom groups have their own keys), but the schema lists the
+        default asset group's stages that the enum used to."""
+        from src.models.assets import AssetCreate
+
+        status = AssetCreate.model_json_schema()['properties']['status']
+        assert status['examples'] == ['draft', 'active', 'deprecated', 'retired']
+        assert 'lifecycle stage group' in status['description']
+
     def test_a_bulk_create_takes_only_a_stage_of_the_default_group(self, db_session):
         """A new asset starts in the default asset group: a custom group's stage is
         refused for a create in the preview and the import, with the default's stages."""

@@ -11,7 +11,11 @@ late) is not started: its claim gets ``skipped`` with ``reason: late``.
 Connections: in the app, the scheduler and its runs use an engine of their own
 with ``max_workers + 1`` connections and no overflow (``start()``), so long runs
 can't take the request pool's connections (``DB_POOL_SIZE`` +
-``DB_MAX_OVERFLOW``); an instance opens at most that many more connections.
+``DB_MAX_OVERFLOW``); an instance opens at most that many more connections. One
+exception: after an in-process restart (the startup retry stops the scheduler and
+starts a new one, or ``stop()`` then ``start()``), a run still going after the
+drain keeps its connection of the old, disposed engine until it ends, on top of
+the new engine's.
 
 Each slot runs at most once across processes, through ``scheduler_claims``: for
 each due slot every instance inserts ``(workflow:<id>, slot)`` with ``ON CONFLICT

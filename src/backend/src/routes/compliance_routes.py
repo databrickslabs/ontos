@@ -591,7 +591,12 @@ async def test_llm_check(
     """
     _check_rule(payload.rule)
     require_compliance_admin_for_llm_check(payload.rule, auth_manager, current_user, request)
-    identity = llm_check_identity(request, payload.rule, auth_manager, current_user)
+    # Any rule tested here reads Unity Catalog as the user, LLM_CHECK or not: as the
+    # app, its verdict would tell what the user can't read (an existence and value oracle)
+    identity = (
+        llm_check_identity(request, payload.rule, auth_manager, current_user)
+        or RunIdentity.for_request(request)
+    )
     try:
         _throttle_rule_test(current_user.username if current_user else 'unknown')
     except RuleTestRateLimitedError as e:

@@ -181,3 +181,55 @@ def test_expired_rule_test_entries_are_dropped(monkeypatch):
     compliance_routes._throttle_rule_test('d@x')
 
     assert set(compliance_routes._rule_tests) == {'d@x'}
+
+
+# --- A rule test reads Unity Catalog as the user, with or without LLM_CHECK ---
+
+PROBE = "MATCH (t:table) ASSERT t.comment = 'secret comment'"
+
+
+def _uc_ws(*tables):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from databricks.sdk.service.catalog import TableInfo, TableType
+
+    ws = MagicMock()
+    ws.catalogs.list.return_value = [SimpleNamespace(name='hr')]
+    ws.schemas.list.return_value = [SimpleNamespace(name='private')]
+    ws.tables.list.return_value = [
+        TableInfo(name=name, full_name=f'hr.private.{name}', catalog_name='hr',
+                  schema_name='private', table_type=TableType.MANAGED, comment=comment)
+        for name, comment in tables
+    ]
+    return ws
+
+
+def test_a_plain_rule_test_cannot_probe_tables_the_user_cannot_read(client):
+    app_ws = _uc_ws(('salaries', 'secret comment'))
+    user_ws = _uc_ws()  # the user has no grant on hr.private.salaries
+
+    with patch('src.common.workspace_client.get_workspace_client', return_value=app_ws), \
+            patch('src.common.workspace_client.get_obo_workspace_client',
+                  return_value=user_ws):
+        response = client.post('/api/compliance/llm-check/test', json={'rule': PROBE})
+
+    # As the app, this answered 200 with passed: true, which confirmed the comment
+    assert response.status_code == 404, response.text
+    assert response.json()['detail']['code'] == 'sample_entity_not_found'
+    app_ws.tables.list.assert_not_called()
+
+
+def test_a_plain_rule_test_without_a_token_is_refused(client):
+    from src.common import workspace_client as wc
+
+    app_ws = _uc_ws(('salaries', 'secret comment'))
+    with patch('src.common.workspace_client.get_workspace_client', return_value=app_ws), \
+            patch('src.common.workspace_client.get_obo_workspace_client',
+                  side_effect=lambda *a, **k: wc.raise_user_token_required()):
+        response = client.post('/api/compliance/llm-check/test', json={'rule': PROBE})
+
+    assert response.status_code == 403, response.text
+    assert response.json()['detail']['code'] == 'user_token_required'
+    app_ws.tables.list.assert_not_called()
+

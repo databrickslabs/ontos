@@ -22,6 +22,7 @@ from src.controller.assets_manager import AssetsManager
 from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
 from src.db_models.assets import AssetDb, AssetTypeDb
+from src.db_models.change_log import ChangeLogDb
 from src.db_models.metadata import DocumentMetadataDb, LinkMetadataDb, RichTextMetadataDb
 from src.models.costs import CostItem, CostItemCreate
 from src.models.metadata import (
@@ -1058,8 +1059,8 @@ def test_the_attachment_list_keeps_rows_of_a_readable_asset(
     assert {a['asset_id'] for a in response.json()} == {ids['note'], ids['link'], ids['doc']}
 
 
-def _timeline_calls(asset, kind):
-    entity_type = f'asset:{kind}'
+def _timeline_calls(asset, kind, prefix='asset'):
+    entity_type = f'{prefix}:{kind}'
     return [
         (f'/api/entities/{entity_type}/{asset.id}/timeline', {}),
         (f'/api/entities/{entity_type}/{asset.id}/timeline/count', {}),
@@ -1069,18 +1070,80 @@ def _timeline_calls(asset, kind):
     ]
 
 
+def _log(db, entity_type, entity_id):
+    db.add(ChangeLogDb(
+        entity_type=entity_type, entity_id=entity_id, action='update', username='seed@example.com',
+    ))
+    db.commit()
+
+
+@pytest.mark.parametrize('prefix', ['asset', 'Asset'])
 @pytest.mark.parametrize('kind', ['rich_text', 'link'])
 def test_the_change_log_of_an_unreadable_assets_metadata_is_empty(
-        client, db_session, asset, act_as, kind):
-    """Answered as for an entity with no entries (the asset may not exist)."""
+        client, db_session, asset, act_as, kind, prefix):
+    """Answered as for an entity with no entries (the asset may not exist); any casing."""
     _seed(db_session, 'asset', str(asset.id))  # logs asset:rich_text and asset:link
+    _log(db_session, f'{prefix}:{kind}', str(asset.id))
     act_as('Data Steward')
 
-    for url, kwargs in _timeline_calls(asset, kind):
+    for url, kwargs in _timeline_calls(asset, kind, prefix):
         response = client.get(url, **kwargs)
         assert response.status_code == 200, (url, response.text)
         assert response.json()['total_count'] == 0, url
         assert response.json().get('timeline', []) == [], url
+
+
+def test_the_change_log_of_another_entity_type_stays_visible(
+        client, db_session, asset, act_as):
+    _log(db_session, 'data_product:rich_text', 'product-1')
+    act_as('Data Steward')
+
+    for url, kwargs in (
+        ('/api/entities/data_product:rich_text/product-1/timeline', {}),
+        ('/api/entities/data_product:rich_text/product-1/timeline/count', {}),
+    ):
+        response = client.get(url, **kwargs)
+        assert response.status_code == 200, (url, response.text)
+        assert response.json()['total_count'] >= 1, url
+
+
+def _fail_closed(call):
+    """The response of a request whose lookup raised: a 500, or the error itself."""
+    try:
+        return call().status_code
+    except RuntimeError:
+        return 500
+
+
+def test_a_failing_asset_lookup_shows_nothing_of_the_asset(
+        client, db_session, asset, act_as, monkeypatch):
+    """Fail closed: a lookup that raises never answers yes."""
+    ids = _seed(db_session, 'asset', str(asset.id))
+    _attach_all(db_session, 'data_product', 'product-1', ids)
+    _log(db_session, 'asset:rich_text', str(asset.id))
+    act_as('Data Steward')
+
+    def broken(self, db, *, asset_id, data_products_manager, is_admin):
+        raise RuntimeError('lookup failed')
+
+    monkeypatch.setattr(AssetsManager, 'is_asset_accessible', broken)
+    seen = {}
+
+    def timeline():
+        seen['timeline'] = client.get(f'/api/entities/asset:rich_text/{asset.id}/timeline')
+        return seen['timeline']
+
+    def merged():
+        seen['merged'] = client.get(
+            '/api/entities/data_product/metadata/merged', params={'entity_id': 'product-1'},
+        )
+        return seen['merged']
+
+    assert _fail_closed(timeline) == 500
+    assert _fail_closed(merged) == 500
+    for response in seen.values():
+        assert str(asset.id) not in response.text
+        assert not {ids['note'], ids['link'], ids['doc']} & set(response.text.split('"'))
 
 
 @pytest.mark.parametrize('role', ['Admin', 'Data Steward'])

@@ -57,7 +57,10 @@ def _policy(db: Session) -> CompliancePolicyDb:
 
 
 def _run(client: TestClient, db: Session, ws, warehouse_id: str, app_ws=None):
-    """Run the policy as a user: their token reads UC; ``app_ws`` is the app's client."""
+    """Run the policy as a user: their token reads UC; ``app_ws`` is the app's client.
+
+    The results are read back by the same user (their client lists what they see).
+    """
     policy = _policy(db)
     with patch('src.common.workspace_client.get_obo_workspace_client', return_value=ws), \
             patch('src.common.workspace_client.get_workspace_client',
@@ -68,11 +71,19 @@ def _run(client: TestClient, db: Session, ws, warehouse_id: str, app_ws=None):
             f'/api/compliance/policies/{policy.id}/runs', json={},
             headers={'x-forwarded-access-token': 'user-token'},
         )
+        assert response.status_code == 200, response.text
+        run = response.json()
+        results = _results(client, run['id'])
+    return run, {r['object_name']: r for r in results['results']}
+
+
+def _results(client: TestClient, run_id: str, headers=None):
+    response = client.get(
+        f"/api/compliance/runs/{run_id}/results",
+        headers=headers if headers is not None else {'x-forwarded-access-token': 'user-token'},
+    )
     assert response.status_code == 200, response.text
-    run = response.json()
-    results = client.get(f"/api/compliance/runs/{run['id']}/results")
-    assert results.status_code == 200, results.text
-    return run, {r['object_name']: r for r in results.json()['results']}
+    return response.json()
 
 
 def test_run_reads_tags_and_lineage_through_the_warehouse(client: TestClient, db_session: Session):
@@ -139,4 +150,52 @@ def test_a_run_waits_on_the_warehouse_off_the_event_loop(
         run, _ = _run(client, db_session, ws, 'wh-1')
 
     assert run['status'] == 'succeeded'
-    assert calls == [compliance_routes.manager.run_policy_inline]
+    # The run, then the viewer's UC listings for its results
+    assert calls == [compliance_routes.manager.run_policy_inline, compliance_routes.visible_results]
+
+
+# --- results per viewer (#1387 review) --------------------------------------------------
+
+def test_results_hide_tables_the_viewer_cannot_read(client: TestClient, db_session: Session):
+    """A runs ASSERT HAS_TAG on two tables; B, who lists only orders, sees only orders."""
+    ws = _ws()
+    ws.statement_execution.execute_statement.side_effect = _answer
+    run, _ = _run(client, db_session, ws, 'wh-1')
+    viewer = _ws()
+    viewer.tables.list.return_value = [_table('orders')]
+
+    with patch('src.common.workspace_client.get_obo_workspace_client', return_value=viewer):
+        body = _results(client, run['id'])
+
+    assert [r['object_name'] for r in body['results']] == ['orders']
+    assert body['hidden_count'] == 1 and body['total'] == 1
+    # One listing for the schema, not one per result
+    viewer.tables.list.assert_called_once_with(catalog_name='main', schema_name='sales')
+
+
+def test_results_hide_every_uc_object_from_a_viewer_without_a_token(
+    client: TestClient, db_session: Session,
+):
+    from src.common import workspace_client as wc
+
+    ws = _ws()
+    ws.statement_execution.execute_statement.side_effect = _answer
+    run, _ = _run(client, db_session, ws, 'wh-1')
+
+    # What get_obo_workspace_client does without a token outside ENV=LOCAL
+    with patch('src.common.workspace_client.get_obo_workspace_client',
+               side_effect=lambda *a, **k: wc.raise_user_token_required()):
+        body = _results(client, run['id'], headers={})
+
+    assert body['results'] == [] and body['hidden_count'] == 2
+
+
+def test_a_run_that_evaluated_nothing_has_no_score_and_says_its_coverage(
+    client: TestClient, db_session: Session,
+):
+    run, _ = _run(client, db_session, _ws(), '')
+
+    assert run['score'] is None
+    assert run['coverage'] == {'evaluated': 0, 'not_evaluated': 2}
+    listed = client.get(f"/api/compliance/policies/{run['policy_id']}/runs").json()
+    assert listed[0]['score'] is None and listed[0]['coverage']['not_evaluated'] == 2

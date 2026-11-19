@@ -22,7 +22,10 @@ class CompliancePolicy(BaseModel):
     description: str = Field(..., description="Description of what the policy checks")
     failure_message: Optional[str] = Field(default=None, description="Human-readable message shown when policy fails")
     rule: str = Field(..., description="Policy rule using the compliance DSL")
-    compliance: float = Field(default=0.0, description="Current compliance score (0-100)")
+    compliance: Optional[float] = Field(
+        default=None,
+        description="Current compliance score (0-100); None without a run that has a score",
+    )
     history: List[float] = Field(default_factory=list, description="Historical compliance scores")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
@@ -39,7 +42,7 @@ class ComplianceRun(BaseModel):
     finished_at: Optional[datetime] = None
     success_count: int
     failure_count: int
-    score: float
+    score: Optional[float] = None  # None: the run failed or evaluated no entity
     error_message: Optional[str] = None
     error_code: Optional[str] = None  # translated by the UI; error_message is the fallback
     error_params: Optional[dict] = None

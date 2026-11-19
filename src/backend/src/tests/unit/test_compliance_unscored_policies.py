@@ -95,3 +95,27 @@ def test_the_job_lists_failed_and_low_runs_for_attention_not_unscored_ones():
     assert not job._needs_attention({'status': 'succeeded', 'score': None})
     assert job._score_text(None) == 'no score'
     assert job._score_text(85.0) == '85.0%'
+
+
+def test_the_api_models_carry_no_score_as_none():
+    from src.models.compliance import CompliancePolicy, ComplianceRun
+
+    run = ComplianceRun(
+        id='r1', policy_id='p1', status='failed', started_at=datetime.utcnow(),
+        success_count=0, failure_count=0, score=None,
+    )
+    policy = CompliancePolicy(
+        id=uuid.uuid4(), name='p', description='d', rule='MATCH (p:data_product)',
+        compliance=None,
+    )
+
+    assert run.score is None and policy.compliance is None
+    # Without a value, neither claims a 0 % score
+    assert ComplianceRun(
+        id='r2', policy_id='p1', status='running', started_at=datetime.utcnow(),
+        success_count=0, failure_count=0,
+    ).score is None
+    assert CompliancePolicy(
+        id=uuid.uuid4(), name='p', description='d', rule='MATCH (p:data_product)',
+    ).compliance is None
+

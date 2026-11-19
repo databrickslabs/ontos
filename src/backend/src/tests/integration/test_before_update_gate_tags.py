@@ -426,3 +426,80 @@ def test_a_refused_update_adds_no_schema_semantic_link(
     assert refused.status_code == 400, refused.text
     assert refused.json()['detail']['code'] == 'update_gate_tag_write_failed'
     assert [kind for kind in write_order if kind[1] is True] == []
+
+
+def _gate(db_session, name, steps):
+    """An active before_update gate on contracts named ``name``; ``steps``: (type, config)."""
+    now = datetime.utcnow()
+    wf_id = str(uuid.uuid4())
+    db_session.add(ProcessWorkflowDb(
+        id=wf_id, name=name, description='gate',
+        trigger_config=json.dumps({'type': 'before_update', 'entity_types': ['data_contract']}),
+        scope_config=json.dumps({'type': 'all'}), is_active=True, is_default=False,
+        version=1, created_at=now, updated_at=now,
+    ))
+    for order, (step_type, config) in enumerate(steps):
+        db_session.add(WorkflowStepDb(
+            id=str(uuid.uuid4()), workflow_id=wf_id, step_id=f's{order}', name=f'S{order}',
+            step_type=step_type, config=json.dumps(config), order=order,
+            on_pass=f's{order + 1}' if order + 1 < len(steps) else None,
+            created_at=now, updated_at=now,
+        ))
+    db_session.commit()
+
+
+def _policy(db_session, rule):
+    policy_id = str(uuid.uuid4())
+    db_session.add(CompliancePolicyDb(id=policy_id, name='Check', rule=rule, is_active=True))
+    db_session.commit()
+    return policy_id
+
+
+def test_a_later_gate_sees_the_tag_an_earlier_gate_removes(client, db_session):
+    contract_id = _new_contract(client)
+    _tag_named(client, 'pii')
+    tagged = client.put(f'/api/data-contracts/{contract_id}', json={'tags': ['pii']})
+    assert tagged.status_code == 200, tagged.text
+    policy_id = _policy(db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('pii')")
+    _gate(db_session, f'a-remove-{uuid.uuid4().hex[:6]}', [('remove_tag', {'key': 'pii'})])
+    _gate(db_session, f'b-check-{uuid.uuid4().hex[:6]}', [
+        ('policy_check', {'policy_id': policy_id}),
+    ])
+
+    refused = client.put(f'/api/data-contracts/{contract_id}', json={'name': 'Renamed'})
+
+    # Before, the second gate saw the stored pii tag and passed, and the update
+    # was saved without it
+    assert refused.status_code == 400, refused.text
+    assert refused.json()['detail']['message'] == 'Pre-update validation failed'
+    # (the refused request rolls back the test's shared session, the tag with it)
+
+
+def test_a_later_gate_sees_the_tag_an_earlier_gate_assigns(client, db_session):
+    contract_id = _new_contract(client)
+    pii_id = _tag_named(client, 'pii')
+    policy_id = _policy(db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('pii')")
+    _gate(db_session, f'a-assign-{uuid.uuid4().hex[:6]}', [('assign_tag', {'key': 'pii'})])
+    _gate(db_session, f'b-check-{uuid.uuid4().hex[:6]}', [
+        ('policy_check', {'policy_id': policy_id}),
+    ])
+
+    passed = client.put(f'/api/data-contracts/{contract_id}', json={'name': 'Renamed'})
+
+    # Before, the second gate didn't see the first one's tag and refused the update
+    assert passed.status_code == 200, passed.text
+    assert len(_contract_tags(db_session, contract_id, pii_id)) == 1
+
+
+def test_a_later_gate_sees_an_earlier_gate_change_to_the_tag_list(client, db_session):
+    contract_id = _new_contract(client)
+    _tag_named(client, 'pii')
+    policy_id = _policy(db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('pii')")
+    _gate(db_session, f'a-remove-{uuid.uuid4().hex[:6]}', [('remove_tag', {'key': 'pii'})])
+    _gate(db_session, f'b-check-{uuid.uuid4().hex[:6]}', [
+        ('policy_check', {'policy_id': policy_id}),
+    ])
+
+    refused = client.put(f'/api/data-contracts/{contract_id}', json={'tags': ['pii']})
+
+    assert refused.status_code == 400, refused.text

@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 import uuid
 
 from src.common.logging import get_logger
@@ -736,6 +736,10 @@ class TriggerContext(BaseModel):
     # For status change triggers
     from_status: Optional[str] = None
     to_status: Optional[str] = None
+
+    # before_update: the entity's tags and the pending tag removals after the
+    # gates that already ran, so the next gate starts from them (not stored)
+    _update_gate_tags: Optional[Dict[str, Any]] = PrivateAttr(default=None)
 
 
 class WorkflowStepExecutionResult(BaseModel):

@@ -10,6 +10,7 @@ Handles step-by-step execution with branching, including:
 - Script execution
 """
 
+import copy
 import json
 import time
 from abc import ABC, abstractmethod
@@ -595,13 +596,47 @@ def _tags_as_rules_read_them(assigned: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _deferred_removals(context: 'StepContext') -> List[str]:
-    """``namespace/name`` of the tags earlier remove-tag steps of this gate will remove."""
-    removed = []
+    """``namespace/name`` of the tags earlier remove-tag steps will remove.
+
+    Those of the gates that ran before this one (``_carried_gate_tags``), then this
+    gate's own.
+    """
+    carried = _carried_gate_tags(context.trigger_context)
+    removed = list((carried or {}).get('removals') or [])
     for entry in (context.step_results or {}).values():
         write = ((entry or {}).get('data') or {}).get('deferred_tag_write') or {}
         if write.get('action') == 'remove' and write.get('tag_fqn'):
             removed.append(write['tag_fqn'])
     return removed
+
+
+def _carried_gate_tags(trigger_context: Any) -> Optional[Dict[str, Any]]:
+    """The tags and pending removals the earlier before_update gates left, else None.
+
+    The update writes the tag changes of every gate (``apply_deferred_tag_writes``),
+    so each gate is evaluated on the entity after the earlier gates' changes.
+    """
+    if getattr(getattr(trigger_context, 'trigger_type', None), 'value', None) != 'before_update':
+        return None
+    return getattr(trigger_context, '_update_gate_tags', None)
+
+
+def _start_from_earlier_gates(context: 'StepContext') -> None:
+    """Put the tags the earlier before_update gates left on a gate's entity."""
+    carried = _carried_gate_tags(context.trigger_context)
+    if carried is not None and 'tags' in carried:
+        context.entity['tags'] = copy.deepcopy(carried['tags'])
+
+
+def _carry_to_later_gates(context: 'StepContext') -> None:
+    """Keep a before_update gate's tags and pending removals for the next gate."""
+    trigger_context = context.trigger_context
+    if getattr(getattr(trigger_context, 'trigger_type', None), 'value', None) != 'before_update':
+        return
+    carried: Dict[str, Any] = {'removals': _deferred_removals(context)}
+    if 'tags' in context.entity:
+        carried['tags'] = copy.deepcopy(context.entity['tags'])
+    trigger_context._update_gate_tags = carried
 
 
 def _with_listed_tag(
@@ -3689,6 +3724,8 @@ class WorkflowExecutor:
             step_results={},
             on_behalf_of=on_behalf_of,
         )
+        # A before_update gate sees the tag changes of the gates that ran before it
+        _start_from_earlier_gates(context)
 
         # Build step lookup
         steps_by_id = {s.step_id: s for s in workflow.steps}
@@ -3761,6 +3798,8 @@ class WorkflowExecutor:
                     final_status = ExecutionStatus.FAILED
                     error_message = result.message or result.error
         
+        _carry_to_later_gates(context)
+
         # Finalize execution
         if final_status != ExecutionStatus.PAUSED:
             workflow_execution_repo.update_status(

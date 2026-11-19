@@ -43,7 +43,8 @@ describe('workflowExecutionErrorText', () => {
         error_code: 'update_gate_step_not_allowed',
         error_params: { stepType: 'delivery' },
       }, asStored)).toBe(
-        'Uma etapa delivery não pode rodar em um gate before update: o que ela faz continuaria '
+        // The step type under the designer's label, not its raw value
+        'Uma etapa Entrega não pode rodar em um gate before update: o que ela faz continuaria '
         + 'feito quando a atualização fosse recusada. '
         + 'Remova a etapa ou mova-a para um fluxo on update.',
       );

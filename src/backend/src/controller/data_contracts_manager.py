@@ -1004,16 +1004,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         return members_list
 
     def build_odcs_from_db(self, db_obj: DataContractDb, db_session=None) -> Dict[str, Any]:
-        # The ODCS spelling: a row stored before the spelling fix may hold '3.0.2'
-        api_version = normalized_api_version(db_obj.api_version) or 'v3.1.0'
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
-            'apiVersion': api_version,
+            # The ODCS spelling: a row stored before the spelling fix may hold '3.0.2'
+            'apiVersion': normalized_api_version(db_obj.api_version) or 'v3.1.0',
             'name': db_obj.name,
             'version': db_obj.version,
             'status': db_obj.status,
         }
+        # The version checks below read the exported value, not the stored one
+        api_version = odcs['apiVersion']
         
         # Apply multi-domain fields via the export adapter: primary name in `domain`,
         # additional domains under customProperties.additionalDomains, plus app round-trip

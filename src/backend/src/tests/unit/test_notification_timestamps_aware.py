@@ -9,7 +9,7 @@ offset, so this guards the source instead: no ``Notification(...)`` takes its
 a local variable.
 """
 import ast
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.common.timestamps import utc_now
@@ -187,3 +187,62 @@ def test_timestamp_template_variable_carries_the_utc_offset():
     value = AssignTagStepHandler(None, {})._resolve_value_source('timestamp', None)
 
     assert datetime.fromisoformat(value).utcoffset() == timedelta(0)
+
+
+def _freshness_module(monkeypatch):
+    """The job script, loaded without pyspark (not installed for the unit suite)."""
+    import importlib.util
+    import sys
+    from types import ModuleType
+
+    for name in ('pyspark', 'pyspark.sql'):
+        stub = ModuleType(name)
+        stub.SparkSession = object
+        monkeypatch.setitem(sys.modules, name, stub)
+    path = SRC / 'workflows' / 'data_contract_validation' / 'data_contract_validation.py'
+    spec = importlib.util.spec_from_file_location('dcv_under_test', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class _Spark:
+    def __init__(self, last_modified):
+        self._row = type('Row', (), {'lastModified': last_modified})()
+
+    def sql(self, _query):
+        return self
+
+    def collect(self):
+        return [self._row]
+
+
+def test_freshness_reads_a_naive_driver_timestamp_in_the_local_zone(monkeypatch):
+    """pyspark's collect() gives a naive datetime in the driver's zone: on a driver
+    east of UTC a table modified 1h ago must not look 8h in the future."""
+    import os
+    import time
+
+    module = _freshness_module(monkeypatch)
+    monkeypatch.setenv('TZ', 'Asia/Tokyo')
+    time.tzset()
+    try:
+        local_hour_ago = datetime.now() - timedelta(hours=1)  # naive, driver-local
+        stale_local = datetime.now() - timedelta(hours=30)
+        fresh_ok, _ = module.check_table_freshness(_Spark(local_hour_ago), 't', 24)
+        stale_ok, message = module.check_table_freshness(_Spark(stale_local), 't', 24)
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+
+    assert fresh_ok is True
+    assert stale_ok is False and 'STALE' in message
+
+
+def test_freshness_reads_strings_without_an_offset_as_utc(monkeypatch):
+    module = _freshness_module(monkeypatch)
+    hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
+
+    passed, _ = module.check_table_freshness(_Spark(hour_ago.isoformat()), 't', 24)
+
+    assert passed is True

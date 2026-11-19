@@ -53,19 +53,20 @@ CONSUMER_VISIBLE_STATUSES: frozenset[str] = frozenset({"active", "deprecated"})
 _ADMIN_ONLY_CATEGORIES: frozenset[str] = frozenset({"retired"})
 
 
-def _category(row: Any) -> Optional[str]:
+def _category(row: Any, db: Any = None) -> Optional[str]:
+    """The row's Stage Category, its group loaded through ``db`` or the row's session."""
     from src.controller.lifecycle_service import lifecycle_service
 
-    return lifecycle_service.category_of_row(row)
+    return lifecycle_service.category_of_row(row, db=db)
 
 
-def is_visible_consumer(row: Any) -> bool:
+def is_visible_consumer(row: Any, db: Any = None) -> bool:
     """A consumer sees only published stages (active / deprecated categories)."""
-    return _category(row) in _CATEGORY_RANK_CONSUMER
+    return _category(row, db) in _CATEGORY_RANK_CONSUMER
 
 
-def is_admin_only_status(row: Any) -> bool:
-    return _category(row) in _ADMIN_ONLY_CATEGORIES
+def is_admin_only_status(row: Any, db: Any = None) -> bool:
+    return _category(row, db) in _ADMIN_ONLY_CATEGORIES
 
 
 def not_others_personal_draft(model: Any, user_email: Optional[str], db: Any = None) -> Any:
@@ -98,7 +99,7 @@ _ENTITY_TYPES_BY_TABLE = {
 }
 
 
-def compute_rank(row: Any, *, has_elevated_access: bool) -> tuple:
+def compute_rank(row: Any, *, has_elevated_access: bool, db: Any = None) -> tuple:
     """Sort key for rep-picking inside a family (lower = preferred).
 
     Tie-breaks by created_at DESC so newer rows win when the status rank
@@ -114,12 +115,12 @@ def compute_rank(row: Any, *, has_elevated_access: bool) -> tuple:
     # have been filtered out already; this just guarantees deterministic
     # ordering rather than a KeyError. Within a category, stage order
     # (proposed before under_review before approved).
-    category_rank = table.get(_category(row) or "", 999)
-    if has_elevated_access and lifecycle_service.is_side_draft_stage(row):
+    category_rank = table.get(_category(row, db) or "", 999)
+    if has_elevated_access and lifecycle_service.is_side_draft_stage(row, db):
         # A draft-category side stage (``sandbox``) ranks below every other
         # stage, as before stage groups: the family shows its main line
         category_rank = 999
-    status_rank = (category_rank, lifecycle_service.stage_order_of_row(row))
+    status_rank = (category_rank, lifecycle_service.stage_order_of_row(row, db))
 
     created_at = getattr(row, "created_at", None)
     # Negate the epoch so DESC sort falls out of a plain ascending key.

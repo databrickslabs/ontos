@@ -83,9 +83,36 @@ describe('ui-customization store: fetchSettings', () => {
       );
       vi.spyOn(console, 'error').mockImplementation(() => {});
       const pending = useUICustomizationStore.getState().fetchSettings();
-      await vi.advanceTimersByTimeAsync(10000);
+      await vi.advanceTimersByTimeAsync(15000);
       await pending;
       expect(useUICustomizationStore.getState().isLoaded).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps waiting for a slow but successful response', async () => {
+    vi.useFakeTimers();
+    try {
+      useUICustomizationStore.setState({ isLoaded: false, appDisplayName: null });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          (_url: string, init?: RequestInit) =>
+            new Promise((resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+              setTimeout(
+                () => resolve({ ok: true, json: async () => ({ app_display_name: 'Slow Brand' }) }),
+                8000,
+              );
+            }),
+        ),
+      );
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const pending = useUICustomizationStore.getState().fetchSettings();
+      await vi.advanceTimersByTimeAsync(8000);
+      await pending;
+      expect(useUICustomizationStore.getState().appDisplayName).toBe('Slow Brand');
     } finally {
       vi.useRealTimers();
     }

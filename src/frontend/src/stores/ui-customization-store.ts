@@ -36,7 +36,9 @@ interface UICustomizationStore extends UICustomizationSettings {
   getShortName: () => string;
 }
 
-const FETCH_TIMEOUT_MS = 5000;
+// Long enough for a cold backend or a slow proxy: an aborted request leaves the default
+// branding for the whole session.
+const FETCH_TIMEOUT_MS = 15000;
 
 export const useUICustomizationStore = create<UICustomizationStore>((set, get) => ({
   i18nEnabled: true,

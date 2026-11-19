@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, object_session
 
 from src.common.api_errors import CodedValueError, InvalidStatusTransitionError
@@ -1100,13 +1101,23 @@ class LifecycleService:
                     raise LifecycleGroupNotFoundError(
                         f"Lifecycle stage group '{group_id}' not found", groupId=group_id,
                     )
+                # The token as stored now, read under a row lock (``FOR UPDATE`` on
+                # Postgres, held until the commit): a save committed since the row was
+                # loaded is seen, and a concurrent save waits for this one, then sees
+                # the token it wrote
+                stored_token = db.execute(
+                    select(LifecycleStageGroupDb.updated_at)
+                    .where(LifecycleStageGroupDb.id == group_id)
+                    .with_for_update()
+                ).scalar_one()
                 if expected_updated_at is not None and \
-                        _utc(row.updated_at) != _utc(expected_updated_at):
+                        _utc(stored_token) != _utc(expected_updated_at):
                     raise LifecycleGroupConflictError(
                         'lifecycle_group_changed',
                         f"'{row.name}' was changed since it was read; reload it first",
                         groupId=group_id, updatedBy=row.updated_by,
                     )
+                new_token = _next_updated_at(stored_token)
                 if row.entity_type != data['entity_type']:
                     raise LifecycleGroupInvalidError(
                         'lifecycle_group_entity_type_immutable',
@@ -1124,7 +1135,7 @@ class LifecycleService:
                 row.updated_by = user
                 # Set here: ``onupdate`` fires only when a column of the group row itself
                 # changes, so a stage-only save by the same user would keep the old token
-                row.updated_at = _next_updated_at(row.updated_at)
+                row.updated_at = new_token
             if data.get('is_default_for_type'):
                 self._make_default(db, row)
             lifecycle_stage_groups_repo.replace_stages(

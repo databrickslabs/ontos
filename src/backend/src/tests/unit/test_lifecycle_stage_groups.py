@@ -227,6 +227,38 @@ class TestConcurrentEdits:
         assert err.value.code == 'lifecycle_group_changed'
 
 
+    def test_a_save_committed_between_the_check_and_the_write_is_refused(
+        self, db_session, monkeypatch,
+    ):
+        """Another request saves after this one loaded the row: the row in memory
+        still has the old token, the token re-read under the row lock refuses."""
+        from datetime import datetime, timezone
+
+        from sqlalchemy import update
+
+        from src.db_models.lifecycle_stage_groups import LifecycleStageGroupDb
+
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'alice')
+        read_at = group.updated_at
+        real_get = lifecycle_stage_groups_repo.get
+
+        def get_then_concurrent_save(db, group_id):
+            row = real_get(db, group_id)
+            db.execute(update(LifecycleStageGroupDb)
+                       .where(LifecycleStageGroupDb.id == group_id)
+                       .values(updated_at=datetime(2030, 1, 1, tzinfo=timezone.utc))
+                       .execution_options(synchronize_session=False))
+            return row
+
+        monkeypatch.setattr(lifecycle_stage_groups_repo, 'get', get_then_concurrent_save)
+        changed = _looping_group()
+        changed['stages'][2]['label'] = 'Periodic review'
+        with pytest.raises(LifecycleGroupConflictError) as err:
+            lifecycle_service.save_group(db_session, changed, 'bob', group_id=group.id,
+                                         expected_updated_at=read_at)
+        assert err.value.code == 'lifecycle_group_changed'
+
+
 class TestSaveValidation:
     @pytest.mark.parametrize('change, code', [
         (lambda g: g['stages'][0].update(is_initial=False), 'lifecycle_group_initial_stage'),

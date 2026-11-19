@@ -432,7 +432,9 @@ policy scored below 70.
 
 The results of a run list only the Unity Catalog objects the viewer can read: they are
 checked with the viewer's own token when the results are opened (one listing per schema),
-whoever started the run. The others are counted (`hidden_count`), not listed.
+whoever started the run. The others are counted (`hidden_count`), not listed. A viewer
+without a token sees none, except with `ENV=LOCAL` or `OBO_ALLOW_SP_FALLBACK=true`, where the
+check uses the app's client and so hides nothing the app can read.
 
 ### Application Entities
 - `type` - Entity type

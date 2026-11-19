@@ -2267,7 +2267,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     check.implementation = dumps(edited)
             db.add(check)
     
-    def _process_semantic_links(self, db, contract_id: str, contract_data, current_user: Optional[str] = None):
+    def _process_semantic_links(
+        self, db, contract_id: str, contract_data, current_user: Optional[str] = None,
+        semantic_manager: Optional[Any] = None, commit: bool = True,
+    ):
         """
         Process all semantic links from authoritative definitions.
         
@@ -2276,6 +2279,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             contract_id: Contract UUID
             contract_data: Contract data (can be Pydantic model or dict)
             current_user: Username for semantic link creation
+            semantic_manager: The caller's SemanticLinksManager (its pending graph changes)
+            commit: False to write the links in the caller's transaction
         """
         from src.controller.semantic_links_manager import SemanticLinksManager
         from src.utils.semantic_helpers import process_contract_semantic_links
@@ -2286,7 +2291,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         else:
             contract_dict = contract_data
         
-        semantic_manager = SemanticLinksManager(db)
+        semantic_manager = semantic_manager or SemanticLinksManager(db)
         
         # Process contract-level semantic assignments
         contract_auth_defs = contract_dict.get('authoritativeDefinitions', []) or []
@@ -2295,7 +2300,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 semantic_manager=semantic_manager,
                 contract_id=contract_id,
                 authoritative_definitions=contract_auth_defs,
-                created_by=current_user
+                created_by=current_user,
+                commit=commit,
             )
     
     def _create_team_members(self, db, contract_id: str, team_data: List[dict]):
@@ -2883,6 +2889,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 for i, tag in enumerate(tags_data):
                     if not isinstance(tag, (str, dict)):
                         raise InvalidTagEntryError(i)
+            semantic_manager = None  # set when the update replaces the contract's links
             
             # Determine whether the caller supplied a domain assignment (multi-domain).
             from src.common import contract_domain_fields as dom
@@ -3161,20 +3168,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         db, contract_id, data_dict['customProperties'],
                         previous=previous)
             
-            # Handle contract-level semantic links if provided
-            if data_dict.get('authoritativeDefinitions') is not None:
-                from src.controller.semantic_links_manager import SemanticLinksManager
-                semantic_manager = SemanticLinksManager(db)
-                
-                # Remove existing contract-level semantic links
-                existing_links = semantic_manager.list_for_entity(entity_id=contract_id, entity_type='data_contract')
-                for link in existing_links:
-                    semantic_manager.remove(link.id, removed_by=current_user)
-                
-                # Process new semantic links
-                if data_dict['authoritativeDefinitions']:
-                    self._process_semantic_links(db, contract_id, data_dict, current_user)
-
             # The tag changes of the before_update gates' tag steps, on top of the
             # update's tags (as the gates saw them) and in its commit; a failed
             # write refuses the update (UpdateGateTagWriteError)
@@ -3182,7 +3175,27 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 from src.common.workflow_executor import apply_deferred_tag_writes
                 apply_deferred_tag_writes(db, gate_executions, current_user)
 
+            # Handle contract-level semantic links if provided, in the update's
+            # commit (their graph changes once it committed)
+            if data_dict.get('authoritativeDefinitions') is not None:
+                from src.controller.semantic_links_manager import SemanticLinksManager
+                semantic_manager = SemanticLinksManager(db)
+                
+                # Remove existing contract-level semantic links
+                existing_links = semantic_manager.list_for_entity(entity_id=contract_id, entity_type='data_contract')
+                for link in existing_links:
+                    semantic_manager.remove(link.id, removed_by=current_user, commit=False)
+                
+                # Process new semantic links
+                if data_dict['authoritativeDefinitions']:
+                    self._process_semantic_links(
+                        db, contract_id, data_dict, current_user,
+                        semantic_manager=semantic_manager, commit=False,
+                    )
+
             db.commit()
+            if semantic_manager is not None:
+                semantic_manager.apply_graph_changes()
             db.refresh(updated)
             
             # Log to change log for timeline

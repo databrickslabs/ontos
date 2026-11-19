@@ -26,7 +26,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy.orm import Session, object_session
@@ -223,6 +223,14 @@ def _utc(value: Optional[datetime]) -> Optional[datetime]:
         return None
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else \
         value.astimezone(timezone.utc)
+
+
+def _next_updated_at(previous: Optional[datetime]) -> datetime:
+    """Now (UTC), and always later than ``previous``, so every save moves the token."""
+    now = datetime.now(timezone.utc)
+    if previous is not None and now <= _utc(previous):
+        return _utc(previous) + timedelta(microseconds=1)
+    return now
 
 
 def _normalized(status: Any) -> str:
@@ -1076,6 +1084,9 @@ class LifecycleService:
                 row.name = data['name']
                 row.description = data.get('description')
                 row.updated_by = user
+                # Set here: ``onupdate`` fires only when a column of the group row itself
+                # changes, so a stage-only save by the same user would keep the old token
+                row.updated_at = _next_updated_at(row.updated_at)
             if data.get('is_default_for_type'):
                 self._make_default(db, row)
             lifecycle_stage_groups_repo.replace_stages(

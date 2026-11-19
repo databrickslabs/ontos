@@ -205,6 +205,27 @@ class TestConcurrentEdits:
                                              expected_updated_at=group.updated_at)
         assert {s.key: s.label for s in saved.stages}['needs_review'] == 'Periodic review'
 
+    def test_a_same_user_stage_only_save_moves_the_token(self, db_session):
+        """Name, description and editor unchanged: only stages change, so ``onupdate``
+        would not fire; a later save based on the first read must still be refused."""
+        from datetime import datetime, timezone
+
+        group = lifecycle_service.save_group(db_session, _looping_group(), 'alice')
+        read_at = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        group.updated_at = read_at
+        db_session.commit()
+        first = _looping_group()
+        first['stages'][2]['label'] = 'Periodic review'
+        saved = lifecycle_service.save_group(db_session, first, 'alice', group_id=group.id,
+                                             expected_updated_at=read_at)
+        assert saved.updated_at.replace(tzinfo=None) != read_at.replace(tzinfo=None)
+        second = _looping_group()
+        second['stages'][2]['label'] = 'Quarterly review'
+        with pytest.raises(LifecycleGroupConflictError) as err:
+            lifecycle_service.save_group(db_session, second, 'alice', group_id=group.id,
+                                         expected_updated_at=read_at)
+        assert err.value.code == 'lifecycle_group_changed'
+
 
 class TestSaveValidation:
     @pytest.mark.parametrize('change, code', [

@@ -2827,6 +2827,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         contract_data,
         current_user: Optional[str] = None,
         background_tasks: Optional[Any] = None,
+        gate_executions: Optional[List[Any]] = None,
     ) -> DataContractDb:
         """
         Update a contract with all nested relations. Manages transaction.
@@ -2837,6 +2838,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             contract_data: Contract update data (Pydantic DataContractUpdate model or dict)
             current_user: Username of current user
             background_tasks: Optional FastAPI BackgroundTasks for async delivery
+            gate_executions: The executions of the before_update gates the update
+                passed (``run_update_gates``): their tag steps' changes are written
+                after the update's own tags, in the same commit
             
         Returns:
             Updated DataContractDb instance
@@ -3170,7 +3174,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 # Process new semantic links
                 if data_dict['authoritativeDefinitions']:
                     self._process_semantic_links(db, contract_id, data_dict, current_user)
-            
+
+            # The tag changes of the before_update gates' tag steps, on top of the
+            # update's tags (as the gates saw them) and in its commit; a failed
+            # write refuses the update (UpdateGateTagWriteError)
+            if gate_executions:
+                from src.common.workflow_executor import apply_deferred_tag_writes
+                apply_deferred_tag_writes(db, gate_executions, current_user)
+
             db.commit()
             db.refresh(updated)
             

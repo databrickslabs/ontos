@@ -347,9 +347,10 @@ class TriggerRegistry:
         Returns:
             Tuple of (all_passed, executions)
 
-        The tags the gates' assign-tag steps set are written only when every
-        gate passed (``apply_deferred_tag_writes``): a blocked update leaves
-        no tag behind.
+        The gates' assign-tag and remove-tag steps only record their change
+        (``deferred_tag_writes``): the update writes them, once it passed, in
+        its own transaction (``apply_deferred_tag_writes``), so a blocked or
+        failed update leaves no tag change behind.
 
         A gate whose evaluation raises has no execution. The error is logged
         and audited; when the gate is ``on_error: fail_closed`` this raises
@@ -380,9 +381,6 @@ class TriggerRegistry:
             exe.status == ExecutionStatus.SUCCEEDED 
             for exe in executions
         ) if executions else True
-        if all_passed and executions:
-            from src.common.workflow_executor import apply_deferred_tag_writes
-            apply_deferred_tag_writes(self._db, executions, user_email)
 
         return all_passed, executions
 
@@ -1521,6 +1519,9 @@ def run_update_gates(
     ones are read straight from the workflows table; if that fails too, the
     mode is unknown and the update proceeds (``(True, [])``, the error is
     still reported).
+
+    Pass the executions to the update (``update_contract_with_relations``):
+    it writes the tag changes of the gates' tag steps with its own fields.
     """
     try:
         return get_trigger_registry(db).before_update(

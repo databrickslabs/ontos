@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.timestamps import utc_now
 from src.db_models.process_workflows import WorkflowStepDb, WorkflowExecutionDb
 from src.models.process_workflows import (
@@ -371,43 +372,81 @@ def _trigger_type(context: 'StepContext') -> Optional[str]:
     return getattr(trigger_type, 'value', trigger_type)
 
 
-def apply_deferred_tag_writes(
-    db: Session, executions: List[WorkflowExecution], user_email: Optional[str],
-) -> int:
-    """Write the tag changes the tag steps of passed before_update gates recorded.
+class UpdateGateTagWriteError(CodedValueError):
+    """A tag change of a passed ``before_update`` gate couldn't be written.
+
+    The update is refused (and rolled back) whatever the gate's ``on_error``: the
+    gates passed on the entity with that tag change. ``params``: ``entityId``.
+    """
+
+    code = 'update_gate_tag_write_failed'
+
+    def __init__(self, entity_id: str):
+        super().__init__(
+            "Update refused: a tag change of its workflow gates could not be written. "
+            "Ask an administrator to check the server log.",
+            entityId=entity_id,
+        )
+
+
+def deferred_tag_writes(executions: List[WorkflowExecution]) -> List[Dict[str, Any]]:
+    """The tag changes the tag steps of before_update gates recorded, in step order.
 
     Assign-tag and remove-tag steps don't write while the gate runs
     (``deferred_tag_write`` in their result): the executor commits each step
     record, so a write there would stay even when a later step, or another
-    gate, blocks the update. Called once all the gates passed, in step order;
-    returns the number of changes written.
+    gate, blocks the update. Only passed steps count.
     """
-    from uuid import UUID
-
-    from src.controller.tags_manager import TagsManager
-
-    tags_mgr = TagsManager()
-    written = 0
-    for execution in executions:
+    ordered: List[Dict[str, Any]] = []
+    for execution in executions or []:
         writes = [
             (step.result_data or {}).get('deferred_tag_write')
             for step in execution.step_executions or [] if step.passed
         ]
         # In step order (``seq``): stored timestamps may tie
-        writes = sorted(
+        ordered.extend(sorted(
             (w for w in writes if isinstance(w, dict)), key=lambda w: w.get('seq', 0),
-        )
-        for write in writes:
-            target = {
-                'db': db, 'entity_id': write['entity_id'], 'entity_type': write['entity_type'],
-                'tag_id': UUID(write['tag_id']), 'user_email': user_email,
-            }
+        ))
+    return ordered
+
+
+def apply_deferred_tag_writes(
+    db: Session, executions: List[WorkflowExecution], user_email: Optional[str],
+) -> int:
+    """Write the tag changes of the passed before_update gates, inside the update.
+
+    Called by the update, after it wrote its own fields and tags (a ``tags`` list
+    replaces the stored ones first, the gates' changes go on top, as the gates saw
+    them) and before it commits: nothing is committed here, so an update that fails
+    afterwards leaves no tag change either. A failed write raises
+    ``UpdateGateTagWriteError`` (the update is refused); returns the number written.
+    """
+    from uuid import UUID
+
+    from src.controller.tags_manager import TagsManager
+
+    writes = deferred_tag_writes(executions)
+    if not writes:
+        return 0
+    tags_mgr = TagsManager()
+    for write in writes:
+        target = {
+            'db': db, 'entity_id': write['entity_id'], 'entity_type': write['entity_type'],
+            'tag_id': UUID(write['tag_id']), 'user_email': user_email, 'commit': False,
+        }
+        try:
             if write.get('action') == 'remove':
                 tags_mgr.remove_tag_from_entity(**target)
             else:
                 tags_mgr.add_tag_to_entity(**target, assigned_value=write.get('assigned_value'))
-            written += 1
-    return written
+        except Exception as e:
+            logger.error(
+                "Could not write the tag change %s of a before_update gate on %s %s",
+                write.get('action'), write.get('entity_type'), write.get('entity_id'),
+                exc_info=True,
+            )
+            raise UpdateGateTagWriteError(str(write.get('entity_id'))) from e
+    return len(writes)
 
 
 def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
@@ -539,6 +578,46 @@ def _deferred_removals(context: 'StepContext') -> List[str]:
     return removed
 
 
+def _with_listed_tag(
+    tags: List[Any], fqn: str, value: Optional[str], tag_id: Optional[str] = None,
+) -> List[Any]:
+    """An update's tag list with ``fqn`` assigned on top, as an assign-tag step writes it.
+
+    A value replaces the listed one; without a value a listed tag keeps its value
+    (``add_tag_to_entity`` keeps a stored value), else it is added key-only.
+    """
+    if value is None and _listed(tags, fqn, tag_id):
+        return tags
+    return [*_without_listed_tag(tags, fqn, tag_id), {'tag_fqn': fqn, 'assigned_value': value}]
+
+
+def _without_listed_tag(tags: List[Any], fqn: str, tag_id: Optional[str] = None) -> List[Any]:
+    """An update's tag list without ``fqn`` (by ``namespace/name``, a name alone or its id)."""
+    return [tag for tag in tags if not _listed([tag], fqn, tag_id)]
+
+
+def _listed(tags: List[Any], fqn: str, tag_id: Optional[str] = None) -> bool:
+    """Whether a tag list (FQN strings or ``AssignedTagCreate`` dicts) names the tag."""
+    from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR as SEP
+
+    def full(name: Any) -> Optional[str]:
+        if not isinstance(name, str) or not name:
+            return None
+        return name if SEP in name else f"{DEFAULT_NAMESPACE_NAME}{SEP}{name}"
+
+    wanted = full(fqn)
+    for tag in tags:
+        listed_id = None if isinstance(tag, str) else (tag or {}).get('tag_id')
+        if tag_id and listed_id:
+            if str(listed_id) == tag_id:
+                return True
+            continue  # as in AssignedTagCreate, the id wins over the name
+        name = tag if isinstance(tag, str) else (tag or {}).get('tag_fqn')
+        if full(name) == wanted:
+            return True
+    return False
+
+
 def _future_tags(
     db: Session, payload: Dict[str, Any], stored: Optional[Dict[str, Any]],
     removed: Optional[List[str]] = None,
@@ -547,9 +626,10 @@ def _future_tags(
 
     A list in the update replaces the stored tags (``[]`` clears them), as
     ``set_tags_for_entity`` does (a listed tag without a value keeps its stored
-    value); without one (no ``tags``, or None) the stored tags
-    stay less the ones earlier remove-tag steps remove (``removed``, written only
-    once the gates pass), and tags earlier assign-tag steps set (a dict) go on
+    value); earlier tag steps of the gate changed the list itself (the update
+    writes their changes after it). Without one (no ``tags``, or None) the stored
+    tags stay less the ones earlier remove-tag steps remove (``removed``, written
+    with the update), and tags earlier assign-tag steps set (a dict) go on
     top. None when the update sends no list and there is no stored entity to
     read the tags from.
     """
@@ -1696,12 +1776,13 @@ class AssignTagStepHandler(StepHandler):
             # afterwards: a key-only assign keeps a value the entity already has.
             # A before_update gate only records the write (``deferred``): the step
             # records are committed as the gate runs, so a tag written here would
-            # stay when a later step blocks the update. ``apply_deferred_tag_writes``
-            # writes it once every gate passed.
+            # stay when a later step blocks the update. The update writes it
+            # (``apply_deferred_tag_writes``), after its own tags and in its commit.
             persisted = False
             wrote = False
             deferred = None
             effective_value = resolved_value
+            tag = None
             try:
                 from src.controller.tags_manager import TagsManager
                 tags_mgr = TagsManager()
@@ -1726,7 +1807,9 @@ class AssignTagStepHandler(StepHandler):
                         if existing is not None:
                             # Already assigned: nothing to write (and no change-log entry).
                             effective_value = existing.assigned_value
-                        elif _trigger_type(context) == 'before_update':
+                        if _trigger_type(context) == 'before_update':
+                            # Recorded even when the tag is stored: a ``tags`` list in
+                            # the update may drop it, and the update writes this after it
                             deferred = {
                                 'action': 'assign',
                                 'seq': len(context.step_results or {}),
@@ -1735,7 +1818,7 @@ class AssignTagStepHandler(StepHandler):
                                 'tag_id': str(tag.id),
                                 'assigned_value': resolved_value,
                             }
-                        else:
+                        elif existing is None:
                             tags_mgr.add_tag_to_entity(
                                 db=self._db,
                                 entity_id=context.entity_id,
@@ -1758,14 +1841,22 @@ class AssignTagStepHandler(StepHandler):
                 logger.exception("TagsManager failed assigning tag %s", key)
                 return StepResult(passed=False, error=f"Could not assign tag '{key}'")
 
-            if context.entity.get('tags') is None:
-                context.entity['tags'] = {}  # none yet, or an update request's null
-            if effective_value is not None:
-                context.entity['tags'][key] = effective_value
+            if isinstance(context.entity.get('tags'), list):
+                # A before_update request's tag list (the tags after the update):
+                # this tag goes on top of it, as the update writes it
+                context.entity['tags'] = _with_listed_tag(
+                    context.entity['tags'], tag.fully_qualified_name if tag else key,
+                    resolved_value, str(tag.id) if tag else None,
+                )
             else:
-                # Key-only, with no stored value: rules see the tag as true, like
-                # the compliance loader shows key-only tags.
-                context.entity['tags'].setdefault(key, True)
+                if context.entity.get('tags') is None:
+                    context.entity['tags'] = {}  # none yet, or an update request's null
+                if effective_value is not None:
+                    context.entity['tags'][key] = effective_value
+                else:
+                    # Key-only, with no stored value: rules see the tag as true, like
+                    # the compliance loader shows key-only tags.
+                    context.entity['tags'].setdefault(key, True)
 
             label = f"{key}={resolved_value}" if resolved_value is not None else key
             if deferred is not None:
@@ -1810,6 +1901,7 @@ class RemoveTagStepHandler(StepHandler):
             # removal, as an assign-tag step does (``apply_deferred_tag_writes``)
             persisted = False
             deferred = None
+            tag = None
             try:
                 from src.controller.tags_manager import TagsManager
                 tags_mgr = TagsManager()
@@ -1845,6 +1937,12 @@ class RemoveTagStepHandler(StepHandler):
             
             if isinstance(context.entity.get('tags'), dict) and key in context.entity['tags']:
                 del context.entity['tags'][key]
+            elif isinstance(context.entity.get('tags'), list):
+                # A before_update request's tag list: the update removes it after the list
+                context.entity['tags'] = _without_listed_tag(
+                    context.entity['tags'], tag.fully_qualified_name if tag else key,
+                    str(tag.id) if tag else None,
+                )
 
             if deferred is not None:
                 suffix = " (written when the update passes its gates)"

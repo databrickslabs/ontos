@@ -235,8 +235,9 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID,
         assigned_value: Optional[str], user_email: Optional[str], commit: bool = True,
     ) -> AssignedTag:
-        """Assign a tag to an entity. With ``commit=False`` (a workflow step, inside
-        its savepoint) the change is only flushed."""
+        """Assign a tag to an entity. With ``commit=False`` (inside the caller's
+        transaction: a workflow step's savepoint, a contract update) the change is
+        only flushed."""
         previous = (
             db.query(EntityTagAssociationDb.assigned_value)
             .filter_by(entity_id=entity_id, entity_type=entity_type, tag_id=tag_id)
@@ -260,24 +261,17 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         # assignment changed: re-adding a tag without a value keeps it (#1420)
         stored_value = assoc.assigned_value
         if previous is None or previous[0] != stored_value:
-            try:
-                from src.controller.change_log_manager import change_log_manager
-                change_log_manager.log_change_with_details(
-                    db,
-                    entity_type=entity_type,
-                    entity_id=str(entity_id),
-                    action="TAG_ASSIGN",
-                    username=user_email,
-                    commit=commit,
-                    details={
-                        "tag": tag_fqn,
-                        "assigned_value": stored_value,
-                        "summary": f"Tag '{tag_fqn}' assigned" + (f" with value '{stored_value}'" if stored_value else "") + (f" by {user_email}" if user_email else ""),
-                    },
-                )
-            except Exception as log_err:
-                logger.warning(f"Failed to log change for tag assign: {log_err}")
-        
+            self._log_tag_change(db, commit, entity_type=entity_type, entity_id=str(entity_id),
+                action="TAG_ASSIGN", username=user_email,
+                details={
+                    "tag": tag_fqn,
+                    "assigned_value": stored_value,
+                    "summary": f"Tag '{tag_fqn}' assigned"
+                    + (f" with value '{stored_value}'" if stored_value else "")
+                    + (f" by {user_email}" if user_email else ""),
+                },
+            )
+
         if commit:
             db.commit()
         else:
@@ -299,8 +293,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID,
         user_email: Optional[str] = None, commit: bool = True,
     ) -> bool:
-        """Remove a tag from an entity. With ``commit=False`` (a workflow step, inside
-        its savepoint) the change is only flushed."""
+        """Remove a tag from an entity; ``commit=False`` only flushes (as ``add_tag_to_entity``)."""
         # Get tag info before removal for change log
         tag_db = self._tag_repo.get(db, id=tag_id)
         tag_fqn = None
@@ -311,27 +304,36 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         ok = self._entity_assoc_repo.remove_tag_from_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id)
         if ok:
             # Log to change log for timeline
-            try:
-                from src.controller.change_log_manager import change_log_manager
-                change_log_manager.log_change_with_details(
-                    db,
-                    entity_type=entity_type,
-                    entity_id=str(entity_id),
-                    action="TAG_REMOVE",
-                    username=user_email,
-                    commit=commit,
-                    details={
-                        "tag": tag_fqn or str(tag_id),
-                        "summary": f"Tag '{tag_fqn or str(tag_id)}' removed" + (f" by {user_email}" if user_email else ""),
-                    },
-                )
-            except Exception as log_err:
-                logger.warning(f"Failed to log change for tag removal: {log_err}")
+            self._log_tag_change(db, commit, entity_type=entity_type, entity_id=str(entity_id),
+                action="TAG_REMOVE", username=user_email,
+                details={
+                    "tag": tag_fqn or str(tag_id),
+                    "summary": f"Tag '{tag_fqn or str(tag_id)}' removed"
+                    + (f" by {user_email}" if user_email else ""),
+                },
+            )
             if commit:
                 db.commit()
             else:
                 db.flush()
         return ok
+
+    @staticmethod
+    def _log_tag_change(db: Session, commit: bool, **entry: Any) -> None:
+        """A change-log entry of a tag change; a failed write is only logged.
+
+        With ``commit=False`` it is written in a savepoint, so a failed write doesn't
+        abort the caller's transaction (Postgres), and isn't committed here.
+        """
+        from src.controller.change_log_manager import change_log_manager
+        try:
+            if commit:
+                change_log_manager.log_change_with_details(db, **entry)
+            else:
+                with db.begin_nested():
+                    change_log_manager.log_change_with_details(db, **entry, commit=False)
+        except Exception as log_err:
+            logger.warning(f"Failed to log change for {entry.get('action')}: {log_err}")
 
     def get_or_create_default_namespace(self, db: Session, *, user_email: Optional[str]) -> TagNamespaceDb:
         """Ensures the default namespace exists, creating it if necessary."""

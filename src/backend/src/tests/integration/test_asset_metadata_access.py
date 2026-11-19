@@ -82,10 +82,13 @@ def _seed(db, entity_type: str, entity_id: str) -> dict:
         entity_type=entity_type, entity_id=entity_id, cost_center='OTHER', amount_cents=100,
         start_month='2026-01-01',
     ), user_email='seed@example.com')
+    # Attached by the attach route, then detached by the detach route.
+    shared = metadata.create_shared_rich_text(db, data=RichTextCreate(
+        entity_type=entity_type, entity_id='ignored', title='Shared', content_markdown='Body',
+    ), user_email='seed@example.com')
     return {
         'note': str(note.id), 'link': str(link.id), 'doc': str(doc.id), 'cost': str(cost.id),
-        # Attached by the attach route, then detached by the detach route.
-        'attached': str(uuid.uuid4()),
+        'attached': str(shared.id),
     }
 
 
@@ -521,14 +524,35 @@ def test_a_steward_attaches_a_row_of_another_entity_to_a_product(
     assert response.status_code == 201, response.text
 
 
-def test_attaching_an_unknown_row_to_another_entity_keeps_working(client, act_as):
-    act_as('Data Steward')
+@pytest.mark.parametrize('entity_type', ['data_product', 'asset'])
+@pytest.mark.parametrize('asset_type', ['rich_text', 'link', 'document'])
+def test_attaching_an_unknown_row_is_404(
+        client, db_session, asset, act_as, entity_type, asset_type):
+    """An attachment must point at a row (before: 201, an attachment to nothing)."""
+    act_as('Admin')
+    entity_id = str(asset.id) if entity_type == 'asset' else 'target-1'
+    row_id = str(uuid.uuid4())
+
+    response = client.post(f'/api/entities/{entity_type}/attachments',
+                           params={'entity_id': entity_id},
+                           json={'asset_type': asset_type, 'asset_id': row_id})
+
+    assert response.status_code == 404, response.text
+    assert _code(response) == 'metadata_row_not_found'
+    assert response.json()['detail']['params'] == {'kind': asset_type, 'rowId': row_id}
+    assert MetadataManager().list_attachments(
+        db_session, entity_type=entity_type, entity_id=entity_id) == []
+
+
+def test_an_unknown_row_is_404_only_after_the_access_checks(client, act_as):
+    """A Consumer can't attach: the data-domains refusal comes first."""
+    act_as('Data Consumer')
 
     response = client.post('/api/entities/data_product/attachments',
                            params={'entity_id': 'target-1'},
                            json={'asset_type': 'rich_text', 'asset_id': str(uuid.uuid4())})
 
-    assert response.status_code == 201, response.text
+    _assert_data_domains_refusal(response)
 
 
 @pytest.mark.parametrize('body', [

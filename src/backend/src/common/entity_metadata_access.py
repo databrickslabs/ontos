@@ -9,7 +9,9 @@ an asset (``entity_type == "asset"``) the asset's own rules apply instead
 - changing needs ``assets`` READ_WRITE (attaching a shared or another
   entity's row also needs ``data-domains`` READ, the right to read that row);
 - attaching a row that belongs to an asset to any other entity needs that asset
-  to be readable too, as its merged metadata goes to every ``data-domains`` reader;
+  to be readable too, as its merged metadata goes to every ``data-domains`` reader,
+  and merged metadata leaves out attached rows of assets the user can't read
+  (``readable_row_filter``); attaching an unknown row is 404 ``metadata_row_not_found``;
 - the asset must exist (404 ``asset_not_found``), except on the routes that
   address a row by its own id, so orphaned rows can still be cleaned up.
 
@@ -56,6 +58,12 @@ class EntityTypeNotSupportedError(CodedValueError):
     """The path names an entity type the routes don't serve, or not in its stored form."""
 
     code = 'entity_type_not_supported'
+
+
+class MetadataRowNotFoundError(CodedValueError):
+    """The note, link or document to attach doesn't exist."""
+
+    code = 'metadata_row_not_found'
 
 
 def _is_asset(entity_type: Optional[str]) -> bool:
@@ -171,7 +179,7 @@ async def _ensure_asset(
 
 
 async def _ensure_attached_row_readable(request: Request, db, user_details, auth_manager) -> None:
-    """The row to attach belongs to an asset: its reader must be able to read that asset.
+    """The row to attach must exist (404), and if it belongs to an asset, be readable.
 
     The attach body isn't validated yet (dependencies run first): a body that
     isn't a JSON object, or doesn't name a row, is left to the route's 422. A
@@ -185,6 +193,11 @@ async def _ensure_attached_row_readable(request: Request, db, user_details, auth
     if asset_type not in ('rich_text', 'link', 'document') or row_id is None:
         return
     owner = get_metadata_manager(request).get_row_owner(db, kind=asset_type, id=str(row_id))
+    if owner is None:
+        # An attachment must point at a row.
+        _refuse(status.HTTP_404_NOT_FOUND, MetadataRowNotFoundError(
+            f"No {asset_type} has the id '{row_id}'.", kind=asset_type, rowId=str(row_id),
+        ))
     if _is_asset_row(owner):
         await _ensure_asset(
             request, db, user_details, auth_manager, owner[1], FeatureAccessLevel.READ_ONLY,

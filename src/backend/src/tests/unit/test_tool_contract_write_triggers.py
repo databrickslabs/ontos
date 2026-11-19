@@ -371,6 +371,45 @@ class TestBlockingGates:
         assert len(_runs(world.db, status_gate)) == 1
         assert _actions(world) == [('UPDATE', True), ('DEPRECATE', True)]
 
+    @staticmethod
+    def _open_request(world):
+        from src.controller.change_log_manager import change_log_manager
+        from src.controller.certified_deprecation_guard import (
+            pending_request_id, request_is_closed,
+        )
+
+        change_log_manager.log_change_with_details(
+            world.db, entity_type='data_contract', entity_id=world.row.id,
+            action='status_change_requested', username='requester@example.com',
+            details={'request_id': 'r1', 'from_status': 'active', 'target_status': 'deprecated'},
+        )
+        assert pending_request_id(world.db, 'data_contract', world.row.id) == 'r1'
+        # Closed, not only no longer pending (a request stops pending once the status moved)
+        return lambda: request_is_closed(world.db, 'data_contract', world.row.id, 'r1')
+
+    def test_a_status_change_with_fields_closes_the_open_requests(self, world, run):
+        closed = self._open_request(world)
+        res = run(_ctx(world), 'update_data_contract', {
+            'contract_id': world.row.id, 'description': 'changed', 'status': 'deprecated',
+            'deprecation_reason': 'Replaced',
+        })
+
+        # The status write closes them (its gates ran before the fields, gates_checked)
+        assert res.success is True, res.error
+        assert closed() is True
+
+    def test_a_blocked_status_change_with_fields_keeps_the_open_requests(self, world, run):
+        closed = self._open_request(world)
+        _workflow(world.db, 'before_status_change', step_type='fail',
+                  from_status='active', to_status='deprecated')
+        res = run(_ctx(world), 'update_data_contract', {
+            'contract_id': world.row.id, 'description': 'changed', 'status': 'deprecated',
+            'deprecation_reason': 'Replaced',
+        })
+
+        assert res.error_code == 'status_change_blocked'
+        assert closed() is False
+
     def test_run_update_gates_returns_pass_when_the_registry_raises(self, world, monkeypatch):
         import src.common.workflow_triggers as triggers
 

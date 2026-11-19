@@ -13,7 +13,8 @@ import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
-import { hasDateConstraints, takesTimezoneName } from './logical-types'
+import { hasDateConstraints, takesTimezoneFlag, takesTimezoneName } from './odcs-logical-types'
+import { Checkbox } from '@/components/ui/checkbox'
 
 type WizardProps = {
   isOpen: boolean
@@ -180,6 +181,12 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     dataGranularityDescription?: string;
   }
   const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>(initial?.schemaObjects || [])
+  const setColumnTimezone = (objIndex: number, colIndex: number, timezone: boolean | undefined) => {
+    setSchemaObjects((prev) => prev.map((x, i) => (i !== objIndex ? x : {
+      ...x,
+      properties: x.properties.map((y, j) => (j === colIndex ? { ...y, timezone } : y)),
+    })))
+  }
   const [contractSemanticConcepts, setContractSemanticConcepts] = useState<SemanticConcept[]>(initial?.contractSemanticConcepts || [])
 
   type QualityRule = {
@@ -1083,10 +1090,29 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                         <Label className="text-[10px]">{t('data-contracts:wizard.constraints.timezone', 'Timezone')}</Label>
                                         <Input
                                           placeholder={t('data-contracts:wizard.constraints.timezonePlaceholder', 'UTC, America/New_York')}
-                                          value={(col as any).timezone || ''}
+                                          value={typeof (col as any).timezone === 'string'
+                                            ? (col as any).timezone : ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, timezone: e.target.value || undefined } : y) } : x))}
                                           className="mt-0.5 h-7 text-xs"
                                         />
+                                      </div>
+                                      )}
+                                      {takesTimezoneFlag((col as any).logicalType) && (
+                                      <div className="flex items-end space-x-2 pb-1">
+                                        <Checkbox
+                                          id={`wizard-timezone-flag-${objIndex}-${colIndex}`}
+                                          checked={(col as any).timezone === true}
+                                          onCheckedChange={(checked) => setColumnTimezone(
+                                            objIndex, colIndex, checked === true ? true : undefined,
+                                          )}
+                                        />
+                                        <Label
+                                          htmlFor={`wizard-timezone-flag-${objIndex}-${colIndex}`}
+                                          className="text-[10px]"
+                                        >
+                                          {t('data-contracts:wizard.constraints.timezone',
+                                            'Timezone')}
+                                        </Label>
                                       </div>
                                       )}
                                       <div>

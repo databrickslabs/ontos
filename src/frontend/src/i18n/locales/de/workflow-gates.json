@@ -18,6 +18,12 @@
   "invalidStatus": "{{status}} ist kein Lebenszyklus-Status. Verwenden Sie einen von: {{allowed}}.",
   "gateError": "Die Statusänderung von {{fromStatus}} zu {{toStatus}} wurde abgelehnt: Das Workflow-Gate {{workflows}} konnte nicht ausgewertet werden. Bitten Sie einen Administrator, den Workflow zu prüfen.",
   "gateErrorUnnamed": "Die Statusänderung von {{fromStatus}} zu {{toStatus}} wurde abgelehnt: Ein Workflow-Gate konnte nicht ausgewertet werden. Bitten Sie einen Administrator, den Workflow zu prüfen.",
+  "updateGate": {
+    "error": "Die Aktualisierung wurde abgelehnt: Das Workflow-Gate {{workflows}} konnte nicht ausgewertet werden. Bitten Sie einen Administrator, den Workflow zu prüfen.",
+    "errorUnnamed": "Die Aktualisierung wurde abgelehnt: Ein Workflow-Gate konnte nicht ausgewertet werden. Bitten Sie einen Administrator, den Workflow zu prüfen.",
+    "tagWriteFailed": "Die Aktualisierung wurde abgelehnt: Eine Tag-Änderung ihrer Workflow-Gates konnte nicht gespeichert werden. Bitten Sie einen Administrator, das Serverprotokoll zu prüfen.",
+    "tagListWriteFailed": "Die Aktualisierung wurde abgelehnt: Ihre Tags, die ihre Workflow-Gates geprüft haben, konnten nicht gespeichert werden. Bitten Sie einen Administrator, das Serverprotokoll zu prüfen."
+  },
   "certifiedDeprecationRequiresApproval": "{{name}} ist zertifiziert und kann daher nur über eine genehmigte Statusänderungsanfrage als veraltet markiert werden. Beantragen Sie stattdessen die Statusänderung.",
   "requestInstead": "Statusänderung beantragen",
   "certifiedGuard": {

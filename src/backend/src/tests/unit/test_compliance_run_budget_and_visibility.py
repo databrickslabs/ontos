@@ -347,6 +347,73 @@ def test_viewer_checks_list_each_schema_once_and_fail_closed():
     assert ws.tables.list.call_count == 2  # sales once, hr once (denied: hidden)
 
 
+def test_viewer_checks_list_functions_and_volumes_by_schema_and_refuse_malformed_ids():
+    ws = MagicMock()
+    ws.functions.list.return_value = [SimpleNamespace(name='mask_email')]
+    ws.volumes.list.return_value = [SimpleNamespace(name='Landing')]
+    results = [
+        _result('function', 'main.sales.mask_email'), _result('function', 'main.sales.secret'),
+        _result('volume', 'main.sales.landing'), _result('volume', 'main.sales.private'),
+        # Malformed ids: wrong number of parts for their type
+        _result('table', 'main.orders'), _result('function', 'mask_email'),
+        _result('schema', 'main'), _result('schema', 'main.sales.extra'),
+        _result('catalog', 'main.sales'), _result('volume', None),
+    ]
+
+    shown, hidden = visible_results(results, ViewerReadChecks(lambda: ws))
+
+    assert [(r.object_type, r.object_id) for r in shown] == [
+        ('function', 'main.sales.mask_email'), ('volume', 'main.sales.landing'),
+    ]
+    assert hidden == 8
+    ws.functions.list.assert_called_once_with(catalog_name='main', schema_name='sales')
+    ws.volumes.list.assert_called_once_with(catalog_name='main', schema_name='sales')
+    # A malformed id is hidden without listing anything for it
+    ws.tables.list.assert_not_called()
+    ws.schemas.list.assert_not_called()
+    ws.catalogs.list.assert_not_called()
+
+
+def test_viewer_checks_list_schemas_of_the_catalog_and_catalogs_once():
+    ws = MagicMock()
+    ws.catalogs.list.return_value = [SimpleNamespace(name='Main')]
+    ws.schemas.list.side_effect = lambda catalog_name: (
+        [SimpleNamespace(name='sales')] if catalog_name == 'main' else
+        [SimpleNamespace(name='raw')]
+    )
+    results = [
+        _result('catalog', 'main'), _result('catalog', 'MAIN'), _result('catalog', 'hr'),
+        _result('schema', 'main.sales'), _result('schema', 'main.raw'),
+        _result('schema', 'lake.raw'), _result('schema', 'lake.sales'),
+    ]
+
+    shown, hidden = visible_results(results, ViewerReadChecks(lambda: ws))
+
+    assert [(r.object_type, r.object_id) for r in shown] == [
+        ('catalog', 'main'), ('catalog', 'MAIN'), ('schema', 'main.sales'), ('schema', 'lake.raw'),
+    ]
+    assert hidden == 3
+    assert ws.catalogs.list.call_count == 1
+    assert sorted(c.kwargs['catalog_name'] for c in ws.schemas.list.call_args_list) == [
+        'lake', 'main',
+    ]
+
+
+def test_a_failed_listing_hides_only_its_part():
+    ws = MagicMock()
+    ws.functions.list.side_effect = PermissionError('denied')
+    ws.volumes.list.return_value = [SimpleNamespace(name='landing')]
+
+    shown, hidden = visible_results(
+        [_result('function', 'main.sales.f'), _result('function', 'main.sales.g'),
+         _result('volume', 'main.sales.landing')],
+        ViewerReadChecks(lambda: ws),
+    )
+
+    assert [r.object_id for r in shown] == ['main.sales.landing'] and hidden == 2
+    assert ws.functions.list.call_count == 1  # the failure is cached for the request
+
+
 def test_a_viewer_without_a_client_sees_no_uc_result():
     def no_token():
         raise RuntimeError('no token')

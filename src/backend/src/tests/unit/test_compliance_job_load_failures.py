@@ -16,7 +16,7 @@ import sys
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from zipfile import ZipFile
 
 import pytest
@@ -188,14 +188,16 @@ def test_the_deployed_archive_carries_the_scripts(tmp_path):
 
 # --- Exit code of the job ---
 
-def _run_main(monkeypatch, tmp_path, run_result, revision=None):
+def _run_main(monkeypatch, tmp_path, run_result, revision=None, policies=None, run_policy=None):
     monkeypatch.setattr(job, 'WorkspaceClient', lambda **_: SimpleNamespace(
         config=SimpleNamespace(host='https://example.cloud.databricks.com')))
     monkeypatch.setattr(job, '_initialize_application_config', lambda ws: None)
     monkeypatch.setattr(job, 'create_engine_from_params',
                         lambda **_: _engine_at(tmp_path, revision or _head()))
-    monkeypatch.setattr(job, 'load_policies', lambda *a, **k: [{'id': 'p1', 'name': 'Contracts active'}])
-    monkeypatch.setattr(job, 'run_policy', lambda *a, **k: run_result)
+    monkeypatch.setattr(job, 'load_policies', lambda *a, **k: policies or [
+        {'id': 'p1', 'name': 'Contracts active'},
+    ])
+    monkeypatch.setattr(job, 'run_policy', run_policy or (lambda *a, **k: run_result))
     monkeypatch.setattr(sys, 'argv', [
         'compliance_checks.py', '--lakebase_instance_name', 'local',
         '--postgres_host', 'localhost', '--postgres_db', 'db',
@@ -238,3 +240,46 @@ def test_a_schema_mismatch_ends_the_job_without_a_traceback(monkeypatch, tmp_pat
 
     assert e.value.code == 1
     assert 'ERROR:' in capsys.readouterr().out
+
+
+# --- Wiring of the runs ---
+
+def test_the_job_passes_one_statement_cache_to_every_policy(monkeypatch, tmp_path):
+    from src.common.uc_table_enrichment import StatementCache
+
+    caches = []
+
+    def record(db, policy, manager, entity_limit, statement_cache=None):
+        caches.append(statement_cache)
+        return {'policy_id': policy['id'], 'policy_name': policy['name'],
+                'status': 'succeeded', 'success_count': 1, 'failure_count': 0,
+                'score': 100.0, 'error': None}
+
+    _run_main(monkeypatch, tmp_path, None, run_policy=record, policies=[
+        {'id': 'p1', 'name': 'One'}, {'id': 'p2', 'name': 'Two'},
+    ])
+
+    assert len(caches) == 2
+    assert isinstance(caches[0], StatementCache) and caches[1] is caches[0]
+
+
+def test_a_job_policy_run_reads_as_the_app_with_the_shared_cache(db_session):
+    from src.db_models.compliance import CompliancePolicyDb
+
+    policy = CompliancePolicyDb(id='p1', name='One', is_active=True,
+                                rule="MATCH (p:data_product) ASSERT p.name != ''")
+    db_session.add(policy)
+    db_session.flush()
+    manager = SimpleNamespace(run_policy_inline=MagicMock(return_value=SimpleNamespace(
+        id='r1', status='succeeded', success_count=1, failure_count=0, score=100.0,
+        error_message=None, warning_code=None, warning_params=None,
+    )))
+    cache = object()
+
+    job.run_policy(db_session, {'id': 'p1', 'name': 'One'}, manager, None, cache)
+
+    kwargs = manager.run_policy_inline.call_args.kwargs
+    assert kwargs['statement_cache'] is cache
+    assert kwargs['run_identity'].on_behalf_of_user is False
+    assert 'current_user' not in kwargs  # no user: the run is the app's
+

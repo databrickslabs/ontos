@@ -591,7 +591,8 @@ def main() -> None:
         total_failed = 0
         total_entities = 0
 
-        # The policies share the warehouse statements (UC tags, lineage) and their budget
+        # The policies share the rows of warehouse statements (UC tags, lineage); each
+        # policy run gets its own statement budget and deadline (StatementCache.start_run)
         from src.common.uc_table_enrichment import StatementCache
         statement_cache = StatementCache()
 

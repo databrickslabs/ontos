@@ -166,8 +166,8 @@ class NotificationsManager:
                     n.can_delete = True
                 filtered_notifications.append(n)
 
-        # Sort by created_at descending (using datetime objects)
-        filtered_notifications.sort(key=lambda x: x.created_at, reverse=True)
+        # Newest first, id breaking a tie, as the repository orders each part
+        filtered_notifications.sort(key=lambda x: (x.created_at, x.id), reverse=True)
 
         return filtered_notifications
 

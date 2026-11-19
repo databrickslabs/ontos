@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
 from sqlalchemy.orm import Session
 
 from src.controller.notifications_manager import NotificationsManager
@@ -449,3 +450,108 @@ class TestPrefilterNeverDropsAVisibleRow:
         filtered, reference = self._visible(db_session, manager, ANA)
 
         assert filtered == reference
+
+
+# The request action types decided through a request dialog (all ``action_required``)
+REQUEST_ACTION_TYPES = (
+    'handle_steward_review', 'handle_deploy_request', 'handle_publish_request',
+    'handle_status_change_request', 'handle_product_status_change',
+    'handle_access_grant_request', 'handle_role_request', 'handle_job_enable_request',
+)
+AFTER_CUTOFF = datetime(2026, 11, 21, 12, 0, 0)
+
+
+def _newer_history(count: int = BELL_HISTORY_LIMIT + 100) -> list:
+    """Informational rows for ana, newer than AFTER_CUTOFF: more than the history holds."""
+    start = AFTER_CUTOFF + timedelta(days=1)
+    return [
+        _row(recipient='ana@example.com', title=f'Later {i}',
+             created_at=start + timedelta(minutes=i))
+        for i in range(count)
+    ]
+
+
+def _request(action_type: str, **fields) -> dict:
+    return _row(**{
+        'type': 'action_required', 'title': f'Request {action_type}',
+        'recipient': 'ana@example.com', 'action_type': action_type,
+        'action_payload': json.dumps({'request_id': 'r-1'}), **fields,
+    })
+
+
+class TestReadDecidesOnlyLegacyRequests:
+    """``read`` decides a request only when the row predates the ``handled`` marker
+    (LEGACY_READ_DECIDED_BEFORE); a newer request that was only opened stays (#1527 review)."""
+
+    @pytest.mark.parametrize('action_type', REQUEST_ACTION_TYPES)
+    def test_an_opened_undecided_request_survives_500_newer_history_rows(
+        self, db_session: Session, action_type: str,
+    ):
+        _insert(db_session, _newer_history())
+        opened = _request(action_type, read=True, created_at=AFTER_CUTOFF)
+        _insert(db_session, [opened])
+
+        listed = _manager().get_notifications(db_session, ANA)
+
+        assert opened['id'] in [n.id for n in listed]
+        assert len([n for n in listed if n.title.startswith('Later')]) == BELL_HISTORY_LIMIT
+
+    def test_a_new_request_with_the_marker_is_history(self, db_session: Session):
+        _insert(db_session, _newer_history())
+        decided = _request('handle_role_request', read=True, created_at=AFTER_CUTOFF,
+                           action_payload=json.dumps({'request_id': 'r-1', 'handled': True}))
+        _insert(db_session, [decided])
+
+        listed = _manager().get_notifications(db_session, ANA)
+
+        assert decided['id'] not in [n.id for n in listed]
+
+    def test_the_cutoff_is_exclusive_for_the_legacy_rule(self, db_session: Session):
+        from src.repositories.notification_repository import LEGACY_READ_DECIDED_BEFORE
+        cutoff = LEGACY_READ_DECIDED_BEFORE.replace(tzinfo=None)
+        _insert(db_session, _newer_history())
+        before = _request('handle_role_request', read=True, title='Before',
+                          created_at=cutoff - timedelta(seconds=1))
+        at = _request('handle_role_request', read=True, title='At', created_at=cutoff)
+        _insert(db_session, [before, at])
+
+        listed = [n.id for n in _manager().get_notifications(db_session, ANA)]
+
+        assert before['id'] not in listed
+        assert at['id'] in listed
+
+
+class TestRecipientWhitespace:
+    """The SQL prefilter strips tabs and line breaks too, as the manager's strip() does."""
+
+    @pytest.mark.parametrize('recipient', ['\tana@example.com', 'ana@example.com\n',
+                                           ' ANA@example.com\r\n'])
+    def test_an_approval_to_a_recipient_with_stray_whitespace_is_listed(
+        self, db_session: Session, recipient: str,
+    ):
+        _flood(db_session)
+        target = _approval(recipient=recipient)
+        _insert(db_session, [target])
+
+        listed = _manager().get_notifications(db_session, ANA)
+
+        assert target['id'] in [n.id for n in listed]
+
+
+class TestEqualTimestamps:
+    """``id`` breaks a tie on ``created_at``, so the 500-row cut and the order are stable."""
+
+    def test_the_history_cut_and_order_follow_the_id_on_equal_timestamps(
+        self, db_session: Session,
+    ):
+        rows = [
+            _row(id=f'n-{i:04d}', recipient='ana@example.com', title=f'Same {i}', created_at=NOW)
+            for i in range(BELL_HISTORY_LIMIT + 20)
+        ]
+        _insert(db_session, rows)
+
+        listed = _manager().get_notifications(db_session, ANA)
+
+        expected = sorted((row['id'] for row in rows), reverse=True)[:BELL_HISTORY_LIMIT]
+        assert [n.id for n in listed] == expected
+

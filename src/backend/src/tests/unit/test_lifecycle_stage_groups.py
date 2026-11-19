@@ -913,6 +913,9 @@ class TestReviewDecisionByApproveTarget:
             db_session, 'data_contract', approved)
         assert lifecycle_service.contract_publishable(db_session, approved)
         assert not lifecycle_service.contract_publishable(db_session, waiting)
+        # Decided: Publish, not a second approve, moves it on
+        assert lifecycle_service.resolve_action(
+            db_session, 'data_contract', approved, 'publish') == 'active'
 
     @pytest.mark.parametrize('entity_type', ['data_product', 'data_contract'])
     def test_the_default_groups_keep_approved_as_the_decided_stage(

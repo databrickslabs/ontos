@@ -17,6 +17,7 @@ os.environ['SKIP_STARTUP_TASKS'] = 'true'
 import asyncio
 import re
 import sys
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from types import ModuleType
@@ -365,3 +366,22 @@ def test_an_overlapping_run_does_not_get_the_lock():
 def test_databases_without_advisory_locks_always_run(engine):
     with job.single_flight(engine) as acquired:
         assert acquired is True
+
+
+def test_a_run_refused_by_the_lock_fails_with_its_own_exit_code():
+    @contextmanager
+    def lock_held(_engine):
+        yield False
+
+    argv = ['uc_bulk_import.py', '--entity_patterns', '[]', '--lakebase_instance_name', 'x',
+            '--postgres_host', 'h', '--postgres_db', 'd']
+    with patch.object(sys, 'argv', argv), patch.object(job, 'WorkspaceClient'), \
+            patch.object(job, 'create_engine_from_params'), \
+            patch.object(job, 'single_flight', lock_held), \
+            patch.object(job, 'run_import') as run_import:
+        with pytest.raises(SystemExit) as exited:
+            job.main()
+
+    # Not 0 (a scheduler would show the skipped run green), not 1 (errors)
+    assert exited.value.code == job.LOCK_HELD_EXIT_CODE == 3
+    run_import.assert_not_called()

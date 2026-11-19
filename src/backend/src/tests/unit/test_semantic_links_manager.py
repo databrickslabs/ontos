@@ -288,6 +288,62 @@ class TestSemanticLinksManager:
 
         assert result is False
 
+    # Links written in the caller's transaction (commit=False)
+
+    @patch('src.controller.semantic_links_manager.change_log_manager')
+    @patch('src.controller.semantic_links_manager.entity_semantic_links_repo')
+    def test_add_without_commit_defers_the_graph_until_apply(
+        self, mock_repo, mock_change_log, manager, sample_link_create, sample_link_db,
+    ):
+        mock_repo.get_by_entity_and_iri.return_value = None
+        mock_repo.create.return_value = sample_link_db
+        manager._db.begin_nested = MagicMock()
+        graph = manager._semantic_models_manager
+
+        manager.add(sample_link_create, 'u', commit=False)
+
+        manager._db.commit.assert_not_called()
+        graph.add_entity_semantic_link_to_graph.assert_not_called()
+        manager.apply_graph_changes()
+        graph.add_entity_semantic_link_to_graph.assert_called_once_with(
+            'data_product', 'entity-123', 'http://example.com/schema/Product', created_by='u',
+        )
+        assert manager._pending_graph_changes == []
+
+    @patch('src.controller.semantic_links_manager.change_log_manager')
+    @patch('src.controller.semantic_links_manager.entity_semantic_links_repo')
+    def test_remove_without_commit_defers_the_graph(
+        self, mock_repo, mock_change_log, manager, sample_link_db,
+    ):
+        mock_repo.remove.return_value = sample_link_db
+        manager._db.begin_nested = MagicMock()
+        graph = manager._semantic_models_manager
+
+        assert manager.remove(1, 'u', commit=False) is True
+
+        manager._db.commit.assert_not_called()
+        graph.remove_entity_semantic_link_from_graph.assert_not_called()
+        manager.apply_graph_changes()
+        graph.remove_entity_semantic_link_from_graph.assert_called_once_with(
+            'data_product', 'entity-123', 'http://example.com/schema/Product',
+        )
+        assert manager._pending_graph_changes == []
+
+    @patch('src.controller.semantic_links_manager.change_log_manager')
+    @patch('src.controller.semantic_links_manager.entity_semantic_links_repo')
+    def test_discarded_graph_changes_are_not_applied(
+        self, mock_repo, mock_change_log, manager, sample_link_create, sample_link_db,
+    ):
+        mock_repo.get_by_entity_and_iri.return_value = None
+        mock_repo.create.return_value = sample_link_db
+        manager._db.begin_nested = MagicMock()
+
+        manager.add(sample_link_create, 'u', commit=False)
+        manager.discard_graph_changes()
+        manager.apply_graph_changes()
+
+        manager._semantic_models_manager.add_entity_semantic_link_to_graph.assert_not_called()
+
     # Add Link Tests
 
     @patch('src.controller.semantic_links_manager.change_log_manager')

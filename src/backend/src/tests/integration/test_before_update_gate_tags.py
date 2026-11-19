@@ -530,3 +530,25 @@ def test_a_gated_update_whose_tag_list_cannot_be_written_is_refused(
     # without it (the failed tag write was only logged)
     assert refused.status_code == 400, refused.text
     assert refused.json()['detail']['code'] == 'update_gate_tag_list_write_failed'
+
+
+def test_new_authoritative_definitions_replace_the_contract_links(client, db_session):
+    from src.db_models.semantic_links import EntitySemanticLinkDb
+
+    contract_id = _new_contract(client)
+    other = {'url': 'http://example.com/ontology#Order', 'type': SEMANTIC}
+    first = client.put(
+        f'/api/data-contracts/{contract_id}', json={'authoritativeDefinitions': [CONCEPT]},
+    )
+    assert first.status_code == 200, first.text
+
+    replaced = client.put(
+        f'/api/data-contracts/{contract_id}', json={'authoritativeDefinitions': [other]},
+    )
+
+    assert replaced.status_code == 200, replaced.text
+    db_session.expire_all()
+    links = db_session.query(EntitySemanticLinkDb).filter_by(
+        entity_id=contract_id, entity_type='data_contract',
+    ).all()
+    assert [link.iri for link in links] == [other['url']]

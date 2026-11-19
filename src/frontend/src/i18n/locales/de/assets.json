@@ -103,6 +103,9 @@
     "downloadTemplate": "Vorlage herunterladen",
     "exportHelp1": "Die Exportdatei enthält alle Felder für jedes Asset. Sie können sie offline bearbeiten und erneut importieren.",
     "exportHelp2": "Die Vorlage stellt eine leere Datei mit korrekten Spaltenüberschriften und einer Beispielzeile bereit.",
+    "importHelp": {
+      "properties": "In der Spalte properties belässt eine leere Zelle die gespeicherten Eigenschaften des Assets; mit {} werden sie gelöscht. Ein Wert ersetzt die öffentlichen Eigenschaften, die von Ontos selbst verwalteten bleiben erhalten."
+    },
     "selectFile": "Datei auswählen",
     "preview": "Vorschau",
     "rows_one": "{{count}} Zeile",

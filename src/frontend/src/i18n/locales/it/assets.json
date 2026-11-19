@@ -103,6 +103,9 @@
     "downloadTemplate": "Scarica modello",
     "exportHelp1": "Il file di esportazione include tutti i campi di ciascun asset. Puoi modificarlo offline e reimportarlo.",
     "exportHelp2": "Il modello fornisce un file vuoto con le intestazioni corrette e una riga di esempio.",
+    "importHelp": {
+      "properties": "Nella colonna properties, una cella vuota mantiene le proprietà memorizzate dell'asset; usa {} per cancellarle. Un valore sostituisce le proprietà pubbliche e quelle gestite da Ontos vengono mantenute."
+    },
     "selectFile": "Seleziona file",
     "preview": "Anteprima",
     "rows_one": "{{count}} riga",

@@ -103,6 +103,9 @@
     "downloadTemplate": "Télécharger le modèle",
     "exportHelp1": "Le fichier d'export inclut tous les champs de chaque actif. Vous pouvez l'éditer hors ligne et le réimporter.",
     "exportHelp2": "Le modèle fournit un fichier vide avec les en-têtes corrects et une ligne d'exemple.",
+    "importHelp": {
+      "properties": "Dans la colonne properties, une cellule vide conserve les propriétés enregistrées de l'actif ; utilisez {} pour les effacer. Une valeur remplace les propriétés publiques, et celles gérées par Ontos sont conservées."
+    },
     "selectFile": "Sélectionner un fichier",
     "preview": "Aperçu",
     "rows_one": "{{count}} ligne",

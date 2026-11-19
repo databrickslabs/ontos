@@ -103,6 +103,9 @@
     "downloadTemplate": "Sjabloon downloaden",
     "exportHelp1": "Het exportbestand bevat alle velden voor elke asset. Je kunt het offline bewerken en opnieuw importeren.",
     "exportHelp2": "Het sjabloon biedt een leeg bestand met de juiste kolomkoppen en een voorbeeldrij.",
+    "importHelp": {
+      "properties": "In de kolom properties behoudt een lege cel de opgeslagen eigenschappen van de asset; gebruik {} om ze te wissen. Een waarde vervangt de openbare eigenschappen, de door Ontos zelf beheerde blijven behouden."
+    },
     "selectFile": "Bestand selecteren",
     "preview": "Voorbeeld",
     "rows_one": "{{count}} rij",

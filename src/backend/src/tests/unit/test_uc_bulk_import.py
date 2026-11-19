@@ -306,24 +306,26 @@ def test_a_product_deleted_in_the_app_is_imported_again_in_full(engine):
     assert _port_assets(engine) == sorted(_TABLES)
 
 
-def _add_newer_draft(engine, table, name):
-    """A newer row with the same name, as a new version of the entity has."""
+def _add_newer_draft(engine, table, name, owner=None):
+    """A newer row with the same name, as a new version of the entity has (a
+    personal draft of ``owner``, when given)."""
     columns = {
         'data_products': "id, api_version, kind, status, name, version, max_level_inheritance, "
                          "version_family_id, published, publication_scope, created_at, "
-                         "updated_at",
+                         "updated_at, draft_owner_id",
         'data_contracts': "id, kind, api_version, status, name, version, version_family_id, "
-                          "published, publication_scope, created_at, updated_at",
+                          "published, publication_scope, created_at, updated_at, "
+                          "draft_owner_id",
     }[table]
     values = {
         'data_products': "'newer', 'v1.0.0', 'DataProduct', 'draft', :n, '2.0.0', 99, "
-                         "'newer', 0, 'none', :t, :t",
+                         "'newer', 0, 'none', :t, :t, :o",
         'data_contracts': "'newer', 'DataContract', 'v3.1.0', 'draft', :n, '2.0.0', 'newer', "
-                          "0, 'none', :t, :t",
+                          "0, 'none', :t, :t, :o",
     }[table]
     with engine.begin() as conn:
         conn.execute(text(f'INSERT INTO {table} ({columns}) VALUES ({values})'),
-                     {'n': name, 't': datetime(2999, 1, 1)})
+                     {'n': name, 't': datetime(2999, 1, 1), 'o': owner})
 
 
 def test_update_adds_ports_to_the_newest_version_of_the_product(engine):
@@ -582,3 +584,68 @@ def test_a_run_refused_by_the_lock_fails_with_its_own_exit_code():
     # Not 0 (a scheduler would show the skipped run green), not 1 (errors)
     assert exited.value.code == job.LOCK_HELD_EXIT_CODE == 3
     run_import.assert_not_called()
+
+
+def _personal_draft_state(engine, table):
+    with engine.connect() as conn:
+        return conn.execute(text(
+            f"SELECT id, status, draft_owner_id FROM {table} WHERE draft_owner_id = 'alice'"
+        )).all()
+
+
+def test_update_leaves_a_users_personal_draft_of_a_product_alone(engine):
+    _import(engine, tables=_TABLES[:1])
+    _set_status(engine, 'data_products', 'active')
+    _add_newer_draft(engine, 'data_products', 'sales', owner='alice')
+
+    # The shared row is active (skipped); alice's newer draft is not the match
+    assert _import(engine, 'update') == _stats(skipped=1)
+
+    assert _port_assets(engine) == _TABLES[:1]
+    assert _personal_draft_state(engine, 'data_products') == [('newer', 'draft', 'alice')]
+
+
+def test_update_leaves_a_users_personal_draft_of_a_contract_alone(engine):
+    _import_contract(engine, tables=_TABLES[:1])
+    _set_status(engine, 'data_contracts', 'active')
+    _add_newer_draft(engine, 'data_contracts', 'orders', owner='alice')
+
+    stats, _ = _import_contract(engine, tables=_TABLES, strategy='update')
+
+    assert stats == _stats(skipped=1)
+    assert _personal_draft_state(engine, 'data_contracts') == [('newer', 'draft', 'alice')]
+    with engine.connect() as conn:
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM data_contract_schema_objects WHERE contract_id = 'newer'"
+        )).scalar() == 0
+
+
+def test_linking_leaves_the_ports_of_a_personal_draft_alone(engine):
+    _, contracts = _import_contract(engine)
+    _import(engine, tables=_TABLES[:1])
+    _set_status(engine, 'data_products', 'active')
+    _add_newer_draft(engine, 'data_products', 'sales', owner='alice')
+    with engine.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO data_product_output_ports "
+            "(id, product_id, name, version, asset_identifier) "
+            "VALUES ('p1', 'newer', 'orders', '1.0.0', :a)"), {'a': _TABLES[0]})
+
+    discovered = {'product': _discovered(tables=_TABLES[:1]), 'contract': contracts}
+    assert job.link_products_to_contracts(engine, discovered) == 0
+    with engine.connect() as conn:
+        assert conn.execute(text(
+            "SELECT contract_id FROM data_product_output_ports WHERE id = 'p1'")).scalar() is None
+
+
+def test_update_adds_nothing_to_a_personal_draft_when_it_is_the_only_row_with_the_name(engine):
+    # The ports live on the shared row only; the personal draft stays at its own ports
+    _import(engine, tables=_TABLES[:1])
+    _add_newer_draft(engine, 'data_products', 'sales', owner='alice')
+
+    assert _import(engine, 'update') == _stats(updated=1)
+
+    with engine.connect() as conn:
+        assert conn.execute(text(
+            "SELECT COUNT(*) FROM data_product_output_ports WHERE product_id = 'newer'"
+        )).scalar() == 0

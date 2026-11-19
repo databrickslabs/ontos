@@ -446,9 +446,12 @@ def find_existing(
     """(id, status, version_family_id) of the row a discovered entity matches, by
     name: the key both the skip and the update strategies use. Versions of an
     entity share its name, so the newest row is the one matched. Domains have no
-    lifecycle or versions: (id, None, None)."""
+    lifecycle or versions: (id, None, None). A user's personal draft (``draft_owner_id``
+    set, made by editing a published entity) is never matched: it belongs to that user."""
     columns = "id" if table == "data_domains" else "id, status, version_family_id"
-    sql = text(f"SELECT {columns} FROM {table} WHERE name = :name ORDER BY created_at DESC LIMIT 1")
+    personal = "" if table == "data_domains" else " AND draft_owner_id IS NULL"
+    sql = text(f"SELECT {columns} FROM {table} WHERE name = :name{personal} "
+               "ORDER BY created_at DESC LIMIT 1")
     with engine.connect() as conn:
         row = conn.execute(sql, {"name": name}).first()
     if row is None:
@@ -889,7 +892,8 @@ def link_products_to_contracts(
         UPDATE data_product_output_ports
         SET contract_id = :contract_id
         WHERE product_id IN (
-            SELECT id FROM data_products WHERE name = :product_name AND status = 'draft'
+            SELECT id FROM data_products
+            WHERE name = :product_name AND status = 'draft' AND draft_owner_id IS NULL
         )
           AND asset_identifier = :asset_identifier
           AND contract_id IS NULL

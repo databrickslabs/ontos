@@ -189,8 +189,14 @@
       "timed_out": "la query era ancora in esecuzione al limite di tempo",
       "budget_exceeded": "l'esecuzione ha raggiunto il limite di query sul SQL warehouse",
       "transient": "il SQL warehouse era temporaneamente non disponibile, anche dopo i nuovi tentativi",
-      "not_found": "la tabella di sistema non è stata trovata (lo schema di sistema è abilitato?)"
+      "not_found": "la tabella di sistema non è stata trovata (lo schema di sistema è abilitato?)",
+      "not_loaded": "i tag di questo tipo di oggetto non vengono ancora letti"
     }
+  },
+  "runScoreCoverage": {
+    "noScore": "Nessun punteggio",
+    "coverage": "{{evaluated}} oggetti valutati su {{total}}; gli altri non rientrano nel punteggio.",
+    "hiddenResults": "{{count}} risultati riguardano oggetti di Unity Catalog che non puoi leggere, quindi non sono elencati."
   },
   "saveErrors": {
     "rule_trailing_input": "La regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Tutto ciò che segue verrebbe ignorato e la regola verificherebbe meno di quanto dichiara. Rimuovila o correggi la sintassi."

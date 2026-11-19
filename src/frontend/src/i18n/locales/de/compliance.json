@@ -189,8 +189,14 @@
       "timed_out": "die Abfrage lief beim Zeitlimit noch",
       "budget_exceeded": "der Lauf hat sein Limit an Abfragen auf dem SQL-Warehouse erreicht",
       "transient": "das SQL-Warehouse war vorübergehend nicht verfügbar, auch nach erneuten Versuchen",
-      "not_found": "die Systemtabelle wurde nicht gefunden (ist das Systemschema aktiviert?)"
+      "not_found": "die Systemtabelle wurde nicht gefunden (ist das Systemschema aktiviert?)",
+      "not_loaded": "Tags werden für diesen Objekttyp noch nicht gelesen"
     }
+  },
+  "runScoreCoverage": {
+    "noScore": "Keine Bewertung",
+    "coverage": "{{evaluated}} von {{total}} Objekten bewertet; die übrigen zählen nicht zur Bewertung.",
+    "hiddenResults": "{{count}} Ergebnisse betreffen Unity-Catalog-Objekte, die Sie nicht lesen können, und werden daher nicht aufgeführt."
   },
   "saveErrors": {
     "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax."

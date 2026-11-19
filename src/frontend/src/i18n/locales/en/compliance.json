@@ -189,8 +189,14 @@
       "timed_out": "the query was still running at the time limit",
       "budget_exceeded": "the run reached its limit of statements on the SQL warehouse",
       "transient": "the SQL warehouse was temporarily unavailable, also after retries",
-      "not_found": "the system table was not found (is the system schema enabled?)"
+      "not_found": "the system table was not found (is the system schema enabled?)",
+      "not_loaded": "tags are not read for this type of object yet"
     }
+  },
+  "runScoreCoverage": {
+    "noScore": "No score",
+    "coverage": "{{evaluated}} of {{total}} objects evaluated; the others are not in the score.",
+    "hiddenResults": "{{count}} results are on Unity Catalog objects you can't read, so they are not listed."
   },
   "saveErrors": {
     "rule_trailing_input": "The rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). Everything from there on would be ignored, so the rule would check less than it says. Remove it or fix the syntax."

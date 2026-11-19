@@ -102,4 +102,18 @@ describe('import report lines', () => {
     expect(line).not.toContain("'certified' is not a status");
     expect(line).toBe(`• Cert Product: ${i18n.t('workflow-gates:certifiedIsNotAStatus')}`);
   });
+
+  it('translates a refused apiVersion', async () => {
+    await i18n.changeLanguage('pt');
+
+    const line = importItemLine({
+      index: 0, name: 'Orders', status: 'failed',
+      message: 'apiVersion v9.9.9 is not an ODCS version',
+      code: 'odcs_api_version_unsupported', params: { api_version: 'v9.9.9' },
+    }, i18n.t);
+
+    expect(line).toBe(
+      '• Orders: O apiVersion v9.9.9 não é uma versão ODCS. '
+      + 'Use uma das versões ODCS, por exemplo v3.1.0.');
+  });
 });

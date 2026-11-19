@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { BatchImportResult, ImportItemResult } from '@/types/import-results';
+import { ODCS_API_VERSION_UNSUPPORTED } from '@/lib/odcs-api-version-error';
 
 /** Codes of the lifecycle import messages (`common:deprecation.import.<code>`). */
 const IMPORT_CODES = new Set([
@@ -37,6 +38,12 @@ export function importItemLine(item: ImportItemResult, t: TFunction): string {
   const fallback = item.message ?? item.status;
   // Refused by a status check shared with the status change dialogs
   const statusKey = item.code ? STATUS_CODE_KEYS[item.code] : undefined;
+  if (item.code === ODCS_API_VERSION_UNSUPPORTED) {
+    // Refused for an apiVersion outside ODCS, as the create and edit dialogs explain it
+    return `• ${name}: ${t('data-contracts:apiVersionErrors.unsupported', {
+      apiVersion: String(item.params?.api_version ?? ''), defaultValue: fallback,
+    })}`;
+  }
   if (statusKey) {
     return `• ${name}: ${t(statusKey, { ...(item.params ?? {}), defaultValue: fallback })}`;
   }

@@ -103,6 +103,7 @@ def test_the_audit_records_what_happened_to_the_token_but_never_its_value(payloa
 
     background_tasks = MagicMock()
     settings_manager = MagicMock()
+    settings_manager.update_settings_with_warnings.return_value = (MagicMock(), [])
     asyncio.run(update_settings(
         request=MagicMock(),
         background_tasks=background_tasks,
@@ -117,3 +118,35 @@ def test_the_audit_records_what_happened_to_the_token_but_never_its_value(payloa
     details = background_tasks.add_task.call_args.kwargs["details"]
     assert details.get("git_password") == recorded
     assert "s3cret-value" not in repr(details)
+
+
+def test_a_settings_save_runs_off_the_event_loop():
+    """Installing, removing or updating jobs blocks: the save runs in a threadpool."""
+    import asyncio
+    from unittest.mock import patch
+
+    from src.routes import settings_routes
+
+    settings_manager = MagicMock()
+    settings_manager.update_settings_with_warnings.return_value = (MagicMock(), [])
+    calls = []
+    real = settings_routes.run_in_threadpool
+
+    async def recording(func, *args, **kwargs):
+        calls.append((func, args))
+        return await real(func, *args, **kwargs)
+
+    with patch.object(settings_routes, 'run_in_threadpool', recording):
+        asyncio.run(settings_routes.update_settings(
+            request=MagicMock(),
+            background_tasks=MagicMock(),
+            db=MagicMock(),
+            audit_manager=MagicMock(),
+            current_user=MagicMock(username="admin@example.com"),
+            settings_payload={"enabled_jobs": ["compliance_checks"]},
+            manager=settings_manager,
+            _=True,
+        ))
+
+    payload = {"enabled_jobs": ["compliance_checks"]}
+    assert calls == [(settings_manager.update_settings_with_warnings, (payload,))]

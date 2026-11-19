@@ -2,17 +2,34 @@ fastapi>=0.141.1,<0.142.0
 uvicorn>=0.54.0
 python-multipart>=0.0.32
 flask-cors>=6.0.5
+# Databricks Apps images include Dash 2.18.1, which requires Flask and
+# Werkzeug below 3.1. Keep the app environment compatible with the managed
+# image instead of replacing those shared packages during deployment.
+flask>=3.0.0,<3.1
 python-dotenv>=1.2.3
 databricks-sdk>=0.148.0
 databricks-sql-connector>=4.5.0
-pandas>=3.1.0
+# Gradio 4.44.0 in the Databricks Apps image requires pandas below 3.
+# Ontos does not import pandas directly; keep the transitive dependency on the
+# managed-image-compatible line.
+pandas>=2.3.3,<3
 numpy>=2.2.2
 python-dateutil>=2.8.2
 croniter>=6.0.0
 pytz>=2026.5
 six>=1.16.0
 typing-extensions>=4.16.0
-werkzeug>=3.1.9
+werkzeug>=3.0.1,<3.1
+# Databricks Apps managed-image compatibility. Gradio 4.44.0 requires
+# MarkupSafe 2.x and Pillow <11; Streamlit 1.38.0 requires cachetools <6,
+# packaging <25, Pillow <11, and protobuf <6.
+markupsafe>=2.1.5,<3
+pillow>=10.4.0,<11
+cachetools>=5.5.0,<6
+packaging>=24.0,<25
+protobuf>=5.0,<6
+# Databricks Apps enforces the patched certifi line for GHSA-6q48-6c7w-9gw2.
+certifi>=2026.10.19
 pyyaml>=6.0.1
 requests>=2.34.2
 httpx>=0.25.0

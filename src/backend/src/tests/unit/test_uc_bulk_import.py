@@ -59,13 +59,17 @@ def _import(engine, strategy='skip', tables=_TABLES):
     return job.create_products(engine, _discovered(tables=tables), strategy, None, None)
 
 
+def _stats(**counts):
+    return {'created': 0, 'updated': 0, 'unchanged': 0, 'skipped': 0, 'errors': 0, **counts}
+
+
 def _count(engine, table):
     with engine.connect() as conn:
         return conn.execute(text(f'SELECT COUNT(*) FROM {table}')).scalar()
 
 
 def test_an_imported_product_is_readable_through_the_manager(engine):
-    assert _import(engine) == {'created': 1, 'updated': 0, 'skipped': 0, 'errors': 0}
+    assert _import(engine) == _stats(created=1)
 
     with Session(engine) as db:
         products = DataProductsManager(db=db).list_products(is_admin=True)
@@ -83,7 +87,7 @@ def test_an_imported_product_is_readable_through_the_manager(engine):
 def test_a_rerun_skips_the_product(engine):
     _import(engine)
 
-    assert _import(engine) == {'created': 0, 'updated': 0, 'skipped': 1, 'errors': 0}
+    assert _import(engine) == _stats(skipped=1)
     assert _count(engine, 'data_products') == 1
     assert _count(engine, 'data_product_output_ports') == len(_TABLES)
 
@@ -92,7 +96,7 @@ def test_a_failed_port_insert_leaves_no_half_imported_product(engine):
     with engine.begin() as conn:
         conn.execute(text('DROP TABLE data_product_output_ports'))
 
-    assert _import(engine) == {'created': 0, 'updated': 0, 'skipped': 0, 'errors': 1}
+    assert _import(engine) == _stats(errors=1)
     # A product without its ports would be skipped by every later run
     assert _count(engine, 'data_products') == 0
 
@@ -111,7 +115,7 @@ def _contract_ids(engine, name='orders'):
 
 def test_an_imported_contract_is_readable_through_the_manager(engine):
     stats, _ = _import_contract(engine)
-    assert stats == {'created': 1, 'updated': 0, 'skipped': 0, 'errors': 0}
+    assert stats == _stats(created=1)
 
     [contract_id] = _contract_ids(engine)
     with Session(engine) as db:
@@ -133,7 +137,7 @@ def test_a_failed_schema_insert_leaves_no_half_imported_contract(engine):
         conn.execute(text('DROP TABLE data_contract_schema_objects'))
 
     stats, _ = _import_contract(engine)
-    assert stats == {'created': 0, 'updated': 0, 'skipped': 0, 'errors': 1}
+    assert stats == _stats(errors=1)
     assert _contract_ids(engine) == []
 
 
@@ -162,13 +166,163 @@ def test_update_adds_the_new_ports_to_the_existing_product(engine):
     with engine.connect() as conn:
         [product_id] = conn.execute(text('SELECT id FROM data_products')).scalars().all()
 
-    # Run twice: the second run has nothing new to add
-    for _ in range(2):
-        assert _import(engine, 'update') == {'created': 0, 'updated': 1, 'skipped': 0, 'errors': 0}
+    assert _import(engine, 'update') == _stats(updated=1)
+    # The second run has nothing new to add
+    assert _import(engine, 'update') == _stats(unchanged=1)
 
     with engine.connect() as conn:
         assert conn.execute(text('SELECT id FROM data_products')).scalars().all() == [product_id]
     assert _port_assets(engine) == sorted(_TABLES)
+
+
+def _updated_at(engine, table):
+    with engine.connect() as conn:
+        return conn.execute(text(f'SELECT updated_at FROM {table}')).scalar()
+
+
+def test_update_changes_updated_at_only_when_it_adds_a_port(engine):
+    _import(engine, tables=_TABLES[:1])
+    created = _updated_at(engine, 'data_products')
+
+    assert _import(engine, 'update', tables=_TABLES[:1]) == _stats(unchanged=1)
+    assert _updated_at(engine, 'data_products') == created
+
+    assert _import(engine, 'update') == _stats(updated=1)
+    assert _updated_at(engine, 'data_products') > created
+
+
+def test_update_changes_a_contracts_updated_at_only_when_it_adds_a_schema_object(engine):
+    _import_contract(engine, tables=_TABLES[:1])
+    created = _updated_at(engine, 'data_contracts')
+
+    stats, _ = _import_contract(engine, tables=_TABLES[:1], strategy='update')
+    assert stats == _stats(unchanged=1)
+    assert _updated_at(engine, 'data_contracts') == created
+
+
+def _delete(engine, sql):
+    with engine.begin() as conn:
+        conn.execute(text(sql), {'t': _TABLES[0]})
+
+
+def test_a_port_deleted_in_the_app_is_not_added_back(engine):
+    _import(engine)
+    _delete(engine, 'DELETE FROM data_product_output_ports WHERE asset_identifier = :t')
+
+    assert _import(engine, 'update') == _stats(unchanged=1)
+    assert _port_assets(engine) == [_TABLES[1]]
+
+
+def test_a_schema_object_deleted_in_the_app_is_not_added_back(engine):
+    _import_contract(engine, tables=_TABLES)
+    _delete(engine, 'DELETE FROM data_contract_schema_objects WHERE physical_name = :t')
+
+    stats, _ = _import_contract(engine, tables=_TABLES, strategy='update')
+    assert stats == _stats(unchanged=1)
+    with engine.connect() as conn:
+        assert conn.execute(text(
+            'SELECT physical_name FROM data_contract_schema_objects')).scalars().all() == \
+            [_TABLES[1]]
+
+
+def test_a_product_imported_before_the_job_recorded_its_tables(engine):
+    # Imported by an earlier job version: ports exist, nothing is recorded
+    _import(engine)
+    with engine.begin() as conn:
+        conn.execute(text('DELETE FROM uc_bulk_import_sources'))
+
+    # The first update run records the ports it finds instead of adding them twice
+    assert _import(engine, 'update') == _stats(unchanged=1)
+    assert _port_assets(engine) == sorted(_TABLES)
+
+    # From then on a deleted port stays deleted
+    _delete(engine, 'DELETE FROM data_product_output_ports WHERE asset_identifier = :t')
+    assert _import(engine, 'update') == _stats(unchanged=1)
+    assert _port_assets(engine) == [_TABLES[1]]
+
+
+def test_a_new_version_shares_what_was_imported_into_its_family(engine):
+    _import(engine)
+    with engine.begin() as conn:
+        old_id, family = conn.execute(text(
+            'SELECT id, version_family_id FROM data_products')).one()
+        # A new draft version of the product: copied without the first table's port
+        conn.execute(text(
+            "INSERT INTO data_products (id, api_version, kind, status, name, version, "
+            "max_level_inheritance, version_family_id, published, publication_scope, "
+            "created_at, updated_at) SELECT 'v2', api_version, kind, 'draft', name, '2.0.0', "
+            "max_level_inheritance, version_family_id, published, publication_scope, "
+            ":later, :later FROM data_products WHERE id = :id"
+        ), {'id': old_id, 'later': datetime(2999, 1, 1)})
+        conn.execute(text(
+            "INSERT INTO data_product_output_ports (id, product_id, name, version, asset_type, "
+            "asset_identifier, contains_pii, auto_approve) VALUES "
+            "('p2', 'v2', 'customers', '1.0.0', 'table', :t, 0, 0)"
+        ), {'t': _TABLES[1]})
+
+    assert _import(engine, 'update') == _stats(unchanged=1)
+    with engine.connect() as conn:
+        assert conn.execute(text(
+            "SELECT asset_identifier FROM data_product_output_ports WHERE product_id = 'v2'"
+        )).scalars().all() == [_TABLES[1]]
+    assert family == old_id
+
+
+def test_a_product_deleted_in_the_app_is_imported_again_in_full(engine):
+    _import(engine)
+    with engine.begin() as conn:
+        conn.execute(text('DELETE FROM data_product_output_ports'))
+        conn.execute(text('DELETE FROM data_products'))
+
+    # A new product is a new version family: nothing recorded for it yet
+    assert _import(engine, 'update') == _stats(created=1)
+    assert _port_assets(engine) == sorted(_TABLES)
+
+
+def _add_newer_draft(engine, table, name):
+    """A newer row with the same name, as a new version of the entity has."""
+    columns = {
+        'data_products': "id, api_version, kind, status, name, version, max_level_inheritance, "
+                         "version_family_id, published, publication_scope, created_at, "
+                         "updated_at",
+        'data_contracts': "id, kind, api_version, status, name, version, version_family_id, "
+                          "published, publication_scope, created_at, updated_at",
+    }[table]
+    values = {
+        'data_products': "'newer', 'v1.0.0', 'DataProduct', 'draft', :n, '2.0.0', 99, "
+                         "'newer', 0, 'none', :t, :t",
+        'data_contracts': "'newer', 'DataContract', 'v3.1.0', 'draft', :n, '2.0.0', 'newer', "
+                          "0, 'none', :t, :t",
+    }[table]
+    with engine.begin() as conn:
+        conn.execute(text(f'INSERT INTO {table} ({columns}) VALUES ({values})'),
+                     {'n': name, 't': datetime(2999, 1, 1)})
+
+
+def test_update_adds_ports_to_the_newest_version_of_the_product(engine):
+    _import(engine, tables=_TABLES[:1])
+    _add_newer_draft(engine, 'data_products', 'sales')
+
+    assert _import(engine, 'update') == _stats(updated=1)
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            'SELECT product_id, asset_identifier FROM data_product_output_ports '
+            'ORDER BY asset_identifier')).all()
+    newer = [a for p, a in rows if p == 'newer']
+    assert newer == sorted(_TABLES)
+    assert len(rows) == 3  # the older version keeps its one port
+
+
+def test_update_adds_schema_objects_to_the_newest_version_of_the_contract(engine):
+    _import_contract(engine, tables=_TABLES[:1])
+    _add_newer_draft(engine, 'data_contracts', 'orders')
+
+    stats, _ = _import_contract(engine, tables=_TABLES, strategy='update')
+    assert stats == _stats(updated=1)
+    with engine.connect() as conn:
+        assert sorted(conn.execute(text(
+            "SELECT physical_name FROM data_contract_schema_objects "
+            "WHERE contract_id = 'newer'")).scalars()) == sorted(_TABLES)
 
 
 def _set_status(engine, table, status):
@@ -184,7 +338,7 @@ def test_update_leaves_a_product_past_draft_alone(engine, status):
         before = conn.execute(text('SELECT updated_at FROM data_products')).scalar()
 
     # Ports a user deleted in the app must not come back, new ones must not appear
-    assert _import(engine, 'update') == {'created': 0, 'updated': 0, 'skipped': 1, 'errors': 0}
+    assert _import(engine, 'update') == _stats(skipped=1)
 
     assert _port_assets(engine) == _TABLES[:1]
     with engine.connect() as conn:
@@ -198,7 +352,7 @@ def test_update_leaves_a_contract_past_draft_alone(engine, status):
 
     stats, _ = _import_contract(engine, tables=_TABLES, strategy='update')
 
-    assert stats == {'created': 0, 'updated': 0, 'skipped': 1, 'errors': 0}
+    assert stats == _stats(skipped=1)
     with engine.connect() as conn:
         assert conn.execute(text('SELECT COUNT(*) FROM data_contract_schema_objects')).scalar() == 1
 
@@ -221,9 +375,9 @@ def test_update_adds_the_new_schema_objects_to_the_existing_contract(engine):
     _import_contract(engine, tables=_TABLES[:1])
     [contract_id] = _contract_ids(engine)
 
-    for _ in range(2):
+    for expected in (_stats(updated=1), _stats(unchanged=1)):
         stats, _ = _import_contract(engine, tables=_TABLES, strategy='update')
-        assert stats == {'created': 0, 'updated': 1, 'skipped': 0, 'errors': 0}
+        assert stats == expected
 
     assert _contract_ids(engine) == [contract_id]
     with engine.connect() as conn:
@@ -237,15 +391,17 @@ def test_update_keeps_the_existing_domain(engine):
     tag = {'data_domain_finance': ''}
     domains = {'finance': [job.DiscoveredObject('SCHEMA', 'main.finance', tag)]}
     assert job.create_domains(engine, domains, 'skip', created_by='job') == \
-        {'created': 1, 'updated': 0, 'skipped': 0, 'errors': 0}
+        _stats(created=1)
     with engine.connect() as conn:
-        [domain_id] = conn.execute(text('SELECT id FROM data_domains')).scalars().all()
+        [(domain_id, before)] = conn.execute(text('SELECT id, updated_at FROM data_domains')).all()
 
-    # Inserting again failed on the unique domain name
+    # Inserting again failed on the unique domain name. The job sets nothing on
+    # a domain beyond its name, so there is nothing to change (not even updated_at)
     assert job.create_domains(engine, domains, 'update', created_by='job') == \
-        {'created': 0, 'updated': 1, 'skipped': 0, 'errors': 0}
+        _stats(unchanged=1)
     with engine.connect() as conn:
-        assert conn.execute(text('SELECT id FROM data_domains')).scalars().all() == [domain_id]
+        assert conn.execute(text('SELECT id, updated_at FROM data_domains')).all() == \
+            [(domain_id, before)]
 
 
 def test_a_stored_port_with_null_booleans_still_reads(engine):
@@ -278,6 +434,17 @@ def test_an_imported_product_is_visible_to_admins_only(engine):
             caller_team_ids=[], caller_project_ids=[]) == []
 
 
+def test_an_imported_contract_is_visible_to_admins_only(engine):
+    # Like products: no owner team, project or draft owner is set
+    _import_contract(engine)
+    manager = DataContractsManager(data_dir=Path('/tmp'))
+
+    with Session(engine) as db:
+        assert [c.name for c in manager.list_contracts_from_db(db, is_admin=True)] == ['orders']
+        assert manager.list_contracts_from_db(
+            db, is_admin=False, caller_email='analyst@example.com', caller_team_ids=set()) == []
+
+
 def _inserted_columns(engine, run):
     """Columns of each table the job inserts into while ``run`` executes."""
     columns = {}
@@ -298,11 +465,14 @@ def test_the_job_sets_every_not_null_column_the_models_require(engine):
     def run():
         _import(engine)
         _import_contract(engine)
+        job.create_domains(engine, {'finance': [job.DiscoveredObject(
+            'SCHEMA', 'main.finance', {'data_domain_finance': ''})]}, 'skip', created_by='job')
 
     inserted = _inserted_columns(engine, run)
 
     for table in ('data_products', 'data_product_output_ports',
-                  'data_contracts', 'data_contract_schema_objects'):
+                  'data_contracts', 'data_contract_schema_objects',
+                  'data_domains', 'uc_bulk_import_sources'):
         required = {c.name for c in Base.metadata.tables[table].columns
                     if not c.nullable and c.server_default is None and not c.primary_key}
         assert required - inserted[table] == set(), table

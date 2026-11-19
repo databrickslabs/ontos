@@ -46,3 +46,27 @@ def test_a_date_column_exports_its_format_but_no_timezone(db_session):
     # still stored
     stored = db_session.query(SchemaPropertyDb).filter_by(name="day").one()
     assert json.loads(stored.logical_type_options_json)["timezone"] == "UTC"
+
+
+def test_a_custom_format_is_not_exported_as_a_non_schema_key(db_session):
+    manager = _manager()
+    contract = manager.create_contract_with_relations(
+        db=db_session,
+        contract_data={
+            "name": f"events-{uuid.uuid4().hex[:6]}", "version": "1.0.0",
+            "schema": [{"name": "events", "properties": [
+                {"name": "ts", "logicalType": "timestamp", "format": "yyyy-MM-dd",
+                 "customFormat": "yyyy/dd"},
+            ]}],
+        },
+        current_user="alice@example.com",
+    )
+    db_session.refresh(contract)
+
+    exported = manager.build_odcs_from_db(contract, db_session)
+
+    ts = _column(exported, "ts")
+    assert ts["format"] == "yyyy-MM-dd"
+    assert "customFormat" not in ts
+    stored = db_session.query(SchemaPropertyDb).filter_by(name="ts").one()
+    assert json.loads(stored.logical_type_options_json)["customFormat"] == "yyyy/dd"

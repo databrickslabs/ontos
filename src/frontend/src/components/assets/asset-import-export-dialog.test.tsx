@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
-import { ImportRowWarnings } from './asset-import-export-dialog';
+import AssetImportExportDialog, { ImportRowWarnings } from './asset-import-export-dialog';
 
 describe('ImportRowWarnings', () => {
   it('shows a saved row whose description was not written to Unity Catalog', () => {
@@ -35,5 +36,15 @@ describe('ImportRowWarnings', () => {
   it('renders nothing without warnings', () => {
     const { container } = render(<ImportRowWarnings warnings={[]} />);
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('AssetImportExportDialog import help', () => {
+  it('says an empty properties cell keeps the stored ones and {} clears them', async () => {
+    render(<AssetImportExportDialog isOpen onOpenChange={() => {}} canImport />);
+    await userEvent.click(screen.getByRole('tab', { name: /import/i }));
+    expect(
+      screen.getByText(/empty cell keeps the asset's stored properties; use \{\} to clear them/)
+    ).toBeInTheDocument();
   });
 });

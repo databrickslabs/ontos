@@ -37,7 +37,10 @@ def _column_type(db):
     return created
 
 
-def test_an_edit_with_imported_column_properties_is_valid_and_kept(db_session, osm):
+def test_characterisation_an_edit_with_imported_column_properties_is_valid_and_kept(
+    db_session, osm,
+):
+    """Characterisation: passes on the base too; documents what the dialog relies on."""
     column = AssetDb(
         name="order_date", asset_type_id=_column_type(db_session).id,
         properties={"data_type": "DATE", "nullable": True, "comment": "Order day"},
@@ -55,7 +58,7 @@ def test_an_edit_with_imported_column_properties_is_valid_and_kept(db_session, o
 
 
 def test_the_column_schema_is_applied(db_session, osm):
-    """Guards the test above: the Column schema does validate the ontology fields."""
+    """Guards the first test: the Column schema does validate the ontology fields."""
     from src.common.errors import ValidationError
 
     column = AssetDb(name="order_id", asset_type_id=_column_type(db_session).id, properties={})
@@ -70,8 +73,9 @@ def test_the_column_schema_is_applied(db_session, osm):
         )
 
 
-def test_an_edit_that_clears_every_property(db_session, osm):
-    """The dialog sends {} when the user clears the last property: it is cleared."""
+def test_characterisation_an_edit_that_clears_every_property(db_session, osm):
+    """Characterisation: passes on the base too. The dialog sends {} when the user
+    clears the last property: it is cleared, the internal keys stay."""
     column = AssetDb(
         name="note", asset_type_id=_column_type(db_session).id,
         properties={"classification": "internal", METRIC_VIEW_PROPERTY: {"source": "x"}},

@@ -74,6 +74,35 @@ def test_user_identity_without_token_raises_the_coded_error():
     app_client.assert_not_called()
 
 
+def _http_error(status_code, cause=None):
+    from fastapi import HTTPException
+    error = HTTPException(status_code=status_code, detail='refused')
+    error.__cause__ = cause
+    return error
+
+
+def test_user_identity_unwraps_the_coded_error_of_the_obo_client():
+    """The route's 403 is unwrapped to the UserTokenRequiredError it was raised from."""
+    coded = UserTokenRequiredError('no token')
+    identity = RunIdentity.for_request(_request({}))
+    with patch('src.common.workspace_client.get_obo_workspace_client',
+               side_effect=_http_error(403, coded)), \
+            pytest.raises(UserTokenRequiredError) as raised:
+        identity.workspace_client()
+    assert raised.value is coded
+    assert raised.value.__cause__ is None
+
+
+def test_user_identity_reraises_any_other_http_error_of_the_obo_client():
+    from fastapi import HTTPException
+    other = _http_error(503, ValueError('workspace down'))
+    identity = RunIdentity.for_request(_request({'x-forwarded-access-token': 't'}))
+    with patch('src.common.workspace_client.get_obo_workspace_client', side_effect=other), \
+            pytest.raises(HTTPException) as raised:
+        identity.workspace_client()
+    assert raised.value is other
+
+
 def test_a_user_run_lists_tables_with_the_user_client_not_the_app(db_session):
     app_ws, user_ws = _ws('orders', 'salaries'), _ws('orders')
     identity = RunIdentity(lambda: user_ws, on_behalf_of_user=True)

@@ -50,6 +50,17 @@ def test_manual_runs_get_the_effective_llm_settings(db_session, llm_settings):
     }
 
 
+def test_without_a_budget_setting_the_job_keeps_its_own():
+    """Settings without a call budget: '' keeps the job's env, not a fixed 100."""
+    from src.controller.jobs_manager import _llm_job_parameters
+
+    params = _llm_job_parameters(SimpleNamespace(LLM_ENABLED=True, LLM_ENDPOINT='e'))
+
+    assert params == {
+        'llm_enabled': 'true', 'llm_endpoint': 'e', 'llm_check_max_calls_per_run': '',
+    }
+
+
 def test_scheduled_runs_get_them_in_the_job_defaults(db_session, llm_settings):
     manager = _manager(db_session, llm_settings)
     wf_def = manager._get_workflow_definition(WORKFLOW, job_cluster_id=None)

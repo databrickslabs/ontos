@@ -82,13 +82,16 @@ def _task_arguments(wf_def: Dict[str, Any], flags: List[str]) -> Dict[str, List[
 
 
 def _llm_job_parameters(settings: Any) -> Dict[str, str]:
-    """The LLM settings a job needs, as job parameters (the job sets them as env vars)."""
+    """The LLM settings a job needs, as job parameters (the job sets them as env vars).
+
+    An empty value keeps the job's own env: the call budget is sent only when the
+    app's settings have one (``COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN``, #1486).
+    """
+    budget = getattr(settings, 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN', None)
     return {
         'llm_enabled': 'true' if getattr(settings, 'LLM_ENABLED', False) else 'false',
         'llm_endpoint': str(getattr(settings, 'LLM_ENDPOINT', None) or ''),
-        'llm_check_max_calls_per_run': str(
-            getattr(settings, 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN', 100)
-        ),
+        'llm_check_max_calls_per_run': '' if budget is None else str(budget),
     }
 
 class JobsManager(ThreadBoundDb):

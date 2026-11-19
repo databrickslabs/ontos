@@ -81,7 +81,9 @@ def test_product_put_tags(client, db_session, product, payload, expected):
     assert _count(db_session, pid, 'data_product') == expected
 
 
-def test_contract_put_with_a_mixed_tag_list_is_refused_and_keeps_the_tags(client, db_session, contract_id):
+def test_contract_put_with_a_mixed_tag_list_is_refused_and_keeps_the_tags(
+    client, db_session, contract_id,
+):
     resp = client.put(f'/api/data-contracts/{contract_id}', json={
         'name': 'Renamed', 'tags': [{'tag_fqn': 'ns/new'}, 123],
     })

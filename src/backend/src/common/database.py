@@ -692,6 +692,44 @@ def get_current_db_revision(engine_connection: Connection, alembic_cfg: AlembicC
     return context.get_current_revision()
 
 
+def _install_connection_hooks(target_engine, settings: Settings) -> None:
+    """Inject the Lakebase OAuth token into new connections and set the search_path.
+
+    Used for the app's engine and for the dedicated engines
+    (``create_dedicated_session_factory``), so their connections behave the same.
+    """
+    if not _use_password_auth(settings):
+        # Use 'do_connect' event to inject password at connection creation time
+        @event.listens_for(target_engine, "do_connect")
+        def inject_token_on_connect(dialect, conn_rec, cargs, cparams):
+            if _oauth_token:
+                cparams["password"] = _oauth_token
+                logger.debug("Injected OAuth token into new database connection")
+
+    # Explicitly enforce search_path at connection time to ensure correct schema usage
+    # in environments where connection options may be ignored.
+    if settings.PGSCHEMA:
+        # Validate schema name to prevent SQL injection in SET command
+        try:
+            target_schema = sanitize_postgres_identifier(settings.PGSCHEMA)
+        except ValueError as e:
+            logger.error(f"Invalid PostgreSQL schema name in PGSCHEMA: {e}")
+            raise ValueError(
+                f"Invalid PostgreSQL schema identifier in PGSCHEMA: {e}. "
+                "Please check configuration."
+            ) from e
+
+        @event.listens_for(target_engine, "connect")
+        def set_search_path(dbapi_connection, connection_record):
+            try:
+                with dbapi_connection.cursor() as cursor:
+                    # SET command cannot be parameterized, but identifier is validated
+                    cursor.execute(f'SET search_path TO "{target_schema}"')
+            except Exception as e:
+                # Log and continue; the app can still operate using default schema if necessary
+                logger.warning(f"Failed to set search_path to '{target_schema}': {e}")
+
+
 def init_db() -> None:
     """Initializes the database connection, checks/creates catalog/schema, and runs migrations."""
     global _engine, _SessionLocal, engine
@@ -736,43 +774,14 @@ def init_db() -> None:
             # Generate initial token
             refresh_oauth_token(settings)
             
-            # Register event handler to inject tokens for new connections
-            # Use 'do_connect' event to inject password at connection creation time
-            @event.listens_for(_engine, "do_connect")
-            def inject_token_on_connect(dialect, conn_rec, cargs, cparams):
-                global _oauth_token
-                if _oauth_token:
-                    cparams["password"] = _oauth_token
-                    logger.debug("Injected OAuth token into new database connection")
-            
             # Start background refresh thread
             start_token_refresh_background(settings)
             logger.info("OAuth authentication configured successfully")
         else:
             logger.info("Password authentication configured for LOCAL mode")
 
-        # Explicitly enforce search_path at connection time to ensure correct schema usage in environments
-        # where connection options may be ignored.
-        if settings.PGSCHEMA:
-            # Validate schema name to prevent SQL injection in SET command
-            try:
-                target_schema = sanitize_postgres_identifier(settings.PGSCHEMA)
-            except ValueError as e:
-                logger.error(f"Invalid PostgreSQL schema name in PGSCHEMA: {e}")
-                raise ValueError(
-                    f"Invalid PostgreSQL schema identifier in PGSCHEMA: {e}. "
-                    "Please check configuration."
-                ) from e
-
-            @event.listens_for(_engine, "connect")
-            def set_search_path(dbapi_connection, connection_record):
-                try:
-                    with dbapi_connection.cursor() as cursor:
-                        # SET command cannot be parameterized, but identifier is validated
-                        cursor.execute(f'SET search_path TO "{target_schema}"')
-                except Exception as e:
-                    # Log and continue; the app can still operate using default schema if necessary
-                    logger.warning(f"Failed to set search_path to '{target_schema}': {e}")
+        # OAuth token injection and search_path, shared with the dedicated engines
+        _install_connection_hooks(_engine, settings)
 
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
         logger.info("Database engine and session factory initialized.")
@@ -1056,6 +1065,34 @@ def get_session_factory():
     if _SessionLocal is None:
         raise RuntimeError("Database session factory not initialized.")
     return _SessionLocal
+
+
+def create_dedicated_session_factory(pool_size: int, name: str):
+    """A session factory on a small engine of its own, or None.
+
+    For background work that holds a session for long (the workflow scheduler's
+    runs, #941), so it can't take the request pool's connections: same database,
+    authentication and search_path as the app's engine, ``pool_size``
+    connections and no overflow. Returns ``(factory, engine)``; the caller
+    disposes the engine when it stops. None when the app's engine isn't set up
+    or the session factory was replaced (tests inject one): the caller uses
+    ``get_session_factory()`` then.
+    """
+    if _engine is None or _SessionLocal is None:
+        return None
+    if getattr(_SessionLocal, 'kw', {}).get('bind') is not _engine:
+        return None
+    settings = get_settings()
+    dedicated = create_engine(
+        _engine.url, echo=settings.DB_ECHO, poolclass=pool.QueuePool,
+        pool_size=max(1, int(pool_size)), max_overflow=0,
+        pool_timeout=settings.DB_POOL_TIMEOUT, pool_recycle=settings.DB_POOL_RECYCLE,
+        pool_pre_ping=True,
+    )
+    _install_connection_hooks(dedicated, settings)
+    logger.info(f"Created the dedicated database engine '{name}' (pool size {pool_size})")
+    factory = sessionmaker(autocommit=False, autoflush=False, bind=dedicated)
+    return factory, dedicated
 
 
 def set_session_factory(factory):

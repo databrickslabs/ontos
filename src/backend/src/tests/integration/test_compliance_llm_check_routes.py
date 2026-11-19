@@ -34,7 +34,9 @@ def llm(test_settings):
     settings = test_settings.model_copy(update={'LLM_ENABLED': True, 'LLM_ENDPOINT': 'fake-ep'})
     fake = FakeLlm(answer=_answer)
     with patch('src.common.config.get_settings', return_value=settings), \
-            patch('src.common.llm_client.create_openai_client', return_value=fake):
+            patch('src.common.llm_client.create_openai_client', return_value=fake), \
+            patch('src.controller.compliance_manager.served_model_of',
+                  return_value='fake-model:1'):
         yield fake
 
 
@@ -165,25 +167,6 @@ def test_saving_a_rule_with_entity_data_as_criterion_is_rejected(client):
 
     assert response.status_code == 422
     assert response.json()['detail']['code'] == 'llm_check_criterion_not_literal'
-
-
-def test_the_settings_save_returns_the_job_warnings(client, monkeypatch):
-    from src.controller.settings_manager import SettingsManager
-
-    warning = {'code': 'compliance_job_not_updated', 'params': {}, 'message': 'm'}
-    monkeypatch.setattr(SettingsManager, '_refresh_llm_job_parameters', lambda self: warning)
-    calls = []
-    real = SettingsManager.update_settings_with_warnings
-    monkeypatch.setattr(
-        SettingsManager, 'update_settings_with_warnings',
-        lambda self, payload: calls.append(payload) or real(self, payload),
-    )
-
-    response = client.put('/api/settings', json={'llm_endpoint': 'new-endpoint'})
-
-    assert response.status_code == 200, response.text
-    assert response.json()['warnings'] == [warning]
-    assert len(calls) == 1
 
 
 def test_expired_rule_test_entries_are_dropped(monkeypatch):

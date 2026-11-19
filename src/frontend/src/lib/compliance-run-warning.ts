@@ -37,6 +37,17 @@ export function complianceRunScoreText(t: TFunction, run: ComplianceRunScoreFiel
 }
 
 /**
+ * The text color of a compliance score: green from 90, yellow from 70, red below,
+ * and muted for no score (a policy whose recent runs failed or evaluated nothing).
+ */
+export function complianceScoreColor(score: number | null | undefined): string {
+  if (score === null || score === undefined) return 'text-muted-foreground';
+  if (score >= 90) return 'text-green-600 dark:text-green-400';
+  if (score >= 70) return 'text-yellow-600 dark:text-yellow-400';
+  return 'text-red-600 dark:text-red-400';
+}
+
+/**
  * How many objects the score is measured on, when some were not evaluated
  * ("50 of 5000 objects evaluated"); an empty string when all were.
  */

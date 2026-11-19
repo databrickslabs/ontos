@@ -543,26 +543,36 @@ class ComplianceManager:
 
     # --- Stats ---
     @staticmethod
-    def _latest_score(db: Session, policy_id: str) -> float:
-        """Score of the policy's latest run that has one (0.0 if none).
+    def _latest_score(db: Session, policy_id: str) -> Optional[float]:
+        """Score of the policy's latest run that has one; None if no recent run has one.
 
         A failed run, or one whose entities were all not evaluated (a source
         could not be read), has no score of its own; it keeps the one before it.
         """
         runs = compliance_run_repo.list_for_policy(db, policy_id=policy_id, limit=20)
-        return next((r.score for r in runs if _run_scored(r)), 0.0)
+        return next((r.score for r in runs if _run_scored(r)), None)
 
-    def get_compliance_stats(self, db: Session) -> Dict[str, float]:
+    def get_compliance_stats(self, db: Session) -> Dict[str, Optional[float]]:
+        """Overall compliance, active policies and critical issues.
+
+        ``overall_compliance`` averages the policies that have a score (see
+        ``_latest_score``); a policy without one is left out, not counted as 0,
+        and with none at all it is None. ``critical_issues`` counts the critical
+        policies whose score is below 70: one without a score is not an issue
+        found, so it isn't counted.
+        """
         policies = self.list_policies(db)
         # Use latest run score per policy
         scores: List[float] = []
         critical_issues = 0
         for p in policies:
             score = self._latest_score(db, p.id)
+            if score is None:
+                continue
             scores.append(score)
             if (p.severity or '').lower() == 'critical' and score < 70:
                 critical_issues += 1
-        overall = sum(scores) / len(scores) if scores else 0.0
+        overall = sum(scores) / len(scores) if scores else None
         active = len([p for p in policies if p.is_active])
         return {
             "overall_compliance": overall,

@@ -5,6 +5,7 @@ import {
   complianceHiddenResultsText,
   complianceRunCoverageText,
   complianceRunScoreText,
+  complianceScoreColor,
 } from './compliance-run-warning';
 
 afterEach(async () => {
@@ -45,5 +46,15 @@ describe('complianceHiddenResultsText', () => {
     expect(complianceHiddenResultsText(i18n.t, 2)).toContain('2 results');
     expect(complianceHiddenResultsText(i18n.t, 0)).toBe('');
     expect(complianceHiddenResultsText(i18n.t, undefined)).toBe('');
+  });
+});
+
+describe('complianceScoreColor', () => {
+  it('colors a score by its band and leaves no score muted, not red', () => {
+    expect(complianceScoreColor(95)).toContain('green');
+    expect(complianceScoreColor(70)).toContain('yellow');
+    expect(complianceScoreColor(0)).toContain('red');
+    expect(complianceScoreColor(null)).toBe('text-muted-foreground');
+    expect(complianceScoreColor(undefined)).toBe('text-muted-foreground');
   });
 });

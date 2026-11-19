@@ -34,7 +34,11 @@ from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
 from src.common.compliance_entities import (
     APP_ENTITY_FEATURES, parse_entity_filter, validate_rule,
 )
-from src.common.compliance_llm_check import LlmCheckQuotaExceededError
+from src.common.compliance_llm_check import (
+    QUOTA_EXCEEDED, LlmCheckQuotaExceededError, seconds_to_next_utc_day,
+)
+from src.common.compliance_result_visibility import viewer_read_checks, visible_results
+from src.controller.compliance_manager import run_score_fields
 from src.common.run_identity import RunIdentity
 
 from src.common.logging import get_logger
@@ -142,22 +146,24 @@ def require_compliance_admin_for_llm_check(
         raise HTTPException(status_code=403, detail=str(error)) from error
 
 
-def require_llm_check_quota(db, rule: Optional[str], current_user) -> None:
-    """A run or rule test of an LLM_CHECK rule needs the user's daily model calls
-    (COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY): without one check's calls
-    left it is answered 429 ``llm_check_daily_quota_exceeded``, with Retry-After
-    (seconds to midnight UTC). Checks past the quota during a run fail with the
-    same code.
+def refuse_when_the_quota_stopped_a_test(result, quota_limit: int) -> None:
+    """429 ``llm_check_daily_quota_exceeded`` (with Retry-After, seconds to midnight
+    UTC) when a rule test needed model calls the user had no longer left today
+    (COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY). A test answered from cached
+    verdicts needs none, so it is never refused for the quota; nor is a run, whose
+    checks past the quota are not evaluated (the run warns how many).
     """
-    if not rule_uses_llm_check(rule):
+    codes = {result.error_code, *(c.code for c in result.llm_checks)}
+    if QUOTA_EXCEEDED not in codes:
         return
-    try:
-        manager.require_llm_quota(db, _username(current_user))
-    except LlmCheckQuotaExceededError as e:
-        raise HTTPException(
-            status_code=429, detail=str(e),
-            headers={'Retry-After': str(e.params['retryAfter'])},
-        ) from e
+    error = LlmCheckQuotaExceededError(
+        f"You used your {quota_limit} LLM_CHECK model calls for today",
+        limit=quota_limit, retryAfter=seconds_to_next_utc_day(),
+    )
+    raise HTTPException(
+        status_code=429, detail=str(error),
+        headers={'Retry-After': str(error.params['retryAfter'])},
+    ) from error
 
 
 def _username(current_user) -> str:
@@ -413,7 +419,6 @@ async def run_policy(
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
     require_compliance_admin_for_llm_check(policy.rule, auth_manager, current_user, request)
     identity = llm_check_identity(request, policy.rule, auth_manager, current_user)
-    require_llm_check_quota(db, policy.rule, current_user)
 
     # For now, implement inline only; async can be backed by Databricks job later.
     # Off the event loop: LLM_CHECK rules call the serving endpoint per entity.
@@ -445,7 +450,7 @@ async def run_policy(
         'finished_at': run.finished_at,
         'success_count': run.success_count,
         'failure_count': run.failure_count,
-        'score': run.score,
+        **run_score_fields(run),
         'error_message': run.error_message,
         **_run_codes(run),
         **_run_llm_usage(run),
@@ -471,7 +476,7 @@ async def list_runs(
             'finished_at': r.finished_at,
             'success_count': r.success_count,
             'failure_count': r.failure_count,
-            'score': r.score,
+            **run_score_fields(r),
             'error_message': r.error_message,
             **_run_codes(r),
             **_run_llm_usage(r),
@@ -482,6 +487,7 @@ async def list_runs(
 @router.get("/compliance/runs/{run_id}/results")
 async def get_run_results(
     run_id: str,
+    request: Request,
     db: DBSessionDep,
     only_failed: Optional[bool] = Query(default=False),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
@@ -490,6 +496,12 @@ async def get_run_results(
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     results = manager.list_results(db, run_id=run_id, only_failed=bool(only_failed), limit=2000)
+    # Only the Unity Catalog objects the viewer can read, with their own token (a
+    # run reads as its starter or as the app, and a model's reason can quote the
+    # object); off the event loop, as it lists UC
+    results, hidden = await run_in_threadpool(
+        visible_results, results, viewer_read_checks(request),
+    )
     return {
         'run': {
             'id': run.id,
@@ -499,7 +511,7 @@ async def get_run_results(
             'finished_at': run.finished_at,
             'success_count': run.success_count,
             'failure_count': run.failure_count,
-            'score': run.score,
+            **run_score_fields(run),
             'error_message': run.error_message,
             **_run_codes(run),
             **_run_llm_usage(run),
@@ -520,6 +532,8 @@ async def get_run_results(
         ],
         'only_failed': bool(only_failed),
         'total': len(results),
+        # Results on objects the viewer can't read: counted, not listed
+        'hidden_count': hidden,
     }
 
 
@@ -578,7 +592,6 @@ async def test_llm_check(
     _check_rule(payload.rule)
     require_compliance_admin_for_llm_check(payload.rule, auth_manager, current_user, request)
     identity = llm_check_identity(request, payload.rule, auth_manager, current_user)
-    require_llm_check_quota(db, payload.rule, current_user)
     try:
         _throttle_rule_test(current_user.username if current_user else 'unknown')
     except RuleTestRateLimitedError as e:
@@ -588,7 +601,7 @@ async def test_llm_check(
         ) from e
     try:
         # The model calls block: run them off the event loop
-        return await run_in_threadpool(
+        result = await run_in_threadpool(
             manager.test_rule_on_sample, db, rule=payload.rule, entity=payload.entity,
             run_identity=identity, quota_user=_username(current_user),
         )
@@ -605,6 +618,9 @@ async def test_llm_check(
                 status_code=503, detail="Databricks workspace client unavailable",
             ) from e
         raise
+    quota_limit = manager.llm_quota(db, _username(current_user)).limit
+    refuse_when_the_quota_stopped_a_test(result, quota_limit)
+    return result
 
 
 @router.get("/compliance/stats")

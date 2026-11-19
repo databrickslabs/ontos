@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
-from src.controller.compliance_manager import ComplianceManager
+from src.controller.compliance_manager import ComplianceManager, run_score_fields
 from src.db_models.compliance import CompliancePolicyDb, ComplianceResultDb
 from src.tests.helpers import FakeLlm, llm_reply as _reply
 
@@ -33,7 +33,9 @@ def _run(db, policy, entities, fake, settings=None, llm_checker=None):
     with patch('src.controller.compliance_manager.create_entity_iterator', return_value=iterator), \
             patch('src.common.workspace_client.get_workspace_client', return_value=MagicMock()), \
             patch('src.common.config.get_settings', return_value=settings or _settings()), \
-            patch('src.common.llm_client.create_openai_client', return_value=fake):
+            patch('src.common.llm_client.create_openai_client', return_value=fake), \
+            patch('src.controller.compliance_manager.served_model_of',
+                  return_value='test-model:1'):
         return ComplianceManager().run_policy_inline(db, policy=policy, llm_checker=llm_checker)
 
 
@@ -109,9 +111,12 @@ def test_no_endpoint_fails_every_entity_with_a_code(db_session):
         settings=_settings(LLM_ENDPOINT=None),
     )
 
-    # No verdict: neither passed nor failed, and left out of the score
+    # No verdict: neither passed nor failed, and left out of the score; with
+    # nothing evaluated, the run has no score (not 0 %), and says its coverage
     assert (run.status, run.success_count, run.failure_count) == ('succeeded', 0, 0)
-    assert (run.not_evaluated_count, run.score) == (1, 0.0)
+    assert run_score_fields(run) == {
+        'score': None, 'coverage': {'evaluated': 0, 'not_evaluated': 1},
+    }
     result = _results(db_session, run)['d1']
     assert (result.passed, result.not_evaluated) == (False, True)
     assert json.loads(result.details_json)['llm_checks'][0]['code'] == 'llm_check_no_endpoint'
@@ -155,7 +160,10 @@ def test_budget_exceeded_is_counted_in_the_run(db_session):
     # NOT does not turn a check that was not run into a pass, and the checks that
     # were not run are not failures: the score covers the 2 judged entities
     assert (run.success_count, run.failure_count, run.not_evaluated_count) == (2, 0, 3)
-    assert run.score == 100.0
+    # The score covers 2 of 5 entities, and the coverage says so
+    assert run_score_fields(run) == {
+        'score': 100.0, 'coverage': {'evaluated': 2, 'not_evaluated': 3},
+    }
     assert run.warning_code == 'llm_check_budget_exceeded'
     assert json.loads(run.warning_params) == {'count': 3, 'budget': 4}
     codes = [

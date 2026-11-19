@@ -45,7 +45,11 @@ class ComplianceResultRepository(CRUDBase[ComplianceResultDb, Dict[str, Any], Di
     def list_for_run(self, db: Session, *, run_id: str, only_failed: bool = False, limit: int = 1000) -> List[ComplianceResultDb]:
         stmt = select(ComplianceResultDb).where(ComplianceResultDb.run_id == run_id)
         if only_failed:
-            stmt = stmt.where(ComplianceResultDb.passed == False)  # noqa: E712
+            # A result not evaluated is stored as not passed, but it is not a failure
+            stmt = stmt.where(
+                ComplianceResultDb.passed == False,  # noqa: E712
+                ComplianceResultDb.not_evaluated == False,  # noqa: E712
+            )
         stmt = stmt.order_by(ComplianceResultDb.created_at.desc()).limit(limit)
         return list(db.execute(stmt).scalars().all())
 

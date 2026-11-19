@@ -496,9 +496,9 @@ def test_an_endpoint_that_rejects_temperature_is_called_without_it():
 
     assert checker.check('Daily grain', GRAIN).passed
     assert checker.check('Weekly grain', GRAIN).passed
-    # Rejected once; the later calls go without it
+    # Rejected once; the later calls go without it. The rejected call counts
     assert len(rejected) == 1
-    assert checker.calls == 4
+    assert checker.calls == 5
     assert all('temperature' not in c for c in fake.calls + fake.scans)
 
 
@@ -586,3 +586,60 @@ def test_a_length_floor_fails_short_texts_without_a_call():
 
     assert evaluator.evaluate(parse_rule(rule)['assert_clause']) is False
     assert fake.calls == [] and fake.scans == []
+
+
+# --- #1486 review: counted retries, cache key fails closed ---------------------------
+
+def _transient_error():
+    import httpx
+    import openai
+
+    return openai.APIConnectionError(request=httpx.Request('POST', 'https://ws/serving'))
+
+
+def test_the_sdk_retries_nothing_and_a_retry_here_is_counted():
+    assert llm.LLM_CHECK_MAX_RETRIES == 0
+    fake = FakeLlm(_transient_error(), _reply('PASS: ok'))
+    checker = _checker(fake)
+    checker._sleep = lambda seconds: None
+
+    assert checker.check('One row per order.', GRAIN).passed
+
+    # The scan, the failed verdict call and its retry: three calls, all counted
+    assert (len(fake.scans), len(fake.calls)) == (1, 2)
+    assert checker.calls == 3
+
+
+def test_a_retry_past_the_budget_is_not_made():
+    fake = FakeLlm(_transient_error(), _reply('PASS: ok'))
+    checker = _checker(fake, settings=_settings(COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN=2))
+    checker._sleep = lambda seconds: None
+
+    with pytest.raises(llm.LlmCheckError) as raised:
+        checker.check('One row per order.', GRAIN)
+
+    assert raised.value.code == llm.CALL_FAILED
+    assert checker.calls == 2 and len(fake.calls) == 1
+
+
+def test_a_permanent_error_is_not_retried():
+    fake = FakeLlm(ValueError('400 bad request'))
+    checker = _checker(fake)
+
+    with pytest.raises(llm.LlmCheckError):
+        checker.check('One row per order.', GRAIN)
+
+    assert checker.calls == 2 and len(fake.calls) == 1
+
+
+def test_an_unknown_served_model_skips_the_cache():
+    """serving_endpoints.get failed: verdicts are neither read nor written."""
+    cache = llm.MemoryLlmCheckCache()
+    fake = FakeLlm(_reply('PASS: ok'))
+
+    for _ in range(2):
+        checker = _checker(fake, cache=cache, model_resolver=lambda endpoint: '')
+        assert checker.check('One row per order.', GRAIN).cached is False
+
+    assert len(fake.calls) == 2
+    assert cache._verdicts == {}

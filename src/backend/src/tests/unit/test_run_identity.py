@@ -6,7 +6,7 @@ with a route's 403 ``HTTPException`` raised from ``UserTokenRequiredError``. The
 run needs the coded error itself, not the HTTP answer.
 """
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -52,3 +52,19 @@ def test_another_http_error_is_raised_unchanged(monkeypatch):
         identity.workspace_client()
 
     assert raised.value.status_code == 500
+
+
+@pytest.mark.parametrize("headers, on_behalf_of_user", [
+    ({"x-forwarded-access-token": "user-token"}, True),
+    ({}, False),  # the service principal fallback (ENV=LOCAL, OBO_ALLOW_SP_FALLBACK)
+])
+def test_a_user_identity_reports_the_client_it_really_is(headers, on_behalf_of_user):
+    from src.common.run_identity import RunIdentity
+
+    request = SimpleNamespace(headers=headers)
+    with patch("src.common.workspace_client.get_obo_workspace_client", return_value=object()):
+        identity = RunIdentity.for_request(request)
+        assert identity.on_behalf_of_user is True  # until the client is built
+        identity.workspace_client()
+
+    assert identity.on_behalf_of_user is on_behalf_of_user

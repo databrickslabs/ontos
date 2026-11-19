@@ -35,6 +35,7 @@ import hashlib
 import json
 import re
 import secrets
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -55,8 +56,13 @@ LLM_CHECK_REASON_MAX_CHARS = 300
 LLM_CHECK_MAX_TEXT_CHARS = 20000
 # Per call: seconds before a call fails (llm_check_call_failed), and retries. The
 # SDK defaults (600 s, 2 retries) could hold a run for hours on a hung endpoint.
+# The SDK retries nothing: a retry is made here, so it counts in the budget and
+# the quota like any call.
 LLM_CHECK_TIMEOUT_SECONDS = 60
-LLM_CHECK_MAX_RETRIES = 1
+LLM_CHECK_MAX_RETRIES = 0
+# Retries of a transient error (connection, timeout, 408/409/429, 5xx), each a call
+LLM_CHECK_CALL_RETRIES = 1
+LLM_CHECK_RETRY_SECONDS = 1.0
 # Model calls of one check that isn't cached: the injection scan, then the verdict.
 CALLS_PER_CHECK = 2
 # Default age (days) after which a cached verdict is asked again.
@@ -334,6 +340,9 @@ class DbLlmCallQuota:
         self._db = db
         self.user = user
         self.limit = max(0, int(limit))
+        # Reservations not given back yet, (day, calls), oldest first: a release
+        # goes to the day it was reserved on, also after midnight UTC
+        self._held: List[List[Any]] = []
 
     @staticmethod
     def _today():
@@ -349,17 +358,28 @@ class DbLlmCallQuota:
         """Count ``calls`` for today if they fit in the limit (committed); False if not."""
         from src.repositories.compliance_repository import compliance_llm_check_usage_repo
 
+        day = self._today()
         ok = compliance_llm_check_usage_repo.reserve(
-            self._db, self.user, self._today(), calls, self.limit,
+            self._db, self.user, day, calls, self.limit,
         )
         self._db.commit()
+        if ok:
+            self._held.append([day, calls])
         return ok
 
     def release(self, calls: int) -> None:
-        """Give back reserved calls that weren't made (committed)."""
+        """Give back reserved calls that weren't made (committed), to the days of the
+        latest reservations."""
         from src.repositories.compliance_repository import compliance_llm_check_usage_repo
 
-        compliance_llm_check_usage_repo.release(self._db, self.user, self._today(), calls)
+        while calls > 0 and self._held:
+            held = self._held[-1]
+            back = min(calls, held[1])
+            compliance_llm_check_usage_repo.release(self._db, self.user, held[0], back)
+            held[1] -= back
+            calls -= back
+            if not held[1]:
+                self._held.pop()
         self._db.commit()
 
 
@@ -374,7 +394,9 @@ def served_model_of(endpoint: str, workspace_client: Any = None) -> str:
 
     Part of the cache key, so repointing a custom endpoint at another model (or
     version) asks again instead of reusing the old model's verdicts. One
-    ``serving_endpoints.get`` per checker; a failure leaves the endpoint name alone.
+    ``serving_endpoints.get`` per checker. When it fails (or names no model),
+    the checker neither reads nor writes the cache: a key on the endpoint name
+    alone could serve another model's verdicts for 30 days.
     """
     try:
         if workspace_client is None:
@@ -433,6 +455,9 @@ class LlmChecker:
         # What the endpoint serves (see served_model_of), resolved once, for the key
         self._model_resolver = model_resolver
         self._served_model: Optional[str] = None
+        # Calls reserved for the check being made (budget and quota), not made yet
+        self._reserved = 0
+        self._sleep: Callable[[float], None] = time.sleep
         # Endpoints that rejected temperature=0 get the call again without it
         self._send_temperature = True
         self._response_model: Optional[str] = None
@@ -468,8 +493,9 @@ class LlmChecker:
         if len(text) > LLM_CHECK_MAX_TEXT_CHARS:
             raise self._error(criterion, TEXT_TOO_LONG)
 
-        key = cache_key(text, criterion, self._model_key(), self._scan_prompt)
-        hit = self._cache.get(key)
+        model_key = self._model_key()
+        key = cache_key(text, criterion, model_key, self._scan_prompt) if model_key else None
+        hit = self._cache.get(key) if key else None
         if hit is not None:
             self.cache_hits += 1
             return LlmCheckResult(criterion, hit[0], hit[1], cached=True)
@@ -482,24 +508,46 @@ class LlmChecker:
             self.quota_exceeded += 1
             raise self._error(criterion, QUOTA_EXCEEDED)
 
-        calls_before = self.calls
+        self._reserved = CALLS_PER_CHECK
         try:
             self._scan(text, criterion)
             passed, reason, response_model = self._ask(text, criterion)
         finally:
-            unused = CALLS_PER_CHECK - (self.calls - calls_before)
+            unused, self._reserved = self._reserved, 0
             if self.quota is not None and unused > 0:
                 self.quota.release(unused)
-        self._cache.put(key, self._endpoint, passed, reason, response_model=response_model)
+        if key:
+            self._cache.put(key, self._endpoint, passed, reason, response_model=response_model)
         return LlmCheckResult(criterion, passed, reason)
 
-    def _model_key(self) -> str:
-        """The endpoint and what it serves: the ``model`` part of the cache key."""
+    def _take_call(self) -> bool:
+        """Count one model call: from the check's reservation, else (a retry) one more
+        within the run's budget and the user's quota. False when none is left."""
+        if self._reserved > 0:
+            self._reserved -= 1
+        elif self.calls + 1 > self.max_calls:
+            return False
+        elif self.quota is not None and not self.quota.reserve(1):
+            return False
+        self.calls += 1
+        return True
+
+    def _model_key(self) -> Optional[str]:
+        """The endpoint and what it serves: the ``model`` part of the cache key.
+
+        None when the resolver can't tell what the endpoint serves: the cache is
+        then not used (fails closed). Without a resolver, the endpoint name.
+        """
+        if self._model_resolver is None:
+            return self._endpoint
         if self._served_model is None:
-            self._served_model = (
-                self._model_resolver(self._endpoint) if self._model_resolver else ''
-            ) or ''
-        return f"{self._endpoint}@{self._served_model}" if self._served_model else self._endpoint
+            self._served_model = self._model_resolver(self._endpoint) or ''
+            if not self._served_model:
+                logger.warning(
+                    "LLM_CHECK: what endpoint %s serves is unknown; verdicts are not cached",
+                    self._endpoint,
+                )
+        return f"{self._endpoint}@{self._served_model}" if self._served_model else None
 
     def _scan(self, text: str, criterion: str) -> None:
         """Phase 1: the injection scan; raises llm_check_text_rejected unless SAFE."""
@@ -526,15 +574,30 @@ class LlmChecker:
         return verdict[0], verdict[1], self._response_model
 
     def _complete(self, messages: List[Dict[str, str]], criterion: str) -> str:
-        """One model call: the answer text, or LlmCheckError for anything else."""
-        self.calls += 1
-        try:
-            if self._client is None:
-                self._client = self._client_factory()
-            response = self._create(messages)
-        except Exception as e:
-            logger.error("LLM_CHECK call to endpoint %s failed: %s", self._endpoint, e)
-            raise self._error(criterion, CALL_FAILED) from e
+        """One model call: the answer text, or LlmCheckError for anything else.
+
+        A transient error is retried ``LLM_CHECK_CALL_RETRIES`` times; each
+        attempt is a call (``_take_call``), so a retry past the budget or the
+        quota is not made.
+        """
+        retries = LLM_CHECK_CALL_RETRIES
+        while True:
+            if not self._take_call():
+                raise self._error(criterion, CALL_FAILED)
+            try:
+                if self._client is None:
+                    self._client = self._client_factory()
+                response = self._create(messages)
+                break
+            except Exception as e:
+                if retries > 0 and _transient(e):
+                    retries -= 1
+                    logger.warning("LLM_CHECK call to endpoint %s failed, retrying: %s",
+                                   self._endpoint, e)
+                    self._sleep(LLM_CHECK_RETRY_SECONDS)
+                    continue
+                logger.error("LLM_CHECK call to endpoint %s failed: %s", self._endpoint, e)
+                raise self._error(criterion, CALL_FAILED) from e
 
         model = getattr(response, 'model', None)
         self._response_model = model if isinstance(model, str) and model else None
@@ -576,8 +639,27 @@ class LlmChecker:
                     raise
                 logger.warning("LLM_CHECK: endpoint %s rejected temperature=0", self._endpoint)
                 self._send_temperature = False
+            # The call without it is another call
+            if not self._take_call():
+                raise RuntimeError("no call left in the budget or the quota")
         return self._client.chat.completions.create(**kwargs)
 
     @staticmethod
     def _error(criterion: str, code: str) -> LlmCheckError:
         return LlmCheckError(LlmCheckResult(criterion, False, code=code))
+
+
+def _transient(error: BaseException) -> bool:
+    """A connection error, a timeout, or a 408 / 409 / 429 / 5xx answer (what the
+    SDK would have retried)."""
+    try:
+        import openai
+    except ImportError:  # pragma: no cover - openai comes with the LLM extras
+        openai = None
+    if openai is not None and isinstance(error, (openai.APIConnectionError,
+                                                 openai.APITimeoutError)):
+        return True
+    if isinstance(error, (ConnectionError, TimeoutError)):
+        return True
+    status = getattr(error, 'status_code', None)
+    return isinstance(status, int) and (status in (408, 409, 429) or status >= 500)

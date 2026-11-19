@@ -32,9 +32,8 @@ from src.common.compliance_notifications import ComplianceRunNotifier
 from src.common.api_errors import CodedValueError, UserTokenRequiredError
 from src.common.run_identity import RunIdentity
 from src.common.compliance_llm_check import (
-    BUDGET_EXCEEDED, CALLS_PER_CHECK, QUOTA_EXCEEDED, DbLlmCallQuota, DbLlmCheckCache,
-    LlmCheckError, LlmChecker, LlmCheckQuotaExceededError, counts_as_failure,
-    seconds_to_next_utc_day, served_model_of,
+    BUDGET_EXCEEDED, QUOTA_EXCEEDED, DbLlmCallQuota, DbLlmCheckCache,
+    LlmCheckError, LlmChecker, counts_as_failure, served_model_of,
 )
 from src.common.compliance_entities import (
     create_entity_iterator,
@@ -267,6 +266,34 @@ def _action_outcomes(action_results) -> List[Dict[str, object]]:
             outcome['params'] = result.params or {}
         outcomes.append(outcome)
     return outcomes
+
+
+def _run_scored(run: ComplianceRunDb) -> bool:
+    """Whether a run's score measures anything: it succeeded and evaluated at
+    least one entity (passed or failed). A failed run, or one whose entities
+    were all not evaluated (or that matched none), has no score."""
+    return run.status == 'succeeded' and bool(
+        (run.success_count or 0) + (run.failure_count or 0)
+    )
+
+
+def run_score_fields(
+    run: ComplianceRunDb, not_evaluated: Optional[int] = None,
+) -> Dict[str, object]:
+    """``score`` (None when the run has none, see ``_run_scored``) and ``coverage``.
+
+    ``coverage``: entities evaluated (passed or failed) and not evaluated (by
+    default the run's ``not_evaluated_count``), so a score measured on a few of
+    many entities says so. The stored score of a run without one stays 0 (the
+    column is not nullable); the API shows None.
+    """
+    if not_evaluated is None:
+        not_evaluated = getattr(run, 'not_evaluated_count', None)
+    evaluated = (run.success_count or 0) + (run.failure_count or 0)
+    return {
+        'score': run.score if _run_scored(run) else None,
+        'coverage': {'evaluated': evaluated, 'not_evaluated': int(not_evaluated or 0)},
+    }
 
 
 class ComplianceManager:
@@ -515,14 +542,23 @@ class ComplianceManager:
         return True
 
     # --- Stats ---
+    @staticmethod
+    def _latest_score(db: Session, policy_id: str) -> float:
+        """Score of the policy's latest run that has one (0.0 if none).
+
+        A failed run, or one whose entities were all not evaluated (a source
+        could not be read), has no score of its own; it keeps the one before it.
+        """
+        runs = compliance_run_repo.list_for_policy(db, policy_id=policy_id, limit=20)
+        return next((r.score for r in runs if _run_scored(r)), 0.0)
+
     def get_compliance_stats(self, db: Session) -> Dict[str, float]:
         policies = self.list_policies(db)
         # Use latest run score per policy
         scores: List[float] = []
         critical_issues = 0
         for p in policies:
-            runs = compliance_run_repo.list_for_policy(db, policy_id=p.id, limit=1)
-            score = runs[0].score if runs else 0.0
+            score = self._latest_score(db, p.id)
             scores.append(score)
             if (p.severity or '').lower() == 'critical' and score < 70:
                 critical_issues += 1
@@ -562,8 +598,7 @@ class ComplianceManager:
         policies = []
         for r in rows:
             # Get latest run score for this policy
-            runs = compliance_run_repo.list_for_policy(db, policy_id=r.id, limit=1)
-            compliance_score = runs[0].score if runs else 0.0
+            compliance_score = self._latest_score(db, r.id)
             
             policies.append({
                 'id': r.id,
@@ -641,7 +676,7 @@ class ComplianceManager:
         runs = db.query(ComplianceRunDb).all()
         by_date: Dict[str, List[float]] = {}
         for r in runs:
-            if not r.started_at:
+            if not r.started_at or not _run_scored(r):
                 continue
             d = r.started_at.date()
             if d < start or d > end:
@@ -786,20 +821,6 @@ class ComplianceManager:
             cls._settings(), 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY', 400,
         )
         return DbLlmCallQuota(db, user, limit)
-
-    @classmethod
-    def require_llm_quota(cls, db: Session, user: str) -> None:
-        """Refuse a run or rule test of an LLM_CHECK rule when ``user`` has no calls left today.
-
-        Raises:
-            LlmCheckQuotaExceededError: not one check's calls left (answered 429).
-        """
-        quota = cls.llm_quota(db, user)
-        if quota.remaining() < CALLS_PER_CHECK:
-            raise LlmCheckQuotaExceededError(
-                f"You used your {quota.limit} LLM_CHECK model calls for today",
-                limit=quota.limit, retryAfter=seconds_to_next_utc_day(),
-            )
 
     @classmethod
     def llm_checker(

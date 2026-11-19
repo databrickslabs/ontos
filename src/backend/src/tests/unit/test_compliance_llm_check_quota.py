@@ -85,21 +85,6 @@ def test_each_users_quota_is_their_own(db_session):
     assert _checker(db_session, fake, limit=2, user='x').check('text 2', GRAIN).passed
 
 
-def test_require_llm_quota_refuses_a_user_without_calls_left(db_session):
-    with patch('src.common.config.get_settings', return_value=_settings(
-        COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY=3,
-    )):
-        ComplianceManager.require_llm_quota(db_session, 'w')
-        repo.reserve(db_session, 'w', llm.utc_now().date(), 2, 3)
-
-        with pytest.raises(llm.LlmCheckQuotaExceededError) as raised:
-            ComplianceManager.require_llm_quota(db_session, 'w')
-
-    assert raised.value.code == 'llm_check_daily_quota_exceeded'
-    assert raised.value.params['limit'] == 3
-    assert 1 <= raised.value.params['retryAfter'] <= 86400
-
-
 def test_seconds_to_next_utc_day():
     now = datetime(2026, 11, 14, 23, 59, 30, tzinfo=timezone.utc)
     assert llm.seconds_to_next_utc_day(now) == 30
@@ -136,24 +121,62 @@ def test_a_run_without_a_user_has_no_quota(db_session):
         assert ComplianceManager.llm_checker(db_session, quota_user='w').quota.limit == 400
 
 
-def test_the_routes_answer_429_without_calls_left():
+def _test_result(*codes, error_code=None):
+    from src.models.compliance import LlmCheckOutcome, LlmCheckTestResponse
+
+    return LlmCheckTestResponse(
+        entity_type='domain', passed=False, error_code=error_code,
+        llm_checks=[LlmCheckOutcome(criterion=GRAIN, passed=code is None, code=code)
+                    for code in codes],
+    )
+
+
+def test_a_rule_test_is_refused_only_when_it_needed_calls_past_the_quota():
+    """A test answered from the cache, or that never reached the quota, is not 429."""
     from fastapi import HTTPException
 
     from src.routes import compliance_routes
 
-    error = llm.LlmCheckQuotaExceededError('used', limit=400, retryAfter=120)
-    user = SimpleNamespace(username='w')
-    with patch.object(compliance_routes, 'manager') as manager:
-        manager.require_llm_quota.side_effect = error
-        with pytest.raises(HTTPException) as raised:
-            compliance_routes.require_llm_check_quota(MagicMock(), RULE, user)
-        assert raised.value.status_code == 429
-        assert raised.value.headers == {'Retry-After': '120'}
+    with pytest.raises(HTTPException) as raised:
+        compliance_routes.refuse_when_the_quota_stopped_a_test(
+            _test_result(llm.QUOTA_EXCEEDED, error_code=llm.QUOTA_EXCEEDED), 400,
+        )
+    assert raised.value.status_code == 429
+    assert 1 <= int(raised.value.headers['Retry-After']) <= 86400
 
-        # Rules without LLM_CHECK are not counted
-        plain = "MATCH (d:domain)\nASSERT 1 = 1"
-        compliance_routes.require_llm_check_quota(MagicMock(), plain, user)
-        assert manager.require_llm_quota.call_count == 1
+    compliance_routes.refuse_when_the_quota_stopped_a_test(_test_result(None), 400)
+    compliance_routes.refuse_when_the_quota_stopped_a_test(
+        _test_result(llm.BUDGET_EXCEEDED, error_code=llm.BUDGET_EXCEEDED), 400,
+    )
+
+
+def test_a_cached_verdict_needs_no_quota(db_session):
+    """No calls left today: a check whose verdict is cached still passes, no 429."""
+    cache = llm.MemoryLlmCheckCache()
+    fake = FakeLlm(llm_reply('PASS: ok'))
+    first = llm.LlmChecker(_settings(), client_factory=lambda: fake, cache=cache)
+    assert first.check('text 1', GRAIN).passed
+    repo.reserve(db_session, 'w', llm.utc_now().date(), 400, 400)
+
+    checker = llm.LlmChecker(
+        _settings(), client_factory=lambda: fake, cache=cache,
+        quota=llm.DbLlmCallQuota(db_session, 'w', 400),
+    )
+
+    assert checker.check('text 1', GRAIN).cached
+    assert checker.calls == 0
+
+
+def test_unused_calls_go_back_to_the_day_they_were_reserved_on(db_session):
+    """A check that spans midnight UTC gives back to the day of its reservation."""
+    days = iter([date(2026, 11, 14), date(2026, 11, 15)])
+    quota = llm.DbLlmCallQuota(db_session, 'w', 10)
+    with patch.object(llm.DbLlmCallQuota, '_today', staticmethod(lambda: next(days))):
+        assert quota.reserve(2)
+        quota.release(1)
+
+    assert repo.used(db_session, 'w', date(2026, 11, 14)) == 1
+    assert repo.used(db_session, 'w', date(2026, 11, 15)) == 0
 
 
 def test_the_default_limits_are_conservative():

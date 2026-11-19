@@ -13,6 +13,7 @@ import pytest
 
 from src.common.workflow_executor import (
     EntityActionStepHandler,
+    StepResult,
     StepContext,
     WorkflowExecutor,
 )
@@ -139,3 +140,20 @@ def test_an_on_update_entity_action_still_publishes(db_session):
     assert result.passed is True, result.error
     db_session.refresh(contract)
     assert contract.publication_scope == 'organization'
+
+
+def test_a_refused_step_ends_the_gate_failed_whatever_its_on_fail(db_session):
+    from types import SimpleNamespace
+
+    from src.common.workflow_executor import _next_step_id, update_gate_step_refusal
+
+    contract = _contract(db_session)
+    step = SimpleNamespace(step_type='entity_action', on_pass='done', on_fail='done')
+    workflow = SimpleNamespace(workflow_type='process')
+    context = _context(contract, TriggerType.BEFORE_UPDATE)
+    refusal = update_gate_step_refusal('entity_action', context)
+
+    # Before, an on_fail to a Pass step let the run succeed: the update went
+    # through and the action was silently skipped
+    assert _next_step_id(workflow, step, refusal) is None
+    assert _next_step_id(workflow, step, StepResult(passed=False)) == 'done'

@@ -2085,7 +2085,7 @@ async def export_odcs(
         db_obj = data_contract_repo.get_with_all(db, id=contract_id)
         if not db_obj:
             raise HTTPException(status_code=404, detail="Contract not found")
-        odcs = manager.build_odcs_from_db(db_obj, db)
+        odcs = manager.build_odcs_from_db(db_obj, db, for_export=True)
 
         # Convert to YAML format for ODCS compliance
         yaml_content = yaml.dump(odcs, default_flow_style=False, allow_unicode=True, sort_keys=False)

@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 
-/** Code of a contract apiVersion outside ODCS (src/common/odcs_versions.py). */
+/** Code of a contract apiVersion outside ODCS (src/common/odcs_api_version.py). */
 export const ODCS_API_VERSION_UNSUPPORTED = 'odcs_api_version_unsupported'
 
 const parsed = (body: unknown): any => {

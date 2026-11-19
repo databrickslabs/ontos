@@ -1121,12 +1121,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         the update path reads the stored values with it off, so a save keeps them.
         ``all_relationship_ids``: write a relationship's ``id`` whatever the ODCS
         version (for an editor save, which completes its payload from this document)."""
-        # The ODCS spelling: a row stored before the spelling fix may hold '3.0.2'
-        api_version = normalized_api_version(db_obj.api_version) or 'v3.1.0'
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
-            'apiVersion': api_version,
+            # The ODCS spelling: a row stored before the spelling fix may hold '3.0.2'
+            'apiVersion': normalized_api_version(db_obj.api_version) or 'v3.1.0',
             'name': db_obj.name,
             'version': db_obj.version,
             # The Stage Category's standard value; the exact stage and group
@@ -1135,6 +1134,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 db_session, 'data_contract', db_obj
             )[0],
         }
+        # The version checks below read the exported value, not the stored one
+        api_version = odcs['apiVersion']
         
         # Apply multi-domain fields via the export adapter: primary name in `domain`,
         # additional domains under customProperties.additionalDomains, plus app round-trip

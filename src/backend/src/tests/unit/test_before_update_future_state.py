@@ -441,6 +441,55 @@ def test_derived_fields_describe_the_contract_after_the_update(db_session):
     assert gate.passed is True
 
 
+def _assign_domain(db, contract, domain, primary=True):
+    from src.db_models.domain_associations import EntityDomainAssociationDb
+    db.add(EntityDomainAssociationDb(
+        domain_id=domain.id, entity_id=contract.id, entity_type='data_contract',
+        is_primary=primary,
+    ))
+    db.flush()
+
+
+def test_the_gate_keys_the_domain_alike_whether_or_not_the_update_sends_it(db_session):
+    # #1403 review: domain is the primary domain's name, domain_id its id, for a
+    # stored contract (the loader's side, #1540) as for one the update moves
+    from src.common.compliance_entities import AppEntityLoader
+    from src.common.workflow_executor import _proposed_values, _with_stored_primary_domain
+
+    contract = _contract(db_session, owner='team-1')
+    sales, ops = (
+        DataDomain(id=str(uuid.uuid4()), name=name, created_by='u@example.com')
+        for name in ('Sales', 'Ops')
+    )
+    db_session.add_all([sales, ops])
+    db_session.flush()
+    _assign_domain(db_session, contract, sales)
+
+    def obj(payload):
+        return _policy_rule_object(db_session, _context(contract, payload))
+
+    untouched = obj(_payload(name='Renamed'))
+    moved = obj(_payload(domainIds=[ops.id]))
+    loaded = AppEntityLoader(db_session).load_entity('data_contract', contract.id)
+    stored = _with_stored_primary_domain(
+        db_session, _context(contract, {}), loaded,
+    )
+    every_field = _payload(
+        owner_team_id='team-2', description=ContractDescription(purpose='p'),
+        domainIds=[ops.id],
+    )
+
+    # Before, a stored contract's domain was None (the loader read a dropped column)
+    assert (untouched['domain'], untouched['domain_id']) == ('Sales', sales.id)
+    assert (moved['domain'], moved['domain_id']) == ('Ops', ops.id)
+    # The overlay writes only keys the stored contract has, and a rule sees the
+    # same keys whether or not the update sends the field
+    assert set(_proposed_values(db_session, every_field)) <= set(stored)
+    assert set(loaded) <= set(stored)
+    assert set(untouched) <= set(moved)
+    assert set(moved) - set(untouched) <= set(_payload(domainIds=[ops.id]))  # request keys
+
+
 # 4. One object for WHERE and ASSERT
 
 def test_assert_sees_the_stored_fields_the_update_does_not_carry(db_session):

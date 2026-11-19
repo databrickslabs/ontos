@@ -398,9 +398,12 @@ def check_table_freshness(
         # Calculate age
         if isinstance(last_modified, str):
             last_modified = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
-
-        if last_modified.tzinfo is None:
-            last_modified = last_modified.replace(tzinfo=timezone.utc)
+            if last_modified.tzinfo is None:
+                last_modified = last_modified.replace(tzinfo=timezone.utc)
+        elif last_modified.tzinfo is None:
+            # collect() returns a TimestampType as a naive datetime in the driver's
+            # local zone, not in UTC
+            last_modified = last_modified.astimezone()
         age = datetime.now(timezone.utc) - last_modified
         age_hours = age.total_seconds() / 3600
 

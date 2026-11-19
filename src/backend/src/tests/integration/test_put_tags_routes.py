@@ -79,3 +79,23 @@ def test_product_put_tags(client, db_session, product, payload, expected):
     resp = client.put(f'/api/data-products/{pid}', json={**body, 'name': 'Renamed', **payload})
     assert resp.status_code == 200, resp.text
     assert _count(db_session, pid, 'data_product') == expected
+
+
+def test_contract_put_with_a_mixed_tag_list_is_refused_with_a_code(client, db_session, contract_id):
+    resp = client.put(f'/api/data-contracts/{contract_id}', json={
+        'name': 'Renamed', 'tags': [{'tag_fqn': 'ns/new'}, 123],
+    })
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()['detail']
+    assert detail['code'] == 'invalid_tag_entry'
+    assert detail['params'] == {'index': 1}
+    assert _count(db_session, contract_id, 'data_contract') == 1
+
+
+def test_product_put_with_a_mixed_tag_list_is_refused(client, db_session, product):
+    pid, body = product
+    resp = client.put(f'/api/data-products/{pid}', json={
+        **body, 'name': 'Renamed', 'tags': [{'tag_fqn': 'ns/new'}, 123],
+    })
+    assert resp.status_code == 422, resp.text
+    assert _count(db_session, pid, 'data_product') == 1

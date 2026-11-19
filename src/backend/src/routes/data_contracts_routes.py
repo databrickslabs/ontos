@@ -8,7 +8,9 @@ from uuid import uuid4
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from src.controller.data_contracts_manager import DataContractsManager, InvalidVersionFormatError
+from src.controller.data_contracts_manager import (
+    DataContractsManager, InvalidTagEntryError, InvalidVersionFormatError,
+)
 from src.common.dependencies import (
     DBSessionDep,
     AuditManagerDep,
@@ -1577,7 +1579,8 @@ async def update_contract(
     except CodedValueError as e:
         # A status change sent with the update (src.common.lifecycle_status)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        status = 422 if isinstance(e, InvalidTagEntryError) else 400
+        raise HTTPException(status_code=status, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error updating contract %s: %s", contract_id, e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}

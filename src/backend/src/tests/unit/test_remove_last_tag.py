@@ -115,10 +115,50 @@ def test_contract_update_without_tags_keeps_them(contracts_manager, contract, db
     assert _contract_tags(db_session, contract) == 1
 
 
-def test_contract_update_with_unreadable_tags_keeps_them(contracts_manager, contract, db_session):
-    contracts_manager.update_contract_with_relations(db_session, contract, {'tags': [None, 7]}, current_user='u')
+def test_contract_update_with_unreadable_tags_is_refused_and_keeps_them(
+    contracts_manager, contract, db_session,
+):
+    from src.controller.data_contracts_manager import InvalidTagEntryError
 
+    with pytest.raises(InvalidTagEntryError) as exc:
+        contracts_manager.update_contract_with_relations(
+            db_session, contract, {'tags': [None, 7]}, current_user='u')
+
+    assert exc.value.code == 'invalid_tag_entry'
+    assert exc.value.params == {'index': 0}
     assert _contract_tags(db_session, contract) == 1
+
+
+def test_contract_update_with_a_mixed_tag_list_is_refused_and_keeps_them(
+    contracts_manager, contract, db_session,
+):
+    from src.controller.data_contracts_manager import InvalidTagEntryError
+
+    with pytest.raises(InvalidTagEntryError) as exc:
+        contracts_manager.update_contract_with_relations(
+            db_session, contract, {'tags': [{'tag_fqn': 'ns/new'}, 123]}, current_user='u')
+
+    assert exc.value.params == {'index': 1}
+    assert _contract_tags(db_session, contract) == 1
+
+
+def test_product_model_reads_null_tags_as_not_sent():
+    from src.models.data_products import DataProduct
+
+    base = {'id': 'p', 'name': 'P', 'version': '1.0.0', 'status': 'draft'}
+    assert 'tags' not in DataProduct(**base, tags=None).model_fields_set
+    assert 'tags' not in DataProduct(**base).model_fields_set
+    cleared = DataProduct(**base, tags=[])
+    assert 'tags' in cleared.model_fields_set and cleared.tags == []
+
+
+def test_product_model_refuses_a_tag_list_with_an_unreadable_entry():
+    from pydantic import ValidationError
+    from src.models.data_products import DataProduct
+
+    base = {'id': 'p', 'name': 'P', 'version': '1.0.0', 'status': 'draft'}
+    with pytest.raises(ValidationError):
+        DataProduct(**base, tags=[{'tag_fqn': 'ns/new'}, 123])
 
 
 def test_clearing_the_last_tag_is_logged(manager, product, db_session):

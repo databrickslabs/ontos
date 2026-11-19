@@ -81,3 +81,73 @@ def test_a_run_without_evaluated_entities_or_that_failed_has_no_score(
                           score=50.0 if expected else 0.0, not_evaluated_count=3)
 
     assert run_score_fields(run)['score'] == expected
+
+
+# --- the viewer filter fails closed, and covers each Unity Catalog type ---
+
+def _results_as(db, run, viewer=None, obo_error=None):
+    import asyncio
+
+    from src.common import workspace_client as wc
+    from src.routes import compliance_routes
+
+    obo = ({'side_effect': lambda *a, **k: wc.raise_user_token_required()} if obo_error
+           else {'return_value': viewer})
+    with patch('src.common.workspace_client.get_obo_workspace_client', **obo):
+        return asyncio.run(compliance_routes.get_run_results(
+            run.id, request=SimpleNamespace(headers={}), db=db, only_failed=False, _=True,
+        ))
+
+
+def test_a_viewer_without_a_token_gets_no_uc_result_nor_its_reason(db_session):
+    run = _run_with_results(db_session)
+
+    body = _results_as(db_session, run, obo_error=True)
+
+    assert [r['object_id'] for r in body['results']] == ['d1']
+    assert body['hidden_count'] == 3
+    assert 'quotes main' not in json.dumps(body, default=str)
+
+
+def test_a_listing_that_fails_hides_every_result_it_covers(db_session):
+    run = _run_with_results(db_session)
+    viewer = MagicMock()
+    viewer.tables.list.side_effect = RuntimeError('warehouse down')
+
+    body = _results_as(db_session, run, viewer=viewer)
+
+    assert [r['object_id'] for r in body['results']] == ['d1']
+    assert body['hidden_count'] == 3
+
+
+@pytest.mark.parametrize('object_type, object_id, shown', [
+    ('catalog', 'main', True), ('catalog', 'hr', False),
+    ('schema', 'main.sales', True), ('schema', 'main.private', False),
+    ('schema', 'hr.sales', False),
+    ('function', 'main.sales.mask', True), ('function', 'main.sales.secret', False),
+    ('volume', 'main.sales.landing', True), ('volume', 'main.sales.private', False),
+    # Ids with the wrong number of parts are never shown
+    ('table', 'main.orders', False), ('schema', 'main', False),
+    ('catalog', 'main.sales', False), ('function', 'main.sales.mask.x', False),
+    ('volume', None, False),
+])
+def test_each_uc_type_is_checked_with_its_own_listing(object_type, object_id, shown):
+    from src.common.compliance_result_visibility import ViewerReadChecks
+
+    viewer = MagicMock()
+    viewer.catalogs.list.return_value = [SimpleNamespace(name='main')]
+    viewer.schemas.list.side_effect = lambda catalog_name: (
+        [SimpleNamespace(name='sales')] if catalog_name == 'main' else []
+    )
+    viewer.functions.list.side_effect = lambda catalog_name, schema_name: (
+        [SimpleNamespace(name='mask')] if (catalog_name, schema_name) == ('main', 'sales')
+        else []
+    )
+    viewer.volumes.list.side_effect = lambda catalog_name, schema_name: (
+        [SimpleNamespace(name='landing')] if (catalog_name, schema_name) == ('main', 'sales')
+        else []
+    )
+
+    assert ViewerReadChecks(lambda: viewer).can_read(object_type, object_id) is shown
+    viewer.tables.list.assert_not_called()
+

@@ -586,3 +586,25 @@ class TestAccessGrantDecisionWritesTheMarker:
 
         db_session.refresh(stored)
         assert json.loads(stored.action_payload)['handled'] is True
+
+    def test_cancel_request_marks_the_request_notification_handled(self, db_session: Session):
+        """A request the requester cancelled leaves My actions too, also once opened."""
+        from src.controller.access_grants_manager import AccessGrantsManager
+        from src.repositories.access_grants_repository import access_grant_request_repo
+
+        notifications = _manager()
+        manager = AccessGrantsManager(notifications_manager=notifications)
+        request = access_grant_request_repo.create(
+            db_session, requester_email='bob@example.com', entity_type='data_product',
+            entity_id='dp-1', requested_duration_days=30,
+        )
+        manager._notify_admins_new_request(db_session, request)
+        stored = db_session.query(NotificationDb).filter(
+            NotificationDb.action_type == 'handle_access_grant_request').one()
+        stored.read = True  # opened in the bell
+        db_session.flush()
+
+        assert manager.cancel_request(db_session, request.id, 'bob@example.com')
+
+        db_session.refresh(stored)
+        assert json.loads(stored.action_payload)['handled'] is True

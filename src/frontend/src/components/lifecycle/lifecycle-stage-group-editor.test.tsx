@@ -129,11 +129,10 @@ describe('LifecycleStageGroupEditor', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [url, init] = lastCall(fetchMock);
-    // The save carries the updated_at that was read, so a concurrent save is refused
-    expect(url).toBe(
-      '/api/lifecycle-stage-groups/g-loop?expected_updated_at=2026-11-15T10%3A00%3A00%2B00%3A00',
-    );
+    // The body carries the updated_at that was read, so a concurrent save is refused
+    expect(url).toBe('/api/lifecycle-stage-groups/g-loop');
     expect(init.method).toBe('PUT');
+    expect(sentBody(fetchMock).expected_updated_at).toBe('2026-11-15T10:00:00+00:00');
     expect(sentBody(fetchMock).stages.map((s: any) => [s.key, s.order, s.is_initial])).toEqual([
       ['draft', 0, false],
       ['needs_review', 1, false],

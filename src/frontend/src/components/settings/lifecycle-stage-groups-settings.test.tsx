@@ -123,11 +123,12 @@ describe('LifecycleStageGroupsSettings', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Make default' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      '/api/lifecycle-stage-groups/g-loop?expected_updated_at=2026-11-15T10%3A00%3A00%2B00%3A00',
+      '/api/lifecycle-stage-groups/g-loop',
       expect.objectContaining({ method: 'PUT' }),
     ));
     const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')!;
     const body = JSON.parse(put[1].body);
+    expect(body.expected_updated_at).toBe('2026-11-15T10:00:00+00:00');
     expect(body.is_default_for_type).toBe(true);
     expect(body.stages.map((s: any) => s.key)).toEqual(['draft', 'active', 'needs_review']);
     expect(body.transitions).toHaveLength(3);

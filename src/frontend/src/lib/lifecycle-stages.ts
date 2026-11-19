@@ -289,16 +289,21 @@ export function stageColorClass(
   return STAGE_COLORS[color];
 }
 
+/** The URL of a group's save (PUT). */
+export function groupSaveUrl(group: Pick<LifecycleStageGroup, 'id'>): string {
+  return `/api/lifecycle-stage-groups/${group.id}`;
+}
+
 /**
- * The URL of a group's save (PUT): carries the `updated_at` the caller read as
- * `expected_updated_at`, so a group saved since is refused (409
+ * The body of a group's save (PUT): the definition plus the `updated_at` the
+ * caller read as `expected_updated_at`, so a group saved since is refused (409
  * `lifecycle_group_changed`) instead of overwritten.
  */
-export function groupSaveUrl(group: Pick<LifecycleStageGroup, 'id' | 'updated_at'>): string {
-  const base = `/api/lifecycle-stage-groups/${group.id}`;
-  return group.updated_at
-    ? `${base}?expected_updated_at=${encodeURIComponent(group.updated_at)}`
-    : base;
+export function groupSaveBody<T extends object>(
+  group: Pick<LifecycleStageGroup, 'updated_at'>,
+  write: T,
+): T & { expected_updated_at?: string } {
+  return group.updated_at ? { ...write, expected_updated_at: group.updated_at } : write;
 }
 
 /** The stages of a group in their order. */

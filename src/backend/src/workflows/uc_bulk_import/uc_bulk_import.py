@@ -440,17 +440,20 @@ def qualify_table_name(full_name: str, default_catalog: Optional[str], default_s
     return full_name
 
 
-def find_existing(engine: Engine, table: str, name: str) -> Optional[Tuple[str, Optional[str]]]:
-    """(id, status) of the row a discovered entity matches, by name: the key both
-    the skip and the update strategies use. Versions of an entity share its name,
-    so the newest row is the one matched. Domains have no lifecycle: status is None."""
-    columns = "id" if table == "data_domains" else "id, status"
+def find_existing(
+    engine: Engine, table: str, name: str
+) -> Optional[Tuple[str, Optional[str], Optional[str]]]:
+    """(id, status, version_family_id) of the row a discovered entity matches, by
+    name: the key both the skip and the update strategies use. Versions of an
+    entity share its name, so the newest row is the one matched. Domains have no
+    lifecycle or versions: (id, None, None)."""
+    columns = "id" if table == "data_domains" else "id, status, version_family_id"
     sql = text(f"SELECT {columns} FROM {table} WHERE name = :name ORDER BY created_at DESC LIMIT 1")
     with engine.connect() as conn:
         row = conn.execute(sql, {"name": name}).first()
     if row is None:
         return None
-    return row[0], (row[1] if len(row) > 1 else None)
+    return (row[0], None, None) if len(row) == 1 else (row[0], row[1], row[2])
 
 
 def should_skip_update(kind: str, name: str, status: Optional[str]) -> bool:
@@ -475,6 +478,53 @@ def _tables(objects: List[DiscoveredObject], default_catalog: Optional[str],
     return tables
 
 
+def _new_stats() -> Dict[str, int]:
+    return {"created": 0, "updated": 0, "unchanged": 0, "skipped": 0, "errors": 0}
+
+
+_IMPORTED_SQL = text("""
+    SELECT source_key FROM uc_bulk_import_sources
+    WHERE entity_type = :entity_type AND version_family_id = :family_id
+""")
+_RECORD_SQL = text("""
+    INSERT INTO uc_bulk_import_sources (
+        id, entity_type, version_family_id, source_key, created_at
+    ) VALUES (
+        :id, :entity_type, :family_id, :source_key, :created_at
+    )
+""")
+
+
+def _add_new_tables(conn, entity_type: str, family_id: str, tables: List[Tuple[str, str]],
+                    present: Set[str], add, now: datetime) -> int:
+    """Call ``add(name, qualified_name)`` for each table the job never imported
+    into this version family, record it in ``uc_bulk_import_sources`` and return
+    how many were added. A recorded table is never added again, so a deliverable
+    a user deleted in the app stays deleted. A table in ``present`` (the entity
+    already has it: imported before the job recorded its tables, or added by a
+    user) is recorded, not added."""
+    params = {"entity_type": entity_type, "family_id": family_id}
+    imported = set(conn.execute(_IMPORTED_SQL, params).scalars())
+    added = 0
+    for name, qualified_name in tables:
+        if qualified_name in imported:
+            continue
+        imported.add(qualified_name)
+        if qualified_name not in present:
+            add(name, qualified_name)
+            added += 1
+        conn.execute(_RECORD_SQL, {
+            **params, "id": str(uuid4()), "source_key": qualified_name, "created_at": now,
+        })
+    return added
+
+
+def _outcome(existing_id: Optional[str], added: int) -> str:
+    if not existing_id:
+        return "created"
+    return "updated" if added else "unchanged"
+
+
 def create_contracts(
     engine: Engine,
     entity_objects: Dict[str, List[DiscoveredObject]],
@@ -487,10 +537,12 @@ def create_contracts(
     """Create data contracts from discovered objects.
 
     With the ``update`` strategy an existing draft contract (matched by name)
-    keeps its id and gets a schema object for each tagged table it doesn't have
-    yet; a contract past draft is skipped.
+    keeps its id and gets a schema object for each tagged table the job never
+    imported into it (see ``_add_new_tables``); its ``updated_at`` changes only
+    when one is added (else it counts as unchanged). A contract past draft is
+    skipped.
     """
-    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
+    stats = _new_stats()
 
     # Raw SQL gets no ORM defaults, so every NOT NULL column of DataContractDb is set here.
     contract_sql = text("""
@@ -503,7 +555,7 @@ def create_contracts(
         )
     """)
     touch_sql = text("UPDATE data_contracts SET updated_at = :updated_at WHERE id = :id")
-    known_sql = text(
+    present_sql = text(
         "SELECT physical_name FROM data_contract_schema_objects WHERE contract_id = :id"
     )
     schema_obj_sql = text("""
@@ -532,26 +584,23 @@ def create_contracts(
             if existing_id and should_skip_update('contract', contract_name, existing[1]):
                 stats["skipped"] += 1
                 continue
-            outcome = "updated" if existing_id else "created"
 
             if dry_run:
                 verb = "update" if existing_id else "create"
                 print(f"  [DRY-RUN] Would {verb} contract: {contract_name} "
                       f"with {len(objects)} schema objects")
-                stats[outcome] += 1
+                stats["updated" if existing_id else "created"] += 1
                 continue
 
             now = datetime.now(timezone.utc)
-            added = 0
             # One transaction: a contract whose schema objects failed would be
             # skipped by every later run.
             with engine.begin() as conn:
                 if existing_id:
-                    contract_id = existing_id
-                    conn.execute(touch_sql, {"id": contract_id, "updated_at": now})
-                    known = set(conn.execute(known_sql, {"id": contract_id}).scalars())
+                    contract_id, family_id = existing_id, existing[2]
+                    present = set(conn.execute(present_sql, {"id": contract_id}).scalars())
                 else:
-                    contract_id = str(uuid4())
+                    contract_id = family_id = str(uuid4())
                     conn.execute(contract_sql, {
                         "id": contract_id,
                         "name": contract_name,
@@ -560,17 +609,14 @@ def create_contracts(
                         "version": "1.0.0",
                         "status": "draft",
                         "published": False,
-                        "version_family_id": contract_id,
+                        "version_family_id": family_id,
                         "publication_scope": "none",
                         "created_at": now,
                         "updated_at": now
                     })
-                    known = set()
+                    present = set()
 
-                for name, qualified_name in _tables(objects, default_catalog, default_schema):
-                    if qualified_name in known:
-                        continue
-                    known.add(qualified_name)
+                def add_schema_object(name, qualified_name):
                     conn.execute(schema_obj_sql, {
                         "id": str(uuid4()),
                         "contract_id": contract_id,
@@ -578,8 +624,16 @@ def create_contracts(
                         "logical_type": "table",
                         "physical_name": qualified_name
                     })
-                    added += 1
 
+                added = _add_new_tables(
+                    conn, "data_contract", family_id,
+                    _tables(objects, default_catalog, default_schema),
+                    present, add_schema_object, now,
+                )
+                if existing_id and added:
+                    conn.execute(touch_sql, {"id": contract_id, "updated_at": now})
+
+            outcome = _outcome(existing_id, added)
             if verbose:
                 print(f"    {outcome.capitalize()}, {added} schema object(s) added")
             stats[outcome] += 1
@@ -605,8 +659,10 @@ def create_products(
     """Create data products from discovered objects.
 
     With the ``update`` strategy an existing draft product (matched by name)
-    keeps its id and gets an output port for each tagged table it doesn't have
-    yet; a product past draft is skipped.
+    keeps its id and gets an output port for each tagged table the job never
+    imported into it (see ``_add_new_tables``); its ``updated_at`` changes only
+    when one is added (else it counts as unchanged). A product past draft is
+    skipped.
 
     Imported products have no owner on purpose: ``draft_owner_id``,
     ``owner_team_id`` and ``project_id`` stay NULL, so only admins see the
@@ -614,7 +670,7 @@ def create_products(
     skips what the manager's create path does (change log, search index, tags,
     domain links, on_create workflows).
     """
-    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
+    stats = _new_stats()
 
     # Raw SQL skips the ORM's Python-side defaults, and a fresh database (tables
     # from create_all) has no server defaults, so every NOT NULL column of
@@ -631,7 +687,7 @@ def create_products(
         )
     """)
     touch_sql = text("UPDATE data_products SET updated_at = :updated_at WHERE id = :id")
-    known_sql = text(
+    present_sql = text(
         "SELECT asset_identifier FROM data_product_output_ports WHERE product_id = :id"
     )
     port_sql = text("""
@@ -662,26 +718,23 @@ def create_products(
             if existing_id and should_skip_update('product', product_name, existing[1]):
                 stats["skipped"] += 1
                 continue
-            outcome = "updated" if existing_id else "created"
 
             if dry_run:
                 verb = "update" if existing_id else "create"
                 print(f"  [DRY-RUN] Would {verb} product: {product_name} "
                       f"with {len(objects)} output ports")
-                stats[outcome] += 1
+                stats["updated" if existing_id else "created"] += 1
                 continue
 
             now = datetime.now(timezone.utc)
-            added = 0
             # One transaction: a product whose ports failed would be skipped
             # by every later run.
             with engine.begin() as conn:
                 if existing_id:
-                    product_id = existing_id
-                    conn.execute(touch_sql, {"id": product_id, "updated_at": now})
-                    known = set(conn.execute(known_sql, {"id": product_id}).scalars())
+                    product_id, family_id = existing_id, existing[2]
+                    present = set(conn.execute(present_sql, {"id": product_id}).scalars())
                 else:
-                    product_id = str(uuid4())
+                    product_id = family_id = str(uuid4())
                     conn.execute(product_sql, {
                         "id": product_id,
                         "api_version": "v1.0.0",
@@ -691,18 +744,15 @@ def create_products(
                         "version": "1.0.0",
                         "product_created_ts": now,
                         "max_level_inheritance": 99,
-                        "version_family_id": product_id,
+                        "version_family_id": family_id,
                         "published": False,
                         "publication_scope": "none",
                         "created_at": now,
                         "updated_at": now
                     })
-                    known = set()
+                    present = set()
 
-                for name, qualified_name in _tables(objects, default_catalog, default_schema):
-                    if qualified_name in known:
-                        continue
-                    known.add(qualified_name)
+                def add_port(name, qualified_name):
                     conn.execute(port_sql, {
                         "id": str(uuid4()),
                         "product_id": product_id,
@@ -713,8 +763,16 @@ def create_products(
                         "contains_pii": False,
                         "auto_approve": False
                     })
-                    added += 1
 
+                added = _add_new_tables(
+                    conn, "data_product", family_id,
+                    _tables(objects, default_catalog, default_schema),
+                    present, add_port, now,
+                )
+                if existing_id and added:
+                    conn.execute(touch_sql, {"id": product_id, "updated_at": now})
+
+            outcome = _outcome(existing_id, added)
             if verbose:
                 print(f"    {outcome.capitalize()}, {added} output port(s) added")
             stats[outcome] += 1
@@ -739,10 +797,11 @@ def create_domains(
     """Create data domains from discovered objects.
 
     With the ``update`` strategy an existing domain (matched by its unique
-    name) keeps its row; only ``updated_at`` changes, as the job sets nothing else.
-    Domains are standalone: the job doesn't link them to products or contracts.
+    name) is left as it is and counted as unchanged: the job sets nothing on a
+    domain beyond its name. Domains are standalone: the job doesn't link them
+    to products or contracts.
     """
-    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
+    stats = _new_stats()
     domain_sql = text("""
         INSERT INTO data_domains (
             id, name, created_by, created_at, updated_at
@@ -750,7 +809,6 @@ def create_domains(
             :id, :name, :created_by, :created_at, :updated_at
         )
     """)
-    touch_sql = text("UPDATE data_domains SET updated_at = :updated_at WHERE id = :id")
 
     for domain_name, objects in entity_objects.items():
         try:
@@ -767,30 +825,29 @@ def create_domains(
                     continue
                 elif conflict_strategy == 'error':
                     raise ValueError(f"Domain '{domain_name}' already exists")
-            outcome = "updated" if existing_id else "created"
+                if verbose:
+                    print(f"    Unchanged (already exists)")
+                stats["unchanged"] += 1
+                continue
 
             if dry_run:
-                verb = "update" if existing_id else "create"
-                print(f"  [DRY-RUN] Would {verb} domain: {domain_name}")
-                stats[outcome] += 1
+                print(f"  [DRY-RUN] Would create domain: {domain_name}")
+                stats["created"] += 1
                 continue
 
             now = datetime.now(timezone.utc)
             with engine.begin() as conn:
-                if existing_id:
-                    conn.execute(touch_sql, {"id": existing_id, "updated_at": now})
-                else:
-                    conn.execute(domain_sql, {
-                        "id": str(uuid4()),
-                        "name": domain_name,
-                        "created_by": created_by,
-                        "created_at": now,
-                        "updated_at": now
-                    })
+                conn.execute(domain_sql, {
+                    "id": str(uuid4()),
+                    "name": domain_name,
+                    "created_by": created_by,
+                    "created_at": now,
+                    "updated_at": now
+                })
 
             if verbose:
-                print(f"    {outcome.capitalize()}")
-            stats[outcome] += 1
+                print(f"    Created")
+            stats["created"] += 1
 
         except Exception as e:
             print(f"  Error creating domain {domain_name}: {e}")
@@ -1000,6 +1057,7 @@ def run_import(args, ws, engine, patterns, dry_run, verbose, current_user):
         )
         summary['contracts'] = contract_stats
         print(f"  Created: {contract_stats['created']}, Updated: {contract_stats['updated']}, "
+              f"Unchanged: {contract_stats['unchanged']}, "
               f"Skipped: {contract_stats['skipped']}, Errors: {contract_stats['errors']}")
     
     if 'product' in discovered:
@@ -1015,6 +1073,7 @@ def run_import(args, ws, engine, patterns, dry_run, verbose, current_user):
         )
         summary['products'] = product_stats
         print(f"  Created: {product_stats['created']}, Updated: {product_stats['updated']}, "
+              f"Unchanged: {product_stats['unchanged']}, "
               f"Skipped: {product_stats['skipped']}, Errors: {product_stats['errors']}")
     
     if 'domain' in discovered:
@@ -1029,6 +1088,7 @@ def run_import(args, ws, engine, patterns, dry_run, verbose, current_user):
         )
         summary['domains'] = domain_stats
         print(f"  Created: {domain_stats['created']}, Updated: {domain_stats['updated']}, "
+              f"Unchanged: {domain_stats['unchanged']}, "
               f"Skipped: {domain_stats['skipped']}, Errors: {domain_stats['errors']}")
     
     # Link products to contracts

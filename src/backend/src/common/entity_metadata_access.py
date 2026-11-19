@@ -152,6 +152,21 @@ def readable_row_filter(request: Request, db, user_details) -> Callable[[str, st
     return can_read
 
 
+def asset_metadata_log_readable(
+    request: Request, db, user_details, entity_type: Optional[str], entity_id: Optional[str],
+) -> bool:
+    """Whether the user may read the change log type ``entity_type`` of ``entity_id``.
+
+    ``MetadataManager`` logs the changes of an asset's notes, links, documents and
+    attachments under ``asset:rich_text``, ``asset:link``, ... with the asset's id:
+    those need the asset to be readable. Every other type answers yes.
+    """
+    prefix, sep, _kind = str(entity_type or '').partition(':')
+    if not sep or not _is_asset(prefix):
+        return True
+    return _asset_readable(request, db, user_details, entity_id)
+
+
 async def _ensure_asset(
     request: Request, db, user_details, auth_manager, entity_id: Optional[str],
     level: FeatureAccessLevel, *, require_asset: bool,

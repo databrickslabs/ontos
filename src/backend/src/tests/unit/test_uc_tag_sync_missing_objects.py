@@ -234,6 +234,9 @@ def test_permission_denied_on_an_unlinked_object_keeps_its_record(tag_sync):
 
     assert result.skipped == []
     assert result.delivered["TABLE"]["gone.crm.old"] == {KEY: PII}
+    # The cleanup could not run: that is an error and a failed object, not a green run
+    assert result.failed_objects == ["TABLE gone.crm.old"]
+    assert len(result.errors) == 1 and "gone.crm.old" in result.errors[0]
 
 
 def test_other_errors_still_fail_the_object(tag_sync):

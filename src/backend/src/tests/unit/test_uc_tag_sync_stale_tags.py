@@ -255,7 +255,7 @@ def test_a_failed_removal_is_reported_and_retried_next_run(tag_sync, uc,
 
 def test_an_unreadable_object_is_kept_for_the_next_run(tag_sync, uc,
                                                        monkeypatch):
-    """Unreadable object is kept for next run."""
+    """Unreadable object is kept for next run, and the run reports the failure."""
     first = _run(tag_sync, [_row("uc_column", COLUMN)], previous={})
 
     def unreadable(*_args):
@@ -264,7 +264,8 @@ def test_an_unreadable_object_is_kept_for_the_next_run(tag_sync, uc,
     monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags", unreadable)
     second = _run(tag_sync, [], previous=first.delivered)
 
-    assert second.errors == []
+    assert len(second.errors) == 1 and COLUMN in second.errors[0]
+    assert second.failed_objects == [f"COLUMN {COLUMN}"]
     assert second.delivered["COLUMN"] == {COLUMN: {OPEX_KEY: OPEX}}
 
 
@@ -477,6 +478,28 @@ def test_legacy_cleanup_already_done_skipped(tag_sync, db):
 
     assert removed == 0
     assert errors == []
+
+
+def test_legacy_scan_failure_with_the_flag_off_is_an_error(tag_sync, db, monkeypatch):
+    """The default (flag-off) scan that can't read a catalog is not a clean one: the
+    error is returned so the run fails, as it does with the flag on."""
+    def failing_bulk_read(spark, catalog, prefix):
+        raise RuntimeError("[PERMISSION_DENIED] USE CATALOG")
+
+    monkeypatch.setattr(tag_sync, "_bulk_read_prefixed_tags_per_catalog", failing_bulk_read)
+    dataset = _asset_dataset(tag_sync, "main.s.t", [OPEX])
+
+    removed, errors = tag_sync.handle_legacy_tag_cleanup(
+        MagicMock(), db, [dataset], tag_sync.DirectLinkInfos(tables=[dataset]),
+        prefix="x_ontos_",
+        previous={},
+        cleanup_enabled=False,
+        is_partial_read=False,
+        dry_run=False,
+    )
+
+    assert removed == 0
+    assert len(errors) == 1 and "main" in errors[0] and "PERMISSION_DENIED" in errors[0]
 
 
 def test_legacy_cleanup_linked_table_keeps_tag(tag_sync, uc, db, monkeypatch):

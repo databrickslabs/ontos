@@ -62,6 +62,50 @@ describe('layoutLineageGraph (layer mode)', () => {
   });
 });
 
+describe('layoutLineageGraph (detail level vs. selected rows)', () => {
+  // A contract property feeding a table column: a field-level edge
+  const fieldGraph: LineageGraph = {
+    center_entity_type: 'DataContract',
+    center_entity_id: 'k',
+    nodes: [
+      node('DataContract:k', 'logical'),
+      node('SchemaObject:s', 'logical'),
+      node('SchemaProperty:f', 'logical'),
+      node('Dataset:d', 'physical'),
+      node('Table:t', 'physical'),
+      node('Column:col', 'physical'),
+    ],
+    edges: [
+      edge('DataContract:k', 'SchemaObject:s', 'hasSchemaObject'),
+      edge('SchemaObject:s', 'SchemaProperty:f', 'hasProperty'),
+      edge('Dataset:d', 'Table:t', 'hasTable'),
+      edge('Table:t', 'Column:col', 'hasColumn'),
+      edge('SchemaProperty:f', 'Column:col', 'implementedBy'),
+    ],
+  };
+  const pathRows = new Set(['SchemaProperty:f', 'Column:col', 'SchemaObject:s', 'Table:t']);
+  const childIds = (l: ReturnType<typeof layoutLineageGraph>, id: string) =>
+    l.groups.find((g) => g.id === id)!.children.map((c) => c.id);
+
+  it('shows cards only at Entities detail, even for selected rows', () => {
+    const l = layoutLineageGraph(fieldGraph, { ...defaultsWith('entities'), alwaysShow: pathRows });
+    expect(childIds(l, 'DataContract:k')).toEqual([]);
+    expect(childIds(l, 'Dataset:d')).toEqual([]);
+    // Edges between hidden rows land on the cards
+    expect(l.edges.length).toBeGreaterThan(0);
+    for (const e of l.edges) {
+      expect(e.sourceHandle).toBeUndefined();
+      expect(e.targetHandle).toBeUndefined();
+    }
+  });
+
+  it('keeps a selected field row at Structure detail, but no other fields', () => {
+    const l = layoutLineageGraph(fieldGraph, { ...defaultsWith('structure'), alwaysShow: new Set(['Column:col']) });
+    expect(childIds(l, 'Dataset:d')).toEqual(['Table:t', 'Column:col']);
+    expect(childIds(l, 'DataContract:k')).toEqual(['SchemaObject:s']);
+  });
+});
+
 function defaultsWith(detail: LineageDetail) {
   return { ...DEFAULT_CONFIG, detail };
 }

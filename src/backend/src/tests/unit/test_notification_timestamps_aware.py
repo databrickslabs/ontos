@@ -9,7 +9,7 @@ offset, so this guards the source instead: no ``Notification(...)`` takes its
 a local variable.
 """
 import ast
-from datetime import timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from src.common.timestamps import utc_now
@@ -136,3 +136,54 @@ def test_job_scripts_do_not_stamp_naive_utc_times():
     ]
 
     assert offenders == []
+
+
+def _is_naive_now(node) -> bool:
+    """``datetime.now()`` with no time zone argument (local time, naive)."""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == 'now'
+        and not node.args
+        and not node.keywords
+    )
+
+
+def test_job_scripts_do_not_compare_against_local_time():
+    """``check_table_freshness`` subtracted a UTC table time from local ``now()``:
+    on a server east of UTC a stale table looked fresher by the offset."""
+    offenders = [
+        f'{path.relative_to(SRC)}:{node.lineno}'
+        for path in (SRC / 'workflows').rglob('*.py')
+        for node in ast.walk(ast.parse(path.read_text(encoding='utf-8')))
+        if _is_naive_now(node)
+    ]
+
+    assert offenders == []
+
+
+def test_the_naive_now_guard_finds_only_local_time_calls():
+    tree = ast.parse('a = datetime.now()\nb = datetime.now(timezone.utc)\n')
+
+    assert [n.lineno for n in ast.walk(tree) if _is_naive_now(n)] == [1]
+
+
+def test_workflow_executor_and_routes_do_not_stamp_naive_utc_times():
+    """The decision ``at``, the ``timestamp`` template variable and ``handled_at``
+    are ISO strings the UI parses: a naive one is read as local time."""
+    offenders = [
+        f'{name}:{node.lineno}'
+        for name in ('common/workflow_executor.py', 'routes/workflows_routes.py')
+        for node in ast.walk(ast.parse((SRC / name).read_text(encoding='utf-8')))
+        if _is_utcnow(node)
+    ]
+
+    assert offenders == []
+
+
+def test_timestamp_template_variable_carries_the_utc_offset():
+    from src.common.workflow_executor import AssignTagStepHandler
+
+    value = AssignTagStepHandler(None, {})._resolve_value_source('timestamp', None)
+
+    assert datetime.fromisoformat(value).utcoffset() == timedelta(0)

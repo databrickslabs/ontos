@@ -15,7 +15,6 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
@@ -1554,7 +1553,7 @@ class AssignTagStepHandler(StepHandler):
         elif source == 'entity_name':
             return context.entity_name
         elif source == 'timestamp':
-            return datetime.utcnow().isoformat()
+            return utc_now().isoformat()
         else:
             return None
 
@@ -3614,7 +3613,7 @@ class WorkflowExecutor:
                     'role_id': role_id,
                     'decided_by': user_email or username,
                     'decision': 'approved' if approved else 'rejected',
-                    'at': datetime.utcnow().isoformat(),
+                    'at': utc_now().isoformat(),
                     'reason': reason,
                 })
                 pending.remove(key)

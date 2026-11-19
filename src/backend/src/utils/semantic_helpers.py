@@ -80,7 +80,8 @@ def process_schema_semantic_links(
     contract_id: str,
     schema_name: str,
     authoritative_definitions: List[Dict[str, Any]],
-    created_by: Optional[str] = None
+    created_by: Optional[str] = None,
+    commit: bool = True,
 ) -> int:
     """
     Process schema-level semantic assignments from authoritativeDefinitions.
@@ -91,6 +92,7 @@ def process_schema_semantic_links(
         schema_name: Schema name
         authoritative_definitions: List of authoritative definitions from ODCS
         created_by: User who created the semantic links
+        commit: False to write the links in the caller's transaction
 
     Returns:
         Number of semantic links created
@@ -109,7 +111,7 @@ def process_schema_semantic_links(
                     iri=url,
                     label=iri_tail.replace('_', ' ') if iri_tail else None
                 )
-                semantic_manager.add(semantic_link, created_by=created_by)
+                semantic_manager.add(semantic_link, created_by=created_by, commit=commit)
                 created_count += 1
                 logger.debug(f"Created semantic link for schema {entity_id}: {url}")
             except Exception as e:
@@ -124,7 +126,8 @@ def process_property_semantic_links(
     schema_name: str,
     property_name: str,
     authoritative_definitions: List[Dict[str, Any]],
-    created_by: Optional[str] = None
+    created_by: Optional[str] = None,
+    commit: bool = True,
 ) -> int:
     """
     Process property-level semantic assignments from authoritativeDefinitions.
@@ -136,6 +139,7 @@ def process_property_semantic_links(
         property_name: Property name
         authoritative_definitions: List of authoritative definitions from ODCS
         created_by: User who created the semantic links
+        commit: False to write the links in the caller's transaction
 
     Returns:
         Number of semantic links created
@@ -154,7 +158,7 @@ def process_property_semantic_links(
                     iri=url,
                     label=iri_tail.replace('_', ' ') if iri_tail else None
                 )
-                semantic_manager.add(semantic_link, created_by=created_by)
+                semantic_manager.add(semantic_link, created_by=created_by, commit=commit)
                 created_count += 1
                 logger.debug(f"Created semantic link for property {entity_id}: {url}")
             except Exception as e:

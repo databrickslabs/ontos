@@ -1732,6 +1732,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
     def _create_schema_objects(
         self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None,
+        semantic_manager: Optional[Any] = None, commit_links: bool = True,
         custom_property_ids: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None,
         include_object_quality: bool = False,
     ):
@@ -1930,18 +1931,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add_all(all_auth_defs)
         db.flush()
 
-        # Process semantic links after bulk insert
+        # Process semantic links after bulk insert. ``semantic_manager`` /
+        # ``commit_links=False``: an update writes them in its own commit (their
+        # graph changes are that manager's pending ones, applied once it committed)
         if schema_semantic_work or prop_semantic_work:
             from src.controller.semantic_links_manager import SemanticLinksManager
             from src.utils.semantic_helpers import process_schema_semantic_links, process_property_semantic_links
-            semantic_manager = SemanticLinksManager(db)
+            semantic_manager = semantic_manager or SemanticLinksManager(db)
             for cid, sname, auth_defs in schema_semantic_work:
                 process_schema_semantic_links(
                     semantic_manager=semantic_manager,
                     contract_id=cid,
                     schema_name=sname,
                     authoritative_definitions=auth_defs,
-                    created_by=current_user
+                    created_by=current_user,
+                    commit=commit_links,
                 )
             for cid, sname, pname, auth_defs in prop_semantic_work:
                 process_property_semantic_links(
@@ -1950,7 +1954,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     schema_name=sname,
                     property_name=pname,
                     authoritative_definitions=auth_defs,
-                    created_by=current_user
+                    created_by=current_user,
+                    commit=commit_links,
                 )
 
     @staticmethod
@@ -2746,12 +2751,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         ).delete()
 
                 if schemas_to_create:
+                    from src.controller.semantic_links_manager import SemanticLinksManager
+                    semantic_manager = SemanticLinksManager(db)
                     # Object-level quality kept from a recreated object is in
-                    # its `quality`; `qualityRules` (below) still replaces it
+                    # its `quality`; `qualityRules` (below) still replaces it.
+                    # Their semantic links are written in the update's commit
                     self._create_schema_objects(
                         db, contract_id, schemas_to_create, current_user,
                         custom_property_ids=custom_property_ids,
                         include_object_quality=True,
+                        semantic_manager=semantic_manager, commit_links=False,
                     )
             
             # Handle quality rules if provided
@@ -2882,7 +2891,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # commit (their graph changes once it committed)
             if data_dict.get('authoritativeDefinitions') is not None:
                 from src.controller.semantic_links_manager import SemanticLinksManager
-                semantic_manager = SemanticLinksManager(db)
+                semantic_manager = semantic_manager or SemanticLinksManager(db)
                 
                 # Remove existing contract-level semantic links
                 existing_links = semantic_manager.list_for_entity(entity_id=contract_id, entity_type='data_contract')

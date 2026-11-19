@@ -23,6 +23,23 @@ jobs:
       contents: read
       id-token: write # JFrog OIDC
 
+    # For the tests that need Postgres (the scheduler's INSERT ... ON CONFLICT
+    # claim, #941); each works in a throwaway schema, so the xdist workers share it.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ontos_test
+          POSTGRES_PASSWORD: ontos_test_pw
+          POSTGRES_DB: ontos_it
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +68,7 @@ jobs:
           DATABRICKS_SCHEMA: test_schema
           DATABRICKS_VOLUME: test_volume
           APP_AUDIT_LOG_DIR: /tmp/audit_logs
+          SCHEDULER_TEST_PG_URL: postgresql+psycopg2://ontos_test:ontos_test_pw@localhost:5432/ontos_it
         # 3 workers, not 4: with 4 the runner was shut down near the end of
         # the run (exit 143, no failing test), likely from memory pressure;
         # locally each worker peaks at ~1.8 GB.

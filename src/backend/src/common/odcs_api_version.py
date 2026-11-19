@@ -7,6 +7,9 @@ from pydantic_core import PydanticCustomError
 
 from src.common import odcs_validation
 from src.common.api_errors import CodedValueError
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
 
 UNSUPPORTED_CODE = "odcs_api_version_unsupported"
 
@@ -23,11 +26,28 @@ class UnsupportedOdcsApiVersionError(CodedValueError):
 
 
 @lru_cache(maxsize=1)
-def odcs_api_versions() -> FrozenSet[str]:
-    """The apiVersion enum of the ODCS JSON schema contracts are validated against
-    (``odcs_validation.ODCS_SCHEMA_PATH``), so a newer schema brings its versions."""
+def _schema_api_versions() -> FrozenSet[str]:
+    """The apiVersion enum of the schema file; raises when it can't be read (not cached)."""
     schema = json.loads(odcs_validation.ODCS_SCHEMA_PATH.read_text(encoding="utf-8"))
     return frozenset(schema["properties"]["apiVersion"]["enum"])
+
+
+def odcs_api_versions() -> FrozenSet[str]:
+    """The apiVersion enum of the ODCS JSON schema contracts are validated against
+    (``odcs_validation.ODCS_SCHEMA_PATH``), so a newer schema brings its versions.
+
+    Fails closed: when the schema is missing or unreadable, the error is logged and no
+    version is accepted (every check answers ``odcs_api_version_unsupported``, never a
+    500). The failure is not cached, so a fixed file is read on the next call.
+    """
+    try:
+        return _schema_api_versions()
+    except (OSError, ValueError, KeyError, TypeError):
+        logger.error(
+            "ODCS schema %s unreadable: no contract apiVersion is accepted",
+            odcs_validation.ODCS_SCHEMA_PATH, exc_info=True,
+        )
+        return frozenset()
 
 
 def normalized_api_version(value: Optional[str]) -> Optional[str]:

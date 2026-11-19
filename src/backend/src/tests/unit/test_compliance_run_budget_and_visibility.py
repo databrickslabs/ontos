@@ -122,6 +122,55 @@ def test_each_policy_run_has_its_own_statement_count_and_keeps_the_cache():
     assert [c['catalog'] for c in inner.calls] == ['main', 'lake']
 
 
+class FailingOnceRunner:
+    """Fails the first statement with ``reason``, then answers."""
+
+    def __init__(self, reason):
+        self.reason = reason
+        self.calls = 0
+
+    def rows(self, statement, parameters):
+        self.calls += 1
+        if self.calls == 1:
+            raise SourceUnavailable(self.reason, 'first try failed')
+        return [{'a': 1}]
+
+
+@pytest.mark.parametrize('reason', ['transient', 'timed_out', 'query_failed'])
+def test_a_passing_failure_is_retried_by_the_next_policy_run(reason):
+    cache = StatementCache()
+    inner = FailingOnceRunner(reason)
+    runner = cache.runner(inner)
+    with pytest.raises(SourceUnavailable):
+        runner.rows('SELECT 1', {'catalog': 'main'})
+    # Not sent again in the same policy run
+    with pytest.raises(SourceUnavailable):
+        runner.rows('SELECT 1', {'catalog': 'main'})
+    assert inner.calls == 1
+
+    cache.start_run()
+
+    # A later policy of the job sends it again instead of reusing the failure
+    assert runner.rows('SELECT 1', {'catalog': 'main'}) == [{'a': 1}]
+    assert inner.calls == 2
+
+
+@pytest.mark.parametrize('reason', ['no_access', 'not_found'])
+def test_a_lasting_failure_is_kept_for_the_whole_job(reason):
+    cache = StatementCache()
+    inner = FailingOnceRunner(reason)
+    runner = cache.runner(inner)
+    with pytest.raises(SourceUnavailable):
+        runner.rows('SELECT 1', {'catalog': 'main'})
+
+    cache.start_run()
+
+    with pytest.raises(SourceUnavailable) as raised:
+        runner.rows('SELECT 1', {'catalog': 'main'})
+    assert raised.value.reason == reason
+    assert inner.calls == 1
+
+
 def _table(name, schema='sales', catalog='main'):
     return TableInfo(
         name=name, full_name=f'{catalog}.{schema}.{name}', catalog_name=catalog,

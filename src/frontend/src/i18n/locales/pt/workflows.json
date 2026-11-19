@@ -341,6 +341,9 @@
       "stepConfigMissing": "Faltam configurações obrigatórias na etapa \"{{step}}\": {{fields}}.",
       "assignTagValueSourceUnknown": "A etapa \"{{step}}\" usa a fonte de valor desconhecida \"{{source}}\".",
       "policyCheckPolicyMissing": "A etapa \"{{step}}\" precisa de uma política de conformidade existente. Selecione uma nas configurações da etapa.",
+      "updateGate": {
+        "entityAction": "A etapa \"{{step}}\" é uma ação de entidade, que não pode rodar em um gate before update: ela continuaria feita quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update."
+      },
       "branch": {
         "on_pass": "sucesso",
         "on_fail": "falha"

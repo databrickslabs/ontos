@@ -341,6 +341,9 @@
       "stepConfigMissing": "Stap \"{{step}}\" mist verplichte instellingen: {{fields}}.",
       "assignTagValueSourceUnknown": "Stap \"{{step}}\" gebruikt de onbekende waardebron \"{{source}}\".",
       "policyCheckPolicyMissing": "Stap \"{{step}}\" heeft een bestaand compliancebeleid nodig. Selecteer er een in de instellingen van de stap.",
+      "updateGate": {
+        "entityAction": "Stap \"{{step}}\" is een entiteitsactie, die niet in een before-update-gate kan draaien: die zou uitgevoerd blijven als de update wordt geweigerd. Verwijder de stap of verplaats hem naar een on-update-workflow."
+      },
       "branch": {
         "on_pass": "succes",
         "on_fail": "fout"

@@ -98,6 +98,12 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
         source: params.source,
         defaultValue: fallback,
       });
+    // An entity action commits as the gate runs, so a before_update gate can't have one (#1403)
+    case 'update_gate_entity_action':
+      return t('workflows:designer.validationIssues.updateGate.entityAction', {
+        step: params.step,
+        defaultValue: fallback,
+      });
     case 'policy_check_policy_missing':
       return t('workflows:designer.validationIssues.policyCheckPolicyMissing', {
         step: params.step,

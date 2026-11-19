@@ -341,6 +341,9 @@
       "stepConfigMissing": "Bei Schritt \"{{step}}\" fehlen Pflichteinstellungen: {{fields}}.",
       "assignTagValueSourceUnknown": "Schritt „{{step}}“ verwendet die unbekannte Wertquelle „{{source}}“.",
       "policyCheckPolicyMissing": "Der Schritt \"{{step}}\" benötigt eine vorhandene Compliance-Richtlinie. Wählen Sie in den Schritteinstellungen eine aus.",
+      "updateGate": {
+        "entityAction": "Schritt \"{{step}}\" ist eine Entitätsaktion, die nicht in einem before-update-Gate laufen kann: Sie bliebe ausgeführt, wenn die Aktualisierung abgelehnt wird. Entfernen Sie den Schritt oder verschieben Sie ihn in einen on-update-Workflow."
+      },
       "branch": {
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"

@@ -420,8 +420,11 @@ def run_policy(
 
     try:
         # Run policy using ComplianceManager
+        # A scheduled run has no user: it reads Unity Catalog as the app
+        from src.common.run_identity import RunIdentity
         run = manager.run_policy_inline(
             db, policy=policy_db, limit=entity_limit, statement_cache=statement_cache,
+            run_identity=RunIdentity.app(),
         )
 
         print(f"  Run ID: {run.id}")

@@ -17,6 +17,7 @@ needs them gets. The query building and row mapping are pure; the only I/O is
 the ``SqlRunner`` passed in, so assets pointing to a UC table can reuse this.
 """
 
+import json
 import time
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Set, Tuple
 
@@ -53,6 +54,17 @@ UNAVAILABLE_KEY = '_unavailable'
 # details_json code of a result not evaluated because a field could not be loaded
 NOT_EVALUATED_CODE = 'rule_field_unavailable'
 
+
+def result_not_evaluated(details_json: Optional[str]) -> bool:
+    """Whether a stored result's details say it was not evaluated (parsed, not matched)."""
+    if not details_json:
+        return False
+    try:
+        details = json.loads(details_json)
+    except (TypeError, ValueError):
+        return False
+    return isinstance(details, dict) and details.get('code') == NOT_EVALUATED_CODE
+
 # Why a source could not be read (codes, also shown in run warnings)
 REASON_NO_WAREHOUSE = 'no_warehouse'
 REASON_NO_ACCESS = 'no_access'
@@ -61,10 +73,18 @@ REASON_TIMED_OUT = 'timed_out'
 REASON_TRANSIENT = 'transient'
 REASON_NOT_FOUND = 'not_found'
 REASON_BUDGET_EXCEEDED = 'budget_exceeded'
+# Not read for this object type (catalogs, schemas, functions, volumes have no tags yet)
+REASON_NOT_LOADED = 'not_loaded'
+NOT_LOADED_SOURCE = 'unity_catalog'
 
-# Statements a run may send. A run is one policy run started by a user, or a
-# whole compliance-checks job run (every policy it runs shares the budget).
+# Statements one policy run may send. The policies of a compliance-checks job
+# run share the cached rows, but each policy run has its own count, so results
+# don't depend on the order the policies run in.
 MAX_STATEMENTS_PER_RUN = 100
+# Time one policy run may spend on statements, from its start. A user run is
+# awaited by their HTTP request; past this, statements still to send and the one
+# running are not waited for (reason ``timed_out``).
+MAX_RUN_SECONDS = 900
 # Rows kept for reuse by later rules of the same run; past this, rows are not kept
 MAX_CACHED_ROWS = 200_000
 # Tables enriched together: the loader yields a catalog's tables in chunks of
@@ -244,26 +264,52 @@ def mark_unavailable(entities: List[Dict[str, Any]], group: str, reason: str) ->
             missing[field] = {'source': GROUP_SOURCE[group], 'reason': reason}
 
 
+def mark_tags_not_loaded(entity: Dict[str, Any]) -> Dict[str, Any]:
+    """Mark ``tags`` unavailable (``not_loaded``) on a UC object whose tags aren't read.
+
+    Only tables and views get their governed tags. Without the marker, a
+    catalog or schema would have no ``tags`` and ``NOT HAS_TAG('x')`` would pass
+    it; with it, a rule reading tags reports it as not evaluated.
+    """
+    entity.setdefault(UNAVAILABLE_KEY, {})['tags'] = {
+        'source': NOT_LOADED_SOURCE, 'reason': REASON_NOT_LOADED,
+    }
+    return entity
+
+
 # --- statement reuse and budget ------------------------------------------------------
 
 class StatementCache:
-    """The statements of one run: their rows, reused by the later rules that send
-    the same statement (same catalog, field group and schemas), and the budget.
+    """The statements of a run: their rows, reused by the later rules that send
+    the same statement (same catalog, field group and schemas), and the budget
+    of the current policy run.
 
-    A statement that failed is not sent again in the run. Past
-    ``max_statements``, a new statement is not sent and its group is
-    unavailable (reason ``budget_exceeded``).
+    A statement that failed is not sent again. Past ``max_statements`` sent by
+    the current policy run, a new statement is not sent and its group is
+    unavailable (reason ``budget_exceeded``); past ``max_run_seconds`` since
+    the policy run started, it is not sent either (reason ``timed_out``), and a
+    statement still running then is cancelled. ``start_run`` begins the next
+    policy run of a job: a new count and deadline, the same cached rows.
     """
 
     def __init__(
         self, max_statements: int = MAX_STATEMENTS_PER_RUN,
         max_cached_rows: int = MAX_CACHED_ROWS,
+        max_run_seconds: float = MAX_RUN_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
     ):
         self.max_statements = max_statements
         self.max_cached_rows = max_cached_rows
-        self.sent = 0
+        self.max_run_seconds = max_run_seconds
+        self._clock = clock
         self._cached_rows = 0
         self._results: Dict[Any, Any] = {}
+        self.start_run()
+
+    def start_run(self) -> None:
+        """Begin a policy run: statements sent and the deadline start over."""
+        self.sent = 0
+        self.deadline = self._clock() + self.max_run_seconds
 
     def runner(self, inner: SqlRunner) -> SqlRunner:
         """``inner`` with this run's reuse and budget."""
@@ -280,11 +326,21 @@ class StatementCache:
             raise SourceUnavailable(
                 REASON_BUDGET_EXCEEDED, f"run already sent {self.sent} statements",
             )
+        if self._clock() >= self.deadline:
+            # Not cached: the next policy run of the job may still send it
+            raise SourceUnavailable(
+                REASON_TIMED_OUT, f"run past its {self.max_run_seconds}s for statements",
+            )
         self.sent += 1
         try:
-            result = inner.rows(statement, parameters)
+            if isinstance(inner, WarehouseSqlRunner):
+                result = inner.rows(statement, parameters, deadline=self.deadline)
+            else:
+                result = inner.rows(statement, parameters)
         except SourceUnavailable as e:
-            self._results[key] = e
+            # Cut short by the run's deadline: the next policy run may still send it
+            if not (e.reason == REASON_TIMED_OUT and self._clock() >= self.deadline):
+                self._results[key] = e
             raise
         if self._cached_rows + len(result) <= self.max_cached_rows:
             self._cached_rows += len(result)
@@ -424,26 +480,40 @@ class WarehouseSqlRunner:
         self._clock = clock
         self._sleep = sleep
 
-    def rows(self, statement: str, parameters: Dict[str, str]) -> List[Dict[str, Any]]:
+    def rows(
+        self, statement: str, parameters: Dict[str, str], deadline: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
         """Rows of the statement; a transient error is retried with backoff, and
-        is reported as ``transient`` when every attempt failed."""
+        is reported as ``transient`` when every attempt failed.
+
+        ``deadline``: the run's (``clock`` time); a statement still running then
+        is cancelled as at its own deadline, and no retry starts past it.
+        """
         for wait in self.RETRY_BACKOFF_SECONDS:
             try:
-                return self._rows_once(statement, parameters)
+                return self._rows_once(statement, parameters, deadline)
             except SourceUnavailable as e:
                 if e.reason != REASON_TRANSIENT:
                     raise
+                if deadline is not None and self._clock() + wait >= deadline:
+                    raise SourceUnavailable(
+                        REASON_TIMED_OUT, f"no time left in the run to retry: {e}",
+                    ) from e
                 logger.info("Transient error on the SQL warehouse, retrying in %ss: %s", wait, e)
                 self._sleep(wait)
-        return self._rows_once(statement, parameters)
+        return self._rows_once(statement, parameters, deadline)
 
-    def _rows_once(self, statement: str, parameters: Dict[str, str]) -> List[Dict[str, Any]]:
+    def _rows_once(
+        self, statement: str, parameters: Dict[str, str], run_deadline: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
         from databricks.sdk.service.sql import (
             ExecuteStatementRequestOnWaitTimeout, StatementParameterListItem,
         )
 
         try:
             deadline = self._clock() + self.DEADLINE_SECONDS
+            if run_deadline is not None:
+                deadline = min(deadline, run_deadline)
             response = self.ws.statement_execution.execute_statement(
                 statement=statement,
                 warehouse_id=self.warehouse_id,
@@ -478,19 +548,33 @@ class WarehouseSqlRunner:
         return [dict(zip(columns, row)) for row in data]
 
     def _wait(self, response: Any, deadline: float) -> Any:
-        """Poll a statement still pending or running until it ends or the deadline."""
-        while _state(response) in _RUNNING_STATES:
-            if self._clock() >= deadline:
-                try:
-                    self.ws.statement_execution.cancel_execution(response.statement_id)
-                except Exception:
-                    logger.warning("Could not cancel statement %s", response.statement_id)
-                raise SourceUnavailable(
-                    REASON_TIMED_OUT, f"statement still running after {self.DEADLINE_SECONDS}s",
-                )
-            self._sleep(self.POLL_SECONDS)
-            response = self.ws.statement_execution.get_statement(response.statement_id)
+        """Poll a statement still pending or running until it ends or the deadline.
+
+        The statement is cancelled at the deadline and on any error while
+        polling (a 503 from ``get_statement``), so a retry never leaves the
+        first copy running on the warehouse.
+        """
+        statement_id = getattr(response, 'statement_id', None)
+        try:
+            while _state(response) in _RUNNING_STATES:
+                if self._clock() >= deadline:
+                    raise SourceUnavailable(
+                        REASON_TIMED_OUT, "statement still running at the deadline",
+                    )
+                self._sleep(self.POLL_SECONDS)
+                response = self.ws.statement_execution.get_statement(statement_id)
+        except BaseException:
+            self._cancel(statement_id)
+            raise
         return response
+
+    def _cancel(self, statement_id: Optional[str]) -> None:
+        if not statement_id:
+            return
+        try:
+            self.ws.statement_execution.cancel_execution(statement_id)
+        except Exception:
+            logger.warning("Could not cancel statement %s", statement_id)
 
 
 _RUNNING_STATES = ('PENDING', 'RUNNING')

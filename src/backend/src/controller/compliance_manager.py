@@ -230,12 +230,26 @@ def _action_outcomes(action_results) -> List[Dict[str, object]]:
 
 
 def _run_scored(run: ComplianceRunDb) -> bool:
-    """Whether a run's score measures anything: not when every entity it matched
-    was not evaluated (warning ``rule_fields_unavailable``, no pass, no fail)."""
-    return not (
-        run.warning_code == 'rule_fields_unavailable'
-        and not (run.success_count or 0) and not (run.failure_count or 0)
+    """Whether a run's score measures anything: it succeeded and evaluated at
+    least one entity (passed or failed). A failed run, or one whose entities
+    were all not evaluated (or that matched none), has no score."""
+    return run.status == 'succeeded' and bool(
+        (run.success_count or 0) + (run.failure_count or 0)
     )
+
+
+def run_score_fields(run: ComplianceRunDb, not_evaluated: int = 0) -> Dict[str, object]:
+    """``score`` (None when the run has none, see ``_run_scored``) and ``coverage``.
+
+    ``coverage``: entities evaluated (passed or failed) and not evaluated, so a
+    score measured on a few of many entities says so. The stored score of a run
+    without one stays 0 (the column is not nullable); the API shows None.
+    """
+    evaluated = (run.success_count or 0) + (run.failure_count or 0)
+    return {
+        'score': run.score if _run_scored(run) else None,
+        'coverage': {'evaluated': evaluated, 'not_evaluated': int(not_evaluated or 0)},
+    }
 
 
 class ComplianceManager:
@@ -486,10 +500,10 @@ class ComplianceManager:
     # --- Stats ---
     @staticmethod
     def _latest_score(db: Session, policy_id: str) -> float:
-        """Score of the policy's latest run that evaluated something (0.0 if none).
+        """Score of the policy's latest run that has one (0.0 if none).
 
-        A run whose entities were all not evaluated (a source could not be
-        read) has no score of its own; it keeps the one before it.
+        A failed run, or one whose entities were all not evaluated (a source
+        could not be read), has no score of its own; it keeps the one before it.
         """
         runs = compliance_run_repo.list_for_policy(db, policy_id=policy_id, limit=20)
         return next((r.score for r in runs if _run_scored(r)), 0.0)
@@ -677,6 +691,10 @@ class ComplianceManager:
     def list_runs(self, db: Session, *, policy_id: str, limit: int = 50) -> List[ComplianceRunDb]:
         return compliance_run_repo.list_for_policy(db, policy_id=policy_id, limit=limit)
 
+    def not_evaluated_counts(self, db: Session, run_ids: List[str]) -> Dict[str, int]:
+        """Results not evaluated, per run id (for the runs' coverage)."""
+        return compliance_result_repo.not_evaluated_counts(db, run_ids)
+
     def list_results(self, db: Session, *, run_id: str, only_failed: bool = False, limit: int = 1000) -> List[ComplianceResultDb]:
         return compliance_result_repo.list_for_run(db, run_id=run_id, only_failed=only_failed, limit=limit)
 
@@ -821,12 +839,21 @@ class ComplianceManager:
         with MATCH, WHERE, ASSERT, ON_PASS, and ON_FAIL clauses.
 
         ``run_identity``: whose permissions Unity Catalog is read with (the
-        tables listed, their tags and lineage). A run a user starts passes
-        theirs; the default, the app's, is for scheduled runs.
+        tables listed, their tags and lineage). Required with ``current_user``:
+        a run a user starts passes theirs (``ValueError`` without it). Without a
+        user, the default is the app's, for scheduled runs.
 
-        ``statement_cache``: the warehouse statements (tags, lineage) and their
-        budget, shared by the policies of one job run; a new one by default.
+        ``statement_cache``: the warehouse statements (tags, lineage), shared by
+        the policies of one job run; each policy run gets its own statement count
+        and deadline (``StatementCache.start_run``). A new one by default.
         """
+        if run_identity is None and current_user:
+            # A run a user starts reads as the user; the app's identity is for
+            # scheduled runs, and is never taken by omission
+            raise ValueError("a run started by a user needs their RunIdentity")
+        if statement_cache is not None:
+            # A job's policies share the cached rows, not the count or the deadline
+            statement_cache.start_run()
         run = self.create_run(db, policy_id=policy.id)
         success = 0
         failure = 0

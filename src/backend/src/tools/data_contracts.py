@@ -392,24 +392,11 @@ class UpdateDataContractTool(BaseTool):
                     error="No fields to update. Provide at least one of: domain, description, status"
                 )
 
-            # A field change runs the before_update gates of PUT
-            # /data-contracts/{id}, before the status change, so a refused call
-            # writes nothing. A status change alone runs only the
-            # before_status_change gates, as the change-status route.
-            gate_executions: List[Any] = []
-            if update_data:
-                if not target:
-                    return ToolResult(
-                        success=False,
-                        error=f"Data contract '{contract_id}' not found"
-                    )
-                refusal, gate_executions = _update_refusal(ctx, self.name, target, update_data)
-                if refusal:
-                    return refusal
-
             # A status change goes through the lifecycle transition (allowed
             # transitions, before_status_change gates), like the change-status
-            # route; an update can't change it.
+            # route; an update can't change it. Checked first, written last: a
+            # refused or failed field update leaves the status as it was.
+            transition = None
             updated = None
             if status is not None:
                 from src.repositories.data_contracts_repository import data_contract_repo
@@ -440,12 +427,24 @@ class UpdateDataContractTool(BaseTool):
                             success=False, error=INVALID_SUNSET_DATE,
                             error_code=INVALID_SUNSET_DATE_CODE,
                         )
-                    updated = _transition_status(
-                        ctx, self.name, contract_id, current_status, status.lower(),
-                        deprecation=deprecation,
-                    )
+                    transition = (current_status, status.lower(), deprecation)
                 else:
                     updated = current
+
+            # A field change runs the before_update gates of PUT
+            # /data-contracts/{id}, then the update, before the status change, so
+            # a refused or failed update writes nothing. A status change alone
+            # runs only the before_status_change gates, as the change-status route.
+            gate_executions: List[Any] = []
+            if update_data:
+                if not target:
+                    return ToolResult(
+                        success=False,
+                        error=f"Data contract '{contract_id}' not found"
+                    )
+                refusal, gate_executions = _update_refusal(ctx, self.name, target, update_data)
+                if refusal:
+                    return refusal
 
             # Update the contract
             if update_data:
@@ -469,6 +468,13 @@ class UpdateDataContractTool(BaseTool):
                     ctx.data_contracts_manager.fire_update_trigger(
                         ctx.db, contract_id, updated, update_data, caller_email(ctx)
                     )
+
+            if transition is not None:
+                from_status, to_status, deprecation = transition
+                updated = _transition_status(
+                    ctx, self.name, contract_id, from_status, to_status,
+                    deprecation=deprecation,
+                )
             
             if not updated:
                 return ToolResult(

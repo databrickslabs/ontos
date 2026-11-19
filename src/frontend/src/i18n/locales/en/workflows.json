@@ -555,6 +555,7 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "The WHERE clause of policy '{{policyName}}' could not be evaluated on {{entityType}} {{entityId}}",
       "tag_not_found": "Tag '{{tag}}' was not found in the tag catalog, so it was not assigned",
+      "update_gate_entity_action": "An entity action can't run in a before update gate: it would stay done when the update is refused. Remove the step, or move it to an on update workflow.",
       "approval_rejected": "Request denied",
       "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
       "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",

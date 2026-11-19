@@ -555,6 +555,7 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "ポリシー '{{policyName}}' の WHERE 句を {{entityType}} {{entityId}} で評価できませんでした",
       "tag_not_found": "タグ '{{tag}}' がタグカタログに見つからなかったため、割り当てませんでした",
+      "update_gate_entity_action": "エンティティアクションは before update ゲートでは実行できません。更新が拒否されてもアクションは実行済みのまま残ります。ステップを削除するか、on update ワークフローに移してください。",
       "approval_rejected": "リクエストが却下されました",
       "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
       "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",

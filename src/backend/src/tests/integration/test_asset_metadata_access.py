@@ -748,8 +748,8 @@ def test_by_id_writes_follow_the_write_rule_first(
         client, db_session, asset, mock_test_user, method):
     """``assets`` READ_WRITE from an email-assigned role: the write check grants it.
 
-    The read check doesn't resolve those roles yet (#1355); writes by id must not
-    depend on it, as creating the row doesn't.
+    The read check resolves those roles too (see the role tests above); writes by
+    id are decided by the write check first, as creating the row is.
     """
     app.state.settings_manager.create_app_role(AppRoleCreate(
         name='Assets by email (#1342)', assigned_users=[mock_test_user.email],

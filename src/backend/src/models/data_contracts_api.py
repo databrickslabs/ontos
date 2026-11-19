@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 from src.common.odcs_api_version import normalized_api_version
@@ -425,17 +425,21 @@ class DataContractBase(BaseModel):
     kind: str = Field('DataContract')  # Required by ODCS
     apiVersion: str = Field('v3.1.0', alias='api_version')  # Required by ODCS
     domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
-    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain assignment (primary included)
-    primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
+    # Multi-domain assignment (primary included). The create dialogs send the domains by
+    # field name: these two fields read both spellings (the name wins when both are
+    # sent); the other aliased fields only their alias
+    domainIds: Optional[List[str]] = Field(
+        None, alias='domain_ids', validation_alias=AliasChoices('domainIds', 'domain_ids'),
+    )
+    primaryDomainId: Optional[str] = Field(
+        None, alias='primary_domain_id',
+        validation_alias=AliasChoices('primaryDomainId', 'primary_domain_id'),
+    )
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     descriptionUsage: Optional[str] = Field(None, alias='description_usage')
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
-
-    class Config:
-        # The create dialog sends the field names (domainIds, primaryDomainId, ...)
-        populate_by_name = True
 
     # Spelling only ('3.0.2' -> 'v3.0.2'); a value outside ODCS is stored as sent
     _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)

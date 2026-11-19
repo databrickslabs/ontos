@@ -24,7 +24,7 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups';
 import {
-  groupDescription, groupName, groupSaveUrl, lifecycleErrorText, orderedStages,
+  groupDescription, groupName, groupSaveBody, groupSaveUrl, lifecycleErrorText, orderedStages,
 } from '@/lib/lifecycle-stages';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
@@ -67,7 +67,7 @@ export default function LifecycleStageGroupsSettings() {
 
   const makeDefault = async (group: LifecycleStageGroup) => {
     const body = { ...toWrite(initialEditorState(group), entityType), is_default_for_type: true };
-    const response = await put(groupSaveUrl(group), body);
+    const response = await put(groupSaveUrl(group), groupSaveBody(group, body));
     if (response.error) return failed(response);
     toast({ title: t('lifecycle:settings.madeDefault', { name: groupName(group, t) }) });
     reload();

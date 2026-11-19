@@ -795,7 +795,8 @@
       "imported_replacement_leads_back": "後継 {{replacementId}} はこのエンティティに戻るため ({{chain}})、リンクされませんでした。",
       "imported_status_mapped": "「{{status}}」はライフサイクルのステータスではないため、「{{mappedTo}}」としてインポートしました。",
       "imported_legacy_status": "「{{status}}」は古いステータス名のため、「{{mappedTo}}」としてインポートしました。",
-      "imported_certified_as_active": "「{{status}}」はもうステータスではないため、「{{mappedTo}}」としてインポートしました。認証はインポートされません。Ontos でエンティティを認証してください。"
+      "imported_certified_as_active": "「{{status}}」はもうステータスではないため、「{{mappedTo}}」としてインポートしました。認証はインポートされません。Ontos でエンティティを認証してください。",
+      "imported_lifecycle_group_unknown": "ライフサイクル「{{group}}」はここに存在しないため、「{{mappedTo}}」にインポートしました。"
     },
     "notice": {
       "deprecated": "非推奨",

@@ -53,6 +53,17 @@ describe('statusChangeErrorText', () => {
     );
   });
 
+  it('shows an ambiguous named action in the user\'s language', () => {
+    expect(statusChangeErrorText({
+      error: 'raw',
+      errorCode: 'lifecycle_action_ambiguous',
+      errorParams: { category: 'review', fromStatus: 'draft', candidates: ['a', 'b'] },
+    }, i18n.t, 'data-products')).toBe(
+      'Several stages of the review category can follow draft (a, b). '
+      + 'Change the status to one of them instead.',
+    );
+  });
+
   it('says the validation failed when there is no reason', async () => {
     await i18n.changeLanguage('pt');
 

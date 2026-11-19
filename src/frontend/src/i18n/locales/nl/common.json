@@ -799,7 +799,8 @@
       "imported_replacement_leads_back": "De vervanging {{replacementId}} leidt terug naar deze entiteit ({{chain}}) en is daarom niet gekoppeld.",
       "imported_status_mapped": "'{{status}}' is geen levenscyclusstatus en is daarom geïmporteerd als '{{mappedTo}}'.",
       "imported_legacy_status": "'{{status}}' is een oudere statusnaam en is daarom geïmporteerd als '{{mappedTo}}'.",
-      "imported_certified_as_active": "'{{status}}' is geen status meer en is daarom geïmporteerd als '{{mappedTo}}'. Certificering wordt niet geïmporteerd: certificeer de entiteit in Ontos."
+      "imported_certified_as_active": "'{{status}}' is geen status meer en is daarom geïmporteerd als '{{mappedTo}}'. Certificering wordt niet geïmporteerd: certificeer de entiteit in Ontos.",
+      "imported_lifecycle_group_unknown": "De levenscyclus ‘{{group}}’ bestaat hier niet en is daarom geïmporteerd in ‘{{mappedTo}}’."
     },
     "notice": {
       "deprecated": "Verouderd",

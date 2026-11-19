@@ -9,6 +9,9 @@ import { useToast } from '@/hooks/use-toast';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { Loader2 } from 'lucide-react';
 import { internalErrorText } from '@/lib/server-error-text';
+import { useStatusOptions } from '@/hooks/use-lifecycle-stage-groups';
+import LifecycleGroupPicker from '@/components/lifecycle/lifecycle-group-picker';
+import { stageLabel } from '@/lib/lifecycle-stages';
 
 type PrefillData = {
   domain?: string;
@@ -43,13 +46,22 @@ export default function CreateContractInlineDialog({
   const [domainIds, setDomainIds] = useState<string[]>([]);
   const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(null);
   const [tenant, setTenant] = useState('');
+  // The new contract's lifecycle stage group; the status picker offers its stages
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const statusOptions = useStatusOptions('data_contract', { groupId, enabled: isOpen });
+  const initialKey = statusOptions.initial?.key;
+
+  // It starts in its group's first stage
+  useEffect(() => {
+    if (isOpen && initialKey) setStatus(initialKey);
+  }, [isOpen, initialKey, groupId]);
 
   useEffect(() => {
     if (isOpen) {
       // Reset or prefill fields when dialog opens
       setName('');
       setVersion('1.0.0');
-      setStatus('draft');
+      setGroupId(null);
       setOwnerTeamId(prefillData?.owner_team_id || '');
       setDomainIds(prefillData?.domainIds || (prefillData?.domainId ? [prefillData.domainId] : []));
       setPrimaryDomainId(prefillData?.primaryDomainId ?? prefillData?.domainId ?? null);
@@ -82,6 +94,7 @@ export default function CreateContractInlineDialog({
         name: name.trim(),
         version: version.trim(),
         status: status,
+        ...(groupId ? { lifecycle_stage_group_id: groupId } : {}),
         kind: 'DataContract',
         apiVersion: '3.0.2'
       };
@@ -163,6 +176,13 @@ export default function CreateContractInlineDialog({
             />
           </div>
 
+          <LifecycleGroupPicker
+            groups={statusOptions.groups}
+            value={groupId}
+            onChange={setGroupId}
+            id="inline-contract-lifecycle-group"
+          />
+
           <div className="space-y-2">
             <Label htmlFor="status">{t('data-contracts:form.status', 'Status')}</Label>
             <Select value={status} onValueChange={setStatus}>
@@ -170,11 +190,10 @@ export default function CreateContractInlineDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="draft">{t('data-contracts:status.draft', 'Draft')}</SelectItem>
-                <SelectItem value="proposed">{t('data-contracts:status.proposed', 'Proposed')}</SelectItem>
-                <SelectItem value="under_review">{t('data-contracts:status.under_review', 'Under Review')}</SelectItem>
-                <SelectItem value="active">{t('data-contracts:status.active', 'Active')}</SelectItem>
-                <SelectItem value="approved">{t('data-contracts:status.approved', 'Approved')}</SelectItem>
+                {/* The stages of the picked lifecycle, from the API */}
+                {statusOptions.options.map((stage) => (
+                  <SelectItem key={stage.key} value={stage.key}>{stageLabel(stage, t)}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

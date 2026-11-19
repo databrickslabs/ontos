@@ -11,6 +11,8 @@ import { useToast } from '@/hooks/use-toast'
 import { CheckCircle2, XCircle, Loader2, Sparkles } from 'lucide-react'
 import type { SuggestedQualityCheck, DataContract } from '@/types/data-contract'
 import CreateVersionDialog from '@/components/data-products/create-version-dialog'
+import { contractEditableInPlace } from '@/lib/lifecycle-stages'
+import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups'
 
 interface DqxSuggestionsDialogProps {
   isOpen: boolean
@@ -30,6 +32,8 @@ export default function DqxSuggestionsDialog({
   onSuccess
 }: DqxSuggestionsDialogProps) {
   const { t } = useTranslation(['data-contracts', 'common'])
+  // The stage submit-review reaches in the contract's lifecycle (proposed by default)
+  const { groups: contractGroups } = useLifecycleStageGroups('data_contract')
   const { toast } = useToast()
   const [suggestions, setSuggestions] = useState<SuggestedQualityCheck[]>([])
   const [loading, setLoading] = useState(false)
@@ -94,8 +98,9 @@ export default function DqxSuggestionsDialog({
   const handleAccept = () => {
     if (selectedIds.size === 0) return
 
-    // Check if version bump is needed
-    const needsVersionBump = contract && !['draft'].includes((contract.status || '').toLowerCase())
+    // A version bump unless the contract is edited in place (a draft stage or the
+    // stage submit-review reaches), the backend's editable_in_place
+    const needsVersionBump = contract && !contractEditableInPlace(contract, contractGroups)
 
     if (needsVersionBump) {
       setPendingAction('accept')

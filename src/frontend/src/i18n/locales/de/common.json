@@ -795,7 +795,8 @@
       "imported_replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück ({{chain}}) und wurde daher nicht verknüpft.",
       "imported_status_mapped": "'{{status}}' ist kein Lebenszyklus-Status und wurde daher als '{{mappedTo}}' importiert.",
       "imported_legacy_status": "'{{status}}' ist ein älterer Statusname und wurde daher als '{{mappedTo}}' importiert.",
-      "imported_certified_as_active": "'{{status}}' ist kein Status mehr und wurde daher als '{{mappedTo}}' importiert. Die Zertifizierung wird nicht importiert: Zertifizieren Sie die Entität in Ontos."
+      "imported_certified_as_active": "'{{status}}' ist kein Status mehr und wurde daher als '{{mappedTo}}' importiert. Die Zertifizierung wird nicht importiert: Zertifizieren Sie die Entität in Ontos.",
+      "imported_lifecycle_group_unknown": "Der Lebenszyklus „{{group}}“ existiert hier nicht und wurde daher in „{{mappedTo}}“ importiert."
     },
     "notice": {
       "deprecated": "Veraltet",

@@ -13,7 +13,7 @@ import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
 import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
-import { DataContractStatus } from '@/lib/odcs-lifecycle'
+import { useStatusOptions } from '@/hooks/use-lifecycle-stage-groups'
 
 type WizardProps = {
   isOpen: boolean
@@ -22,8 +22,6 @@ type WizardProps = {
   initial?: any
 }
 
-// The contract lifecycle statuses (archived is not one: it was renamed retired)
-const statuses = Object.values(DataContractStatus)
 
 interface SemanticConcept {
   iri: string
@@ -64,6 +62,20 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const { t } = useTranslation(['data-contracts', 'common'])
   const { refetch: refetchDomains } = useDomains()
   const { toast } = useToast()
+  // The statuses offered, from the API: a new contract's group stages; an
+  // edited one's current stage and the moves its group allows
+  const currentStatus = typeof initial?.status === 'string' ? initial.status.toLowerCase() : ''
+  const { options: statusStages, initial: initialStageOfGroup } = useStatusOptions(
+    'data_contract',
+    {
+      entityId: initial?.id ?? null,
+      groupId: initial?.lifecycle_stage_group_id ?? null,
+      currentStatus,
+    },
+  )
+  const statuses = statusStages.length ? statusStages.map((st) => st.key) : ['draft']
+  // Where a new contract (and a partial save) starts: its lifecycle's first stage
+  const initialKey = initialStageOfGroup?.key ?? 'draft'
 
   // Helper function to handle domain-related errors
   const handleDomainError = async (error: any) => {
@@ -227,6 +239,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
   const [lookupOpen, setLookupOpen] = useState(false)
   const wasOpenRef = useRef(false)
+  // Whether the user picked a status: until then a new contract follows its group's first stage
+  const statusPickedRef = useRef(false)
 
   // Initialize wizard state only when the dialog transitions from closed -> open
   useEffect(() => {
@@ -237,7 +251,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         setStep(1)
         setName('')
         setVersion('1.0.0')
-        setStatus('draft')
+        statusPickedRef.current = false
+        setStatus(initialKey)
         setOwner('')
         setDomainIds([])
         setPrimaryDomainId(null)
@@ -290,6 +305,17 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       wasOpenRef.current = false
     }
   }, [isOpen, initial])
+
+  // The group's stages arrive after the dialog opens: a new contract starts in the
+  // first one unless the user already chose a status
+  useEffect(() => {
+    if (isOpen && !initial && !statusPickedRef.current) setStatus(initialKey)
+  }, [isOpen, initial, initialKey])
+
+  const pickStatus = (value: string) => {
+    statusPickedRef.current = true
+    setStatus(value)
+  }
 
   const addObject = () => setSchemaObjects((prev) => [...prev, { name: '', properties: [] }])
   const removeObject = (idx: number) => setSchemaObjects((prev) => prev.filter((_, i) => i !== idx))
@@ -487,7 +513,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       const payload = {
         name,
         version,
-        status: 'draft', // Draft status for partial saves
+        status: initialKey, // The first stage for partial saves
         owner,
         domainIds: domainIds, // Multi-domain assignment (primary included)
         primaryDomainId: primaryDomainId,
@@ -634,7 +660,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                   </div>
                   <div>
                     <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.status', 'Status *')}</Label>
-                    <Select value={status} onValueChange={setStatus}>
+                    <Select value={status} onValueChange={pickStatus}>
                       <SelectTrigger className="mt-1">
                         <SelectValue placeholder={t('common:placeholders.selectStatus', 'Select status')} />
                       </SelectTrigger>

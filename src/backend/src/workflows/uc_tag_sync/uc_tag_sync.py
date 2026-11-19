@@ -1570,9 +1570,11 @@ def remove_delivered_tags(
     except Exception as e:
         if is_missing_object_error(e):
             raise UcObjectMissing(object_type, object_name) from None
-        msg = f"[WARN] Failed to read tags of {object_type} {object_name}: {e}"
-        print(msg)
-        return (0, [], dict(delivered))
+        # Not "nothing to remove": the object keeps its record and the run fails,
+        # or a lost permission would end green with the tags still in place
+        msg = f"Failed to read tags of {object_type} {object_name}: {e}"
+        print(f"[WARN] {msg}")
+        return (0, [msg], dict(delivered))
     to_remove = [
         k for k in delivered if k in existing and same_tag_value(delivered[k], existing[k])
     ]
@@ -1625,10 +1627,6 @@ class SyncResult:
     warnings: List[str] = field(default_factory=list)
 
 
-# Unity Catalog documents no column tag DDL for a metric view's dimensions and measures:
-# ALTER VIEW has no ALTER COLUMN clause, and neither ALTER TABLE ... ALTER COLUMN nor
-# SET TAG ON COLUMN names metric views. Their fields are left untagged until the job
-# writes metric view tags with a documented statement.
 def all_linked_objects_missing(result: SyncResult) -> bool:
     """True when the run tried linked objects and UC reported every one as not found.
 
@@ -1641,6 +1639,10 @@ def all_linked_objects_missing(result: SyncResult) -> bool:
     )
 
 
+# Unity Catalog documents no column tag DDL for a metric view's dimensions and measures:
+# ALTER VIEW has no ALTER COLUMN clause, and neither ALTER TABLE ... ALTER COLUMN nor
+# SET TAG ON COLUMN names metric views. Their fields are left untagged until the job
+# writes metric view tags with a documented statement.
 METRIC_VIEW_TABLE_TYPE = "METRIC_VIEW"
 MISSING_OBJECT_SKIP_REASON = "not found in Unity Catalog"
 METRIC_VIEW_FIELD_SKIP_REASON = (
@@ -2025,7 +2027,9 @@ def handle_legacy_tag_cleanup(
 
                 except Exception as e:
                     # Not marked checked: the next full run scans again.
-                    print(f"[WARN] Legacy tag scan of catalog {cat} failed: {e}")
+                    msg = f"Legacy tag scan of catalog {cat} failed: {e}"
+                    print(f"[WARN] {msg}")
+                    errors.append(msg)
                     scan_failed = True
 
             if candidates_found > 0:

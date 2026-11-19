@@ -47,6 +47,24 @@ def test_odcs_logical_type(physical, logical):
     assert odcs_logical_type(physical) == logical
 
 
+@pytest.mark.parametrize(
+    "physical, logical",
+    [
+        # types the Catalog Commander's old substring mapper typed (it matched "int", "float", ...)
+        ("int8", "integer"), ("INT16", "integer"), ("INT32", "integer"), ("uint8", "integer"),
+        ("UINT64", "integer"), ("unsigned int", "integer"), ("MEDIUMINT", "integer"),
+        ("tinyint unsigned", "integer"), ("INT4", "integer"),
+        ("float32", "number"), ("FLOAT64", "number"), ("float8", "number"),
+        ("double precision", "number"),
+        ("datetime2", "timestamp"), ("datetime2(7)", "timestamp"),
+        ("smalldatetime", "timestamp"), ("datetimeoffset", "timestamp"),
+        ("timestamptz", "timestamp"), ("TIMESTAMP_NS", "timestamp"), ("timetz", "time"),
+    ],
+)
+def test_odcs_logical_type_aliases(physical, logical):
+    assert odcs_logical_type(physical) == logical
+
+
 def _type(db, name):
     found = db.query(AssetTypeDb).filter(AssetTypeDb.name == name).first()
     if found:

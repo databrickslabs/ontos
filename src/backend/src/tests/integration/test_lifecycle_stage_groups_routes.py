@@ -98,6 +98,26 @@ class TestGroups:
         assert res.json()['detail']['code'] == 'lifecycle_stage_in_use'
 
 
+    def test_a_stale_expected_updated_at_in_the_body_is_a_409(self, client):
+        """In the body a ``+00:00`` offset needs no URL-encoding."""
+        created = _create(client, _group(name=f'Stale {uuid.uuid4().hex[:6]}'))
+        body = _group(name=created['name'])
+        url = f"/api/lifecycle-stage-groups/{created['id']}"
+        fresh = client.put(url, json={**body, 'expected_updated_at': created['updated_at']})
+        assert fresh.status_code == 200, fresh.text
+        stale_read = '2000-01-01T00:00:00+00:00'
+        stale = client.put(url, json={**body, 'expected_updated_at': stale_read})
+        assert stale.status_code == 409, stale.text
+        assert stale.json()['detail']['code'] == 'lifecycle_group_changed'
+
+    def test_a_stale_expected_updated_at_in_the_query_is_still_a_409(self, client):
+        created = _create(client, _group(name=f'Stale {uuid.uuid4().hex[:6]}'))
+        res = client.put(f"/api/lifecycle-stage-groups/{created['id']}",
+                         json=_group(name=created['name']),
+                         params={'expected_updated_at': '2000-01-01T00:00:00+00:00'})
+        assert res.status_code == 409, res.text
+
+
 class TestEntityLifecycle:
     def test_an_entity_shows_its_group_stage_and_next_stages(self, client, db_session):
         pid = _product(db_session, 'approved')

@@ -9,8 +9,8 @@
   stages and transitions and is validated (one first stage, all stages
   reachable from it, an active stage); a stage in use or named by a workflow
   rule can't be removed, a default or assigned group can't be deleted. ``PUT``
-  takes ``expected_updated_at`` (the ``updated_at`` read): a group saved since
-  is a 409 ``lifecycle_group_changed``.
+  takes ``expected_updated_at`` (the ``updated_at`` read) in the body (the query
+  parameter still works): a group saved since is a 409 ``lifecycle_group_changed``.
 - ``GET /api/lifecycle/{entity_type}/{entity_id}``: the entity's group, stage and
   allowed next stages, for whoever may read the entity.
 - ``POST /api/lifecycle/{entity_type}/{entity_id}/change-group``: Read/Write on
@@ -37,7 +37,7 @@ from src.controller.lifecycle_service import (
 )
 from src.models.lifecycle_stage_groups import (
     ChangeLifecycleGroupPayload, EntityLifecycleRead, LifecycleEntityType,
-    LifecycleStageGroupRead, LifecycleStageGroupWrite,
+    LifecycleStageGroupRead, LifecycleStageGroupUpdate, LifecycleStageGroupWrite,
 )
 from src.repositories.lifecycle_stage_groups_repository import (
     entity_model, lifecycle_stage_groups_repo,
@@ -176,20 +176,22 @@ async def create_lifecycle_stage_group(
 @router.put('/lifecycle-stage-groups/{group_id}', response_model=LifecycleStageGroupRead)
 async def update_lifecycle_stage_group(
     group_id: str,
-    body: LifecycleStageGroupWrite,
+    body: LifecycleStageGroupUpdate,
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     expected_updated_at: Optional[datetime] = Query(
-        None, description="The group's updated_at as read; 409 when it was saved since",
+        None, description="Deprecated: send expected_updated_at in the body instead "
+                          "(the body wins when both are sent)",
     ),
     _: bool = Depends(PermissionChecker(SETTINGS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     try:
         row = lifecycle_service.save_group(
-            db, body.model_dump(), current_user.username, group_id=group_id,
-            expected_updated_at=expected_updated_at,
+            db, body.model_dump(exclude={'expected_updated_at'}), current_user.username,
+            group_id=group_id,
+            expected_updated_at=body.expected_updated_at or expected_updated_at,
         )
     except CodedValueError as e:
         logger.info("Refused lifecycle stage group %s: %s", group_id, e)

@@ -758,6 +758,32 @@ def _future_contract_fields(
     return derived
 
 
+def _with_stored_primary_domain(
+    db: Session, context: 'StepContext', stored: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """A stored contract with its primary domain as ``domain`` (name) and ``domain_id``.
+
+    The keys ``_proposed_values`` gives an update that sends a domain, so a rule
+    reads the same keys whether or not the update changes the domain. Kept as
+    loaded when the loader already gives ``domain_id`` (#1540) or for other types.
+    """
+    if (context.entity_type or '').lower() != 'data_contract' or not stored \
+            or 'domain_id' in stored:
+        return stored
+    from src.repositories.entity_domain_association_repository import entity_domain_repo
+
+    assigned = entity_domain_repo.get_domains_for_entity(
+        db, entity_type='data_contract', entity_id=str(context.entity_id),
+    )
+    # Primary first; the first one when none is primary, as the update picks it
+    primary = assigned[0] if assigned else None
+    return {
+        **stored,
+        'domain_id': str(primary.domain_id) if primary else None,
+        'domain': primary.domain_name if primary else None,
+    }
+
+
 def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     """The entity as it will be after a before_update gate's update.
 
@@ -783,6 +809,7 @@ def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]
             tags = _future_tags(db, payload, stored, _deferred_removals(context))
             proposed = _proposed_values(db, payload)
             derived = _future_contract_fields(db, context, payload, stored, proposed)
+            stored = _with_stored_primary_domain(db, context, stored)
     except Exception as e:
         raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
     stored = stored or {}

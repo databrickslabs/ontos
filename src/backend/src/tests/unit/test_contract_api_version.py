@@ -97,3 +97,35 @@ def test_a_self_service_contract_stores_the_odcs_spelling(manager, db_session, s
         odcs["apiVersion"] = sent
 
     assert manager.create_from_odcs_dict(db_session, odcs, "alice").api_version == stored
+
+
+def _export(manager, db, api_version, with_team=False):
+    from src.db_models.data_contracts import DataContractTeamDb, DataContractTeamMetadataDb
+
+    cid = _contract(db, api_version)
+    if with_team:
+        db.add(DataContractTeamDb(contract_id=cid, username="alice@example.com", role="owner"))
+        db.add(DataContractTeamMetadataDb(contract_id=cid, name="Orders team"))
+        db.flush()
+    db.expire_all()
+    return manager.build_odcs_from_db(db.get(DataContractDb, cid), db)
+
+
+@pytest.mark.parametrize("stored, exported", [
+    ("3.0.2", "v3.0.2"), ("v3.0.2", "v3.0.2"), (None, "v3.1.0"), ("", "v3.1.0"),
+])
+def test_the_export_writes_the_odcs_spelling_of_a_stored_value(
+    manager, db_session, stored, exported,
+):
+    """A row stored before the spelling fix ('3.0.2') exports as a valid ODCS apiVersion."""
+    assert _export(manager, db_session, stored)["apiVersion"] == exported
+
+
+def test_the_export_reads_a_stored_version_without_v_as_v3_1_0_for_the_team_object(
+    manager, db_session,
+):
+    """'3.1.0' stored without its "v" gets the v3.1.0 team object, as 'v3.1.0' does."""
+    exported = _export(manager, db_session, "3.1.0", with_team=True)
+
+    assert exported["apiVersion"] == "v3.1.0"
+    assert exported["team"]["name"] == "Orders team"

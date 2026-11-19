@@ -1401,7 +1401,15 @@ export default function DataContractDetails() {
         }
       }
       
-      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.updateFailed', 'Update failed'))
+      if (!res.ok) {
+        // A coded refusal (a before_update gate's, a lifecycle check's) in the user's language
+        const body = await res.json().catch(() => null)
+        throw new Error(statusChangeErrorText(
+          apiErrorOf(body, t('data-contracts:detailsView.errors.updateFailed', 'Update failed')),
+          t,
+          'data-contracts',
+        ))
+      }
       await fetchDetails()
       if (showToast) {
         toast({ title: t('data-contracts:detailsView.toast.updatedTitle', 'Updated'), description: t('data-contracts:detailsView.toast.contractUpdated', 'Contract updated successfully.') })

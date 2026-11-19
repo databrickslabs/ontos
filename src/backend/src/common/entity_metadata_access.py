@@ -11,7 +11,8 @@ an asset (``entity_type == "asset"``) the asset's own rules apply instead
 - attaching a row that belongs to an asset to any other entity needs that asset
   to be readable too, as its merged metadata goes to every ``data-domains`` reader,
   and merged metadata leaves out attached rows of assets the user can't read
-  (``readable_row_filter``); attaching an unknown row is 404 ``metadata_row_not_found``;
+  (``readable_row_filter``); attaching an unknown row, or a row of an asset the user
+  can't read, is the same 404 ``metadata_row_not_found``;
 - the asset must exist (404 ``asset_not_found``), except on the routes that
   address a row by its own id, so orphaned rows can still be cleaned up.
 
@@ -178,8 +179,11 @@ async def _ensure_asset(
         ))
 
 
-async def _ensure_attached_row_readable(request: Request, db, user_details, auth_manager) -> None:
-    """The row to attach must exist (404), and if it belongs to an asset, be readable.
+async def _ensure_attached_row_readable(request: Request, db, user_details) -> None:
+    """The row to attach must exist and, if it belongs to an asset, be readable.
+
+    Both refusals are the same 404 ``metadata_row_not_found``, as on the routes
+    by row id: a row id doesn't tell whether it belongs to an unreadable asset.
 
     The attach body isn't validated yet (dependencies run first): a body that
     isn't a JSON object, or doesn't name a row, is left to the route's 422. A
@@ -193,16 +197,13 @@ async def _ensure_attached_row_readable(request: Request, db, user_details, auth
     if asset_type not in ('rich_text', 'link', 'document') or row_id is None:
         return
     owner = get_metadata_manager(request).get_row_owner(db, kind=asset_type, id=str(row_id))
-    if owner is None:
-        # An attachment must point at a row.
+    if owner is None or (
+        _is_asset_row(owner) and not _asset_readable(request, db, user_details, owner[1])
+    ):
+        # An attachment must point at a row the caller may read.
         _refuse(status.HTTP_404_NOT_FOUND, MetadataRowNotFoundError(
             f"No {asset_type} has the id '{row_id}'.", kind=asset_type, rowId=str(row_id),
         ))
-    if _is_asset_row(owner):
-        await _ensure_asset(
-            request, db, user_details, auth_manager, owner[1], FeatureAccessLevel.READ_ONLY,
-            require_asset=False,
-        )
 
 
 class EntityMetadataPermission:
@@ -245,7 +246,7 @@ class EntityMetadataPermission:
         if entity_type != ASSET_ENTITY_TYPE:
             await self._domain_checker(request, user_details, auth_manager)
             if self.attaching:
-                await _ensure_attached_row_readable(request, db, user_details, auth_manager)
+                await _ensure_attached_row_readable(request, db, user_details)
             return
         entity_id = request.path_params.get('entity_id') or request.query_params.get('entity_id')
         await _ensure_asset(
@@ -256,7 +257,7 @@ class EntityMetadataPermission:
             await self._domain_checker(request, user_details, auth_manager)
         if self.attaching:
             await self._domain_read_checker(request, user_details, auth_manager)
-            await _ensure_attached_row_readable(request, db, user_details, auth_manager)
+            await _ensure_attached_row_readable(request, db, user_details)
 
 
 def _rich_text_owner(request: Request, db):

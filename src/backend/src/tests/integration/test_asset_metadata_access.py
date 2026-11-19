@@ -482,13 +482,26 @@ def test_assets_alone_cannot_attach_a_contract_note_to_an_asset(
     _assert_data_domains_refusal(response)
 
 
+def _unknown_row_detail(kind, row_id):
+    """What attaching a row the caller may not see answers, unknown or not."""
+    return {
+        'code': 'metadata_row_not_found', 'message': f"No {kind} has the id '{row_id}'.",
+        'params': {'kind': kind, 'rowId': row_id},
+    }
+
+
 @pytest.mark.parametrize('asset_type, seed_key', [
     ('rich_text', 'note'), ('link', 'link'), ('document', 'doc'),
 ])
 @pytest.mark.parametrize('entity_type', OTHER_TYPES)
 def test_a_steward_cannot_attach_a_row_of_an_asset_to_another_entity(
         client, db_session, asset, ws, act_as, entity_type, asset_type, seed_key):
-    """The attached row would be returned to every data-domains reader of the entity."""
+    """The attached row would be returned to every data-domains reader of the entity.
+
+    Answered exactly as an unknown row (status, code, params, message: see
+    ``test_attaching_an_unknown_row_is_404``), as on the routes by row id: a row id
+    doesn't tell that it belongs to an unreadable asset.
+    """
     ids = _seed(db_session, 'asset', str(asset.id))
     act_as('Data Steward')
 
@@ -496,8 +509,8 @@ def test_a_steward_cannot_attach_a_row_of_an_asset_to_another_entity(
                            params={'entity_id': 'target-1'},
                            json={'asset_type': asset_type, 'asset_id': ids[seed_key]})
 
-    assert response.status_code == 403, response.text
-    assert _code(response) == 'asset_read_denied'
+    assert response.status_code == 404, response.text
+    assert response.json()['detail'] == _unknown_row_detail(asset_type, ids[seed_key])
 
 
 def test_a_steward_attaches_a_row_of_an_accessible_asset_to_another_entity(
@@ -538,19 +551,22 @@ def test_attaching_an_unknown_row_is_404(
                            json={'asset_type': asset_type, 'asset_id': row_id})
 
     assert response.status_code == 404, response.text
-    assert _code(response) == 'metadata_row_not_found'
-    assert response.json()['detail']['params'] == {'kind': asset_type, 'rowId': row_id}
+    assert response.json()['detail'] == _unknown_row_detail(asset_type, row_id)
     assert MetadataManager().list_attachments(
         db_session, entity_type=entity_type, entity_id=entity_id) == []
 
 
-def test_an_unknown_row_is_404_only_after_the_access_checks(client, act_as):
+@pytest.mark.parametrize('row', ['unknown', 'unreadable asset'])
+def test_an_unknown_row_is_404_only_after_the_access_checks(
+        client, db_session, asset, act_as, row):
     """A Consumer can't attach: the data-domains refusal comes first."""
+    row_id = (str(uuid.uuid4()) if row == 'unknown'
+              else _seed(db_session, 'asset', str(asset.id))['note'])
     act_as('Data Consumer')
 
     response = client.post('/api/entities/data_product/attachments',
                            params={'entity_id': 'target-1'},
-                           json={'asset_type': 'rich_text', 'asset_id': str(uuid.uuid4())})
+                           json={'asset_type': 'rich_text', 'asset_id': row_id})
 
     _assert_data_domains_refusal(response)
 

@@ -422,7 +422,7 @@ with the warning `rule_fields_unavailable` and the number of such entities. Fiel
 source that could be read are still evaluated.
 
 A run that evaluated nothing (every entity not evaluated, or none matched), or that failed,
-has no score: the API returns `score: null` and the UI shows "No score". Each run also has
+has no score: it stores null, the API returns `score: null` and the UI shows "No score". Each run also has
 `coverage` (`evaluated`, `not_evaluated`), shown when some entities were not evaluated, so a
 score measured on a few of many tables says so. The policy list, the stats and the trend use
 the policy's latest run that has a score.

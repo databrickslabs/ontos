@@ -22,6 +22,7 @@ import { useUICustomizationStore } from '@/stores/ui-customization-store';
 export default function Home() {
   const { t } = useTranslation(['home', 'common']);
   const appName = useUICustomizationStore((s) => s.getAppName());
+  const appTagline = useUICustomizationStore((s) => s.appTagline?.trim() || null);
   const { permissions, isLoading: permissionsLoading, hasPermission, requestableRoles, appliedRoleId } = usePermissions();
 
   // Get available tiles based on permissions
@@ -73,6 +74,16 @@ export default function Home() {
                 {t('home:title', { appName })}
               </h1>
             </div>
+            {appTagline && (
+              <p
+                data-brand="tagline"
+                className={
+                  '-mt-2 mb-3 text-sm font-medium tracking-[0.2em] text-muted-foreground'
+                }
+              >
+                {appTagline}
+              </p>
+            )}
             <p className="text-lg text-muted-foreground mb-6">
               {t('home:tagline')}
             </p>

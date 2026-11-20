@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import DomainMultiSelector from '@/components/ui/domain-multi-selector'
+import DomainMultiSelector, { resolveEffectivePrimary } from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
 import type { DataContractCreate } from '@/types/data-contract'
 import type { TeamSummary } from '@/types/team'
@@ -208,7 +208,9 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         apiVersion: 'v3.1.0',
         // On edit, the domain assignment is sent only when it was changed, so a
         // dialog opened with a partial assignment can't overwrite the stored one.
-        ...(!isEdit || domainsChanged ? { domainIds, primaryDomainId } : {}),
+        ...(!isEdit || domainsChanged
+          ? { domainIds, primaryDomainId: resolveEffectivePrimary(domainIds, primaryDomainId) }
+          : {}),
         tenant: tenant.trim() || undefined,
         // On edit, only a changed selection is sent ([] removes every tag, #1435).
         tags: (isEdit ? tagsForUpdate(tags, initialFormValues?.tags) : tagsForCreate(tags)) as any,

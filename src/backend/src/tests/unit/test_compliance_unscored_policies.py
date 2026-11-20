@@ -118,4 +118,3 @@ def test_the_api_models_carry_no_score_as_none():
     assert CompliancePolicy(
         id=uuid.uuid4(), name='p', description='d', rule='MATCH (p:data_product)',
     ).compliance is None
-

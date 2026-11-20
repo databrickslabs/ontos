@@ -282,4 +282,3 @@ def test_a_job_policy_run_reads_as_the_app_with_the_shared_cache(db_session):
     assert kwargs['statement_cache'] is cache
     assert kwargs['run_identity'].on_behalf_of_user is False
     assert 'current_user' not in kwargs  # no user: the run is the app's
-

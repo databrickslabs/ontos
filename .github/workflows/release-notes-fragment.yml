@@ -1,0 +1,93 @@
+name: release-notes-fragment
+
+# Release notes are one fragment file per PR under
+# src/docs/release-notes/unreleased/<section>/<slug>.md (see the README in
+# src/docs/release-notes/). This check validates the fragments a PR adds or
+# changes, and asks for one when the PR title type is feat, fix or perf.
+# Opt out with the `no-release-notes` label. While existing PRs still edit
+# src/docs/RELEASE_NOTES.md, editing it also passes (with a notice).
+# Removal trigger for that transition rule: delete the `RELEASE_NOTES.md` branch
+# below once the first release has been assembled from fragments and no open PR
+# edits that file any more (then a PR editing it should fail like any other).
+
+on:
+  pull_request:
+    branches: [main, development]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: release notes fragment
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history, so the PR's files can be listed against its base commit
+          # whether or not GitHub could build a merge commit (it cannot when the PR
+          # has conflicts, and then the checkout is the PR head itself).
+          fetch-depth: 0
+
+      - name: Check release notes fragments
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          NO_RELEASE_NOTES: ${{ contains(github.event.pull_request.labels.*.name, 'no-release-notes') }}
+        run: |
+          set -euo pipefail
+          dir=src/docs/release-notes/unreleased
+          # File names come from the PR: escape what a workflow command would decode,
+          # so a name cannot end the annotation and start another one.
+          escape() {
+            local text=$1
+            text=${text//'%'/'%25'}
+            text=${text//$'\r'/'%0D'}
+            text=${text//$'\n'/'%0A'}
+            printf '%s' "$text"
+          }
+          if [ "$(git rev-parse --verify -q 'HEAD^2^{commit}' || true)" = "$HEAD_SHA" ]; then
+            # Checkout is the merge commit GitHub built: its first parent is the current
+            # base tip (the event's base sha can be older when the base moved since).
+            changed=$(git diff --name-only --diff-filter=ACMR HEAD^1 HEAD)
+          else
+            # No merge commit (the PR has conflicts): the checkout is the PR head.
+            changed=$(git diff --name-only --diff-filter=ACMR "${BASE_SHA}...HEAD")
+          fi
+
+          # Fragments added or changed by this PR.
+          fragments=()
+          while IFS= read -r file; do
+            if [ -n "$file" ]; then fragments+=("$file"); fi
+          done < <(printf '%s\n' "$changed" | grep -E "^${dir}/.+" | grep -v '/\.gitkeep$' || true)
+          if [ "${#fragments[@]}" -gt 0 ]; then
+            python3 src/scripts/assemble_release_notes.py --check "${fragments[@]}" > problems.txt || {
+              while IFS= read -r line; do echo "::error title=Release notes fragment::$(escape "$line")"; done < problems.txt
+              exit 1
+            }
+            echo "Fragments are valid: ${fragments[*]}"
+            exit 0
+          fi
+
+          # No fragment: is one required?
+          type=$(printf '%s' "$PR_TITLE" | sed -E -n 's/^([a-z]+)(\([^)]*\))?!?:.*/\1/p')
+          case "$type" in
+            feat|fix|perf) ;;
+            *) echo "PR type '${type:-none}' needs no release note."; exit 0 ;;
+          esac
+          if [ "$NO_RELEASE_NOTES" = "true" ]; then
+            echo "Label no-release-notes: no fragment required."
+            exit 0
+          fi
+          if printf '%s\n' "$changed" | grep -qx 'src/docs/RELEASE_NOTES.md'; then
+            echo "::notice title=Release notes::This PR edits src/docs/RELEASE_NOTES.md. Please move the entry to a fragment in ${dir}/<section>/<slug>.md (see src/docs/release-notes/README.md)."
+            exit 0
+          fi
+          echo "::error title=Release notes fragment missing::A '${type}' PR needs a release note. Add ${dir}/<section>/<slug>.md (see src/docs/release-notes/README.md), or add the label no-release-notes."
+          exit 1

@@ -1227,6 +1227,20 @@ class SettingsManager:
 
         try:
             content = doc_path.read_text(encoding="utf-8")
+            fragments_dir = doc_info.get("release_note_fragments")
+            if fragments_dir:
+                # Show unreleased fragments in the Unreleased block; the file is not changed.
+                from src.common.release_notes import render_unreleased_view
+
+                docs_root = self._get_docs_directory().resolve()
+                fragments_path = (docs_root / fragments_dir).resolve()
+                if fragments_path.is_relative_to(docs_root):
+                    content = render_unreleased_view(content, fragments_path)
+                else:
+                    logger.warning(
+                        f"Ignoring release_note_fragments of '{doc_name}': "
+                        "the folder is outside the docs directory"
+                    )
             logger.info(f"Successfully loaded '{doc_name}' ({len(content)} chars)")
 
             result = {

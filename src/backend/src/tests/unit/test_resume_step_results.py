@@ -14,6 +14,7 @@ import uuid
 from src.common.workflow_executor import WorkflowExecutor, substitute_template
 from src.controller.workflows_manager import WorkflowsManager
 from src.db_models.process_workflows import WorkflowStepExecutionDb
+from src.db_models.tags import TagDb
 from src.models.process_workflows import (
     EntityType,
     ProcessWorkflowCreate,
@@ -28,6 +29,7 @@ from src.repositories.process_workflows_repository import (
     process_workflow_repo,
     workflow_execution_repo,
 )
+from src.repositories.tags_repository import tag_namespace_repo
 
 RULE = 'MATCH (obj:Object) ASSERT 1 = 1'
 FAILING_RULE = 'MATCH (obj:Object) ASSERT 1 = 2'
@@ -50,6 +52,16 @@ def _create(db, steps):
         trigger=WorkflowTrigger(type=TriggerType.MANUAL, entity_types=[EntityType.TABLE]),
         steps=steps,
     ))
+
+
+def _seed_tags(db, *names):
+    """Create the tags an Assign Tag step names: a tag not in the catalog fails the step
+    (``tag_not_found``), and the run would end before the approval."""
+    namespace = tag_namespace_repo.get_or_create_default_namespace(db, user_email=None)
+    for name in names:
+        if not db.query(TagDb).filter_by(namespace_id=namespace.id, name=name).first():
+            db.add(TagDb(name=name, status='active', namespace_id=namespace.id))
+    db.commit()
 
 
 class _Spy:
@@ -305,8 +317,9 @@ def test_a_decided_pause_record_is_not_the_open_one(db_session, monkeypatch):
 
 
 def test_tags_set_in_the_run_context_survive_the_approval(db_session):
-    """Tags only in the run context (no tag with that name exists) are what a
-    step after the approval sees, as it would without the pause."""
+    """Tags the steps before the approval set in the run context are what a step
+    after it sees, as it would without the pause."""
+    _seed_tags(db_session, 'tier', 'reviewed')
     db_workflow = _create(db_session, [
         _step('tier', StepType.ASSIGN_TAG, {'key': 'tier', 'value': 'gold'}, on_pass='flag'),
         _step('flag', StepType.ASSIGN_TAG, {'key': 'reviewed'}, on_pass='drop'),
@@ -331,6 +344,7 @@ def test_tags_set_in_the_run_context_survive_the_approval(db_session):
 
 
 def test_tags_changed_between_two_approvals_survive_both(db_session):
+    _seed_tags(db_session, 'tier')
     db_workflow = _create(db_session, [
         _approval('first', on_pass='tier'),
         _step('tier', StepType.ASSIGN_TAG, {'key': 'tier', 'value': 'gold'}, on_pass='second'),
@@ -349,6 +363,7 @@ def test_tags_changed_between_two_approvals_survive_both(db_session):
 
 
 def _paused_with_tags(db_session):
+    _seed_tags(db_session, 'tier')
     db_workflow = _create(db_session, [
         _step('tier', StepType.ASSIGN_TAG, {'key': 'tier', 'value': 'gold'}, on_pass='approve'),
         _approval('approve', on_pass='done'),

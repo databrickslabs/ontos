@@ -69,7 +69,7 @@ def tag_sync():
 @pytest.fixture
 def job(tag_sync, monkeypatch):
     """Run ``main()`` against an in-memory UC tag store and delivery state."""
-    env = SimpleNamespace(store={}, state={}, assigned=[], unassigned=[])
+    env = SimpleNamespace(store={}, state={}, assigned=[], unassigned=[], missing_runs={})
 
     def existing(_spark, object_type, name, prefix):
         tags = env.store.get((object_type, name), {})
@@ -83,10 +83,11 @@ def job(tag_sync, monkeypatch):
         env.unassigned.append((object_type, name, key))
         env.store.get((object_type, name), {}).pop(key, None)
 
-    def save(_engine, state, _prefix, replace=True):
+    def save(_engine, state, _prefix, replace=True, missing_runs=None):
         copied = json.loads(json.dumps(state))
         if replace:
             env.state = copied
+            env.missing_runs = json.loads(json.dumps(missing_runs or {}))
         else:
             # Like the real save: merged key by key, every stored key stays.
             for object_type, objects in copied.items():
@@ -104,6 +105,8 @@ def job(tag_sync, monkeypatch):
     monkeypatch.setattr(tag_sync, "read_delivery_state",
                         lambda _engine: copy.deepcopy(env.state))
     monkeypatch.setattr(tag_sync, "save_delivery_state", save)
+    monkeypatch.setattr(tag_sync, "read_missing_runs",
+                        lambda _engine: copy.deepcopy(env.missing_runs))
     monkeypatch.setattr(tag_sync, "handle_legacy_tag_cleanup",
                         lambda *_a, **_k: (0, []))
     for name in ("WorkspaceClient", "create_engine_from_params", "SparkSession"):
@@ -561,7 +564,7 @@ def test_a_corrupt_stored_state_is_replaced_but_does_not_open_the_legacy_cleanup
     monkeypatch.setattr(tag_sync, "handle_legacy_tag_cleanup",
                         lambda *_a, **kwargs: legacy.append(kwargs) or (0, []))
     monkeypatch.setattr(tag_sync, "save_delivery_state",
-                        lambda _e, _state, _p, replace=True: saves.append(replace))
+                        lambda _e, _state, _p, replace=True, **_kw: saves.append(replace))
 
     job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")],
             extra_args=["--cleanup_legacy_tags", "true"])
@@ -732,10 +735,10 @@ def test_two_configs_producing_the_same_key_are_reported(tag_sync, job, capsys):
     assert f"[WARN] Tag key {DOMAIN_KEY} is produced by several configs" in out
 
 
-def test_an_unreadable_state_keeps_matching_tags_recorded(tag_sync, job, monkeypatch):
+def test_an_unreadable_state_does_not_adopt_matching_tags(tag_sync, job, monkeypatch):
     """The state can't be read: nothing is removed, a tag that already has the desired
-    value stays recorded (merged into the stored state), and the stored records stay,
-    also the ones of the tagged table (ontos_semantic_old, removed by a later run)."""
+    value is not recorded (it may be the customer's), and the stored records stay, also
+    the ones of the tagged table (ontos_semantic_old, removed by a later run)."""
     _seed(job, ORDERS, {DOMAIN_KEY: "Finance", "ontos_semantic_old": "stale"})
     job.state = {"TABLE": {OTHER: {DOMAIN_KEY: "Sales"},
                            ORDERS: {"ontos_semantic_old": "stale"}}}
@@ -746,9 +749,26 @@ def test_an_unreadable_state_keeps_matching_tags_recorded(tag_sync, job, monkeyp
     # The schema and catalog get the aggregated tag; the table is already right.
     assert [a for a in job.assigned if a[0] == "TABLE"] == [] and job.unassigned == []
     assert job.state["TABLE"] == {
-        ORDERS: {DOMAIN_KEY: "Finance", "ontos_semantic_old": "stale"},
+        ORDERS: {"ontos_semantic_old": "stale"},
         OTHER: {DOMAIN_KEY: "Sales"},
     }
+
+
+def test_an_unreadable_state_then_an_unlink_keeps_the_customer_tag(
+    tag_sync, job, monkeypatch
+):
+    """A customer set the desired value by hand; the state can't be read on that run.
+    A later unlink must not remove the customer's tag."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "Finance"})
+    monkeypatch.setattr(tag_sync, "read_delivery_state", lambda _engine: None)
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
+
+    monkeypatch.setattr(tag_sync, "read_delivery_state",
+                        lambda _engine: copy.deepcopy(job.state))
+    job.run([DOMAIN_CFG], [])
+
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}
+    assert [u for u in job.unassigned if u[0] == "TABLE"] == []
 
 
 # A stored state that doesn't parse -------------------------------------------------
@@ -800,9 +820,10 @@ def test_a_corrupt_state_is_not_replaced_when_the_backup_fails(tag_sync, job, mo
     assert _app_settings(engine) == {"uc_tag_sync_delivery_state": CORRUPT_WITH_RECORDS}
 
 
-def test_a_corrupt_state_keeps_tags_that_already_match_recorded(tag_sync, job, monkeypatch):
-    """With a corrupt state, a tag already right on a linked table is recorded in the
-    repaired state, so a later unlink still removes it."""
+def test_a_corrupt_state_does_not_adopt_tags_that_already_match(tag_sync, job, monkeypatch):
+    """With a corrupt state, a tag already right on a linked table may be the
+    customer's: it is not recorded, so a later unlink leaves it (the accepted cost: a
+    tag the job wrote before the state broke stays as an orphan)."""
     import sqlalchemy
 
     engine = _sqlite_engine(sqlalchemy, CORRUPT_WITH_RECORDS)
@@ -814,8 +835,247 @@ def test_a_corrupt_state_keeps_tags_that_already_match_recorded(tag_sync, job, m
     job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
 
     assert [a for a in job.assigned if a[0] == "TABLE"] == []
-    assert _stored_objects(engine)["TABLE"] == {ORDERS: {DOMAIN_KEY: "Finance"}}
+    assert _stored_objects(engine)["TABLE"].get(ORDERS, {}) == {}
 
     job.run([DOMAIN_CFG], [])
 
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}
+
+
+# Linked objects Unity Catalog doesn't find -----------------------------------------
+
+def _not_found_for(tag_sync, monkeypatch, *missing):
+    """Tag reads of the ``missing`` objects raise what UC raises for a missing table."""
+    real_existing = tag_sync.get_existing_prefixed_tags
+
+    def existing(spark, object_type, name, prefix):
+        if any(name == m or name.startswith(f"{m}.") or m.startswith(f"{name}.")
+               for m in missing):
+            raise RuntimeError(f"[TABLE_OR_VIEW_NOT_FOUND] `{name}` cannot be found. "
+                               "SQLSTATE: 42P01")
+        return real_existing(spark, object_type, name, prefix)
+
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags", existing)
+
+
+def test_a_run_where_every_linked_object_is_missing_fails(tag_sync, job, monkeypatch,
+                                                          capsys):
+    """A renamed catalog: every linked object is not found. Before, the run printed
+    errors=0 and ended green with nothing synced."""
+    _not_found_for(tag_sync, monkeypatch, ORDERS, OTHER)
+
+    with pytest.raises(SystemExit) as exit_info:
+        job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                               _table(tag_sync, fqn=OTHER, domain="Sales")])
+
+    assert exit_info.value.code == 1
+    out = capsys.readouterr().out
+    assert "errors=0" in out and "missing=" in out
+    assert "[ERROR] None of the" in out and "linked UC object(s) was found" in out
+    assert job.assigned == []
+
+
+def test_a_run_where_some_linked_objects_are_missing_succeeds(tag_sync, job, monkeypatch,
+                                                              capsys):
+    _not_found_for(tag_sync, monkeypatch, OTHER)
+
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                           _table(tag_sync, fqn=OTHER, domain="Sales")])
+
+    out = capsys.readouterr().out
+    assert "[ERROR] None of the" not in out
+    assert "completed successfully" in out
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}
+
+
+def test_a_run_whose_only_missing_objects_are_unlinked_succeeds(tag_sync, job,
+                                                                monkeypatch, capsys):
+    """A dropped table that only has a record left: skipped, the run stays green."""
+    job.state = _previous(OTHER, {DOMAIN_KEY: "Sales"})
+    _not_found_for(tag_sync, monkeypatch, OTHER)
+
+    job.run([DOMAIN_CFG], [])
+
+    out = capsys.readouterr().out
+    assert "completed successfully" in out
+    assert "[ERROR] None of the" not in out
+
+
+# A run stopped inside the per-object loop ------------------------------------------
+
+def _stop_on(tag_sync, monkeypatch, fqn, stop):
+    """assign_tag calls ``stop()`` when it reaches ``fqn`` (after ORDERS was tagged)."""
+    real_assign = tag_sync.assign_tag
+
+    def assign(spark, object_type, name, key, value):
+        if name == fqn:
+            stop()
+        real_assign(spark, object_type, name, key, value)
+
+    monkeypatch.setattr(tag_sync, "assign_tag", assign)
+
+
+@pytest.mark.parametrize("how", ["interrupt", "sigterm"])
+def test_a_run_stopped_inside_the_object_loop_saves_what_it_wrote(
+    tag_sync, job, monkeypatch, how
+):
+    """The run is cancelled while tagging OTHER, after ORDERS was tagged: the state holds
+    ORDERS, OTHER keeps its record, the schema not reached keeps its record, and an
+    unlink later leaves no orphan."""
+    import os
+    import signal
+
+    _seed(job, OTHER, {DOMAIN_KEY: "Old"})
+    _seed(job, SCHEMA, {DOMAIN_KEY: "Sales"}, object_type="SCHEMA")
+    job.state = {"TABLE": {OTHER: {DOMAIN_KEY: "Old"}},
+                 "SCHEMA": {SCHEMA: {DOMAIN_KEY: "Sales"}}}
+
+    def interrupt():
+        raise KeyboardInterrupt
+
+    def sigterm():
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    fixture_assign = tag_sync.assign_tag
+    _stop_on(tag_sync, monkeypatch, OTHER, interrupt if how == "interrupt" else sigterm)
+    with pytest.raises((KeyboardInterrupt, SystemExit)):
+        job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                               _table(tag_sync, fqn=OTHER, domain="Finance")])
+
+    assert job.state["TABLE"] == {ORDERS: {DOMAIN_KEY: "Finance"},
+                                  OTHER: {DOMAIN_KEY: "Old"}}
+    assert job.state["SCHEMA"][SCHEMA] == {DOMAIN_KEY: "Sales"}
+    # The handler is restored after the run.
+    assert signal.getsignal(signal.SIGTERM) is not tag_sync._exit_on_sigterm
+
+    monkeypatch.setattr(tag_sync, "assign_tag", fixture_assign)
+    job.run([DOMAIN_CFG], [])
+
     assert job.store[("TABLE", ORDERS)] == {}
+    assert job.store[("TABLE", OTHER)] == {}
+    assert job.store[("SCHEMA", SCHEMA)] == {}
+
+
+def test_the_state_is_saved_every_checkpoint_during_the_run(tag_sync, job, monkeypatch):
+    """A run killed without a chance to save loses at most CHECKPOINT_EVERY objects:
+    by the time OTHER is tagged, ORDERS is already in the stored state."""
+    monkeypatch.setattr(tag_sync, "CHECKPOINT_EVERY", 1)
+    seen = {}
+
+    def look():
+        seen.update(copy.deepcopy(job.state.get("TABLE", {})))
+
+    _stop_on(tag_sync, monkeypatch, OTHER, look)
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                           _table(tag_sync, fqn=OTHER, domain="Finance")])
+
+    assert seen == {ORDERS: {DOMAIN_KEY: "Finance"}}
+
+
+# A record of an object UC hasn't found for many runs --------------------------------
+
+def test_a_record_not_found_for_many_runs_in_a_row_is_dropped(tag_sync, job, monkeypatch,
+                                                              capsys):
+    """A dropped table that only has a record left: each full run counts it, and the
+    record is dropped (logged) at MISSING_RUNS_BEFORE_DROP, so the skip stops recurring
+    and a table recreated under that name doesn't lose a tag the job never wrote."""
+    monkeypatch.setattr(tag_sync, "MISSING_RUNS_BEFORE_DROP", 3)
+    job.state = _previous(OTHER, {DOMAIN_KEY: "Sales"})
+    _not_found_for(tag_sync, monkeypatch, OTHER)
+
+    job.run([DOMAIN_CFG], [])
+    job.run([DOMAIN_CFG], [])
+    assert job.state["TABLE"] == {OTHER: {DOMAIN_KEY: "Sales"}}
+    assert job.missing_runs["TABLE"] == {OTHER: 2}
+    capsys.readouterr()
+
+    job.run([DOMAIN_CFG], [])
+    assert job.state["TABLE"] == {}
+    assert job.missing_runs.get("TABLE", {}) == {}
+    assert f"Dropped the delivery record of TABLE {OTHER}" in capsys.readouterr().out
+
+    # Recreated with the same tag value by someone else: not removed.
+    monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags",
+                        lambda _s, t, n, p: dict(job.store.get((t, n), {})))
+    _seed(job, OTHER, {DOMAIN_KEY: "Sales"})
+    job.run([DOMAIN_CFG], [])
+    assert job.store[("TABLE", OTHER)] == {DOMAIN_KEY: "Sales"}
+
+
+def test_a_record_found_again_resets_its_count(tag_sync, job, monkeypatch):
+    job.state = _previous(OTHER, {DOMAIN_KEY: "Sales"})
+    job.missing_runs = {"TABLE": {OTHER: 5}}
+    _seed(job, OTHER, {DOMAIN_KEY: "Sales"})
+
+    job.run([DOMAIN_CFG], [_table(tag_sync, fqn=OTHER, domain="Sales")])
+
+    assert job.state["TABLE"] == {OTHER: {DOMAIN_KEY: "Sales"}}
+    assert job.missing_runs.get("TABLE", {}) == {}
+
+
+def test_a_partial_run_does_not_count_missing_runs(tag_sync, job, monkeypatch):
+    monkeypatch.setattr(tag_sync, "MISSING_RUNS_BEFORE_DROP", 1)
+    job.state = _previous(OTHER, {DOMAIN_KEY: "Sales"})
+    _not_found_for(tag_sync, monkeypatch, OTHER)
+
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                           _table(tag_sync, fqn=OTHER, domain="Sales")],
+            extra_args=("--limit", "5"))
+
+    assert job.state["TABLE"][OTHER] == {DOMAIN_KEY: "Sales"}
+    assert job.missing_runs == {}
+
+
+def test_missing_run_counts_are_stored_and_kept_by_a_merging_save(tag_sync):
+    import sqlalchemy
+
+    engine = _sqlite_engine(sqlalchemy, None)
+    counts = {"TABLE": {OTHER: 2}}
+    assert tag_sync.save_delivery_state(engine, _previous(OTHER, {DOMAIN_KEY: "S"}), "",
+                                        replace=True, missing_runs=counts) is None
+    assert tag_sync.read_missing_runs(engine) == counts
+
+    assert tag_sync.save_delivery_state(engine, _previous(ORDERS, {DOMAIN_KEY: "F"}), "",
+                                        replace=False) is None
+    assert tag_sync.read_missing_runs(engine) == counts
+    assert set(_stored_objects(engine)["TABLE"]) == {OTHER, ORDERS}
+
+
+def test_restoring_a_sigterm_handler_not_set_from_python_uses_the_default(
+    tag_sync, job, monkeypatch
+):
+    import signal
+
+    calls = []
+
+    def fake_signal(signum, handler):
+        calls.append(handler)
+        return None  # what signal.signal returns for a handler not set from Python
+
+    monkeypatch.setattr(tag_sync.signal, "signal", fake_signal)
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")])
+
+    assert calls == [tag_sync._exit_on_sigterm, signal.SIG_DFL]
+
+
+def test_a_run_stopped_part_way_keeps_the_counts_of_objects_not_reached(
+    tag_sync, job, monkeypatch
+):
+    """ORDERS is found (its count resets), the run stops on THIRD: OTHER and the schema
+    it never reached keep their not-found counts."""
+    third = "main.finance.third"
+    job.state = {"TABLE": {ORDERS: {DOMAIN_KEY: "Finance"}, OTHER: {DOMAIN_KEY: "S"}},
+                 "SCHEMA": {SCHEMA: {DOMAIN_KEY: "Sales"}}}
+    job.missing_runs = {"TABLE": {ORDERS: 2, OTHER: 5}, "SCHEMA": {SCHEMA: 3}}
+    _seed(job, ORDERS, {DOMAIN_KEY: "Finance"})
+
+    def interrupt():
+        raise KeyboardInterrupt
+
+    _stop_on(tag_sync, monkeypatch, third, interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance"),
+                               _table(tag_sync, fqn=third, domain="Finance")])
+
+    assert job.missing_runs == {"TABLE": {OTHER: 5}, "SCHEMA": {SCHEMA: 3},
+                                "COLUMN": {}, "CATALOG": {}}

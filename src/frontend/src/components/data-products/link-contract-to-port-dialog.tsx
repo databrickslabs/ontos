@@ -189,7 +189,7 @@ export default function LinkContractToPortDialog({
               onClick={() => setIsCreateContractOpen(true)}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Create New Contract
+              {t('data-products:linkContract.actions.createNewContract')}
             </Button>
           </div>
 
@@ -199,7 +199,7 @@ export default function LinkContractToPortDialog({
               onClick={() => onOpenChange(false)} 
               disabled={isSubmitting}
             >
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button 
               onClick={handleSubmit} 
@@ -208,10 +208,10 @@ export default function LinkContractToPortDialog({
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Linking...
+                  {t('data-products:linkContract.actions.linking')}
                 </>
               ) : (
-                'Link Contract'
+                t('data-products:linkContract.actions.linkContract')
               )}
             </Button>
           </DialogFooter>

@@ -12,7 +12,7 @@ import re
 import argparse
 import traceback
 from typing import List, Dict, Any, Optional, Set, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -455,8 +455,8 @@ def create_contracts(
                     "api_version": "v3.1.0",
                     "version": "1.0.0",
                     "status": "draft",
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
                 })
                 conn.commit()
             
@@ -556,9 +556,9 @@ def create_products(
                     "status": "draft",
                     "name": product_name,
                     "version": "1.0.0",
-                    "product_created_ts": datetime.utcnow(),
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
+                    "product_created_ts": datetime.now(timezone.utc),
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
                 })
                 conn.commit()
             
@@ -655,8 +655,8 @@ def create_domains(
                     "id": domain_id,
                     "name": domain_name,
                     "created_by": created_by,
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
                 })
                 conn.commit()
             

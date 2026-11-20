@@ -5,7 +5,6 @@ Provides CRUD operations for workflow definitions and execution management.
 """
 
 import json
-from datetime import datetime
 from typing import Any, Collection, Dict, List, Optional, Union
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
@@ -24,9 +23,10 @@ from src.common.workflow_approvals import (
     is_handled, open_approval_ids, open_execution_approvals,
 )
 from src.common.logging import get_logger
+from src.common.timestamps import utc_now
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.notifications_manager import NotificationsManager
-from src.common.workflow_executor import WorkflowExecutor
+from src.common.workflow_executor import WorkflowExecutor, public_result_data
 from src.repositories.process_workflows_repository import process_workflow_repo, workflow_execution_repo
 from src.db_models.compliance import CompliancePolicyDb
 from src.db_models.notifications import NotificationDb
@@ -1721,7 +1721,7 @@ def _mark_step_notifications_handled(
                 payload['handled'] = True
                 payload['decision'] = decision or ('approved' if approved else 'rejected')
                 payload['handled_by'] = user_email
-                payload['handled_at'] = datetime.utcnow().isoformat()
+                payload['handled_at'] = utc_now().isoformat()
                 notif.action_payload = json.dumps(payload)
                 db.add(notif)
         except (json.JSONDecodeError, TypeError):
@@ -2357,7 +2357,7 @@ async def get_execution(
             'step_name': se.step_name,
             'status': se.status,
             'passed': se.passed,
-            'result_data': json.loads(se.result_data) if se.result_data else None,
+            'result_data': public_result_data(se.result_data),
             'error_message': se.error_message,
             'message': se.message,
             'duration_ms': se.duration_ms,

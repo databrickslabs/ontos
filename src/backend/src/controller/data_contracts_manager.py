@@ -1707,8 +1707,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         Raises ValueError when that domain is not one of the contract's domains.
         """
-        requested = data_dict.get('primaryDomainId') or data_dict.get('primary_domain_id')
-        primary = self._resolve_domain(db, domain_id=str(requested))
+        from src.common import contract_domain_fields as dom
+
+        field, requested = dom.sent_domain_field(data_dict, dom.PRIMARY_DOMAIN_KEYS)
+        primary = self._resolve_domain(db, domain_id=dom.domain_identifier(field, requested))
         stored = [
             d.domain_id for d in entity_domain_repo.get_domains_for_entity(
                 db, entity_type="data_contract", entity_id=contract_id,
@@ -1721,29 +1723,47 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     def _resolve_domain_assignment(self, db, data_dict: dict) -> tuple[List[str], Optional[str]]:
         """Resolve a contract payload's domain assignment to (domain_ids, primary_domain_id).
 
-        Preference order:
-        1. ``domain_ids`` (list of IDs) + optional ``primary_domain_id``.
-        2. Legacy single ``domainId`` (ID) or ``domain`` (name) → single primary.
-        Each ID is validated (and names resolved) via ``_resolve_domain``.
+        A field counts as sent when its key is present with a non-null value, so ``[]``
+        and ``""`` are values, not absence. Precedence:
+
+        1. ``domainIds`` / ``domain_ids`` (a list) with an optional ``primaryDomainId``.
+           When ``domainIds`` is sent, the legacy ``domainId`` / ``domain`` are ignored:
+           ``domainIds: []`` clears the assignment.
+        2. ``primaryDomainId`` alone (without ``domainIds``) wins over the legacy
+           ``domainId`` / ``domain`` as the single domain.
+        3. Legacy single ``domainId`` (ID) or ``domain`` (name) → single primary.
+
+        A blank identifier (``""``, in any of those fields) is refused with
+        ``invalid_domain_identifier``. Each ID is validated via ``_resolve_domain``.
         """
-        raw_ids = data_dict.get('domain_ids') or data_dict.get('domainIds')
-        if isinstance(raw_ids, list) and raw_ids:
+        from src.common import contract_domain_fields as dom
+
+        sent_ids = dom.sent_domain_field(data_dict, dom.DOMAIN_IDS_KEYS)
+        sent_primary = dom.sent_domain_field(data_dict, dom.PRIMARY_DOMAIN_KEYS)
+        sent_legacy = dom.sent_domain_field(data_dict, dom.LEGACY_DOMAIN_ID_KEYS)
+        # Validate every sent identifier first, so a blank one never clears silently.
+        primary_id = dom.domain_identifier(*sent_primary) if sent_primary else None
+        legacy_id = dom.domain_identifier(*sent_legacy) if sent_legacy else None
+
+        if sent_ids:
+            field, raw_ids = sent_ids
+            if not isinstance(raw_ids, list):
+                raise dom.InvalidDomainIdentifierError(field)
             resolved = []
             for did in raw_ids:
-                rid = self._resolve_domain(db, domain_id=str(did))
-                if rid:
+                rid = self._resolve_domain(db, domain_id=dom.domain_identifier(field, did))
+                if rid and rid not in resolved:
                     resolved.append(rid)
-            primary = data_dict.get('primary_domain_id') or data_dict.get('primaryDomainId')
-            if primary:
-                primary = self._resolve_domain(db, domain_id=str(primary))
+            primary = self._resolve_domain(db, domain_id=primary_id) if primary_id else None
             if primary not in resolved:
                 primary = resolved[0] if resolved else None
             return resolved, primary
 
-        # Legacy single-domain fallback.
         single = None
-        if data_dict.get('domainId'):
-            single = self._resolve_domain(db, domain_id=data_dict.get('domainId'))
+        if primary_id:
+            single = self._resolve_domain(db, domain_id=primary_id)
+        elif legacy_id:
+            single = self._resolve_domain(db, domain_id=legacy_id)
         elif data_dict.get('domain'):
             single = self._resolve_domain(db, domain_name=data_dict.get('domain'))
         return ([single], single) if single else ([], None)
@@ -2635,15 +2655,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             tags_data = data_dict.get('tags')
             
             # Determine whether the caller supplied a domain assignment (multi-domain).
+            from src.common import contract_domain_fields as dom
+
             domains_provided = any(
-                k in data_dict and data_dict.get(k) is not None
-                for k in ('domain_ids', 'domainIds', 'primary_domain_id', 'primaryDomainId', 'domainId', 'domain')
+                data_dict.get(k) is not None
+                for k in (*dom.DOMAIN_IDS_KEYS, *dom.PRIMARY_DOMAIN_KEYS,
+                          *dom.LEGACY_DOMAIN_ID_KEYS, 'domain')
             )
             lone_primary = (
-                data_dict.get('primaryDomainId') or data_dict.get('primary_domain_id')
+                dom.sent_domain_field(data_dict, dom.PRIMARY_DOMAIN_KEYS) is not None
             ) and all(
                 data_dict.get(k) is None
-                for k in ('domain_ids', 'domainIds', 'domainId', 'domain_id', 'domain')
+                for k in (*dom.DOMAIN_IDS_KEYS, *dom.LEGACY_DOMAIN_ID_KEYS, 'domain')
             )
             if lone_primary:
                 # primaryDomainId alone moves the primary within the stored domains

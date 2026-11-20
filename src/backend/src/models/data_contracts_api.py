@@ -497,6 +497,8 @@ _KEEP_IF_NULL = "Omitted or null: the stored value is kept."
 _DOMAINS_NOTE = (
     " A non-null domainIds or domainId replaces the whole assignment; domainIds []"
     " clears it. primaryDomainId alone makes one of the stored domains primary."
+    " Precedence: domainIds (and primaryDomainId) win over the legacy domainId, which"
+    " is then ignored. An empty string is refused (400, invalid_domain_identifier)."
 )
 
 
@@ -508,6 +510,10 @@ class DataContractUpdate(BaseModel):
     domain assignment is replaced as a whole (with ``primaryDomainId`` as its primary),
     so ``domainIds: []`` clears it; ``primaryDomainId`` alone makes one of the stored
     domains primary (another domain is refused); all of them null or omitted keep it.
+    Precedence: ``domainIds`` / ``primaryDomainId`` win over the legacy ``domainId``
+    (``domainIds: []`` with a ``domainId`` clears the domains). A blank identifier
+    (``""``) is refused with a 400 and the code ``invalid_domain_identifier``, never
+    read as "not sent".
     """
     name: Optional[str] = None
     version: Optional[str] = None

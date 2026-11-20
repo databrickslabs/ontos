@@ -63,6 +63,7 @@ from src.controller.lifecycle_fields import contract_status_audit, LifecycleFiel
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.models.data_products import DeprecationPayload
+from src.models.entity_diff import EntityDiffResponse
 from src.common.upload_limits import read_uploads_capped
 from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
@@ -4233,6 +4234,44 @@ async def get_diff_from_parent(
     except Exception as e:
         logger.error("Error getting diff from parent for contract %s", contract_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get diff from parent")
+
+
+@router.get('/data-contracts/{base_id}/diff/{target_id}', response_model=EntityDiffResponse)
+def diff_contract_versions(
+    base_id: str,
+    target_id: str,
+    db: DBSessionDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    scope: dict = Depends(contract_read_scope),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """Diff two versions of a contract family on their ODCS documents (PRD #1086).
+
+    Returns field-level changes, each classified major/minor/patch/none, the
+    suggested next version from ``base``, whether ``target``'s version reflects
+    the changes, and a unified YAML diff. Both contracts must be readable by the
+    caller (same rule as GET /data-contracts/{id}); a miss is a 404.
+    """
+    from src.common.entity_diff import EntityNotFound, EntityTooLarge, VersionFamilyMismatch
+
+    rows = []
+    for contract_id in (base_id, target_id):
+        contract = data_contract_repo.get_with_all(db, id=contract_id)
+        if not contract or not manager.can_read_contract(db, contract, **scope):
+            raise HTTPException(status_code=404, detail="Contract not found")
+        rows.append(contract)
+
+    try:
+        return manager.diff_versions(db, base_id=base_id, target_id=target_id, base=rows[0], target=rows[1])
+    except VersionFamilyMismatch:
+        raise HTTPException(status_code=400, detail="Contracts belong to different version families")
+    except EntityNotFound:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    except EntityTooLarge as e:
+        raise HTTPException(status_code=413, detail=str(e))
+    except Exception:
+        logger.error("Error diffing contracts %s and %s", base_id, target_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to diff contract versions")
 
 
 @router.post('/data-contracts/{contract_id}/commit', response_model=dict)

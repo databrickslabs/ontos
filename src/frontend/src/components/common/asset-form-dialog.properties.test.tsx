@@ -177,6 +177,34 @@ describe('AssetFormDialog edit', () => {
     expect(await screen.findByRole('checkbox', { name: /primary key/i })).toBeInTheDocument();
   });
 
+  it('announces the properties read as a status until it resolves', async () => {
+    const { properties: _omit, ...row } = column as unknown as Record<string, unknown>;
+    let resolveRead: (value: unknown) => void = () => {};
+    mockGet.mockImplementation((url: string) => (
+      url === '/api/assets/col-1'
+        ? new Promise((resolve) => { resolveRead = resolve; })
+        : Promise.resolve({ data: COLUMN_SCHEMA })
+    ));
+    render(
+      <AssetFormDialog
+        isOpen onOpenChange={vi.fn()} onSuccess={vi.fn()}
+        assetTypeId="type-column" assetTypeName="Column"
+        assetTypeIri="http://ontos.app/ontology#Column"
+        asset={row as unknown as AssetRead}
+      />,
+    );
+
+    // The schema has loaded; only the properties read is pending, and it is announced
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('common:assetForm.loadingSchema');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/assets/col-1'));
+
+    resolveRead({ data: column });
+    await screen.findByRole('checkbox', { name: /primary key/i });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('says so and blocks Save when the stored properties cannot be read', async () => {
     const { properties: _omit, ...row } = column as unknown as Record<string, unknown>;
     mockGet.mockImplementation(async (url: string) => (

@@ -71,6 +71,12 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
       return t('workflows:designer.validationIssues.stepsRequired', { defaultValue: fallback });
     case 'duplicate_step_ids':
       return t('workflows:designer.validationIssues.duplicateStepIds', { defaultValue: fallback });
+    case 'evaluate_asset_maturity_trigger_unsupported':
+      return t('workflows:assetMaturityStep.triggerUnsupported', {
+        step: params.step,
+        trigger: getTriggerTypeLabel(String(params.triggerType) as TriggerType, t),
+        defaultValue: fallback,
+      });
     // Trigger entity types (#1151): one the app doesn't know, or one the trigger never fires for
     case 'trigger_entity_type_unknown':
       return t('workflows:triggerEntityChecks.unknownOnSave', {
@@ -111,12 +117,6 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
       return t('workflows:designer.validationIssues.updateGate.stepNotAllowed', {
         step: params.step,
         type: getStepTypeLabel(String(params.stepType) as StepType, t),
-        defaultValue: fallback,
-      });
-    case 'evaluate_asset_maturity_trigger_unsupported':
-      return t('workflows:assetMaturityStep.triggerUnsupported', {
-        step: params.step,
-        trigger: getTriggerTypeLabel(String(params.triggerType) as TriggerType, t),
         defaultValue: fallback,
       });
     case 'policy_check_policy_missing':

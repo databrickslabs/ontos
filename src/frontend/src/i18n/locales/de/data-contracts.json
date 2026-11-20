@@ -529,6 +529,10 @@
     "personal": "Persönlich",
     "requestAccess": "Zugriff anfordern ({{count}})"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} ist leer: Senden Sie eine Domain-ID oder lassen Sie das Feld weg, um die Domains des Vertrags zu behalten.",
+    "primaryDomainNotInDomains": "Die Domain {{primaryDomainId}} gehört nicht zu den Domains des Vertrags und kann daher nicht die primäre Domain sein."
+  },
   "createInline": {
     "title": "Neuen Vertrag erstellen",
     "description": "Erstellen Sie einen minimalen Datenvertrag. Schemas und Qualitätsregeln können Sie später hinzufügen.",
@@ -542,6 +546,9 @@
     "ownerTeamIdPlaceholder": "UUID des Eigentümer-Teams",
     "ownerTeamIdHint": "Optional: Wird vom Produkt übernommen, falls verfügbar",
     "creating": "Wird erstellt..."
+  },
+  "apiVersionErrors": {
+    "unsupported": "apiVersion {{apiVersion}} ist keine ODCS-Version. Verwenden Sie eine ODCS-Version, zum Beispiel v3.1.0."
   },
   "basicForm": {
     "editTitle": "Vertragsmetadaten bearbeiten",

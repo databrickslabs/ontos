@@ -155,6 +155,9 @@ from src.controller.lifecycle_fields import (
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
 from src.common.api_errors import CodedValueError
+from src.common.odcs_api_version import (
+    check_api_version_change, checked_api_version, normalized_api_version,
+)
 
 logger = get_logger(__name__)
 
@@ -677,7 +680,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         status = odcs.get('status') or 'draft'
         owner = odcs.get('owner') or (current_username or 'unknown')
         kind = odcs.get('kind') or 'DataContract'
-        api_version = odcs.get('apiVersion') or 'v3.0.1'
+        # The ODCS spelling ('3.0.2' -> 'v3.0.2'); refused outside the ODCS versions, as on
+        # every create path
+        api_version = checked_api_version(odcs.get('apiVersion') or 'v3.0.1')
         description = odcs.get('description') or {}
 
         # Try to resolve owner as team name
@@ -1005,11 +1010,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
-            'apiVersion': db_obj.api_version or 'v3.1.0',
+            # The ODCS spelling: a row stored before the spelling fix may hold '3.0.2'
+            'apiVersion': normalized_api_version(db_obj.api_version) or 'v3.1.0',
             'name': db_obj.name,
             'version': db_obj.version,
             'status': db_obj.status,
         }
+        # The version checks below read the exported value, not the stored one
+        api_version = odcs['apiVersion']
         
         # Apply multi-domain fields via the export adapter: primary name in `domain`,
         # additional domains under customProperties.additionalDomains, plus app round-trip
@@ -1224,7 +1232,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             if property_quality_checks:
                                 quality = []
                                 for check in property_quality_checks:
-                                    quality_dict = odcs_quality_check(check, db_obj.api_version)
+                                    quality_dict = odcs_quality_check(check, api_version)
                                     quality.append(quality_dict)
                                 prop_dict['quality'] = quality
 
@@ -1255,7 +1263,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         # Property-level checks have property_id set and are exported with their properties
                         if check.property_id is not None:
                             continue
-                        quality_dict = odcs_quality_check(check, db_obj.api_version)
+                        quality_dict = odcs_quality_check(check, api_version)
                         quality.append(quality_dict)
                     schema_dict['quality'] = quality
 
@@ -1343,7 +1351,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             )
 
         if members_list:
-            api_version = db_obj.api_version or 'v3.1.0'
             tm = getattr(db_obj, 'team_metadata', None)
             if api_version >= 'v3.1.0' and tm:
                 team_obj: Dict[str, Any] = {}
@@ -1700,34 +1707,76 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             logger.warning(f"Domain resolution failed: {e}")
             return None
 
+    def _primary_within_stored_domains(
+        self, db, contract_id: str, data_dict: dict,
+    ) -> tuple[List[str], Optional[str]]:
+        """(stored domain ids, new primary) for an update that sends only primaryDomainId.
+
+        Raises ValueError when that domain is not one of the contract's domains.
+        """
+        from src.common import contract_domain_fields as dom
+
+        field, requested = dom.sent_domain_field(data_dict, dom.PRIMARY_DOMAIN_KEYS)
+        primary = self._resolve_domain(db, domain_id=dom.domain_identifier(field, requested))
+        stored = [
+            d.domain_id for d in entity_domain_repo.get_domains_for_entity(
+                db, entity_type="data_contract", entity_id=contract_id,
+            )
+        ]
+        if primary not in stored:
+            raise dom.PrimaryDomainNotAssignedError(primary)
+        return stored, primary
+
     def _resolve_domain_assignment(self, db, data_dict: dict) -> tuple[List[str], Optional[str]]:
         """Resolve a contract payload's domain assignment to (domain_ids, primary_domain_id).
 
-        Preference order:
-        1. ``domain_ids`` (list of IDs) + optional ``primary_domain_id``.
-        2. Legacy single ``domainId`` (ID) or ``domain`` (name) → single primary.
-        Each ID is validated (and names resolved) via ``_resolve_domain``.
+        A field counts as sent when its key is present with a non-null value, so ``[]``
+        and ``""`` are values, not absence. Precedence:
+
+        1. ``domainIds`` / ``domain_ids`` (a list) with an optional ``primaryDomainId``.
+           When ``domainIds`` is sent, the legacy ``domainId`` / ``domain`` are ignored:
+           ``domainIds: []`` clears the assignment.
+        2. ``primaryDomainId`` alone (without ``domainIds``) wins over the legacy
+           ``domainId`` / ``domain`` as the single domain.
+        3. Legacy single ``domainId`` (ID) or ``domain`` (name) → single primary.
+
+        A blank identifier (``""``, in any of those fields, the ``domain`` name included)
+        is refused with ``invalid_domain_identifier``. A ``primaryDomainId`` that is not one
+        of the ``domainIds`` (``[]`` included) is refused with ``primary_domain_not_in_domains``,
+        as when it is sent alone. Each ID is validated via ``_resolve_domain``.
         """
-        raw_ids = data_dict.get('domain_ids') or data_dict.get('domainIds')
-        if isinstance(raw_ids, list) and raw_ids:
+        from src.common import contract_domain_fields as dom
+
+        sent_ids = dom.sent_domain_field(data_dict, dom.DOMAIN_IDS_KEYS)
+        sent_primary = dom.sent_domain_field(data_dict, dom.PRIMARY_DOMAIN_KEYS)
+        sent_legacy = dom.sent_domain_field(data_dict, dom.LEGACY_DOMAIN_ID_KEYS)
+        # Validate every sent identifier first, so a blank one never clears silently.
+        primary_id = dom.domain_identifier(*sent_primary) if sent_primary else None
+        legacy_id = dom.domain_identifier(*sent_legacy) if sent_legacy else None
+        sent_name = dom.sent_domain_field(data_dict, dom.LEGACY_DOMAIN_NAME_KEYS)
+        legacy_name = dom.domain_identifier(*sent_name) if sent_name else None
+
+        if sent_ids:
+            field, raw_ids = sent_ids
+            if not isinstance(raw_ids, list):
+                raise dom.InvalidDomainIdentifierError(field)
             resolved = []
             for did in raw_ids:
-                rid = self._resolve_domain(db, domain_id=str(did))
-                if rid:
+                rid = self._resolve_domain(db, domain_id=dom.domain_identifier(field, did))
+                if rid and rid not in resolved:
                     resolved.append(rid)
-            primary = data_dict.get('primary_domain_id') or data_dict.get('primaryDomainId')
-            if primary:
-                primary = self._resolve_domain(db, domain_id=str(primary))
-            if primary not in resolved:
-                primary = resolved[0] if resolved else None
-            return resolved, primary
+            primary = self._resolve_domain(db, domain_id=primary_id) if primary_id else None
+            if primary and primary not in resolved:
+                raise dom.PrimaryDomainNotAssignedError(primary)
+            return resolved, primary or (resolved[0] if resolved else None)
 
-        # Legacy single-domain fallback.
         single = None
-        if data_dict.get('domainId'):
-            single = self._resolve_domain(db, domain_id=data_dict.get('domainId'))
-        elif data_dict.get('domain'):
-            single = self._resolve_domain(db, domain_name=data_dict.get('domain'))
+        if primary_id:
+            single = self._resolve_domain(db, domain_id=primary_id)
+        elif legacy_id:
+            single = self._resolve_domain(db, domain_id=legacy_id)
+        elif legacy_name:
+            single = self._resolve_domain(db, domain_name=legacy_name)
         return ([single], single) if single else ([], None)
 
     def _create_schema_objects(
@@ -2482,7 +2531,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 draft_owner_id=draft_owner_id,
                 project_id=project_id,  # Add project_id
                 kind=data_dict.get('kind', 'DataContract'),
-                api_version=data_dict.get('apiVersion', 'v3.1.0'),
+                # A dict caller (assistant tools) skips the create model: same check
+                api_version=checked_api_version(data_dict.get('apiVersion', 'v3.1.0')),
                 tenant=data_dict.get('tenant'),
                 data_product=data_dict.get('dataProduct'),
                 description_usage=description.get('usage'),
@@ -2608,6 +2658,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # request-status-change, approve/reject), which runs the gates; an
             # update may only repeat it.
             check_status_unchanged(db_obj.status, data_dict.get('status'))
+            check_api_version_change(db_obj.api_version, data_dict.get('apiVersion'))
             
             # Validate required fields
             if data_dict.get('name') is not None and (not data_dict['name'] or not data_dict['name'].strip()):
@@ -2617,13 +2668,30 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             tags_data = data_dict.get('tags')
             
             # Determine whether the caller supplied a domain assignment (multi-domain).
+            from src.common import contract_domain_fields as dom
+
             domains_provided = any(
-                k in data_dict and data_dict.get(k) is not None
-                for k in ('domain_ids', 'domainIds', 'primary_domain_id', 'primaryDomainId', 'domainId', 'domain')
+                data_dict.get(k) is not None
+                for k in (*dom.DOMAIN_IDS_KEYS, *dom.PRIMARY_DOMAIN_KEYS,
+                          *dom.LEGACY_DOMAIN_ID_KEYS, *dom.LEGACY_DOMAIN_NAME_KEYS)
             )
-            resolved_domain_ids, resolved_primary_domain_id = (
-                self._resolve_domain_assignment(db, data_dict) if domains_provided else ([], None)
+            lone_primary = (
+                dom.sent_domain_field(data_dict, dom.PRIMARY_DOMAIN_KEYS) is not None
+            ) and all(
+                data_dict.get(k) is None
+                for k in (*dom.DOMAIN_IDS_KEYS, *dom.LEGACY_DOMAIN_ID_KEYS,
+                          *dom.LEGACY_DOMAIN_NAME_KEYS)
             )
+            if lone_primary:
+                # primaryDomainId alone moves the primary within the stored domains
+                resolved_domain_ids, resolved_primary_domain_id = (
+                    self._primary_within_stored_domains(db, contract_id, data_dict)
+                )
+            else:
+                resolved_domain_ids, resolved_primary_domain_id = (
+                    self._resolve_domain_assignment(db, data_dict)
+                    if domains_provided else ([], None)
+                )
 
             # Extract description fields from nested dict or flat keys
             description = data_dict.get('description')
@@ -3099,7 +3167,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             status_val = normalize_new_status(parsed_odcs.get('status'), CONTRACT_STATUSES)
             owner_val = parsed_odcs.get('owner') or current_user or 'system'
             kind_val = parsed_odcs.get('kind', 'DataContract')
-            api_version_val = parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version', 'v3.1.0')
+            # The ODCS spelling ('3.0.2' -> 'v3.0.2'). A value outside the ODCS versions is
+            # refused (a failed import item with its code), as on every create path
+            api_version_val = checked_api_version(
+                parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version') or 'v3.1.0'
+            )
             
             # Extract description fields
             description = parsed_odcs.get('description', {})

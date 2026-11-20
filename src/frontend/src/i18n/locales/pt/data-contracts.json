@@ -529,6 +529,10 @@
     "personal": "Pessoal",
     "requestAccess": "Solicitar Acesso ({{count}})"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} está vazio: envie o id de um domínio ou omita o campo para manter os domínios do contrato.",
+    "primaryDomainNotInDomains": "O domínio {{primaryDomainId}} não é um dos domínios do contrato, então não pode ser o domínio principal."
+  },
   "createInline": {
     "title": "Criar Novo Contrato",
     "description": "Crie um contrato de dados mínimo. Você pode adicionar esquemas e regras de qualidade depois.",
@@ -542,6 +546,9 @@
     "ownerTeamIdPlaceholder": "UUID da equipe proprietária",
     "ownerTeamIdHint": "Opcional: Herdado do produto, se disponível",
     "creating": "Criando..."
+  },
+  "apiVersionErrors": {
+    "unsupported": "O apiVersion {{apiVersion}} não é uma versão ODCS. Use uma das versões ODCS, por exemplo v3.1.0."
   },
   "basicForm": {
     "editTitle": "Editar Metadados do Contrato",

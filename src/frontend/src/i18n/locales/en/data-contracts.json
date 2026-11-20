@@ -529,6 +529,10 @@
     "personal": "Personal",
     "requestAccess": "Request Access ({{count}})"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} is empty: send a domain id, or leave the field out to keep the contract's domains.",
+    "primaryDomainNotInDomains": "Domain {{primaryDomainId}} is not one of the contract's domains, so it cannot be the primary domain."
+  },
   "createInline": {
     "title": "Create New Contract",
     "description": "Create a minimal data contract. You can add schemas and quality rules later.",
@@ -542,6 +546,9 @@
     "ownerTeamIdPlaceholder": "UUID of owning team",
     "ownerTeamIdHint": "Optional: Inherited from product if available",
     "creating": "Creating..."
+  },
+  "apiVersionErrors": {
+    "unsupported": "apiVersion {{apiVersion}} is not an ODCS version. Use one of the ODCS versions, for example v3.1.0."
   },
   "basicForm": {
     "editTitle": "Edit Contract Metadata",

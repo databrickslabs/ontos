@@ -6,9 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import DomainMultiSelector from '@/components/ui/domain-multi-selector';
+import DomainMultiSelector, {
+  resolveEffectivePrimary,
+} from '@/components/ui/domain-multi-selector';
 import { Loader2 } from 'lucide-react';
 import { internalErrorText } from '@/lib/server-error-text';
+import { contractDomainErrorText } from '@/lib/contract-domain-error';
+import { odcsApiVersionErrorText } from '@/lib/odcs-api-version-error';
 
 type PrefillData = {
   domain?: string;
@@ -83,14 +87,14 @@ export default function CreateContractInlineDialog({
         version: version.trim(),
         status: status,
         kind: 'DataContract',
-        apiVersion: '3.0.2'
+        apiVersion: 'v3.1.0'
       };
 
       // Add optional fields if provided
       if (ownerTeamId.trim()) payload.owner_team_id = ownerTeamId.trim();
       if (domainIds.length > 0) {
         payload.domainIds = domainIds;
-        payload.primaryDomainId = primaryDomainId;
+        payload.primaryDomainId = resolveEffectivePrimary(domainIds, primaryDomainId);
       }
       if (tenant.trim()) payload.tenant = tenant.trim();
 
@@ -103,7 +107,9 @@ export default function CreateContractInlineDialog({
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(
-          internalErrorText(errorText) ?? (errorText || t('data-contracts:createInline.createError', 'Failed to create contract'))
+          contractDomainErrorText(errorText, t) ?? odcsApiVersionErrorText(errorText, t) ??
+            internalErrorText(errorText) ??
+            (errorText || t('data-contracts:createInline.createError', 'Failed to create contract'))
         );
       }
 

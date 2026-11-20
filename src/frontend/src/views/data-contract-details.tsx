@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { buildContractMetadataUpdate } from '@/lib/contract-metadata-payload'
+import { contractDomainErrorText } from '@/lib/contract-domain-error'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import DeprecationNotice from '@/components/common/deprecation-notice'
 import { useTranslation } from 'react-i18next'
@@ -74,6 +75,7 @@ import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error'
+import { odcsApiVersionErrorText } from '@/lib/odcs-api-version-error'
 
 // Status-based editability constants
 // Only draft/proposed contracts can be edited in place
@@ -975,7 +977,9 @@ export default function DataContractDetails() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => null)
-        throw new Error(statusChangeErrorText(
+        const versionError = odcsApiVersionErrorText(body, t)
+        if (versionError) throw new Error(versionError)
+        throw new Error(contractDomainErrorText(body, t) ?? statusChangeErrorText(
           apiErrorOf(body, t('data-contracts:detailsView.errors.updateFailed', 'Update failed')),
           t,
           'data-contracts',

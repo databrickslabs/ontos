@@ -529,6 +529,10 @@
     "personal": "Persoonlijk",
     "requestAccess": "Toegang aanvragen ({{count}})"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} is leeg: stuur een domein-id mee of laat het veld weg om de domeinen van het contract te behouden.",
+    "primaryDomainNotInDomains": "Domein {{primaryDomainId}} is geen van de domeinen van het contract en kan dus niet het primaire domein zijn."
+  },
   "createInline": {
     "title": "Nieuw contract aanmaken",
     "description": "Maak een minimaal datacontract aan. U kunt later schema's en kwaliteitsregels toevoegen.",
@@ -542,6 +546,9 @@
     "ownerTeamIdPlaceholder": "UUID van het eigenaarsteam",
     "ownerTeamIdHint": "Optioneel: Overgeërfd van product indien beschikbaar",
     "creating": "Aanmaken..."
+  },
+  "apiVersionErrors": {
+    "unsupported": "apiVersion {{apiVersion}} is geen ODCS-versie. Gebruik een van de ODCS-versies, bijvoorbeeld v3.1.0."
   },
   "basicForm": {
     "editTitle": "Contractmetadata bewerken",

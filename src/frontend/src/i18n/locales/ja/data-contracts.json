@@ -529,6 +529,10 @@
     "personal": "個人用",
     "requestAccess": "アクセスをリクエスト（{{count}}）"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} が空です。ドメイン ID を送信するか、フィールドを省略してコントラクトのドメインを維持してください。",
+    "primaryDomainNotInDomains": "ドメイン {{primaryDomainId}} はコントラクトのドメインに含まれていないため、プライマリドメインにできません。"
+  },
   "createInline": {
     "title": "新しいコントラクトを作成",
     "description": "最小限のデータコントラクトを作成します。スキーマや品質ルールは後で追加できます。",
@@ -542,6 +546,9 @@
     "ownerTeamIdPlaceholder": "所有チームの UUID",
     "ownerTeamIdHint": "任意: 利用可能な場合はプロダクトから継承されます",
     "creating": "作成中..."
+  },
+  "apiVersionErrors": {
+    "unsupported": "apiVersion {{apiVersion}} は ODCS のバージョンではありません。ODCS のバージョン (例: v3.1.0) を使用してください。"
   },
   "basicForm": {
     "editTitle": "コントラクトのメタデータを編集",

@@ -501,7 +501,7 @@ class EntityTagAssociationRepository(CRUDBase[EntityTagAssociationDb, BaseModel,
 tag_namespace_repo = TagNamespaceRepository(TagNamespaceDb)
 tag_repo = TagRepository(TagDb)
 tag_namespace_permission_repo = TagNamespacePermissionRepository(TagNamespacePermissionDb)
-entity_tag_repo = EntityTagAssociationRepository(EntityTagAssociationDb) 
+entity_tag_repo = EntityTagAssociationRepository(EntityTagAssociationDb)
 
 
 # Tags the shipped default workflows assign (data/default_workflows.yaml)

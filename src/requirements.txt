@@ -639,9 +639,9 @@ fastapi==0.141.1 \
     # via
     #   -r src/backend/requirements.in
     #   mlflow-skinny
-filelock==4.2.4 \
-    --hash=sha256:301241438c57936ef93f4243a94f2559022268bfcf9b375a9a72eb0f8db8358e \
-    --hash=sha256:c6d8663535e1650ee430507b4ffbac7b464dd64b7647ea0112a9f406499d163d
+filelock==4.2.10 \
+    --hash=sha256:9479aaeb4db20b5a53e3da28493edd24720b66b8a0b84030aa56ccdf243d6857 \
+    --hash=sha256:fcc3c0cb8bfe7f4b3bb0e231c04b15dbad068cb3c2515f343d8fde4dce93bd5d
     # via -r src/requirements.in
 flask==3.0.3 \
     --hash=sha256:34e815dfaa43340d1d15a5c3a02b8476004037eb4840b34910c6e21679d288f3 \

@@ -166,6 +166,31 @@ def test_a_conditional_keeps_its_branch_across_the_pause(db_session):
     assert spy.seen['done']['check']['passed'] is True
 
 
+def test_a_conditional_keeps_the_message_and_data_later_steps_saw(db_session):
+    db_workflow = _create(db_session, [
+        _step(
+            'check', StepType.CONDITIONAL, {'condition': '1 != 1'},
+            on_pass='approve', on_fail='approve',
+        ),
+        _approval('approve', on_pass='done'),
+        _step('done', StepType.PASS),
+    ])
+    before = WorkflowExecutor(db_session)
+    spy_before = _Spy(before)
+    paused = _run(db_session, db_workflow.id, before)
+    live = spy_before.seen['approve']['check']
+    assert live['message'] == 'Condition evaluated to: False'
+
+    after = WorkflowExecutor(db_session)
+    spy_after = _Spy(after)
+    _resume(after, paused.id)
+
+    assert spy_after.seen['done']['check'] == live
+    assert substitute_template(
+        '${step_results.check.message}', spy_after.context,
+    ) == 'Condition evaluated to: False'
+
+
 def test_two_approvals_in_one_run_keep_every_earlier_result(db_session):
     db_workflow = _create(db_session, [
         _step('validate', StepType.VALIDATION, {'rule': RULE}, on_pass='first'),

@@ -252,7 +252,9 @@ def test_an_update_with_a_legacy_domain_id_alone_still_replaces_the_domain(db_se
     assert _update(db_session, created.id, domainId=second) == {second}
 
 
-@pytest.mark.parametrize("fields", [{"domain": ""}, {"domain": "  "}, {"domainIds": ["x"], "domain": ""}])
+@pytest.mark.parametrize("fields", [
+    {"domain": ""}, {"domain": "  "}, {"domainIds": ["x"], "domain": ""},
+])
 def test_a_blank_domain_name_does_not_clear_the_domains_of_an_update(db_session: Session, fields):
     """The legacy ``domain`` (name) counts as sent when present: blank is refused instead of
     resolving to "no domain" and clearing them. The assistant's update tool sends a dict

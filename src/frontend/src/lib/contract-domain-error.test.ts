@@ -22,7 +22,8 @@ describe('contractDomainErrorText', () => {
 
   it('explains a blank domain identifier with its field', () => {
     expect(contractDomainErrorText(blank, i18n.t)).toBe(
-      "primaryDomainId is empty: send a domain id, or leave the field out to keep the contract's domains.",
+      "primaryDomainId is empty: send a domain id, or leave the field out to keep " +
+        "the contract's domains.",
     );
   });
 

@@ -96,6 +96,7 @@
       "create_asset_review": "Asset-beoordeling",
       "webhook": "Webhook",
       "grant_permissions": "Machtigingen Verlenen",
+      "evaluate_asset_maturity": "Assetvolwassenheid evalueren",
       "on_behalf_of": "Namens",
       "legal_document": "Juridisch Document",
       "acknowledgement_checklist": "Bevestigingschecklist",
@@ -559,6 +560,22 @@
       "previewCancelled": "Voorvertoning geannuleerd"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "Catalogus",
+    "catalogPlaceholder": "Alle catalogi",
+    "schema": "Schema",
+    "schemaPlaceholder": "Alle schema’s (vereist een catalogus)",
+    "help": "Evalueert de volwassenheid van de tabel-, view- en metric-view-assets in dit bereik, zoals Instellingen > Volwassenheidsniveaus, en legt de aantallen vast in het stapresultaat. Gebruik een geplande trigger om het regelmatig uit te voeren.",
+    "identityNote": "De run leest Unity Catalog-tabellen met de identiteit van de app. Deze workflow opslaan, activeren of uitvoeren vereist schrijftoegang tot Instellingen.",
+    "triggerHint": "Deze stap draait alleen in geplande en handmatige workflows.",
+    "allCatalogs": "Alle catalogi",
+    "triggerUnsupported": "Stap '{{step}}' evalueert de assetvolwassenheid, die alleen in geplande en handmatige workflows draait, niet bij {{trigger}}.",
+    "permissionRequired": "Deze workflow voert de evaluatie van de assetvolwassenheid uit. Opslaan, activeren of uitvoeren vereist schrijftoegang tot Instellingen.",
+    "summary": "{{evaluated}} van {{total}} assets geëvalueerd: {{changed}} van niveau veranderd, {{skipped}} overgeslagen, {{errors}} fouten",
+    "errors": {
+      "maturity_bulk_scope_invalid": "Vul een catalogus in voor het schema, zonder punten of backticks."
+    }
+  },
   "entityTypeSelect": {
     "label": "Van toepassing op",
     "helper": "Op welke soorten objecten dit wordt geactiveerd",
@@ -582,6 +599,9 @@
       "tag_not_found": "Tag '{{tag}}' is niet gevonden in de tagcatalogus, dus die is niet toegekend",
       "update_gate_step_not_allowed": "Een {{stepType}}-stap kan niet in een before-update-gate draaien: wat hij doet zou blijven staan als de update wordt geweigerd. Verwijder de stap of verplaats hem naar een on-update-workflow.",
       "approval_rejected": "Verzoek afgewezen",
+      "maturity_bulk_run_in_progress": "Er loopt al een bulkevaluatie van de assetvolwassenheid, dus deze run is niet gestart",
+      "maturity_bulk_scope_invalid": "De catalogus of het schema van de stap is ongeldig",
+      "maturity_bulk_run_failed": "De bulkevaluatie van de assetvolwassenheid is mislukt; de details staan in het serverlog",
       "output_port_contracts_missing": "Publiceren niet mogelijk: de uitvoerpoorten {{ports}} moeten datacontracten toegewezen hebben",
       "output_port_contracts_unapproved": "Publiceren niet mogelijk: deze uitvoerpoorten hebben niet-goedgekeurde contracten: {{ports}}. De contracten moeten eerst worden goedgekeurd.",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} kon niet worden geladen om de regel te evalueren",

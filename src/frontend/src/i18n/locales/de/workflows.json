@@ -96,6 +96,7 @@
       "create_asset_review": "Asset-Überprüfung",
       "webhook": "Webhook",
       "grant_permissions": "Berechtigungen erteilen",
+      "evaluate_asset_maturity": "Asset-Reifegrad bewerten",
       "on_behalf_of": "Im Namen von",
       "legal_document": "Rechtsdokument",
       "acknowledgement_checklist": "Bestätigungs-Checkliste",
@@ -559,6 +560,22 @@
       "previewCancelled": "Vorschau abgebrochen"
     }
   },
+  "assetMaturityStep": {
+    "catalog": "Katalog",
+    "catalogPlaceholder": "Alle Kataloge",
+    "schema": "Schema",
+    "schemaPlaceholder": "Alle Schemas (benötigt einen Katalog)",
+    "help": "Bewertet den Reifegrad der Tabellen-, View- und Metric-View-Assets in diesem Bereich wie Einstellungen > Reifegrade und speichert die Zahlen im Schrittergebnis. Mit einem geplanten Trigger läuft er regelmäßig.",
+    "identityNote": "Der Lauf liest Unity-Catalog-Tabellen mit der Identität der App. Speichern, Aktivieren oder Ausführen dieses Workflows erfordert Schreibzugriff auf die Einstellungen.",
+    "triggerHint": "Dieser Schritt läuft nur in geplanten und manuellen Workflows.",
+    "allCatalogs": "Alle Kataloge",
+    "triggerUnsupported": "Schritt '{{step}}' bewertet den Asset-Reifegrad und läuft nur in geplanten und manuellen Workflows, nicht bei {{trigger}}.",
+    "permissionRequired": "Dieser Workflow führt die Bewertung des Asset-Reifegrads aus. Speichern, Aktivieren oder Ausführen erfordert Schreibzugriff auf die Einstellungen.",
+    "summary": "{{evaluated}} von {{total}} Assets bewertet: {{changed}} mit geändertem Reifegrad, {{skipped}} übersprungen, {{errors}} Fehler",
+    "errors": {
+      "maturity_bulk_scope_invalid": "Geben Sie für das Schema einen Katalog an, ohne Punkte oder Backticks."
+    }
+  },
   "entityTypeSelect": {
     "label": "Gilt für",
     "helper": "Auf welche Arten von Objekten dies angewendet wird",
@@ -582,6 +599,9 @@
       "tag_not_found": "Die Tag '{{tag}}' wurde im Tag-Katalog nicht gefunden und daher nicht zugewiesen",
       "update_gate_step_not_allowed": "Ein {{stepType}}-Schritt kann nicht in einem before-update-Gate laufen: Was er tut, bliebe bestehen, wenn die Aktualisierung abgelehnt wird. Entfernen Sie den Schritt oder verschieben Sie ihn in einen on-update-Workflow.",
       "approval_rejected": "Anfrage abgelehnt",
+      "maturity_bulk_run_in_progress": "Es läuft bereits eine Massenbewertung des Asset-Reifegrads, daher wurde dieser Lauf nicht gestartet",
+      "maturity_bulk_scope_invalid": "Der Katalog oder das Schema des Schritts ist ungültig",
+      "maturity_bulk_run_failed": "Die Massenbewertung des Asset-Reifegrads ist fehlgeschlagen; Details stehen im Server-Log",
       "output_port_contracts_missing": "Veröffentlichung nicht möglich: Den Ausgabeports {{ports}} müssen Datenverträge zugewiesen sein",
       "output_port_contracts_unapproved": "Veröffentlichung nicht möglich: Diese Ausgabeports haben nicht genehmigte Verträge: {{ports}}. Die Verträge müssen zuerst genehmigt werden.",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} konnte nicht geladen werden, um die Regel auszuwerten",

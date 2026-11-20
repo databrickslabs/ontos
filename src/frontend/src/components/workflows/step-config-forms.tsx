@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useApi } from '@/hooks/use-api';
 import TemplateVarsInspector from './template-vars-inspector';
 import {
+  localStepConfigIssue,
   scriptSchema,
   stepConfigIssueText,
   type ConditionCheckResult,
@@ -110,6 +111,77 @@ export function ConditionalStepConfig({
           ))}
         </ul>
       </div>
+    </div>
+  );
+}
+
+// Triggers the evaluate_asset_maturity step may run on (workflows_manager.py)
+const ASSET_MATURITY_TRIGGERS = ['scheduled', 'manual'];
+
+export function EvaluateAssetMaturityStepConfig({
+  config,
+  onChange,
+  triggerType,
+  showRequired = false,
+}: {
+  config: Record<string, unknown>;
+  onChange: (config: Record<string, unknown>) => void;
+  triggerType?: string;
+  showRequired?: boolean;
+}) {
+  const { t } = useTranslation(['workflows']);
+  const catalog = typeof config.catalog === 'string' ? config.catalog : '';
+  const schemaName = typeof config.schema_name === 'string' ? config.schema_name : '';
+  const issue = localStepConfigIssue({
+    step_id: '', name: '', step_type: 'evaluate_asset_maturity', config, order: 0,
+  });
+  const [touched, setTouched] = useState(false);
+
+  // An empty field is left out of the config: no scope means every catalog or schema
+  const setField = (field: 'catalog' | 'schema_name', value: string) => {
+    setTouched(true);
+    const next = { ...config };
+    if (value.trim()) {
+      next[field] = value;
+    } else {
+      delete next[field];
+    }
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-3" data-testid="asset-maturity-step-config">
+      <div>
+        <Label htmlFor="asset-maturity-catalog">{t('workflows:assetMaturityStep.catalog')}</Label>
+        <Input
+          id="asset-maturity-catalog"
+          value={catalog}
+          onChange={(e) => setField('catalog', e.target.value)}
+          placeholder={t('workflows:assetMaturityStep.catalogPlaceholder')}
+        />
+      </div>
+      <div>
+        <Label htmlFor="asset-maturity-schema">{t('workflows:assetMaturityStep.schema')}</Label>
+        <Input
+          id="asset-maturity-schema"
+          value={schemaName}
+          onChange={(e) => setField('schema_name', e.target.value)}
+          placeholder={t('workflows:assetMaturityStep.schemaPlaceholder')}
+          aria-invalid={issue ? true : undefined}
+        />
+        {issue && (touched || showRequired) && (
+          <IssueText issue={issue} testId="asset-maturity-scope-issue" />
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">{t('workflows:assetMaturityStep.help')}</p>
+      <p className="text-xs text-muted-foreground">
+        {t('workflows:assetMaturityStep.identityNote')}
+      </p>
+      {triggerType && !ASSET_MATURITY_TRIGGERS.includes(triggerType) && (
+        <p className="text-xs text-destructive" role="alert" data-testid="asset-maturity-trigger">
+          {t('workflows:assetMaturityStep.triggerHint')}
+        </p>
+      )}
     </div>
   );
 }

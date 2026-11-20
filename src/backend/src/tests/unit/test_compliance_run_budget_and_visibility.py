@@ -73,6 +73,25 @@ def test_a_polling_error_cancels_the_statement_before_the_retry():
     assert ws.statement_execution.cancel_execution.call_count == attempts
 
 
+def test_a_transient_error_with_no_time_left_to_retry_is_timed_out_without_sleeping():
+    from databricks.sdk import errors
+
+    ws = MagicMock()
+    ws.statement_execution.execute_statement.side_effect = errors.TemporarilyUnavailable('503')
+    clock = FakeClock()
+    sleeps = []
+    runner = WarehouseSqlRunner(ws, 'wh-1', clock=clock, sleep=sleeps.append)
+    # The first backoff (2s) would end at or past the run's deadline
+    deadline = clock() + WarehouseSqlRunner.RETRY_BACKOFF_SECONDS[0]
+
+    with pytest.raises(SourceUnavailable) as raised:
+        runner.rows('SELECT 1', {}, deadline=deadline)
+
+    assert raised.value.reason == 'timed_out'
+    assert ws.statement_execution.execute_statement.call_count == 1
+    assert sleeps == []
+
+
 def test_the_run_deadline_cuts_a_running_statement_short():
     ws = MagicMock()
     ws.statement_execution.execute_statement.return_value = _response('RUNNING')

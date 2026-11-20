@@ -208,6 +208,7 @@ class MaturityEvaluator:
                     message_code=notice.code if notice else None,
                     message_params=notice.params if notice else None,
                     evaluated=not uses_uc_fields,
+                    failure_message=(policy.failure_message or None) if not passed else None,
                 ))
 
             level_results.append(LevelResult(

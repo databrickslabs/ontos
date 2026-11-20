@@ -1010,7 +1010,17 @@
     "required": "Required",
     "advisory": "Advisory",
     "overTime": "Maturity over time",
-    "retry": "Retry"
+    "retry": "Retry",
+    "currentLevel": "Current level",
+    "nextLevel": "Next level",
+    "belowFirstLevel": "Below the first level",
+    "topLevelReached": "Highest level reached",
+    "noLevels": "No maturity levels are defined for this type yet.",
+    "gateStatus": {
+      "pass": "Passed",
+      "fail": "Failed",
+      "warn": "Not met"
+    }
   },
   "maturityGateCodes": {
     "maturity_uc_table_client_unavailable": "Unity Catalog can't be reached, so the fields of table {{tableName}} are missing.",

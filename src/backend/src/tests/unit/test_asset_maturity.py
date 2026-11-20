@@ -572,6 +572,26 @@ def test_a_failed_assertion_keeps_its_message(db_session):
     assert gate.message_code is None
 
 
+def test_a_failed_gate_carries_its_policy_failure_message(db_session):
+    asset = _asset(db_session, description='x' * 60)
+    level = _level(db_session, 1, 'Documented', [
+        'ASSERT LENGTH(obj.description) >= 50', 'ASSERT obj.is_certified = True',
+    ])
+    for gate in level.gates:
+        gate.compliance_policy.failure_message = f'Missing: {gate.compliance_policy.name}'
+    db_session.flush()
+
+    report = MaturityEvaluator(_ws(_table([]))).evaluate(
+        db_session, entity_type='Asset', entity_id=str(asset.id), persist=False,
+    )
+
+    passed, failed = report.levels[0].gates
+    assert passed.passed and passed.failure_message is None
+    assert not failed.passed
+    assert failed.failure_message == 'Missing: Documented gate 1'
+    assert failed.message == 'Assertion failed: obj.is_certified = True'
+
+
 # --- snapshot counts per entity type -------------------------------------------
 
 def _snapshot(db, entity_type, order):

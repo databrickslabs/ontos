@@ -1010,7 +1010,17 @@
     "required": "Obbligatorio",
     "advisory": "Consultivo",
     "overTime": "Maturità nel tempo",
-    "retry": "Riprova"
+    "retry": "Riprova",
+    "currentLevel": "Livello attuale",
+    "nextLevel": "Livello successivo",
+    "belowFirstLevel": "Sotto il primo livello",
+    "topLevelReached": "Livello più alto raggiunto",
+    "noLevels": "Non sono ancora definiti livelli di maturità per questo tipo.",
+    "gateStatus": {
+      "pass": "Superato",
+      "fail": "Non superato",
+      "warn": "Non soddisfatto"
+    }
   },
   "maturityGateCodes": {
     "maturity_uc_table_client_unavailable": "Unity Catalog non è raggiungibile, quindi mancano i campi della tabella {{tableName}}.",

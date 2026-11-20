@@ -17,6 +17,17 @@ class InvalidDomainIdentifierError(CodedValueError):
         super().__init__(message or f"{field} must not be empty", field=field)
 
 
+class PrimaryDomainNotAssignedError(CodedValueError):
+    """A primary domain that isn't one of the contract's (new or stored) domains."""
+
+    code = 'primary_domain_not_in_domains'
+
+    def __init__(self, domain_id: str):
+        super().__init__(
+            f"Domain {domain_id} is not one of the contract's domains", primaryDomainId=domain_id,
+        )
+
+
 DOMAIN_IDS_KEYS = ('domainIds', 'domain_ids')
 PRIMARY_DOMAIN_KEYS = ('primaryDomainId', 'primary_domain_id')
 LEGACY_DOMAIN_ID_KEYS = ('domainId', 'domain_id')
@@ -39,3 +50,6 @@ def domain_identifier(field: str, value) -> str:
     if not isinstance(value, str) or not value.strip():
         raise InvalidDomainIdentifierError(field)
     return value.strip()
+
+
+LEGACY_DOMAIN_NAME_KEYS = ('domain',)

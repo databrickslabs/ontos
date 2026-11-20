@@ -1717,7 +1717,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             )
         ]
         if primary not in stored:
-            raise ValueError(f"Domain {primary} is not one of the contract's domains")
+            raise dom.PrimaryDomainNotAssignedError(primary)
         return stored, primary
 
     def _resolve_domain_assignment(self, db, data_dict: dict) -> tuple[List[str], Optional[str]]:
@@ -1733,8 +1733,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
            ``domainId`` / ``domain`` as the single domain.
         3. Legacy single ``domainId`` (ID) or ``domain`` (name) → single primary.
 
-        A blank identifier (``""``, in any of those fields) is refused with
-        ``invalid_domain_identifier``. Each ID is validated via ``_resolve_domain``.
+        A blank identifier (``""``, in any of those fields, the ``domain`` name included)
+        is refused with ``invalid_domain_identifier``. A ``primaryDomainId`` that is not one
+        of the ``domainIds`` (``[]`` included) is refused with ``primary_domain_not_in_domains``,
+        as when it is sent alone. Each ID is validated via ``_resolve_domain``.
         """
         from src.common import contract_domain_fields as dom
 
@@ -1744,6 +1746,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # Validate every sent identifier first, so a blank one never clears silently.
         primary_id = dom.domain_identifier(*sent_primary) if sent_primary else None
         legacy_id = dom.domain_identifier(*sent_legacy) if sent_legacy else None
+        sent_name = dom.sent_domain_field(data_dict, dom.LEGACY_DOMAIN_NAME_KEYS)
+        legacy_name = dom.domain_identifier(*sent_name) if sent_name else None
 
         if sent_ids:
             field, raw_ids = sent_ids
@@ -1755,17 +1759,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if rid and rid not in resolved:
                     resolved.append(rid)
             primary = self._resolve_domain(db, domain_id=primary_id) if primary_id else None
-            if primary not in resolved:
-                primary = resolved[0] if resolved else None
-            return resolved, primary
+            if primary and primary not in resolved:
+                raise dom.PrimaryDomainNotAssignedError(primary)
+            return resolved, primary or (resolved[0] if resolved else None)
 
         single = None
         if primary_id:
             single = self._resolve_domain(db, domain_id=primary_id)
         elif legacy_id:
             single = self._resolve_domain(db, domain_id=legacy_id)
-        elif data_dict.get('domain'):
-            single = self._resolve_domain(db, domain_name=data_dict.get('domain'))
+        elif legacy_name:
+            single = self._resolve_domain(db, domain_name=legacy_name)
         return ([single], single) if single else ([], None)
 
     def _create_schema_objects(
@@ -2660,13 +2664,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             domains_provided = any(
                 data_dict.get(k) is not None
                 for k in (*dom.DOMAIN_IDS_KEYS, *dom.PRIMARY_DOMAIN_KEYS,
-                          *dom.LEGACY_DOMAIN_ID_KEYS, 'domain')
+                          *dom.LEGACY_DOMAIN_ID_KEYS, *dom.LEGACY_DOMAIN_NAME_KEYS)
             )
             lone_primary = (
                 dom.sent_domain_field(data_dict, dom.PRIMARY_DOMAIN_KEYS) is not None
             ) and all(
                 data_dict.get(k) is None
-                for k in (*dom.DOMAIN_IDS_KEYS, *dom.LEGACY_DOMAIN_ID_KEYS, 'domain')
+                for k in (*dom.DOMAIN_IDS_KEYS, *dom.LEGACY_DOMAIN_ID_KEYS,
+                          *dom.LEGACY_DOMAIN_NAME_KEYS)
             )
             if lone_primary:
                 # primaryDomainId alone moves the primary within the stored domains

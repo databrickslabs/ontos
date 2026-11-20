@@ -498,7 +498,9 @@ _DOMAINS_NOTE = (
     " A non-null domainIds or domainId replaces the whole assignment; domainIds []"
     " clears it. primaryDomainId alone makes one of the stored domains primary."
     " Precedence: domainIds (and primaryDomainId) win over the legacy domainId, which"
-    " is then ignored. An empty string is refused (400, invalid_domain_identifier)."
+    " is then ignored. An empty string is refused (400, invalid_domain_identifier), and so"
+    " is a primaryDomainId that is not one of the domainIds (400,"
+    " primary_domain_not_in_domains)."
 )
 
 
@@ -513,7 +515,9 @@ class DataContractUpdate(BaseModel):
     Precedence: ``domainIds`` / ``primaryDomainId`` win over the legacy ``domainId``
     (``domainIds: []`` with a ``domainId`` clears the domains). A blank identifier
     (``""``) is refused with a 400 and the code ``invalid_domain_identifier``, never
-    read as "not sent".
+    read as "not sent"; so is a ``primaryDomainId`` that is not one of the ``domainIds``
+    (``primary_domain_not_in_domains``), as when it is sent alone. The legacy ``domain``
+    (a name, not an id) is checked the same way where a caller can send it.
     """
     name: Optional[str] = None
     version: Optional[str] = None

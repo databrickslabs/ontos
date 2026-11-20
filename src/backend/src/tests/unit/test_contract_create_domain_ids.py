@@ -250,3 +250,60 @@ def test_an_update_with_a_legacy_domain_id_alone_still_replaces_the_domain(db_se
     created = _create(db_session, domainIds=[first])
 
     assert _update(db_session, created.id, domainId=second) == {second}
+
+
+@pytest.mark.parametrize("fields", [{"domain": ""}, {"domain": "  "}, {"domainIds": ["x"], "domain": ""}])
+def test_a_blank_domain_name_does_not_clear_the_domains_of_an_update(db_session: Session, fields):
+    """The legacy ``domain`` (name) counts as sent when present: blank is refused instead of
+    resolving to "no domain" and clearing them. The assistant's update tool sends a dict
+    (the REST update model has no ``domain`` field)."""
+    created = _create(db_session, domainIds=[_domain(db_session)])
+
+    with pytest.raises(CodedValueError) as refused:
+        _manager().update_contract_with_relations(
+            db=db_session, contract_id=created.id, contract_data=dict(fields),
+        )
+
+    assert refused.value.code == "invalid_domain_identifier"
+    assert refused.value.params in ({"field": "domain"}, {"field": "domainIds"})
+
+
+def test_a_create_with_a_blank_domain_name_is_refused(db_session: Session):
+    with pytest.raises(CodedValueError) as refused:
+        _create(db_session, domain="")
+
+    assert refused.value.params == {"field": "domain"}
+
+
+@pytest.mark.parametrize("domain_ids", [[], ["other"]])
+def test_a_primary_outside_domain_ids_is_refused(db_session: Session, domain_ids):
+    """The replace path refuses a primary that isn't one of the domainIds (before, it fell
+    back to the first one, or to none), as the lone-primary path does."""
+    first, other = _domain(db_session), _domain(db_session)
+    created = _create(db_session, domainIds=[first])
+    ids = [other if d == "other" else d for d in domain_ids]
+
+    with pytest.raises(CodedValueError) as refused:
+        _update(db_session, created.id, domainIds=ids, primaryDomainId=first)
+
+    assert refused.value.code == "primary_domain_not_in_domains"
+    assert refused.value.params == {"primaryDomainId": first}
+
+
+def test_a_create_with_a_primary_outside_domain_ids_is_refused(db_session: Session):
+    first, other = _domain(db_session), _domain(db_session)
+
+    with pytest.raises(CodedValueError) as refused:
+        _create(db_session, domainIds=[first], primaryDomainId=other)
+
+    assert refused.value.code == "primary_domain_not_in_domains"
+
+
+def test_the_lone_primary_refusal_is_coded(db_session: Session):
+    first, other = _domain(db_session), _domain(db_session)
+    created = _create(db_session, domainIds=[first])
+
+    with pytest.raises(CodedValueError) as refused:
+        _update(db_session, created.id, primaryDomainId=other)
+
+    assert refused.value.code == "primary_domain_not_in_domains"

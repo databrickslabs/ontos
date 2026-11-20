@@ -124,5 +124,28 @@ def test_a_create_with_the_domain_ids_of_a_product_keeps_them(client, db_session
 
     contract = _create(client, domainIds=[first, second], primaryDomainId=second)
 
-    assert contract["domainIds"] == [second, first] or contract["domainIds"] == [first, second]
+    assert set(contract["domainIds"]) == {first, second}
     assert contract["primaryDomainId"] == second
+
+
+def test_a_create_with_a_blank_domain_name_is_refused(client, db_session):
+    resp = client.post("/api/data-contracts", json={
+        "name": f"Orders {uuid.uuid4().hex[:6]}", "version": "1.0.0", "domain": "  ",
+    })
+
+    _assert_refused(resp, "domain")
+
+
+def test_an_update_with_a_primary_outside_domain_ids_is_refused(client, db_session):
+    first, other = _domain(db_session), _domain(db_session)
+    contract = _create(client, domainIds=[first])
+
+    resp = client.put(
+        f"/api/data-contracts/{contract['id']}",
+        json={"domainIds": [first], "primaryDomainId": other},
+    )
+
+    assert resp.status_code == 400, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "primary_domain_not_in_domains"
+    assert detail["params"] == {"primaryDomainId": other}

@@ -55,6 +55,8 @@ export enum AssetType {
     // Term-mapping suggestions (one ReviewedAsset == one MappingSuggestionDb)
     CONCEPT_MAPPING_SUGGESTION = "concept_mapping_suggestion",
 
+    // Authority Relation reviews (asset_fqn = authority-relation://{id})
+    AUTHORITY_RELATION = "authority_relation",
     // Knowledge system assets
     KNOWLEDGE_CONCEPT = "knowledge_concept",
     CONCEPT_CHANGESET = "concept_changeset",

@@ -90,5 +90,9 @@
   "about": {
     "name": "Over",
     "description": "Informatie over de applicatie en zijn functies."
+  },
+  "authority-resolution": {
+    "name": "Autoriteitsresolutie",
+    "description": "Stel Authority Relations (ARF) op en los agentbeslissingen ertegen op."
   }
 }

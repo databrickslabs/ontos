@@ -138,7 +138,9 @@ _HEAD_RE = re.compile(
 
 def _find_statement_end(sql: str, start: int) -> int:
     """Return the index just past the ';' terminating the statement that begins at
-    ``start``, scanning past ';' that appear inside single-quoted strings."""
+    ``start``, scanning past ';' that appear inside single-quoted strings or
+    inside ``-- ...`` line comments (packs legitimately include ';' in comment
+    prose like ``-- AR 3 (meta-authority over Ontos itself; …)``)."""
     in_q = False
     i, n = start, len(sql)
     while i < n:
@@ -152,6 +154,12 @@ def _find_statement_end(sql: str, start: int) -> int:
         else:
             if c == "'":
                 in_q = True
+            elif c == "-" and i + 1 < n and sql[i + 1] == "-":
+                j = sql.find("\n", i)
+                if j == -1:
+                    return n
+                i = j + 1
+                continue
             elif c == ";":
                 return i + 1
         i += 1

@@ -43,5 +43,6 @@ Migrations live in `src/backend/alembic/versions/` and use a `<letter><number>_<
 
 - The **filename prefix is cosmetic**; only the `revision` string variable matters for chain integrity. Keep them in sync regardless.
 - `down_revision` must point at the **current live head**, not a historical one. A stale `down_revision` (e.g. on a long-running branch) creates a second head after merge and breaks CI.
+- Re-pointing a stale `down_revision` is only safe while the branch's migrations have **never run against a deployed/shared DB**. Once they have, re-pointing makes the other branch's migrations ancestors of an already-stamped revision, so `upgrade head` silently skips them (missing columns/tables). Use a merge revision instead and keep the original parents.
 - Don't rename historical migrations — descendants reference their `revision` strings and renaming the variable will orphan them.
 - Postgres-specific column types (`from sqlalchemy.dialects.postgresql import JSON`) are fine; the project deploys on Postgres.

@@ -95,6 +95,9 @@ class ToolContext:
     semantic_models_manager: Optional[Any] = None
     costs_manager: Optional[Any] = None
     search_manager: Optional[Any] = None
+    # Lazily builds a WorkspaceClient scoped to the calling user (OBO); None when
+    # the request carried no forwarded user token.
+    obo_workspace_client_factory: Optional[Callable[[], Any]] = None
     # Builds the workspace client the first time a tool reads ``workspace_client``
     # (once per context). An error it raises reaches the tool's caller.
     workspace_client_factory: Optional[Callable[[], Any]] = field(

@@ -37,6 +37,10 @@
           "in_progress": "in corso",
           "unknown": "sconosciuto"
         }
+      },
+      "authorityResolution": {
+        "title": "Authority Resolution",
+        "description": "Authority Relation attive"
       }
     }
   },

@@ -1,0 +1,540 @@
+{
+  "title": {
+    "main": "Résolution d'autorité"
+  },
+  "list": {
+    "description": "Rédigez des relations d'autorité (ARF) qui rendent explicite et appelable par les agents l'autorité de décision souple. Chaque relation porte un DNA-Coefficient — une mesure de divergence où 0,0 est le meilleur score — calculé à partir des preuves associées, et ne devient active que lorsqu'il est dans son seuil et entièrement confirmé.",
+    "buttonNew": "Nouvelle relation d'autorité",
+    "buttonDeleteSelected": "Supprimer la sélection ({{count}})",
+    "columnDnaco": "DNAco",
+    "columnMaturity": "Maturité",
+    "columnAction": "Action",
+    "columnUsage": "Utilisation",
+    "confirmDelete": "Supprimer la relation d'autorité « {{name}} » ?",
+    "confirmBulkDelete": "Supprimer {{count}} relation(s) d'autorité sélectionnée(s) ?",
+    "bulkDeleteSuccess": "{{count}} relation(s) d'autorité supprimée(s)."
+  },
+  "details": {
+    "defaultTitle": "Relation d'autorité",
+    "notFound": "Relation d'autorité introuvable.",
+    "backButton": "Retour à la liste",
+    "buttonNewVersion": "Nouvelle version",
+    "buttonRequest": "Demander…",
+    "buttonComputeDnaco": "Calculer le DNAco",
+    "buttonActivate": "Activer",
+    "buttonTest": "Tester",
+    "buttonAffirm": "Confirmer",
+    "buttonReview": "Réviser",
+    "dnaComputeFailed": "Échec du calcul du DNAco",
+    "dnaComputed": "DNAco calculé",
+    "dnaComputedMsg": "magnitude {{magnitude}} · {{divergent}}/{{total}} divergent(s)",
+    "activateFailed": "Activation impossible",
+    "activated": "Relation d'autorité activée",
+    "affirmFailed": "Échec de la confirmation",
+    "confirmDelete": "Supprimer cette relation d'autorité ?",
+    "versionCreated": "Nouvelle version créée",
+    "versionCreatedMsg": "v{{version}} (brouillon)",
+    "familySlugHint": "@id destiné aux agents (famille de versions)",
+    "tileUsage": "Utilisation",
+    "tileApproved": "Approuvées",
+    "tileDenied": "Refusées",
+    "tileDnaco": "DNA-Coefficient",
+    "tileDnacoHint": "0,0 est le meilleur",
+    "tileDnacoHintHover": "0,0 est le meilleur — survolez pour voir les dimensions",
+    "dnacoDimensions": "Dimensions du DNAco",
+    "dnacoFormula": "Global = 1 − ∏(1 − dₙ) = {{value}}",
+    "dnacoFormulaDescription": "probabilité de divergence sur ≥1 dimension",
+    "activationRequires": "L'activation exige que le DNA-Coefficient soit mesuré et inférieur à son plafond ({{threshold}}), et que toutes les confirmations requises soient effectuées{{affirmed}}.",
+    "notYetFullyAffirmed": "(pas encore entièrement confirmée)",
+    "cardApprovers": "Approbateurs (porte N-fonctionnelle)",
+    "noApprovers": "Aucun approbateur défini.",
+    "alsoReviewer": "également réviseur",
+    "affirmed": "confirmé",
+    "pending": "en attente",
+    "cardReviewers": "Réviseurs (interrogés pour confirmer que la relation reflète la réalité)",
+    "cardReviewProcess": "Processus de révision",
+    "workflowsSection": "Workflows",
+    "assetReviewsSection": "Révisions d'actifs",
+    "noReviewersAssigned": "Aucun réviseur assigné.",
+    "reviewStatus": "révision : {{status}}",
+    "linkWorkflow": "Workflow",
+    "linkOpenReview": "Ouvrir la révision",
+    "notStarted": "non démarré",
+    "cardHistory": "Historique",
+    "dnaRunsSection": "Exécutions du DNA-Coefficient",
+    "dnaRunResult": "{{divergent}}/{{total}} divergent(s)",
+    "decisionsSection": "Décisions récentes",
+    "cardRelation": "Relation d'autorité",
+    "labelActorRole": "Rôle de l'acteur",
+    "labelActorIdentity": "Identité de l'acteur",
+    "labelAction": "Action",
+    "labelObject": "Objet",
+    "labelDomainContext": "Contexte de domaine",
+    "labelJustificationChain": "Chaîne de justification",
+    "cardRuntimeEvidence": "Exécution et preuves",
+    "labelDecisionCriteria": "Critères de décision",
+    "criterion": "Critère",
+    "noCriteria": "Aucun critère — la porte n'est soumise à aucune contrainte (approuve toute demande).",
+    "labelEvidenceSources": "Sources de preuves",
+    "linkCatalogCommander": "Ouvrir {{ref}} dans Catalog Commander",
+    "labelGovernsConceptsHint": "Régit les concepts métier",
+    "labelPrerequisites": "Nécessite (AR prérequises)",
+    "required": "requis",
+    "optional": "facultatif",
+    "noPrerequisites": "Aucune — cette AR décide sans parcourir de porte en amont.",
+    "labelResourceRefs": "Références de ressources (pointeurs typés)",
+    "mcpAuth": "Authentification MCP : {{auth}}",
+    "noResourceRefs": "Aucune — les champs canoniques sont lus directement depuis la ligne de l'AR.",
+    "labelRecomputeSchedule": "Planification du recalcul",
+    "cronManualOnly": "Manuel uniquement",
+    "cronCustom": "Personnalisé ({{cron}})",
+    "cronHourly": "Toutes les heures (à :{{min}})",
+    "cronDaily": "Tous les jours à {{time}}",
+    "cronWeekly": "Chaque semaine le {{day}} à {{time}}",
+    "cronMonthly": "Mensuel (le 1er) à {{time}}",
+    "dialogTitleReview": "Révision de la relation d'autorité",
+    "dialogTitleVersion": "Créer une nouvelle version",
+    "versionDialogDescription": "Crée un instantané de cette relation d'autorité sous forme de nouvelle version brouillon. La règle, les critères, les participants, les preuves et les domaines sont copiés ; le DNAco mesuré et les compteurs d'utilisation sont réinitialisés.",
+    "labelNewVersion": "Nouvelle version",
+    "labelChangeSummary": "Résumé des modifications (facultatif)",
+    "placeholderChangeSummary": "Qu'est-ce qui a changé dans cette version ?",
+    "buttonCreateVersion": "Créer la version",
+    "dialogTitleTest": "Tester la résolution d'autorité",
+    "testDialogDescription": "Simulation sur la logique de décision de cette relation d'autorité — fonctionne quel que soit le statut et n'enregistre pas la décision ni ne modifie les compteurs d'utilisation. Les décisions réelles proviennent de l'outil MCP resolve_authority exécuté sur une AR active.",
+    "labelSigner": "Signataire (identité de l'acteur)",
+    "labelValue": "Valeur",
+    "testCosignLabel": "co-signature présente",
+    "testEscalatedLabel": "escaladé",
+    "testPrerequisiteChain": "Chaîne de prérequis",
+    "testResolvedRefs": "Références de ressources résolues",
+    "buttonTestResolve": "Résoudre"
+  },
+  "conceptLinks": {
+    "failedLink": "Échec de la liaison du concept",
+    "failedUnlink": "Échec de la suppression du lien du concept",
+    "buttonAddConcept": "Ajouter un concept"
+  },
+  "status": {
+    "draft": "Brouillon",
+    "active": "Actif",
+    "needs_review": "À réviser",
+    "retired": "Retiré",
+    "deprecated": "Obsolète"
+  },
+  "verdict": {
+    "approved": "Approuvé",
+    "denied": "Refusé",
+    "conflict": "Conflit",
+    "no_authority": "Aucune autorité",
+    "error": "Erreur"
+  },
+  "refType": {
+    "literal": "Littéral",
+    "ontos_entity": "Entité Ontos",
+    "mcp_tool": "Outil MCP"
+  },
+  "resolverAuth": {
+    "obo": "appelant (OBO)",
+    "app_sp": "principal de service de l'application"
+  },
+  "reviewStatus": {
+    "na": "N/D",
+    "pending": "En attente",
+    "in_review": "En cours de révision",
+    "completed": "Terminé"
+  },
+  "workflowStatus": {
+    "running": "En cours",
+    "succeeded": "Réussi",
+    "failed": "Échec",
+    "pending": "En attente",
+    "completed": "Terminé",
+    "defined": "Défini",
+    "paused": "En attente d'approbation",
+    "cancelled": "Annulé"
+  },
+  "dnaRunStatus": {
+    "running": "En cours",
+    "succeeded": "Réussi",
+    "failed": "Échec"
+  },
+  "decisionSource": {
+    "mcp": "MCP",
+    "evidence": "Preuve",
+    "ui": "UI"
+  },
+  "sourceType": {
+    "delta_table": "Table Delta",
+    "data_product": "Produit de données",
+    "asset": "Actif"
+  },
+  "direction": {
+    "actual-exceeds-documented": "Le réel dépasse le documenté",
+    "documented-exceeds-actual": "Le documenté dépasse le réel",
+    "neutral": "Neutre"
+  },
+  "editor": {
+    "title": {
+      "new": "Nouvelle relation d'autorité",
+      "edit": "Modifier la relation d'autorité"
+    },
+    "labels": {
+      "name": "Nom",
+      "slug": "Slug",
+      "description": "Description",
+      "actorRole": "Rôle de l'acteur",
+      "actorIdentity": "Identité de l'acteur",
+      "action": "Action",
+      "objectType": "Type d'objet",
+      "objectId": "ID de l'objet",
+      "threshold": "Seuil",
+      "currency": "Devise",
+      "market": "Marché",
+      "time": "Heure",
+      "dayOfWeek": "Jour de la semaine",
+      "minuteOfHour": "Minute de l'heure",
+      "recomputeFrequency": "Fréquence de recalcul",
+      "dnaMaxThreshold": "DNA-Coefficient maximal pour activer"
+    },
+    "hints": {
+      "slug": "Clé stable utilisée par les agents pour appeler cette AR. Partagée par toutes les versions de la famille.",
+      "authorityRelation": "Le tuple ARF : <strong>qui</strong> (rôle de l'acteur + identité de signature) peut effectuer quelle <strong>action</strong> sur quel <strong>objet</strong>.",
+      "domainContext": "Le prédicat évaluable : le contexte (seuil, devise, marché) dans lequel cette autorité s'applique. Les critères sont évalués par rapport à celui-ci.",
+      "dnaMaxThreshold": "Le plafond de divergence. Le DNA-Coefficient mesure dans quelle mesure les décisions passées <strong>divergent</strong> de cette règle (0,0 = correspondance parfaite, plus élevé = pire). L'AR ne peut être activée que tant que sa valeur mesurée reste au niveau de ce plafond ou en dessous ; une AR active qui dérive ensuite au-dessus est automatiquement marquée <strong>À réviser</strong>.",
+      "mcpResolverCredentials": "<strong>OBO :</strong> les outils MCP s'exécutent avec les permissions propres de l'appelant ; un appelant sans jeton transmis obtient no_authority. <strong>Principal de service de l'application :</strong> les outils s'exécutent en tant qu'application Ontos pour chaque appelant, si bien que le résultat ne dépend plus de qui pose la question. À n'utiliser que lorsque l'outil doit voir des données auxquelles les appelants n'ont pas accès.",
+      "mcpNoCallerToken": "Aucun jeton d'appelant n'a été transmis ; cette liste a donc été récupérée en tant que principal de service de l'application Ontos. Les appelants d'une AR authentifiée par OBO peuvent ne pas avoir accès à ces services."
+    },
+    "sections": {
+      "authorityRelation": "Relation d'autorité",
+      "domainContext": "Contexte de domaine",
+      "decisionCriteria": "Critères de décision",
+      "domains": "Domaines",
+      "evidenceSources": "Sources de preuves",
+      "participants": "Participants",
+      "requires": "Prérequis",
+      "resourceRefs": "Références de ressources",
+      "mcpResolverCredentials": "Identifiants du résolveur MCP",
+      "dnaSchedule": "Planification du DNA-Coefficient",
+      "tags": "Tags",
+      "ownership": "Propriété et projet"
+    },
+    "sectionDescriptions": {
+      "decisionCriteria": "Rédigez les règles appliquées par la porte de résolution (et par rapport auxquelles le DNA-Coefficient mesure la divergence). Chaque critère est un <strong>contrôle de conformité</strong> réutilisable.",
+      "evidenceSources": "Associez les décisions passées par rapport auxquelles le DNA-Coefficient est mesuré. Ajoutez une ou plusieurs sources — une <strong>table Delta</strong>, un <strong>produit de données</strong> ou un <strong>actif</strong> (fichier de volume, table ou vue). Chacune associe ses colonnes aux éléments canoniques de l'AR via la correspondance de colonnes.",
+      "participants": "La porte N-fonctionnelle et la révision. Les <strong>approbateurs</strong> comptent dans la porte de confirmation. Les <strong>réviseurs</strong> sont interrogés pendant le processus de révision pour confirmer que la relation reflète la réalité. Un principal peut être les deux.",
+      "requires": "AR prérequises : chacune doit être résolue comme <strong>approuvée</strong> avant que celle-ci ne décide. Référencées par le slug de la famille (et non la version), afin que cette AR continue de fonctionner lorsqu'un prérequis change de version. L'enregistrement exige que cette AR possède son propre slug.",
+      "resourceRefs": "D'où viennent les valeurs des champs. Au lieu d'un littéral simple, adossez un champ canonique (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) à un pointeur typé. Une référence à une <strong>entité Ontos</strong> est résolue à nouveau dans le graphe de connaissances lors de l'évaluation, de sorte que la valeur reste à jour lorsque le concept, le produit ou le domaine sous-jacent change. Les références à un <strong>outil MCP</strong> appellent un service MCP Unity Catalog au moment de la décision ; les critères peuvent comparer la valeur résolue sous la forme <code>obj.ref_{{fieldPlaceholder}}</code> (les points deviennent des tirets bas, p. ex. <code>obj.ref_actor_identity</code>).",
+      "dnaSchedule": "Fréquence de recalcul du DNA-Coefficient par rapport aux sources de preuves.",
+      "domainContext": "Le prédicat évaluable : le contexte (seuil, devise, marché) dans lequel cette autorité s'applique. Les critères sont évalués par rapport à celui-ci."
+    },
+    "fields": {
+      "name": {
+        "placeholder": "Approbation de remise EMEA-Nord"
+      },
+      "slug": {
+        "placeholder": "ar-disc-emea-north"
+      },
+      "actorRole": {
+        "placeholder": "Responsable régional des ventes – Est"
+      },
+      "actorIdentity": {
+        "placeholder": "rsm-east@example.com"
+      },
+      "objectType": {
+        "placeholder": "data_product | data_contract"
+      },
+      "objectId": {
+        "placeholder": "dp-1234"
+      },
+      "threshold": {
+        "placeholder": "0.15"
+      },
+      "currency": {
+        "placeholder": "EUR"
+      },
+      "market": {
+        "placeholder": "emea-north"
+      },
+      "dnaMaxThreshold": {
+        "placeholder": "0.3"
+      },
+      "ownerTeam": "Équipe propriétaire",
+      "project": "Projet",
+      "noTeam": "Aucune équipe",
+      "noProject": "Aucun projet"
+    },
+    "evidenceSources": {
+      "type": {
+        "deltaTable": "Table Delta",
+        "dataProduct": "Produit de données",
+        "asset": "Actif"
+      },
+      "placeholders": {
+        "deltaTable": "catalog.schema.promotion_decisions",
+        "dataProduct": "ID du produit de données",
+        "asset": "FQN de l'actif (table/vue/volume)",
+        "label": "Libellé facultatif",
+        "columnMap": "Correspondance de colonnes (JSON)"
+      },
+      "messages": {
+        "dataProductNotYetSupported": "Les sources de type produit de données sont enregistrées mais pas encore lues pour le DNAco (v1)."
+      }
+    },
+    "affirmations": {
+      "selectRoleLabel": "Sélectionner un rôle…",
+      "principalPlaceholder": "principal (e-mail ou groupe)",
+      "principalTypeUser": "utilisateur",
+      "principalTypeGroup": "groupe",
+      "approverLabel": "approbateur",
+      "reviewerLabel": "réviseur",
+      "validation": {
+        "roleRequired": "Participant {{index}} : choisissez un rôle métier",
+        "roleRequiredDescription": "Chaque participant ayant un principal doit être associé à un rôle métier (depuis les paramètres).",
+        "principalRequired": "Participant {{index}} : saisissez un principal",
+        "principalRequiredDescription": "Chaque participant ayant un rôle doit avoir un e-mail ou un identifiant de groupe."
+      }
+    },
+    "prerequisites": {
+      "selectPrerequisiteLabel": "Sélectionner une AR prérequise…",
+      "requiredLabel": "requis",
+      "notePlaceholder": "Note facultative"
+    },
+    "resourceRefs": {
+      "fieldPathPlaceholder": "actor_identity | object_id | domain_context.market",
+      "literalPlaceholder": "Valeur littérale (p. ex. rsm-east@example.com)",
+      "entityTypePlaceholder": "Choisir un type…",
+      "entityIdPlaceholder": "Choisir une entité…",
+      "entityIdDisabledPlaceholder": "Choisissez d'abord un type…",
+      "refType": {
+        "literal": "Littéral",
+        "ontosEntity": "Entité Ontos",
+        "mcpTool": "Outil MCP"
+      },
+      "entityType": {
+        "businessConcept": "Concept métier",
+        "dataProduct": "Produit de données",
+        "dataDomain": "Domaine de données"
+      }
+    },
+    "mcpResolverAuth": {
+      "obo": "Utilisateur / agent appelant (OBO) — par défaut",
+      "appServicePrincipal": "Principal de service de l'application Ontos"
+    },
+    "buttons": {
+      "addEvidenceSource": "Ajouter une source de preuves",
+      "addParticipant": "Ajouter un participant",
+      "addPrerequisite": "Ajouter un prérequis",
+      "addResourceRef": "Ajouter une référence de ressource",
+      "cancel": "Annuler",
+      "create": "Créer",
+      "save": "Enregistrer"
+    },
+    "actions": {
+      "approve": "Approuver",
+      "escalate": "Escalader",
+      "override": "Outrepasser",
+      "delegate": "Déléguer",
+      "veto": "Opposer son veto"
+    },
+    "validation": {
+      "nameRequired": "Le nom est requis",
+      "invalidColumnMap": "Correspondance de colonnes invalide",
+      "columnMapError": "La correspondance de colonnes pour « {{ref}} » doit être un JSON valide."
+    }
+  },
+  "criteria": {
+    "description": "La porte n'approuve que si tous les critères activés sont satisfaits. Un critère qui échoue pour une décision passée compte comme une divergence dans le DNA-Coefficient — pondérée et signée selon sa direction. Une règle composée est acceptable ; ne scindez en critères distincts que si vous voulez une divergence par motif.",
+    "mode": {
+      "builder": "Structuré",
+      "raw": "ASSERT brut",
+      "existing": "Réutiliser un contrôle existant"
+    },
+    "predicate": {
+      "allowlist": "Liste des signataires autorisés",
+      "ceiling": "Plafond numérique",
+      "requiredFlag": "Indicateur requis",
+      "actionMatch": "Correspondance d'action"
+    },
+    "predicateDefaults": {
+      "allowlistField": "actor_identity",
+      "allowlistName": "Signataire autorisé",
+      "allowlistFailure": "Le signataire n'est pas autorisé.",
+      "ceilingField": "value",
+      "ceilingName": "Dans le seuil",
+      "ceilingFailure": "La valeur dépasse le seuil sans escalade.",
+      "requiredFlagField": "cosign_present",
+      "requiredFlagName": "Indicateur requis présent",
+      "requiredFlagFailure": "Une condition requise est manquante.",
+      "actionMatchField": "action",
+      "actionMatchName": "Correspondance d'action",
+      "actionMatchFailure": "L'action n'est pas autorisée."
+    },
+    "fields": {
+      "fieldPlaceholder": "champ (p. ex. actor_identity)",
+      "allowlistPlaceholder": "rsm-east, rsm-west",
+      "actionMatchPlaceholder": "approve",
+      "ceilingPlaceholder": "0.15",
+      "ceilingAllowEscalation": "autoriser si escaladé",
+      "criterionNamePlaceholder": "Nom du critère",
+      "failureMessagePlaceholder": "Message de refus affiché en cas d'échec",
+      "rawRulePlaceholder": "obj.actor_identity IN ['rsm-east'] AND (obj.value <= 0.15 OR obj.escalated = True)"
+    },
+    "validation": {
+      "validateButton": "Valider",
+      "ruleValid": "La règle est valide",
+      "ruleInvalid": "Invalide"
+    },
+    "divergence": {
+      "direction": "Direction",
+      "weight": "Poids",
+      "dimension": "Dimension",
+      "dimensionPlaceholder": "people",
+      "reusedCheckBadge": "contrôle réutilisé"
+    },
+    "buttons": {
+      "addCriterion": "Ajouter un critère"
+    },
+    "selections": {
+      "selectComplianceCheck": "Sélectionner un contrôle de conformité…"
+    },
+    "assertPrefix": "ASSERT"
+  },
+  "mcp": {
+    "extraSchemas": {
+      "label": "Schémas supplémentaires",
+      "hint": "catalog.schema, séparés par des virgules, dans lesquels rechercher des services MCP. system.ai est toujours inclus.",
+      "placeholder": "main.app_ontos"
+    },
+    "services": {
+      "selectLabel": "Choisir un serveur MCP…"
+    },
+    "tools": {
+      "selectLabel": "Choisir un outil…",
+      "loadingLabel": "Chargement des outils…"
+    },
+    "params": {
+      "label": "Paramètres (JSON)",
+      "hint": "Les valeurs de type chaîne sont des modèles Jinja appliqués à la requête, plus <code>ar.*</code>, p. ex. <code>{{exampleActor}}</code>, <code>{{exampleMarket}}</code>.",
+      "errorInvalid": "JSON invalide.",
+      "errorNotObject": "Les paramètres doivent être un objet JSON."
+    },
+    "resultPointer": {
+      "label": "Pointeur de résultat",
+      "hint": "JSONPath dans la réponse de l'outil ; <code>$</code> désigne la réponse entière.",
+      "placeholder": "$  or  $.user.email  or  $.items[0].name"
+    },
+    "buttons": {
+      "refresh": "Actualiser"
+    }
+  },
+  "schedule": {
+    "frequency": {
+      "label": "Fréquence de recalcul",
+      "off": "Désactivé (manuel uniquement)",
+      "hourly": "Toutes les heures",
+      "daily": "Tous les jours",
+      "weekly": "Toutes les semaines",
+      "monthly": "Mensuel (le 1er)",
+      "custom": "Personnalisé"
+    },
+    "time": {
+      "label": "Heure"
+    },
+    "minuteOfHour": {
+      "label": "Minute de l'heure"
+    },
+    "dayOfWeek": {
+      "label": "Jour de la semaine",
+      "sunday": "Dimanche",
+      "monday": "Lundi",
+      "tuesday": "Mardi",
+      "wednesday": "Mercredi",
+      "thursday": "Jeudi",
+      "friday": "Vendredi",
+      "saturday": "Samedi"
+    },
+    "descriptions": {
+      "off": "Aucun recalcul automatique. Le DNA-Coefficient n'est mis à jour que si vous cliquez sur Calculer ou modifiez l'AR.",
+      "custom": "Planification personnalisée : <code>{{cron}}</code>",
+      "scheduled": "Le job de recalcul planifié l'exécute à cette cadence (stockée sous la forme <code>{{cron}}</code>)."
+    }
+  },
+  "infoHint": {
+    "ariaLabel": "Plus d'informations"
+  },
+  "review": {
+    "errors": {
+      "noReviewerIdentity": "Aucune identité de réviseur disponible.",
+      "noReviewFound": "Aucune révision trouvée pour vous sur cette relation d'autorité."
+    },
+    "toasts": {
+      "submitFailed": "Échec de l'envoi de la révision",
+      "submitSuccess": "Révision envoyée"
+    },
+    "statuses": {
+      "completed": "terminée"
+    },
+    "details": {
+      "title": "Détails de la relation d'autorité",
+      "actorIdentity": "Identité de l'acteur",
+      "action": "Action",
+      "domainContext": "Contexte de domaine",
+      "decisionCriteria": "Critères de décision",
+      "criterion": "Critère",
+      "empty": "—",
+      "evidenceSources": "Sources de preuves",
+      "evidenceBinding": "Association des preuves",
+      "justificationChain": "Chaîne de justification"
+    },
+    "questionnaire": {
+      "confirmation": "Confirmation",
+      "elicitation": "Recueil structuré",
+      "placeholder": "Votre réponse…"
+    },
+    "actions": {
+      "submitReview": "Envoyer la révision"
+    }
+  },
+  "request": {
+    "types": {
+      "review": {
+        "title": "Demander une révision",
+        "description": "Démarrez la révision N-fonctionnelle : chaque réviseur assigné reçoit une révision d'actif pour confirmer que la relation reflète la réalité, et le workflow de révision est déclenché."
+      },
+      "statusChange": {
+        "title": "Changer le statut",
+        "description": "Faites progresser cette relation d'autorité dans son cycle de vie. L'activation exige que le DNA-Coefficient soit mesuré dans son plafond et que toutes les confirmations requises soient effectuées."
+      }
+    },
+    "dialog": {
+      "title": "Demander une action",
+      "description": "Sélectionnez le type de demande que vous souhaitez soumettre pour cette relation d'autorité."
+    },
+    "relationInfo": {
+      "label": "Relation d'autorité",
+      "status": "Statut"
+    },
+    "form": {
+      "requestType": "Type de demande *",
+      "message": "Message (facultatif)",
+      "messagePlaceholder": "Ajoutez des notes pour les réviseurs…",
+      "targetStatus": "Statut cible *",
+      "statusPlaceholder": "Choisir le statut cible…"
+    },
+    "errors": {
+      "selectStatus": "Veuillez sélectionner un statut cible.",
+      "submitFailed": "Échec de l'envoi de la demande"
+    },
+    "toasts": {
+      "reviewRequested": "Révision demandée",
+      "reviewersNotified": "{{count}} réviseur(s) notifié(s).",
+      "statusChanged": "Statut modifié",
+      "statusSetTo": "Statut défini sur « {{status}} »."
+    },
+    "actions": {
+      "submitting": "Envoi en cours…",
+      "changeStatus": "Changer le statut",
+      "sendRequest": "Envoyer la demande"
+    }
+  }
+}

@@ -23,7 +23,19 @@ def upgrade() -> None:
 
     Per-role privilege that gates adopting an entity's UUID from an imported
     file as the primary key. Defaults to false so existing roles are safe.
+
+    Guarded so a DB whose revision graph skipped this migration (create_all
+    already added the column) can replay it safely.
     """
+    exists = op.get_bind().execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = current_schema() "
+            "AND table_name = 'app_roles' AND column_name = 'can_adopt_entity_ids'"
+        )
+    ).scalar() is not None
+    if exists:
+        return
     op.add_column(
         'app_roles',
         sa.Column(

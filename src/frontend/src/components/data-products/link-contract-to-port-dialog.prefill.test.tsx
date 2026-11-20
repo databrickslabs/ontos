@@ -38,7 +38,7 @@ describe('LinkContractToPortDialog: Create New Contract prefill', () => {
     await waitFor(() => expect(prefill).toHaveBeenLastCalledWith(
       expect.objectContaining({ domainIds: ['d-1', 'd-2'], primaryDomainId: 'd-2' }),
     ));
-    const last = prefill.mock.calls.at(-1)![0];
+    const last = prefill.mock.calls[prefill.mock.calls.length - 1][0];
     expect(last).not.toHaveProperty('domainId');
     expect(last).not.toHaveProperty('domain');
   });

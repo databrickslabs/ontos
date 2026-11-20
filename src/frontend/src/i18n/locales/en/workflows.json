@@ -361,6 +361,7 @@
       "terminalStepHasNext": "Step \"{{step}}\" ends the workflow, so its link to \"{{target}}\" is ignored and removed on save.",
       "conditionalBranchMissing": "Conditional \"{{step}}\" has no step on its {{branch}} branch. When the condition is {{branch}}, the workflow ends as succeeded.",
       "unreachableSteps": "These steps can't be reached from the first step: {{steps}}.",
+      "assignTagKeyUnknown": "Step \"{{step}}\" assigns the tag \"{{key}}\", which is not in the tag catalog. The step fails until the tag is created.",
       "storedEntityTypeUnknown": "The trigger lists \"{{entityType}}\", an entity type that no longer exists. It never fires for it.",
       "storedEntityTypeUnsupported": "The {{trigger}} trigger never fires for {{entity}}."
     }
@@ -542,6 +543,7 @@
     "removedStepsHint": "These steps ran in this execution and were removed from the workflow later.",
     "stepErrors": {
       "rule_where_evaluation_failed": "The WHERE clause of policy '{{policyName}}' could not be evaluated on {{entityType}} {{entityId}}",
+      "tag_not_found": "Tag '{{tag}}' was not found in the tag catalog, so it was not assigned",
       "approval_rejected": "Request denied",
       "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
       "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",

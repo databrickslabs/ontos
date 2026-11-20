@@ -28,6 +28,12 @@ export function workflowWarningText(issue: WorkflowValidationIssue, t: TFunction
         }),
         defaultValue: fallback,
       });
+    case 'assign_tag_key_unknown':
+      return t('workflows:designer.validationWarnings.assignTagKeyUnknown', {
+        step: params.step,
+        key: params.key,
+        defaultValue: fallback,
+      });
     case 'unreachable_steps':
       return t('workflows:designer.validationWarnings.unreachableSteps', {
         steps: Array.isArray(params.steps) ? params.steps.join(', ') : '',

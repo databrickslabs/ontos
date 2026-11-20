@@ -1,5 +1,5 @@
 from uuid import uuid4
-from sqlalchemy import Column, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -50,8 +50,9 @@ class TeamMemberDb(Base):
     member_type = Column(String, nullable=False)  # user or group
     member_identifier = Column(String, nullable=False)  # email for user, name for group
 
-    # Optional app role override (takes precedence over group-based role)
-    app_role_override = Column(String, nullable=True)
+    # Optional app role override (takes precedence over group-based role), stored by role id
+    # so renaming the role keeps it; cleared when the role is deleted (#1453)
+    app_role_override_id = Column(String, ForeignKey('app_roles.id', ondelete='SET NULL'), nullable=True)
 
     # Audit fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -60,6 +61,17 @@ class TeamMemberDb(Base):
 
     # Relationships
     team = relationship("TeamDb", back_populates="members")
+    app_role = relationship("AppRoleDb", lazy="joined")
+
+    __table_args__ = (
+        # Role-override lookup by identifier (lower-cased, case-insensitive)
+        Index('ix_team_members_lower_identifier', func.lower(member_identifier)),
+    )
+
+    @property
+    def app_role_override(self):
+        """The override's role name, read from the role; written through ``app_role_override_id``."""
+        return self.app_role.name if self.app_role is not None else None
 
     def __repr__(self):
         return f"<TeamMemberDb(id='{self.id}', team_id='{self.team_id}', member='{self.member_identifier}')>"

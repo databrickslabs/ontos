@@ -20,7 +20,6 @@ class CommentsRepository(CRUDBase[CommentDb, CommentCreate, CommentUpdate]):
         project_id: Optional[str] = None,
         user_groups: Optional[List[str]] = None,
         user_teams: Optional[List[str]] = None,
-        user_app_role: Optional[str] = None,
         user_role_ids: Optional[Set[str]] = None,
         include_deleted: bool = False
     ) -> List[CommentDb]:
@@ -34,8 +33,6 @@ class CommentsRepository(CRUDBase[CommentDb, CommentCreate, CommentUpdate]):
                 project_id or null (global)
             user_groups: List of user's group memberships
             user_teams: List of team IDs the user belongs to
-            user_app_role: The user's app role *name* (legacy team-override path;
-                matches ``role:<name>`` tokens in stored audience JSON)
             user_role_ids: Set of AppRole UUIDs the viewer holds (group-derived + any
                 applied override). Matches ``role_id:<uuid>`` tokens in stored audience
                 JSON. This is the authoritative path introduced in issue #326.
@@ -63,7 +60,6 @@ class CommentsRepository(CRUDBase[CommentDb, CommentCreate, CommentUpdate]):
         has_audience_filter = (
             user_groups is not None
             or user_teams is not None
-            or user_app_role is not None
             or user_role_ids is not None
         )
         if has_audience_filter:
@@ -71,9 +67,9 @@ class CommentsRepository(CRUDBase[CommentDb, CommentCreate, CommentUpdate]):
             # 1. audience is null (visible to all)
             # 2. audience contains at least one of user's groups (plain string)
             # 3. audience contains team:<team_id> matching user's teams
-            # 4. audience contains role:<role_name> matching user's app role (legacy)
-            # 5. audience contains role_id:<uuid> matching one of the user's effective
-            #    AppRole UUIDs (group-derived or override — introduced in issue #326)
+            # 4. audience contains role_id:<uuid> matching one of the user's effective
+            #    AppRole UUIDs (group-derived, team or override — #326, #1453).
+            #    role:<name> tokens are matched by the caller (CommentsManager.list_comments).
             audience_conditions = [CommentDb.audience.is_(None)]
 
             # Check plain group memberships
@@ -89,12 +85,6 @@ class CommentsRepository(CRUDBase[CommentDb, CommentCreate, CommentUpdate]):
                     audience_conditions.append(
                         CommentDb.audience.contains(f'"team:{team_id}"')
                     )
-
-            # Check legacy role:<name> token (team-override path)
-            if user_app_role:
-                audience_conditions.append(
-                    CommentDb.audience.contains(f'"role:{user_app_role}"')
-                )
 
             # Check role_id:<uuid> tokens — the authoritative path for new comments
             if user_role_ids:

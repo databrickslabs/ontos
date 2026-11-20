@@ -80,13 +80,22 @@ def _create(db: Session, **fields):
     )
 
 
-def test_create_reads_only_the_domain_fields_by_name(db_session: Session):
-    """Only the domain fields read their name as well as their alias. The other aliased
-    fields read only the alias, as before: ``apiVersion`` sent by name keeps the
-    ``v3.1.0`` default, so an existing client's create doesn't change version."""
+def test_create_reads_api_version_and_the_domains_by_name_not_the_other_fields(
+    db_session: Session,
+):
+    """``apiVersion`` and the domain fields read their name as well as their alias. The
+    other aliased fields read only the alias, as before: ``dataProduct`` sent by name is
+    ignored."""
     created = _create(db_session, dataProduct="orders-dp", apiVersion="v3.0.2")
 
-    assert (created.data_product, created.api_version) == (None, "v3.1.0")
+    assert (created.data_product, created.api_version) == (None, "v3.0.2")
+
+
+def test_api_version_by_name_wins_over_the_alias():
+    model = DataContractCreate.model_validate({
+        "name": "Orders", "apiVersion": "v3.0.2", "api_version": "v3.1.0",
+    })
+    assert model.apiVersion == "v3.0.2"
 
 
 def test_the_field_name_wins_when_both_spellings_are_sent():

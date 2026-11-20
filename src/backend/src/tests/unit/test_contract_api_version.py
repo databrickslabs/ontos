@@ -20,10 +20,11 @@ SPELLINGS = [
 ]
 
 
+@pytest.mark.parametrize("key", ["apiVersion", "api_version"])
 @pytest.mark.parametrize("sent, stored", SPELLINGS)
-def test_a_create_stores_the_odcs_spelling(sent, stored):
+def test_a_create_stores_the_odcs_spelling(key, sent, stored):
     assert DataContractCreate.model_validate(
-        {"name": "Orders", "api_version": sent}).apiVersion == stored
+        {"name": "Orders", key: sent}).apiVersion == stored
 
 
 @pytest.mark.parametrize("key", ["apiVersion", "api_version"])

@@ -423,11 +423,16 @@ class DataContractBase(BaseModel):
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
-    apiVersion: str = Field('v3.1.0', alias='api_version')  # Required by ODCS
+    # Required by ODCS. Read as ``apiVersion`` (the documented spelling) or ``api_version``
+    # (the name wins when both are sent)
+    apiVersion: str = Field(
+        'v3.1.0', alias='api_version',
+        validation_alias=AliasChoices('apiVersion', 'api_version'),
+    )
     domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
     # Multi-domain assignment (primary included). The create dialogs send the domains by
-    # field name: these two fields read both spellings (the name wins when both are
-    # sent); the other aliased fields only their alias
+    # field name: these two fields and ``apiVersion`` read both spellings (the name wins
+    # when both are sent); the other aliased fields only their alias
     domainIds: Optional[List[str]] = Field(
         None, alias='domain_ids', validation_alias=AliasChoices('domainIds', 'domain_ids'),
     )

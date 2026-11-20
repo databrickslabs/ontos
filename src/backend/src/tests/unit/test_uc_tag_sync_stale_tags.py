@@ -224,7 +224,7 @@ def test_dry_run_reports_but_removes_nothing(tag_sync, uc, capsys):
 
     assert uc[("COLUMN", COLUMN)] == {OPEX_KEY: OPEX}
     out = capsys.readouterr().out
-    assert f"[DRY-RUN] COLUMN {COLUMN} remove=['{OPEX_KEY}']" in out
+    assert f"[DRY-RUN] COLUMN {COLUMN} remove (recorded, will remove)=['{OPEX_KEY}']" in out
 
 
 def test_unknown_previous_state_skips_the_cleanup(tag_sync, uc):
@@ -366,10 +366,9 @@ def test_prefix_changed_between_runs_removes_recorded_keys(tag_sync, db, uc):
     removals = []
     original_remove = tag_sync.remove_delivered_tags
 
-    def track_remove(spark, obj_type, obj_name, delivered, prefix, dry_run=False):
-        removals.append((obj_type, obj_name, delivered, prefix))
-        return original_remove(spark, obj_type, obj_name, delivered, prefix,
-                               dry_run=dry_run)
+    def track_remove(spark, obj_type, obj_name, delivered, dry_run=False):
+        removals.append((obj_type, obj_name, delivered))
+        return original_remove(spark, obj_type, obj_name, delivered, dry_run=dry_run)
 
     # Patch and run with new prefix
     with patch.object(tag_sync, "remove_delivered_tags", track_remove):

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
 import { usePagination, PaginationControls } from '@/components/common/paginated-list';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ---------------------------------------------------------------------------
 // VersionHistoryPanel — drives the signed-off versioning contract §1 (version
@@ -187,9 +188,10 @@ export function VersionHistoryPanel({
           <History className="h-4 w-4 text-muted-foreground" />
           <h3 className="text-sm font-medium">{title}</h3>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          {t('common:loading', 'Loading…')}
+        <div className="space-y-2" data-testid="version-history-loading">
+          <Skeleton className="h-4 w-1/3" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-4/5" />
         </div>
       </div>
     );

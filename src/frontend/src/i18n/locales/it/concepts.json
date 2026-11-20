@@ -5,6 +5,121 @@
     "browser": "Concetti",
     "search": "Ricerca",
     "graph": "Grafo",
-    "hierarchy": "Gerarchia"
+    "hierarchy": "Gerarchia",
+    "searchSparql": "Ricerca / SPARQL",
+    "generator": "Generatore",
+    "import": "Importa",
+    "mapping": "Mappatura"
+  },
+  "sections": {
+    "label": "Sezioni dei concetti",
+    "define": "Definisci",
+    "explore": "Esplora",
+    "enrich": "Arricchisci"
+  },
+  "explore": {
+    "viewLabel": "Viste di esplorazione",
+    "viewList": "Elenco",
+    "viewTree": "Albero",
+    "viewGraph": "Grafo",
+    "createConcept": "Nuovo concetto",
+    "createScheme": "Nuovo schema di concetti",
+    "description": "Crea, consulta e distribuisci i tuoi schemi di concetti aziendali.",
+    "sparql": "SPARQL",
+    "sparqlPanel": "SPARQL e ricerca nel knowledge graph"
+  },
+  "define": {
+    "description": "Crea, genera o importa i tuoi schemi di concetti aziendali."
+  },
+  "enrich": {
+    "deliver": {
+      "description": "Scrivi metadati governati sugli asset {{platform}} mappati.",
+      "tags": {
+        "name": "Tag",
+        "desc": "Tag di governance chiave/valore su tabelle e colonne. Guidano la ricerca e le policy di accesso.",
+        "via": "tramite uc_tag_sync",
+        "notConfigured": "La distribuzione dei tag non è configurata. Per attivarla, installa il job uc_tag_sync in Impostazioni > Job.",
+        "note": "La distribuzione dei tag avviene tramite il job condiviso uc_tag_sync, che copre anche aspetti diversi dall'assegnazione semantica. Configurane ambito e pianificazione in Impostazioni > Job."
+      },
+      "desc": {
+        "name": "Descrizioni delle colonne",
+        "desc": "Significato in linguaggio semplice sulle colonne. È ciò che Genie e la ricerca leggono per rispondere con precisione.",
+        "assist": "dbxmetagen può redigerne una bozza"
+      },
+      "glossary": {
+        "name": "UC Glossary",
+        "desc": "Il glossario aziendale governato all'interno della piattaforma stessa.",
+        "note": "Sincronizza i concetti con il glossario aziendale nativo di Unity Catalog, il livello governato da cui legge Genie Ontology. Disponibile con la GA di UC Glossary."
+      },
+      "title": "Distribuisci",
+      "tip": "Distribuisci scrive i tuoi metadati governati sulla piattaforma. Gli strumenti a valle (Genie, ricerca, agenti) li leggono da lì. Tag = policy e ricerca. Descrizioni = ciò che legge Genie. Glossario = il livello aziendale governato.",
+      "pendingTitle": "Modifiche ai tag in sospeso",
+      "pendingSubtitle": "Collegamenti concetto-asset creati dall'ultima sincronizzazione dei tag riuscita. Una nuova esecuzione di uc_tag_sync li distribuirebbe.",
+      "pendingEmpty": "Nulla in sospeso.",
+      "pendingInScheme": "in",
+      "pendingAppliesTo": "si applica a",
+      "coverageSynced": "{{synced}} di {{total}} sincronizzati · ",
+      "pendingCount": "{{pending}} in sospeso",
+      "lastRun": " · ultima esecuzione {{run}}",
+      "notSynced": "Non ancora sincronizzato",
+      "manageInSettings": "Gestisci in Impostazioni",
+      "configure": "Configura",
+      "comingSoon": "Prossimamente: la configurazione e l'esecuzione di questa sincronizzazione da Ontos non sono ancora disponibili.",
+      "syncNow": "Sincronizza ora",
+      "about": "Informazioni su questa destinazione di distribuzione"
+    },
+    "subtitle": "Mappa i tuoi concetti sugli asset, poi distribuisci i metadati governati sulla piattaforma.",
+    "deliverTo": "Distribuisci su",
+    "platformTip": "Le piattaforme di distribuzione derivano dalle connessioni configurate in Impostazioni. Unity Catalog è quella predefinita. Le destinazioni di distribuzione qui sotto si adattano alla piattaforma scelta.",
+    "manageConnections": "Gestisci connessioni ↗",
+    "map": {
+      "title": "Mappa",
+      "suggest": "Suggerisci corrispondenze",
+      "desc": "Collega un concetto direttamente a un Asset {{platform}} (il percorso predefinito, senza bisogno di prodotti o contratti), poi aggiungi facoltativamente collegamenti a data product e data contract. I tre collegamenti sono indipendenti.",
+      "col": {
+        "scheme": "Schema di concetti",
+        "lastRun": "Ultima esecuzione",
+        "concepts": "Concetti",
+        "coverage": "Copertura",
+        "products": "Prodotti",
+        "contracts": "Contratti",
+        "assets": "Asset",
+        "suggested": "Suggeriti"
+      },
+      "assetNote": "I collegamenti agli asset sono ciò che Distribuisci arricchisce nel passaggio 2. Il collegamento diretto agli asset funziona anche prima che esista un prodotto o un contratto, risolvendo così il problema dell'uovo e della gallina.",
+      "review": "Rivedi",
+      "allSelected": "Tutti selezionati",
+      "unmappedNote": "{{unmapped}} concetti non hanno ancora un collegamento.",
+      "coverageTip": "Copertura = quota dei concetti di uno schema con almeno un collegamento. Prodotti e Contratti sono collegamenti aggiuntivi facoltativi, quindi i tre conteggi non si sommano al totale. Solo gli Asset possono essere arricchiti nel passaggio 2.",
+      "placeholderNote": "I dati di copertura sono di esempio: il servizio di copertura in tempo reale non è al momento disponibile."
+    },
+    "review": {
+      "title": "Rivedi le corrispondenze suggerite",
+      "subtitle": "Accetta o rifiuta ogni corrispondenza concetto-Asset. Nulla viene sincronizzato finché non la accetti.",
+      "loading": "Caricamento delle corrispondenze suggerite…",
+      "applied": "{{count}} corrispondenze applicate. Verranno sincronizzate alla prossima distribuzione.",
+      "applyError": "Impossibile applicare le corrispondenze: ",
+      "placeholderNote": "Corrispondenze di esempio mostrate a titolo illustrativo.",
+      "reject": "Rifiuta",
+      "accept": "Accetta",
+      "drift": "Schema drift da risolvere",
+      "openFull": "Apri la Review Board completa",
+      "applying": "Applicazione in corso…",
+      "acceptApplyAll": "Accetta e applica tutte ({{count}})"
+    },
+    "modes": {
+      "direct": "Diretta",
+      "directDesc": "Ontos applica immediatamente le modifiche a questo workspace tramite il service principal.",
+      "indirect": "Indiretta",
+      "indirectDesc": "Ontos scrive YAML in Git affinché la tua pipeline CI/CD lo promuova (da dev a staging a prod).",
+      "manual": "Manuale",
+      "manualDesc": "Ontos avvisa una persona affinché applichi la modifica altrove.",
+      "active": "attiva",
+      "manageLink": "La modalità di distribuzione si imposta per sito in Impostazioni, Distribuzione"
+    }
+  },
+  "mode": {
+    "description": "La vista avanzata mostra il livello dell'ontologia: RDF/SKOS, IRI, dominio e range delle proprietà e impostazioni tecniche di distribuzione. La vista semplice li nasconde. La tua scelta viene ricordata.",
+    "label": "Modalità di visualizzazione"
   }
 }

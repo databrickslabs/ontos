@@ -251,7 +251,7 @@ export default function ConceptSelectDialog({
                         </div>
                       </div>
                     </div>
-                    <Button size="sm" variant="default" className="shrink-0" onClick={() => onSelect(h.target_concept_iri)}>Select</Button>
+                    <Button size="sm" variant="default" className="shrink-0" onClick={() => onSelect(h.target_concept_iri)}>{t('common:actions.select')}</Button>
                   </div>
                 ))}
               </div>
@@ -274,7 +274,7 @@ export default function ConceptSelectDialog({
                         </div>
                       </div>
                     </div>
-                    <Button size="sm" variant="default" className="shrink-0" onClick={() => onSelect(r.value)}>Select</Button>
+                    <Button size="sm" variant="default" className="shrink-0" onClick={() => onSelect(r.value)}>{t('common:actions.select')}</Button>
                   </div>
                 ))}
               </div>
@@ -306,7 +306,7 @@ export default function ConceptSelectDialog({
                             </div>
                           </div>
                         </div>
-                        <Button size="sm" variant="outline" className="shrink-0" onClick={() => onSelect(r.value)}>Select</Button>
+                        <Button size="sm" variant="outline" className="shrink-0" onClick={() => onSelect(r.value)}>{t('common:actions.select')}</Button>
                       </div>
                     ))}
                   </div>

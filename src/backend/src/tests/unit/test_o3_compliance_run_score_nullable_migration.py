@@ -52,7 +52,7 @@ def _scores(conn):
 def test_upgrade_stores_null_for_runs_without_a_score_and_downgrade_restores_zero(
     tmp_path, migration,
 ):
-    assert migration.down_revision == 'o2_step_execution_message'
+    assert migration.down_revision == 'c8_workflow_scheduler_claims'
     engine = create_engine(f"sqlite:///{tmp_path / 'o3.db'}")
     with engine.begin() as conn:
         conn.execute(text(

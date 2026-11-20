@@ -1,9 +1,10 @@
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
+from src.common.odcs_api_version import normalized_api_version
 
 if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed
@@ -422,15 +423,38 @@ class DataContractBase(BaseModel):
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
-    apiVersion: str = Field('v3.1.0', alias='api_version')  # Required by ODCS
+    # Required by ODCS. Read as ``apiVersion`` (the documented spelling) or ``api_version``
+    # (the name wins when both are sent)
+    apiVersion: str = Field(
+        'v3.1.0', alias='api_version',
+        validation_alias=AliasChoices('apiVersion', 'api_version'),
+    )
     domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
-    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain assignment (primary included)
-    primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
+    # Multi-domain assignment (primary included). The create dialogs send the fields by
+    # name: every aliased field is read by its name as well as its alias
+    # (``populate_by_name``). For ``apiVersion`` and the two domain fields below the name
+    # also wins when both spellings are sent (explicit ``AliasChoices``); for the other
+    # fields the alias is read first, as pydantic does
+    domainIds: Optional[List[str]] = Field(
+        None, alias='domain_ids', validation_alias=AliasChoices('domainIds', 'domain_ids'),
+    )
+    primaryDomainId: Optional[str] = Field(
+        None, alias='primary_domain_id',
+        validation_alias=AliasChoices('primaryDomainId', 'primary_domain_id'),
+    )
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     descriptionUsage: Optional[str] = Field(None, alias='description_usage')
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
+
+    # Spelling only ('3.0.2' -> 'v3.0.2'); a value outside ODCS is stored as sent
+    _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
+
+    class Config:
+        # The create dialogs and the wizard send the field names (dataProduct, tenant,
+        # domainIds, ...), the documented camelCase input
+        populate_by_name = True
 
 
 class DataContractCreate(DataContractBase):
@@ -489,17 +513,50 @@ class DataContractCreate(DataContractBase):
         )
 
 
+_KEEP_IF_NULL = "Omitted or null: the stored value is kept."
+_DOMAINS_NOTE = (
+    " A non-null domainIds or domainId replaces the whole assignment; domainIds []"
+    " clears it. primaryDomainId alone makes one of the stored domains primary."
+    " Precedence: domainIds (and primaryDomainId) win over the legacy domainId, which"
+    " is then ignored. An empty string is refused (400, invalid_domain_identifier), and so"
+    " is a primaryDomainId that is not one of the domainIds (400,"
+    " primary_domain_not_in_domains)."
+)
+
+
 class DataContractUpdate(BaseModel):
+    """Contract update. ``apiVersion`` and the domain fields omitted or sent as null
+    keep the stored value.
+
+    Domains: when ``domainIds`` or ``domainId`` is sent with a non-null value, the
+    domain assignment is replaced as a whole (with ``primaryDomainId`` as its primary),
+    so ``domainIds: []`` clears it; ``primaryDomainId`` alone makes one of the stored
+    domains primary (another domain is refused); all of them null or omitted keep it.
+    Precedence: ``domainIds`` / ``primaryDomainId`` win over the legacy ``domainId``
+    (``domainIds: []`` with a ``domainId`` clears the domains). A blank identifier
+    (``""``) is refused with a 400 and the code ``invalid_domain_identifier``, never
+    read as "not sent"; so is a ``primaryDomainId`` that is not one of the ``domainIds``
+    (``primary_domain_not_in_domains``), as when it is sent alone. The legacy ``domain``
+    (a name, not an id) is checked the same way where a caller can send it.
+    """
     name: Optional[str] = None
     version: Optional[str] = None
     status: Optional[str] = None
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     project_id: Optional[str] = None  # Project association
     kind: Optional[str] = None
-    apiVersion: Optional[str] = Field(None, alias='api_version')
-    domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
-    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain replace-all
-    primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
+    apiVersion: Optional[str] = Field(None, alias='api_version', description=_KEEP_IF_NULL)
+    # Legacy single-domain (primary)
+    domainId: Optional[str] = Field(
+        None, alias='domain_id', description=_KEEP_IF_NULL + _DOMAINS_NOTE,
+    )
+    # Multi-domain replace-all
+    domainIds: Optional[List[str]] = Field(
+        None, alias='domain_ids', description=_KEEP_IF_NULL + _DOMAINS_NOTE,
+    )
+    primaryDomainId: Optional[str] = Field(
+        None, alias='primary_domain_id', description=_KEEP_IF_NULL + _DOMAINS_NOTE,
+    )
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None  # Nested description object (flattened in manager)
@@ -530,6 +587,9 @@ class DataContractUpdate(BaseModel):
 
     class Config:
         populate_by_name = True
+
+    # Spelling only ('3.0.2' -> 'v3.0.2'), as on create
+    _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
 
 
 class DataContractRead(BaseModel):

@@ -529,6 +529,10 @@
     "personal": "個人用",
     "requestAccess": "アクセスをリクエスト（{{count}}）"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} が空です。ドメイン ID を送信するか、フィールドを省略してコントラクトのドメインを維持してください。",
+    "primaryDomainNotInDomains": "ドメイン {{primaryDomainId}} はコントラクトのドメインに含まれていないため、プライマリドメインにできません。"
+  },
   "createInline": {
     "title": "新しいコントラクトを作成",
     "description": "最小限のデータコントラクトを作成します。スキーマや品質ルールは後で追加できます。",

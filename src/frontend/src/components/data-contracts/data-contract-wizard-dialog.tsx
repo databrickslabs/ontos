@@ -11,7 +11,7 @@ import type { InferredSchemaObject } from './infer-from-asset-dialog'
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
-import DomainMultiSelector from '@/components/ui/domain-multi-selector'
+import DomainMultiSelector, { resolveEffectivePrimary } from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
 
 type WizardProps = {
@@ -400,7 +400,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         status: status, // Use user-selected status
         owner,
         domainIds: domainIds, // Multi-domain assignment (primary included)
-        primaryDomainId: primaryDomainId,
+        primaryDomainId: resolveEffectivePrimary(domainIds, primaryDomainId),
         tenant,
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
@@ -488,7 +488,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         status: 'draft', // Draft status for partial saves
         owner,
         domainIds: domainIds, // Multi-domain assignment (primary included)
-        primaryDomainId: primaryDomainId,
+        primaryDomainId: resolveEffectivePrimary(domainIds, primaryDomainId),
         tenant,
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },

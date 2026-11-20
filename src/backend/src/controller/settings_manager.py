@@ -1,7 +1,8 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import json
+import threading
 import uuid
 import yaml
 
@@ -32,6 +33,7 @@ from src.models.settings import JobCluster, AppRole, AppRoleCreate, AppRoleUpdat
 from src.models.workflow_installations import WorkflowInstallation
 from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES, ACCESS_LEVEL_ORDER
 from src.common.logging import get_logger
+from src.common.thread_session import ThreadBoundDb, thread_session
 from src.common.api_errors import CodedValueError
 from src.repositories.settings_repository import app_role_repo, role_hierarchy_repo
 from src.repositories.workflow_installations_repository import workflow_installation_repo
@@ -176,7 +178,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     },
 }
 
-class SettingsManager:
+class SettingsManager(ThreadBoundDb):
     def __init__(self, db: Session, settings: Settings, workspace_client: Optional[WorkspaceClient] = None):
         """Inject database session, settings, and optional workspace client."""
         self._db = db
@@ -1556,8 +1558,85 @@ class SettingsManager:
             error_summary = f"Failed to update {len(errors)} workflow(s): " + "; ".join(errors)
             raise RuntimeError(error_summary)
 
+    # Warnings of the installed compliance job sync, sent with the saved settings
+    COMPLIANCE_JOB_NOT_UPDATED = 'compliance_job_not_updated'
+    COMPLIANCE_JOB_SHAPE_UNEXPECTED = 'compliance_job_shape_unexpected'
+
+    def _refresh_llm_job_parameters(self) -> Optional[Dict[str, Any]]:
+        """Give the installed compliance job the new LLM settings; a warning if it couldn't.
+
+        Scheduled runs read them from the job's defaults, where they are written
+        when the job is installed or updated (LLM_CHECK rules). A job installed
+        before the job took LLM settings also gets their code and task arguments.
+        The settings are saved either way; the warning says what to do.
+        """
+        if not getattr(self, '_jobs', None):
+            return None
+        from src.controller.jobs_manager import JOB_SHAPE_UNEXPECTED, LLM_TASK_ARGUMENTS
+
+        try:
+            outcome = self._jobs.sync_installed_workflow(
+                'compliance_checks', required_arguments=LLM_TASK_ARGUMENTS,
+            )
+        except Exception as e:
+            logger.warning(
+                "Could not update the LLM settings of the installed compliance job: %s", e,
+            )
+            return {
+                'code': self.COMPLIANCE_JOB_NOT_UPDATED, 'params': {},
+                'message': "The Compliance Checks job could not be updated with the LLM "
+                           "settings (the app may lack permission on the job). Scheduled "
+                           "LLM_CHECK rules use the old settings until the job is reinstalled.",
+            }
+        if outcome == JOB_SHAPE_UNEXPECTED:
+            return {
+                'code': self.COMPLIANCE_JOB_SHAPE_UNEXPECTED, 'params': {},
+                'message': "The Compliance Checks job was changed in Databricks, so only its "
+                           "parameters were updated. If scheduled LLM_CHECK rules fail with "
+                           "llm_check_disabled, reinstall the job.",
+            }
+        return None
+
+    def _llm_job_values(self) -> Tuple[Any, Any]:
+        """The LLM settings the installed compliance job gets as parameters."""
+        return (
+            getattr(self._settings, 'LLM_ENABLED', None),
+            getattr(self._settings, 'LLM_ENDPOINT', None),
+        )
+
     def update_settings(self, settings: dict) -> Settings:
         """Update settings"""
+        return self.update_settings_with_warnings(settings)[0]
+
+    def update_settings_with_warnings(
+        self, settings: dict,
+    ) -> Tuple[Settings, List[Dict[str, Any]]]:
+        """Update settings; also what didn't apply, as ``{code, params, message}`` warnings.
+
+        The warnings are returned, not kept on this shared instance, so
+        concurrent saves don't see each other's.
+        """
+        warnings: List[Dict[str, Any]] = []
+        return self._update_settings(settings, warnings), warnings
+
+    # One settings save at a time: a save changes this instance and the installed jobs
+    _save_lock = threading.Lock()
+
+    def update_settings_off_loop(
+        self, settings: dict,
+    ) -> Tuple[Settings, List[Dict[str, Any]]]:
+        """``update_settings_with_warnings`` for a worker thread.
+
+        The save gets its own DB session (this manager's and the jobs manager's
+        ``_db`` on this thread), so it never shares the managers' Session with
+        handlers on the event loop; saves run one at a time.
+        """
+        from src.common.database import get_session_factory
+
+        with self._save_lock, thread_session(get_session_factory()):
+            return self.update_settings_with_warnings(settings)
+
+    def _update_settings(self, settings: dict, warnings: List[Dict[str, Any]]) -> Settings:
         git_values_before = self._git_setting_values()
         # Persist configured cluster ID string; do not scan clusters
         cluster_in_payload = 'job_cluster_id' in settings
@@ -1656,6 +1735,8 @@ class SettingsManager:
             logger.info(f"Updated APP_AUDIT_LOG_DIR to: {value}")
         
         # Handle LLM settings
+        # The General form always sends both: the installed job is synced only on a change
+        llm_values_before = self._llm_job_values()
         if 'llm_enabled' in settings:
             value = settings.get('llm_enabled')
             # Convert to string for storage, then back to bool
@@ -1668,6 +1749,11 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'LLM_ENDPOINT', value)
             self._settings.LLM_ENDPOINT = value
             logger.info(f"Updated LLM_ENDPOINT to: {value}")
+
+        if self._llm_job_values() != llm_values_before:
+            warning = self._refresh_llm_job_parameters()
+            if warning:
+                warnings.append(warning)
         
         if 'llm_system_prompt' in settings:
             value = settings.get('llm_system_prompt') or None

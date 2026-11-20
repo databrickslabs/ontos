@@ -2336,8 +2336,15 @@ click **Evaluate assets**. The card polls the run while it goes and then shows i
   visible after a restart.
 - **Permission.** Only users with Settings read/write access (admins) can start a run. The
   summary can be read by users with Settings read access.
-- **Scheduling.** A run is started from this card or from the API
-  (`POST /api/maturity-evaluations/assets`). It isn't scheduled yet.
+- **Scheduling.** A run is started from this card, from the API
+  (`POST /api/maturity-evaluations/assets`), or by a workflow with an **Evaluate Asset
+  Maturity** step on a schedule. The default workflow **Nightly Asset Maturity Evaluation**
+  (inactive) runs it every night at 02:00 UTC; set a catalog or schema on its step, change
+  the schedule, and activate it in **Settings → Workflows**. Saving, activating or running
+  such a workflow needs Settings read/write access as well. A scheduled run reads the Unity
+  Catalog tables with the app's identity, not an admin's, and is listed here like any other
+  run (started by `system:scheduler`). See the
+  [Workflow Authoring Guide](workflow-authoring-guide.md#asset-maturity-evaluation).
 
 ---
 

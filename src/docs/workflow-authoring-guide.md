@@ -126,6 +126,7 @@ Each step ends with a pass or a fail, which picks the next step. A step that rai
 | `create_asset_review` | The review was created | It couldn't be created |
 | `entity_action` | The action (certify, decertify, publish, unpublish, set publication scope) was applied | The action isn't allowed or fails |
 | `grant_permissions` | The Unity Catalog grant was made | It couldn't be made |
+| `evaluate_asset_maturity` | The bulk maturity evaluation of its scope completed (see below) | Another run is going (`maturity_bulk_run_in_progress`), the scope is invalid (`maturity_bulk_scope_invalid`), or the run failed (`maturity_bulk_run_failed`) |
 | `pass` | Always | Never |
 | `fail` | Never | Always; its `message` becomes the execution's error |
 
@@ -152,6 +153,16 @@ A Python script runs with a small set of safe built-ins (`len`, `str`, `dict`, `
 - The step fails after `timeout_seconds` (default 60).
 
 A SQL script runs on the SQL warehouse set in Settings, with variables substituted into the SQL text as they are: values are not quoted or escaped, so don't build SQL from user-entered fields.
+
+### Asset maturity evaluation
+
+`evaluate_asset_maturity` runs the bulk maturity evaluation of table, view and metric view assets that **Settings → Maturity Levels** starts (`POST /api/maturity-evaluations/assets`), and waits for it to end. Use it on a `scheduled` trigger to evaluate assets regularly; the default workflow **Nightly Asset Maturity Evaluation** (inactive) does that every night at 02:00 UTC.
+
+- Config: `catalog` (optional, empty = every catalog) and `schema_name` (optional, needs `catalog`). The step is allowed only on `scheduled` and `manual` workflows (`evaluate_asset_maturity_trigger_unsupported` on others), since it evaluates every asset of its scope.
+- Result data: `run_id`, `state`, `scope`, `total`, `processed`, `evaluated`, `changed`, `skipped` (count per reason code) and `error_count`. The execution view shows the counts; the run is also the last run on the Maturity Levels card.
+- One run at a time per app instance: a slot that comes while a run is going (started from the card, or a previous slot) fails the step with `maturity_bulk_run_in_progress`, and `on_fail` can follow it. The scheduler doesn't run a workflow's next slot before its previous run ended.
+- The run reads the Unity Catalog tables with the app's identity (a scheduled or manual run has no user token) and is started by `system:scheduler`, or by the user of a manual run.
+- Permission: creating or editing a workflow with this step, activating it, running it with **Run** and retrying one of its executions need Settings read/write access (the permission of the bulk evaluation), on top of the workflow permission (403 `workflow_step_requires_settings_write`). Removing the step or deactivating the workflow doesn't.
 
 ## Variables and Templates
 

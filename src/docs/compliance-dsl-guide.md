@@ -242,6 +242,11 @@ You can write rules for these entity types:
 ### Generic
 - `Object` - Matches all entity types
 
+Type names ignore case and underscores, so `MATCH (p:DataProduct)` is the same
+as `MATCH (p:data_product)`, in compliance runs and in workflow policy checks.
+When a rule matches no entity, its run succeeds with a "no entities matched"
+warning and no results.
+
 ## Common Properties
 
 Different entities expose different properties. Here are the most common:

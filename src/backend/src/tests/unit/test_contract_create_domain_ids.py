@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.controller.data_contracts_manager import DataContractsManager
 from src.db_models.data_domains import DataDomain
 from src.models.data_contracts_api import DataContractCreate, DataContractUpdate
@@ -178,3 +179,74 @@ def test_an_update_with_domain_id_and_primary_replaces_them(db_session: Session)
 
     assert _update(db_session, created.id, domainId=second, primaryDomainId=second) == {second}
     assert _primary(db_session, created.id) == [second]
+
+
+def _stored(db: Session, contract_id: str) -> set:
+    return {
+        d.domain_id for d in entity_domain_repo.get_domains_for_entity(
+            db, entity_type="data_contract", entity_id=contract_id,
+        )
+    }
+
+
+@pytest.mark.parametrize("fields", [
+    {"primaryDomainId": ""},
+    {"domainId": ""},
+    {"domainIds": [""]},
+    {"domainIds": [" "]},
+    {"domainIds": ["x"], "primaryDomainId": ""},
+    {"domainIds": [], "primaryDomainId": ""},
+])
+def test_an_update_with_a_blank_domain_identifier_is_refused(
+    db_session: Session, fields,
+):
+    """A blank id is a value, not absence: it is refused with a code, never read as
+    "clear the domains" (before, ``primaryDomainId: ""`` cleared them)."""
+    created = _create(db_session, domainIds=[_domain(db_session)])
+
+    with pytest.raises(CodedValueError) as refused:
+        _update(db_session, created.id, **fields)
+
+    assert refused.value.code == "invalid_domain_identifier"
+
+
+def test_a_create_with_a_blank_domain_identifier_is_refused(db_session: Session):
+    with pytest.raises(CodedValueError) as refused:
+        _create(db_session, domainIds=[_domain(db_session)], primaryDomainId="")
+
+    assert refused.value.params == {"field": "primaryDomainId"}
+
+
+def test_an_update_with_empty_domain_ids_wins_over_a_legacy_domain_id(db_session: Session):
+    """domainIds [] is the modern clear-all: the legacy domainId doesn't keep a domain."""
+    domain = _domain(db_session)
+    created = _create(db_session, domainIds=[domain])
+
+    assert _update(db_session, created.id, domainIds=[], domainId=domain) == set()
+
+
+def test_a_create_with_empty_domain_ids_wins_over_a_legacy_domain_id(db_session: Session):
+    created = _create(db_session, domainIds=[], domainId=_domain(db_session))
+
+    assert _stored(db_session, created.id) == set()
+
+
+def test_an_update_with_domain_ids_wins_over_a_legacy_domain_id(db_session: Session):
+    first, second = _domain(db_session), _domain(db_session)
+    created = _create(db_session, domainIds=[first])
+
+    assert _update(db_session, created.id, domainIds=[second], domainId=first) == {second}
+
+
+def test_an_update_with_primary_and_legacy_domain_id_takes_the_primary(db_session: Session):
+    first, second = _domain(db_session), _domain(db_session)
+    created = _create(db_session, domainIds=[first])
+
+    assert _update(db_session, created.id, primaryDomainId=second, domainId=first) == {second}
+
+
+def test_an_update_with_a_legacy_domain_id_alone_still_replaces_the_domain(db_session: Session):
+    first, second = _domain(db_session), _domain(db_session)
+    created = _create(db_session, domainIds=[first])
+
+    assert _update(db_session, created.id, domainId=second) == {second}

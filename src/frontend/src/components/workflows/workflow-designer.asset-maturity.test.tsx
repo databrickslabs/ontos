@@ -138,7 +138,7 @@ describe('WorkflowDesigner Evaluate Asset Maturity step', () => {
 
     await waitFor(() => expect(api.toast).toHaveBeenCalled());
     expect(api.toast.mock.calls[0][0].description).toBe(
-      'Este workflow executa a avaliação de maturidade dos ativos. '
+      'Este workflow executa a avaliação de maturidade dos assets. '
       + 'Salvá-lo, ativá-lo ou executá-lo exige acesso de escrita em Configurações.',
     );
   });
@@ -164,7 +164,7 @@ describe('getAssetMaturitySummary', () => {
       await i18n.changeLanguage('pt');
     });
     expect(getAssetMaturitySummary(run, i18n.t)).toBe(
-      '3 de 5 ativos avaliados: 1 mudaram de nível, 2 ignorados, 0 erros',
+      '3 de 5 assets avaliados: 1 mudaram de nível, 2 ignorados, 0 erros',
     );
     expect(getAssetMaturitySummary({ result_data: { error_code: 'x' } }, i18n.t)).toBeUndefined();
     expect(getAssetMaturitySummary(undefined, i18n.t)).toBeUndefined();

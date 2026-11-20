@@ -1,0 +1,623 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Plus, Trash2, Power, PowerOff, Loader2, X, Pencil } from 'lucide-react';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { useTranslation } from 'react-i18next';
+import { useToast } from '@/hooks/use-toast';
+import { useApi } from '@/hooks/use-api';
+
+interface ComplianceField {
+  id?: string;
+  group_title: string;
+  key: string;
+  label: string;
+  reference_id: string;
+  value_type: string;
+  possible_values: string[] | null;
+  default_value: unknown | null;
+  hint_text: string | null;
+  is_mandatory: boolean;
+  field_order: number;
+  group_order: number;
+}
+
+interface ComplianceTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  entity_type: string;
+  is_active: boolean;
+  fields: ComplianceField[];
+}
+
+// Slice 1: Data Products is the only bound entity type exercised end-to-end.
+const ENTITY_TYPE_OPTIONS = [{ value: 'data_product' }];
+
+interface DraftField {
+  id?: string; // present when editing an existing field
+  label: string;
+  reference_id: string;
+  group_title: string;
+  value_type: string;
+  possible_values: string; // comma-separated in the editor; split on save
+  hint_text: string;
+  default_value: string; // raw text; backend coerces to the field type
+  is_mandatory: boolean;
+}
+
+// Labels are translated in the component (settings:complianceTemplates.valueTypes.*)
+const VALUE_TYPE_OPTIONS = [
+  { value: 'string' },
+  { value: 'numeric' },
+  { value: 'boolean' },
+  { value: 'date' },
+  { value: 'enum' },
+  { value: 'multi_enum' },
+  { value: 'range' },
+];
+
+const VOCAB_TYPES = new Set(['enum', 'multi_enum']);
+
+/** Parse the admin's raw default text into the JSON shape for a field type.
+ *  The backend re-validates/coerces, so this only needs to pick the right shape. */
+function parseDefaultValue(valueType: string, raw: string): unknown {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  switch (valueType) {
+    case 'numeric': {
+      const n = Number(trimmed);
+      return Number.isNaN(n) ? trimmed : n;
+    }
+    case 'boolean':
+      return /^(true|yes|1)$/i.test(trimmed);
+    case 'multi_enum':
+      return trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+    case 'range': {
+      // Accept "low-high" or "low,high".
+      const parts = trimmed.split(/[,-]/).map((s) => s.trim());
+      if (parts.length === 2) return { low: Number(parts[0]), high: Number(parts[1]) };
+      return trimmed;
+    }
+    default:
+      return trimmed; // string, enum, date
+  }
+}
+
+/** Stringify a stored default value back into the editor's text field. */
+function stringifyDefault(valueType: string, value: unknown): string {
+  if (value == null) return '';
+  if (valueType === 'multi_enum' && Array.isArray(value)) return value.join(', ');
+  if (valueType === 'range' && typeof value === 'object') {
+    const r = value as { low?: unknown; high?: unknown };
+    return `${r.low ?? ''}-${r.high ?? ''}`;
+  }
+  if (valueType === 'boolean') return value ? 'true' : 'false';
+  return String(value);
+}
+
+export default function ComplianceTemplatesSettings() {
+  const { t } = useTranslation(['settings', 'common']);
+  const { toast } = useToast();
+  const { get, post, put, delete: apiDelete } = useApi();
+
+  const [templates, setTemplates] = useState<ComplianceTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingTemplate, setDeletingTemplate] = useState<ComplianceTemplate | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({ name: '', description: '', entity_type: 'data_product' });
+  const [draftFields, setDraftFields] = useState<DraftField[]>([]);
+  // Edit mode: the template being edited (null = create mode) + its original
+  // fields, so save can diff (add / update / delete) against the server state.
+  const [editingTemplate, setEditingTemplate] = useState<ComplianceTemplate | null>(null);
+  const [originalFields, setOriginalFields] = useState<ComplianceField[]>([]);
+  const hasFetched = useRef(false);
+
+  const fetchTemplates = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await get<ComplianceTemplate[]>('/api/compliance-templates');
+      if (error) throw new Error(error);
+      setTemplates(Array.isArray(data) ? data : []);
+    } catch {
+      // Silent on initial load to avoid flash.
+    } finally {
+      setLoading(false);
+    }
+  }, [get]);
+
+  useEffect(() => {
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      fetchTemplates();
+    }
+  }, [fetchTemplates]);
+
+  const handleOpenCreate = () => {
+    setEditingTemplate(null);
+    setOriginalFields([]);
+    setFormData({ name: '', description: '', entity_type: 'data_product' });
+    setDraftFields([]);
+    setDialogOpen(true);
+  };
+
+  const handleOpenEdit = (template: ComplianceTemplate) => {
+    setEditingTemplate(template);
+    const sorted = [...(template.fields || [])].sort(
+      (a, b) => a.group_order - b.group_order || a.field_order - b.field_order,
+    );
+    setOriginalFields(sorted);
+    setFormData({
+      name: template.name,
+      description: template.description || '',
+      entity_type: template.entity_type,
+    });
+    setDraftFields(
+      sorted.map((f) => ({
+        id: f.id,
+        label: f.label,
+        reference_id: f.reference_id,
+        group_title: f.group_title || '',
+        value_type: f.value_type,
+        possible_values: Array.isArray(f.possible_values) ? f.possible_values.join(', ') : '',
+        hint_text: f.hint_text || '',
+        default_value: stringifyDefault(f.value_type, f.default_value),
+        is_mandatory: f.is_mandatory,
+      })),
+    );
+    setDialogOpen(true);
+  };
+
+  const toSlug = (s: string) =>
+    s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  const handleAddDraftField = () => {
+    setDraftFields((prev) => [
+      ...prev,
+      { label: '', reference_id: '', group_title: '', value_type: 'string', possible_values: '', hint_text: '', default_value: '', is_mandatory: false },
+    ]);
+  };
+
+  /** Map an editor draft field to the API field payload. */
+  const draftToPayload = (f: DraftField, idx: number) => ({
+    group_title: f.group_title.trim(),
+    group_order: 0,
+    key: toSlug(f.label) || `field-${idx + 1}`,
+    label: f.label.trim(),
+    reference_id: (f.reference_id.trim() && toSlug(f.reference_id)) || toSlug(f.label) || `field-${idx + 1}`,
+    value_type: f.value_type,
+    possible_values: VOCAB_TYPES.has(f.value_type)
+      ? f.possible_values.split(',').map((s) => s.trim()).filter(Boolean)
+      : null,
+    default_value: parseDefaultValue(f.value_type, f.default_value),
+    hint_text: f.hint_text.trim() || null,
+    is_mandatory: f.is_mandatory,
+    field_order: idx,
+  });
+
+  const handleSave = async () => {
+    if (!formData.name.trim()) return;
+    setSaving(true);
+    try {
+      if (editingTemplate) {
+        await saveEdits(editingTemplate);
+      } else {
+        const fields = draftFields.filter((f) => f.label.trim()).map(draftToPayload);
+        const { error } = await post('/api/compliance-templates', {
+          name: formData.name,
+          description: formData.description || null,
+          entity_type: formData.entity_type,
+          fields,
+        });
+        if (error) throw new Error(error);
+        toast({
+        title: t('complianceTemplates.toast.created'),
+        description: t('complianceTemplates.toast.createdDescription', { name: formData.name }),
+      });
+      }
+      setDialogOpen(false);
+      fetchTemplates();
+    } catch (err: any) {
+      toast({
+        title: t('common:toast.error'),
+        description: err?.message || t('complianceTemplates.toast.saveFailed'),
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Persist edits by diffing the editor against the template's original fields:
+   *  update template attrs, add new fields, update changed ones, delete removed. */
+  const saveEdits = async (template: ComplianceTemplate) => {
+    const base = `/api/compliance-templates/${template.id}`;
+
+    // 1. Template name/description (entity_type is immutable server-side).
+    if (formData.name !== template.name || (formData.description || '') !== (template.description || '')) {
+      const { error } = await put(base, {
+        name: formData.name,
+        description: formData.description || null,
+      });
+      if (error) throw new Error(error);
+    }
+
+    const kept = draftFields.filter((f) => f.label.trim());
+    const keptIds = new Set(kept.filter((f) => f.id).map((f) => f.id));
+
+    // 2. Deletes: original fields no longer present. Surfaces a 409 if the
+    //    field has stored values (guarded server-side) — reported to the user.
+    for (const orig of originalFields) {
+      if (orig.id && !keptIds.has(orig.id)) {
+        const { error } = await apiDelete(`${base}/fields/${orig.id}`);
+        if (error) throw new Error(t('complianceTemplates.toast.cannotRemove', { label: orig.label, error }));
+      }
+    }
+
+    // 3. Adds + updates.
+    for (let idx = 0; idx < kept.length; idx++) {
+      const f = kept[idx];
+      const payload = draftToPayload(f, idx);
+      if (!f.id) {
+        const { error } = await post(`${base}/fields`, payload);
+        if (error) throw new Error(t('complianceTemplates.toast.cannotAdd', { label: f.label, error }));
+      } else {
+        const { error } = await put(`${base}/fields/${f.id}`, payload);
+        if (error) throw new Error(t('complianceTemplates.toast.cannotUpdate', { label: f.label, error }));
+      }
+    }
+
+    // 4. Persist ordering (group + field order) in one reorder call.
+    const reorder = kept
+      .filter((f) => f.id)
+      .map((f, idx) => ({ id: f.id, group_title: f.group_title.trim(), group_order: 0, field_order: idx }));
+    if (reorder.length > 0) {
+      await put(`${base}/fields/reorder`, { fields: reorder });
+    }
+
+    toast({
+      title: t('complianceTemplates.toast.saved'),
+      description: t('complianceTemplates.toast.savedDescription', { name: formData.name }),
+    });
+  };
+
+  const handleToggleActive = async (template: ComplianceTemplate) => {
+    const action = template.is_active ? 'deactivate' : 'activate';
+    const { error } = await post<ComplianceTemplate>(
+      `/api/compliance-templates/${template.id}/${action}`,
+      {},
+    );
+    if (error) {
+      toast({ title: t('common:toast.error'), description: error, variant: 'destructive' });
+    } else {
+      toast({
+        title: template.is_active
+          ? t('complianceTemplates.toast.deactivated')
+          : t('complianceTemplates.toast.activated'),
+        description: template.is_active
+          ? t('complianceTemplates.toast.deactivatedDescription', { name: template.name })
+          : t('complianceTemplates.toast.activatedDescription', { name: template.name }),
+      });
+      fetchTemplates();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingTemplate) return;
+    const { error } = await apiDelete(`/api/compliance-templates/${deletingTemplate.id}`);
+    if (error) {
+      toast({ title: t('complianceTemplates.toast.cannotDelete'), description: error, variant: 'destructive' });
+    } else {
+      toast({
+        title: t('complianceTemplates.toast.deleted'),
+        description: t('complianceTemplates.toast.deletedDescription', { name: deletingTemplate.name }),
+      });
+      setDeletingTemplate(null);
+      fetchTemplates();
+    }
+    setDeleteDialogOpen(false);
+  };
+
+  const entityLabel = (value: string) =>
+    t(`complianceTemplates.entityTypes.${value}`, { defaultValue: value });
+
+  if (loading) {
+    return <ListItemSkeleton count={3} height="h-16" className="space-y-2" />;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">{t('complianceTemplates.title')}</h2>
+          <p className="text-sm text-muted-foreground">
+            {t('complianceTemplates.intro')}
+          </p>
+        </div>
+        <Button onClick={handleOpenCreate} size="sm">
+          <Plus className="mr-1 h-4 w-4" /> {t('complianceTemplates.addTemplate')}
+        </Button>
+      </div>
+
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('complianceTemplates.columns.name')}</TableHead>
+            <TableHead>{t('complianceTemplates.columns.entityType')}</TableHead>
+            <TableHead>{t('complianceTemplates.columns.fields')}</TableHead>
+            <TableHead>{t('complianceTemplates.columns.status')}</TableHead>
+            <TableHead className="w-32">{t('complianceTemplates.columns.actions')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {templates.map((template) => (
+            <TableRow key={template.id}>
+              <TableCell className="font-medium">
+                {template.name}
+                {template.description && (
+                  <div className="text-xs text-muted-foreground">{template.description}</div>
+                )}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">{entityLabel(template.entity_type)}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">{template.fields?.length ?? 0}</TableCell>
+              <TableCell>
+                {template.is_active ? (
+                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">{t('complianceTemplates.status.active')}</Badge>
+                ) : (
+                  <Badge variant="outline">{t('complianceTemplates.status.inactive')}</Badge>
+                )}
+              </TableCell>
+              <TableCell>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    title={t('complianceTemplates.actions.edit')}
+                    onClick={() => handleOpenEdit(template)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    title={template.is_active ? t('complianceTemplates.actions.deactivate') : t('complianceTemplates.actions.activate')}
+                    onClick={() => handleToggleActive(template)}
+                  >
+                    {template.is_active ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive"
+                    onClick={() => { setDeletingTemplate(template); setDeleteDialogOpen(true); }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+          {templates.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                {t('complianceTemplates.emptyState')}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+
+      {/* Create Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {editingTemplate ? t('complianceTemplates.dialog.editTitle') : t('complianceTemplates.dialog.createTitle')}
+            </DialogTitle>
+            <DialogDescription>
+              {editingTemplate
+                ? t('complianceTemplates.dialog.editDescription')
+                : t('complianceTemplates.dialog.createDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 space-y-4 overflow-y-auto py-2 pr-1">
+            <div className="space-y-2">
+              <Label htmlFor="ct-name">{t('complianceTemplates.dialog.name')}</Label>
+              <Input
+                id="ct-name"
+                value={formData.name}
+                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder={t('complianceTemplates.dialog.namePlaceholder')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ct-desc">{t('complianceTemplates.dialog.description')}</Label>
+              <Textarea
+                id="ct-desc"
+                value={formData.description}
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder={t('complianceTemplates.dialog.descriptionPlaceholder')}
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ct-entity">{t('complianceTemplates.dialog.entityType')}</Label>
+              <select
+                id="ct-entity"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
+                value={formData.entity_type}
+                disabled={!!editingTemplate}
+                onChange={(e) => setFormData((prev) => ({ ...prev, entity_type: e.target.value }))}
+              >
+                {ENTITY_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{t(`complianceTemplates.entityTypes.${o.value}`)}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>{t('complianceTemplates.dialog.fields')}</Label>
+                <Button variant="outline" size="sm" onClick={handleAddDraftField}>
+                  <Plus className="mr-1 h-3.5 w-3.5" /> {t('complianceTemplates.dialog.addField')}
+                </Button>
+              </div>
+              {draftFields.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {t('complianceTemplates.dialog.noFields')}
+                </p>
+              )}
+              {draftFields.map((field, idx) => (
+                <div key={idx} className="space-y-2 rounded-md border p-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={field.label}
+                      onChange={(e) =>
+                        setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, label: e.target.value } : f)))
+                      }
+                      placeholder={t('complianceTemplates.dialog.fieldLabelPlaceholder')}
+                    />
+                    <Input
+                      value={field.group_title}
+                      onChange={(e) =>
+                        setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, group_title: e.target.value } : f)))
+                      }
+                      placeholder={t('complianceTemplates.dialog.groupPlaceholder')}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      onClick={() => setDraftFields((prev) => prev.filter((_, i) => i !== idx))}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                      value={field.value_type}
+                      onChange={(e) =>
+                        setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, value_type: e.target.value } : f)))
+                      }
+                    >
+                      {VALUE_TYPE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{t(`complianceTemplates.valueTypes.${o.value}`)}</option>
+                      ))}
+                    </select>
+                    {VOCAB_TYPES.has(field.value_type) && (
+                      <Input
+                        value={field.possible_values}
+                        onChange={(e) =>
+                          setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, possible_values: e.target.value } : f)))
+                        }
+                        placeholder={t('complianceTemplates.dialog.optionsPlaceholder')}
+                      />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={field.hint_text}
+                      onChange={(e) =>
+                        setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, hint_text: e.target.value } : f)))
+                      }
+                      placeholder={t('complianceTemplates.dialog.hintPlaceholder')}
+                    />
+                    <Input
+                      value={field.default_value}
+                      onChange={(e) =>
+                        setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, default_value: e.target.value } : f)))
+                      }
+                      placeholder={t('complianceTemplates.dialog.defaultPlaceholder')}
+                    />
+                    <Input
+                      value={field.reference_id}
+                      onChange={(e) =>
+                        setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, reference_id: e.target.value } : f)))
+                      }
+                      placeholder={t('complianceTemplates.dialog.referencePlaceholder')}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id={`mandatory-${idx}`}
+                      checked={field.is_mandatory}
+                      onCheckedChange={(checked) =>
+                        setDraftFields((prev) => prev.map((f, i) => (i === idx ? { ...f, is_mandatory: checked === true } : f)))
+                      }
+                    />
+                    <label htmlFor={`mandatory-${idx}`} className="text-sm">{t('complianceTemplates.dialog.mandatory')}</label>
+                  </div>
+                  {field.is_mandatory && field.default_value.trim() && (
+                    <p className="text-xs text-amber-600 dark:text-amber-500">
+                      {t('complianceTemplates.dialog.mandatoryWithDefault')}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('complianceTemplates.dialog.cancel')}</Button>
+            <Button onClick={handleSave} disabled={saving || !formData.name.trim()}>
+              {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+              {editingTemplate ? t('complianceTemplates.dialog.saveChanges') : t('complianceTemplates.dialog.create')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('complianceTemplates.deleteDialog.title')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('complianceTemplates.deleteDialog.description', { name: deletingTemplate?.name ?? '' })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('complianceTemplates.deleteDialog.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+              {t('complianceTemplates.deleteDialog.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

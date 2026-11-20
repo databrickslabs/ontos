@@ -174,6 +174,7 @@ from src.common import genie_client
 from src.common.delivery_mixin import DeliveryMixin
 from src.repositories.entity_relationships_repository import entity_relationship_repo
 from src.repositories.assets_repository import asset_repo
+from src.controller.compliance_templates_manager import compliance_templates_manager, raise_if_incomplete
 
 logger = get_logger(__name__)
 
@@ -1398,6 +1399,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     f"Product must be active to publish. Current status: {product_db.status}"
                 )
             self._validate_output_port_contracts(product_db, db)
+            # Compliance Templates (#712): block publishing to any non-none scope
+            # when mandatory compliance fields are incomplete. Advisory on edit,
+            # blocking here at publish. No-op when no template is active.
+            raise_if_incomplete(compliance_templates_manager.check_completeness(
+                db, entity_type="data_product", entity_id=product_id
+            ))
             product_db.publication_scope = scope
             if not was_published:
                 # A scope change keeps who published it and when
@@ -1677,6 +1684,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             self._validate_output_port_contracts(product_db)
             # A product deprecated while published keeps its scope (e.g. domain)
             was_published = (product_db.publication_scope or 'none').lower() != 'none'
+
+            # Check compliance template completeness (blocks publish if mandatory fields are missing)
+            try:
+                raise_if_incomplete(compliance_templates_manager.check_completeness(
+                    self._db, entity_type="data_product", entity_id=product_id
+                ))
+            except ValueError as e:
+                logger.error(f"Compliance check failed for product {product_id}: {e}")
+                raise
+            logger.info(f"Compliance check passed for product {product_id}")
 
             # Use transition_status for validation and update
             result = self.transition_status(product_id, 'active', current_user)

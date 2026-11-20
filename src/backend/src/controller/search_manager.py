@@ -1,7 +1,8 @@
 from __future__ import annotations # Ensure forward references work
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Iterable, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, Iterable, TYPE_CHECKING
 import re
+import threading
 
 # Import Search Interfaces
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -61,12 +62,23 @@ class SearchManager:
         self._config_loader = config_loader or get_search_config_loader()
 
         # Choose the backend from settings ("memory" default, "postgres" = DB-backed FTS).
+        engine_name, trgm_threshold = "auto", 0.45
+        self._backfill_wait_seconds, self._backfill_batch_size = 30.0, 500
         try:
             from src.common.config import get_settings
-            backend_name = get_settings().SEARCH_BACKEND
+            settings = get_settings()
+            backend_name = settings.SEARCH_BACKEND
+            engine_name = settings.SEARCH_ENGINE
+            trgm_threshold = settings.SEARCH_TRGM_THRESHOLD
+            self._backfill_wait_seconds = settings.SEARCH_BACKFILL_WAIT_SECONDS
+            self._backfill_batch_size = settings.SEARCH_BACKFILL_BATCH_SIZE
         except Exception:
             backend_name = "memory"
-        self._backend = create_backend(self, backend_name)
+        self._reconcile_thread: Optional[threading.Thread] = None
+        self.last_reconcile: Optional[Dict[str, Any]] = None
+        # On Postgres, engine detection + index DDL run on the reconcile thread
+        # (PostgresBackend.reconcile), off the startup path.
+        self._backend = create_backend(self, backend_name, engine_name, trgm_threshold)
 
         logger.info(
             f"SearchManager initialized with {len(self.searchable_managers)} managers "
@@ -100,39 +112,118 @@ class SearchManager:
             return False
         return True
 
+    def _is_item_indexable(self, item: SearchIndexItem, uses_postgres: bool) -> bool:
+        """Whether to store the item in the active index.
+
+        The Postgres backend stores items of disabled asset types too and
+        excludes them at query time, so toggling a type in Settings applies on
+        the next query in both directions without a rebuild.
+        """
+        if uses_postgres:
+            return bool(getattr(item, 'feature_id', None))
+        return self._is_item_enabled(item)
+
     def build_index(self):
-        """Builds or rebuilds the search index by querying searchable managers."""
+        """Builds or rebuilds the search index by querying searchable managers.
+
+        In-memory backend: synchronous full build. Postgres backend: starts a
+        background reconcile of ``search_documents`` (see ``_reconcile_postgres``);
+        the in-memory ``index`` is never populated, so search RAM stays flat.
+        """
+        if self._uses_postgres():
+            self._start_reconcile()
+            return
         logger.info(f"Building search index from {len(self.searchable_managers)} managers...")
         new_index: List[SearchIndexItem] = []
-        config = self.config
 
         for manager in self.searchable_managers:
             manager_name = manager.__class__.__name__
             try:
                 items = manager.get_search_index_items()
                 for item in items:
-                    if not self._is_item_enabled(item):
+                    if not self._is_item_indexable(item, False):
                         logger.debug(f"Skipping item {item.id} from {manager_name} (disabled or missing feature_id)")
                         continue
                     new_index.append(item)
             except Exception as e:
                 logger.error(f"Failed to get search items from {manager_name}: {e}", exc_info=True)
-        
+
         self.index = new_index
         logger.info(f"Search index build complete. Total items: {len(self.index)}")
 
-        # Postgres backend: backfill the search_documents table, then drop the
-        # in-memory copy so search RAM is O(1) rather than O(entities).
-        if self._uses_postgres():
-            try:
-                self._backend.rebuild(self.index)
-            except Exception as e:
-                logger.error(f"Failed to backfill search_documents: {e}", exc_info=True)
-            self.index = []
+    # --- Postgres backend: background reconcile ---------------------------
+    def _start_reconcile(self) -> None:
+        """Fetch every manager's items here, on the caller's thread (managers
+        hold sessions that aren't safe to use from another thread), then write
+        them in a daemon thread. Wait (bounded) only on an empty table, so the
+        first searches after a fresh deploy aren't blank; otherwise search
+        answers from the existing rows while the reconcile catches up."""
+        if self._reconcile_thread is not None and self._reconcile_thread.is_alive():
+            logger.info("Search reconcile already running; not starting another.")
+            return
+        sources = [(m.__class__.__name__, self._prefetch(m)) for m in self.searchable_managers]
+        try:
+            empty = self._backend.count() == 0
+        except Exception as e:
+            logger.error(f"Could not read search_documents: {e}", exc_info=True)
+            empty = False
+        self._reconcile_thread = threading.Thread(
+            target=self._reconcile_postgres, args=(sources,), name="search-reconcile", daemon=True,
+        )
+        self._reconcile_thread.start()
+        if empty and self._backfill_wait_seconds > 0:
+            self._reconcile_thread.join(timeout=self._backfill_wait_seconds)
+            if self._reconcile_thread.is_alive():
+                logger.info(
+                    f"Search backfill still running after {self._backfill_wait_seconds}s; "
+                    "serving from the partial index meanwhile."
+                )
+
+    @staticmethod
+    def _prefetch(manager: SearchableAsset) -> Callable[[], List[SearchIndexItem]]:
+        """Fetch now; the reconcile thread replays the result (or the error)."""
+        try:
+            items = list(manager.get_search_index_items())
+        except Exception as e:
+            error = e
+
+            def fetch() -> List[SearchIndexItem]:
+                raise error
+            return fetch
+        return lambda: items
+
+    def _reconcile_postgres(self, sources) -> None:
+        try:
+            self.last_reconcile = self._backend.reconcile(
+                sources,
+                is_indexable=lambda it: self._is_item_indexable(it, True),
+                batch_size=self._backfill_batch_size,
+            )
+        except Exception as e:
+            self.last_reconcile = {"status": "failed", "error": str(e)}
+            logger.error(f"Search reconcile failed: {e}", exc_info=True)
+
+    def wait_for_reconcile(self, timeout: Optional[float] = None) -> bool:
+        """Block until the running reconcile finishes (tests, admin tooling).
+        Returns True if none is running anymore."""
+        t = self._reconcile_thread
+        if t is not None:
+            t.join(timeout=timeout)
+            return not t.is_alive()
+        return True
+
+    def replace_type(self, type_: str, items: Iterable[SearchIndexItem]) -> None:
+        """Replace every indexed item of one type (bulk producers, e.g. the glossary)."""
+        uses_postgres = self._uses_postgres()
+        keep = [it for it in items if it.type == type_ and self._is_item_indexable(it, uses_postgres)]
+        if uses_postgres:
+            self._backend.replace_type(type_, keep)
+        else:
+            self.index = [it for it in self.index if it.type != type_] + keep
 
     def upsert_item(self, item: SearchIndexItem) -> None:
         """Insert or update a single item in the active backend's index."""
-        if not self._is_item_enabled(item):
+        if not self._is_item_indexable(item, self._uses_postgres()):
             logger.debug(f"upsert_item: skipping {item.id} (disabled or missing feature_id)")
             # A now-disabled item should also be removed if present.
             self._backend.remove(item.id)

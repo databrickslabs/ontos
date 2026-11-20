@@ -35,6 +35,8 @@ variables:
           value: ${var.schema_name}
         - name: "DATABRICKS_VOLUME"
           value: ${var.volume_name}
+        - name: "SEARCH_BACKEND"
+          value: "postgres"
 
 resources:
   apps:

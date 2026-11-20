@@ -174,8 +174,29 @@
   "runErrors": {
     "entities_load_failed": "Die {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden.",
     "rule_parse_failed": "Die Regel konnte nicht geparst werden: {{detail}}",
+    "user_token_required": "Diese Regel prüft Unity-Catalog-Objekte, die mit Ihrer Databricks-Anmeldung gelesen werden, und die Anfrage hatte keine; sie konnte daher nicht ausgeführt werden.",
     "workspace_client_unavailable": "Der Databricks-Workspace ist nicht verfügbar, und diese Regel prüft Unity-Catalog-Objekte; sie konnte daher nicht ausgeführt werden.",
     "tags_load_failed": "Die Tags der {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden."
+  },
+  "tableSources": {
+    "notEvaluatedStatus": "Nicht ausgewertet",
+    "runWarning": "Nicht ausgewertete Objekte: {{count}}. Die Regel liest Felder aus {{sources}}, die nicht gelesen werden konnten ({{reasons}}). Sie zählen weder als bestanden noch als fehlgeschlagen und nicht für die Bewertung.",
+    "notEvaluated": "Nicht ausgewertet: {{fields}} konnte nicht aus {{sources}} gelesen werden ({{reason}}).",
+    "reasons": {
+      "no_warehouse": "kein SQL-Warehouse konfiguriert",
+      "no_access": "kein Zugriff auf die Systemtabelle",
+      "query_failed": "die Abfrage ist fehlgeschlagen",
+      "timed_out": "die Abfrage lief beim Zeitlimit noch",
+      "budget_exceeded": "der Lauf hat sein Limit an Abfragen auf dem SQL-Warehouse erreicht",
+      "transient": "das SQL-Warehouse war vorübergehend nicht verfügbar, auch nach erneuten Versuchen",
+      "not_found": "die Systemtabelle wurde nicht gefunden (ist das Systemschema aktiviert?)",
+      "not_loaded": "Tags werden für diesen Objekttyp noch nicht gelesen"
+    }
+  },
+  "runScoreCoverage": {
+    "noScore": "Keine Bewertung",
+    "coverage": "{{evaluated}} von {{total}} Objekten bewertet; die übrigen zählen nicht zur Bewertung.",
+    "hiddenResults": "{{count}} Ergebnisse betreffen Unity-Catalog-Objekte, die Sie nicht lesen können, und werden daher nicht aufgeführt."
   },
   "saveErrors": {
     "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax."

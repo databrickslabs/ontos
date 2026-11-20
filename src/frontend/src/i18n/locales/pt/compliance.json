@@ -174,8 +174,29 @@
   "runErrors": {
     "entities_load_failed": "Não foi possível carregar as entidades {{entityType}}, por isso a regra não pôde ser avaliada.",
     "rule_parse_failed": "Não foi possível interpretar a regra: {{detail}}",
+    "user_token_required": "Esta regra verifica objetos do Unity Catalog, que são lidos com o seu login no Databricks, e a requisição não o tinha, por isso não pôde ser executada.",
     "workspace_client_unavailable": "O workspace Databricks não está disponível e esta regra verifica objetos do Unity Catalog, por isso não pôde ser executada.",
     "tags_load_failed": "Não foi possível carregar as tags das entidades {{entityType}}, por isso a regra não pôde ser avaliada."
+  },
+  "tableSources": {
+    "notEvaluatedStatus": "Não avaliado",
+    "runWarning": "Objetos não avaliados: {{count}}. A regra lê campos de {{sources}}, que não puderam ser lidos ({{reasons}}). Eles não contam como aprovados nem reprovados, nem na pontuação.",
+    "notEvaluated": "Não avaliado: não foi possível ler {{fields}} de {{sources}} ({{reason}}).",
+    "reasons": {
+      "no_warehouse": "nenhum SQL warehouse configurado",
+      "no_access": "sem acesso à tabela de sistema",
+      "query_failed": "a consulta falhou",
+      "timed_out": "a consulta ainda estava em execução no limite de tempo",
+      "budget_exceeded": "a execução atingiu o limite de consultas no SQL warehouse",
+      "transient": "o SQL warehouse ficou temporariamente indisponível, mesmo após novas tentativas",
+      "not_found": "a tabela de sistema não foi encontrada (o schema de sistema está habilitado?)",
+      "not_loaded": "as tags deste tipo de objeto ainda não são lidas"
+    }
+  },
+  "runScoreCoverage": {
+    "noScore": "Sem pontuação",
+    "coverage": "{{evaluated}} de {{total}} objetos avaliados; os demais não entram na pontuação.",
+    "hiddenResults": "{{count}} resultados são de objetos do Unity Catalog que você não pode ler, por isso não são listados."
   },
   "saveErrors": {
     "rule_trailing_input": "A regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Tudo a partir dali seria ignorado, e a regra verificaria menos do que diz. Remova o trecho ou corrija a sintaxe."

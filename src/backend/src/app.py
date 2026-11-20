@@ -231,6 +231,8 @@ async def startup_event():
     
     logger.info("Running application startup event...")
     settings = get_settings()
+    from src.common.workspace_client import warn_if_sp_fallback
+    warn_if_sp_fallback(settings)
     
     try:
         initialize_database()

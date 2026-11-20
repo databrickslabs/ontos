@@ -174,8 +174,29 @@
   "runErrors": {
     "entities_load_failed": "De {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd.",
     "rule_parse_failed": "De regel kon niet worden geparseerd: {{detail}}",
+    "user_token_required": "Deze regel controleert Unity Catalog-objecten, die met uw Databricks-aanmelding worden gelezen, en het verzoek had die niet, dus kon hij niet worden uitgevoerd.",
     "workspace_client_unavailable": "De Databricks-workspace is niet beschikbaar en deze regel controleert Unity Catalog-objecten, dus kon hij niet worden uitgevoerd.",
     "tags_load_failed": "De tags van de {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd."
+  },
+  "tableSources": {
+    "notEvaluatedStatus": "Niet geëvalueerd",
+    "runWarning": "Niet geëvalueerde objecten: {{count}}. De regel leest velden uit {{sources}}, die niet gelezen konden worden ({{reasons}}). Ze tellen niet als geslaagd of mislukt, en niet mee in de score.",
+    "notEvaluated": "Niet geëvalueerd: {{fields}} kon niet worden gelezen uit {{sources}} ({{reason}}).",
+    "reasons": {
+      "no_warehouse": "er is geen SQL-warehouse geconfigureerd",
+      "no_access": "geen toegang tot de systeemtabel",
+      "query_failed": "de query is mislukt",
+      "timed_out": "de query liep nog bij de tijdslimiet",
+      "budget_exceeded": "de uitvoering heeft haar limiet aan query's op het SQL-warehouse bereikt",
+      "transient": "het SQL-warehouse was tijdelijk niet beschikbaar, ook na nieuwe pogingen",
+      "not_found": "de systeemtabel is niet gevonden (is het systeemschema ingeschakeld?)",
+      "not_loaded": "tags worden voor dit objecttype nog niet gelezen"
+    }
+  },
+  "runScoreCoverage": {
+    "noScore": "Geen score",
+    "coverage": "{{evaluated}} van {{total}} objecten geëvalueerd; de overige tellen niet mee in de score.",
+    "hiddenResults": "{{count}} resultaten gaan over Unity Catalog-objecten die u niet kunt lezen en worden daarom niet getoond."
   },
   "saveErrors": {
     "rule_trailing_input": "De regel bevat ongeldige invoer, vanaf regel {{line}}, kolom {{column}} ('{{text}}'). Alles vanaf dat punt zou worden genegeerd, waardoor de regel minder controleert dan er staat. Verwijder het of corrigeer de syntaxis."

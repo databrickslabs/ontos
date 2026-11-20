@@ -137,6 +137,18 @@ repeat across namespaces, use the fully qualified name
 `True`. If the tags can't be loaded, the run fails instead of treating the
 entities as untagged.
 
+For Unity Catalog tables and views, `key` is the governed tag's key as Unity
+Catalog stores it, with no namespace: `HAS_TAG('governance/pii')` doesn't match a
+UC tag `pii`, so a rule that covers both app entities and tables names the tag
+the way each one stores it. A tag without a value has the value `True`. See [Table and View Tags and
+Lineage](#table-and-view-tags-and-lineage) for where the tags come from.
+
+`TAG(key)` is `null` on an entity without that tag, and `null != ''` is true: `ASSERT
+TAG('data_classification') != ''` passes every untagged entity, and an entity with the tag
+but no value (`True`) as well. To require a tag, use `HAS_TAG('data_classification')`; to
+require one of some values, use `TAG('data_classification') IN ['public', 'internal']`, which
+is false without the tag.
+
 ### String Functions
 - `UPPER(str)` - Convert to uppercase
 - `LOWER(str)` - Convert to lowercase
@@ -350,7 +362,81 @@ MATCH (t:table) ASSERT t.partition_columns_without_comment_count = 0
 MATCH (v:view) ASSERT v.columns_without_comment_count = 0
 ```
 
-Column tags, table tags, keys and lineage are not available yet.
+Primary and foreign keys are not available yet.
+
+#### Table and View Tags and Lineage
+These fields come from system tables, read through the SQL warehouse the app is configured
+with (`DATABRICKS_WAREHOUSE_ID`). They are loaded only for a rule that reads them, with one
+statement per field group for each chunk of a catalog's tables (whole schemas, about 500
+tables; never one per table), restricted to the catalogs and schemas selected by the
+`AND`-ed parts of the rule's `WHERE` that don't read these fields. A chunk is read only when
+the run gets to it, so a run that stops at its `limit` reads no more. The policies of one
+compliance-checks job run share the statements: a later policy that needs the same tags or
+lineage reuses them. A statement that failed with `timed_out`, `transient` or `query_failed`
+is sent again by the next policy that needs it; one that failed with `no_access` or
+`not_found` is not. Each policy run sends at most 100 statements (in a job run, each
+policy has its own 100, and statements already read for an earlier policy don't count);
+past that, the fields are not read (reason `budget_exceeded`). A policy run spends at most
+15 minutes on these statements, from its start; past that, the statements still to send
+and the one running are not waited for (reason `timed_out`):
+
+- `tags` - The table's governed tags as `{key: value}`, read with `HAS_TAG` / `TAG`. Source:
+  `system.information_schema.table_tags`. Column tags are not read
+- `upstream_count` - Distinct tables this table was written from in the last 90 days, in
+  `system.access.table_lineage`
+- `downstream_count` - Distinct tables written from this table in the last 90 days
+
+Lineage counts only events of the last 90 days and only table-to-table lineage (rows whose
+source or target is a path, a notebook or a dashboard are not counted); a table with no event
+in that window has `0`.
+
+> **Stale tables read `0`.** A valid table that was last written more than 90 days ago (a
+> yearly load, a frozen reference table) has `upstream_count = 0`, so `t.upstream_count > 0`
+> fails it. Exclude such tables in the `WHERE` (by schema, or with a tag such as
+> `NOT HAS_TAG('static')`), or check lineage only where pipelines run at least quarterly.
+
+```
+MATCH (t:table) ASSERT HAS_TAG('data_classification')
+MATCH (t:table) ASSERT TAG('data_classification') IN ['public', 'internal', 'confidential']
+MATCH (t:table) WHERE t.catalog = 'production' ASSERT t.upstream_count > 0
+MATCH (v:view) ASSERT v.downstream_count > 0 OR HAS_TAG('deprecated')
+```
+
+A statement that is still running after 50 seconds keeps running and is polled; one still
+running after 5 minutes, or at the run's 15 minutes, is cancelled (reason `timed_out`), as is
+one whose polling fails, before it is retried.
+
+Only tables and views have tags in rules. On catalogs, schemas, functions and volumes, `tags`
+is not loaded: a rule that reads it (`MATCH (s:schema) ASSERT NOT HAS_TAG('x')`) reports
+each of them as not evaluated (reason `not_loaded`) instead of passing it.
+
+A transient error (the warehouse busy or starting, a rate limit, a network timeout) is
+retried twice with backoff before the source is reported as unavailable (reason
+`transient`); a missing system table or schema has the reason `not_found`.
+
+If a source can't be read (no SQL warehouse configured, no access to the system table, the
+statement fails or times out), its fields are left out and every entity whose rule reads them gets a
+result marked *not evaluated* with the field, the source and the reason. It is neither passed
+nor failed: it is not in the run's passed and failed counts, the score or the failed list,
+and its `ON_PASS` / `ON_FAIL` actions don't run. When the `WHERE` reads a missing field, the
+entity is kept only if the `AND`-ed parts of the `WHERE` that don't read it hold. The run ends
+with the warning `rule_fields_unavailable` and the number of such entities. Fields from a
+source that could be read are still evaluated.
+
+A run that evaluated nothing (every entity not evaluated, or none matched), or that failed,
+has no score: it stores null, the API returns `score: null` and the UI shows "No score". Each run also has
+`coverage` (`evaluated`, `not_evaluated`), shown when some entities were not evaluated, so a
+score measured on a few of many tables says so. The policy list, the stats and the trend use
+the policy's latest run that has a score. A policy with no such run among its last 20 has no
+score: it shows "No score", the overall compliance averages only the policies that have one
+(no score at all when none has), and it doesn't count as a critical issue, which is a critical
+policy scored below 70.
+
+The results of a run list only the Unity Catalog objects the viewer can read: they are
+checked with the viewer's own token when the results are opened (one listing per schema),
+whoever started the run. The others are counted (`hidden_count`), not listed. A viewer
+without a token sees none, except with `ENV=LOCAL` or `OBO_ALLOW_SP_FALLBACK=true`, where the
+check uses the app's client and so hides nothing the app can read.
 
 ### Application Entities
 - `type` - Entity type
@@ -414,6 +500,9 @@ Extend the evaluator to support custom functions by modifying `evaluate_function
 - **Batch Processing**: Entity loading is batched for efficiency
 - **Lazy Evaluation**: Entities are loaded on-demand as iterators
 - **WHERE Filtering**: Applied before ASSERT to reduce evaluations
+- **Tags and Lineage**: Read from system tables only when the rule uses them, once per
+  chunk of a catalog's tables, only for the schemas a `WHERE` on catalog or schema selects,
+  and at most 100 statements and 15 minutes per policy run
 - **Limits**: Use the `limit` parameter when testing rules
 
 ## Integration

@@ -551,7 +551,7 @@ ON_FAIL NOTIFY 'data-governance@company.com'
 ```text
 MATCH (contract:data_contract)
 WHERE contract.status = 'active'
-ASSERT HAS_TAG('slo_defined') AND TAG('slo_freshness') != ''
+ASSERT HAS_TAG('slo_defined') AND HAS_TAG('slo_freshness')
 ON_FAIL FAIL 'Active contracts must have freshness SLOs defined'
 ```
 

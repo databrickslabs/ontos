@@ -80,15 +80,27 @@ def _create(db: Session, **fields):
     )
 
 
-def test_create_reads_api_version_and_the_domains_by_name_not_the_other_fields(
-    db_session: Session,
-):
-    """``apiVersion`` and the domain fields read their name as well as their alias. The
-    other aliased fields read only the alias, as before: ``dataProduct`` sent by name is
-    ignored."""
+def test_create_reads_every_aliased_field_by_name(db_session: Session):
+    """The create body is read by field name as well as by alias: ``dataProduct``,
+    ``apiVersion`` and the domains sent by name are stored (the wizard sends them so)."""
     created = _create(db_session, dataProduct="orders-dp", apiVersion="v3.0.2")
 
-    assert (created.data_product, created.api_version) == (None, "v3.0.2")
+    assert (created.data_product, created.api_version) == ("orders-dp", "v3.0.2")
+
+
+def test_the_flat_description_fields_are_read_by_name_and_by_alias():
+    by_name = DataContractCreate.model_validate({
+        "name": "Orders", "descriptionUsage": "u", "descriptionPurpose": "p",
+        "descriptionLimitations": "l",
+    })
+    by_alias = DataContractCreate.model_validate({
+        "name": "Orders", "description_usage": "u", "description_purpose": "p",
+        "description_limitations": "l",
+    })
+
+    for model in (by_name, by_alias):
+        assert (model.descriptionUsage, model.descriptionPurpose) == ("u", "p")
+        assert model.descriptionLimitations == "l"
 
 
 def test_api_version_by_name_wins_over_the_alias():

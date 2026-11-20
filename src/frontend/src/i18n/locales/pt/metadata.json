@@ -251,5 +251,16 @@
     "goToDetails": "Ir para detalhes",
     "alreadySubscribed": "Já inscrito",
     "subscribe": "Inscrever-se"
+  },
+  "inherited": {
+    "title": "Herdado",
+    "description": "Metadados somente leitura herdados dos contratos e ativos desta entidade. Edite-os na origem.",
+    "refresh": "Atualizar metadados herdados",
+    "fromContract": "do contrato {{name}}",
+    "fromAsset": "do ativo {{name}}",
+    "shared": "compartilhado",
+    "table": {
+      "source": "Origem"
+    }
   }
 }

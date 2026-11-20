@@ -251,5 +251,16 @@
     "goToDetails": "Vai ai Dettagli",
     "alreadySubscribed": "Già Iscritto",
     "subscribe": "Iscriviti"
+  },
+  "inherited": {
+    "title": "Ereditato",
+    "description": "Metadati di sola lettura ereditati dai contratti e dagli asset di questa entità. Modificali all'origine.",
+    "refresh": "Aggiorna i metadati ereditati",
+    "fromContract": "dal contratto {{name}}",
+    "fromAsset": "dall'asset {{name}}",
+    "shared": "condiviso",
+    "table": {
+      "source": "Origine"
+    }
   }
 }

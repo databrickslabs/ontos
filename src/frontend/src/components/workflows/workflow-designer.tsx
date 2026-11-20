@@ -171,6 +171,7 @@ import {
   joinRoleAndPrincipals,
   roleSelectValue,
   splitRoleAndPrincipals,
+  workflowPrincipalValue,
 } from '@/lib/workflow-principals';
 
 interface WorkflowActivationConflict {
@@ -2627,6 +2628,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                   accepts={['user', 'group']}
                                   value={split.principals}
                                   onChange={setPrincipals}
+                                  pickValue={workflowPrincipalValue}
                                   placeholder={t('workflows:designer.customPrincipals.addPlaceholder')}
                                   aria-label={t('workflows:designer.notification.additionalRecipientsAria')}
                                 />
@@ -2778,6 +2780,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                   accepts={['user', 'group']}
                                   value={split.principals}
                                   onChange={setPrincipals}
+                                  pickValue={workflowPrincipalValue}
                                   placeholder={t('workflows:designer.customPrincipals.addPlaceholder')}
                                   aria-label={t('workflows:designer.approval.additionalApproversAria')}
                                 />

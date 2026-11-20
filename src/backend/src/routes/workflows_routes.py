@@ -7,6 +7,7 @@ Provides CRUD operations for workflow definitions and execution management.
 import json
 from typing import Any, Callable, Collection, Dict, List, Optional, Union
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from src.common.database import get_db
@@ -1216,7 +1217,10 @@ async def execute_workflow(
         user_email=user_email,
     )
     
-    execution = executor.execute_workflow(
+    # Off the event loop: a step can run for minutes (an evaluate_asset_maturity
+    # step waits for its bulk run), and other requests must not wait for it
+    execution = await run_in_threadpool(
+        executor.execute_workflow,
         workflow=workflow,
         entity={'id': entity_id, 'name': entity_name, 'type': entity_type.value},
         entity_type=entity_type.value,
@@ -1458,8 +1462,9 @@ async def resume_workflow_execution(
         # Open before the resume: a loop-back into this step opens a new round
         open_before = open_approval_ids(db, execution_id)
 
-        # Resume the workflow
-        result = executor.resume_workflow(
+        # Resume the workflow, off the event loop (the steps after it can be long)
+        result = await run_in_threadpool(
+            executor.resume_workflow,
             execution_id=execution_id,
             step_result=approved,
             result_data={
@@ -2400,8 +2405,11 @@ async def handle_workflow_approval(
             current_user.email if current_user else None,
             current_user.username if current_user else None,
         ):
+            # Off the event loop (the steps after it can be long); the thread
+            # sees eligible_approver's context variable
             try:
-                result = executor.resume_workflow(
+                result = await run_in_threadpool(
+                    executor.resume_workflow,
                     execution_id=execution_id,
                     step_result=approved,
                     result_data={
@@ -2676,7 +2684,9 @@ async def retry_execution(
         # Get entity data from trigger context
         entity_data = trigger_data.get('entity_data', {}) or {}
 
-        result = executor.execute_workflow(
+        # Off the event loop, as a manual run (execute_workflow route)
+        result = await run_in_threadpool(
+            executor.execute_workflow,
             workflow,
             entity_data,  # positional argument
             entity_type=trigger_data.get('entity_type', 'unknown'),

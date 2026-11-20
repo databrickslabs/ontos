@@ -22,6 +22,7 @@ from src.models.assets import (
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
 from src.common.errors import ConflictError, NotFoundError, ValidationError
 from src.common.logging import get_logger
+from src.common.odcs_logical_types import column_logical_type, schemas_for_version
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.database import get_session_factory
 from src.controller.change_log_manager import change_log_manager
@@ -839,7 +840,7 @@ class AssetsManager(SearchableAsset):
     _CONTAINER_TYPES = {"Schema", "Catalog"}
 
     def infer_schema_from_asset(
-        self, db: Session, asset_id: UUID
+        self, db: Session, asset_id: UUID, api_version: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Extract ODCS-compatible schema objects from an asset and its children.
@@ -849,7 +850,12 @@ class AssetsManager(SearchableAsset):
         - Catalog: returns schema objects for all Table/View descendants.
 
         Each returned dict has: name, physicalName, description, physicalType, properties.
+        ``api_version`` is the target contract's ODCS version: below v3.1.0 the logical
+        types are those that version lists (``timestamp`` -> ``date``, ``time`` -> ``string``).
         """
+        return schemas_for_version(self._infer_schemas(db, asset_id), api_version)
+
+    def _infer_schemas(self, db: Session, asset_id: UUID) -> List[Dict[str, Any]]:
         db_asset = self._asset_repo.get_with_relationships(db, asset_id)
         if not db_asset:
             raise NotFoundError(f"Asset '{asset_id}' not found")
@@ -877,7 +883,9 @@ class AssetsManager(SearchableAsset):
                     {
                         "name": c.get("name", ""),
                         "physicalType": c.get("data_type", ""),
-                        "logicalType": c.get("logical_type", "string"),
+                        "logicalType": column_logical_type(
+                            c.get("logical_type"), c.get("data_type")
+                        ),
                         "required": not c.get("nullable", True),
                         "description": c.get("description", ""),
                         "partitioned": c.get("is_partition_key", False),
@@ -909,7 +917,9 @@ class AssetsManager(SearchableAsset):
             columns.append({
                 "name": child.name,
                 "physicalType": props.get("data_type", ""),
-                "logicalType": props.get("logical_type", "string"),
+                "logicalType": column_logical_type(
+                    props.get("logical_type"), props.get("data_type")
+                ),
                 "required": not props.get("nullable", True),
                 "description": child.description or "",
                 "partitioned": props.get("is_partition_key", False),

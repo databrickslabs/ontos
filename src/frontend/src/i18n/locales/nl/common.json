@@ -569,16 +569,25 @@
     "removeConfirm": "Weet je zeker dat je deze relatie wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Selecteer {{kind}}…",
     "latestSuffix": "{{name}} (nieuwste)",
     "pinVersionTitle": "Een specifieke versie vastzetten",
     "pinVersion": "Versie vastzetten",
     "followLatestTitle": "Altijd de nieuwste zichtbare versie van de familie volgen",
     "followLatest": "Nieuwste volgen",
-    "searchPlaceholder": "Zoek {{kind}}s…",
     "loading": "Laden…",
-    "noMatching": "Geen overeenkomende {{kind}}s.",
     "unnamed": "(naamloos)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Selecteer een contract…",
+      "search": "Zoek contracten…",
+      "noMatching": "Geen overeenkomende contracten."
+    },
+    "product": {
+      "select": "Selecteer een product…",
+      "search": "Zoek producten…",
+      "noMatching": "Geen overeenkomende producten."
+    }
   },
   "entityTree": {
     "title": "Gerelateerde entiteiten",

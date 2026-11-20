@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AssetSelector } from '@/components/common/asset-selector';
 import type { SelectedAsset } from '@/components/common/asset-selector';
 import { useToast } from '@/hooks/use-toast';
+import { inferSchemaQuery } from './odcs-logical-types';
 
 export interface InferredSchemaObject {
   name: string;
@@ -23,6 +24,8 @@ interface InferFromAssetDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onInfer: (schemas: InferredSchemaObject[]) => void;
+  /** The target contract's ODCS apiVersion: below v3.1.0, no timestamp / time types */
+  apiVersion?: string;
 }
 
 const TARGET_ASSET_TYPES = [
@@ -33,6 +36,7 @@ export default function InferFromAssetDialog({
   isOpen,
   onOpenChange,
   onInfer,
+  apiVersion,
 }: InferFromAssetDialogProps) {
   const [isInferring, setIsInferring] = useState(false);
   const { toast } = useToast();
@@ -44,7 +48,8 @@ export default function InferFromAssetDialog({
     try {
       const results = await Promise.all(
         assets.map(async (asset) => {
-          const resp = await fetch(`/api/assets/${asset.id}/infer-schema`);
+          const query = inferSchemaQuery(apiVersion);
+          const resp = await fetch(`/api/assets/${asset.id}/infer-schema${query}`);
           if (!resp.ok) throw new Error(t('data-contracts:infer.inferSchemaFromError', 'Failed to infer schema from "{{name}}"', { name: asset.name }));
           return resp.json() as Promise<InferredSchemaObject[]>;
         }),

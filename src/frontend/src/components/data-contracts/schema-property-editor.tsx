@@ -13,8 +13,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { ColumnProperty, QualityRule, SchemaRelationship } from '@/types/data-contract'
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import QualityRuleFormDialog from './quality-rule-form-dialog'
+import {
+  hasDateConstraints, logicalTypesForVersion, takesTimezoneFlag, takesTimezoneName,
+  timezoneForType,
+} from './odcs-logical-types'
 
-const LOGICAL_TYPES = ['string', 'date', 'number', 'integer', 'object', 'array', 'boolean']
 const CLASSIFICATION_LEVELS = ['public', 'internal', 'confidential', 'restricted', 'pii', '1', '2', '3', '4', '5']
 
 // Helper function to detect which tabs have values for a column property
@@ -105,7 +108,7 @@ function normalizePropertyForCompare(prop: ColumnProperty): string {
     multipleOf: prop.multipleOf,
     precision: prop.precision,
     format: (prop.format || '').trim() || undefined,
-    timezone: (prop.timezone || '').trim() || undefined,
+    timezone: timezoneForType(prop.logicalType, prop.timezone),
     customFormat: (prop.customFormat || '').trim() || undefined,
     itemType: (prop.itemType || '').trim() || undefined,
     minItems: prop.minItems,
@@ -130,6 +133,8 @@ interface SchemaPropertyEditorProps {
   properties: ColumnProperty[]
   onChange: (properties: ColumnProperty[]) => void
   readOnly?: boolean
+  /** The contract's ODCS apiVersion: below v3.1.0, no timestamp / time logical type */
+  apiVersion?: string
 }
 
 export interface SchemaPropertyEditorHandle {
@@ -138,7 +143,7 @@ export interface SchemaPropertyEditorHandle {
 }
 
 function SchemaPropertyEditorInner(
-  { properties, onChange, readOnly = false }: SchemaPropertyEditorProps,
+  { properties, onChange, readOnly = false, apiVersion }: SchemaPropertyEditorProps,
   ref: React.Ref<SchemaPropertyEditorHandle>
 ) {
   const { toast } = useToast()
@@ -173,7 +178,8 @@ function SchemaPropertyEditorInner(
   const [multipleOf, setMultipleOf] = useState('')
   const [precision, setPrecision] = useState('')
   const [dateFormat, setDateFormat] = useState('')
-  const [timezone, setTimezone] = useState('')
+  // a zone name on a date, a boolean on timestamp and time (ODCS v3.1)
+  const [timezone, setTimezone] = useState<string | boolean | undefined>(undefined)
   const [customFormat, setCustomFormat] = useState('')
   const [itemType, setItemType] = useState('')
   const [minItems, setMinItems] = useState('')
@@ -232,7 +238,7 @@ function SchemaPropertyEditorInner(
     setMultipleOf('')
     setPrecision('')
     setDateFormat('')
-    setTimezone('')
+    setTimezone(undefined)
     setCustomFormat('')
     setItemType('')
     setMinItems('')
@@ -276,7 +282,7 @@ function SchemaPropertyEditorInner(
     setMultipleOf(prop.multipleOf !== undefined ? String(prop.multipleOf) : '')
     setPrecision(prop.precision !== undefined ? String(prop.precision) : '')
     setDateFormat(prop.format || '')
-    setTimezone(prop.timezone || '')
+    setTimezone(prop.timezone)
     setCustomFormat(prop.customFormat || '')
     setItemType(prop.itemType || '')
     setMinItems(prop.minItems !== undefined ? String(prop.minItems) : '')
@@ -329,7 +335,7 @@ function SchemaPropertyEditorInner(
     multipleOf: multipleOf ? Number(multipleOf) : undefined,
     precision: precision ? parseInt(precision) : undefined,
     format: dateFormat.trim() || undefined,
-    timezone: timezone.trim() || undefined,
+    timezone: timezoneForType(logicalType, timezone),
     customFormat: customFormat.trim() || undefined,
     itemType: itemType.trim() || undefined,
     minItems: minItems ? parseInt(minItems) : undefined,
@@ -501,7 +507,7 @@ function SchemaPropertyEditorInner(
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {LOGICAL_TYPES.map((type) => (
+                      {logicalTypesForVersion(apiVersion, logicalType).map((type) => (
                         <SelectItem key={type} value={type}>
                           {type}
                         </SelectItem>
@@ -683,16 +689,42 @@ function SchemaPropertyEditorInner(
                     </div>
                   )}
 
-                  {logicalType === 'date' && (
+                  {hasDateConstraints(logicalType) && (
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="prop-date-format" className="text-xs">{t('data-contracts:property.fields.format', 'Format')}</Label>
                         <Input id="prop-date-format" value={dateFormat} onChange={(e) => setDateFormat(e.target.value)} placeholder={t('data-contracts:property.fields.formatPlaceholder', 'e.g., yyyy-MM-dd')} className="h-9" />
                       </div>
+                      {takesTimezoneName(logicalType) && (
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-timezone" className="text-xs">{t('data-contracts:property.fields.timezone', 'Timezone')}</Label>
-                        <Input id="prop-timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder={t('data-contracts:property.fields.timezonePlaceholder', 'e.g., UTC')} className="h-9" />
+                        <Label htmlFor="prop-timezone" className="text-xs">
+                          {t('data-contracts:property.fields.timezone', 'Timezone')}
+                        </Label>
+                        <Input
+                          id="prop-timezone"
+                          value={typeof timezone === 'string' ? timezone : ''}
+                          onChange={(e) => setTimezone(e.target.value)}
+                          placeholder={t(
+                            'data-contracts:property.fields.timezonePlaceholder', 'e.g., UTC',
+                          )}
+                          className="h-9"
+                        />
                       </div>
+                      )}
+                      {takesTimezoneFlag(logicalType) && (
+                      <div className="flex items-end space-x-2 pb-2">
+                        <Checkbox
+                          id="prop-timezone-flag"
+                          checked={timezone === true}
+                          onCheckedChange={(checked) => (
+                          setTimezone(checked === true ? true : undefined)
+                        )}
+                        />
+                        <Label htmlFor="prop-timezone-flag" className="text-xs">
+                          {t('data-contracts:property.fields.timezone', 'Timezone')}
+                        </Label>
+                      </div>
+                      )}
                       <div className="space-y-1.5">
                         <Label htmlFor="prop-custom-format" className="text-xs">{t('data-contracts:property.fields.customFormat', 'Custom Format')}</Label>
                         <Input id="prop-custom-format" value={customFormat} onChange={(e) => setCustomFormat(e.target.value)} className="h-9" />

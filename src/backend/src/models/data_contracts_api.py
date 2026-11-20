@@ -471,9 +471,11 @@ class DataContractBase(CamelCaseSpellingWins):
         validation_alias=AliasChoices('apiVersion', 'api_version'),
     )
     domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
-    # Multi-domain assignment (primary included). The create dialogs send the domains by
-    # field name: these two fields and ``apiVersion`` read both spellings (the name wins
-    # when both are sent); the other aliased fields only their alias
+    # Multi-domain assignment (primary included). The create dialogs send the fields by
+    # name: every aliased field is read by its name as well as its alias
+    # (``populate_by_name``). For ``apiVersion`` and the two domain fields below the name
+    # also wins when both spellings are sent (explicit ``AliasChoices``); for the other
+    # fields the alias is read first, as pydantic does
     domainIds: Optional[List[str]] = Field(
         None, alias='domain_ids', validation_alias=AliasChoices('domainIds', 'domain_ids'),
     )
@@ -489,6 +491,11 @@ class DataContractBase(CamelCaseSpellingWins):
 
     # Spelling only ('3.0.2' -> 'v3.0.2'); a value outside ODCS is stored as sent
     _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
+
+    class Config:
+        # The create dialogs and the wizard send the field names (dataProduct, tenant,
+        # domainIds, ...), the documented camelCase input
+        populate_by_name = True
 
 
 class DataContractCreate(DataContractBase):

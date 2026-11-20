@@ -10,6 +10,11 @@ from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Entity types whose ladder doesn't include the shared ``all`` levels
+OWN_LADDER_ENTITY_TYPES = frozenset({"Asset"})
+# Entity types the shared ``all`` levels apply to
+SHARED_LEVEL_ENTITY_TYPES = ("DataProduct", "DataContract")
+
 
 class MaturityLevelRepository:
 
@@ -18,12 +23,19 @@ class MaturityLevelRepository:
     # ------------------------------------------------------------------
 
     def get_all_ordered(self, db: Session, *, entity_type: Optional[str] = None) -> List[MaturityLevelDb]:
-        """Return levels ordered by level_order, optionally filtered by entity_type."""
+        """Return levels ordered by level_order, optionally filtered by entity_type.
+
+        Levels with entity type ``all`` apply to data products and data
+        contracts. Assets have their own ladder (``Asset`` levels only): the
+        shared levels gate on product/contract fields (contracts, delivery
+        channels) that an asset doesn't have.
+        """
         q = db.query(MaturityLevelDb)
         if entity_type:
-            q = q.filter(
-                MaturityLevelDb.entity_type.in_([entity_type, "all"])
-            )
+            types = [entity_type]
+            if entity_type not in OWN_LADDER_ENTITY_TYPES:
+                types.append("all")
+            q = q.filter(MaturityLevelDb.entity_type.in_(types))
         return q.order_by(MaturityLevelDb.level_order).all()
 
     def get_by_id(self, db: Session, level_id: UUID) -> Optional[MaturityLevelDb]:
@@ -95,9 +107,18 @@ class MaturityLevelRepository:
 
         return self.get_all_ordered(db)
 
-    def count_snapshots_for_level(self, db: Session, level_order: int) -> int:
+    def count_snapshots_for_level(self, db: Session, level_order: int,
+                                  entity_type: str = "all") -> int:
+        """Snapshots at ``level_order`` of the entity types the level applies to.
+
+        An ``all`` level covers data products and data contracts; any other
+        level only its own entity type, so an asset snapshot never blocks
+        deleting a product or contract level (nor the reverse).
+        """
+        types = list(SHARED_LEVEL_ENTITY_TYPES) if entity_type == "all" else [entity_type]
         return db.query(func.count(MaturitySnapshotDb.id)).filter(
-            MaturitySnapshotDb.achieved_level_order == level_order
+            MaturitySnapshotDb.achieved_level_order == level_order,
+            MaturitySnapshotDb.entity_type.in_(types),
         ).scalar() or 0
 
     def is_empty(self, db: Session, entity_type: Optional[str] = None) -> bool:

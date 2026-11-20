@@ -146,3 +146,158 @@ class TestProductChangeAnalyzerNullSafety:
         # bob without a critical role → patch-level fix, not breaking.
         assert result.change_type == ChangeType.FIX
         assert any("bob" in entry for entry in result.fixes)
+
+
+def _with_ports(key: str, ports) -> Dict:
+    return {**_empty_product(), key: ports}
+
+
+class TestInputPortRules:
+    """Input ports have no `required` field: the rules use fields that exist."""
+
+    def test_removing_an_input_port_is_breaking(self):
+        old = _with_ports("inputPorts", [{"name": "in", "version": "1", "contractId": "c1"}])
+        new = _with_ports("inputPorts", [])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert result.version_bump == "major"
+        assert any("in" in c for c in result.breaking_changes)
+
+    def test_adding_an_input_port_is_a_feature(self):
+        old = _with_ports("inputPorts", [])
+        new = _with_ports("inputPorts", [{"name": "in", "version": "1", "contractId": "c1"}])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.FEATURE
+        assert result.breaking_changes == []
+
+
+def _out(**over) -> Dict:
+    port = {
+        "name": "o", "version": "1", "contractId": "c1", "assetType": "table",
+        "assetIdentifier": "main.sales.orders", "containsPii": False,
+    }
+    return {**port, **over}
+
+
+class TestOutputPortChanges:
+    """Changes to an output port that consumers read are breaking."""
+
+    @pytest.mark.parametrize("over", [
+        {"assetIdentifier": "main.sales.orders_v2"},
+        {"assetType": "view"},
+        {"server": {"host": "kafka-b"}},
+        {"contractId": None},
+    ])
+    def test_repointing_or_unlinking_is_breaking(self, over):
+        old = _with_ports("outputPorts", [_out(server={"host": "kafka-a"})])
+        new = _with_ports("outputPorts", [_out(**{"server": {"host": "kafka-a"}, **over})])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert result.version_bump == "major"
+
+    @pytest.mark.parametrize("stored, sent", [
+        ('{"host": "kafka-a", "port": null}', {"host": "kafka-a"}),
+        ('{bad', '{bad'),
+    ])
+    def test_a_server_stored_as_json_text_compares_by_value(self, stored, sent):
+        old = _with_ports("outputPorts", [_out(server=stored)])
+        new = _with_ports("outputPorts", [_out(server=sent)])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.NONE
+
+    def test_a_server_stored_as_json_text_that_changed_is_breaking(self):
+        old = _with_ports("outputPorts", [_out(server='{"host": "kafka-a"}')])
+        new = _with_ports("outputPorts", [_out(server={"host": "kafka-b"})])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.BREAKING
+
+    @pytest.mark.parametrize("over", [
+        {"status": "deprecated"},
+        {"containsPii": True},
+        {"description": "new text"},
+        {"deliveryMethodId": "dm-2"},
+    ])
+    def test_other_attribute_changes_are_a_patch(self, over):
+        old = _with_ports("outputPorts", [_out(deliveryMethodId="dm-1")])
+        new = _with_ports("outputPorts", [_out(**{"deliveryMethodId": "dm-1", **over})])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.FIX
+
+    def test_unchanged_port_with_empty_values_is_not_a_change(self):
+        old = _with_ports("outputPorts", [_out(description=None, containsPii=None)])
+        new = _with_ports("outputPorts", [_out(description="", containsPii=False)])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.NONE
+
+    def test_left_out_delivery_method_is_not_a_change(self):
+        old = _with_ports("outputPorts", [_out(deliveryMethodId="dm-1")])
+        new = _with_ports("outputPorts", [_out()])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.NONE
+
+
+class TestPortIdentity:
+    """The repository keeps an output port by id, the analyzer matches by name."""
+
+    def test_same_name_with_a_new_id_is_breaking(self):
+        old = _with_ports("outputPorts", [_out(id="p1")])
+        new = _with_ports("outputPorts", [_out(id="p2")])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert any("Recreated" in c for c in result.breaking_changes)
+
+    def test_same_name_without_an_id_is_breaking(self):
+        old = _with_ports("outputPorts", [_out(id="p1")])
+        new = _with_ports("outputPorts", [_out()])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.BREAKING
+
+    def test_same_id_is_not_a_change(self):
+        old = _with_ports("outputPorts", [_out(id="p1")])
+        new = _with_ports("outputPorts", [_out(id="p1")])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.NONE
+
+    def test_ids_are_ignored_when_the_old_side_has_none(self):
+        old = _with_ports("outputPorts", [_out()])
+        new = _with_ports("outputPorts", [_out(id="p1")])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.NONE
+
+    def test_dropping_one_of_two_same_named_ports_is_seen(self):
+        old = _with_ports("outputPorts", [_out(id="p1"), _out(id="p2")])
+        new = _with_ports("outputPorts", [_out(id="p1")])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert any("Removed" in c for c in result.breaking_changes)
+
+
+class TestSnakeCaseKeys:
+    """POST /data-products/compare takes caller-supplied dicts: aliases work too."""
+
+    def test_snake_case_port_lists_are_analyzed(self):
+        old = {"output_ports": [{"name": "o", "version": "1", "contract_id": "c1"}],
+               "support_channels": [{"channel": "slack", "url": "u"}]}
+        new = {"output_ports": [], "support_channels": []}
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert any("Removed output port" in c for c in result.breaking_changes)
+        assert any("slack" in f for f in result.fixes)

@@ -7,7 +7,7 @@ Handles mapping between API models (Pydantic) and DB models (SQLAlchemy).
 
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select, distinct, or_, and_
-from typing import Iterable, List, Optional, Any, Dict, Set, Union
+from typing import Iterable, List, Optional, Any, Dict, Set, Tuple, Union
 import json
 
 from src.common.repository import CRUDBase, coerce_uuid
@@ -74,6 +74,31 @@ def _port_type_of(port: Dict[str, Any], default: Optional[str]) -> Optional[str]
     """
     value = port.get('port_type', port.get('type'))
     return default if value is None else value
+
+
+def _nth_name(seen: Dict[str, int], name: str) -> Tuple[str, int]:
+    """(name, n) for the n-th port of that name in a list, counting from 0."""
+    n = seen.get(name, 0)
+    seen[name] = n + 1
+    return name, n
+
+
+def _ports_by_name(ports, keys: Iterable[str]) -> Dict[Tuple[str, int], Dict[str, Any]]:
+    """The stored ports' values of ``keys``, read before the ports are replaced."""
+    seen: Dict[str, int] = {}
+    return {
+        _nth_name(seen, port.name): {key: getattr(port, key) for key in keys}
+        for port in ports
+    }
+
+
+def _sent_or_stored(
+    port_dict: Dict[str, Any], key: str, stored: Optional[Dict[str, Any]],
+) -> Any:
+    """The sent value (null included), else the stored port's, else None."""
+    if key in port_dict:
+        return port_dict[key]
+    return (stored or {}).get(key)
 
 
 class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProductUpdate]):
@@ -358,16 +383,22 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                     )
                     db_obj.custom_properties.append(prop_obj)
 
-            # 5. Update Input Ports (replace all)
+            # 5. Update Input Ports (replace all). A port left out of the list is
+            # removed; a field left out of a port keeps the value of the stored port
+            # of that name (the n-th of a repeated name), as for output ports.
             if 'input_ports' in update_data:
+                stored_ports = _ports_by_name(
+                    db_obj.input_ports, ('asset_type', 'asset_identifier'))
                 db_obj.input_ports.clear()
+                incoming_names: Dict[str, int] = {}
                 for port_dict in update_data['input_ports'] or []:
+                    stored = stored_ports.get(_nth_name(incoming_names, port_dict['name']))
                     port_obj = InputPortDb(
                         name=port_dict['name'],
                         version=port_dict['version'],
                         contract_id=port_dict['contract_id'],
-                        asset_type=port_dict.get('asset_type'),
-                        asset_identifier=port_dict.get('asset_identifier')
+                        asset_type=_sent_or_stored(port_dict, 'asset_type', stored),
+                        asset_identifier=_sent_or_stored(port_dict, 'asset_identifier', stored),
                     )
                     db_obj.input_ports.append(port_obj)
 
@@ -388,7 +419,12 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         port_obj = existing_by_id[port_id]
                         port_obj.name = port_dict['name']
                         port_obj.version = port_dict['version']
-                        port_obj.description = port_dict.get('description')
+                        # A field the caller leaves out keeps its stored value (the
+                        # port dialog sends only what it edits); null or [] clears it.
+                        # The contract is the exception: an omitted one is an unlink,
+                        # as the versioning check reads it.
+                        if 'description' in port_dict:
+                            port_obj.description = port_dict.get('description')
                         if 'port_type' in port_dict or 'type' in port_dict:
                             port_obj.port_type = _port_type_of(port_dict, None)
                         port_obj.contract_id = port_dict.get('contract_id')
@@ -401,22 +437,28 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         if 'delivery_method_id' in port_dict:
                             port_obj.delivery_method_id = coerce_uuid(
                                 port_dict.get('delivery_method_id'))
-                        port_obj.asset_type = port_dict.get('asset_type')
-                        port_obj.asset_identifier = port_dict.get('asset_identifier')
-                        port_obj.status = port_dict.get('status')
-                        port_obj.server = server_json
-                        port_obj.contains_pii = port_dict.get('contains_pii', False)
-                        port_obj.auto_approve = port_dict.get('auto_approve', False)
+                        if 'asset_type' in port_dict:
+                            port_obj.asset_type = port_dict.get('asset_type')
+                        if 'asset_identifier' in port_dict:
+                            port_obj.asset_identifier = port_dict.get('asset_identifier')
+                        if 'status' in port_dict:
+                            port_obj.status = port_dict.get('status')
+                        if 'server' in port_dict:
+                            port_obj.server = server_json
+                        if 'contains_pii' in port_dict:
+                            port_obj.contains_pii = bool(port_dict.get('contains_pii'))
+                        if 'auto_approve' in port_dict:
+                            port_obj.auto_approve = bool(port_dict.get('auto_approve'))
 
                         # Replace SBOM
-                        port_obj.sbom.clear()
-                        if port_dict.get('sbom'):
-                            for sbom_dict in port_dict['sbom']:
+                        if 'sbom' in port_dict:
+                            port_obj.sbom.clear()
+                            for sbom_dict in port_dict['sbom'] or []:
                                 port_obj.sbom.append(SBOMDb(type=sbom_dict.get('type', 'external'), url=sbom_dict['url']))
                         # Replace InputContracts
-                        port_obj.input_contracts.clear()
-                        if port_dict.get('input_contracts'):
-                            for contract_dict in port_dict['input_contracts']:
+                        if 'input_contracts' in port_dict:
+                            port_obj.input_contracts.clear()
+                            for contract_dict in port_dict['input_contracts'] or []:
                                 port_obj.input_contracts.append(InputContractDb(contract_id=contract_dict['id'], contract_version=contract_dict['version']))
 
                         incoming_ids.add(port_id)
@@ -452,17 +494,26 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         db_obj.output_ports.remove(old_port)
                         db.delete(old_port)
 
-            # 7. Update Management Ports (replace all)
+            # 7. Update Management Ports (replace all), as input ports: a port left
+            # out of the list is removed, a field left out of a port is kept.
             if 'management_ports' in update_data:
+                stored_ports = _ports_by_name(
+                    db_obj.management_ports, ('port_type', 'url', 'channel', 'description'))
                 db_obj.management_ports.clear()
+                incoming_names = {}
                 for mgmt_dict in update_data['management_ports'] or []:
+                    stored = stored_ports.get(_nth_name(incoming_names, mgmt_dict['name']))
+                    if 'port_type' in mgmt_dict or 'type' in mgmt_dict or not stored:
+                        port_type = _port_type_of(mgmt_dict, 'rest')
+                    else:
+                        port_type = stored['port_type']
                     mgmt_obj = ManagementPortDb(
                         name=mgmt_dict['name'],
                         content=mgmt_dict['content'],
-                        port_type=_port_type_of(mgmt_dict, 'rest'),
-                        url=mgmt_dict.get('url'),
-                        channel=mgmt_dict.get('channel'),
-                        description=mgmt_dict.get('description')
+                        port_type=port_type,
+                        url=_sent_or_stored(mgmt_dict, 'url', stored),
+                        channel=_sent_or_stored(mgmt_dict, 'channel', stored),
+                        description=_sent_or_stored(mgmt_dict, 'description', stored),
                     )
                     db_obj.management_ports.append(mgmt_obj)
 

@@ -693,7 +693,15 @@ class AssetUpdate(BaseModel):
     location: Optional[str] = None
     domain_ids: Optional[List[str]] = None
     primary_domain_id: Optional[str] = None
-    properties: Optional[Dict[str, Any]] = None
+    properties: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Replaces the stored properties as a whole: send every property to keep "
+            "(the Edit dialog sends the stored ones with its changes). Omitted: kept. "
+            "null or {}: the public properties are cleared. The internal keys, which "
+            "clients never see, are always kept."
+        ),
+    )
     tags: Optional[List[str]] = None
     status: Optional[AssetStatus] = None
 

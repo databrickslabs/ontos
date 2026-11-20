@@ -432,6 +432,10 @@ export default function AssetImportExportDialog({
               </div>
             </div>
 
+            <p className="text-xs text-muted-foreground">
+              {t('assets:importExport.importHelp.properties')}
+            </p>
+
             {/* Global errors */}
             {preview?.error_messages && preview.error_messages.length > 0 && (
               <Alert variant="destructive">

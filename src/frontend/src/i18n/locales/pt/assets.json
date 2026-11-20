@@ -102,6 +102,9 @@
     "downloadTemplate": "Baixar Modelo",
     "exportHelp1": "O arquivo de exportação inclui todos os campos de cada ativo. Você pode editá-lo offline e reimportá-lo.",
     "exportHelp2": "O modelo fornece um arquivo vazio com os cabeçalhos corretos e uma linha de exemplo.",
+    "importHelp": {
+      "properties": "Na coluna properties, uma célula vazia mantém as propriedades armazenadas do ativo; use {} para limpá-las. Um valor substitui as propriedades públicas, e as que o Ontos mantém por conta própria são preservadas."
+    },
     "selectFile": "Selecionar Arquivo",
     "preview": "Pré-visualização",
     "rows_one": "{{count}} linha",

@@ -480,6 +480,9 @@
     "targetNotPickable": "{{type}} はここでは選択できません。専用のページで管理されます。",
     "noAccessToTarget": "{{type}} へのアクセス権がありません。リンクするには管理者に読み取りアクセスを依頼してください。"
   },
+  "assetFormStoredProperties": {
+    "loadError": "アセットの保存済みプロパティを読み込めなかったため、ここでは保存できません。ダイアログを閉じて、もう一度お試しください。"
+  },
   "assetForm": {
     "groups": {
       "basic": "基本情報",

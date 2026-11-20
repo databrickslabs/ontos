@@ -30,6 +30,8 @@ from src.controller.metadata_manager import MetadataManager
 
 logger = get_logger(__name__)
 
+_UNSET = object()
+
 ONTOS_NS = "http://ontos.app/ontology#"
 
 
@@ -388,13 +390,18 @@ class AssetsManager(SearchableAsset):
 
         effective_type_id = asset_in.asset_type_id or db_asset.asset_type_id
         if asset_in.properties is not None:
-            self._validate_properties(db, effective_type_id, asset_in.properties)
+            # Only what the update changes: a stored legacy value that doesn't fit the
+            # schema doesn't block an edit of another field (the dialog sends them back)
+            stored = db_asset.properties or {}
+            changed = {k: v for k, v in asset_in.properties.items() if stored.get(k, _UNSET) != v}
+            self._validate_properties(db, effective_type_id, changed)
 
         update_data = asset_in.model_dump(exclude_unset=True)
-        if update_data.get('properties') is not None:
-            # Clients never see the internal keys, so they can't send them back
+        if 'properties' in update_data:
+            # Clients never see the internal keys, so they can't send them back; null
+            # clears the public properties like {} and keeps the internal ones
             update_data['properties'] = with_internal_properties(
-                update_data['properties'], db_asset.properties)
+                update_data['properties'] or {}, db_asset.properties)
         domains_provided = 'domain_ids' in update_data
         domain_ids = update_data.pop('domain_ids', None) or []
         primary_domain_id = update_data.pop('primary_domain_id', None)

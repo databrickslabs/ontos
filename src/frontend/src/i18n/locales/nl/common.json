@@ -484,6 +484,9 @@
     "targetNotPickable": "{{type}} kan hier niet worden gekozen. Het wordt op een eigen pagina beheerd.",
     "noAccessToTarget": "U hebt geen toegang tot {{type}}. Vraag een beheerder om leestoegang om ernaar te koppelen."
   },
+  "assetFormStoredProperties": {
+    "loadError": "De opgeslagen eigenschappen van het asset konden niet worden geladen, dus het kan hier niet worden opgeslagen. Sluit het dialoogvenster en probeer het opnieuw."
+  },
   "assetForm": {
     "groups": {
       "basic": "Basisinformatie",

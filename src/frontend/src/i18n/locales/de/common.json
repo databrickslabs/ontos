@@ -480,6 +480,9 @@
     "targetNotPickable": "{{type}} kann hier nicht ausgewählt werden. Es wird auf einer eigenen Seite verwaltet.",
     "noAccessToTarget": "Sie haben keinen Zugriff auf {{type}}. Bitten Sie einen Administrator um Lesezugriff, um darauf zu verknüpfen."
   },
+  "assetFormStoredProperties": {
+    "loadError": "Die gespeicherten Eigenschaften des Assets konnten nicht geladen werden, daher kann es hier nicht gespeichert werden. Schließen Sie den Dialog und versuchen Sie es erneut."
+  },
   "assetForm": {
     "groups": {
       "basic": "Grundinformationen",

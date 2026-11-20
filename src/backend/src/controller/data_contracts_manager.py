@@ -1732,6 +1732,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
     def _create_schema_objects(
         self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None,
+        semantic_manager: Optional[Any] = None, commit_links: bool = True,
         custom_property_ids: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None,
         include_object_quality: bool = False,
     ):
@@ -1930,18 +1931,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add_all(all_auth_defs)
         db.flush()
 
-        # Process semantic links after bulk insert
+        # Process semantic links after bulk insert. ``semantic_manager`` /
+        # ``commit_links=False``: an update writes them in its own commit (their
+        # graph changes are that manager's pending ones, applied once it committed)
         if schema_semantic_work or prop_semantic_work:
             from src.controller.semantic_links_manager import SemanticLinksManager
             from src.utils.semantic_helpers import process_schema_semantic_links, process_property_semantic_links
-            semantic_manager = SemanticLinksManager(db)
+            semantic_manager = semantic_manager or SemanticLinksManager(db)
             for cid, sname, auth_defs in schema_semantic_work:
                 process_schema_semantic_links(
                     semantic_manager=semantic_manager,
                     contract_id=cid,
                     schema_name=sname,
                     authoritative_definitions=auth_defs,
-                    created_by=current_user
+                    created_by=current_user,
+                    commit=commit_links,
                 )
             for cid, sname, pname, auth_defs in prop_semantic_work:
                 process_property_semantic_links(
@@ -1950,7 +1954,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     schema_name=sname,
                     property_name=pname,
                     authoritative_definitions=auth_defs,
-                    created_by=current_user
+                    created_by=current_user,
+                    commit=commit_links,
                 )
 
     @staticmethod
@@ -2029,7 +2034,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         for rule_data in quality_rules:
             db.add(self._build_quality_check_db(rule_data, object_id=schema_obj.id))
     
-    def _process_semantic_links(self, db, contract_id: str, contract_data, current_user: Optional[str] = None):
+    def _process_semantic_links(
+        self, db, contract_id: str, contract_data, current_user: Optional[str] = None,
+        semantic_manager: Optional[Any] = None, commit: bool = True,
+    ):
         """
         Process all semantic links from authoritative definitions.
         
@@ -2038,6 +2046,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             contract_id: Contract UUID
             contract_data: Contract data (can be Pydantic model or dict)
             current_user: Username for semantic link creation
+            semantic_manager: The caller's SemanticLinksManager (its pending graph changes)
+            commit: False to write the links in the caller's transaction
         """
         from src.controller.semantic_links_manager import SemanticLinksManager
         from src.utils.semantic_helpers import process_contract_semantic_links
@@ -2048,7 +2058,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         else:
             contract_dict = contract_data
         
-        semantic_manager = SemanticLinksManager(db)
+        semantic_manager = semantic_manager or SemanticLinksManager(db)
         
         # Process contract-level semantic assignments
         contract_auth_defs = contract_dict.get('authoritativeDefinitions', []) or []
@@ -2057,7 +2067,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 semantic_manager=semantic_manager,
                 contract_id=contract_id,
                 authoritative_definitions=contract_auth_defs,
-                created_by=current_user
+                created_by=current_user,
+                commit=commit,
             )
     
     def _create_team_members(self, db, contract_id: str, team_data: List[dict]):
@@ -2569,6 +2580,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         contract_data,
         current_user: Optional[str] = None,
         background_tasks: Optional[Any] = None,
+        gate_executions: Optional[List[Any]] = None,
     ) -> DataContractDb:
         """
         Update a contract with all nested relations. Manages transaction.
@@ -2579,6 +2591,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             contract_data: Contract update data (Pydantic DataContractUpdate model or dict)
             current_user: Username of current user
             background_tasks: Optional FastAPI BackgroundTasks for async delivery
+            gate_executions: The executions of the before_update gates the update
+                passed (``run_update_gates``): their tag steps' changes are written
+                after the update's own tags, in the same commit
             
         Returns:
             Updated DataContractDb instance
@@ -2615,6 +2630,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             # Extract tags (handled separately)
             tags_data = data_dict.get('tags')
+            semantic_manager = None  # set when the update replaces the contract's links
             
             # Determine whether the caller supplied a domain assignment (multi-domain).
             domains_provided = any(
@@ -2735,12 +2751,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         ).delete()
 
                 if schemas_to_create:
+                    from src.controller.semantic_links_manager import SemanticLinksManager
+                    semantic_manager = SemanticLinksManager(db)
                     # Object-level quality kept from a recreated object is in
-                    # its `quality`; `qualityRules` (below) still replaces it
+                    # its `quality`; `qualityRules` (below) still replaces it.
+                    # Their semantic links are written in the update's commit
                     self._create_schema_objects(
                         db, contract_id, schemas_to_create, current_user,
                         custom_property_ids=custom_property_ids,
                         include_object_quality=True,
+                        semantic_manager=semantic_manager, commit_links=False,
                     )
             
             # Handle quality rules if provided
@@ -2800,18 +2820,30 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     if tags_data and not tag_creates:
                         logger.warning("No readable tag in the update of contract %s; its tags are kept", contract_id)
                     else:
-                        # Set tags for the contract entity
-                        self._tags_manager.set_tags_for_entity(
-                            db,
-                            entity_id=contract_id,
-                            entity_type="data_contract",
-                            tags=tag_creates,
-                            user_email=current_user
-                        )
+                        # Set tags for the contract entity, committed with the rest of
+                        # the update; a savepoint, so a failure here undoes only the tags
+                        with db.begin_nested():
+                            self._tags_manager.set_tags_for_entity(
+                                db,
+                                entity_id=contract_id,
+                                entity_type="data_contract",
+                                tags=tag_creates,
+                                user_email=current_user,
+                                commit=False,
+                            )
                         logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
                 except Exception as e:
                     logger.error(f"Failed to update tags for contract {contract_id}: {e}")
-                    # Don't fail the entire update if tags fail
+                    if gate_executions:
+                        # The before_update gates passed on this tag list as written:
+                        # saving the update with the old tags would bypass them
+                        from src.common.workflow_executor import UpdateGateTagListWriteError
+                        raise UpdateGateTagListWriteError(contract_id) from e
+                    # Without gates, don't fail the entire update if tags fail
+                    logger.warning(
+                        "Contract %s keeps its previous tags: the update's %d tag(s) "
+                        "weren't written", contract_id, len(tags_data),
+                    )
             
             # Servers (the contract page sends the whole list): replace them,
             # keeping the ODCS id of a server the payload names without one
@@ -2851,21 +2883,34 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if data_dict['customProperties']:
                     self._create_custom_properties(db, contract_id, data_dict['customProperties'])
             
-            # Handle contract-level semantic links if provided
+            # The tag changes of the before_update gates' tag steps, on top of the
+            # update's tags (as the gates saw them) and in its commit; a failed
+            # write refuses the update (UpdateGateTagWriteError)
+            if gate_executions:
+                from src.common.workflow_executor import apply_deferred_tag_writes
+                apply_deferred_tag_writes(db, gate_executions, current_user)
+
+            # Handle contract-level semantic links if provided, in the update's
+            # commit (their graph changes once it committed)
             if data_dict.get('authoritativeDefinitions') is not None:
                 from src.controller.semantic_links_manager import SemanticLinksManager
-                semantic_manager = SemanticLinksManager(db)
+                semantic_manager = semantic_manager or SemanticLinksManager(db)
                 
                 # Remove existing contract-level semantic links
                 existing_links = semantic_manager.list_for_entity(entity_id=contract_id, entity_type='data_contract')
                 for link in existing_links:
-                    semantic_manager.remove(link.id, removed_by=current_user)
+                    semantic_manager.remove(link.id, removed_by=current_user, commit=False)
                 
                 # Process new semantic links
                 if data_dict['authoritativeDefinitions']:
-                    self._process_semantic_links(db, contract_id, data_dict, current_user)
-            
+                    self._process_semantic_links(
+                        db, contract_id, data_dict, current_user,
+                        semantic_manager=semantic_manager, commit=False,
+                    )
+
             db.commit()
+            if semantic_manager is not None:
+                semantic_manager.apply_graph_changes()
             db.refresh(updated)
             
             # Log to change log for timeline
@@ -4297,22 +4342,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     ) -> tuple[bool, List[Any]]:
         """Run the before_update gates of an update; ``(passed, executions)``.
 
-        ``changes`` are the fields sent. A gate that raises is logged and lets
-        the update proceed (``(True, [])``).
+        ``changes`` are the fields sent. A gate that raises is logged and
+        audited; it refuses the update when it is ``on_error: fail_closed``
+        (``UpdateGateEvaluationError``), else the update proceeds
+        (``workflow_triggers.run_update_gates``).
         """
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common import workflow_triggers
         from src.models.process_workflows import EntityType
-        try:
-            return get_trigger_registry(db).before_update(
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=str(contract.id),
-                entity_name=getattr(contract, 'name', None),
-                entity_data=changes,
-                user_email=user_email,
-            )
-        except Exception as e:
-            logger.warning(f"before_update trigger failed for contract {contract.id}: {e}")
-            return True, []
+        return workflow_triggers.run_update_gates(
+            db,
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=str(contract.id),
+            entity_name=getattr(contract, 'name', None),
+            entity_data=changes,
+            user_email=user_email,
+        )
 
     @staticmethod
     def fire_create_trigger(db: Session, contract: Any, user_email: Optional[str]) -> None:
@@ -4371,6 +4415,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         current_user: Optional[str] = None,
         deprecation: Optional[DeprecationDetails] = None,
         also_set: Optional[Dict[str, Any]] = None,
+        gates_checked: bool = False,
     ) -> DataContractDb:
         """
         Transition contract status. Validates contract exists and transition is valid.
@@ -4386,6 +4431,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             also_set: Other fields written in the same commit as the status,
                 only once the gates passed (e.g. a review request clears
                 ``draft_owner_id`` with its draft -> proposed change)
+            gates_checked: the caller already ran the transition's gates
+                (``check_transition_gates``) in this request: they don't run
+                again, the deprecation fields are still checked
             
         Returns:
             Updated DataContractDb instance
@@ -4393,38 +4441,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid status transition
         """
-        contract = data_contract_repo.get(db, id=contract_id)
-        if not contract:
-            raise ValueError("Contract not found")
-        
-        # Certification is now a separate dimension — removed from status transitions
-        from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
-        valid_transitions = DATA_CONTRACT_TRANSITIONS
-        
-        current_status = contract.status or 'draft'
-        if new_status not in valid_transitions.get(current_status, []):
-            # Allow any transition if current status not in map (backward compatibility)
-            if current_status in valid_transitions:
-                raise ValueError(f"Invalid status transition from {current_status} to {new_status}")
-
-        # Run before_status_change workflows (gating)
-        # (a gate that errors refuses the transition when it is fail_closed, #1103);
-        # the deprecation fields are checked after the certified guard, before the gates
-        from src.common.workflow_triggers import run_status_gates
-        from src.models.process_workflows import EntityType as WFEntityType
-        run_status_gates(
-            db,
-            entity_type=WFEntityType.DATA_CONTRACT,
-            entity_id=contract_id,
-            from_status=current_status,
-            to_status=new_status,
-            entity_name=contract.name,
-            entity_data={"name": contract.name, "status": current_status},
-            user_email=current_user,
-            before_gates=lambda: check_lifecycle_fields(
-                db, 'data_contract', contract_id, new_status, deprecation
-            ),
-        )
+        contract, current_status = self._transition_target(db, contract_id, new_status)
+        if gates_checked:
+            check_lifecycle_fields(db, 'data_contract', contract_id, new_status, deprecation)
+            from src.controller.certified_deprecation_guard import close_open_requests
+            close_open_requests(db, 'data_contract', contract_id, new_status, current_user)
+        else:
+            self._run_transition_gates(
+                db, contract, current_status, new_status, current_user, deprecation,
+            )
         
         try:
             lifecycle_changes = apply_lifecycle_fields(
@@ -4475,6 +4500,66 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             "data_contract", contract_id, current_status, new_status
         )
         return updated
+
+    @staticmethod
+    def _transition_target(db, contract_id: str, new_status: str) -> tuple:
+        """``(contract, current status)``; ValueError when missing or not allowed."""
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError("Contract not found")
+
+        # Certification is now a separate dimension — removed from status transitions
+        from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
+        valid_transitions = DATA_CONTRACT_TRANSITIONS
+
+        current_status = contract.status or 'draft'
+        if new_status not in valid_transitions.get(current_status, []):
+            # Allow any transition if current status not in map (backward compatibility)
+            if current_status in valid_transitions:
+                raise ValueError(f"Invalid status transition from {current_status} to {new_status}")
+        return contract, current_status
+
+    @staticmethod
+    def _run_transition_gates(
+        db, contract, current_status: str, new_status: str, current_user: Optional[str],
+        deprecation: Optional[DeprecationDetails], close_requests: bool = True,
+    ) -> None:
+        """The before_status_change gates of a transition (``run_status_gates``)."""
+        # (a gate that errors refuses the transition when it is fail_closed, #1103);
+        # the deprecation fields are checked after the certified guard, before the gates
+        from src.common.workflow_triggers import run_status_gates
+        from src.models.process_workflows import EntityType as WFEntityType
+        contract_id = str(contract.id)
+        run_status_gates(
+            db,
+            entity_type=WFEntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            from_status=current_status,
+            to_status=new_status,
+            entity_name=contract.name,
+            entity_data={"name": contract.name, "status": current_status},
+            user_email=current_user,
+            before_gates=lambda: check_lifecycle_fields(
+                db, 'data_contract', contract_id, new_status, deprecation
+            ),
+            close_requests=close_requests,
+        )
+
+    def check_transition_gates(
+        self, db, contract_id: str, new_status: str, current_user: Optional[str] = None,
+        deprecation: Optional[DeprecationDetails] = None,
+    ) -> None:
+        """Run a transition's checks and before_status_change gates without writing it.
+
+        For a caller that writes other changes first and the status after them
+        (``transition_status(gates_checked=True)``), so a refused transition
+        leaves those changes unwritten too. Raises as ``transition_status`` does.
+        """
+        contract, current_status = self._transition_target(db, contract_id, new_status)
+        self._run_transition_gates(
+            db, contract, current_status, new_status, current_user, deprecation,
+            close_requests=False,
+        )
 
     # --- DQX Profiling Methods ---
     

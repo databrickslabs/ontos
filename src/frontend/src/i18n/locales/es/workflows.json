@@ -115,6 +115,10 @@
       "descriptionPlaceholder": "Descripción del flujo de trabajo",
       "failClosed": "Rechazar la transición si esta compuerta no se puede evaluar",
       "failClosedHint": "Fail closed: cuando evaluar esta compuerta produce un error (no un fallo normal), el cambio de estado se rechaza. Desactivado (fail open), el cambio se aplica y el error se registra y se audita.",
+      "updateGate": {
+        "failClosed": "Rechazar la actualización si esta compuerta no se puede evaluar",
+        "failClosedHint": "Fail closed: cuando evaluar esta compuerta produce un error (no un fallo normal), la actualización se rechaza. Desactivado (fail open), la actualización se aplica y el error se registra y se audita."
+      },
       "disabledFor": {
         "title": "Desactivado para",
         "hint": "Esta compuerta no se ejecuta para los dominios, productos de datos y contratos de datos indicados aquí (un dominio cubre sus productos y contratos). Cada omisión se registra y se audita.",
@@ -337,6 +341,9 @@
       "stepConfigMissing": "Al paso \"{{step}}\" le faltan ajustes obligatorios: {{fields}}.",
       "assignTagValueSourceUnknown": "El paso «{{step}}» usa la fuente de valor desconocida «{{source}}».",
       "policyCheckPolicyMissing": "El paso \"{{step}}\" necesita una política de cumplimiento existente. Seleccione una en la configuración del paso.",
+      "updateGate": {
+        "stepNotAllowed": "El paso \"{{step}}\" ({{type}}) no puede ejecutarse en un gate before update: lo que hace quedaría hecho cuando se rechace la actualización. Elimine el paso o muévalo a un flujo on update."
+      },
       "branch": {
         "on_pass": "éxito",
         "on_fail": "fallo"
@@ -542,6 +549,7 @@
     "removedStepsHint": "Estos pasos se ejecutaron en esta ejecución y luego se eliminaron del workflow.",
     "stepErrors": {
       "rule_where_evaluation_failed": "No se pudo evaluar la cláusula WHERE de la política '{{policyName}}' en {{entityType}} {{entityId}}",
+      "update_gate_step_not_allowed": "Un paso {{stepType}} no puede ejecutarse en un gate before update: lo que hace quedaría hecho cuando se rechace la actualización. Elimine el paso o muévalo a un flujo on update.",
       "approval_rejected": "Solicitud denegada",
       "output_port_contracts_missing": "No se puede publicar: los puertos de salida {{ports}} deben tener contratos de datos asignados",
       "output_port_contracts_unapproved": "No se puede publicar: estos puertos de salida tienen contratos no aprobados: {{ports}}. Primero hay que aprobar los contratos.",

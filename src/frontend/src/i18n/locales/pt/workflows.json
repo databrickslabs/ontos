@@ -115,6 +115,10 @@
       "descriptionPlaceholder": "Descrição do fluxo de trabalho",
       "failClosed": "Recusar a transição se este gate não puder ser avaliado",
       "failClosedHint": "Fail closed: quando a avaliação deste gate gera um erro (e não uma falha normal), a mudança de status é recusada. Desligado (fail open), a mudança acontece e o erro é registrado no log e na auditoria.",
+      "updateGate": {
+        "failClosed": "Recusar a atualização se este gate não puder ser avaliado",
+        "failClosedHint": "Fail closed: quando a avaliação deste gate gera um erro (e não uma falha normal), a atualização é recusada. Desligado (fail open), a atualização acontece e o erro é registrado no log e na auditoria."
+      },
       "disabledFor": {
         "title": "Desligado para",
         "hint": "Este gate não roda para os domínios, produtos de dados e contratos de dados listados aqui (um domínio cobre seus produtos e contratos). Cada vez que ele é pulado, isso fica no log e na auditoria.",
@@ -337,6 +341,9 @@
       "stepConfigMissing": "Faltam configurações obrigatórias na etapa \"{{step}}\": {{fields}}.",
       "assignTagValueSourceUnknown": "A etapa \"{{step}}\" usa a fonte de valor desconhecida \"{{source}}\".",
       "policyCheckPolicyMissing": "A etapa \"{{step}}\" precisa de uma política de conformidade existente. Selecione uma nas configurações da etapa.",
+      "updateGate": {
+        "stepNotAllowed": "A etapa \"{{step}}\" ({{type}}) não pode rodar em um gate before update: o que ela faz continuaria feito quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update."
+      },
       "branch": {
         "on_pass": "sucesso",
         "on_fail": "falha"
@@ -542,6 +549,7 @@
     "removedStepsHint": "Estas etapas rodaram nesta execução e depois foram removidas do workflow.",
     "stepErrors": {
       "rule_where_evaluation_failed": "Não foi possível avaliar a cláusula WHERE da política '{{policyName}}' em {{entityType}} {{entityId}}",
+      "update_gate_step_not_allowed": "Uma etapa {{stepType}} não pode rodar em um gate before update: o que ela faz continuaria feito quando a atualização fosse recusada. Remova a etapa ou mova-a para um fluxo on update.",
       "approval_rejected": "Solicitação negada",
       "output_port_contracts_missing": "Não é possível publicar: as portas de saída {{ports}} precisam ter contratos de dados atribuídos",
       "output_port_contracts_unapproved": "Não é possível publicar: estas portas de saída têm contratos não aprovados: {{ports}}. Os contratos precisam ser aprovados primeiro.",

@@ -33,6 +33,8 @@ interface SemanticConcept {
 const LOGICAL_TYPES = [
   'string',
   'date',
+  'timestamp',
+  'time',
   'number',
   'integer',
   'object',

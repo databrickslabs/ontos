@@ -47,6 +47,7 @@
       "uc_description_import_write_limit": "This import reached its limit of {{limit}} rows tried in Unity Catalog, so the description of {{object}} was not written there.",
       "uc_description_import_writes_failed": "The assets were imported, but their descriptions could not be written to Unity Catalog.",
       "uc_description_existing_comment": "Unity Catalog already has another comment on {{object}}, so the description was not written there. Set the description to that comment, or change the comment in Unity Catalog, and save again.",
+      "uc_description_write_unverified": "The description of {{object}} was written to Unity Catalog, but the comment could not be read back to check it. Save again to check it.",
       "uc_description_unsupported_text": "The description of {{object}} has a character Unity Catalog can't store, so it was not written there.",
       "uc_description_import_time_budget": "This import ran out of time for Unity Catalog writes, so the description of {{object}} was not written there.",
       "uc_description_import_writes_uc": "The description of {{object}} will be written to Unity Catalog. If it already has a different comment there, that comment is kept and the row gets a warning.",

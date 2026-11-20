@@ -145,7 +145,9 @@ def test_branding_rejects_display_name_too_long(client: TestClient):
     assert "display name" in detail.lower() or "characters" in detail.lower()
 
 
-def test_invalid_volume_is_rejected_with_a_code_and_stores_nothing(client: TestClient, test_settings):
+def test_invalid_volume_is_rejected_with_a_code_and_stores_nothing(
+    client: TestClient, test_settings
+):
     """A volume that can't name a UC volume answers 400 with code + params and changes nothing."""
     response = client.put(
         "/api/settings",

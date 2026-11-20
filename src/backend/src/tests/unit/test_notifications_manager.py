@@ -89,13 +89,13 @@ class TestNotificationsManager:
 
     def test_get_notifications_empty(self, manager):
         """Test getting notifications when none exist."""
-        manager._repo.get_multi.return_value = []
+        manager._repo.get_addressed_to.return_value = []
 
         assert manager.get_notifications(Mock()) == []
 
     def test_get_notifications_broadcast_only(self, manager):
         """Without user info only broadcast (no recipient) notifications are returned."""
-        manager._repo.get_multi.return_value = [
+        manager._repo.get_addressed_to.return_value = [
             _db_notif("notif-1", "Broadcast"),
             _db_notif("notif-2", "Personal", recipient="user@example.com"),
         ]
@@ -106,7 +106,7 @@ class TestNotificationsManager:
 
     def test_get_notifications_filtered_by_email(self, manager, sample_user_info):
         """A user sees their own notifications, not other users'."""
-        manager._repo.get_multi.return_value = [
+        manager._repo.get_addressed_to.return_value = [
             _db_notif("notif-1", "User Notification", recipient="user@example.com"),
             _db_notif("notif-2", "Other Notification", recipient="other@example.com",
                       created_at=datetime(2024, 1, 2)),
@@ -124,7 +124,7 @@ class TestNotificationsManager:
         mock_settings_manager.list_app_roles.return_value = [
             _role("Data Consumer", groups=["data_consumers"])
         ]
-        manager._repo.get_multi.return_value = [
+        manager._repo.get_addressed_to.return_value = [
             _db_notif("notif-1", "Role Notification", recipient="Data Consumer")
         ]
 
@@ -140,7 +140,7 @@ class TestNotificationsManager:
         mock_settings_manager.list_app_roles.return_value = [
             _role("Data Producer", groups=["producers"])
         ]
-        manager._repo.get_multi.return_value = [
+        manager._repo.get_addressed_to.return_value = [
             _db_notif("notif-1", "Role Notification", recipient="Data Producer")
         ]
 
@@ -148,7 +148,7 @@ class TestNotificationsManager:
 
     def test_get_notifications_sorts_by_created_at(self, manager):
         """Notifications are sorted by created_at descending for a user."""
-        manager._repo.get_multi.return_value = [
+        manager._repo.get_addressed_to.return_value = [
             _db_notif("notif-1", "First", created_at=datetime(2024, 1, 1)),
             _db_notif("notif-2", "Second", created_at=datetime(2024, 1, 3)),
             _db_notif("notif-3", "Third", created_at=datetime(2024, 1, 2)),

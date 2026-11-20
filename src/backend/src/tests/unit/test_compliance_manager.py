@@ -216,8 +216,9 @@ class TestComplianceManager:
 
         # Assert
         assert result["active_policies"] == 1
-        assert result["overall_compliance"] == 0.0
-        assert result["critical_issues"] >= 0
+        # No policy has a scored run: no overall score, not 0 %
+        assert result["overall_compliance"] is None
+        assert result["critical_issues"] == 0
 
     def test_get_compliance_stats_with_runs(self, manager, db_session, sample_policy_db):
         """Test compliance stats with existing runs."""

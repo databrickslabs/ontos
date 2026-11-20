@@ -1255,6 +1255,9 @@
       "created": "Livello di maturità \"{{name}}\" creato.",
       "deleted": "Livello di maturità \"{{name}}\" eliminato.",
       "cannotDeleteTitle": "Impossibile eliminare"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Questa policy usa LLM_CHECK, che viene valutato solo nelle esecuzioni di conformità, quindi un gate di maturità farebbe fallire ogni entità. Seleziona una policy senza LLM_CHECK."
     }
   },
   "directory": {

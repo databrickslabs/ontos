@@ -1255,6 +1255,9 @@
       "created": "Reifegradstufe \"{{name}}\" erstellt.",
       "deleted": "Reifegradstufe \"{{name}}\" gelöscht.",
       "cannotDeleteTitle": "Löschen nicht möglich"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "Diese Richtlinie verwendet LLM_CHECK, das nur in Compliance-Läufen ausgewertet wird; ein Reifegrad-Gate würde daher jede Entität ablehnen. Wählen Sie eine Richtlinie ohne LLM_CHECK."
     }
   },
   "directory": {

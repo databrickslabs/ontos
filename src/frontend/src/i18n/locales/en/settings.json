@@ -1273,6 +1273,9 @@
       "created": "Maturity level \"{{name}}\" created.",
       "deleted": "Maturity level \"{{name}}\" deleted.",
       "cannotDeleteTitle": "Cannot delete"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "This policy uses LLM_CHECK, which is only evaluated in compliance runs, so a maturity gate would fail every entity. Select a policy without LLM_CHECK."
     }
   },
   "directory": {

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterator, List, Optional, Protocol
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
 from src.common.uc_table_columns import table_column_fields
@@ -569,9 +570,24 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
         ``code`` and ``params`` (for the UI to translate) and an English
         ``message``.
     """
-    from src.common.compliance_dsl import parse_rule
+    from src.common.compliance_dsl import (
+        LlmCheckCriterionError, llm_check_criterion, parse_rule,
+    )
 
     parsed = parse_rule(rule, strict=True)
+    if _function_calls(parsed.get('where_clause'), 'LLM_CHECK'):
+        # The WHERE is evaluated without a model: the check fails, and the rule
+        # would skip every entity without a word
+        raise LlmCheckInWhereError(
+            "LLM_CHECK is only evaluated in ASSERT; in WHERE it fails, so the rule "
+            "would skip every entity. Move it to ASSERT."
+        )
+    for call in llm_check_calls(parsed):
+        if llm_check_criterion(call) is None:
+            raise LlmCheckCriterionError(
+                "LLM_CHECK takes a text and a criterion written as a string literal, "
+                "for example LLM_CHECK(t.comment, 'states the grain of the table')"
+            )
     warnings: List[Dict[str, Any]] = []
     entity_filter = parse_entity_filter(rule, parsed=parsed)
     known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
@@ -593,4 +609,42 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
             'message': "The rule has no ASSERT clause, so every entity passes.",
         })
     return warnings
+
+
+class LlmCheckInWhereError(CodedValueError):
+    """A rule with LLM_CHECK in WHERE (rejected on save)."""
+
+    code = 'llm_check_in_where'
+
+
+def llm_check_calls(parsed: Dict[str, Any]) -> list:
+    """The LLM_CHECK calls of a parsed rule, in WHERE and ASSERT."""
+    return _function_calls(parsed.get('where_clause'), 'LLM_CHECK') + _function_calls(
+        parsed.get('assert_clause'), 'LLM_CHECK'
+    )
+
+
+# The app entity types a rule can match, and the feature whose read access shows them
+APP_ENTITY_FEATURES = {
+    'data_product': 'data-products',
+    'data_contract': 'data-contracts',
+    'domain': 'data-domains',
+    'review': 'data-asset-reviews',
+}
+
+
+def _function_calls(node: Any, name: str) -> list:
+    """The calls of the DSL function ``name`` in a rule expression (AST node)."""
+    from src.common.compliance_dsl import FunctionCall
+
+    if node is None:
+        return []
+    if isinstance(node, (list, tuple)):
+        return [c for n in node for c in _function_calls(n, name)]
+    if not hasattr(node, '__dataclass_fields__'):
+        return []
+    found = [node] if isinstance(node, FunctionCall) and node.name == name else []
+    return found + [
+        c for f in node.__dataclass_fields__ for c in _function_calls(getattr(node, f), name)
+    ]
 

@@ -24,6 +24,16 @@ describe('complianceSaveErrorText', () => {
     expect(text).not.toContain('unparsed');
   });
 
+  it('translates an LLM_CHECK refusal', async () => {
+    await i18n.changeLanguage('de');
+    expect(complianceSaveErrorText(i18n.t, {
+      error: 'This policy uses LLM_CHECK; ...', errorCode: 'llm_check_admin_required',
+    })).toBe(
+      'Diese Regel verwendet LLM_CHECK. Speichern, Ausführen oder Testen erfordert '
+      + 'Administratorzugriff auf Compliance.',
+    );
+  });
+
   it('shows the API message for an error without a code', () => {
     expect(complianceSaveErrorText(i18n.t, { error: 'Failed to parse rule: x' }))
       .toBe('Failed to parse rule: x');

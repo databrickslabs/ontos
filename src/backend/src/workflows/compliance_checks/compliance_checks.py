@@ -389,11 +389,27 @@ def _json_or_none(value: Optional[str]) -> Any:
         return None
 
 
+def _score_text(score) -> str:
+    """A run's score for the log: "85.0%", or "no score" for a run without one
+    (it failed, or evaluated no entity)."""
+    return "no score" if score is None else f"{score}%"
+
+
+def _needs_attention(result: dict) -> bool:
+    """A policy whose run errored or failed, or scored below 70 (a run without a
+    score that succeeded evaluated nothing: not a finding)."""
+    if result.get("status") in ("error", "failed"):
+        return True
+    score = result.get("score")
+    return score is not None and score < 70
+
+
 def run_policy(
     db: Session,
     policy: Dict[str, Any],
     manager: Any,
-    entity_limit: Optional[int]
+    entity_limit: Optional[int],
+    llm_checker: Any = None,
 ) -> Dict[str, Any]:
     """Run a single compliance policy.
 
@@ -419,13 +435,18 @@ def run_policy(
 
     try:
         # Run policy using ComplianceManager
-        run = manager.run_policy_inline(db, policy=policy_db, limit=entity_limit)
+        run = manager.run_policy_inline(
+            db, policy=policy_db, limit=entity_limit, llm_checker=llm_checker,
+        )
 
         print(f"  Run ID: {run.id}")
         print(f"  Status: {run.status}")
         print(f"  Passed: {run.success_count}")
         print(f"  Failed: {run.failure_count}")
-        print(f"  Score: {run.score}%")
+        # A run that failed or evaluated nothing has no score (its stored 0.0 is not one)
+        from src.controller.compliance_manager import run_score_fields
+        score = run_score_fields(run)['score']
+        print(f"  Score: {_score_text(score)}")
         # A finished run can report something about its rule (e.g. an ignored tail)
         warning = None
         if run.warning_code:
@@ -439,7 +460,7 @@ def run_policy(
             "status": run.status,
             "success_count": run.success_count,
             "failure_count": run.failure_count,
-            "score": run.score,
+            "score": score,
             "error": run.error_message,
             "warning": warning,
         }
@@ -570,8 +591,11 @@ def main() -> None:
         total_failed = 0
         total_entities = 0
 
+        # One LLM_CHECK budget for the whole job run, shared by its policies
+        llm_checker = manager.llm_checker(db, purge_expired=True)
+
         for policy in policies:
-            result = run_policy(db, policy, manager, entity_limit)
+            result = run_policy(db, policy, manager, entity_limit, llm_checker)
             results.append(result)
 
             if result.get("status") in ["succeeded", "running"]:
@@ -593,13 +617,12 @@ def main() -> None:
             print(f"Overall score: {overall_score}%")
 
         # Show failed policies
-        failed_policies = [r for r in results if r.get("status") == "error" or r.get("score", 100) < 70]
+        failed_policies = [r for r in results if _needs_attention(r)]
         if failed_policies:
             print(f"\nPolicies requiring attention ({len(failed_policies)}):")
             for r in failed_policies:
                 status = r.get("status", "unknown")
-                score = r.get("score", 0)
-                print(f"  - {r['policy_name']}: {status} (score: {score}%)")
+                print(f"  - {r['policy_name']}: {status} (score: {_score_text(r.get('score'))})")
 
         warned = [r for r in results if r.get("warning")]
         if warned:

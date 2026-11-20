@@ -128,7 +128,8 @@ describe('WorkflowDesigner Evaluate Asset Maturity step', () => {
       await i18n.changeLanguage('pt');
     });
     api.put.mockImplementation(async () => ({
-      error: 'requires write access to Settings', errorCode: 'workflow_step_requires_settings_write',
+      error: 'requires write access to Settings',
+      errorCode: 'workflow_step_requires_settings_write',
       errorParams: { stepType: 'evaluate_asset_maturity', feature: 'settings' }, status: 403,
     }));
     renderDesigner('wf-1');

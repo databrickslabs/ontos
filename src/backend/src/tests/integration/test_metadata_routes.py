@@ -137,29 +137,48 @@ class TestAssetMetadataRoutes:
         monkeypatch.setattr(MetadataManager, "ensure_volume_path", lambda self, ws, settings, base_dir: "/Volumes/c/s/v")
         return ws
 
-    def test_create_rich_text_for_asset(self, client: TestClient):
+    @pytest.fixture
+    def asset_id(self, db_session: Session) -> str:
+        """An existing asset: the metadata routes answer 404 for an unknown one (#1342)."""
+        from src.db_models.assets import AssetDb, AssetTypeDb
+
+        asset_type = AssetTypeDb(name="Dashboard (metadata routes)", category="analytics")
+        db_session.add(asset_type)
+        db_session.flush()
+        asset = AssetDb(name="sales", asset_type_id=asset_type.id)
+        db_session.add(asset)
+        db_session.flush()
+        return str(asset.id)
+
+    def test_create_rich_text_for_asset(self, client: TestClient, asset_id):
         response = client.post(
             "/api/entities/asset/rich-texts",
-            params={"entity_id": "asset-1"},
-            json={"entity_id": "asset-1", "entity_type": "asset", "title": "Note", "content_markdown": "Body"},
+            params={"entity_id": asset_id},
+            json={
+                "entity_id": asset_id, "entity_type": "asset", "title": "Note",
+                "content_markdown": "Body",
+            },
         )
         assert response.status_code == 201, response.text
 
-        listed = client.get("/api/entities/asset/rich-texts", params={"entity_id": "asset-1"})
+        listed = client.get("/api/entities/asset/rich-texts", params={"entity_id": asset_id})
         assert [rt["id"] for rt in listed.json()] == [response.json()["id"]]
 
-    def test_create_link_for_asset(self, client: TestClient):
+    def test_create_link_for_asset(self, client: TestClient, asset_id):
         response = client.post(
             "/api/entities/asset/links",
-            params={"entity_id": "asset-1"},
-            json={"entity_id": "asset-1", "entity_type": "asset", "title": "Link", "url": "https://example.com"},
+            params={"entity_id": asset_id},
+            json={
+                "entity_id": asset_id, "entity_type": "asset", "title": "Link",
+                "url": "https://example.com",
+            },
         )
         assert response.status_code == 201, response.text
 
-    def test_upload_document_for_asset(self, client: TestClient, mock_ws):
+    def test_upload_document_for_asset(self, client: TestClient, mock_ws, asset_id):
         response = client.post(
             "/api/entities/asset/documents",
-            params={"entity_id": "asset-1"},
+            params={"entity_id": asset_id},
             data={"title": "Snapshot"},
             files={"file": ("snapshot.png", b"\x89PNG", "image/png")},
         )

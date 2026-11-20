@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Tuple
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -38,6 +39,22 @@ class CostsManager:
     def list(self, db: Session, *, entity_type: str, entity_id: str, month: Optional[date] = None) -> List[CostItem]:
         rows = self._repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id, month=month)
         return [CostItem.model_validate(r, from_attributes=True) for r in rows]
+
+    def get(self, db: Session, *, id: str) -> Optional[CostItem]:
+        db_obj = self._repo.get(db, id=id)
+        return CostItem.model_validate(db_obj, from_attributes=True) if db_obj else None
+
+    def get_owner(self, db: Session, *, id: str) -> Optional[Tuple[str, str]]:
+        """``(entity_type, entity_id)`` of a cost item, from the stored row (no conversion).
+
+        ``None`` when no row has this id; an id that isn't a UUID can't be one.
+        """
+        try:
+            UUID(str(id))
+        except ValueError:
+            return None
+        db_obj = self._repo.get(db, id=id)
+        return (db_obj.entity_type, db_obj.entity_id) if db_obj else None
 
     def update(self, db: Session, *, id: str, data: CostItemUpdate, user_email: Optional[str]) -> Optional[CostItem]:
         db_obj = self._repo.get(db, id=id)

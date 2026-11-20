@@ -1,7 +1,7 @@
 """Add the source of imported Markdown documents and their text, once per file
 
 Revision ID: s2_document_markdown_import
-Revises: o2_step_execution_message
+Revises: c8_workflow_scheduler_claims
 Create Date: 2026-11-12
 
 Markdown files imported from a Unity Catalog volume become documents on the
@@ -21,7 +21,7 @@ import sqlalchemy as sa
 
 
 revision: str = 's2_document_markdown_import'
-down_revision: Union[str, None] = 'o2_step_execution_message'
+down_revision: Union[str, None] = 'c8_workflow_scheduler_claims'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

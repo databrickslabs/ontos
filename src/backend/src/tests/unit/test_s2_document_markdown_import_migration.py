@@ -33,7 +33,7 @@ def _insert(conn, doc_id, source_path, entity_id='d1'):
 
 
 def test_one_imported_document_per_file_and_entity(tmp_path, migration):
-    assert migration.down_revision == 'o2_step_execution_message'
+    assert migration.down_revision == 'c8_workflow_scheduler_claims'
     engine = create_engine(f"sqlite:///{tmp_path / 's2.db'}")
     with engine.begin() as conn:
         conn.execute(text(

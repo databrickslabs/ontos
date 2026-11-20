@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import type { Notification } from '@/types/notification';
@@ -75,5 +75,32 @@ describe('RequiredActionsSection workflow approvals', () => {
     renderWithProviders(<RequiredActionsSection />);
 
     expect(await screen.findByText('Read But Pending')).toBeInTheDocument();
+  });
+});
+
+describe('RequiredActionsSection approvals queue', () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    useNotificationsStore.setState({
+      notifications: [], unreadCount: 0, isLoading: false, error: null,
+      fetchNotifications: vi.fn(), markAsRead: vi.fn(),
+    } as never);
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reads the queue by default', async () => {
+    renderWithProviders(<RequiredActionsSection />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      '/api/approvals/queue', expect.anything(),
+    ));
+  });
+
+  it('skips the queue request when fetchQueue is false', async () => {
+    renderWithProviders(<RequiredActionsSection fetchQueue={false} />);
+    await screen.findByText(/./);
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/approvals/queue', expect.anything());
   });
 });

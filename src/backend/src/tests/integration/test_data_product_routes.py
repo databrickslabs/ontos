@@ -419,7 +419,8 @@ class TestDataProductRoutes:
     def test_publish_product_without_contracts_fails(
         self, client, sample_product_data
     ):
-        """Test that publishing without contracts returns 400."""
+        """Publishing a product its lifecycle can't publish (proposed) is a 409,
+        as for the other lifecycle actions (#1213)."""
         # Arrange
         sample_product_data["status"] = "proposed"
         create_response = client.post("/api/data-products", json=sample_product_data)
@@ -429,7 +430,8 @@ class TestDataProductRoutes:
         response = client.post(f"/api/data-products/{product_id}/publish")
 
         # Assert
-        assert response.status_code == 400
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "invalid_status_transition"
 
     def test_deprecate_product_success(self, client, sample_product_data):
         """Test POST /api/data-products/{id}/deprecate."""

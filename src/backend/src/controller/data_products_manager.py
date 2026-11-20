@@ -129,11 +129,9 @@ from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
 from src.common.lifecycle_status import (
-    PRODUCT_STATUSES,
     check_status_unchanged,
-    import_status,
-    normalize_new_status,
 )
+from src.controller.lifecycle_service import NAMED_ACTIONS, lifecycle_service
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.common.uc_tag_sync_trigger import request_uc_tag_sync_after_transition
@@ -393,12 +391,23 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Ensure ODPS required fields have defaults
             product_data.setdefault('apiVersion', 'v1.0.0')
             product_data.setdefault('kind', 'DataProduct')
-            product_data.setdefault('status', DataProductStatus.DRAFT.value)
+            # No default status: a new product without one starts in its
+            # group's first stage (draft in the default lifecycle)
             # A new product starts in one of the lifecycle statuses; `certified`
             # is certification_level, set by the certify action.
-            product_data['status'] = normalize_new_status(
-                product_data.get('status'), PRODUCT_STATUSES
+            # It starts in a stage of its lifecycle stage group (the default one
+            # unless the payload names one).
+            requested_group = (product_data.get('lifecycle_stage_group_id')
+                               or product_data.get('lifecycleStageGroupId'))
+            # The create model defaults status to 'draft': in a group (named or the
+            # default) without that stage it means "no status", the first stage
+            group_id, stage_key = lifecycle_service.stage_for_new(
+                db_session, 'data_product', requested_group, product_data.get('status'),
+                model_default='draft',
             )
+            product_data['status'] = stage_key
+            product_data['lifecycle_stage_group_id'] = group_id
+            product_data.pop('lifecycleStageGroupId', None)
 
             # Stamp the creator as the single-user owner when no other owner is
             # supplied. Without this, a freshly created product has no
@@ -1121,28 +1130,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ValueError: If transition is invalid or product not found
             SQLAlchemyError: If database operation fails
         """
-        # Certification is now a separate dimension — removed from status transitions
-        from src.models.lifecycle import DATA_PRODUCT_TRANSITIONS
-        valid_transitions = DATA_PRODUCT_TRANSITIONS
-        
         try:
             product_db = self._repo.get(db=self._db, id=product_id)
             if not product_db:
                 raise ValueError(f"Data product with ID {product_id} not found")
-            
-            # Normalize statuses
-            current_status = (product_db.status or 'draft').lower()
-            new_status_lower = new_status.lower()
-            
-            # Validate transition
-            allowed = valid_transitions.get(current_status, [])
-            if new_status_lower not in allowed:
-                from src.common.api_errors import InvalidStatusTransitionError
-                raise InvalidStatusTransitionError(
-                    f"Invalid status transition from '{current_status}' to '{new_status_lower}'. "
-                    f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}",
-                    fromStatus=current_status, toStatus=new_status_lower, allowed=list(allowed),
-                )
+
+            # The product's lifecycle stage group allows the move (coded
+            # InvalidStatusTransitionError otherwise); both keys lowercase
+            current_status, new_status_lower = lifecycle_service.check_transition(
+                self._db, 'data_product', product_db, new_status
+            )
 
             # Run before_status_change workflows (gating)
             # (a gate that errors refuses the transition when it is fail_closed, #1103);
@@ -1319,11 +1316,21 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ValueError: If product not found or invalid status transition
             SQLAlchemyError: If database operation fails
         """
-        return self.transition_status(product_id, 'sandbox', current_user)
+        return self._apply_action(product_id, 'move_to_sandbox', current_user)
+
+    def _apply_action(self, product_id: str, action: str, current_user: Optional[str],
+                      **kwargs: Any) -> DataProductApi:
+        """Apply a named lifecycle action: the stage ``lifecycle_service.resolve_action``
+        picks for it in the product's group (409 when none or several)."""
+        product_db = self._repo.get(db=self._db, id=product_id)
+        if not product_db:
+            raise ValueError(f"Data product with ID {product_id} not found")
+        target = lifecycle_service.resolve_action(self._db, 'data_product', product_db, action)
+        return self.transition_status(product_id, target, current_user, **kwargs)
 
     def submit_for_review(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """Submit a draft/sandbox product for review (draft/sandbox → proposed)."""
-        return self.transition_status(product_id, 'proposed', current_user)
+        return self._apply_action(product_id, 'submit_review', current_user)
 
     # Backward-compatible alias
     submit_for_certification = submit_for_review
@@ -1343,7 +1350,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ValueError: If product not found or invalid status transition
             SQLAlchemyError: If database operation fails
         """
-        return self.transition_status(product_id, 'approved', current_user)
+        return self._apply_action(product_id, 'approve', current_user)
 
     def reject_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """
@@ -1360,7 +1367,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ValueError: If product not found or invalid status transition
             SQLAlchemyError: If database operation fails
         """
-        return self.transition_status(product_id, 'draft', current_user)
+        return self._apply_action(product_id, 'reject', current_user)
 
     def _validate_output_port_contracts(self, product_db, db=None) -> None:
         """Raise ``OutputPortContractsError`` unless every port has an approved contract."""
@@ -1393,7 +1400,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         was_published = (product_db.publication_scope or 'none').lower() != 'none'
 
         if scope != 'none':
-            if product_db.status != 'active':
+            if lifecycle_service.category_of(db, 'data_product', product_db) != 'active':
                 raise ValueError(
                     f"Product must be active to publish. Current status: {product_db.status}"
                 )
@@ -1591,7 +1598,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         product_db = self._repo.get(db=db, id=product_id)
         if not product_db:
             raise ValueError(f"Data product with ID {product_id} not found")
-        if (product_db.status or 'draft').lower() in ('draft', 'sandbox'):
+        # From a draft-category stage (draft or sandbox by default)
+        if not product_db.status or \
+                lifecycle_service.category_of(db, 'data_product', product_db) == 'draft':
             self.submit_for_review(product_id, requester)
 
         get_trigger_registry(db).on_request_certify(
@@ -1679,7 +1688,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             was_published = (product_db.publication_scope or 'none').lower() != 'none'
 
             # Use transition_status for validation and update
-            result = self.transition_status(product_id, 'active', current_user)
+            result = self._apply_action(product_id, 'publish', current_user)
             if was_published:
                 # Same rule as set_publication_scope: no new scope, stamp or
                 # on_publish unless the product goes from unpublished to published
@@ -1744,18 +1753,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ValueError: If product not found or invalid status transition
             SQLAlchemyError: If database operation fails
         """
-        return self.transition_status(
-            product_id, 'deprecated', current_user, deprecation=deprecation
+        return self._apply_action(
+            product_id, 'deprecate', current_user, deprecation=deprecation
         )
 
     # ==================== Status Change Request/Approval Methods ====================
 
-    def _get_allowed_status_transitions(self, current_status: str) -> List[Dict[str, str]]:
+    def _get_allowed_status_transitions(
+        self, current_status: str, product: Any = None,
+    ) -> List[Dict[str, str]]:
         """Get allowed status transitions for a given status.
 
-        The targets are the lifecycle map's (``DATA_PRODUCT_TRANSITIONS``), the
-        one ``transition_status`` applies, so a request is only accepted for a
-        change that can be applied. Certification isn't a status.
+        The targets are the ones ``transition_status`` allows (the product's
+        lifecycle stage group, ``lifecycle_service``), so a request is only
+        accepted for a change that can be applied. Certification isn't a status.
 
         Args:
             current_status: Current product status
@@ -1763,8 +1774,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Returns:
             List of allowed transitions with target and label
         """
-        from src.models.lifecycle import DATA_PRODUCT_TRANSITIONS
-
         labels = {
             'draft': 'Return to Draft',
             'sandbox': 'Move to Sandbox',
@@ -1776,10 +1785,18 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             'retired': 'Retire',
         }
         current = (current_status or 'draft').lower()
-        targets = DATA_PRODUCT_TRANSITIONS.get(current, [])
+        group = (
+            lifecycle_service.group_for(self._db, 'data_product', product)
+            if product is not None else lifecycle_service.default_group(self._db, 'data_product')
+        )
         return [
-            {'target': target, 'label': 'Reactivate' if current == 'deprecated' and target == 'active' else labels[target]}
-            for target in targets
+            {
+                'target': stage.key,
+                'label': 'Reactivate'
+                if group.category(current) == 'deprecated' and stage.category == 'active'
+                else labels.get(stage.key, stage.label),
+            }
+            for stage in group.targets(current)
         ]
 
     def request_status_change(
@@ -1829,7 +1846,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         target_status_lower = target_status.lower()
         
         # Validate transition is allowed
-        allowed_transitions = self._get_allowed_status_transitions(from_status)
+        allowed_transitions = self._get_allowed_status_transitions(from_status, product)
         if target_status_lower not in [t['target'] for t in allowed_transitions]:
             raise ValueError(f"Invalid status transition from '{from_status}' to '{target_status}'.")
 
@@ -2063,14 +2080,21 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Product not found")
         
         from_status = (product_db.status or '').lower()
-        if from_status not in ('draft', 'sandbox'):
+        if lifecycle_service.category_of(self._db, 'data_product', product_db) != 'draft':
             raise ValueError(f"Cannot request review from status {product_db.status}. Must be DRAFT or SANDBOX.")
         
-        # Transition to PROPOSED first
-        self.transition_status(product_id, 'proposed', current_user)
-        
-        # Then transition to UNDER_REVIEW
-        self.transition_status(product_id, 'under_review', current_user)
+        # Submit it (PROPOSED in the default lifecycle), then start the review
+        # (UNDER_REVIEW) when its lifecycle has that step
+        self._apply_action(product_id, 'submit_review', current_user)
+        product_db = self._repo.get(db=self._db, id=product_id)
+        # Only the start-review step itself (under_review): a group without it
+        # stays in the stage submit-review reached, rather than skipping ahead
+        # to another review stage by category
+        start_key = NAMED_ACTIONS['start_review'][0]
+        if start_key in lifecycle_service.allowed_target_keys(
+                self._db, 'data_product', product_db):
+            self._apply_action(product_id, 'start_review', current_user)
+            product_db = self._repo.get(db=self._db, id=product_id)
         
         request_id = str(uuid4())
 
@@ -2088,7 +2112,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 "product_id": product_id,
                 "product_name": product_db.name,
                 "from_status": from_status,
-                "to_status": "under_review",
+                "to_status": (product_db.status or "").lower(),
                 "message": message,
                 "reviewer_email": reviewer_email,
                 "request_id": request_id,
@@ -2117,7 +2141,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         """
         Get data products published to the marketplace (by publication scope).
 
-        Returns products with a non-none publication_scope. Optionally filter to one scope.
+        Returns products with a non-none publication_scope whose stage is in the
+        active or deprecated Stage Category. Optionally filter to one scope.
 
         Args:
             skip: Number of published products to skip (for pagination)
@@ -2137,9 +2162,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # per-user ownership cascade. Bypass the cascade so published
             # products surface regardless of who's asking.
             all_products = self.list_products(is_admin=True)
+            # Published (a scope) and in a published Stage Category: a product
+            # whose lifecycle loops back into review (Active -> Needs Review)
+            # leaves the Marketplace until it is active again
+            from src.common.version_visibility import CONSUMER_VISIBLE_CATEGORIES
             published_products = [
                 product for product in all_products
                 if product.publication_scope and product.publication_scope.lower() != 'none'
+                and lifecycle_service.category_of_row(product, self._db)
+                in CONSUMER_VISIBLE_CATEGORIES
             ]
             if scope:
                 published_products = [
@@ -2397,10 +2428,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 # calling create_product (#853 review item 4).
                 try:
                     # A status Ontos doesn't have is imported as draft, with a note
-                    status_value, status_note = import_status(
-                        product_data.get('status'), PRODUCT_STATUSES
+                    # The stage and group the file carries (ontosLifecycleStage /
+                    # ontosLifecycleStageGroup), else its status mapped by category;
+                    # a status Ontos doesn't have is imported as draft, with a note
+                    group_id, status_value, status_note = lifecycle_service.imported_status(
+                        self._db, 'data_product', product_data.get('status'),
+                        product_data.get('customProperties'),
                     )
-                    product_data = {**product_data, 'status': status_value}
+                    product_data = {
+                        **product_data, 'status': status_value,
+                        'lifecycle_stage_group_id': group_id,
+                    }
                     created = self._create_imported_product(
                         product_data, user=user, preserve_source_id=True,
                         create_missing_domains=create_missing_domains,
@@ -2487,8 +2525,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             or original_product_id
         )
 
-        # Reset status to DRAFT
-        new_product_data['status'] = DataProductStatus.DRAFT.value
+        # Reset status to the first stage of the original's lifecycle (DRAFT by default)
+        group_id, initial_key = lifecycle_service.initial_stage_of(
+            self._db, 'data_product', original_product
+        )
+        new_product_data['lifecycle_stage_group_id'] = group_id
+        new_product_data['status'] = initial_key
         logger.info(f"Resetting status to DRAFT for new version {new_product_data['id']}")
 
         try:
@@ -2628,13 +2670,18 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             
             # Carry the family id forward unchanged on clone (PRD #442).
             family_id = getattr(source_product, 'version_family_id', None) or source_product.id
+            # The new version keeps the lifecycle and starts in its first stage
+            group_id, initial_key = lifecycle_service.initial_stage_of(
+                db, 'data_product', source_product
+            )
 
             # Create new product with core fields
             new_product = DataProductDb(
                 id=new_id,
+                lifecycle_stage_group_id=group_id,
                 api_version=source_product.api_version,
                 kind=source_product.kind,
-                status='draft' if as_personal_draft else DataProductStatus.DRAFT.value,
+                status=initial_key,
                 name=source_product.name,
                 version=new_version,
                 tenant=source_product.tenant,
@@ -2902,7 +2949,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Product not found")
         
         # Check if source is in an editable state - if so, don't clone
-        if source_product.status and source_product.status.lower() in ['draft', 'proposed']:
+        # Edited in place, not cloned: the update route's rule (editable_in_place)
+        if source_product.status and lifecycle_service.editable_in_place(
+                db, 'data_product', source_product):
             raise ValueError("Product is already in an editable state. Edit directly instead of cloning.")
         
         # Use current version with -draft suffix
@@ -3835,12 +3884,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if not contract_db:
             raise ValueError(f"Data Contract with ID {contract_id} not found")
 
-        # Validate contract status
-        valid_statuses = ['active', 'approved']
-        if contract_db.status and contract_db.status.lower() not in valid_statuses:
+        # An active-category stage or approved, the rule for publishing it
+        if contract_db.status and not lifecycle_service.contract_publishable(
+                self._db, contract_db):
             raise ValueError(
                 f"Cannot create product from contract in status '{contract_db.status}'. "
-                f"Contract must be in one of: {', '.join(valid_statuses)}"
+                "Contract must be approved or active."
             )
 
         # Create ODPS product data
@@ -4161,11 +4210,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if not product:
             raise ValueError(f"Product {product_id} not found")
 
+        # ``status`` is the Stage Category's standard value; the exact stage and
+        # group travel as ontosLifecycleStage / ontosLifecycleStageGroup
+        export_status, lifecycle_props = lifecycle_service.export_status(
+            session, 'data_product', product
+        )
         odps: Dict[str, Any] = {
             "kind": product.kind or "DataProduct",
             "apiVersion": product.apiVersion or "v1.0.0",
             "id": product.id,
-            "status": product.status,
+            "status": export_status,
         }
 
         if product.name:
@@ -4254,6 +4308,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
         _upsert_custom_property(odps, ONTOS_ENTITY_ID_PROPERTY, product.id)
         for prop, value in lifecycle_custom_properties(product, 'data_product').items():
+            _upsert_custom_property(odps, prop, value)
+        for prop, value in lifecycle_props.items():
             _upsert_custom_property(odps, prop, value)
 
         if product.authoritativeDefinitions:
@@ -4587,8 +4643,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError(f"Product {product_id} not found")
 
             # Check if product is in a subscribable status
-            subscribable_statuses = ['active']
-            if product.status and product.status.lower() not in subscribable_statuses:
+            # Only an active-category stage is subscribable
+            # Through the session: a cold or stale cache still knows custom groups
+            if product.status and \
+                    lifecycle_service.category_of_row(product, db or self._db) != 'active':
                 # Try to get replacement product info if available (from #1042)
                 replacement_id = None
                 replacement_name = None

@@ -322,7 +322,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
                           <SelectContent>
                             {contracts.length === 0 ? (
                               <div className="p-2 text-sm text-muted-foreground text-center">
-                                No active/approved contracts available
+                                {t('data-products:outputPortForm.messages.noActiveContracts')}
                               </div>
                             ) : (
                               contracts.map((contract) => (
@@ -337,7 +337,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          Only showing active/approved/certified contracts
+                          {t('data-products:outputPortForm.hints.onlyActiveContracts')}
                         </p>
                       </>
                     )}

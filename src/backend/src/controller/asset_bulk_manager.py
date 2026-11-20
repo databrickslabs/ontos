@@ -29,7 +29,6 @@ from src.db_models.assets import AssetDb, AssetRelationshipDb
 from src.models.assets import (
     CodedWarning, without_internal_properties,
     AssetCreate,
-    AssetStatus,
     AssetUpdate,
     public_properties,
     with_internal_properties,
@@ -77,6 +76,49 @@ IMPORT_COLUMNS = [
     "parent_asset",
     "parent_relationship_type",
 ]
+
+
+def _asset_stage_keys(db: Session) -> List[str]:
+    """The stage keys of every asset lifecycle stage group."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    keys: List[str] = []
+    for group in lifecycle_service.groups(db, 'asset'):
+        keys.extend(k for k in group.stages if k not in keys)
+    return keys
+
+
+def _new_asset_status_error(db: Session, requested: Optional[str]) -> Optional[str]:
+    """Why a bulk row can't create an asset with ``requested``: a new asset starts in
+    the default asset group, so its status must be a stage of that group."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    keys = list(lifecycle_service.default_group(db, 'asset').stages)
+    if not requested or requested in keys:
+        return None
+    return (
+        f"Invalid status for a new asset: '{requested}'. "
+        f"Must be one of: {', '.join(keys)}"
+    )
+
+
+def _bulk_status(db: Session, existing: Any, requested: Optional[str]) -> str:
+    """The status a bulk row gives an existing asset: unchanged without one, else a
+    move its lifecycle stage group must allow (raises ``InvalidStatusTransitionError``)."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    current = (existing.status or '').lower()
+    if not requested or requested == current:
+        return existing.status
+    return lifecycle_service.check_transition(db, 'asset', existing, requested)[1]
+
+
+def _bulk_status_update(db: Session, existing: Any, requested: Optional[str]) -> Dict[str, str]:
+    """``AssetUpdate`` keyword for a bulk row's status: none without one, so the
+    update leaves the stored status alone instead of writing it back."""
+    if not requested:
+        return {}
+    return {'status': _bulk_status(db, existing, requested)}
 
 
 class ImportAction(str, Enum):
@@ -551,8 +593,11 @@ class AssetBulkManager:
 
             # Validate status
             status_raw = row.get("status", "").strip().lower()
-            if status_raw and status_raw not in [s.value for s in AssetStatus]:
-                item.message = f"Invalid status: '{status_raw}'. Must be one of: {', '.join(s.value for s in AssetStatus)}"
+            stage_keys = _asset_stage_keys(db)
+            if status_raw and status_raw not in stage_keys:
+                item.message = (
+                    f"Invalid status: '{status_raw}'. Must be one of: {', '.join(stage_keys)}"
+                )
                 result.errors += 1
                 result.items.append(item)
                 continue
@@ -601,6 +646,12 @@ class AssetBulkManager:
                     item.existing_asset_id = str(existing.id)
                     result.will_update += 1
                 else:
+                    create_error = _new_asset_status_error(db, status_raw)
+                    if create_error:
+                        item.message = create_error
+                        result.errors += 1
+                        result.items.append(item)
+                        continue
                     item.action = ImportAction.CREATE
                     result.will_create += 1
 
@@ -683,7 +734,7 @@ class AssetBulkManager:
 
             # Validate status
             status_raw = row.get("status", "").strip().lower()
-            if status_raw and status_raw not in [s.value for s in AssetStatus]:
+            if status_raw and status_raw not in _asset_stage_keys(db):
                 item.message = f"Invalid status: '{status_raw}'"
                 result.errors += 1
                 result.items.append(item)
@@ -718,7 +769,7 @@ class AssetBulkManager:
             domain_ids_raw = row.get("domain_ids", "") or row.get("domain_id", "")
             domain_ids_val = [d.strip() for d in domain_ids_raw.split(";") if d.strip()]
             primary_domain_val = domain_ids_val[0] if domain_ids_val else None
-            status_val = AssetStatus(status_raw) if status_raw else AssetStatus.ACTIVE
+            status_val = status_raw or None
 
             # Determine create vs update
             row_id = row.get("id", "").strip()
@@ -746,7 +797,7 @@ class AssetBulkManager:
                             # The internal keys aren't exported, so the file can't carry them
                             properties=with_internal_properties(properties, existing.properties),
                             tags=tags,
-                            status=status_val,
+                            **_bulk_status_update(db, existing, status_val),
                         )
                         updated = self._asset_repo.update(
                             db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
@@ -769,7 +820,7 @@ class AssetBulkManager:
                                 properties=with_internal_properties(
                                     properties, existing.properties),
                                 tags=tags,
-                                status=status_val,
+                                **_bulk_status_update(db, existing, status_val),
                             )
                             updated = self._asset_repo.update(
                                 db=db, db_obj=existing,
@@ -784,6 +835,12 @@ class AssetBulkManager:
                             created_assets[name.lower()] = updated.id
                         else:
                             previous_description = None
+                            create_error = _new_asset_status_error(db, status_val)
+                            if create_error:
+                                item.message = create_error
+                                result.errors += 1
+                                result.items.append(item)
+                                continue
                             create_data = {
                                 "name": name,
                                 "description": description,
@@ -792,9 +849,14 @@ class AssetBulkManager:
                                 "location": location_val,
                                 "properties": without_internal_properties(properties),
                                 "tags": tags,
-                                "status": status_val.value,
                                 "created_by": current_user_id,
                             }
+                            # A stage of the default asset lifecycle; without one, active
+                            from src.controller.lifecycle_service import lifecycle_service
+                            (create_data["lifecycle_stage_group_id"],
+                             create_data["status"]) = lifecycle_service.stage_for_new(
+                                db, 'asset', None, status_val, default_category='active',
+                            )
                             db_asset = AssetDb(**create_data)
                             db.add(db_asset)
                             db.flush()

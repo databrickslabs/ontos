@@ -795,7 +795,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Hoe deze levering data aan consumenten aanbiedt (bijv. Tabeltoegang, Serving Endpoint)",
-      "onlyActiveContracts": "Toont alleen actieve/goedgekeurde/gecertificeerde contracten",
+      "onlyActiveContracts": "Toont alleen actieve/goedgekeurde contracten",
       "containsPiiHint": "Bevat deze levering persoonlijk identificeerbare informatie?",
       "autoApproveHint": "Toegangsverzoeken voor deze levering automatisch goedkeuren?",
       "afterCreation": "Na het aanmaken van deze levering kun je assets (tabellen, views, datasets, enz.) eraan koppelen vanaf de detailpagina."

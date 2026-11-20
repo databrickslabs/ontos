@@ -529,6 +529,10 @@
     "personal": "Personnel",
     "requestAccess": "Demander l'accès ({{count}})"
   },
+  "domainErrors": {
+    "invalidDomainIdentifier": "{{field}} est vide : envoyez l'id d'un domaine ou omettez le champ pour conserver les domaines du contrat.",
+    "primaryDomainNotInDomains": "Le domaine {{primaryDomainId}} ne fait pas partie des domaines du contrat, il ne peut donc pas être le domaine principal."
+  },
   "createInline": {
     "title": "Créer un nouveau contrat",
     "description": "Créez un contrat de données minimal. Vous pourrez ajouter des schémas et des règles de qualité plus tard.",

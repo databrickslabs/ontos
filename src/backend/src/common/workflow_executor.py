@@ -1977,15 +1977,14 @@ class CreateAssetReviewStepHandler(StepHandler):
             # Get requester from trigger context (TriggerContext is a Pydantic model, not a dict)
             tc = context.trigger_context
             requester_email = tc.user_email if tc else None
-            if not requester_email and _started_by_no_user(tc):
-                # A scheduled run has no requester; a review needs one, and a
-                # made-up identity must not end up in the review record.
+            if not requester_email:
+                # No user fired the trigger (a scheduled run, or any other trigger
+                # without a user): a review needs a requester, and a made-up
+                # identity must not end up in the review record.
                 return StepResult(
                     passed=False,
                     error="A run no user started has no requester to create an asset review for",
                 )
-            if not requester_email:
-                requester_email = 'system@app.local'
             
             reviewer_email = self._resolve_reviewer(reviewer_role, context, requester_email)
             if not reviewer_email:

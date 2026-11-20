@@ -4,6 +4,7 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import VolumeType
+from collections.abc import Callable
 
 from src.common.logging import get_logger
 from src.common.config import Settings, resolve_volume
@@ -421,25 +422,177 @@ class MetadataManager:
     # Merged Metadata with Inheritance
     # =========================================================================
     
+    def resolve_inheritance_sources(
+        self, db: Session, *, entity_type: str, entity_id: str
+    ) -> List[Tuple[str, str]]:
+        """Entities whose inheritable metadata flows into this one, as (entity_type, entity_id).
+
+        - Data contract: the assets that implement it, i.e. stored ``implementsContract``
+          relationships plus Table/View assets whose location matches a schema
+          object's physical name. A qualified name (``schema.table`` or longer)
+          matches locations ending with it; an unqualified one only an equal
+          location, so ``customers`` does not pull in every ``*.customers`` table.
+        - Data product: each output port's contract and the asset at the port's
+          ``asset_identifier`` (exact location match, any asset type, so dashboard
+          ports work too). Inheritance is one hop; a product does not pick up
+          metadata its contracts inherit from their assets.
+        """
+        found: List[Tuple[str, str]] = []
+
+        def add(kind: str, ident: Optional[str]) -> None:
+            if ident and (kind, str(ident)) not in found:
+                found.append((kind, str(ident)))
+
+        if entity_type == "data_contract":
+            from src.db_models.entity_relationships import EntityRelationshipDb
+            from src.db_models.data_contracts import SchemaObjectDb
+            from src.controller.model_lineage import PHYSICAL_TABLE_TYPES, ModelLineageResolver
+
+            rels = (
+                db.query(EntityRelationshipDb.source_id)
+                .filter(
+                    EntityRelationshipDb.target_type == "DataContract",
+                    EntityRelationshipDb.target_id == entity_id,
+                    EntityRelationshipDb.relationship_type == "implementsContract",
+                )
+                .all()
+            )
+            for (source_id,) in rels:
+                add("asset", source_id)
+            physical_names = (
+                db.query(SchemaObjectDb.physical_name)
+                .filter(SchemaObjectDb.contract_id == entity_id, SchemaObjectDb.physical_name.isnot(None))
+                .all()
+            )
+            for (physical_name,) in physical_names:
+                pn = physical_name.strip().lower()
+                if pn:
+                    exact = "." not in pn
+                    for asset in ModelLineageResolver._query_physical_assets(db, pn, exact=exact):
+                        # The exact lookup also returns Dataset assets; only Tables/Views count
+                        if asset.asset_type.name in PHYSICAL_TABLE_TYPES:
+                            add("asset", asset.id)
+
+        elif entity_type == "data_product":
+            from sqlalchemy import func
+            from src.db_models.assets import AssetDb
+            from src.db_models.data_products import OutputPortDb
+            from src.controller.model_lineage import ModelLineageResolver
+
+            ports = db.query(OutputPortDb).filter(OutputPortDb.product_id == entity_id).all()
+            for port in ports:
+                contract = ModelLineageResolver._contract_by_ref(db, port.contract_id)
+                if contract is not None:
+                    add("data_contract", contract.id)
+                identifier = (port.asset_identifier or "").strip().lower()
+                if identifier:
+                    for asset in db.query(AssetDb).filter(func.lower(AssetDb.location) == identifier).all():
+                        add("asset", asset.id)
+
+        return found
+
+    def _readable_sources(
+        self,
+        db: Session,
+        sources: List[Tuple[str, str]],
+        can_read_source: Optional[Callable[[str, Any], bool]],
+    ) -> List[Tuple[str, str]]:
+        """Drop retired or missing sources and those ``can_read_source`` rejects.
+
+        ``can_read_source(kind, row)`` gets the contract or asset row; ``None``
+        skips the caller check (internal use). Fails closed on errors.
+        """
+        from uuid import UUID
+        from src.db_models.assets import AssetDb
+        from src.db_models.data_contracts import DataContractDb
+
+        contract_ids = [ident for kind, ident in sources if kind == "data_contract"]
+        asset_ids = []
+        for kind, ident in sources:
+            if kind == "asset":
+                try:
+                    asset_ids.append(UUID(ident))
+                except (ValueError, TypeError):
+                    continue
+        rows: Dict[Tuple[str, str], Any] = {}
+        if contract_ids:
+            for c in db.query(DataContractDb).filter(DataContractDb.id.in_(contract_ids)).all():
+                rows[("data_contract", str(c.id))] = c
+        if asset_ids:
+            for a in db.query(AssetDb).filter(AssetDb.id.in_(asset_ids)).all():
+                rows[("asset", str(a.id))] = a
+
+        kept: List[Tuple[str, str]] = []
+        for source in sources:
+            row = rows.get(source)
+            if row is None or (getattr(row, "status", "") or "").strip().lower() == "retired":
+                continue
+            if can_read_source is not None:
+                try:
+                    if not can_read_source(source[0], row):
+                        continue
+                except Exception:
+                    logger.exception("Inheritance source read check failed; skipping source")
+                    continue
+            kept.append(source)
+        return kept
+
+    def _source_names(self, db: Session, sources: List[Tuple[str, str]]) -> Dict[str, str]:
+        """Display names for inheritance sources, keyed like ``sources`` values."""
+        from uuid import UUID
+        from src.db_models.assets import AssetDb
+        from src.db_models.data_contracts import DataContractDb
+
+        names: Dict[str, str] = {}
+        contract_ids = [ident for kind, ident in sources if kind == "data_contract"]
+        if contract_ids:
+            for c in db.query(DataContractDb.id, DataContractDb.name).filter(DataContractDb.id.in_(contract_ids)).all():
+                names[f"contract:{c.id}"] = c.name
+        asset_ids = []
+        for kind, ident in sources:
+            if kind == "asset":
+                try:
+                    asset_ids.append(UUID(ident))
+                except (ValueError, TypeError):
+                    continue
+        if asset_ids:
+            for a in db.query(AssetDb.id, AssetDb.name).filter(AssetDb.id.in_(asset_ids)).all():
+                names[f"asset:{a.id}"] = a.name
+        return names
+
+    def _default_max_level(self, db: Session, entity_type: str, entity_id: str) -> int:
+        if entity_type == "data_product":
+            from src.db_models.data_products import DataProductDb
+            product = db.query(DataProductDb.max_level_inheritance).filter(DataProductDb.id == entity_id).first()
+            if product is not None and product[0] is not None:
+                return product[0]
+        return 99
+
     def get_merged_metadata(
         self, db: Session, *,
         entity_type: str, entity_id: str,
         contract_ids: Optional[List[str]] = None,
-        max_level_inheritance: int = 99
+        max_level_inheritance: Optional[int] = None,
+        can_read_source: Optional[Callable[[str, Any], bool]] = None,
     ) -> MergedMetadataResponse:
         """
-        Get merged metadata for an entity, including inherited metadata from contracts.
+        Get merged metadata for an entity, including inherited metadata.
         
-        For Data Products and Datasets:
         - Direct metadata attached to the entity
         - Attached shared assets
-        - Inherited metadata from associated contracts (filtered by level and inheritable flag)
+        - Inherited metadata from the sources found by ``resolve_inheritance_sources``
+          (contracts and assets), plus any explicitly passed ``contract_ids``.
+          Retired sources are skipped, and so are sources ``can_read_source``
+          rejects (the route passes the caller's contract/asset read rules).
         
         Merging logic:
         - All items are sorted by level (ascending)
         - For same level, entity's own metadata comes before inherited
-        - Only contract metadata with inheritable=True and level <= max_level_inheritance is inherited
+        - Only metadata with inheritable=True and level <= max_level_inheritance is inherited.
+          The default is the product's ``max_level_inheritance`` (99 for other entities).
         """
+        if max_level_inheritance is None:
+            max_level_inheritance = self._default_max_level(db, entity_type, entity_id)
         sources: Dict[str, str] = {}
         
         # 1. Get direct metadata for the entity
@@ -477,29 +630,35 @@ class MetadataManager:
         inherited_links = []
         inherited_docs = []
         
-        if contract_ids:
-            for contract_id in contract_ids:
-                # Get inheritable metadata from each contract
-                contract_rts = self._rich_text_repo.list_inheritable_for_entity(
-                    db, entity_type="data_contract", entity_id=contract_id, max_level=max_level_inheritance
-                )
-                contract_links = self._link_repo.list_inheritable_for_entity(
-                    db, entity_type="data_contract", entity_id=contract_id, max_level=max_level_inheritance
-                )
-                contract_docs = self._document_repo.list_inheritable_for_entity(
-                    db, entity_type="data_contract", entity_id=contract_id, max_level=max_level_inheritance
-                )
-                
-                for rt in contract_rts:
-                    sources[str(rt.id)] = f"contract:{contract_id}"
-                for link in contract_links:
-                    sources[str(link.id)] = f"contract:{contract_id}"
-                for doc in contract_docs:
-                    sources[str(doc.id)] = f"contract:{contract_id}"
-                
-                inherited_rich_texts.extend(contract_rts)
-                inherited_links.extend(contract_links)
-                inherited_docs.extend(contract_docs)
+        inherit_from = self.resolve_inheritance_sources(db, entity_type=entity_type, entity_id=entity_id)
+        for contract_id in contract_ids or []:
+            if ("data_contract", contract_id) not in inherit_from:
+                inherit_from.append(("data_contract", contract_id))
+        inherit_from = self._readable_sources(db, inherit_from, can_read_source)
+
+        for source_type, source_id in inherit_from:
+            source_key = f"contract:{source_id}" if source_type == "data_contract" else f"asset:{source_id}"
+            source_rts = self._rich_text_repo.list_inheritable_for_entity(
+                db, entity_type=source_type, entity_id=source_id, max_level=max_level_inheritance
+            )
+            source_links = self._link_repo.list_inheritable_for_entity(
+                db, entity_type=source_type, entity_id=source_id, max_level=max_level_inheritance
+            )
+            source_docs = self._document_repo.list_inheritable_for_entity(
+                db, entity_type=source_type, entity_id=source_id, max_level=max_level_inheritance
+            )
+
+            # An item reachable through several sources keeps its first source
+            for rt in source_rts:
+                sources.setdefault(str(rt.id), source_key)
+            for link in source_links:
+                sources.setdefault(str(link.id), source_key)
+            for doc in source_docs:
+                sources.setdefault(str(doc.id), source_key)
+
+            inherited_rich_texts.extend(source_rts)
+            inherited_links.extend(source_links)
+            inherited_docs.extend(source_docs)
         
         # 4. Merge and sort by level
         all_rich_texts = list(direct_rich_texts) + list(attached_rich_texts) + inherited_rich_texts
@@ -537,5 +696,6 @@ class MetadataManager:
             rich_texts=[RichText.from_orm(rt) for rt in unique_rich_texts],
             links=[Link.from_orm(link) for link in unique_links],
             documents=[Document.from_orm(doc) for doc in unique_docs],
-            sources=sources
+            sources=sources,
+            source_names=self._source_names(db, inherit_from),
         )

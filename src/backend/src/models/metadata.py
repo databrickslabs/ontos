@@ -173,15 +173,16 @@ class SharedAssetListResponse(BaseModel):
 class MergedMetadataResponse(BaseModel):
     """Response containing merged metadata with inheritance applied.
     
-    For Data Products and Datasets, this includes:
+    This includes:
     - Direct metadata attached to the entity
-    - Inherited metadata from associated contracts (filtered by level and inheritable flag)
+    - Inherited metadata from its contracts and assets (filtered by level and inheritable flag)
     """
     rich_texts: List[RichText] = Field(default_factory=list)
     links: List[Link] = Field(default_factory=list)
     documents: List[Document] = Field(default_factory=list)
     # Source tracking
     sources: dict = Field(default_factory=dict, description="Mapping of asset IDs to their source entity")
+    source_names: dict = Field(default_factory=dict, description="Display names of inheritance sources, keyed like `sources` values (contract:<id>, asset:<id>)")
 
 from pydantic import BaseModel
 

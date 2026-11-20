@@ -251,5 +251,16 @@
     "goToDetails": "Zu Details wechseln",
     "alreadySubscribed": "Bereits abonniert",
     "subscribe": "Abonnieren"
+  },
+  "inherited": {
+    "title": "Geerbt",
+    "description": "Schreibgeschützte Metadaten, die von den Verträgen und Assets dieser Entität geerbt werden. Bearbeiten Sie sie an der Quelle.",
+    "refresh": "Geerbte Metadaten aktualisieren",
+    "fromContract": "aus Vertrag {{name}}",
+    "fromAsset": "aus Asset {{name}}",
+    "shared": "geteilt",
+    "table": {
+      "source": "Quelle"
+    }
   }
 }

@@ -5,7 +5,8 @@ import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
-import { useEntityMetadata, useMergedMetadata, DocumentItem, LinkItem, EntityKind } from '@/hooks/use-entity-metadata';
+import { useEntityMetadata, useMergedMetadata, LinkItem, EntityKind } from '@/hooks/use-entity-metadata';
+import { rewriteImageLinks } from '@/lib/metadata-image-links';
 import { Bell, Check, Loader2, ArrowLeft, Share2, Star, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { StarRatingInput } from '@/components/ratings/star-rating-input';
@@ -29,32 +30,6 @@ interface Props {
   // Inheritance support (for Data Products and Datasets)
   contractIds?: string[];
   maxLevelInheritance?: number;
-}
-
-// Replace image references in markdown to target our document content endpoint.
-// Supports: ![alt](doc:ID) or ![alt](file:filename.ext)
-function rewriteImageLinks(markdown: string, documents: DocumentItem[]): string {
-  if (!markdown) return markdown;
-
-  const byId = new Map(documents.map(d => [String(d.id), d]));
-  const byName = new Map(documents.map(d => [d.original_filename, d]));
-
-  const replaceUrl = (url: string): string => {
-    if (url.startsWith('doc:')) {
-      const id = url.slice(4);
-      if (byId.has(id)) return `/api/documents/${id}/content`;
-    }
-    if (url.startsWith('file:')) {
-      const name = url.slice(5);
-      const doc = byName.get(name);
-      if (doc) return `/api/documents/${doc.id}/content`;
-    }
-    return url;
-  };
-
-  let out = markdown.replace(/!\[[^\]]*\]\(([^)]+)\)/g, (m, p1) => m.replace(p1, replaceUrl(p1)));
-  out = out.replace(/\[[^\]]*\]\(([^)]+)\)/g, (m, p1) => m.replace(p1, replaceUrl(p1)));
-  return out;
 }
 
 function slugify(text: string): string {
@@ -93,12 +68,13 @@ export default function EntityInfoDialog({
   showBackButton = false,
   onGoToDetails,
   contractIds,
-  maxLevelInheritance = 99,
+  maxLevelInheritance,
 }: Props) {
   const { t } = useTranslation(['metadata', 'common']);
-  // Use merged if we have contract IDs, otherwise use direct
-  const useMerged = !!contractIds && contractIds.length > 0;
-  // Use merged metadata when contractIds are provided (for DP/DS with inheritance).
+  // Products and contracts inherit metadata (sources are resolved server-side);
+  // other entities use merged only when contract IDs are passed explicitly.
+  const useMerged = entityType === 'data_product' || entityType === 'data_contract'
+    || (!!contractIds && contractIds.length > 0);
   // Only the hook in use gets an entity id, so the other one skips its fetches.
   const directMetadata = useEntityMetadata(entityType, useMerged ? undefined : entityId || undefined);
   const mergedMetadata = useMergedMetadata(
@@ -119,6 +95,7 @@ export default function EntityInfoDialog({
     : directMetadata;
   
   const sources = useMerged ? mergedMetadata.sources : {};
+  const sourceNames = useMerged ? mergedMetadata.sourceNames : {};
 
   // Ratings state
   const [ratingAggregation, setRatingAggregation] = useState<RatingAggregation | null>(null);
@@ -168,16 +145,19 @@ export default function EntityInfoDialog({
     const divider = '\n\n---\n\n';
     const raw = richTexts.map(rt => {
       const source = sources[rt.id];
-      const sourceLabel = source?.startsWith('contract:') 
-        ? ` _(from contract)_` 
-        : source?.startsWith('shared:') 
-        ? ` _(shared)_` 
+      const sourceName = source ? sourceNames[source] ?? '' : '';
+      const sourceLabel = source?.startsWith('contract:')
+        ? ` _(${t('inherited.fromContract', { name: sourceName })})_`
+        : source?.startsWith('asset:')
+        ? ` _(${t('inherited.fromAsset', { name: sourceName })})_`
+        : source?.startsWith('shared:')
+        ? ` _(${t('inherited.shared')})_`
         : '';
       return `# ${rt.title}${sourceLabel}\n\n${rt.short_description ? `_${rt.short_description}_\n\n` : ''}${rt.content_markdown}`;
     }).join(divider);
     const withImages = rewriteImageLinks(raw, documents);
     return withImages;
-  }, [richTexts, documents, sources]);
+  }, [richTexts, documents, sources, sourceNames, t]);
 
   const toc = useMemo(() => buildToc(concatenatedMarkdown), [concatenatedMarkdown]);
 

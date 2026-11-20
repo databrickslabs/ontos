@@ -176,7 +176,10 @@
       "updated": "Kosten aktualisiert",
       "deleted": "Kosten gelöscht",
       "deleteFailed": "Löschen fehlgeschlagen",
-      "saveFailed": "Speichern fehlgeschlagen"
+      "saveFailed": "Speichern fehlgeschlagen",
+      "requestFailed": "Die Anfrage konnte nicht abgeschlossen werden.",
+      "validationFailed": "Prüfen Sie die eingegebenen Werte und versuchen Sie es erneut.",
+      "invalidResponse": "Der Server hat eine ungültige Antwort zurückgegeben."
     }
   },
   "quality": {

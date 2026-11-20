@@ -416,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "Startseiten-Bereiche",
-        "description": "Wählen Sie, welche Bereiche auf der Startseite für Benutzer mit dieser Rolle angezeigt werden."
+        "description": "Wählen Sie, welche Bereiche auf der Startseite für Benutzer mit dieser Rolle angezeigt werden.",
+        "labels": {
+          "JOURNEY": "Journey-Startseite"
+        },
+        "descriptions": {
+          "JOURNEY": "Ersetzt die vollständige Startseite durch Finden, Verstehen, Vertrauen, Veröffentlichen und Pflegen. Es lässt sich nicht mit anderen Bereichen kombinieren."
+        }
       },
       "approvalPrivileges": {
         "title": "Genehmigungsrechte",
@@ -1215,7 +1221,7 @@
     "title": "Reifegradstufen",
     "description": "Definieren Sie die Reifegradleiter für Datenprodukte und Verträge. Jede Stufe ist durch Compliance-Richtlinien gesteuert.",
     "addLevel": "Stufe hinzufügen",
-    "allTypes": "Alle Typen",
+    "allTypes": "Produkte und Verträge",
     "gateCount_one": "{{count}} Gate",
     "gateCount_other": "{{count}} Gates",
     "complianceGates": "Compliance-Richtlinien-Gates",
@@ -1242,7 +1248,8 @@
       "levelNamePreview": "Stufenname"
     },
     "entityTypes": {
-      "all": "Alle Entity-Typen",
+      "all": "Datenprodukte und Datenverträge",
+      "Asset": "Assets (Tabellen, Views und Metric Views)",
       "DataProduct": "Datenprodukte",
       "DataContract": "Datenverträge"
     },

@@ -47,6 +47,7 @@ const COLOR_OPTIONS = ['blue', 'cyan', 'green', 'amber', 'purple', 'red', 'emera
 
 const ENTITY_TYPE_OPTIONS: Array<{ value: string }> = [
   { value: 'all' },
+  { value: 'Asset' },
   { value: 'DataProduct' },
   { value: 'DataContract' },
 ];
@@ -279,7 +280,9 @@ export default function MaturityLevelsSettings() {
                   </Badge>
                   <span className="text-sm text-muted-foreground flex-1">{level.description || ''}</span>
                   <Badge variant="secondary" className="text-xs">
-                    {level.entity_type === 'all' ? t('maturityLevels.allTypes') : level.entity_type}
+                    {level.entity_type === 'all'
+                      ? t('maturityLevels.allTypes')
+                      : t(`maturityLevels.entityTypes.${level.entity_type}`)}
                   </Badge>
                   <span className="text-xs text-muted-foreground">{t('maturityLevels.gateCount', { count: level.gates?.length || 0 })}</span>
                 </button>

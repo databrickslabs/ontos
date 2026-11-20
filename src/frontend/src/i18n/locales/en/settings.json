@@ -423,7 +423,13 @@
     "privileges": {
       "homeSections": {
         "title": "Home Sections",
-        "description": "Select which sections appear on the home page for users with this role."
+        "description": "Select which sections appear on the home page for users with this role.",
+        "labels": {
+          "JOURNEY": "Journey home"
+        },
+        "descriptions": {
+          "JOURNEY": "Replaces the full home page with Find, Understand, Trust, Publish and Maintain. It can't be combined with other sections."
+        }
       },
       "approvalPrivileges": {
         "title": "Approval Privileges",
@@ -1233,7 +1239,7 @@
     "title": "Maturity Levels",
     "description": "Define the maturity ladder for data products and contracts. Each level is gated by compliance policies.",
     "addLevel": "Add Level",
-    "allTypes": "All types",
+    "allTypes": "Products and contracts",
     "gateCount_one": "{{count}} gate",
     "gateCount_other": "{{count}} gates",
     "complianceGates": "Compliance Policy Gates",
@@ -1260,7 +1266,8 @@
       "levelNamePreview": "Level Name"
     },
     "entityTypes": {
-      "all": "All Entity Types",
+      "all": "Data products and contracts",
+      "Asset": "Assets (tables, views and metric views)",
       "DataProduct": "Data Products",
       "DataContract": "Data Contracts"
     },

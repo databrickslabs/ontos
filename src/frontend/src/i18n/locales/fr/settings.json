@@ -416,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "Sections d'accueil",
-        "description": "Sélectionnez les sections qui apparaissent sur la page d'accueil pour les utilisateurs avec ce rôle."
+        "description": "Sélectionnez les sections qui apparaissent sur la page d'accueil pour les utilisateurs avec ce rôle.",
+        "labels": {
+          "JOURNEY": "Accueil par parcours"
+        },
+        "descriptions": {
+          "JOURNEY": "Remplace la page d'accueil complète par Trouver, Comprendre, Faire confiance, Publier et Maintenir. Elle ne peut pas être combinée avec d'autres sections."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilèges d'approbation",
@@ -1215,7 +1221,7 @@
     "title": "Niveaux de maturité",
     "description": "Définissez l'échelle de maturité des produits de données et des contrats. Chaque niveau est conditionné par des politiques de conformité.",
     "addLevel": "Ajouter un niveau",
-    "allTypes": "Tous les types",
+    "allTypes": "Produits et contrats",
     "gateCount_one": "{{count}} condition",
     "gateCount_other": "{{count}} conditions",
     "complianceGates": "Conditions de politique de conformité",
@@ -1242,7 +1248,8 @@
       "levelNamePreview": "Nom du niveau"
     },
     "entityTypes": {
-      "all": "Tous les types d'entités",
+      "all": "Produits et contrats de données",
+      "Asset": "Actifs (tables, vues et vues de métriques)",
       "DataProduct": "Produits de données",
       "DataContract": "Contrats de données"
     },

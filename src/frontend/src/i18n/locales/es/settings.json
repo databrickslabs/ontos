@@ -416,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "Secciones de inicio",
-        "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol."
+        "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol.",
+        "labels": {
+          "JOURNEY": "Inicio por recorrido"
+        },
+        "descriptions": {
+          "JOURNEY": "Sustituye la página de inicio completa por Buscar, Entender, Confiar, Publicar y Mantener. No se puede combinar con otras secciones."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilegios de aprobación",
@@ -1215,7 +1221,7 @@
     "title": "Niveles de madurez",
     "description": "Define la escala de madurez para los productos de datos y los contratos. Cada nivel está condicionado por políticas de cumplimiento.",
     "addLevel": "Añadir nivel",
-    "allTypes": "Todos los tipos",
+    "allTypes": "Productos y contratos",
     "gateCount_one": "{{count}} puerta",
     "gateCount_other": "{{count}} puertas",
     "complianceGates": "Puertas de política de cumplimiento",
@@ -1242,7 +1248,8 @@
       "levelNamePreview": "Nombre del nivel"
     },
     "entityTypes": {
-      "all": "Todos los tipos de entidad",
+      "all": "Productos y contratos de datos",
+      "Asset": "Activos (tablas, vistas y vistas de métricas)",
       "DataProduct": "Productos de datos",
       "DataContract": "Contratos de datos"
     },

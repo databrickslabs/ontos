@@ -423,7 +423,13 @@
     "privileges": {
       "homeSections": {
         "title": "Home Secties",
-        "description": "Selecteer welke secties op de homepagina verschijnen voor gebruikers met deze rol."
+        "description": "Selecteer welke secties op de homepagina verschijnen voor gebruikers met deze rol.",
+        "labels": {
+          "JOURNEY": "Journey-startpagina"
+        },
+        "descriptions": {
+          "JOURNEY": "Vervangt de volledige startpagina door Vinden, Begrijpen, Vertrouwen, Publiceren en Onderhouden. Kan niet met andere secties worden gecombineerd."
+        }
       },
       "approvalPrivileges": {
         "title": "Goedkeuringsprivileges",
@@ -1233,7 +1239,7 @@
     "title": "Volwassenheidsniveaus",
     "description": "Definieer de volwassenheidsladder voor dataproducten en contracten. Elk niveau wordt afgeschermd door compliance-beleid.",
     "addLevel": "Niveau Toevoegen",
-    "allTypes": "Alle types",
+    "allTypes": "Producten en contracten",
     "gateCount_one": "{{count}} poort",
     "gateCount_other": "{{count}} poorten",
     "complianceGates": "Compliance-beleidspoorten",
@@ -1260,7 +1266,8 @@
       "levelNamePreview": "Niveaunaam"
     },
     "entityTypes": {
-      "all": "Alle Entiteitstypes",
+      "all": "Dataproducten en datacontracten",
+      "Asset": "Assets (tabellen, views en metric views)",
       "DataProduct": "Dataproducten",
       "DataContract": "Datacontracten"
     },

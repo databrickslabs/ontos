@@ -427,10 +427,11 @@ class AccessGrantsManager:
         db: Session,
         email: str,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
+        status: Optional[str] = None,
     ) -> AccessGrantRequestList:
-        """Get all requests made by a user (any status: pending, approved, denied, etc.)."""
-        requests, total = self._request_repo.get_all_for_user(db, email, limit, offset)
+        """Get the requests made by a user: any status, or only `status` when given."""
+        requests, total = self._request_repo.get_all_for_user(db, email, limit, offset, status)
         return AccessGrantRequestList(
             requests=[AccessGrantRequestResponse.model_validate(r) for r in requests],
             total=total

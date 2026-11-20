@@ -416,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "ホームセクション",
-        "description": "このロールを持つユーザーのホームページに表示されるセクションを選択します。"
+        "description": "このロールを持つユーザーのホームページに表示されるセクションを選択します。",
+        "labels": {
+          "JOURNEY": "ジャーニーホーム"
+        },
+        "descriptions": {
+          "JOURNEY": "完全なホームページを、検索・理解・信頼・公開・保守の流れに置き換えます。他のセクションとは併用できません。"
+        }
       },
       "approvalPrivileges": {
         "title": "承認権限",
@@ -1215,7 +1221,7 @@
     "title": "成熟度レベル",
     "description": "データプロダクトと契約の成熟度の段階を定義します。各レベルはコンプライアンスポリシーによってゲートされます。",
     "addLevel": "レベルを追加",
-    "allTypes": "すべてのタイプ",
+    "allTypes": "プロダクトと契約",
     "gateCount_one": "{{count}} 個のゲート",
     "gateCount_other": "{{count}} 個のゲート",
     "complianceGates": "コンプライアンスポリシーゲート",
@@ -1242,7 +1248,8 @@
       "levelNamePreview": "レベル名"
     },
     "entityTypes": {
-      "all": "すべてのエンティティタイプ",
+      "all": "データプロダクトとデータ契約",
+      "Asset": "アセット（テーブル、ビュー、メトリックビュー）",
       "DataProduct": "データプロダクト",
       "DataContract": "データ契約"
     },

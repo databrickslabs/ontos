@@ -1,5 +1,5 @@
 """Repository for maturity levels, gates, and snapshots."""
-from typing import List, Optional
+from typing import Any, List, Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import func, select, and_
@@ -10,6 +10,15 @@ from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Entity types whose ladder doesn't include the shared ``all`` levels
+OWN_LADDER_ENTITY_TYPES = frozenset({"Asset"})
+# Entity types the shared ``all`` levels apply to
+SHARED_LEVEL_ENTITY_TYPES = ("DataProduct", "DataContract")
+
+
+# Candidate ids per IN clause (keeps under the bind-parameter limits)
+_ID_CHUNK = 5000
+
 
 class MaturityLevelRepository:
 
@@ -18,12 +27,19 @@ class MaturityLevelRepository:
     # ------------------------------------------------------------------
 
     def get_all_ordered(self, db: Session, *, entity_type: Optional[str] = None) -> List[MaturityLevelDb]:
-        """Return levels ordered by level_order, optionally filtered by entity_type."""
+        """Return levels ordered by level_order, optionally filtered by entity_type.
+
+        Levels with entity type ``all`` apply to data products and data
+        contracts. Assets have their own ladder (``Asset`` levels only): the
+        shared levels gate on product/contract fields (contracts, delivery
+        channels) that an asset doesn't have.
+        """
         q = db.query(MaturityLevelDb)
         if entity_type:
-            q = q.filter(
-                MaturityLevelDb.entity_type.in_([entity_type, "all"])
-            )
+            types = [entity_type]
+            if entity_type not in OWN_LADDER_ENTITY_TYPES:
+                types.append("all")
+            q = q.filter(MaturityLevelDb.entity_type.in_(types))
         return q.order_by(MaturityLevelDb.level_order).all()
 
     def get_by_id(self, db: Session, level_id: UUID) -> Optional[MaturityLevelDb]:
@@ -95,9 +111,18 @@ class MaturityLevelRepository:
 
         return self.get_all_ordered(db)
 
-    def count_snapshots_for_level(self, db: Session, level_order: int) -> int:
+    def count_snapshots_for_level(self, db: Session, level_order: int,
+                                  entity_type: str = "all") -> int:
+        """Snapshots at ``level_order`` of the entity types the level applies to.
+
+        An ``all`` level covers data products and data contracts; any other
+        level only its own entity type, so an asset snapshot never blocks
+        deleting a product or contract level (nor the reverse).
+        """
+        types = list(SHARED_LEVEL_ENTITY_TYPES) if entity_type == "all" else [entity_type]
         return db.query(func.count(MaturitySnapshotDb.id)).filter(
-            MaturitySnapshotDb.achieved_level_order == level_order
+            MaturitySnapshotDb.achieved_level_order == level_order,
+            MaturitySnapshotDb.entity_type.in_(types),
         ).scalar() or 0
 
     def is_empty(self, db: Session, entity_type: Optional[str] = None) -> bool:
@@ -159,6 +184,60 @@ class MaturityLevelRepository:
             .all()
         )
 
+    def entity_ids_below_first_level(
+        self, db: Session, *, entity_type: str,
+        entity_ids: Optional[Sequence[Any]] = None,
+    ) -> List[str]:
+        """Ids of the entities whose latest snapshot reached no level.
+
+        Only snapshots taken with levels defined count (``total_levels > 0``), and
+        nothing counts while ``entity_type`` has no level of its own: an entity
+        never evaluated, or evaluated without levels, isn't below the first level.
+
+        ``entity_ids`` (when not None) limits the search to those candidates in SQL;
+        an empty list returns nothing. The latest snapshot is the newest
+        ``evaluated_at``, ties broken by the highest ``id``.
+        """
+        if entity_ids is not None and not entity_ids:
+            return []
+        if self.is_empty(db, entity_type=entity_type):
+            return []
+        candidates = None if entity_ids is None else [str(i) for i in entity_ids]
+        chunks = [None] if candidates is None else [
+            candidates[i:i + _ID_CHUNK] for i in range(0, len(candidates), _ID_CHUNK)
+        ]
+        found: List[str] = []
+        for chunk in chunks:
+            ranked = (
+                db.query(
+                    MaturitySnapshotDb.entity_id.label("entity_id"),
+                    MaturitySnapshotDb.achieved_level_order.label("achieved_level_order"),
+                    MaturitySnapshotDb.total_levels.label("total_levels"),
+                    func.row_number().over(
+                        partition_by=MaturitySnapshotDb.entity_id,
+                        order_by=(
+                            MaturitySnapshotDb.evaluated_at.desc(),
+                            MaturitySnapshotDb.id.desc(),
+                        ),
+                    ).label("rn"),
+                )
+                .filter(MaturitySnapshotDb.entity_type == entity_type)
+            )
+            if chunk is not None:
+                ranked = ranked.filter(MaturitySnapshotDb.entity_id.in_(chunk))
+            sub = ranked.subquery()
+            rows = (
+                db.query(sub.c.entity_id)
+                .filter(
+                    sub.c.rn == 1,
+                    sub.c.achieved_level_order.is_(None),
+                    sub.c.total_levels > 0,
+                )
+                .all()
+            )
+            found.extend(r.entity_id for r in rows)
+        return found
+
     def get_latest_snapshot(self, db: Session, *, entity_type: str,
                             entity_id: str) -> Optional[MaturitySnapshotDb]:
         return (
@@ -169,7 +248,7 @@ class MaturityLevelRepository:
                     MaturitySnapshotDb.entity_id == entity_id,
                 )
             )
-            .order_by(MaturitySnapshotDb.evaluated_at.desc())
+            .order_by(MaturitySnapshotDb.evaluated_at.desc(), MaturitySnapshotDb.id.desc())
             .first()
         )
 

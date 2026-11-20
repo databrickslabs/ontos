@@ -1127,8 +1127,8 @@
     "exportSuccessfulDesc": "{{filename}} をダウンロードしました",
     "exportFailed": "エクスポートに失敗しました",
     "exportFailedDesc": "データ製品のエクスポートに失敗しました",
-    "exportDescription": "「エクスポート」をクリックすると、この製品が ODPS v1.0.0 準拠の JSON ファイルとしてダウンロードされます。移植性のため、監査フィールド（created_at, updated_at）は除外されます。",
-    "exportAsJson": "JSON としてエクスポート",
+    "exportDescription": "「エクスポート」をクリックすると、この製品が ODPS v1.0.0 の YAML ファイルとしてダウンロードされます。保存済みの製品から生成されるため、再インポートで復元できます。",
+    "exportAsJson": "YAML としてエクスポート",
     "currentProduct": "現在の製品",
     "unnamed": "名前なし",
     "noProductDesc": "製品が選択されていません。エクスポートするには、製品の詳細ページからこのダイアログを開いてください。"

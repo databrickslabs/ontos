@@ -21,6 +21,9 @@ import uuid
 
 import pytest
 
+# Products are created with productType: sourceAligned
+pytestmark = pytest.mark.usefixtures("seeded_product_types")
+
 
 class TestPartialPutPreservesUnmodifiedFields:
     """PR I — verify the route layer round-trips partial PUTs faithfully."""

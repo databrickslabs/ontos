@@ -1062,7 +1062,7 @@
     "contractLabel": "契約:",
     "productNameLabel": "製品名 *",
     "productNamePlaceholder": "例: 顧客分析製品",
-    "productTypeLabel": "製品タイプ *",
+    "productTypeLabel": "製品タイプ",
     "productTypePlaceholder": "製品タイプを選択",
     "versionLabel": "バージョン *",
     "versionPlaceholder": "例: v1.0.0",
@@ -1074,8 +1074,8 @@
     "errors": {
       "nameRequired": "製品名は必須です",
       "versionRequired": "バージョンは必須です",
-      "typeRequired": "製品タイプは必須です",
-      "createError": "契約からの製品作成に失敗しました"
+      "createError": "契約からの製品作成に失敗しました",
+      "unknown_data_product_type": "製品タイプ「{{key}}」は存在しないか、無効化されています。別のタイプを選択してください。"
     },
     "messages": {
       "productCreated": "製品を作成しました",
@@ -1183,5 +1183,12 @@
     "colSubscriber": "購読者",
     "colSubscribed": "購読日",
     "colReason": "理由"
+  },
+  "dataProductType": {
+    "source-aligned": "ソース指向",
+    "aggregate": "集約",
+    "consumer-aligned": "コンシューマー指向",
+    "source": "ソース",
+    "sink": "シンク"
   }
 }

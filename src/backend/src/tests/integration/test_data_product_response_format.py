@@ -12,6 +12,9 @@ import pytest
 
 from src.models.data_products import DataProduct, InputPort, OutputPort
 
+# Products are created with productType: sourceAligned
+pytestmark = pytest.mark.usefixtures("seeded_product_types")
+
 
 def _alias_only_keys() -> set:
     """Alias spellings that differ from the field name (output_ports, api_version, ...)."""

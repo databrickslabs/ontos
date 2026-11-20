@@ -15,6 +15,9 @@ from fastapi.testclient import TestClient
 
 from src.models.data_products import DataProduct
 
+# Products are created with productType: sourceAligned
+pytestmark = pytest.mark.usefixtures("seeded_product_types")
+
 
 class TestDataProductRoutes:
     """Integration test suite for /api/data-products endpoints"""
@@ -698,6 +701,104 @@ class TestDataProductRoutes:
         )
         assert response.status_code == 403, response.text
         assert "data-domains" in response.json().get("detail", "")
+
+    # =================================================================
+    # POST /api/data-products/from-contract
+    # =================================================================
+
+    @pytest.fixture
+    def active_contract(self, db_session):
+        """An active contract with the default product types seeded."""
+        from src.db_models.data_contracts import DataContractDb
+        from src.repositories.data_product_types_repository import data_product_types_repo
+
+        data_product_types_repo.seed_defaults(db_session)
+        contract = DataContractDb(
+            name="Source Contract",
+            version="1.0.0",
+            status="active",
+            owner_team_id=None,
+        )
+        db_session.add(contract)
+        db_session.commit()
+        return contract
+
+    @staticmethod
+    def _from_contract(client, contract_id, **extra):
+        body = {
+            "contract_id": contract_id,
+            "product_name": "Product From Contract",
+            "version": "1.0.0",
+            **extra,
+        }
+        return client.post("/api/data-products/from-contract", json=body)
+
+    @staticmethod
+    def _stored_type(db_session, product_id):
+        from src.db_models.data_products import DataProductDb
+        from src.db_models.data_product_types import DataProductTypeDb
+
+        db_session.expire_all()
+        product = db_session.get(DataProductDb, product_id)
+        if product.product_type_id is None:
+            return None
+        return db_session.get(DataProductTypeDb, product.product_type_id).key
+
+    def test_create_product_from_contract_stores_product_type(
+        self, client, db_session, active_contract
+    ):
+        """The chosen type is stored on product_type_id and as the
+        ``productType`` custom property."""
+        response = self._from_contract(client, active_contract.id, product_type="aggregate")
+
+        assert response.status_code == 201, response.text
+        data = response.json()
+        assert data["name"] == "Product From Contract"
+        assert self._stored_type(db_session, data["id"]) == "aggregate"
+
+        stored = client.get(f"/api/data-products/{data['id']}").json()
+        assert stored["outputPorts"][0]["contractId"] == active_contract.id
+        assert {"property": "productType", "value": "aggregate"} in [
+            {"property": cp["property"], "value": cp["value"]}
+            for cp in stored.get("customProperties") or []
+        ]
+
+    def test_create_product_from_contract_uses_default_type(
+        self, client, db_session, active_contract
+    ):
+        """Without a product_type, the default type is used."""
+        response = self._from_contract(client, active_contract.id)
+
+        assert response.status_code == 201, response.text
+        assert self._stored_type(db_session, response.json()["id"]) == "source-aligned"
+
+    def test_create_product_from_contract_rejects_unknown_type(
+        self, client, db_session, active_contract
+    ):
+        """An unknown type key returns 400 naming the type, and no product is created."""
+        from src.db_models.data_products import DataProductDb
+
+        response = self._from_contract(client, active_contract.id, product_type="banana")
+
+        assert response.status_code == 400, response.text
+        detail = response.json()["detail"]
+        assert detail["code"] == "unknown_data_product_type"
+        assert detail["params"] == {"key": "banana"}
+        assert db_session.query(DataProductDb).count() == 0
+
+    def test_create_product_from_contract_rejects_inactive_type(
+        self, client, db_session, active_contract
+    ):
+        """A deactivated type can't be chosen for a new product."""
+        from src.repositories.data_product_types_repository import data_product_types_repo
+
+        data_product_types_repo.get_by_key(db_session, "sink").is_active = False
+        db_session.commit()
+
+        response = self._from_contract(client, active_contract.id, product_type="sink")
+
+        assert response.status_code == 400, response.text
+        assert response.json()["detail"]["code"] == "unknown_data_product_type"
 
 
 class TestUnpublishRoute:

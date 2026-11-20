@@ -93,6 +93,17 @@ class DataProductDb(Base):
     replacement_product_id = Column(String, nullable=True)
     deprecated_at = Column(DateTime(timezone=True), nullable=True)
 
+    # ==================== Product Type ====================
+    # Optional; RESTRICT keeps a type from being deleted while products use it.
+    product_type_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey('data_product_types.id', ondelete='RESTRICT'),
+        nullable=True,
+        index=True,
+    )
+    # Loaded with the product so reads (API, ODPS export) don't query per product.
+    product_type = relationship("DataProductTypeDb", lazy="selectin")
+
     # ==================== Maturity ====================
     maturity_level_order = Column(Integer, nullable=True)
     maturity_evaluated_at = Column(DateTime(timezone=True), nullable=True)

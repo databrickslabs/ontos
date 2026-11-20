@@ -111,6 +111,7 @@
     "uiCustomization": "UI Customization",
     "connectors": "Connectors",
     "schemaImporter": "Schema Importer",
+    "dataProductTypes": "Data Product Types",
     "certificationLevels": "Certification Levels",
     "maturityLevels": "Maturity Levels"
   },
@@ -1194,6 +1195,71 @@
     },
     "saveButton": "Delivery settings saved successfully",
     "title": "Delivery Modes"
+  },
+  "dataProductTypes": {
+    "title": "Data Product Types",
+    "description": "Define the types a data product can have. Built-in types can be renamed or deactivated, but not deleted.",
+    "addType": "Add Type",
+    "table": {
+      "label": "Label",
+      "key": "Key",
+      "products": "Products",
+      "active": "Active"
+    },
+    "badges": {
+      "default": "Default",
+      "builtIn": "Built-in",
+      "imported": "Imported"
+    },
+    "actions": {
+      "moveUp": "Move {{name}} up",
+      "moveDown": "Move {{name}} down",
+      "toggleActive": "Active: {{name}}",
+      "makeDefault": "Make default",
+      "makeDefaultFor": "Make {{name}} the default",
+      "edit": "Edit {{name}}",
+      "delete": "Delete {{name}}"
+    },
+    "emptyState": "No data product types yet. Click \"Add Type\" to create one.",
+    "defaultCannotBeInactive": "The default type can't be deactivated. Make another type the default first.",
+    "dialog": {
+      "editTitle": "Edit Data Product Type",
+      "createTitle": "Add Data Product Type",
+      "editDescription": "Change how this type is shown. The key stays the same.",
+      "createDescription": "Create a type producers can pick for their data products."
+    },
+    "form": {
+      "label": "Label",
+      "labelPlaceholder": "e.g., Golden Record",
+      "seededLabelHint": "Built-in types are shown translated until you change the label.",
+      "key": "Key",
+      "keyHint": "Lower-case words joined by hyphens, e.g. golden-record. It can't be changed later and is the value used in ODPS files.",
+      "keyImmutable": "The key can't be changed.",
+      "color": "Color"
+    },
+    "delete": {
+      "title": "Delete data product type?",
+      "description": "Are you sure you want to delete \"{{name}}\"? This cannot be undone."
+    },
+    "deleteBlocked": {
+      "seeded": "Built-in types can't be deleted. Deactivate it instead.",
+      "inUse_one": "Used by {{count}} data product. Deactivate it instead.",
+      "inUse_other": "Used by {{count}} data products. Deactivate it instead."
+    },
+    "messages": {
+      "updated": "Data product type \"{{name}}\" updated.",
+      "created": "Data product type \"{{name}}\" created.",
+      "deleted": "Data product type \"{{name}}\" deleted.",
+      "reorderFailed": "Failed to reorder"
+    },
+    "errors": {
+      "data_product_type_not_found": "This data product type no longer exists.",
+      "data_product_type_key_exists": "A data product type with the key \"{{key}}\" already exists.",
+      "data_product_type_in_use_one": "\"{{key}}\" is used by {{count}} data product. Deactivate it instead of deleting it.",
+      "data_product_type_in_use_other": "\"{{key}}\" is used by {{count}} data products. Deactivate it instead of deleting it.",
+      "data_product_type_seeded": "\"{{key}}\" is a built-in type and can't be deleted. Deactivate it instead.",
+      "data_product_type_default_inactive": "\"{{key}}\" can't be both the default and inactive. Make another type the default first."
+    }
   },
   "certificationLevels": {
     "title": "Certification Levels",

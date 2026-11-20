@@ -52,6 +52,7 @@ const SETTINGS_SUB_GROUPS: SettingsSubGroup[] = [
             'settings-asset-types',
             'teams',
             'projects',
+            'settings-data-product-types',
             'settings-certification-levels',
             'settings-maturity-levels',
         ],

@@ -111,6 +111,7 @@
     "uiCustomization": "UI-aanpassing",
     "connectors": "Connectors",
     "schemaImporter": "Schema-importer",
+    "dataProductTypes": "Dataproducttypen",
     "certificationLevels": "Certificeringsniveaus",
     "maturityLevels": "Volwassenheidsniveaus"
   },
@@ -1194,6 +1195,71 @@
     },
     "saveButton": "Leveringsinstellingen succesvol opgeslagen",
     "title": "Leveringsmodi"
+  },
+  "dataProductTypes": {
+    "title": "Dataproducttypen",
+    "description": "Bepaal welke typen een dataproduct kan hebben. Ingebouwde typen kunnen worden hernoemd of gedeactiveerd, maar niet verwijderd.",
+    "addType": "Type toevoegen",
+    "table": {
+      "label": "Label",
+      "key": "Sleutel",
+      "products": "Producten",
+      "active": "Actief"
+    },
+    "badges": {
+      "default": "Standaard",
+      "builtIn": "Ingebouwd",
+      "imported": "Geïmporteerd"
+    },
+    "actions": {
+      "moveUp": "{{name}} omhoog",
+      "moveDown": "{{name}} omlaag",
+      "toggleActive": "Actief: {{name}}",
+      "makeDefault": "Als standaard instellen",
+      "makeDefaultFor": "{{name}} als standaard instellen",
+      "edit": "{{name}} bewerken",
+      "delete": "{{name}} verwijderen"
+    },
+    "emptyState": "Nog geen dataproducttypen. Klik op \"Type toevoegen\" om er een te maken.",
+    "defaultCannotBeInactive": "Het standaardtype kan niet worden gedeactiveerd. Stel eerst een ander type als standaard in.",
+    "dialog": {
+      "editTitle": "Dataproducttype bewerken",
+      "createTitle": "Dataproducttype toevoegen",
+      "editDescription": "Wijzig hoe dit type wordt getoond. De sleutel blijft hetzelfde.",
+      "createDescription": "Maak een type dat producenten voor hun dataproducten kunnen kiezen."
+    },
+    "form": {
+      "label": "Label",
+      "labelPlaceholder": "bijv. Golden Record",
+      "seededLabelHint": "Ingebouwde typen worden vertaald getoond totdat u het label wijzigt.",
+      "key": "Sleutel",
+      "keyHint": "Woorden in kleine letters, verbonden met koppeltekens, bijv. golden-record. Kan later niet worden gewijzigd en is de waarde in ODPS-bestanden.",
+      "keyImmutable": "De sleutel kan niet worden gewijzigd.",
+      "color": "Kleur"
+    },
+    "delete": {
+      "title": "Dataproducttype verwijderen?",
+      "description": "Weet u zeker dat u \"{{name}}\" wilt verwijderen? Dit kan niet ongedaan worden gemaakt."
+    },
+    "deleteBlocked": {
+      "seeded": "Ingebouwde typen kunnen niet worden verwijderd. Deactiveer het in plaats daarvan.",
+      "inUse_one": "Gebruikt door {{count}} dataproduct. Deactiveer het in plaats daarvan.",
+      "inUse_other": "Gebruikt door {{count}} dataproducten. Deactiveer het in plaats daarvan."
+    },
+    "messages": {
+      "updated": "Dataproducttype \"{{name}}\" bijgewerkt.",
+      "created": "Dataproducttype \"{{name}}\" aangemaakt.",
+      "deleted": "Dataproducttype \"{{name}}\" verwijderd.",
+      "reorderFailed": "Herschikken mislukt"
+    },
+    "errors": {
+      "data_product_type_not_found": "Dit dataproducttype bestaat niet meer.",
+      "data_product_type_key_exists": "Er bestaat al een dataproducttype met de sleutel \"{{key}}\".",
+      "data_product_type_in_use_one": "\"{{key}}\" wordt gebruikt door {{count}} dataproduct. Deactiveer het in plaats van het te verwijderen.",
+      "data_product_type_in_use_other": "\"{{key}}\" wordt gebruikt door {{count}} dataproducten. Deactiveer het in plaats van het te verwijderen.",
+      "data_product_type_seeded": "\"{{key}}\" is een ingebouwd type en kan niet worden verwijderd. Deactiveer het in plaats daarvan.",
+      "data_product_type_default_inactive": "\"{{key}}\" kan niet tegelijk standaard en inactief zijn. Stel eerst een ander type als standaard in."
+    }
   },
   "certificationLevels": {
     "title": "Certificeringsniveaus",

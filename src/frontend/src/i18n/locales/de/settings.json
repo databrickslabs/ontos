@@ -111,6 +111,7 @@
     "uiCustomization": "UI-Anpassung",
     "connectors": "Konnektoren",
     "schemaImporter": "Schema-Importer",
+    "dataProductTypes": "Datenprodukttypen",
     "certificationLevels": "Zertifizierungsstufen",
     "maturityLevels": "Reifegradstufen"
   },
@@ -1176,6 +1177,71 @@
     },
     "saveButton": "Zustellungseinstellungen erfolgreich gespeichert",
     "title": "Zustellungsmodi"
+  },
+  "dataProductTypes": {
+    "title": "Datenprodukttypen",
+    "description": "Legen Sie die Typen fest, die ein Datenprodukt haben kann. Integrierte Typen können umbenannt oder deaktiviert, aber nicht gelöscht werden.",
+    "addType": "Typ hinzufügen",
+    "table": {
+      "label": "Bezeichnung",
+      "key": "Schlüssel",
+      "products": "Produkte",
+      "active": "Aktiv"
+    },
+    "badges": {
+      "default": "Standard",
+      "builtIn": "Integriert",
+      "imported": "Importiert"
+    },
+    "actions": {
+      "moveUp": "{{name}} nach oben verschieben",
+      "moveDown": "{{name}} nach unten verschieben",
+      "toggleActive": "Aktiv: {{name}}",
+      "makeDefault": "Als Standard festlegen",
+      "makeDefaultFor": "{{name}} als Standard festlegen",
+      "edit": "{{name}} bearbeiten",
+      "delete": "{{name}} löschen"
+    },
+    "emptyState": "Noch keine Datenprodukttypen. Klicken Sie auf „Typ hinzufügen“, um einen zu erstellen.",
+    "defaultCannotBeInactive": "Der Standardtyp kann nicht deaktiviert werden. Legen Sie zuerst einen anderen Typ als Standard fest.",
+    "dialog": {
+      "editTitle": "Datenprodukttyp bearbeiten",
+      "createTitle": "Datenprodukttyp hinzufügen",
+      "editDescription": "Ändern Sie, wie dieser Typ angezeigt wird. Der Schlüssel bleibt gleich.",
+      "createDescription": "Erstellen Sie einen Typ, den Produzenten für ihre Datenprodukte wählen können."
+    },
+    "form": {
+      "label": "Bezeichnung",
+      "labelPlaceholder": "z. B. Golden Record",
+      "seededLabelHint": "Integrierte Typen werden übersetzt angezeigt, bis Sie die Bezeichnung ändern.",
+      "key": "Schlüssel",
+      "keyHint": "Kleingeschriebene Wörter, durch Bindestriche verbunden, z. B. golden-record. Er kann später nicht geändert werden und ist der Wert in ODPS-Dateien.",
+      "keyImmutable": "Der Schlüssel kann nicht geändert werden.",
+      "color": "Farbe"
+    },
+    "delete": {
+      "title": "Datenprodukttyp löschen?",
+      "description": "Möchten Sie „{{name}}“ wirklich löschen? Dies kann nicht rückgängig gemacht werden."
+    },
+    "deleteBlocked": {
+      "seeded": "Integrierte Typen können nicht gelöscht werden. Deaktivieren Sie ihn stattdessen.",
+      "inUse_one": "Wird von {{count}} Datenprodukt verwendet. Deaktivieren Sie ihn stattdessen.",
+      "inUse_other": "Wird von {{count}} Datenprodukten verwendet. Deaktivieren Sie ihn stattdessen."
+    },
+    "messages": {
+      "updated": "Datenprodukttyp „{{name}}“ aktualisiert.",
+      "created": "Datenprodukttyp „{{name}}“ erstellt.",
+      "deleted": "Datenprodukttyp „{{name}}“ gelöscht.",
+      "reorderFailed": "Neuordnung fehlgeschlagen"
+    },
+    "errors": {
+      "data_product_type_not_found": "Dieser Datenprodukttyp existiert nicht mehr.",
+      "data_product_type_key_exists": "Ein Datenprodukttyp mit dem Schlüssel „{{key}}“ existiert bereits.",
+      "data_product_type_in_use_one": "„{{key}}“ wird von {{count}} Datenprodukt verwendet. Deaktivieren Sie ihn, statt ihn zu löschen.",
+      "data_product_type_in_use_other": "„{{key}}“ wird von {{count}} Datenprodukten verwendet. Deaktivieren Sie ihn, statt ihn zu löschen.",
+      "data_product_type_seeded": "„{{key}}“ ist ein integrierter Typ und kann nicht gelöscht werden. Deaktivieren Sie ihn stattdessen.",
+      "data_product_type_default_inactive": "„{{key}}“ kann nicht gleichzeitig Standard und inaktiv sein. Legen Sie zuerst einen anderen Typ als Standard fest."
+    }
   },
   "certificationLevels": {
     "title": "Zertifizierungsstufen",

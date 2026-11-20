@@ -1062,7 +1062,7 @@
     "contractLabel": "Contract:",
     "productNameLabel": "Productnaam *",
     "productNamePlaceholder": "bijv. Customer Analytics Product",
-    "productTypeLabel": "Producttype *",
+    "productTypeLabel": "Producttype",
     "productTypePlaceholder": "Selecteer producttype",
     "versionLabel": "Versie *",
     "versionPlaceholder": "bijv. v1.0.0",
@@ -1074,8 +1074,8 @@
     "errors": {
       "nameRequired": "Productnaam is verplicht",
       "versionRequired": "Versie is verplicht",
-      "typeRequired": "Producttype is verplicht",
-      "createError": "Aanmaken van product vanuit contract mislukt"
+      "createError": "Aanmaken van product vanuit contract mislukt",
+      "unknown_data_product_type": "Het producttype \"{{key}}\" bestaat niet of is gedeactiveerd. Kies een ander type."
     },
     "messages": {
       "productCreated": "Product Aangemaakt",
@@ -1183,5 +1183,12 @@
     "colSubscriber": "Abonnee",
     "colSubscribed": "Geabonneerd",
     "colReason": "Reden"
+  },
+  "dataProductType": {
+    "source-aligned": "Brongericht",
+    "aggregate": "Aggregaat",
+    "consumer-aligned": "Consumentgericht",
+    "source": "Bron",
+    "sink": "Bestemming"
   }
 }

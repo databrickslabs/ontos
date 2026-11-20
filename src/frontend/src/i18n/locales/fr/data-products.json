@@ -1062,7 +1062,7 @@
     "contractLabel": "Contrat :",
     "productNameLabel": "Nom du produit *",
     "productNamePlaceholder": "par ex. Produit d'analyse client",
-    "productTypeLabel": "Type de produit *",
+    "productTypeLabel": "Type de produit",
     "productTypePlaceholder": "Sélectionner le type de produit",
     "versionLabel": "Version *",
     "versionPlaceholder": "par ex. v1.0.0",
@@ -1074,8 +1074,8 @@
     "errors": {
       "nameRequired": "Le nom du produit est obligatoire",
       "versionRequired": "La version est obligatoire",
-      "typeRequired": "Le type de produit est obligatoire",
-      "createError": "Échec de la création du produit à partir du contrat"
+      "createError": "Échec de la création du produit à partir du contrat",
+      "unknown_data_product_type": "Le type de produit « {{key}} » n'existe pas ou a été désactivé. Choisissez un autre type."
     },
     "messages": {
       "productCreated": "Produit créé",
@@ -1183,5 +1183,12 @@
     "colSubscriber": "Abonné",
     "colSubscribed": "Abonné",
     "colReason": "Raison"
+  },
+  "dataProductType": {
+    "source-aligned": "Aligné sur la source",
+    "aggregate": "Agrégat",
+    "consumer-aligned": "Aligné sur le consommateur",
+    "source": "Source",
+    "sink": "Destination"
   }
 }

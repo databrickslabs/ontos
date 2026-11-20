@@ -161,7 +161,7 @@ A SQL script runs on the SQL warehouse set in Settings, with variables substitut
 - Config: `catalog` (optional, empty = every catalog) and `schema_name` (optional, needs `catalog`). The step is allowed only on `scheduled` and `manual` workflows (`evaluate_asset_maturity_trigger_unsupported` on others), since it evaluates every asset of its scope.
 - Result data: `run_id`, `state`, `scope`, `total`, `processed`, `evaluated`, `changed`, `skipped` (count per reason code) and `error_count`. The execution view shows the counts; the run is also the last run on the Maturity Levels card.
 - One run at a time per app instance: a slot that comes while a run is going (started from the card, or a previous slot) fails the step with `maturity_bulk_run_in_progress`, and `on_fail` can follow it. The scheduler doesn't run a workflow's next slot before its previous run ended.
-- The run reads the Unity Catalog tables with the app's identity (a scheduled or manual run has no user token) and is started by `system:scheduler`, or by the user of a manual run.
+- Identity: scheduled and manual workflow runs of this step read the Unity Catalog tables with the app's identity (a step has no user token), so they see what the app's service principal can read. A run started from the Maturity Levels card uses the token of the admin who starts it. The run is started by `system:scheduler`, or by the user of a manual run.
 - Permission: creating or editing a workflow with this step, activating it, running it with **Run** and retrying one of its executions need Settings read/write access (the permission of the bulk evaluation), on top of the workflow permission (403 `workflow_step_requires_settings_write`). Removing the step or deactivating the workflow doesn't.
 
 ## Variables and Templates
@@ -504,5 +504,6 @@ As of this version:
 - Reload All Defaults also reset the defaults' active flag to the shipped value, and reset defaults a user had edited (fixed by #1456: activation is kept, and edited defaults are kept unless you opt in).
 - After an approval, a field of the entity's latest completed request wizard replaces an approval field with the same name (`${step_results.<approval_step_id>.reason}` can be the requester's reason) (fixed by WORKFLOWS_PR).
 - The `config` example of the script step in the API schema uses `return`, which fails; set `result` instead (fixed by WORKFLOWS_PR).
+- The bulk asset maturity evaluation allows one run at a time per app instance (`evaluate_asset_maturity`, `maturity_bulk_run_in_progress`). The scheduler's claims run each slot on one instance only, but a run started on another instance (from the Maturity Levels card, or a manual workflow run) can overlap it. The overlapping run skips the assets already evaluated since it started (`maturity_bulk_skipped_evaluated_in_run`), so they are not evaluated twice by it.
 
 See also the [Future Roadmap section of the Process Workflows Guide](/user-docs/process-workflows-guide#future-roadmap-deferred-items) for timeout expiry, escalation and crash recovery.

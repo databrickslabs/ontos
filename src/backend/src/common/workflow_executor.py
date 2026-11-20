@@ -1455,36 +1455,47 @@ class AssignTagStepHandler(StepHandler):
             # Persist via TagsManager. ``effective_value`` is what the entity holds
             # afterwards: a key-only assign keeps a value the entity already has.
             persisted = False
+            wrote = False
             effective_value = resolved_value
             try:
                 from src.controller.tags_manager import TagsManager
                 tags_mgr = TagsManager()
-                tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
-                if tag:
-                    existing = None
-                    if resolved_value is None:
-                        existing = next(
-                            (t for t in tags_mgr.list_assigned_tags(
-                                self._db, entity_id=context.entity_id, entity_type=context.entity_type,
-                            ) if t.tag_id == tag.id),
-                            None,
-                        )
-                    if existing is not None:
-                        # Already assigned: nothing to write (and no change-log entry).
-                        effective_value = existing.assigned_value
-                    else:
-                        tags_mgr.add_tag_to_entity(
-                            db=self._db,
-                            entity_id=context.entity_id,
-                            entity_type=context.entity_type,
-                            tag_id=tag.id,
-                            assigned_value=resolved_value,
-                            user_email=context.user_email,
-                        )
-                    persisted = True
-                else:
+                # Savepoint: a database error in the lookup or the write rolls back
+                # only the tag operation. On PostgreSQL a failed statement aborts the
+                # whole transaction, and the run could not record this failed step.
+                with self._db.begin_nested():
+                    tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
+                    if tag:
+                        existing = None
+                        if resolved_value is None:
+                            existing = next(
+                                (t for t in tags_mgr.list_assigned_tags(
+                                    self._db, entity_id=context.entity_id,
+                                    entity_type=context.entity_type,
+                                ) if t.tag_id == tag.id),
+                                None,
+                            )
+                        if existing is not None:
+                            # Already assigned: nothing to write (and no change-log entry).
+                            effective_value = existing.assigned_value
+                        else:
+                            tags_mgr.add_tag_to_entity(
+                                db=self._db,
+                                entity_id=context.entity_id,
+                                entity_type=context.entity_type,
+                                tag_id=tag.id,
+                                assigned_value=resolved_value,
+                                user_email=context.user_email,
+                                commit=False,
+                            )
+                            wrote = True
+                        persisted = True
+                if not tag:
                     # Nothing was assigned, so the step must not pass
                     return _rule_step_error(TagNotFoundError(key))
+                if wrote:
+                    # Committed, as add_tag_to_entity did before it ran in the savepoint
+                    self._db.commit()
             except Exception:
                 # Same false success as a missing tag: nothing was assigned.
                 logger.exception("TagsManager failed assigning tag %s", key)
@@ -1540,19 +1551,25 @@ class RemoveTagStepHandler(StepHandler):
             try:
                 from src.controller.tags_manager import TagsManager
                 tags_mgr = TagsManager()
-                tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
-                if tag:
-                    ok = tags_mgr.remove_tag_from_entity(
-                        db=self._db,
-                        entity_id=context.entity_id,
-                        entity_type=context.entity_type,
-                        tag_id=tag.id,
-                        user_email=context.user_email,
-                    )
-                    persisted = ok
-                else:
+                # Savepoint as in AssignTagStepHandler: a database error here must
+                # not leave the run unable to record the step
+                with self._db.begin_nested():
+                    tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
+                    if tag:
+                        persisted = tags_mgr.remove_tag_from_entity(
+                            db=self._db,
+                            entity_id=context.entity_id,
+                            entity_type=context.entity_type,
+                            tag_id=tag.id,
+                            user_email=context.user_email,
+                            commit=False,
+                        )
+                if persisted:
+                    self._db.commit()
+                elif not tag:
                     logger.warning(f"Tag '{key}' not found by FQN — context updated only")
             except Exception as e:
+                persisted = False
                 logger.warning(f"TagsManager integration failed (context still updated): {e}")
             
             if 'tags' in context.entity and key in context.entity['tags']:

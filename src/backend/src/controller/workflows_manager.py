@@ -1068,7 +1068,10 @@ class WorkflowsManager:
         warnings = []
         for step_id, key in keys.items():
             try:
-                found = tags_mgr.get_tag_by_fqn(db=self._db, fqn=str(key))
+                # Savepoint: a failed lookup must not abort the transaction the
+                # create or update route saves the workflow in (PostgreSQL)
+                with self._db.begin_nested():
+                    found = tags_mgr.get_tag_by_fqn(db=self._db, fqn=str(key))
             except Exception:
                 logger.warning("Could not look up tag %s while validating", key, exc_info=True)
                 continue

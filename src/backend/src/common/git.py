@@ -24,7 +24,7 @@ import git
 import yaml
 
 from .api_errors import CodedValueError
-from .config import get_settings, resolve_volume, Settings
+from .config import get_settings, is_local_volume_path, resolve_volume, Settings
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -71,7 +71,7 @@ def resolve_git_paths(settings: Settings) -> GitPaths:
     raw = (settings.DATABRICKS_VOLUME or '').strip().rstrip('/')
     if not raw:
         return GitPaths(repo_dir=Path("data") / GIT_EXPORT_SUBDIR)
-    if raw.startswith('/') and not raw.startswith('/Volumes/'):
+    if is_local_volume_path(raw):
         return GitPaths(repo_dir=Path(raw) / GIT_EXPORT_SUBDIR)
 
     try:

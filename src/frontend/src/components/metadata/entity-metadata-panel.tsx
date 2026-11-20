@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import MarkdownViewer from '@/components/ui/markdown-viewer';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
 import { useTranslation } from 'react-i18next';
+import { documentUploadErrorText } from '@/lib/document-upload-error';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useSharedAssets, attachSharedAsset, RichTextItem, LinkItem, DocumentItem, MetadataAttachment } from '@/hooks/use-entity-metadata';
@@ -507,7 +508,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     form.append('file', docFile);
                     const endpoint = docIsShared ? '/api/metadata/shared/documents' : `/api/entities/${entityType}/documents?entity_id=${encodeURIComponent(entityId)}`;
                     const resp = await fetch(endpoint, { method: 'POST', body: form });
-                    if (!resp.ok) throw new Error(await resp.text());
+                    if (!resp.ok) throw new Error(documentUploadErrorText(await resp.text(), t));
                     setDocTitle(''); setDocDesc(''); setDocFile(null); setDocLevel(50); setDocInheritable(true); setDocIsShared(false); setUploadingDoc(false); setAddingDoc(false);
                     fetchMetadata();
                     if (docIsShared) sharedAssets.refresh();

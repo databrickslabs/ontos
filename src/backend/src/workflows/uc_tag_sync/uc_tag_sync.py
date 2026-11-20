@@ -176,6 +176,10 @@ class DatasetTagInfo:
     # Asset metadata (populated when sourced from assets table)
     asset_id: Optional[str] = None
     asset_type_name: Optional[str] = None
+    # The asset's maturity level (latest evaluation), for {ASSET.MATURITY} and
+    # {ASSET.MATURITY_ORDER}; None when the asset has no level (see read_asset_maturity).
+    asset_maturity_name: Optional[str] = None
+    asset_maturity_order: Optional[int] = None
     # Additional (non-primary) domain names for the chosen domain source.
     additional_domain_names: List[str] = field(default_factory=list)
     # Internal: the domain is the product's (the contract or asset has none of its own).
@@ -565,6 +569,133 @@ def build_asset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[
     return out
 
 
+# Asset maturity -------------------------------------------------------------
+#
+# {ASSET.MATURITY} (level name) and {ASSET.MATURITY_ORDER} (level order) come from the
+# latest maturity evaluation of a table or view asset (``maturity_snapshots`` rows with
+# entity type ``Asset``), named after the current ``Asset`` level of that order: a
+# renamed level is published under its new name, and a level that no longer exists
+# isn't published. The job reads levels, it doesn't evaluate them: the app evaluates
+# an asset when it changes, when its page is opened, and on demand.
+#
+# Only table-level tags: the maturity entries are left out of the schema and catalog
+# aggregation (a schema has no maturity of its own).
+
+MATURITY_VARIABLES = ("{ASSET.MATURITY}", "{ASSET.MATURITY_ORDER}")
+# Mirrors MATURITY_ASSET_TYPES in src/controller/entity_dict_builder.py (this job runs
+# without the app package).
+MATURITY_ASSET_TYPES = ("Table", "View")
+
+# Why an asset gets no maturity tag; counted in the run output.
+MATURITY_SKIP_NO_UC_NAME = "no Unity Catalog table name (catalog.schema.table)"
+MATURITY_SKIP_ASSET_TYPE = "maturity levels apply to table and view assets only"
+MATURITY_SKIP_NO_LEVEL = "no maturity level (not evaluated yet, or no level reached)"
+MATURITY_SKIP_REASONS = (
+    MATURITY_SKIP_NO_UC_NAME, MATURITY_SKIP_ASSET_TYPE, MATURITY_SKIP_NO_LEVEL,
+)
+
+
+def uses_asset_maturity(config: Dict[str, Any]) -> bool:
+    """True when a tag_sync_configs entry formats a maturity variable."""
+    formats = f"{config.get('tag_key_format') or ''}{config.get('tag_value_format') or ''}"
+    return any(v in formats for v in MATURITY_VARIABLES)
+
+
+def maturity_configured(tag_sync_configs: List[Dict[str, Any]]) -> bool:
+    """True when an enabled asset entry uses {ASSET.MATURITY} or {ASSET.MATURITY_ORDER}."""
+    return any(
+        c.get("entity_type") == "asset" and c.get("enabled", True) and uses_asset_maturity(c)
+        for c in tag_sync_configs
+    )
+
+
+def _asset_key(asset_id: Any) -> str:
+    # Postgres renders a uuid with hyphens; compare ids in one form whatever the source.
+    return str(asset_id or "").replace("-", "").lower()
+
+
+def read_asset_maturity(engine: Engine) -> Dict[str, Tuple[str, int]]:
+    """Latest maturity level of every evaluated asset: asset key -> (name, order).
+
+    Assets whose latest evaluation reached no level, or reached a level that no longer
+    exists, are absent. Errors are raised: publishing without the levels would remove
+    the maturity tags this job delivered before.
+    """
+    sql = """
+        SELECT s.entity_id AS asset_id, ml.name AS level_name,
+               s.achieved_level_order AS level_order
+        FROM (
+            SELECT entity_id, achieved_level_order,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY entity_id ORDER BY evaluated_at DESC, id DESC
+                   ) AS rn
+            FROM maturity_snapshots
+            WHERE entity_type = 'Asset'
+        ) s
+        JOIN maturity_levels ml
+          ON ml.entity_type = 'Asset'
+         AND ml.level_order = s.achieved_level_order
+        WHERE s.rn = 1
+    """
+    with engine.connect() as conn:
+        rows = [dict(r._mapping) for r in conn.execute(text(sql))]
+    return {
+        _asset_key(r["asset_id"]): (str(r["level_name"]), int(r["level_order"]))
+        for r in rows
+        if r.get("level_name") and r.get("level_order") is not None
+    }
+
+
+def attach_asset_maturity(
+    asset_rows: List[Dict[str, Any]],
+    asset_datasets: List[DatasetTagInfo],
+    maturity: Dict[str, Tuple[str, int]],
+) -> Dict[str, List[str]]:
+    """Set the maturity fields on the asset datasets; return the skipped ones by reason.
+
+    ``asset_rows`` are the rows of read_assets_and_links: an asset with no dataset in
+    ``asset_datasets`` had no ``catalog.schema.table`` name. Skips name the asset id,
+    or the table when there is one.
+    """
+    skipped: Dict[str, List[str]] = {reason: [] for reason in MATURITY_SKIP_REASONS}
+    by_id = {_asset_key(d.asset_id): d for d in asset_datasets if d.asset_id}
+    seen: set = set()
+    for r in asset_rows:
+        key = _asset_key(r.get("asset_id"))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        d = by_id.get(key)
+        if d is None:
+            skipped[MATURITY_SKIP_NO_UC_NAME].append(f"asset {r.get('asset_id')}")
+            continue
+        if d.asset_type_name not in MATURITY_ASSET_TYPES:
+            skipped[MATURITY_SKIP_ASSET_TYPE].append(d.fqn)
+            continue
+        level = maturity.get(key)
+        if level is None:
+            skipped[MATURITY_SKIP_NO_LEVEL].append(d.fqn)
+            continue
+        d.asset_maturity_name, d.asset_maturity_order = level
+    return skipped
+
+
+def report_maturity_skips(skipped: Dict[str, List[str]], tagged: int,
+                          verbose: bool = False) -> int:
+    """Print the asset maturity counts; return how many assets were skipped."""
+    total = sum(len(items) for items in skipped.values())
+    print(f"  Asset maturity: {tagged} asset(s) with a level, {total} skipped")
+    for reason in MATURITY_SKIP_REASONS:
+        items = skipped.get(reason) or []
+        if not items:
+            continue
+        print(f"    - {len(items)} skipped: {reason}")
+        if verbose:
+            for item in items:
+                print(f"        {item}")
+    return total
+
+
 def read_output_ports_without_contract(
     engine: Engine, limit: Optional[int] = None
 ) -> List[Dict[str, Any]]:
@@ -850,6 +981,9 @@ def merge_dataset_tag_infos(
             # Merge: prefer non-None values, union semantic links
             existing.asset_id = existing.asset_id or d.asset_id
             existing.asset_type_name = existing.asset_type_name or d.asset_type_name
+            if existing.asset_maturity_name is None:
+                existing.asset_maturity_name = d.asset_maturity_name
+                existing.asset_maturity_order = d.asset_maturity_order
             # Union semantic links
             existing_iris = {link.iri for link in existing.semantic_links}
             for link in d.semantic_links:
@@ -942,6 +1076,10 @@ def build_variables_for_dataset(d: DatasetTagInfo, link: Optional[SemanticLink] 
         "ASSET.ID": d.asset_id,
         "ASSET.TYPE": d.asset_type_name,
         "ASSET.FQN": d.fqn,
+        "ASSET.MATURITY": d.asset_maturity_name,
+        "ASSET.MATURITY_ORDER": (
+            str(d.asset_maturity_order) if d.asset_maturity_order is not None else None
+        ),
     }
 
     # Add semantic link variables if provided
@@ -1764,12 +1902,14 @@ def aggregate_parent_desired(
     """
     schema_to_tags: Dict[str, Dict[str, set]] = {}
     catalog_to_tags: Dict[str, Dict[str, set]] = {}
+    # Maturity is a table tag: a schema or catalog doesn't get its tables' levels.
+    parent_configs = [c for c in tag_sync_configs if not uses_asset_maturity(c)]
 
     for d in dataset_items:
         schema_fqn = f"{d.catalog}.{d.schema}"
 
         # Build desired tags for this dataset
-        desired = build_desired_for_dataset(d, tag_sync_configs)
+        desired = build_desired_for_dataset(d, parent_configs)
 
         # Aggregate to parent levels
         for tag_key, tag_value in desired.items():
@@ -2011,6 +2151,13 @@ def main() -> None:
     asset_datasets = build_asset_tag_infos(asset_rows, default_catalog,
                                            default_schema)
     print(f"  Found {len(asset_datasets)} datasets from assets")
+    maturity_skipped: Dict[str, List[str]] = {}
+    if maturity_configured(tag_sync_configs):
+        print("Reading asset maturity levels...")
+        maturity = read_asset_maturity(engine)
+        maturity_skipped = attach_asset_maturity(asset_rows, asset_datasets, maturity)
+        tagged = sum(1 for d in asset_datasets if d.asset_maturity_name)
+        report_maturity_skips(maturity_skipped, tagged, verbose=verbose)
 
     print("Reading direct UC links (catalog/schema/table/column)...")
     direct_rows = read_direct_uc_links(engine, limit=limit)
@@ -2078,6 +2225,9 @@ def main() -> None:
     print("\n" + "=" * 80)
     msg = f"Summary: updated={updated_total} removed={removed_total} errors="
     print(f"{msg}{len(all_errors)} skipped={len(result.skipped)}")
+    if maturity_skipped:
+        skipped_assets = sum(len(items) for items in maturity_skipped.values())
+        print(f"Asset maturity: skipped={skipped_assets} (see 'Asset maturity' above)")
 
     if result.skipped:
         print(f"\n{len(result.skipped)} object(s) skipped (not errors):")

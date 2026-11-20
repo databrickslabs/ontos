@@ -12,9 +12,13 @@ import { Info, AlertCircle } from 'lucide-react';
 import { TagSyncConfig } from '@/types/workflow-configurations';
 import {
   LIFECYCLE_STATUS_MAPPING,
+  MATURITY_MAPPING,
+  MATURITY_VARIABLES,
   defaultLifecycleEntry,
+  defaultMaturityEntry,
   findEntryIndex,
   supportsLifecycleMapping,
+  supportsMaturityMapping,
   upsertEntry,
 } from './tag-sync-configs';
 
@@ -47,7 +51,44 @@ const AVAILABLE_VARIABLES: Record<string, { key: string; description: string }[]
     { key: '{PRODUCT.VERSION}', description: 'Product version' },
     { key: '{PRODUCT.STATUS}', description: 'Product status' },
   ],
+  asset: [
+    { key: '{ASSET.ID}', description: 'Asset UUID' },
+    { key: '{ASSET.TYPE}', description: 'Asset type name' },
+    { key: '{ASSET.FQN}', description: 'Unity Catalog name of the table' },
+    { key: '{ASSET.MATURITY}', description: 'Maturity level name' },
+    { key: '{ASSET.MATURITY_ORDER}', description: 'Maturity level number' },
+  ],
 };
+
+const EXAMPLE_VALUES: Record<string, string> = {
+  '{LINK.IRI}': 'https://example.com/terms/customer',
+  '{LINK.LABEL}': 'Customer',
+  '{LINK.SLUG}': 'customer',
+  '{DOMAIN.ID}': '123e4567-e89b-12d3-a456-426614174000',
+  '{DOMAIN.NAME}': 'sales',
+  '{CONTRACT.ID}': '123e4567-e89b-12d3-a456-426614174001',
+  '{CONTRACT.NAME}': 'customer_contract',
+  '{CONTRACT.VERSION}': '1.0.0',
+  '{CONTRACT.STATUS}': 'active',
+  '{PRODUCT.ID}': '123e4567-e89b-12d3-a456-426614174002',
+  '{PRODUCT.NAME}': 'customer_product',
+  '{PRODUCT.VERSION}': '1.0.0',
+  '{PRODUCT.STATUS}': 'active',
+  '{ASSET.ID}': '123e4567-e89b-12d3-a456-426614174003',
+  '{ASSET.TYPE}': 'Table',
+  '{ASSET.FQN}': 'main.sales.orders',
+  '{ASSET.MATURITY}': '2 stars',
+  '{ASSET.MATURITY_ORDER}': '3',
+};
+
+/** A format with its variables replaced by example values. */
+function renderExample(format: string, entityType: string): string {
+  let example = format;
+  for (const variable of AVAILABLE_VARIABLES[entityType] || []) {
+    example = example.replace(variable.key, EXAMPLE_VALUES[variable.key] || '?');
+  }
+  return example;
+}
 
 // UC tag key validation
 const INVALID_TAG_CHARS = [',', '.', ':', '-', '/', '`', '='];
@@ -86,6 +127,11 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
     '{PRODUCT.NAME}': t('settings:tags.syncConfigs.variables.productName'),
     '{PRODUCT.VERSION}': t('settings:tags.syncConfigs.variables.productVersion'),
     '{PRODUCT.STATUS}': t('settings:tags.syncConfigs.variables.productStatus'),
+    '{ASSET.ID}': t('settings:tags.syncConfigs.assetVariables.assetId'),
+    '{ASSET.TYPE}': t('settings:tags.syncConfigs.assetVariables.assetType'),
+    '{ASSET.FQN}': t('settings:tags.syncConfigs.assetVariables.assetFqn'),
+    '{ASSET.MATURITY}': t('settings:tags.syncConfigs.assetVariables.assetMaturity'),
+    '{ASSET.MATURITY_ORDER}': t('settings:tags.syncConfigs.assetVariables.assetMaturityOrder'),
   };
 
   // Ensure we have a config for each entity type (the first entry without a mapping id)
@@ -110,6 +156,10 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
       data_product: {
         key: 'ontos_product_name',
         value: '{PRODUCT.NAME}',
+      },
+      asset: {
+        key: 'ontos_asset_type',
+        value: '{ASSET.TYPE}',
       },
     };
 
@@ -138,31 +188,16 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
   };
 
   // Render example tag key with current format
-  const renderExampleKey = (config: TagSyncConfig): string => {
-    let example = config.tag_key_format;
-    const variables = AVAILABLE_VARIABLES[config.entity_type] || [];
+  const renderExampleKey = (config: TagSyncConfig): string =>
+    renderExample(config.tag_key_format, config.entity_type);
 
-    // Replace variables with example values
-    for (const variable of variables) {
-      const exampleValues: Record<string, string> = {
-        '{LINK.IRI}': 'https://example.com/terms/customer',
-        '{LINK.LABEL}': 'Customer',
-        '{LINK.SLUG}': 'customer',
-        '{DOMAIN.ID}': '123e4567-e89b-12d3-a456-426614174000',
-        '{DOMAIN.NAME}': 'sales',
-        '{CONTRACT.ID}': '123e4567-e89b-12d3-a456-426614174001',
-        '{CONTRACT.NAME}': 'customer_contract',
-        '{CONTRACT.VERSION}': '1.0.0',
-        '{CONTRACT.STATUS}': 'active',
-        '{PRODUCT.ID}': '123e4567-e89b-12d3-a456-426614174002',
-        '{PRODUCT.NAME}': 'customer_product',
-        '{PRODUCT.VERSION}': '1.0.0',
-        '{PRODUCT.STATUS}': 'active',
-      };
-      example = example.replace(variable.key, exampleValues[variable.key] || '?');
-    }
+  // The maturity level entry of an asset (mapping 'maturity')
+  const getMaturityConfig = (): TagSyncConfig =>
+    value[findEntryIndex(value, 'asset', MATURITY_MAPPING)] ?? defaultMaturityEntry();
 
-    return example;
+  const updateMaturityConfig = (updates: Partial<TagSyncConfig>) => {
+    const index = findEntryIndex(value, 'asset', MATURITY_MAPPING);
+    onChange(upsertEntry(value, index, defaultMaturityEntry(), updates));
   };
 
   const formatEntityTypeName = (type: string): string => {
@@ -298,6 +333,9 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
                   onChange={(updates) => updateLifecycleConfig(entityType, updates)}
                 />
               )}
+              {supportsMaturityMapping(entityType) && (
+                <MaturityTagCard config={getMaturityConfig()} onChange={updateMaturityConfig} />
+              )}
             </TabsContent>
           );
         })}
@@ -362,6 +400,99 @@ function LifecycleStatusCard({ entityType, config, onChange }: LifecycleStatusCa
             <code className="bg-muted px-1 py-0.5 rounded">{config.tag_value_format}</code>
           </div>
           <div>{t('settings:tags.syncConfigs.lifecycle.sharedKeyHint')}</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface MaturityTagCardProps {
+  config: TagSyncConfig;
+  onChange: (updates: Partial<TagSyncConfig>) => void;
+}
+
+// The maturity level of a table or view asset, as a table tag. Key and value are edited;
+// the value has to use a maturity variable.
+function MaturityTagCard({ config, onChange }: MaturityTagCardProps) {
+  const { t } = useTranslation(['settings']);
+  const keyError = config.enabled
+    ? validateTagKey(renderExample(config.tag_key_format, 'asset'), t)
+    : null;
+  const usesMaturity = MATURITY_VARIABLES.some(
+    (v) => config.tag_value_format.includes(v) || config.tag_key_format.includes(v),
+  );
+  const valueError = config.enabled && !usesMaturity
+    ? t('settings:tags.syncConfigs.maturity.valueNeedsVariable')
+    : null;
+
+  return (
+    <Card className="mt-4" data-testid="asset-maturity-card">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>{t('settings:tags.syncConfigs.maturity.title')}</span>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="asset-maturity-enabled">{t('settings:tags.enable')}</Label>
+            <Switch
+              id="asset-maturity-enabled"
+              checked={config.enabled}
+              onCheckedChange={(enabled) => onChange({ enabled })}
+            />
+          </div>
+        </CardTitle>
+        <CardDescription>{t('settings:tags.syncConfigs.maturity.description')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="asset-maturity-key-format">
+            {t('settings:tags.syncConfigs.keyFormatLabel')}
+            <span className="text-red-500 ml-1">*</span>
+          </Label>
+          <Input
+            id="asset-maturity-key-format"
+            value={config.tag_key_format}
+            onChange={(e) => onChange({ tag_key_format: e.target.value })}
+            className="font-mono text-sm"
+            disabled={!config.enabled}
+          />
+          {keyError && (
+            <div className="text-xs text-red-500 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {keyError}
+            </div>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="asset-maturity-value-format">
+            {t('settings:tags.syncConfigs.valueFormatLabel')}
+            <span className="text-red-500 ml-1">*</span>
+          </Label>
+          <Input
+            id="asset-maturity-value-format"
+            value={config.tag_value_format}
+            onChange={(e) => onChange({ tag_value_format: e.target.value })}
+            className="font-mono text-sm"
+            disabled={!config.enabled}
+          />
+          {config.enabled && !valueError && (
+            <div className="text-xs text-muted-foreground">
+              {t('settings:tags.syncConfigs.example')}{' '}
+              <code className="bg-muted px-1 py-0.5 rounded">
+                {renderExample(config.tag_key_format, 'asset')}
+                {' = '}
+                {renderExample(config.tag_value_format, 'asset')}
+              </code>
+            </div>
+          )}
+          {valueError && (
+            <div className="text-xs text-red-500 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {valueError}
+            </div>
+          )}
+        </div>
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <div>{t('settings:tags.syncConfigs.maturity.tablesOnlyHint')}</div>
+          <div>{t('settings:tags.syncConfigs.maturity.prefixHint')}</div>
         </div>
       </CardContent>
     </Card>

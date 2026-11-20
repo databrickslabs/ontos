@@ -104,7 +104,8 @@ export default function CreateContractInlineDialog({
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(
-          contractDomainErrorText(errorText, t) ?? internalErrorText(errorText) ?? (errorText || t('data-contracts:createInline.createError', 'Failed to create contract'))
+          contractDomainErrorText(errorText, t) ?? internalErrorText(errorText) ??
+            (errorText || t('data-contracts:createInline.createError', 'Failed to create contract'))
         );
       }
 

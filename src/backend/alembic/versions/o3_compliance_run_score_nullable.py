@@ -1,7 +1,7 @@
 """a compliance run without a score stores NULL
 
 Revision ID: o3_compliance_run_score_nullable
-Revises: o2_step_execution_message
+Revises: c8_workflow_scheduler_claims
 Create Date: 2026-11-19 06:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'o3_compliance_run_score_nullable'
-down_revision: Union[str, None] = 'o2_step_execution_message'
+down_revision: Union[str, None] = 'c8_workflow_scheduler_claims'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

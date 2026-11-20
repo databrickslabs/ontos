@@ -138,6 +138,9 @@ class StepType(str, Enum):
     DELIVER = "deliver"
     GRANT_PERMISSIONS = "grant_permissions"  # Process workflow: grant UC permissions via SP workspace client
     ON_BEHALF_OF = "on_behalf_of"  # Approval workflow: capture self/group/SP principal at wizard start ()
+    # Process workflow: bulk maturity evaluation of table and view assets (#1414), for
+    # scheduled and manual workflows
+    EVALUATE_ASSET_MATURITY = "evaluate_asset_maturity"
 
 
 # Steps that end a process workflow run with their own outcome. They have no next

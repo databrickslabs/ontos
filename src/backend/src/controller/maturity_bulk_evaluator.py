@@ -13,8 +13,9 @@ batches, with a bounded number of worker threads, and keeps progress and a summa
 - The summary of the last run is stored in ``app_settings`` so it survives a restart.
   Progress of a running run lives in this process.
 
-Scheduling is not part of this module: the run is started from the API (see
-``routes/maturity_routes.py``).
+A run is started from the API (``routes/maturity_bulk_routes.py``, in the background)
+or by the ``evaluate_asset_maturity`` workflow step (``run_now``, in the step's thread),
+which a scheduled workflow runs on its slots.
 """
 import json
 import threading
@@ -229,10 +230,11 @@ def _record(run_id: str, outcome: Dict[str, Any]) -> None:
                 })
 
 
-def _finish(run_id: str, state: str, session_factory: SessionFactory) -> None:
+def _finish(run_id: str, state: str, session_factory: SessionFactory) -> Optional[Dict[str, Any]]:
+    """End the run, store its summary and return it."""
     with _lock:
         if _current is None or _current["id"] != run_id:
-            return
+            return None
         _current["state"] = state
         _current["finished_at"] = _now()
         snapshot = _serialise(_current)
@@ -247,6 +249,7 @@ def _finish(run_id: str, state: str, session_factory: SessionFactory) -> None:
     except Exception:
         # The run is over either way; the summary stays in memory until the next restart
         logger.warning("Could not store the bulk maturity run summary", exc_info=True)
+    return snapshot
 
 
 # --- Evaluation -------------------------------------------------------------------
@@ -306,19 +309,21 @@ def execute_run(
     session_factory: SessionFactory = get_db_session,
     evaluator_factory: Optional[Callable[[], MaturityEvaluator]] = None,
     run_identity: Optional[RunIdentity] = None,
-) -> None:
+) -> Optional[Dict[str, Any]]:
     """Evaluate every asset of the scope for a run registered with start_run.
 
     ``run_identity``: whose permissions the UC tables are read with. A run an
     admin starts passes theirs (a table they can't read stays unreadable for
     them); the default, the app's, is for runs no user started.
+
+    Returns the run's final summary (None when the run isn't the registered one).
     """
     make_evaluator = evaluator_factory or (
         lambda: MaturityEvaluator(run_identity=run_identity)
     )
     with _lock:
         if _current is None or _current["id"] != run_id:
-            return
+            return None
         started_at = _current["started_at"]
         max_workers = _current["max_workers"]
         batch_size = _current["batch_size"]
@@ -344,11 +349,32 @@ def execute_run(
                     ]
                     for future in as_completed(futures):
                         _record(run_id, future.result())
-        _finish(run_id, "completed", session_factory)
+        return _finish(run_id, "completed", session_factory)
     except Exception:
         logger.error("Bulk maturity evaluation %s failed", run_id, exc_info=True)
         with _lock:
             if _current is not None and _current["id"] == run_id:
                 _current["error_count"] += 1
                 _current["errors"].append({"asset_id": "", "code": ERROR_RUN_FAILED, "params": {}})
-        _finish(run_id, "failed", session_factory)
+        return _finish(run_id, "failed", session_factory)
+
+
+def run_now(
+    scope: BulkScope,
+    *,
+    started_by: Optional[str],
+    session_factory: SessionFactory = get_db_session,
+    evaluator_factory: Optional[Callable[[], MaturityEvaluator]] = None,
+) -> Dict[str, Any]:
+    """Start a run and evaluate it in the calling thread; returns its final summary.
+
+    For the ``evaluate_asset_maturity`` workflow step: a scheduled or manual run has
+    no request, so the UC tables are read with the app's identity. Raises
+    ``MaturityBulkRunInProgressError`` while another run is going, as ``start_run``.
+    """
+    run = start_run(scope, started_by=started_by)
+    summary = execute_run(
+        run["id"], scope, evaluated_by=started_by,
+        session_factory=session_factory, evaluator_factory=evaluator_factory,
+    )
+    return summary if summary is not None else run

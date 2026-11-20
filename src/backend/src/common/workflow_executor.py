@@ -3864,6 +3864,44 @@ class GrantPermissionsStepHandler(StepHandler):
         return None
 
 
+class EvaluateAssetMaturityStepHandler(StepHandler):
+    """Runs the bulk maturity evaluation of table and view assets (#1414) and waits for it.
+
+    Config: optional ``catalog`` and ``schema_name`` (a schema needs its catalog); none
+    evaluates every table, view and metric view asset. The run is the one
+    ``POST /api/maturity-evaluations/assets`` starts, in this step's thread, with the
+    app's identity reading the UC tables. The result data has the run's counts. While
+    another run is going the step fails with ``maturity_bulk_run_in_progress``.
+    """
+
+    SUMMARY_KEYS = ('state', 'scope', 'total', 'processed', 'evaluated', 'changed', 'skipped',
+                    'error_count')
+
+    def execute(self, context: StepContext) -> StepResult:
+        from src.controller import maturity_bulk_evaluator as bulk
+        from src.controller.workflow_scheduler import SCHEDULER_USER
+
+        try:
+            scope = bulk.normalize_scope(self._config.get('catalog'),
+                                         self._config.get('schema_name'))
+            summary = bulk.run_now(scope, started_by=context.user_email or SCHEDULER_USER)
+        except (bulk.MaturityBulkScopeError, bulk.MaturityBulkRunInProgressError) as e:
+            return StepResult(passed=False, error=str(e),
+                              data={'error_code': e.code, 'error_params': e.params})
+        data = {'run_id': summary.get('id'), **{key: summary.get(key) for key in self.SUMMARY_KEYS}}
+        skipped = sum((summary.get('skipped') or {}).values())
+        message = (
+            f"Evaluated {summary.get('evaluated', 0)} of {summary.get('total', 0)} assets: "
+            f"{summary.get('changed', 0)} changed level, {skipped} skipped, "
+            f"{summary.get('error_count', 0)} errors"
+        )
+        if summary.get('state') != 'completed':
+            data.update(error_code=bulk.ERROR_RUN_FAILED, error_params={})
+            return StepResult(passed=False, message=message, data=data,
+                              error="The bulk maturity evaluation failed")
+        return StepResult(passed=True, message=message, data=data)
+
+
 class WorkflowExecutor:
     """Executes process workflows."""
 
@@ -3884,6 +3922,7 @@ class WorkflowExecutor:
         'webhook': WebhookStepHandler,
         'entity_action': EntityActionStepHandler,
         'grant_permissions': GrantPermissionsStepHandler,
+        'evaluate_asset_maturity': EvaluateAssetMaturityStepHandler,
     }
 
     def __init__(self, db: Session):

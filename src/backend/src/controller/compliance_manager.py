@@ -635,7 +635,9 @@ class ComplianceManager:
             'examples': examples,
         }
 
-    def get_compliance_trend(self, db: Session, days: int = 30) -> List[Dict[str, float]]:
+    def get_compliance_trend(
+        self, db: Session, days: int = 30
+    ) -> List[Dict[str, Optional[float]]]:
         end = datetime.utcnow().date()
         start = end - timedelta(days=days - 1)
         # Gather runs within the window
@@ -649,16 +651,13 @@ class ComplianceManager:
                 continue
             key = d.isoformat()
             by_date.setdefault(key, []).append(float(r.score or 0.0))
-        # Construct time series, filling missing days with previous or 0
-        trend: List[Dict[str, float]] = []
+        # One point per day; a day without a scored run has no score (None), not 0 %
+        trend: List[Dict[str, Optional[float]]] = []
         for i in range(days - 1, -1, -1):
             d = (end - timedelta(days=i)).isoformat()
             vals = by_date.get(d, [])
-            if vals:
-                avg = sum(vals) / len(vals)
-            else:
-                avg = 0.0
-            trend.append({"date": d, "compliance": round(avg, 2)})
+            avg = round(sum(vals) / len(vals), 2) if vals else None
+            trend.append({"date": d, "compliance": avg})
         return trend
 
     # --- Runs ---

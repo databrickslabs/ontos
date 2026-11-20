@@ -338,7 +338,9 @@ def test_no_settings_feature_cannot_read(with_levels):
     assert client.get("/api/settings").status_code == 403
 
 
-def test_invalid_volume_is_rejected_with_a_code_and_stores_nothing(client: TestClient, test_settings):
+def test_invalid_volume_is_rejected_with_a_code_and_stores_nothing(
+    client: TestClient, test_settings
+):
     """A volume that can't name a UC volume answers 400 with code + params and changes nothing."""
     response = client.put(
         "/api/settings",

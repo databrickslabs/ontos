@@ -18,7 +18,10 @@ vi.mock('react-i18next', () => ({
   }),
 }))
 
-vi.mock('@/components/ui/domain-multi-selector', () => ({ default: () => null }))
+vi.mock('@/components/ui/domain-multi-selector', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/ui/domain-multi-selector')>()),
+  default: () => null,
+}))
 
 vi.mock('@/components/ui/select', () => ({
   Select: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

@@ -100,3 +100,29 @@ def test_a_create_with_an_empty_primary_domain_id_is_refused(client, db_session)
     })
 
     _assert_refused(resp, "primaryDomainId")
+
+
+def test_a_create_with_a_domain_name_in_domain_ids_is_refused(client, db_session):
+    """domainIds takes ids: a domain NAME (what a product's `domain` holds) is an unknown
+    id, refused with a 400 and nothing is created."""
+    domain = DataDomain(
+        id=str(uuid.uuid4()), name=f"Sales-{uuid.uuid4().hex[:6]}", created_by="u@example.com",
+    )
+    db_session.add(domain)
+    db_session.flush()
+
+    resp = client.post("/api/data-contracts", json={
+        "name": f"Orders {uuid.uuid4().hex[:6]}", "version": "1.0.0",
+        "domainIds": [domain.name], "primaryDomainId": domain.name,
+    })
+
+    assert resp.status_code == 400, resp.text
+
+
+def test_a_create_with_the_domain_ids_of_a_product_keeps_them(client, db_session):
+    first, second = _domain(db_session), _domain(db_session)
+
+    contract = _create(client, domainIds=[first, second], primaryDomainId=second)
+
+    assert contract["domainIds"] == [second, first] or contract["domainIds"] == [first, second]
+    assert contract["primaryDomainId"] == second

@@ -53,6 +53,16 @@ def test_a_local_directory_is_saved_as_the_git_export_uses_it(manager, volume):
     assert stored.value == volume
 
 
+@pytest.mark.parametrize("volume", ["/volumes/c/s/v", "/VOLUMES/c/s/v", "/Volumes", "/vOlUmEs"])
+def test_a_volumes_path_in_another_casing_is_malformed_not_a_local_directory(manager, volume):
+    # saved as a directory, the export would go to /volumes/c/s/v/git-export
+    with pytest.raises(VolumeInvalidError) as raised:
+        _save(manager, {"databricks_volume": volume})
+
+    assert raised.value.code == "volume_invalid"
+    assert raised.value.params["value"] == volume
+
+
 @pytest.mark.parametrize("volume", ["/Volumes", "/Volumes/"])
 def test_the_bare_volumes_root_is_rejected(manager, volume):
     with pytest.raises(VolumeInvalidError):

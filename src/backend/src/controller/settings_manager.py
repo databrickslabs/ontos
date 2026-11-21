@@ -1709,8 +1709,8 @@ class SettingsManager(ThreadBoundDb):
         if volume == current['databricks_volume'] and re.search(r'[\s./]', volume or ''):
             return
         # A local directory (development) is exported to as it is, as resolve_git_paths
-        # does; only the bare "/Volumes" has no volume to name.
-        if is_local_volume_path(volume) and (volume or '').strip().rstrip('/') != '/Volumes':
+        # does; a "/Volumes" path in any casing is not one and is checked below.
+        if is_local_volume_path(volume):
             return
         resolve_volume(SimpleNamespace(**{key.upper(): value for key, value in effective.items()}))
 

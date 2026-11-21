@@ -517,10 +517,15 @@ def is_local_volume_path(value: Optional[str]) -> bool:
     """True for a volume setting that is a local directory (development).
 
     An absolute path outside ``/Volumes``. ``resolve_git_paths`` exports to it
-    directly, so it needs no Unity Catalog volume.
+    directly, so it needs no Unity Catalog volume. A path under ``/Volumes`` in any
+    other casing (``/volumes/c/s/v``) is a malformed volume path, not a directory:
+    ``resolve_volume`` refuses it.
     """
-    raw = (value or '').strip().rstrip('/')
-    return raw.startswith('/') and not raw.startswith('/Volumes/')
+    raw = (value or '').strip()
+    if not raw.startswith('/'):
+        return False
+    first = next((part for part in raw.split('/') if part), '')
+    return first.lower() != 'volumes'
 
 
 def resolve_volume(settings: Settings) -> Optional[Tuple[str, str, str]]:

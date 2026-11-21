@@ -25,8 +25,24 @@ def test_a_create_without_api_version_gets_the_default(client, db_session):
     assert _create(client)["apiVersion"] == "v3.1.0"
 
 
-def test_a_create_with_both_spellings_takes_the_name(client, db_session):
-    assert _create(client, apiVersion="v3.0.2", api_version="v3.1.0")["apiVersion"] == "v3.0.2"
+@pytest.mark.parametrize("camel, snake", [("v3.0.2", "v3.1.0"), ("v3.1.0", "v3.0.2")])
+def test_a_create_with_both_spellings_takes_the_camel_case_one(client, db_session, camel, snake):
+    assert _create(client, apiVersion=camel, api_version=snake)["apiVersion"] == camel
+
+
+@pytest.mark.parametrize("camel, snake", [("v3.0.2", "v3.1.0"), ("v3.1.0", "v3.0.2")])
+def test_an_update_with_both_spellings_takes_the_camel_case_one(
+    client, db_session, camel, snake
+):
+    """Same rule as on create (and for the domain fields): the camelCase spelling wins."""
+    contract = _create(client, apiVersion="v3.0.0")
+
+    resp = client.put(
+        f"/api/data-contracts/{contract['id']}", json={"apiVersion": camel, "api_version": snake},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["apiVersion"] == camel
 
 
 def test_a_create_stores_the_fields_the_wizard_sends_by_name(client, db_session):

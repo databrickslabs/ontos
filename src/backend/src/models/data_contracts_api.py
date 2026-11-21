@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 
-from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 from src.common.payload_spellings import CamelCaseSpellingWins
@@ -465,24 +465,14 @@ class DataContractBase(CamelCaseSpellingWins):
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
     # Required by ODCS. Read as ``apiVersion`` (the documented spelling) or ``api_version``
-    # (the name wins when both are sent)
-    apiVersion: str = Field(
-        'v3.1.0', alias='api_version',
-        validation_alias=AliasChoices('apiVersion', 'api_version'),
-    )
+    apiVersion: str = Field('v3.1.0', alias='api_version')
     domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
     # Multi-domain assignment (primary included). The create dialogs send the fields by
     # name: every aliased field is read by its name as well as its alias
-    # (``populate_by_name``). For ``apiVersion`` and the two domain fields below the name
-    # also wins when both spellings are sent (explicit ``AliasChoices``); for the other
-    # fields the alias is read first, as pydantic does
-    domainIds: Optional[List[str]] = Field(
-        None, alias='domain_ids', validation_alias=AliasChoices('domainIds', 'domain_ids'),
-    )
-    primaryDomainId: Optional[str] = Field(
-        None, alias='primary_domain_id',
-        validation_alias=AliasChoices('primaryDomainId', 'primary_domain_id'),
-    )
+    # (``populate_by_name``); when both spellings are sent, the camelCase one wins, as on
+    # update (``CamelCaseSpellingWins``)
+    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')
+    primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     descriptionUsage: Optional[str] = Field(None, alias='description_usage')

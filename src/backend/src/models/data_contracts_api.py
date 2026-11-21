@@ -4,6 +4,7 @@ from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
+from src.common.payload_spellings import CamelCaseSpellingWins
 
 if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed
@@ -415,7 +416,9 @@ class ODCSContract(BaseModel):
         populate_by_name = True
 
 
-class DataContractBase(BaseModel):
+class DataContractBase(CamelCaseSpellingWins):
+    """Create body. A field sent as camelCase and snake_case reads camelCase (as on update)."""
+
     name: str  # Required for app usability
     version: str = Field('1.0.0')
     status: str = Field('draft')
@@ -504,7 +507,7 @@ _DOMAINS_NOTE = (
 )
 
 
-class DataContractUpdate(BaseModel):
+class DataContractUpdate(CamelCaseSpellingWins):
     """Contract update. ``apiVersion`` and the domain fields omitted or sent as null
     keep the stored value.
 
@@ -518,6 +521,9 @@ class DataContractUpdate(BaseModel):
     read as "not sent"; so is a ``primaryDomainId`` that is not one of the ``domainIds``
     (``primary_domain_not_in_domains``), as when it is sent alone. The legacy ``domain``
     (a name, not an id) is checked the same way where a caller can send it.
+
+    A field sent under both spellings (``domainIds`` and ``domain_ids``) reads the camelCase
+    one, as on create.
     """
     name: Optional[str] = None
     version: Optional[str] = None

@@ -149,3 +149,32 @@ def test_an_update_with_a_primary_outside_domain_ids_is_refused(client, db_sessi
     detail = resp.json()["detail"]
     assert detail["code"] == "primary_domain_not_in_domains"
     assert detail["params"] == {"primaryDomainId": other}
+
+
+# Both spellings sent: the camelCase one (the documented input) wins, on create and update.
+
+
+def test_a_create_with_both_spellings_reads_the_camel_case_domain_fields(client, db_session):
+    first, second, other = _domain(db_session), _domain(db_session), _domain(db_session)
+
+    contract = _create(
+        client, domainIds=[first, second], domain_ids=[other],
+        primaryDomainId=second, primary_domain_id=other,
+    )
+
+    assert set(contract["domainIds"]) == {first, second}
+    assert contract["primaryDomainId"] == second
+
+
+def test_an_update_with_both_spellings_reads_the_camel_case_domain_fields(client, db_session):
+    first, second, other = _domain(db_session), _domain(db_session), _domain(db_session)
+    contract = _create(client, domainIds=[other])
+
+    resp = client.put(f"/api/data-contracts/{contract['id']}", json={
+        "domainIds": [first, second], "domain_ids": [other],
+        "primaryDomainId": second, "primary_domain_id": other,
+    })
+
+    assert resp.status_code == 200, resp.text
+    assert set(resp.json()["domainIds"]) == {first, second}
+    assert resp.json()["primaryDomainId"] == second

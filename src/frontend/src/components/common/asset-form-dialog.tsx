@@ -278,12 +278,17 @@ export function AssetFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {schemaLoading || propertiesRead === 'loading' ? (
-          <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
-            <span className="ml-2 text-sm text-muted-foreground">{t('common:assetForm.loadingSchema')}</span>
-          </div>
-        ) : (
+        <div role="status" aria-live="polite">
+          {(schemaLoading || propertiesRead === 'loading') && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
+              <span className="ml-2 text-sm text-muted-foreground">
+                {t('common:assetForm.loadingSchema')}
+              </span>
+            </div>
+          )}
+        </div>
+        {schemaLoading || propertiesRead === 'loading' ? null : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               {/* Core fields always shown */}

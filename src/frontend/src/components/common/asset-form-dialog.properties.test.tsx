@@ -195,14 +195,16 @@ describe('AssetFormDialog edit', () => {
     );
 
     // The schema has loaded; only the properties read is pending, and it is announced
-    const status = await screen.findByRole('status');
-    expect(status).toHaveTextContent('common:assetForm.loadingSchema');
+    const status = screen.getByRole('status');
     expect(status).toHaveAttribute('aria-live', 'polite');
+    await waitFor(() => expect(status).toHaveTextContent('common:assetForm.loadingSchema'));
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/assets/col-1'));
 
     resolveRead({ data: column });
     await screen.findByRole('checkbox', { name: /primary key/i });
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    // The region stays mounted (the same node) and is empty once the read is done
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toBeEmptyDOMElement();
   });
 
   it('says so and blocks Save when the stored properties cannot be read', async () => {

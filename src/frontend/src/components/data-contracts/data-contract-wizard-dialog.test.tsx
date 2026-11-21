@@ -525,4 +525,25 @@ describe('DataContractWizardDialog Schema Inference', () => {
 
     expect((await savedColumn()).timezone).toBeUndefined()
   })
+
+  it('drops a zone name loaded on a timestamp column that was not edited', async () => {
+    renderWithProviders(
+      <DataContractWizardDialog
+        isOpen={true}
+        onOpenChange={mockOnOpenChange}
+        onSubmit={mockOnSubmit}
+        initial={{
+          name: 'Test Contract', version: '1.0.0', status: 'draft',
+          schemaObjects: [{
+            name: 'events', physicalName: '', description: '', physicalType: 'table',
+            properties: [{ ...tsColumn, timezone: 'UTC' }],
+          }],
+        } as any}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    await waitFor(() => expect(screen.getByDisplayValue('event_ts')).toBeInTheDocument())
+
+    expect((await savedColumn()).timezone).toBeUndefined()
+  })
 })

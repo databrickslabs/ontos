@@ -447,6 +447,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
           authoritativeDefinitions: convertSemanticConcepts(o.semanticConcepts),
           properties: o.properties.map(p => ({
             ...p,
+            timezone: timezoneForType(p.logicalType, (p as any).timezone),
             // Include property-level semantic assignments
             authoritativeDefinitions: convertSemanticConcepts(p.semanticConcepts)
           }))
@@ -535,6 +536,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
           authoritativeDefinitions: convertSemanticConcepts(o.semanticConcepts),
           properties: o.properties.map(p => ({
             ...p,
+            timezone: timezoneForType(p.logicalType, (p as any).timezone),
             // Include property-level semantic assignments
             authoritativeDefinitions: convertSemanticConcepts(p.semanticConcepts)
           }))

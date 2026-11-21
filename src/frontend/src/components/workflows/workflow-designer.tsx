@@ -1145,69 +1145,53 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     let cancelled = false;
     // A superseded edit load no longer clears it: a new workflow must not stay "loading"
     if (isNew) setIsLoading(false);
+    // The picker lookups depend neither on each other nor on the workflow: all start at once and
+    // each is applied when it arrives, so a slow one (UC HTTP connections) only holds up its own
+    // selector. A failed lookup is applied as `undefined`.
+    const loadLookup = <T,>(url: string, label: string, apply: (data: T | undefined) => void) => {
+      get<T>(url)
+        .then(response => apply(response.data))
+        .catch(error => {
+          console.error(`Failed to load ${label}:`, error);
+          apply(undefined);
+        });
+    };
+
     const loadData = async () => {
       // Load step types
-      try {
-        const typesResponse = await get<StepTypeSchema[]>('/api/workflows/step-types');
-        if (typesResponse.data) {
-          setStepTypes(typesResponse.data);
+      loadLookup<StepTypeSchema[]>('/api/workflows/step-types', 'step types', data => {
+        if (data) {
+          setStepTypes(data);
         }
-      } catch (error) {
-        console.error('Failed to load step types:', error);
-      }
+      });
 
       // Load trigger-type catalog (powers the grouped picker + entity-type
       // multiselect — single source of truth, mirrors the backend enum).
-      try {
-        const triggerTypesResponse = await get<TriggerTypeOption[]>('/api/workflows/trigger-types');
-        if (triggerTypesResponse.data && Array.isArray(triggerTypesResponse.data)) {
-          setTriggerTypeOptions(triggerTypesResponse.data);
+      loadLookup<TriggerTypeOption[]>('/api/workflows/trigger-types', 'trigger types', data => {
+        if (data && Array.isArray(data)) {
+          setTriggerTypeOptions(data);
         }
-      } catch (error) {
-        console.error('Failed to load trigger types:', error);
-      }
-      
+      });
+
       // Load compliance policies for policy_check step selector
-      try {
-        const policiesResponse = await get<CompliancePolicyRef[]>('/api/workflows/compliance-policies');
-        if (policiesResponse.data && Array.isArray(policiesResponse.data)) {
-          setCompliancePolicies(policiesResponse.data);
+      loadLookup<CompliancePolicyRef[]>('/api/workflows/compliance-policies', 'compliance policies', data => {
+        if (data && Array.isArray(data)) {
+          setCompliancePolicies(data);
           setCompliancePoliciesLoaded(true);
         } else {
           setCompliancePolicies([]);
         }
-      } catch (error) {
-        console.error('Failed to load compliance policies:', error);
-        setCompliancePolicies([]);
-      }
-      
-      // Load available roles for approval/notification step selectors
-      try {
-        const rolesResponse = await get<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>('/api/workflows/roles');
-        if (rolesResponse.data && Array.isArray(rolesResponse.data)) {
-          setAvailableRoles(rolesResponse.data);
-        } else {
-          setAvailableRoles([]);
-        }
-      } catch (error) {
-        console.error('Failed to load roles:', error);
-        setAvailableRoles([]);
-      }
-      
-      // Load HTTP connections for webhook step selector
-      try {
-        const connectionsResponse = await get<HttpConnectionRef[]>('/api/workflows/http-connections');
-        if (connectionsResponse.data && Array.isArray(connectionsResponse.data)) {
-          setHttpConnections(connectionsResponse.data);
-        } else {
-          setHttpConnections([]);
-        }
-      } catch (error) {
-        console.error('Failed to load HTTP connections:', error);
-        setHttpConnections([]);
-      }
+      });
 
-      if (cancelled) return;
+      // Load available roles for approval/notification step selectors
+      loadLookup<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>('/api/workflows/roles', 'roles', data => {
+        setAvailableRoles(data && Array.isArray(data) ? data : []);
+      });
+
+      // Load HTTP connections for webhook step selector
+      loadLookup<HttpConnectionRef[]>('/api/workflows/http-connections', 'HTTP connections', data => {
+        setHttpConnections(data && Array.isArray(data) ? data : []);
+      });
 
       // Load workflow if editing
       if (!isNew) {

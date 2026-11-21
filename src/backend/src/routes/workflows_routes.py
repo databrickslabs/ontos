@@ -513,8 +513,10 @@ async def get_role_by_id(
     }
 
 
+# Plain ``def``: the SDK listing blocks, so FastAPI runs it in its threadpool instead of
+# stalling the event loop (and every other request) for the duration of the UC call
 @router.get("/http-connections")
-async def list_http_connections_for_workflows(
+def list_http_connections_for_workflows(
     request: Request,
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> List[Dict[str, Any]]:

@@ -57,6 +57,8 @@ class CachingWorkspaceClient(WorkspaceClient):
         self._cache: Dict[str, Any] = {}
         self._cache_times: Dict[str, float] = {}
         self._cache_duration = 60  # 1 minute in seconds
+        # Per-key overrides: listing every UC connection takes ~1s+ and the set rarely changes
+        self._cache_durations: Dict[str, int] = {'connections.list': 300}
         self._timeout = timeout
 
     def __call__(self, timeout: int = 30):
@@ -107,7 +109,7 @@ class CachingWorkspaceClient(WorkspaceClient):
                 if (
                     key in self._cache
                     and key in self._cache_times
-                    and current_time - self._cache_times[key] < self._cache_duration
+                    and current_time - self._cache_times[key] < self._cache_durations.get(key, self._cache_duration)
                 ):
                     logger.info(f"Cache hit for {key} (age: {current_time - self._cache_times[key]:.1f}s)")
                     return self._cache[key]

@@ -128,6 +128,20 @@ describe('WorkflowDesigner overlapping loads', () => {
     expect(screen.queryByText('First step')).toBeNull();
   });
 
+  it('shows the workflow without waiting for the picker lookups', async () => {
+    // A slow lookup (UC HTTP connections) never answers: the workflow must still load
+    api.get.mockImplementation(async (url: string) => {
+      if (url === '/api/workflows/step-types') return { data: STEP_TYPES };
+      if (url === '/api/workflows/wf-1') return { data: workflowFixture('wf-1', 'First') };
+      if (url === '/api/workflows/http-connections') return new Promise(() => undefined);
+      return { data: [] };
+    });
+    renderWith('wf-1');
+
+    expect(await screen.findByPlaceholderText(/workflow name/i)).toHaveValue('First');
+    expect(api.get).toHaveBeenCalledWith('/api/workflows/http-connections');
+  });
+
   it('does not stay loading when a new workflow replaces a pending edit load', async () => {
     const held: Record<string, () => void> = {};
     holdWorkflows(held, { 'wf-1': workflowFixture('wf-1', 'First') });

@@ -23,7 +23,9 @@ from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.change_log import ChangeLogDb
-from src.db_models.metadata import DocumentMetadataDb, LinkMetadataDb, RichTextMetadataDb
+from src.db_models.metadata import (
+    DocumentMetadataDb, ImportedMarkdownFileDb, LinkMetadataDb, RichTextMetadataDb,
+)
 from src.models.costs import CostItem, CostItemCreate
 from src.models.metadata import (
     LinkCreate, MetadataAttachmentCreate, RichText, RichTextCreate,
@@ -1156,3 +1158,43 @@ def test_the_change_log_of_a_readable_assets_metadata_is_listed(
         response = client.get(url, **kwargs)
         assert response.status_code == 200, (url, response.text)
         assert response.json()['total_count'] >= 1, url
+
+
+# --- Imported Markdown documents (#1478) ---------------------------------------
+
+def _imported_document(db, asset) -> str:
+    """A Markdown document the import linked to the asset (stored text, no volume file)."""
+    path = '/Volumes/main/docs/context/orders.md'
+    doc = DocumentMetadataDb(
+        entity_type='asset', entity_id=str(asset.id), title='Orders', original_filename='orders.md',
+        content_type='text/markdown', size_bytes=5, storage_path=path, source_path=path,
+        content_hash='h1',
+    )
+    db.add(doc)
+    db.add(ImportedMarkdownFileDb(source_path=path, content_hash='h1', content_text='secret\n'))
+    db.commit()
+    return str(doc.id)
+
+
+@pytest.mark.parametrize('role', ['Data Steward', 'Data Consumer'])
+def test_an_imported_asset_document_follows_the_asset_read_rule(
+        client, db_session, asset, act_as, role):
+    """The stored text of an imported document is not served around the asset's own rule."""
+    doc_id = _imported_document(db_session, asset)
+    act_as(role)
+
+    response = client.get(f'/api/documents/{doc_id}/content')
+
+    # A row of an unreadable asset answers as an unknown row
+    assert response.status_code == 404, response.text
+    assert 'secret' not in response.text
+
+
+def test_assets_read_write_reads_an_imported_asset_document(client, db_session, asset, act_as):
+    doc_id = _imported_document(db_session, asset)
+    act_as(ASSETS_ONLY)
+
+    response = client.get(f'/api/documents/{doc_id}/content')
+
+    assert response.status_code == 200, response.text
+    assert response.text == 'secret\n'

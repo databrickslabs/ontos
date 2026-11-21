@@ -735,7 +735,9 @@ def test_imported_content_needs_read_access_to_its_entity_feature(
     assert client.get(f"/api/documents/{docs['data_domain']}/content").status_code == 200
     response = client.get(f"/api/documents/{docs['asset']}/content")
 
-    assert response.status_code == 403
+    # An asset's document of a user who can't read the asset answers as an unknown row
+    # (the asset rule of #1342, which runs before the feature check).
+    assert response.status_code == 404
     assert 'v1' not in response.text
 
 
@@ -795,7 +797,8 @@ def test_a_domain_only_import_leaves_the_text_of_asset_documents_as_it_was(
 
     docs = {d.entity_type: d.id for d in db_session.query(DocumentMetadataDb)}
     assert client.get(f"/api/documents/{docs['data_domain']}/content").text == v2
-    _add_role(db_session, {'data-domains': 'Read-only', 'assets': 'Read-only'}, 'readers')
+    # Reading an asset's documents needs the asset readable: assets Read/Write
+    _add_role(db_session, {'data-domains': 'Read-only', 'assets': 'Read/Write'}, 'readers')
     mock_test_user.groups = ['readers']
     assert client.get(f"/api/documents/{docs['asset']}/content").text == v1
 

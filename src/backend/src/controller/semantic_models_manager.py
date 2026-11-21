@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 import signal
 from contextlib import contextmanager
 import json
+import re
 import shutil
 import urllib.parse
 from filelock import FileLock
@@ -219,6 +220,25 @@ _TEXT_FILTER = (
 def _text_filter_bindings(text_filter: str) -> Dict[str, Any]:
     """The ``bindings`` for a query using ``_TEXT_FILTER`` (none for an empty text)."""
     return {'text_filter': Literal(text_filter)} if text_filter.strip() else {}
+
+
+class ConceptNameIndex:
+    """Concept IRIs by IRI, label and local name (see ``concept_name_index``)."""
+
+    def __init__(self, concepts: set, labels: Dict[str, set], local_names: Dict[str, set]):
+        self._concepts = concepts
+        self._labels = labels
+        self._local_names = local_names
+
+    def find(self, value: str) -> List[str]:
+        """The IRIs ``value`` names: the IRI itself, else by label, else by local name."""
+        value = (value or '').strip()
+        if not value:
+            return []
+        if value in self._concepts:
+            return [value]
+        needle = value.casefold()
+        return sorted(self._labels.get(needle) or self._local_names.get(needle) or ())
 
 
 @searchable_asset
@@ -4611,6 +4631,35 @@ class SemanticModelsManager(SearchableAsset):
             "source_file": source_file,
             "owners": owners,
         }
+
+    def find_concept_iris(self, value: str) -> List[str]:
+        """IRIs of the concepts (OWL/RDFS classes, SKOS concepts) ``value`` names.
+
+        ``value`` is an IRI, a label (``skos:prefLabel`` / ``rdfs:label``), or,
+        when no label matches, the IRI's local name; names compare
+        case-insensitively. Several IRIs mean the name is ambiguous. To look up
+        many names, build ``concept_name_index()`` once and call its ``find``.
+        """
+        return self.concept_name_index().find(value)
+
+    def concept_name_index(self) -> 'ConceptNameIndex':
+        """The concepts by IRI, label and local name, from one pass over the graph."""
+        concept_types = (OWL.Class, RDFS.Class, SKOS.Concept)
+        concepts = {
+            str(subject)
+            for kind in concept_types
+            for subject in self._graph.subjects(RDF.type, kind)
+            if isinstance(subject, URIRef)
+        }
+        labels: Dict[str, set] = {}
+        for predicate in (SKOS.prefLabel, RDFS.label):
+            for subject, label in self._graph.subject_objects(predicate):
+                if isinstance(label, Literal) and str(subject) in concepts:
+                    labels.setdefault(str(label).strip().casefold(), set()).add(str(subject))
+        local_names: Dict[str, set] = {}
+        for iri in concepts:
+            local_names.setdefault(re.split(r'[#/:]', iri)[-1].casefold(), set()).add(iri)
+        return ConceptNameIndex(concepts, labels, local_names)
 
     def get_concept(self, concept_iri: str) -> Optional[Dict[str, Any]]:
         """Get a concept by IRI with all its properties and governance info."""

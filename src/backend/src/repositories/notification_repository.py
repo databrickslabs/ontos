@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from typing import Any, Dict, FrozenSet, Union, Optional, List
 import json # For handling JSON strings
@@ -43,22 +42,10 @@ def _is_actionable():
     )
 
 
-# The only action type whose decisions have always written the ``handled`` marker
-APPROVAL_ACTION_TYPE = 'workflow_approval'
-
-
 # The JSON whitespace characters, also what the recipient match strips (Python's strip() in
 # NotificationsManager strips them too; it also strips \v, \f and Unicode spaces, which no
 # recipient written by the app carries)
 WHITESPACE = (' ', '\t', '\n', '\r')
-
-# Rows created before this instant count as decided once read, for every action type but
-# approvals. Older builds recorded a decided request only as read; this fix (#1526) has every
-# request decision write the ``handled`` marker, so a request created from this instant on is
-# decided only by the marker, and one that was merely opened in the bell stays pending. A
-# request that an older build (still running after this date) decided stays in My actions, as
-# it did before the fix; it is never dropped.
-LEGACY_READ_DECIDED_BEFORE = datetime(2026, 11, 20, tzinfo=timezone.utc)
 
 
 def _without_json_whitespace(column):
@@ -82,21 +69,13 @@ def _is_decided():
     """Decided: the ``handled`` marker that approval and request decisions write into
     ``action_payload``, or a delivery's ``completed`` marker, with any JSON spacing.
 
-    ``read`` also decides a legacy row (created before ``LEGACY_READ_DECIDED_BEFORE``) of any
-    action type but approvals: before every request decision wrote the marker, ``read`` was the
-    only record of a decided request. A newer row needs the marker, since the bell sets ``read``
-    on click, so a request that was only opened stays pending. An approval's decision has always
-    written ``handled``, so a read approval without the marker is pending whatever its age.
+    ``read`` alone does not decide: the bell sets it on click, so a request that was only
+    opened stays pending. Older builds recorded a decided request only as read; migration
+    ``s3_notifications_read_requests_handled`` gave those rows the ``handled`` marker at the
+    upgrade (#1527 review).
     """
     payload = _without_json_whitespace(func.coalesce(NotificationDb.action_payload, ''))
-    return or_(
-        payload.contains('"handled":true'), payload.contains('"completed":true'),
-        and_(
-            NotificationDb.read.is_(True),
-            NotificationDb.action_type != APPROVAL_ACTION_TYPE,
-            NotificationDb.created_at < LEGACY_READ_DECIDED_BEFORE,
-        ),
-    )
+    return or_(payload.contains('"handled":true'), payload.contains('"completed":true'))
 
 
 def _is_pending_actionable():

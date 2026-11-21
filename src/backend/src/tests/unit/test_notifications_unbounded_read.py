@@ -223,20 +223,18 @@ class TestPendingIsSemantic:
         assert len(listed) == BELL_HISTORY_LIMIT
 
 
-    def test_a_request_read_before_the_handled_marker_existed_is_history(
-        self, db_session: Session,
-    ):
-        # Before the shared handle path wrote ``handled``, deciding a request set only read
+    def test_a_request_only_read_is_pending_whatever_its_age(self, db_session: Session):
+        # Read alone no longer decides: migration s3 gave the requests older builds decided
+        # (read only) the handled marker at the upgrade (#1527 review)
         _insert(db_session, _history())
-        legacy = _row(type='action_required', title='Role request', recipient='ana@example.com',
+        opened = _row(type='action_required', title='Role request', recipient='ana@example.com',
                       action_type='handle_role_request', read=True, created_at=OLD,
                       action_payload=json.dumps({'requester_email': 'bob@example.com'}))
-        _insert(db_session, [legacy])
+        _insert(db_session, [opened])
 
         listed = _manager().get_notifications(db_session, ANA)
 
-        assert legacy['id'] not in [n.id for n in listed]
-        assert len(listed) == BELL_HISTORY_LIMIT
+        assert opened['id'] in [n.id for n in listed]
 
     def test_an_unread_request_without_the_marker_is_still_pending(self, db_session: Session):
         _insert(db_session, _history())
@@ -458,12 +456,12 @@ REQUEST_ACTION_TYPES = (
     'handle_status_change_request', 'handle_product_status_change',
     'handle_access_grant_request', 'handle_role_request', 'handle_job_enable_request',
 )
-AFTER_CUTOFF = datetime(2026, 11, 21, 12, 0, 0)
+LATER = datetime(2026, 11, 21, 12, 0, 0)
 
 
 def _newer_history(count: int = BELL_HISTORY_LIMIT + 100) -> list:
-    """Informational rows for ana, newer than AFTER_CUTOFF: more than the history holds."""
-    start = AFTER_CUTOFF + timedelta(days=1)
+    """Informational rows for ana, newer than LATER: more than the history holds."""
+    start = LATER + timedelta(days=1)
     return [
         _row(recipient='ana@example.com', title=f'Later {i}',
              created_at=start + timedelta(minutes=i))
@@ -479,16 +477,17 @@ def _request(action_type: str, **fields) -> dict:
     })
 
 
-class TestReadDecidesOnlyLegacyRequests:
-    """``read`` decides a request only when the row predates the ``handled`` marker
-    (LEGACY_READ_DECIDED_BEFORE); a newer request that was only opened stays (#1527 review)."""
+class TestReadAloneNeverDecidesARequest:
+    """Only the ``handled`` marker decides a request: a request that was only opened in the
+    bell stays pending, whatever its age, with no date cutoff (#1527 review)."""
 
+    @pytest.mark.parametrize('created_at', [OLD, LATER], ids=['old', 'recent'])
     @pytest.mark.parametrize('action_type', REQUEST_ACTION_TYPES)
     def test_an_opened_undecided_request_survives_500_newer_history_rows(
-        self, db_session: Session, action_type: str,
+        self, db_session: Session, action_type: str, created_at: datetime,
     ):
         _insert(db_session, _newer_history())
-        opened = _request(action_type, read=True, created_at=AFTER_CUTOFF)
+        opened = _request(action_type, read=True, created_at=created_at)
         _insert(db_session, [opened])
 
         listed = _manager().get_notifications(db_session, ANA)
@@ -496,29 +495,18 @@ class TestReadDecidesOnlyLegacyRequests:
         assert opened['id'] in [n.id for n in listed]
         assert len([n for n in listed if n.title.startswith('Later')]) == BELL_HISTORY_LIMIT
 
-    def test_a_new_request_with_the_marker_is_history(self, db_session: Session):
+    @pytest.mark.parametrize('created_at', [OLD, LATER], ids=['old', 'recent'])
+    def test_a_request_with_the_marker_is_history(
+        self, db_session: Session, created_at: datetime,
+    ):
         _insert(db_session, _newer_history())
-        decided = _request('handle_role_request', read=True, created_at=AFTER_CUTOFF,
+        decided = _request('handle_role_request', read=True, created_at=created_at,
                            action_payload=json.dumps({'request_id': 'r-1', 'handled': True}))
         _insert(db_session, [decided])
 
         listed = _manager().get_notifications(db_session, ANA)
 
         assert decided['id'] not in [n.id for n in listed]
-
-    def test_the_cutoff_is_exclusive_for_the_legacy_rule(self, db_session: Session):
-        from src.repositories.notification_repository import LEGACY_READ_DECIDED_BEFORE
-        cutoff = LEGACY_READ_DECIDED_BEFORE.replace(tzinfo=None)
-        _insert(db_session, _newer_history())
-        before = _request('handle_role_request', read=True, title='Before',
-                          created_at=cutoff - timedelta(seconds=1))
-        at = _request('handle_role_request', read=True, title='At', created_at=cutoff)
-        _insert(db_session, [before, at])
-
-        listed = [n.id for n in _manager().get_notifications(db_session, ANA)]
-
-        assert before['id'] not in listed
-        assert at['id'] in listed
 
 
 class TestRecipientWhitespace:

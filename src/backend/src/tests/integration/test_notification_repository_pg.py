@@ -1,33 +1,37 @@
 """Local-Postgres integration test for the notification list's SQL (#1526, #1527 review).
 
 The unit and integration suites run on SQLite. ``NotificationRepository.get_addressed_to``
-relies on ``replace``, ``LIKE``, ``lower``, a ``timestamptz`` comparison with the legacy
-cutoff and an ``ORDER BY ... LIMIT``; this module runs that SQL on Postgres and **auto-skips**
-when no database is configured, so it is safe in CI.
+relies on ``replace``, ``LIKE``, ``lower`` and an ``ORDER BY ... LIMIT``; this module runs
+that SQL, and the s3 migration that marks the read requests handled, on Postgres and
+**auto-skips** when no database is configured, so it is safe in CI.
 
 To run it, point it at a throwaway Postgres via ``NOTIFICATIONS_TEST_PG_URL``::
 
     NOTIFICATIONS_TEST_PG_URL=postgresql+psycopg2://user:pw@localhost:5432/db \\
         hatch -e dev run pytest src/tests/integration/test_notification_repository_pg.py
 """
+import importlib.util
 import json
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from src.db_models.notifications import NotificationDb
-from src.repositories.notification_repository import (
-    LEGACY_READ_DECIDED_BEFORE, RecipientKeys, notification_repo,
-)
+from src.repositories.notification_repository import RecipientKeys, notification_repo
 
 _PG_URL = os.environ.get("NOTIFICATIONS_TEST_PG_URL")
 HISTORY = 5
 ANA = RecipientKeys(identities=frozenset({'ana@example.com'}))
-AFTER = LEGACY_READ_DECIDED_BEFORE + timedelta(days=1)
+AFTER = datetime(2026, 11, 21, 12, 0, tzinfo=timezone.utc)
+OLD = datetime(2020, 1, 1, 12, 0, tzinfo=timezone.utc)
+_MIGRATION = 's3_notifications_read_requests_handled'
 
 
 def _check_pg_or_skip():
@@ -98,16 +102,43 @@ def _listed(db) -> list:
     return [n.id for n in notification_repo.get_addressed_to(db, keys=ANA, history_limit=HISTORY)]
 
 
-def test_read_decides_a_request_only_before_the_cutoff(pg_session):
+def test_read_alone_never_decides_a_request(pg_session):
     _insert(pg_session, _history())
-    legacy = _request(read=True, created_at=LEGACY_READ_DECIDED_BEFORE - timedelta(seconds=1))
-    opened = _request(read=True, created_at=LEGACY_READ_DECIDED_BEFORE)
-    _insert(pg_session, [legacy, opened])
+    rows = [_request(read=True, created_at=at) for at in (OLD, AFTER)]
+    _insert(pg_session, rows)
 
     listed = _listed(pg_session)
 
-    assert legacy['id'] not in listed
-    assert opened['id'] in listed
+    assert all(row['id'] in listed for row in rows)
+
+
+def _migration():
+    path = Path(__file__).resolve().parents[3] / 'alembic' / 'versions' / f'{_MIGRATION}.py'
+    spec = importlib.util.spec_from_file_location(_MIGRATION, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_migration_marks_the_read_requests_handled_on_postgres(pg_session):
+    _insert(pg_session, _history())
+    read_request = _request(read=True, created_at=OLD)
+    unread_request = _request(created_at=OLD)
+    read_approval = _request(read=True, action_type='workflow_approval', created_at=OLD,
+                             action_payload=json.dumps({'execution_id': 'e-1'}))
+    _insert(pg_session, [read_request, unread_request, read_approval])
+
+    with Operations.context(MigrationContext.configure(pg_session.connection())):
+        _migration().upgrade()
+    pg_session.flush()
+
+    listed = _listed(pg_session)
+    stored = pg_session.get(NotificationDb, read_request['id'])
+    pg_session.refresh(stored)
+    assert json.loads(stored.action_payload) == {'request_id': 'r-1', 'handled': True}
+    assert read_request['id'] not in listed
+    assert unread_request['id'] in listed
+    assert read_approval['id'] in listed
 
 
 def test_the_markers_match_whatever_the_json_spacing(pg_session):

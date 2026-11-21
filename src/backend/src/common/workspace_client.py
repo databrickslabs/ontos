@@ -7,6 +7,15 @@ from typing import Any, Callable, Dict, NoReturn, Optional
 
 from databricks import sql
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.errors import (
+    DatabricksError,
+    DeadlineExceeded,
+    InternalError,
+    RequestLimitExceeded,
+    ResourceExhausted,
+    TemporarilyUnavailable,
+    TooManyRequests,
+)
 from fastapi import Depends, Header, Request
 from typing import Optional as OptionalType
 
@@ -52,6 +61,32 @@ def _get_token_hash(token: str) -> str:
 
 class TimeoutError(Exception):
     """Exception raised when a function times out."""
+
+# SDK failures worth riding out with the last good result, for at most _STALE_MAX_AGE seconds
+_TRANSIENT_SDK_ERRORS = (
+    DeadlineExceeded,
+    InternalError,
+    RequestLimitExceeded,
+    ResourceExhausted,
+    TemporarilyUnavailable,
+    TooManyRequests,
+)
+_STALE_MAX_AGE = 300
+
+
+def _is_transient(error: Exception) -> bool:
+    """Whether a failed listing may fall back to stale cached data.
+
+    Anything else (permission revoked, auth failure, bad request) must surface instead of
+    serving a listing the user may no longer be allowed to see. ``DatabricksError`` derives
+    from ``OSError``, so SDK errors are classified before the network-error check.
+    """
+    if isinstance(error, DatabricksError):
+        return isinstance(error, _TRANSIENT_SDK_ERRORS)
+    # Network failures (requests' exceptions and the builtin TimeoutError are OSErrors) and
+    # this module's TimeoutError
+    return isinstance(error, (OSError, TimeoutError))
+
 
 class CachingWorkspaceClient(WorkspaceClient):
     def __init__(self, client: WorkspaceClient, timeout: int = 30):
@@ -100,9 +135,7 @@ class CachingWorkspaceClient(WorkspaceClient):
              logger.error(f"Error during API call in _make_api_call: {e}")
              raise # Re-raise the original exception
 
-    def _cache_result(self, key: str, ttl: Optional[int] = None) -> Callable:
-        duration = self._cache_duration if ttl is None else ttl
-
+    def _cache_result(self, key: str) -> Callable:
         def decorator(func: Callable) -> Callable:
             @wraps(func)
             def wrapper(*args, **kwargs):
@@ -111,7 +144,7 @@ class CachingWorkspaceClient(WorkspaceClient):
                 if (
                     key in self._cache
                     and key in self._cache_times
-                    and current_time - self._cache_times[key] < duration
+                    and current_time - self._cache_times[key] < self._cache_duration
                 ):
                     logger.info(f"Cache hit for {key} (age: {current_time - self._cache_times[key]:.1f}s)")
                     return self._cache[key]
@@ -123,19 +156,15 @@ class CachingWorkspaceClient(WorkspaceClient):
                     self._cache[key] = result
                     self._cache_times[key] = current_time
                     return result
-                except TimeoutError as e:
-                    logger.error(f"Timeout while fetching {key}: {e}")
-                    # Return cached data if available, even if expired
-                    if key in self._cache:
-                        logger.warning(f"Returning stale cached data for {key}")
-                        return self._cache[key]
-                    raise
                 except Exception as e:
                     logger.error(f"Error fetching {key}: {e}")
-                    # Return cached data if available, even if expired
-                    if key in self._cache:
-                        logger.warning(f"Returning stale cached data for {key}")
+                    age = current_time - self._cache_times.get(key, current_time)
+                    if _is_transient(e) and key in self._cache and age < _STALE_MAX_AGE:
+                        logger.warning(f"Returning stale cached data for {key} (age: {age:.1f}s)")
                         return self._cache[key]
+                    # Not transient, or too old to stand in: the next call must try again
+                    self._cache.pop(key, None)
+                    self._cache_times.pop(key, None)
                     raise
             return wrapper
         return decorator
@@ -160,8 +189,7 @@ class CachingWorkspaceClient(WorkspaceClient):
                 self._parent = parent
 
             def list(self):
-                # Listing every UC connection takes ~1s+ and the set rarely changes
-                return self._parent._cache_result('connections.list', ttl=300)(
+                return self._parent._cache_result('connections.list')(
                     lambda: list(self._parent._client.connections.list())
                 )()
 

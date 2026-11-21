@@ -170,6 +170,41 @@ describe('WorkflowDesigner overlapping loads', () => {
       expect(container.querySelector('.react-flow__node')?.parentElement?.textContent).toContain('Data Stewards'));
   });
 
+  it('keeps an edited workflow loading until the step types are in', async () => {
+    let releaseStepTypes: () => void = () => undefined;
+    api.get.mockImplementation(async (url: string) => {
+      if (url === '/api/workflows/step-types') {
+        await new Promise<void>(resolve => { releaseStepTypes = resolve; });
+        return { data: STEP_TYPES };
+      }
+      if (url === '/api/workflows/wf-1') return { data: workflowFixture('wf-1', 'First') };
+      return { data: [] };
+    });
+    renderWith('wf-1');
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/wf-1'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    expect(screen.queryByPlaceholderText(/workflow name/i)).toBeNull(); // spinner
+
+    await act(async () => { releaseStepTypes(); });
+    expect(await screen.findByPlaceholderText(/workflow name/i)).toHaveValue('First');
+  });
+
+  it('still fetches approver roles per entity when the base role list fails', async () => {
+    api.get.mockImplementation(async (url: string) => {
+      if (url === '/api/workflows/step-types') return { data: STEP_TYPES };
+      if (url === '/api/workflows/roles') throw new Error('roles down');
+      if (url === '/api/workflows/wf-1') {
+        const workflow = workflowFixture('wf-1', 'First');
+        return { data: { ...workflow, trigger: { type: 'on_create', entity_types: ['data_product'] } } };
+      }
+      return { data: [] };
+    });
+    renderWith('wf-1');
+
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/api/workflows/roles?approval_entity=PRODUCTS'));
+  });
+
   it('lists UC HTTP connections only once a webhook step is opened', async () => {
     api.get.mockImplementation(async (url: string) => ({
       data: url === '/api/workflows/step-types' ? [...STEP_TYPES, WEBHOOK_STEP_TYPE] : [],
@@ -191,6 +226,30 @@ describe('WorkflowDesigner overlapping loads', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Webhook' }));
     await screen.findByRole('dialog');
     await waitFor(() => expect(connectionCalls()).toBe(1));
+  });
+
+  it('lists UC HTTP connections again on the next webhook step after a failure', async () => {
+    api.get.mockImplementation(async (url: string) => {
+      if (url === '/api/workflows/http-connections') throw new Error('UC down');
+      return { data: url === '/api/workflows/step-types' ? [...STEP_TYPES, WEBHOOK_STEP_TYPE] : [] };
+    });
+    render(
+      <MemoryRouter initialEntries={['/workflows/new?type=process']}>
+        <WorkflowDesigner workflowId="new" />
+      </MemoryRouter>,
+    );
+    const connectionCalls = () =>
+      api.get.mock.calls.filter(([url]) => url === '/api/workflows/http-connections').length;
+    const addAndClose = async (label: string) => {
+      fireEvent.click(await screen.findByRole('button', { name: label }));
+      fireEvent.click(within(await screen.findByRole('dialog')).getByTestId('step-config-done'));
+    };
+
+    await addAndClose('Webhook');
+    await waitFor(() => expect(connectionCalls()).toBe(1));
+    await addAndClose('Conditional');
+    await addAndClose('Webhook');
+    await waitFor(() => expect(connectionCalls()).toBe(2));
   });
 
   it('does not stay loading when a new workflow replaces a pending edit load', async () => {

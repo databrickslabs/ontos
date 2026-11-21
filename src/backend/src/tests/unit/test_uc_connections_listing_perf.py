@@ -8,7 +8,13 @@ from unittest.mock import MagicMock
 
 import pytest
 import requests
-from databricks.sdk.errors import PermissionDenied, TemporarilyUnavailable, Unauthenticated
+from databricks.sdk.errors import (
+    DatabricksError,
+    NotFound,
+    PermissionDenied,
+    TemporarilyUnavailable,
+    Unauthenticated,
+)
 
 from src.common import workspace_client as wc
 from src.common.workspace_client import CachingWorkspaceClient
@@ -49,6 +55,7 @@ def test_connections_listing_is_cached_for_a_minute(clock):
 
 @pytest.mark.parametrize("error", [
     TemporarilyUnavailable("busy"),
+    DatabricksError("502 Bad Gateway"),  # unmapped status
     requests.exceptions.ConnectionError("reset"),
     wc.TimeoutError("slow"),
 ])
@@ -60,7 +67,9 @@ def test_transient_failure_returns_recent_stale_listing(clock, error):
     assert client.connections.list() == CACHED
 
 
-@pytest.mark.parametrize("error", [PermissionDenied("revoked"), Unauthenticated("expired")])
+@pytest.mark.parametrize("error", [
+    PermissionDenied("revoked"), Unauthenticated("expired"), NotFound("gone"),
+])
 def test_non_transient_failure_raises_and_drops_the_cache(clock, error):
     client, inner = _primed_client()
     clock[0] += 120
@@ -81,6 +90,19 @@ def test_transient_failure_does_not_serve_a_listing_older_than_the_stale_limit(c
 
     with pytest.raises(TemporarilyUnavailable):
         client.connections.list()
+
+
+def test_entry_evicted_by_another_thread_is_still_returned(clock):
+    # Another thread drops the entry between this call's cache read and its stale fallback
+    client, inner = _primed_client()
+    clock[0] += 120
+
+    def evict_then_fail():
+        client.clear_cache('connections.list')
+        raise TemporarilyUnavailable("busy")
+
+    inner.connections.list.side_effect = evict_then_fail
+    assert client.connections.list() == CACHED
 
 
 def test_http_connection_routes_run_in_the_threadpool():

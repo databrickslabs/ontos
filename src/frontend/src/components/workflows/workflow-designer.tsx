@@ -875,6 +875,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [isSaving, setIsSaving] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [_stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
+  // Step-config validation needs the schemas: an edited workflow isn't shown before they're in
+  const [stepTypesLoaded, setStepTypesLoaded] = useState(false);
   // Step whose config blocked the last save; its form shows the missing field.
   const [invalidStepId, setInvalidStepId] = useState<string | null>(null);
   // Errors and warnings of the last Check, with the draft (draftKey) it checked
@@ -892,6 +894,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     [compliancePolicies, compliancePoliciesLoaded],
   );
   const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>([]);
+  const [availableRolesLoaded, setAvailableRolesLoaded] = useState(false);
   // approverRoles is the approval-entity-filtered subset of availableRoles used
   // specifically in the Approvers (Role) picker. It is re-computed whenever
   // entityTypes changes so the dropdown tracks the trigger configuration.
@@ -1164,6 +1167,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     // Load step types
     loadLookup<StepTypeSchema[]>('/api/workflows/step-types', 'step types', data => {
       if (data) setStepTypes(data);
+      setStepTypesLoaded(true);
     });
 
     // Load trigger-type catalog (powers the grouped picker + entity-type
@@ -1181,6 +1185,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     // Load available roles for approval/notification step selectors
     loadLookup<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>('/api/workflows/roles', 'roles', data => {
       setAvailableRoles(data ?? []);
+      setAvailableRolesLoaded(true);
     });
 
     const loadData = async () => {
@@ -1299,12 +1304,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       return;
     }
 
-    // The base role list loads in parallel with the workflow: fetching before it arrives would
-    // repeat every per-entity request once it does (roles approving an entity ⊆ all roles)
-    if (availableRoles.length === 0) {
-      setApproverRoles([]);
-      return;
-    }
+    // The base role list loads in parallel with the workflow: fetching before it has answered
+    // would repeat every per-entity request once it does. A failed list still counts as answered.
+    if (!availableRolesLoaded) return;
 
     let cancelled = false;
 
@@ -1342,7 +1344,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
     fetchIntersection();
     return () => { cancelled = true; };
-  }, [entityTypes, availableRoles, get]);
+  }, [entityTypes, availableRoles, availableRolesLoaded, get]);
 
   // Update node data when rolesMap changes, or when a loaded workflow replaces the nodes
   useEffect(() => {
@@ -1815,10 +1817,12 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       .catch(error => {
         console.error('Failed to load HTTP connections:', error);
         setHttpConnections([]);
+        // Opening a webhook step again retries
+        httpConnectionsRequested.current = false;
       });
   }, [webhookStepOpen, get]);
 
-  if (isLoading) {
+  if (isLoading || (!isNew && !stepTypesLoaded)) {
     return (
       <div className="py-6 space-y-4 h-[calc(100vh-120px)] flex flex-col">
         <WorkflowCanvasSkeleton showSidebar height="flex-1" />

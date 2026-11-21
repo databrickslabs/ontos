@@ -59,4 +59,11 @@ describe('timezone by logical type', () => {
     expect(timezoneForType('date', '  ')).toBeUndefined()
     expect(timezoneForType('date', true)).toBeUndefined()
   })
+
+  it.each(['string', 'integer', 'number', 'boolean', 'array', 'object', undefined])(
+    'keeps no timezone on %s', (logicalType) => {
+      expect(timezoneForType(logicalType, 'UTC')).toBeUndefined()
+      expect(timezoneForType(logicalType, true)).toBeUndefined()
+    },
+  )
 })

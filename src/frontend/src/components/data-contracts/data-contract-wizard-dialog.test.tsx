@@ -513,4 +513,16 @@ describe('DataContractWizardDialog Schema Inference', () => {
 
     expect((await savedColumn()).timezone).toBeUndefined()
   })
+
+  it('drops a zone name when a date column changes to string', async () => {
+    renderSaving([{ ...tsColumn, name: 'day', logicalType: 'date' }])
+    await waitFor(() => expect(screen.getByDisplayValue('day')).toBeInTheDocument())
+    fireEvent.change(
+      screen.getByPlaceholderText('UTC, America/New_York'), { target: { value: 'UTC' } },
+    )
+
+    fireEvent.click(screen.getAllByRole('option', { name: 'string' })[0])
+
+    expect((await savedColumn()).timezone).toBeUndefined()
+  })
 })

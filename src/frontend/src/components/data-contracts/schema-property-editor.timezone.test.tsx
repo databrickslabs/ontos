@@ -71,4 +71,10 @@ describe('SchemaPropertyEditor timezone', () => {
     expect(screen.queryByRole('checkbox', { name: 'Timezone' })).not.toBeInTheDocument()
     expect(saved(onChange).timezone).toBe('UTC')
   })
+
+  it('drops a zone name left on a column whose type takes no timezone', () => {
+    const onChange = openColumn(column('string', 'UTC'))
+
+    expect(saved(onChange).timezone).toBeUndefined()
+  })
 })

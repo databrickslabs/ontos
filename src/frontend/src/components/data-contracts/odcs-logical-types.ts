@@ -63,7 +63,7 @@ export function takesTimezoneFlag(logicalType?: string): boolean {
 /**
  * The `timezone` value a column of this logical type keeps: a trimmed string on a
  * date, a boolean on timestamp and time (a zone name there is dropped, it isn't
- * valid ODCS), anything else as it is.
+ * valid ODCS), nothing on any other type.
  */
 export function timezoneForType(
   logicalType: string | undefined, value: unknown,
@@ -72,5 +72,5 @@ export function timezoneForType(
     return typeof value === 'string' ? value.trim() || undefined : undefined
   }
   if (takesTimezoneFlag(logicalType)) return typeof value === 'boolean' ? value : undefined
-  return typeof value === 'string' ? value.trim() || undefined : (value as boolean | undefined)
+  return undefined
 }

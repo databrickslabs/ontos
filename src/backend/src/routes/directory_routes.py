@@ -153,8 +153,9 @@ async def update_settings(
     return manager.get_status(db)
 
 
+# Plain ``def`` so the blocking SDK listing runs in FastAPI's threadpool (see workflows_routes)
 @router.get("/uc-http-connections")
-async def list_uc_http_connections(
+def list_uc_http_connections(
     request: Request,
     _: bool = Depends(PermissionChecker("settings-directory", FeatureAccessLevel.READ_WRITE)),
 ) -> List[dict]:

@@ -26,7 +26,7 @@ def _apply(conn, step):
 
 
 def test_upgrade_clears_the_flag_only_on_rows_stored_on_an_entity(tmp_path, migration):
-    assert migration.down_revision == 'o2_step_execution_message'
+    assert migration.down_revision == 's2_document_markdown_import'
     engine = create_engine(f"sqlite:///{tmp_path / 'o3.db'}")
     with engine.begin() as conn:
         for table in _TABLES:

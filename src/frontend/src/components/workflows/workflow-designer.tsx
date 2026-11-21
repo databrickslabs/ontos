@@ -896,7 +896,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   // specifically in the Approvers (Role) picker. It is re-computed whenever
   // entityTypes changes so the dropdown tracks the trigger configuration.
   const [approverRoles, setApproverRoles] = useState<typeof availableRoles>([]);
-  const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
+  // null until the first webhook step is opened: most workflows have none and listing UC
+  // connections is slow, so they are fetched on demand, once per designer
+  const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[] | null>(null);
+  const httpConnectionsRequested = useRef(false);
   const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [showRearrangeDialog, setShowRearrangeDialog] = useState(false);
@@ -1146,53 +1149,41 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     // A superseded edit load no longer clears it: a new workflow must not stay "loading"
     if (isNew) setIsLoading(false);
     // The picker lookups depend neither on each other nor on the workflow: all start at once and
-    // each is applied when it arrives, so a slow one (UC HTTP connections) only holds up its own
-    // selector. A failed lookup is applied as `undefined`.
-    const loadLookup = <T,>(url: string, label: string, apply: (data: T | undefined) => void) => {
+    // each is applied when it arrives, so a slow one only holds up its own selector. A failed or
+    // non-list response is applied as `undefined`; a superseded run's results are dropped. HTTP
+    // connections are loaded only when a webhook step is opened (see below).
+    const loadLookup = <T extends unknown[]>(url: string, label: string, apply: (data: T | undefined) => void) => {
       get<T>(url)
-        .then(response => apply(response.data))
+        .then(response => { if (!cancelled) apply(Array.isArray(response.data) ? response.data : undefined); })
         .catch(error => {
           console.error(`Failed to load ${label}:`, error);
-          apply(undefined);
+          if (!cancelled) apply(undefined);
         });
     };
 
+    // Load step types
+    loadLookup<StepTypeSchema[]>('/api/workflows/step-types', 'step types', data => {
+      if (data) setStepTypes(data);
+    });
+
+    // Load trigger-type catalog (powers the grouped picker + entity-type
+    // multiselect — single source of truth, mirrors the backend enum).
+    loadLookup<TriggerTypeOption[]>('/api/workflows/trigger-types', 'trigger types', data => {
+      if (data) setTriggerTypeOptions(data);
+    });
+
+    // Load compliance policies for policy_check step selector
+    loadLookup<CompliancePolicyRef[]>('/api/workflows/compliance-policies', 'compliance policies', data => {
+      setCompliancePolicies(data ?? []);
+      if (data) setCompliancePoliciesLoaded(true);
+    });
+
+    // Load available roles for approval/notification step selectors
+    loadLookup<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>('/api/workflows/roles', 'roles', data => {
+      setAvailableRoles(data ?? []);
+    });
+
     const loadData = async () => {
-      // Load step types
-      loadLookup<StepTypeSchema[]>('/api/workflows/step-types', 'step types', data => {
-        if (data) {
-          setStepTypes(data);
-        }
-      });
-
-      // Load trigger-type catalog (powers the grouped picker + entity-type
-      // multiselect — single source of truth, mirrors the backend enum).
-      loadLookup<TriggerTypeOption[]>('/api/workflows/trigger-types', 'trigger types', data => {
-        if (data && Array.isArray(data)) {
-          setTriggerTypeOptions(data);
-        }
-      });
-
-      // Load compliance policies for policy_check step selector
-      loadLookup<CompliancePolicyRef[]>('/api/workflows/compliance-policies', 'compliance policies', data => {
-        if (data && Array.isArray(data)) {
-          setCompliancePolicies(data);
-          setCompliancePoliciesLoaded(true);
-        } else {
-          setCompliancePolicies([]);
-        }
-      });
-
-      // Load available roles for approval/notification step selectors
-      loadLookup<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>('/api/workflows/roles', 'roles', data => {
-        setAvailableRoles(data && Array.isArray(data) ? data : []);
-      });
-
-      // Load HTTP connections for webhook step selector
-      loadLookup<HttpConnectionRef[]>('/api/workflows/http-connections', 'HTTP connections', data => {
-        setHttpConnections(data && Array.isArray(data) ? data : []);
-      });
-
       // Load workflow if editing
       if (!isNew) {
         setIsLoading(true);
@@ -1241,8 +1232,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
               steps: loadedSteps.map(s => ({ ...s })),
             });
             
-            // Convert to flow elements - rolesMap will be empty initially, but nodes will be updated
-            // when availableRoles loads (via updateNodesWithRoles effect)
+            // Convert to flow elements - rolesMap is filled in by the rolesMap effect below, which
+            // also re-runs for a newly loaded workflow (roles may have arrived first)
             const { nodes: flowNodes, edges: flowEdges } = workflowToElements(response.data, {}, t);
             setNodes(flowNodes);
             setEdges(flowEdges);
@@ -1308,6 +1299,13 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       return;
     }
 
+    // The base role list loads in parallel with the workflow: fetching before it arrives would
+    // repeat every per-entity request once it does (roles approving an entity ⊆ all roles)
+    if (availableRoles.length === 0) {
+      setApproverRoles([]);
+      return;
+    }
+
     let cancelled = false;
 
     const fetchIntersection = async () => {
@@ -1346,7 +1344,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     return () => { cancelled = true; };
   }, [entityTypes, availableRoles, get]);
 
-  // Update node data when rolesMap changes
+  // Update node data when rolesMap changes, or when a loaded workflow replaces the nodes
   useEffect(() => {
     if (Object.keys(rolesMap).length > 0) {
       setNodes(prevNodes => prevNodes.map(node => {
@@ -1357,7 +1355,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         };
       }));
     }
-  }, [rolesMap, setNodes]);
+  }, [rolesMap, workflow, setNodes]);
 
   // Keep the canvas trigger node in sync with the trigger picker state.
   // Without this the node renders only the initial default (on_create / table)
@@ -1806,6 +1804,19 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     if (!selectedNodeId || selectedNodeId === 'trigger') return null;
     return steps.find(s => s.step_id === selectedNodeId);
   }, [selectedNodeId, steps]);
+
+  // Load HTTP connections for the webhook step selector the first time one is opened
+  const webhookStepOpen = selectedStep?.step_type === 'webhook';
+  useEffect(() => {
+    if (!webhookStepOpen || httpConnectionsRequested.current) return;
+    httpConnectionsRequested.current = true;
+    get<HttpConnectionRef[]>('/api/workflows/http-connections')
+      .then(response => setHttpConnections(Array.isArray(response.data) ? response.data : []))
+      .catch(error => {
+        console.error('Failed to load HTTP connections:', error);
+        setHttpConnections([]);
+      });
+  }, [webhookStepOpen, get]);
 
   if (isLoading) {
     return (
@@ -2931,7 +2942,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                 <SelectValue placeholder={t('workflows:designer.webhook.selectConnection')} />
                               </SelectTrigger>
                               <SelectContent>
-                                {httpConnections.length === 0 ? (
+                                {httpConnections === null ? (
+                                  <div className="px-2 py-3 text-sm text-muted-foreground">
+                                    {t('common:states.loading')}
+                                  </div>
+                                ) : httpConnections.length === 0 ? (
                                   <div className="px-2 py-3 text-sm text-muted-foreground">
                                     {t('workflows:designer.webhook.noConnections')}
                                   </div>

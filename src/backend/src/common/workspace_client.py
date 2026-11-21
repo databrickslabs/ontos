@@ -35,13 +35,15 @@ def _cleanup_client_cache():
         return
 
     _LAST_CLEANUP_TIME = current_time
+    # Snapshot + pop: sync routes/dependencies call this from FastAPI's threadpool, so another
+    # thread may add or remove entries meanwhile
     stale_keys = [
-        key for key, (_, _, last_access) in _CLIENT_CACHE.items()
+        key for key, (_, _, last_access) in list(_CLIENT_CACHE.items())
         if current_time - last_access > _CACHE_MAX_AGE
     ]
 
     for key in stale_keys:
-        del _CLIENT_CACHE[key]
+        _CLIENT_CACHE.pop(key, None)
         logger.info(f"Cleaned up stale workspace client for user: {key}")
 
 def _get_token_hash(token: str) -> str:
@@ -57,8 +59,6 @@ class CachingWorkspaceClient(WorkspaceClient):
         self._cache: Dict[str, Any] = {}
         self._cache_times: Dict[str, float] = {}
         self._cache_duration = 60  # 1 minute in seconds
-        # Per-key overrides: listing every UC connection takes ~1s+ and the set rarely changes
-        self._cache_durations: Dict[str, int] = {'connections.list': 300}
         self._timeout = timeout
 
     def __call__(self, timeout: int = 30):
@@ -100,7 +100,9 @@ class CachingWorkspaceClient(WorkspaceClient):
              logger.error(f"Error during API call in _make_api_call: {e}")
              raise # Re-raise the original exception
 
-    def _cache_result(self, key: str) -> Callable:
+    def _cache_result(self, key: str, ttl: Optional[int] = None) -> Callable:
+        duration = self._cache_duration if ttl is None else ttl
+
         def decorator(func: Callable) -> Callable:
             @wraps(func)
             def wrapper(*args, **kwargs):
@@ -109,7 +111,7 @@ class CachingWorkspaceClient(WorkspaceClient):
                 if (
                     key in self._cache
                     and key in self._cache_times
-                    and current_time - self._cache_times[key] < self._cache_durations.get(key, self._cache_duration)
+                    and current_time - self._cache_times[key] < duration
                 ):
                     logger.info(f"Cache hit for {key} (age: {current_time - self._cache_times[key]:.1f}s)")
                     return self._cache[key]
@@ -158,7 +160,8 @@ class CachingWorkspaceClient(WorkspaceClient):
                 self._parent = parent
 
             def list(self):
-                return self._parent._cache_result('connections.list')(
+                # Listing every UC connection takes ~1s+ and the set rarely changes
+                return self._parent._cache_result('connections.list', ttl=300)(
                     lambda: list(self._parent._client.connections.list())
                 )()
 

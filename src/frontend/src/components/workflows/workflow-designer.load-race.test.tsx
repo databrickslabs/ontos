@@ -27,6 +27,12 @@ const STEP_TYPES = [
   },
 ];
 
+const WEBHOOK_STEP_TYPE = {
+  type: 'webhook', name: 'Webhook', description: '', icon: 'globe',
+  config_schema: { type: 'object', properties: {} },
+  has_pass_branch: true, has_fail_branch: true,
+};
+
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
 });
@@ -129,17 +135,62 @@ describe('WorkflowDesigner overlapping loads', () => {
   });
 
   it('shows the workflow without waiting for the picker lookups', async () => {
-    // A slow lookup (UC HTTP connections) never answers: the workflow must still load
+    // Slow lookups never answer: the workflow must still load
     api.get.mockImplementation(async (url: string) => {
       if (url === '/api/workflows/step-types') return { data: STEP_TYPES };
       if (url === '/api/workflows/wf-1') return { data: workflowFixture('wf-1', 'First') };
-      if (url === '/api/workflows/http-connections') return new Promise(() => undefined);
-      return { data: [] };
+      return new Promise(() => undefined);
     });
     renderWith('wf-1');
 
     expect(await screen.findByPlaceholderText(/workflow name/i)).toHaveValue('First');
-    expect(api.get).toHaveBeenCalledWith('/api/workflows/http-connections');
+  });
+
+  it('shows role names on a workflow that arrives after the roles', async () => {
+    const held: Record<string, () => void> = {};
+    const workflow = {
+      ...workflowFixture('wf-1', 'First'),
+      steps: [{
+        step_id: 'approve', name: 'Approve', step_type: 'approval',
+        config: { approvers: 'role-1' }, order: 0,
+      }],
+    };
+    holdWorkflows(held, { 'wf-1': workflow });
+    const roles = [{ id: 'role-1', name: 'Data Stewards', source: 'app' }];
+    const preload = api.get.getMockImplementation()!;
+    api.get.mockImplementation(async (url: string) =>
+      url === '/api/workflows/roles' ? { data: roles } : preload(url));
+    const { container } = renderWith('wf-1');
+    await waitFor(() => expect(held['wf-1']).toBeDefined());
+    // Let the roles response settle before the workflow answers
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+
+    await act(async () => { held['wf-1'](); });
+    await waitFor(() =>
+      expect(container.querySelector('.react-flow__node')?.parentElement?.textContent).toContain('Data Stewards'));
+  });
+
+  it('lists UC HTTP connections only once a webhook step is opened', async () => {
+    api.get.mockImplementation(async (url: string) => ({
+      data: url === '/api/workflows/step-types' ? [...STEP_TYPES, WEBHOOK_STEP_TYPE] : [],
+    }));
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/workflows/new?type=process']}>
+          <WorkflowDesigner workflowId="new" />
+        </MemoryRouter>
+      </StrictMode>,
+    );
+    const connectionCalls = () =>
+      api.get.mock.calls.filter(([url]) => url === '/api/workflows/http-connections').length;
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Conditional' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByTestId('step-config-done'));
+    expect(connectionCalls()).toBe(0);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Webhook' }));
+    await screen.findByRole('dialog');
+    await waitFor(() => expect(connectionCalls()).toBe(1));
   });
 
   it('does not stay loading when a new workflow replaces a pending edit load', async () => {

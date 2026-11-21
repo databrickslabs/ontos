@@ -40,6 +40,8 @@ def test_a_date_column_exports_its_format_but_no_timezone(db_session):
     exported = manager.build_odcs_from_db(contract, db_session, for_export=True)
 
     day = _column(exported, "day")
+    # Flat `format` is the current export shape, not the intended ODCS one: type options
+    # move under `logicalTypeOptions` with #1635.
     assert day["format"] == "yyyy-MM-dd"
     assert "timezone" not in day
     assert _column(exported, "code")["pattern"] == "^[A-Z]+$"
@@ -66,6 +68,7 @@ def test_a_custom_format_is_not_exported_as_a_non_schema_key(db_session):
     exported = manager.build_odcs_from_db(contract, db_session, for_export=True)
 
     ts = _column(exported, "ts")
+    # Flat `format`: current shape, to move under `logicalTypeOptions` with #1635.
     assert ts["format"] == "yyyy-MM-dd"
     assert "customFormat" not in ts
     stored = db_session.query(SchemaPropertyDb).filter_by(name="ts").one()

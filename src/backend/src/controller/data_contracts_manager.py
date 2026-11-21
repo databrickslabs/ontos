@@ -1736,7 +1736,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         A blank identifier (``""``, in any of those fields, the ``domain`` name included)
         is refused with ``invalid_domain_identifier``. A ``primaryDomainId`` that is not one
         of the ``domainIds`` (``[]`` included) is refused with ``primary_domain_not_in_domains``,
-        as when it is sent alone. Each ID is validated via ``_resolve_domain``.
+        as when it is sent alone. Each ID is validated via ``_resolve_domain``: an unknown
+        id is refused. A legacy ``domain`` name that matches no domain is not: the contract
+        is left without that domain, silently (by design since #851).
         """
         from src.common import contract_domain_fields as dom
 

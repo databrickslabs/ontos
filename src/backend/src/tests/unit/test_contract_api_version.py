@@ -47,6 +47,20 @@ def test_a_new_contract_outside_odcs_is_refused(key, sent):
     assert error["ctx"] == {"api_version": sent}
 
 
+@pytest.mark.parametrize("camel, snake, refused", [
+    ("v4.0.0", "v3.1.0", True), ("v3.0.2", "v4.0.0", False),
+])
+def test_a_create_with_both_spellings_checks_the_camel_case_one(camel, snake, refused):
+    """The shared rule (camelCase wins when both are sent) decides what is checked."""
+    data = {"name": "Orders", "apiVersion": camel, "api_version": snake}
+    if refused:
+        with pytest.raises(ValidationError) as err:
+            DataContractCreate.model_validate(data)
+        assert err.value.errors()[0]["ctx"] == {"api_version": camel}
+    else:
+        assert DataContractCreate.model_validate(data).apiVersion == camel
+
+
 def test_the_create_route_answers_422_with_the_code_and_param():
     from fastapi import Body, FastAPI
     from fastapi.testclient import TestClient
@@ -157,6 +171,30 @@ def test_an_update_to_a_version_outside_odcs_is_refused(manager, db_session):
     assert (err.value.code, err.value.params) == (
         "odcs_api_version_unsupported", {"api_version": "v9.9.9"},
     )
+
+
+@pytest.mark.parametrize("camel, snake, refused", [
+    ("9.9.9", "v3.0.2", True), ("v3.0.2", "9.9.9", False),
+])
+def test_an_update_with_both_spellings_checks_the_camel_case_one(
+    manager, db_session, camel, snake, refused
+):
+    """Same rule as on create: the camelCase apiVersion is the one checked and stored."""
+    cid = _contract(db_session, "v3.1.0")
+    body = DataContractUpdate.model_validate({"apiVersion": camel, "api_version": snake})
+
+    if refused:
+        with pytest.raises(UnsupportedOdcsApiVersionError) as err:
+            manager.update_contract_with_relations(
+                db=db_session, contract_id=cid, contract_data=body,
+            )
+        assert err.value.params == {"api_version": "v9.9.9"}
+    else:
+        manager.update_contract_with_relations(
+            db=db_session, contract_id=cid, contract_data=body,
+        )
+        db_session.expire_all()
+        assert db_session.get(DataContractDb, cid).api_version == camel
 
 
 def test_the_update_route_answers_with_the_code_and_param():

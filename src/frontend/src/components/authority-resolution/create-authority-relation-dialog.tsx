@@ -17,6 +17,8 @@ import CriteriaBuilder, {
   rowsFromCriteria, rowsToPayload, type CriterionRow,
 } from '@/components/authority-resolution/criteria-builder';
 import { useApi } from '@/hooks/use-api';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
 import { useTeams } from '@/hooks/use-teams';
 import { useProjectContext } from '@/stores/project-store';
 import { useToast } from '@/hooks/use-toast';
@@ -100,6 +102,9 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   const [slugCatalog, setSlugCatalog] = useState<AuthorityRelationSlug[]>([]);
   const [resourceRefs, setResourceRefs] = useState<ResourceRefInput[]>([]);
   const [resolverAuth, setResolverAuth] = useState<ResolverAuth>('obo');
+  // The DNA ceiling, the recompute schedule and the app service principal identity are Admin-only.
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const isAdmin = !permissionsLoading && hasPermission('authority-resolution', FeatureAccessLevel.ADMIN);
   // Picker catalog, keyed by (entity_type, search-term). The dialog debounces
   // searches per row so the picker stays cheap even with 100s of concepts.
   const [refCandidates, setRefCandidates] = useState<Record<string, EntityRefCandidate[]>>({});
@@ -792,13 +797,15 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
                 onChange={(e) => setResolverAuth(e.target.value as ResolverAuth)}
               >
                 <option value="obo">{t('editor.mcpResolverAuth.obo')}</option>
-                <option value="app_sp">{t('editor.mcpResolverAuth.appServicePrincipal')}</option>
+                <option value="app_sp" disabled={!isAdmin}>{t('editor.mcpResolverAuth.appServicePrincipal')}</option>
               </NativeSelect>
             </div>
           )}
 
           <SectionTitle title={t('editor.sections.dnaSchedule')} info={t('editor.sectionDescriptions.dnaSchedule')} />
-          <ScheduleSelect value={scheduleCron} onChange={setScheduleCron} />
+          <fieldset disabled={!isAdmin} className="contents">
+            <ScheduleSelect value={scheduleCron} onChange={setScheduleCron} />
+          </fieldset>
 
           <SectionTitle title={t('editor.sections.tags')} />
           <TagSelector value={tags} onChange={setTags} placeholder={t('common:actions.search')} />
@@ -810,7 +817,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
                 <Trans i18nKey="editor.hints.dnaMaxThreshold" ns="authority-resolution" components={{ strong: <strong />, }} />
               </InfoHint>
             </Label>
-            <Input value={dnaMax} onChange={(e) => setDnaMax(e.target.value)} placeholder={t('editor.fields.dnaMaxThreshold.placeholder')} className="max-w-[200px]" />
+            <Input value={dnaMax} onChange={(e) => setDnaMax(e.target.value)} disabled={!isAdmin} placeholder={t('editor.fields.dnaMaxThreshold.placeholder')} className="max-w-[200px]" />
           </div>
         </div>
 

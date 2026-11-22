@@ -332,11 +332,26 @@ class TestActionTypeLookupsAreNotCapped:
         payload = {'job': 'compliance'}
         _insert(db_session, [_row(
             type='action_required', title='Run job', action_type='request_background_job',
-            action_payload=json.dumps(payload), created_at=OLD, read=True,
+            action_payload=json.dumps({**payload, 'handled': True}), created_at=OLD, read=True,
         )])
 
         assert _manager().has_unhandled_actionable_notification(
             db_session, 'request_background_job', payload) is False
+
+    def test_an_opened_request_without_the_marker_still_deduplicates(
+        self, db_session: Session,
+    ):
+        # The bell sets read on click: the request is still pending in My actions, so a
+        # second ask must not add a duplicate (#1527 review)
+        payload = {'workflow_id': 'compliance-checks'}
+        _insert(db_session, [_row(
+            type='action_required', title='Enable job', action_type='handle_job_enable_request',
+            action_payload=json.dumps({**payload, 'requester_email': 'bob@example.com'}),
+            created_at=OLD, read=True,
+        )])
+
+        assert _manager().has_unhandled_actionable_notification(
+            db_session, 'handle_job_enable_request', payload) is True
 
     def test_only_the_unread_deliveries_are_pending(self, db_session: Session):
         payload = json.dumps({'change_type': 'grant'})

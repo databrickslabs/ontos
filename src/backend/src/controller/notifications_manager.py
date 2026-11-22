@@ -324,15 +324,18 @@ class NotificationsManager:
             raise
 
     def has_unhandled_actionable_notification(self, db: Session, action_type: str, action_payload: Dict) -> bool:
-        """Return True if an unread notification already matches this action type/payload.
+        """Return True if a notification not decided yet already matches this action
+        type/payload.
 
         Used to deduplicate user-triggered requests (e.g. asking an admin to enable a
         background job) so repeated clicks don't flood the admin notification bell.
         Matching mirrors handle_actionable_notification: the provided payload must be a
-        subset of the stored payload.
+        subset of the stored payload. Decided means the ``handled`` (or ``completed``)
+        marker, as in the list: a request only opened in the bell (read) is still pending,
+        so it still deduplicates (#1527 review).
         """
         try:
-            for notification_db in self._repo.get_by_action_type(db, action_type, unread_only=True):
+            for notification_db in self._repo.get_by_action_type(db, action_type):
                 payload_db = {}
                 if notification_db.action_payload:
                     try:
@@ -340,6 +343,10 @@ class NotificationsManager:
                     except json.JSONDecodeError:
                         logger.warning("Could not parse action_payload for notification %s", notification_db.id)
                         continue
+                if not isinstance(payload_db, dict):
+                    continue
+                if payload_db.get('handled') is True or payload_db.get('completed') is True:
+                    continue
 
                 if all(item in payload_db.items() for item in action_payload.items()):
                     return True

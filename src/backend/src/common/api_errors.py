@@ -37,6 +37,37 @@ def new_error_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
+def log_failure(tag: str, exc: BaseException) -> str:
+    """Log an unexpected failure once, with an error id, and return that id.
+
+    The id is kept on the exception as ``error_id``. A later caller that answers
+    the same failure (a route, then the run row it failed) reuses the id and does
+    not log the failure again.
+    """
+    existing = getattr(exc, 'error_id', None)
+    if existing:
+        return existing
+    error_id = new_error_id()
+    logger.error(
+        "[%s] failed (error id %s): %s: %s", tag, error_id, type(exc).__name__, exc, exc_info=exc,
+    )
+    try:
+        exc.error_id = error_id
+    except AttributeError:
+        pass
+    return error_id
+
+
+def client_failure(tag: str, exc: BaseException, *, code: str, message: str) -> Dict[str, Any]:
+    """The coded client payload for an unexpected failure: ``{code, message, params}``.
+
+    ``message`` may contain ``{errorId}``, which is filled with the error id that
+    ``log_failure`` logged. The exception's text stays in the server log.
+    """
+    error_id = log_failure(tag, exc)
+    return {'code': code, 'message': message.format(errorId=error_id), 'params': {'errorId': error_id}}
+
+
 class CodedValueError(ValueError):
     """A ``ValueError`` with a code and parameters for the UI."""
 
@@ -138,19 +169,13 @@ def permission_check_failure(feature_id: str, exc: BaseException) -> StarletteHT
     the client gets with the code; the check's feature id is in the parameters.
     Raise the result outside the ``except`` block, so the text is not chained.
     """
-    error_id = new_error_id()
-    logger.error(
-        "Permission check for feature '%s' failed (error id %s): %s: %s",
-        feature_id, error_id, type(exc).__name__, exc, exc_info=exc,
+    payload = client_failure(
+        f"permission check for '{feature_id}'", exc,
+        code=PERMISSION_CHECK_FAILED_CODE,
+        message='Could not check your permissions (error id {errorId}). See the server log.',
     )
-    return StarletteHTTPException(
-        status_code=500,
-        detail={
-            'code': PERMISSION_CHECK_FAILED_CODE,
-            'message': f'Could not check your permissions (error id {error_id}). See the server log.',
-            'params': {'errorId': error_id, 'feature': feature_id},
-        },
-    )
+    payload['params']['feature'] = feature_id
+    return StarletteHTTPException(status_code=500, detail=payload)
 
 
 async def coded_http_exception_handler(request: Request, exc: StarletteHTTPException) -> Response:

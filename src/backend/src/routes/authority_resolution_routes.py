@@ -23,7 +23,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Query, Request
 
-from src.common.api_errors import CodedValueError, new_error_id
+from src.common.api_errors import CodedValueError, client_failure
 from src.common.authorization import PermissionChecker, get_user_details_from_sdk, user_has_feature_level
 from src.common.dependencies import DBSessionDep, AuditCurrentUserDep, DataAssetReviewManagerDep
 from src.common.features import FeatureAccessLevel
@@ -79,29 +79,26 @@ def _failure(tag: str, exc: BaseException, coded_status: int = 400,
              unexpected_status: int = 500) -> HTTPException:
     """The client-facing answer for an exception raised while handling a request.
 
-    Our own coded errors keep their message (it is written for the user, and the
-    manager never puts exception text in it). A level refusal is a 403. Any other
-    exception is logged with an error id and answered with a generic message that
-    names the id, so a user can quote it and find the log entry.
+    Our own coded errors keep their message and code (written for the user; the
+    manager never puts exception text in them). A refusal (an access level, or a
+    named role) is a 403 and is logged. Any other exception goes through the
+    shared ``client_failure``: logged once with an error id, answered generically
+    with that id. An id the manager already attached to the exception is reused.
 
     Raise the result outside the ``except`` block where it is built; a coded
     error's ``__cause__`` is set here so the coded handler can read its code.
     """
-    if isinstance(exc, AuthorityPermissionError):
-        error = HTTPException(status_code=403, detail=str(exc))
-        error.__cause__ = exc
-        return error
     if isinstance(exc, CodedValueError):
-        error = HTTPException(status_code=coded_status, detail=str(exc))
+        status = 403 if isinstance(exc, AuthorityPermissionError) else coded_status
+        logger.info("[%s] refused: %s", tag, exc.code)
+        error = HTTPException(status_code=status, detail=str(exc))
         error.__cause__ = exc
         return error
-    error_id = new_error_id()
-    logger.error("[%s] failed (error id %s): %s", tag, error_id, type(exc).__name__, exc_info=exc)
-    return HTTPException(status_code=unexpected_status, detail={
-        "code": AUTHORITY_FAILED_CODE,
-        "message": f"The request failed (error id {error_id}). See the server log.",
-        "params": {"errorId": error_id},
-    })
+    payload = client_failure(
+        tag, exc, code=AUTHORITY_FAILED_CODE,
+        message="The request failed (error id {errorId}). See the server log.",
+    )
+    return HTTPException(status_code=unexpected_status, detail=payload)
 
 
 def _resolve_req_dict(req: ResolveRequest) -> dict:
@@ -340,8 +337,8 @@ async def affirm(
     username = current_user.username if current_user else "unknown"
     try:
         aff = manager.affirm(db, affirmation_id, affirmed_by=username, notes=payload.notes, user=current_user)
-    except PermissionError:
-        raise _denied(READ_WRITE)
+    except PermissionError as e:
+        raise _failure("affirm", e)
     if not aff:
         raise HTTPException(status_code=404, detail="Affirmation not found")
     return {"id": aff.id, "affirmed": aff.affirmed, "affirmed_by": aff.affirmed_by, "affirmed_at": aff.affirmed_at}
@@ -373,12 +370,23 @@ def resolve(
     user: UserInfo = Depends(get_user_details_from_sdk),
     auth_manager: AuthorizationManager = Depends(get_auth_manager),
     payload: ResolveRequest = Body(default=ResolveRequest()),
-    record: bool = Query(False, description="Record the decision (needs Read-write)"),
+    record: Optional[bool] = Query(
+        None, description="Record the decision. Default: recorded for a Read-write caller, never for Read-only.",
+    ),
     _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
-    """Resolve a decision. Read-only callers get the verdict without a decision
-    row; ``record=true`` writes one and needs Read-write (S14)."""
-    if record and not _may(request, user, auth_manager, FEATURE_ID, READ_WRITE):
+    """Resolve a decision.
+
+    ``record`` defaults to the caller's write capability, the same rule the MCP
+    tool applies: a Read-write caller's resolve writes a decision row, a
+    Read-only caller's never does. A write-capable caller can pass
+    ``record=false`` to get the verdict without a row. ``record=true`` from a
+    caller without Read-write is refused with 403 (S14).
+    """
+    can_write = _may(request, user, auth_manager, FEATURE_ID, READ_WRITE)
+    if record is None:
+        record = can_write
+    elif record and not can_write:
         raise _denied(READ_WRITE)
     obo, app_sp = _ws_factories(request)
     return manager.resolve(
@@ -577,15 +585,14 @@ def list_mcp_service_tools(
         client = mcp_resolver.McpHttpClient(ws, service_name, timeout=10.0)
         return {"identity": identity, "tools": client.list_tools()}
     except mcp_resolver.McpResolverError as e:
-        # The resolver's text can carry the service's own error: log it, answer by kind.
-        error_id = new_error_id()
-        logger.error("MCP tool listing failed (error id %s): %s", error_id, e.kind, exc_info=True)
+        # The resolver's text can carry the service's own error: logged, answered by kind.
         status = 403 if e.kind == "permission" else 504 if e.kind == "timeout" else 502
-        raise HTTPException(status_code=status, detail={
-            "code": f"authority_mcp_{e.kind}",
-            "message": f"The MCP service could not list its tools (error id {error_id}). See the server log.",
-            "params": {"errorId": error_id, "kind": e.kind},
-        })
+        payload = client_failure(
+            "list MCP service tools", e, code=f"authority_mcp_{e.kind}",
+            message="The MCP service could not list its tools (error id {errorId}). See the server log.",
+        )
+        payload["params"]["kind"] = e.kind
+        raise HTTPException(status_code=status, detail=payload)
 
 
 @router.get("/authority/entity-ref-candidates")
@@ -766,8 +773,8 @@ async def review_context(
 ):
     try:
         ctx = manager.get_review_context(db, relation_id, reviewer, user=current_user)
-    except PermissionError:
-        raise _denied(READ_ONLY)
+    except PermissionError as e:
+        raise _failure("review_context", e)
     if ctx is None:
         raise HTTPException(status_code=404, detail="No review found for this reviewer on this Authority Relation")
     return ctx
@@ -785,8 +792,8 @@ async def submit_review(
     answers = payload.get("answers", payload) if isinstance(payload, dict) else {}
     try:
         participant = manager.submit_review(db, participant_id, answers=answers, reviewer=reviewer, user=current_user)
-    except PermissionError:
-        raise _denied(READ_WRITE)
+    except PermissionError as e:
+        raise _failure("submit_review", e)
     if not participant:
         raise HTTPException(status_code=404, detail="Review participant not found")
     return {"id": participant.id, "review_status": participant.review_status}

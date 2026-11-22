@@ -26,16 +26,24 @@ _manager = AuthorityResolutionManager()
 FEATURE_ID = "authority-resolution"
 
 
+# Token scopes that let a call write Authority Resolution data.
+_WRITE_SCOPES = ("*", "authority:*", "authority:write")
+
+
 def _may_record(ctx: Any) -> bool:
     """Whether this caller's resolve may write a decision row (S14).
 
-    Only a write-capable caller records: a token with ``authority:write`` (which
-    reaches the caller as Read-write through ``scope_read_levels``) or a user with
-    Read-write on the feature. Anyone else gets the verdict and nothing is written.
-    Fails closed when there is no caller.
+    Records only when both hold: the token permits writes (no token restriction,
+    i.e. Ask Ontos, or a token scoped ``authority:write`` / ``authority:*`` / ``*``),
+    and the caller holds Read-write on the feature. A read-scoped token never
+    records, even for a user with Read-write. Fails closed when there is no caller.
     """
     caller = getattr(ctx, "caller", None)
-    return caller is not None and caller.has_level(FEATURE_ID, FeatureAccessLevel.READ_WRITE)
+    if caller is None:
+        return False
+    if caller.token_scopes is not None and not any(s in _WRITE_SCOPES for s in caller.token_scopes):
+        return False
+    return caller.has_level(FEATURE_ID, FeatureAccessLevel.READ_WRITE)
 
 
 def _app_sp_workspace_client():

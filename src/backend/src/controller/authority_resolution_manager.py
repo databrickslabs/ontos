@@ -22,7 +22,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from src.common.api_errors import CodedValueError, new_error_id
+from src.common.api_errors import CodedValueError, client_failure
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common import authority_resolution_dna as authority_dna
@@ -59,25 +59,49 @@ class AuthorityInvalidError(CodedValueError):
     code = "authority_invalid"
 
 
-class AuthorityPermissionError(CodedValueError):
-    """The caller's Authority Resolution level does not allow this change."""
+class AuthorityPermissionError(CodedValueError, PermissionError):
+    """The caller's Authority Resolution level, or their named role, does not allow this.
+
+    Also a ``PermissionError``, so callers that catch the built-in keep working.
+    """
 
     code = "authority_permission_denied"
+
+
+class AuthorityNotNamedError(AuthorityPermissionError):
+    """The caller is not the principal the participant row names."""
+
+    code = "authority_not_named_participant"
+
+
+class AuthorityReviewerNotApproverError(AuthorityPermissionError):
+    """An affirmation was sent for a reviewer row, which only reviews."""
+
+    code = "authority_reviewer_not_approver"
+
+
+class AuthorityNotAReviewerError(AuthorityPermissionError):
+    """A review was submitted for a participant that is not a reviewer."""
+
+    code = "authority_not_a_reviewer"
 
 
 def client_failure_text(tag: str, exc: BaseException) -> str:
     """The text a client may see for a failed run.
 
     Our own validation messages go out as they are. Anything else (SQL, warehouse
-    or workspace errors) is logged with an error id and answered with a generic
-    message, so the exception text never reaches a user, an MCP client or the
-    ``error_message`` column read back by the DNA run list.
+    or workspace errors) is logged once with an error id and answered with a
+    generic message, so the exception text never reaches a user, an MCP client or
+    the ``error_message`` column read back by the DNA run list. The id is kept on
+    the exception, so the route that re-raises it reports the same id.
     """
     if isinstance(exc, CodedValueError):
         return str(exc)
-    error_id = new_error_id()
-    logger.error("[%s] failed (error id %s): %s", tag, error_id, type(exc).__name__, exc_info=exc)
-    return f"The {tag} failed (error id {error_id}); see the server log."
+    payload = client_failure(
+        tag, exc, code="",
+        message="The " + tag + " failed (error id {errorId}); see the server log.",
+    )
+    return payload["message"]
 
 
 ENTITY_TYPE = "authority_relation"
@@ -1409,9 +1433,9 @@ class AuthorityResolutionManager(SearchableAsset):
         if not aff:
             return None
         if not getattr(aff, "is_approver", True):
-            raise PermissionError("This participant is a reviewer, not an approver.")
+            raise AuthorityReviewerNotApproverError("This participant is a reviewer, not an approver.")
         if not principal_matches(aff.principal, aff.principal_type, user):
-            raise PermissionError("Only the named participant can record this affirmation.")
+            raise AuthorityNotNamedError("Only the named participant can record this affirmation.")
         return authority_affirmation_repo.update(db, db_obj=aff, obj_in={
             "affirmed": True, "affirmed_by": affirmed_by, "affirmed_at": self._now(), "notes": notes,
         })
@@ -1557,7 +1581,7 @@ class AuthorityResolutionManager(SearchableAsset):
         if participant is None:
             return None
         if not principal_matches(participant.principal, participant.principal_type, user):
-            raise PermissionError("Only the named reviewer can open this review.")
+            raise AuthorityNotNamedError("Only the named reviewer can open this review.")
         role = participant.role
         ctx: Dict[str, Any] = {
             "participant_id": participant.id,
@@ -1597,9 +1621,9 @@ class AuthorityResolutionManager(SearchableAsset):
         if not participant:
             return None
         if not getattr(participant, "is_reviewer", False):
-            raise PermissionError("This participant is not a reviewer.")
+            raise AuthorityNotAReviewerError("This participant is not a reviewer.")
         if not principal_matches(participant.principal, participant.principal_type, user):
-            raise PermissionError("Only the named reviewer can submit this review.")
+            raise AuthorityNotNamedError("Only the named reviewer can submit this review.")
         return authority_affirmation_repo.update(db, db_obj=participant, obj_in={
             "review_answers": answers,
             "review_status": "completed",
@@ -1946,14 +1970,18 @@ class AuthorityResolutionManager(SearchableAsset):
         Activating or retiring an AR is Admin-only; a Read-write author can
         still move it between draft and needs_review.
         """
-        if status in (STATUS_ACTIVE, STATUS_RETIRED) and not caller_is_admin:
-            raise AuthorityPermissionError(
-                f"Only an Admin can set an Authority Relation to '{status}'.",
-                status=status, required_level="Admin",
-            )
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
             return None, "not_found"
+        # Taking an AR into or out of service (active or retired, either side) is
+        # Admin-only; a Read-write author moves it between draft and needs_review.
+        in_service = (STATUS_ACTIVE, STATUS_RETIRED)
+        if (status in in_service or relation.status in in_service) and not caller_is_admin:
+            raise AuthorityPermissionError(
+                f"Only an Admin can change an Authority Relation from '{relation.status}' "
+                f"to '{status}'.",
+                **{"from": relation.status, "to": status, "required_level": "Admin"},
+            )
         if status not in _ALLOWED_STATUSES:
             return relation, f"Unknown status '{status}' — expected one of {_ALLOWED_STATUSES}."
         if status == STATUS_ACTIVE:
@@ -2080,12 +2108,37 @@ class AuthorityResolutionManager(SearchableAsset):
                 required_level="Read/Write",
             )
         relation = self.resolve_relation_ref(db, relation_id)
-        if relation is not None and relation.resolver_auth == RESOLVER_AUTH_APP_SP and not caller_is_admin:
-            raise AuthorityPermissionError(
-                "Only an Admin can test an Authority Relation that resolves as the app service principal.",
-                required_level="Admin",
-            )
+        if relation is not None and not caller_is_admin:
+            sp_slug = self._app_sp_in_prerequisite_walk(db, relation)
+            if sp_slug is not None:
+                raise AuthorityPermissionError(
+                    "Only an Admin can test an Authority Relation whose chain resolves as the app "
+                    "service principal.",
+                    required_level="Admin", ar=sp_slug,
+                )
         return self.resolve(db, relation_id, req, record=False, require_active=False, **kwargs)
+
+    def _app_sp_in_prerequisite_walk(self, db: Session, relation: AuthorityRelationDb) -> Optional[str]:
+        """The slug (or id) of the first app_sp AR in this AR's prerequisite walk, itself included.
+
+        A dry run walks the prerequisites and calls their MCP refs as the app SP,
+        so one app_sp AR anywhere in the chain counts (B2).
+        """
+        seen: set = set()
+        stack = [relation]
+        while stack:
+            current = stack.pop()
+            if current.resolver_auth == RESOLVER_AUTH_APP_SP:
+                return current.slug or current.id
+            family = self._family_slug_of(db, current)
+            if not family or family in seen:
+                continue
+            seen.add(family)
+            for edge in authority_prerequisite_repo.list_for_family(db, relation_family_slug=family):
+                upstream = self.resolve_relation_ref(db, edge.prerequisite_family_slug)
+                if upstream is not None:
+                    stack.append(upstream)
+        return None
 
     def _resolve_internal(
         self,

@@ -331,8 +331,8 @@ def update_notes(text: str, commits: List[Commit], version: str, date: str) -> T
         raise ValueError("no commits and no hand-written notes: nothing to release")
     rest = lines[end:]
     new_lines = lines[:start] + block + rest
-    if not rest:
-        new_lines = new_lines[:-1]
+    if not rest and not text.endswith("\n"):
+        new_lines = new_lines[:-1]  # the block ends with an empty line: no final newline
     return "\n".join(new_lines), "\n".join(block).rstrip() + "\n"
 
 

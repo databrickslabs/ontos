@@ -249,6 +249,14 @@ def test_hand_written_section_with_an_unknown_heading_is_kept_last():
                      "## ✨ Features\n\n- f (#1)\n\n## Custom\n\n- kept\n")
 
 
+@pytest.mark.parametrize("end", ["\n", ""])
+def test_a_last_unreleased_block_keeps_the_file_ending(end):
+    text = "# Release Notes - Unreleased\n\n## Custom\n\n- kept" + end
+    new_text, block = rn.update_notes(text, [commit("feat: f (#1)")], "1.2.0", "2026-11-22")
+    assert new_text == block.rstrip("\n") + end
+    assert new_text.endswith("## Custom\n\n- kept" + end)
+
+
 def test_refuses_a_version_already_in_the_file():
     with pytest.raises(ValueError, match="already"):
         rn.update_notes(UNRELEASED, [commit("feat: f")], "1.1.0", "2026-11-22")

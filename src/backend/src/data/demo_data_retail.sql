@@ -259,7 +259,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 4c. DATA CONTRACT SCHEMA PROPERTIES (type=006)
 -- ============================================================================
 
-INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, transform_description) VALUES
+INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, description) VALUES
 -- customers table properties
 ('00600001-0000-4000-8000-000000000001', '00500001-0000-4000-8000-000000000001', 'customer_id', 'string', true, true, true, false, 1, -1, true, 'Unique customer identifier (UUID format)'),
 ('00600002-0000-4000-8000-000000000002', '00500001-0000-4000-8000-000000000001', 'email', 'string', true, true, false, false, -1, -1, true, 'Customer email address (primary contact)'),

@@ -5,15 +5,16 @@ from the payload. The editor only loads and sends some fields (names, types,
 descriptions, granularity, relationships, semantic concepts, the columns and
 their custom properties); the others are kept from the stored object when the
 payload leaves them out: the ODCS ids, tags, custom properties and quality
-checks of the object, the ids, quality checks, relationships and tags of its
-columns, and authoritative definitions other than semantic concepts.
+checks of the object, the ids, quality checks and relationships of its
+columns, and authoritative definitions other than semantic concepts. (A
+column's tags are loaded and sent, so an empty field clears them.)
 """
 from typing import Any, Dict, List, Optional
 
 SEMANTIC_ASSIGNMENT = 'http://databricks.com/ontology/uc/semanticAssignment'
 
 _OBJECT_FIELDS = ('id', 'tags', 'customProperties', 'quality')
-_PROPERTY_FIELDS = ('id', 'quality', 'relationships', 'tags', 'itemType')
+_PROPERTY_FIELDS = ('id', 'quality', 'relationships', 'itemType')
 
 
 def _sent(payload: Dict[str, Any], key: str) -> bool:

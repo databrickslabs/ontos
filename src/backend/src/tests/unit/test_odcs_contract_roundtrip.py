@@ -142,8 +142,9 @@ def test_the_export_adds_no_sample_values(db_session: Session):
         assert 'customProperties' not in column
         assert 'authoritativeDefinitions' not in column
         assert 'quality' not in column
-        assert column['tags'] == []
-    assert _column(doc, 'transaction_reference_date')['physicalName'] == 'transaction_reference_date'
+        # Nor tags or a physical name the file doesn't have (#610)
+        assert 'tags' not in column
+        assert 'physicalName' not in column
 
 
 def test_a_new_version_keeps_object_and_property_definitions(db_session: Session, exported):

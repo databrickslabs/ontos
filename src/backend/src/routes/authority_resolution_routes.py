@@ -1,13 +1,38 @@
-"""API routes for the Authority Resolution feature (ARF)."""
+"""API routes for the Authority Resolution feature (ARF).
+
+Permission levels on ``authority-resolution`` (None / Read-only / Read-write /
+Admin):
+
+* Read-only: view ARs, versions, decisions, DNA runs, criteria, review context
+  and tracking; resolve (a decision is recorded only when the caller asks for it
+  and holds Read-write).
+* Read-write: author drafts, new versions, compute the DNA-Coefficient, start
+  and submit reviews and affirmations, test an AR, record decisions.
+* Admin: activate or retire an AR, delete an AR, set or change the DNA ceiling,
+  the recompute schedule or an ``app_sp`` MCP identity, recompute every AR.
+
+The Admin-only rules for the fields of a definition live in the manager, which
+is the enforcement point; the routes only pass the caller's level down.
+
+Errors are coded (``{code, message, params}``). Exception text never goes to a
+client: an unexpected failure is logged with an error id and answered with a
+generic message that carries the id (see ``_failure``).
+"""
 import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Query, Request
 
+from src.common.api_errors import CodedValueError, new_error_id
+from src.common.authorization import PermissionChecker, get_user_details_from_sdk, user_has_feature_level
 from src.common.dependencies import DBSessionDep, AuditCurrentUserDep, DataAssetReviewManagerDep
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import PermissionChecker
-from src.controller.authority_resolution_manager import AuthorityResolutionManager
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authority_resolution_manager import (
+    AuthorityPermissionError,
+    AuthorityResolutionManager,
+)
+from src.controller.authorization_manager import AuthorizationManager
 from src.models.authority_resolution import (
     AuthorityRelationCreate,
     AuthorityRelationUpdate,
@@ -17,6 +42,7 @@ from src.models.authority_resolution import (
     ResolveRequest,
     FindAuthorityForConceptRequest,
 )
+from src.models.users import UserInfo
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -25,6 +51,57 @@ router = APIRouter(prefix="/api", tags=["Authority Resolution"])
 manager = AuthorityResolutionManager()
 
 FEATURE_ID = "authority-resolution"
+COMPLIANCE_FEATURE_ID = "compliance"
+READ_ONLY = FeatureAccessLevel.READ_ONLY
+READ_WRITE = FeatureAccessLevel.READ_WRITE
+ADMIN = FeatureAccessLevel.ADMIN
+
+AUTHORITY_FAILED_CODE = "authority_failed"
+PERMISSION_DENIED_CODE = "authority_permission_denied"
+PERMISSION_DENIED_MESSAGE = "Your Authority Resolution access level does not allow this."
+
+
+def _may(request: Request, user: UserInfo, auth_manager: AuthorizationManager,
+         feature_id: str, level: FeatureAccessLevel) -> bool:
+    """The caller's level on a feature, resolved as the route guards resolve it. Fails closed."""
+    return user_has_feature_level(auth_manager, user, feature_id, level, request)
+
+
+def _denied(required_level: FeatureAccessLevel) -> HTTPException:
+    return HTTPException(status_code=403, detail={
+        "code": PERMISSION_DENIED_CODE,
+        "message": PERMISSION_DENIED_MESSAGE,
+        "params": {"required_level": required_level.value},
+    })
+
+
+def _failure(tag: str, exc: BaseException, coded_status: int = 400,
+             unexpected_status: int = 500) -> HTTPException:
+    """The client-facing answer for an exception raised while handling a request.
+
+    Our own coded errors keep their message (it is written for the user, and the
+    manager never puts exception text in it). A level refusal is a 403. Any other
+    exception is logged with an error id and answered with a generic message that
+    names the id, so a user can quote it and find the log entry.
+
+    Raise the result outside the ``except`` block where it is built; a coded
+    error's ``__cause__`` is set here so the coded handler can read its code.
+    """
+    if isinstance(exc, AuthorityPermissionError):
+        error = HTTPException(status_code=403, detail=str(exc))
+        error.__cause__ = exc
+        return error
+    if isinstance(exc, CodedValueError):
+        error = HTTPException(status_code=coded_status, detail=str(exc))
+        error.__cause__ = exc
+        return error
+    error_id = new_error_id()
+    logger.error("[%s] failed (error id %s): %s", tag, error_id, type(exc).__name__, exc_info=exc)
+    return HTTPException(status_code=unexpected_status, detail={
+        "code": AUTHORITY_FAILED_CODE,
+        "message": f"The request failed (error id {error_id}). See the server log.",
+        "params": {"errorId": error_id},
+    })
 
 
 def _resolve_req_dict(req: ResolveRequest) -> dict:
@@ -71,7 +148,7 @@ async def list_relations(
     include_history: bool = Query(False, description="Return every version instead of one row per family"),
     project_id: Optional[str] = Query(None, description="Only ARs in this project"),
     owner_team_id: Optional[str] = Query(None, description="Only ARs owned by this team"),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     ids = [d for d in domain_ids.split(",") if d] if domain_ids else None
     relations = manager.list_relations(
@@ -83,19 +160,20 @@ async def list_relations(
 
 @router.post("/authority/relations")
 async def create_relation(
+    request: Request,
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     payload: AuthorityRelationCreate = Body(...),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
     username = current_user.username if current_user else None
+    is_admin = _may(request, user, auth_manager, FEATURE_ID, ADMIN)
     try:
-        relation = manager.create_relation(db, payload, current_user=username)
-    except ValueError as e:
-        # Author-visible validation errors from the manager (prerequisite
-        # cycles, missing-slug + prereqs set, etc.) — surface as 400 so the
-        # dialog can toast the specific message.
-        raise HTTPException(status_code=400, detail=str(e))
+        relation = manager.create_relation(db, payload, current_user=username, caller_is_admin=is_admin)
+    except Exception as e:
+        raise _failure("create_relation", e)
     return manager.to_read_dict(db, relation)
 
 
@@ -103,7 +181,7 @@ async def create_relation(
 async def get_relation(
     relation_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     # UUID pins the exact version (version navigation uses ids); a slug resolves
     # to the family's active version (the stable agent-facing @id).
@@ -116,16 +194,22 @@ async def get_relation(
 @router.put("/authority/relations/{relation_id}")
 async def update_relation(
     relation_id: str,
+    request: Request,
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     payload: AuthorityRelationUpdate = Body(...),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
     username = current_user.username if current_user else None
+    is_admin = _may(request, user, auth_manager, FEATURE_ID, ADMIN)
     try:
-        relation = manager.update_relation(db, relation_id, payload, current_user=username)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        relation = manager.update_relation(
+            db, relation_id, payload, current_user=username, caller_is_admin=is_admin,
+        )
+    except Exception as e:
+        raise _failure("update_relation", e)
     if not relation:
         raise HTTPException(status_code=404, detail="Authority Relation not found")
     return manager.to_read_dict(db, relation)
@@ -135,12 +219,12 @@ async def update_relation(
 async def delete_relation(
     relation_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, ADMIN)),
 ):
     try:
         deleted = manager.delete_relation(db, relation_id)
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise _failure("delete_relation", e, coded_status=409)
     if not deleted:
         raise HTTPException(status_code=404, detail="Authority Relation not found")
     return {"deleted": True, "id": relation_id}
@@ -150,7 +234,7 @@ async def delete_relation(
 async def get_relation_versions(
     relation_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     """Every version of an AR's family, newest first — the tight row shape the
     shared VersionSelector / VersionNavigator consumes (mirrors Data Products)."""
@@ -182,14 +266,17 @@ async def create_relation_version(
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
     payload: NewVersionRequest = Body(...),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
     """Snapshot an AR into a new immutable version (deep-clones the definition)."""
     username = current_user.username if current_user else None
-    relation = manager.create_new_version(
-        db, relation_id, payload.new_version,
-        change_summary=payload.change_summary, current_user=username,
-    )
+    try:
+        relation = manager.create_new_version(
+            db, relation_id, payload.new_version,
+            change_summary=payload.change_summary, current_user=username,
+        )
+    except Exception as e:
+        raise _failure("create_new_version", e)
     if relation is None:
         raise HTTPException(status_code=404, detail="Authority Relation not found")
     return manager.to_read_dict(db, relation)
@@ -199,14 +286,17 @@ async def create_relation_version(
 async def compute_dnaco(
     relation_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
+    failure: Optional[HTTPException] = None
     try:
         run = manager.compute_dnaco(db, relation_id)
     except Exception as e:
         # Persist the failed run row before the error rolls the request back.
         db.commit()
-        raise HTTPException(status_code=502, detail=f"DNA-Coefficient computation failed: {e}")
+        failure = _failure("compute_dnaco", e, coded_status=502, unexpected_status=502)
+    if failure is not None:
+        raise failure
     if not run:
         raise HTTPException(status_code=404, detail="Authority Relation not found")
     return {
@@ -218,15 +308,24 @@ async def compute_dnaco(
 @router.post("/authority/relations/{relation_id}/status")
 async def change_status(
     relation_id: str,
+    request: Request,
     db: DBSessionDep,
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     payload: StatusChangeRequest = Body(...),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
-    relation, error = manager.set_status(db, relation_id, payload.status)
+    is_admin = _may(request, user, auth_manager, FEATURE_ID, ADMIN)
+    try:
+        relation, error = manager.set_status(db, relation_id, payload.status, caller_is_admin=is_admin)
+    except Exception as e:
+        raise _failure("set_status", e, coded_status=409)
     if relation is None:
         raise HTTPException(status_code=404, detail="Authority Relation not found")
     if error:
-        raise HTTPException(status_code=409, detail=error)
+        raise HTTPException(status_code=409, detail={
+            "code": "authority_status_conflict", "message": error, "params": {},
+        })
     return manager.to_read_dict(db, relation)
 
 
@@ -236,13 +335,13 @@ async def affirm(
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
     payload: AffirmRequest = Body(default=AffirmRequest()),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
     username = current_user.username if current_user else "unknown"
     try:
         aff = manager.affirm(db, affirmation_id, affirmed_by=username, notes=payload.notes, user=current_user)
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+    except PermissionError:
+        raise _denied(READ_WRITE)
     if not aff:
         raise HTTPException(status_code=404, detail="Affirmation not found")
     return {"id": aff.id, "affirmed": aff.affirmed, "affirmed_by": aff.affirmed_by, "affirmed_at": aff.affirmed_at}
@@ -253,10 +352,11 @@ def resolve_by_concept(
     db: DBSessionDep,
     request: Request,
     payload: FindAuthorityForConceptRequest = Body(...),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     """Find the AR governing a Business Concept in a given context. Returns ranked
-    candidates and ``resolved`` (a family slug) only when exactly one survives."""
+    candidates and ``resolved`` (a family slug) only when exactly one survives.
+    Records no decision."""
     obo, app_sp = _ws_factories(request)
     return manager.find_authority_for_concept(
         db, payload.concept_iri, payload.context, payload.domains, payload.request,
@@ -270,12 +370,19 @@ def resolve(
     relation_id: str,
     db: DBSessionDep,
     request: Request,
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     payload: ResolveRequest = Body(default=ResolveRequest()),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    record: bool = Query(False, description="Record the decision (needs Read-write)"),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
+    """Resolve a decision. Read-only callers get the verdict without a decision
+    row; ``record=true`` writes one and needs Read-write (S14)."""
+    if record and not _may(request, user, auth_manager, FEATURE_ID, READ_WRITE):
+        raise _denied(READ_WRITE)
     obo, app_sp = _ws_factories(request)
     return manager.resolve(
-        db, relation_id, _resolve_req_dict(payload),
+        db, relation_id, _resolve_req_dict(payload), record=record,
         semantic_models_manager=_semantic_models_manager(request),
         obo_ws_factory=obo, app_ws_factory=app_sp,
     )
@@ -286,20 +393,28 @@ def test_resolve(
     relation_id: str,
     db: DBSessionDep,
     request: Request,
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     payload: ResolveRequest = Body(default=ResolveRequest()),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     """Dry-run the resolution gate against this AR regardless of status, without
     recording the decision or touching the usage counters. Used by the detail-view
     Test dialog so authors can preview verdicts before activating.
+
+    Needs Read-write, and an ``app_sp`` AR is dry-run only by an Admin (B2).
     """
     obo, app_sp = _ws_factories(request)
-    return manager.resolve(
-        db, relation_id, _resolve_req_dict(payload),
-        record=False, require_active=False,
-        semantic_models_manager=_semantic_models_manager(request),
-        obo_ws_factory=obo, app_ws_factory=app_sp,
-    )
+    try:
+        return manager.test_relation(
+            db, relation_id, _resolve_req_dict(payload),
+            caller_can_write=_may(request, user, auth_manager, FEATURE_ID, READ_WRITE),
+            caller_is_admin=_may(request, user, auth_manager, FEATURE_ID, ADMIN),
+            semantic_models_manager=_semantic_models_manager(request),
+            obo_ws_factory=obo, app_ws_factory=app_sp,
+        )
+    except AuthorityPermissionError as e:
+        raise _failure("test_relation", e)
 
 
 @router.get("/authority/relations/{relation_id}/decisions")
@@ -307,7 +422,7 @@ async def list_decisions(
     relation_id: str,
     db: DBSessionDep,
     source: Optional[str] = Query(None),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     from src.repositories.authority_resolution_repository import authority_decision_repo
     rows = authority_decision_repo.list_for_relation(db, relation_id=relation_id, source=source)
@@ -326,7 +441,7 @@ async def list_decisions(
 async def list_dna_runs(
     relation_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     from src.repositories.authority_resolution_repository import authority_dna_run_repo
     runs = authority_dna_run_repo.list_for_relation(db, relation_id=relation_id)
@@ -347,7 +462,7 @@ async def start_review(
     current_user: AuditCurrentUserDep,
     reviews_manager: DataAssetReviewManagerDep,
     payload: dict = Body(default={}),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
     owner = current_user.username if current_user else None
     message = payload.get("message") if isinstance(payload, dict) else None
@@ -360,7 +475,7 @@ async def start_review(
 @router.get("/authority/relation-slugs")
 async def list_relation_slugs(
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     """Family-level slugs the Requires picker consumes.
 
@@ -375,7 +490,7 @@ async def list_relation_slugs(
 async def list_prerequisites(
     relation_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     """The AR's declared prerequisite edges (each resolved to the active
     family version for display)."""
@@ -389,7 +504,7 @@ async def list_prerequisites(
 async def list_resource_refs(
     relation_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     """The AR's declared typed resource refs with each row's last cached label.
 
@@ -420,7 +535,7 @@ _SCHEMA_PARENT_RE = re.compile(r"^[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+$")
 def list_mcp_services(
     request: Request,
     schemas: Optional[str] = Query(None, description="CSV of catalog.schema to search besides system.ai"),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
     """UC MCP services visible to the caller (built-ins under ``system.ai`` plus
     any listed ``catalog.schema``) for the author's MCP-ref picker."""
@@ -433,7 +548,11 @@ def list_mcp_services(
         if not sch:
             continue
         if not _SCHEMA_PARENT_RE.match(sch):
-            raise HTTPException(status_code=400, detail=f"Invalid schema '{sch}' — expected catalog.schema")
+            raise HTTPException(status_code=400, detail={
+                "code": "authority_invalid_schema",
+                "message": "Each schema must be written as catalog.schema.",
+                "params": {"schema": sch},
+            })
         parents.append(f"schemas/{sch}")
     return {"identity": identity, "services": mcp_resolver.list_mcp_services(ws, parents)}
 
@@ -442,30 +561,43 @@ def list_mcp_services(
 def list_mcp_service_tools(
     request: Request,
     service_name: str = Query(..., description="Full service name, mcp-services/<catalog>.<schema>.<name>"),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
     """Tools (name, description, input/output schema) exposed by one MCP service."""
     from src.common import mcp_resolver
 
     if not service_name.startswith(mcp_resolver.SERVICE_PREFIX):
-        raise HTTPException(status_code=400, detail="service_name must start with 'mcp-services/'")
+        raise HTTPException(status_code=400, detail={
+            "code": "authority_invalid_service",
+            "message": "The MCP service name must start with 'mcp-services/'.",
+            "params": {"prefix": mcp_resolver.SERVICE_PREFIX},
+        })
     ws, identity = _authoring_ws(request)
     try:
         client = mcp_resolver.McpHttpClient(ws, service_name, timeout=10.0)
         return {"identity": identity, "tools": client.list_tools()}
     except mcp_resolver.McpResolverError as e:
+        # The resolver's text can carry the service's own error: log it, answer by kind.
+        error_id = new_error_id()
+        logger.error("MCP tool listing failed (error id %s): %s", error_id, e.kind, exc_info=True)
         status = 403 if e.kind == "permission" else 504 if e.kind == "timeout" else 502
-        raise HTTPException(status_code=status, detail=str(e))
+        raise HTTPException(status_code=status, detail={
+            "code": f"authority_mcp_{e.kind}",
+            "message": f"The MCP service could not list its tools (error id {error_id}). See the server log.",
+            "params": {"errorId": error_id, "kind": e.kind},
+        })
 
 
 @router.get("/authority/entity-ref-candidates")
 async def entity_ref_candidates(
     request: Request,
     db: DBSessionDep,
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     entity_type: str = Query(..., description="Ontos entity type to search in"),
     q: Optional[str] = Query(None, description="Case-insensitive label filter"),
     limit: int = Query(50, ge=1, le=200),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     """Picker feed for the ``ontos_entity`` ref type in the author dialog.
 
@@ -475,8 +607,10 @@ async def entity_ref_candidates(
 
     * ``business_concept`` — hits the semantic-models search endpoint
       (``entity_id`` *is* the concept IRI).
-    * ``data_product`` — ``name``-prefix match over data products.
-    * ``data_domain`` — ``name``-prefix match over data domains.
+    * ``data_product`` — ``name``-prefix match over data products; needs
+      Read-only on ``data-products``, else an empty list (S13).
+    * ``data_domain`` — ``name``-prefix match over data domains; needs
+      Read-only on ``data-domains``, else an empty list (S13).
     """
     needle = (q or "").strip().lower()
     out: List[dict] = []
@@ -488,8 +622,8 @@ async def entity_ref_candidates(
             # ``search_concepts`` already returns ``{value, label}`` pairs
             # (value = IRI); an empty needle is a plain limit-N listing.
             hits = sm.search_concepts(needle, limit=limit)
-        except Exception as e:
-            logger.warning(f"Concept search failed: {e}")
+        except Exception:
+            logger.warning("Concept search for the Authority Resolution picker failed", exc_info=True)
             return []
         for h in hits or []:
             iri = h.get("value") if isinstance(h, dict) else getattr(h, "value", None)
@@ -503,6 +637,9 @@ async def entity_ref_candidates(
                 "iri": iri,
             })
     elif entity_type in ("data_product", "data_domain"):
+        feature = "data-products" if entity_type == "data_product" else "data-domains"
+        if not _may(request, user, auth_manager, feature, READ_ONLY):
+            return []
         if entity_type == "data_product":
             from src.db_models.data_products import DataProductDb as model
         else:
@@ -518,11 +655,11 @@ async def entity_ref_candidates(
                 "label": row_name or str(row_id),
             })
     else:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported entity_type '{entity_type}' — expected "
-                   "business_concept, data_product, or data_domain.",
-        )
+        raise HTTPException(status_code=400, detail={
+            "code": "authority_invalid_entity_type",
+            "message": "The entity type must be business_concept, data_product or data_domain.",
+            "params": {"expected": ["business_concept", "data_product", "data_domain"]},
+        })
     out.sort(key=lambda x: (x.get("label") or "").lower())
     return out
 
@@ -531,7 +668,7 @@ async def entity_ref_candidates(
 async def list_criteria(
     relation_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     """The AR's author-configured decision criteria (Compliance Checks + facets)."""
     relation = manager.get_relation(db, relation_id)
@@ -542,22 +679,29 @@ async def list_criteria(
 
 @router.get("/authority/criteria/policies")
 async def list_reusable_checks(
+    request: Request,
     db: DBSessionDep,
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     category: Optional[str] = Query(None, description="Filter by compliance policy category"),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     """Reusable Compliance Checks for the criteria picker (authority-scoped so the
-    builder isn't gated on the separate compliance permission)."""
-    from src.db_models.compliance import CompliancePolicyDb
-    q = db.query(CompliancePolicyDb).filter(CompliancePolicyDb.is_active == True)  # noqa: E712
-    if category:
-        q = q.filter(CompliancePolicyDb.category == category)
+    builder isn't gated on the separate compliance permission).
+
+    Only the ARF checks ("Authority Decision") are listed unless the caller also
+    has Compliance read (S13).
+    """
+    can_read_compliance = _may(request, user, auth_manager, COMPLIANCE_FEATURE_ID, READ_ONLY)
+    policies = manager.list_reusable_checks(
+        db, category=category, caller_can_read_compliance=can_read_compliance,
+    )
     return [
         {
             "id": p.id, "name": p.name, "rule": p.rule, "category": p.category,
             "failure_message": p.failure_message, "severity": p.severity,
         }
-        for p in q.order_by(CompliancePolicyDb.name.asc()).all()
+        for p in policies
     ]
 
 
@@ -565,7 +709,7 @@ async def list_reusable_checks(
 async def validate_criterion(
     db: DBSessionDep,
     payload: dict = Body(...),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     """Live-validate a single criterion's DSL rule against a sample request object.
 
@@ -577,21 +721,24 @@ async def validate_criterion(
     if rule and not rule.upper().startswith("ASSERT"):
         rule = "ASSERT " + rule
     obj = payload.get("object") or {}
+    failure: Optional[HTTPException] = None
     try:
         passed, msg = eval_dsl(rule, obj)
         return {"passed": passed, "message": msg}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Rule validation failed: {e}")
+        failure = _failure("validate_criterion", e, coded_status=400, unexpected_status=400)
+    raise failure
 
 
 @router.post("/authority/recompute-scheduled")
 async def recompute_scheduled(
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, ADMIN)),
 ):
     """Manually trigger a DNAco recompute for every AR with a schedule set.
 
-    The same routine the scheduled ``authority_dna_recompute`` job runs.
+    The same routine the scheduled ``authority_dna_recompute`` job runs. Admin
+    only: it recomputes every AR in the workspace.
     """
     return manager.recompute_scheduled(db)
 
@@ -601,7 +748,7 @@ async def review_tracking(
     relation_id: str,
     db: DBSessionDep,
     reviews_manager: DataAssetReviewManagerDep,
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     result = manager.get_review_tracking(db, relation_id, reviews_manager=reviews_manager)
     if result is None:
@@ -615,12 +762,12 @@ async def review_context(
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
     reviewer: str = Query(..., description="Reviewer principal (email/group)"),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
     try:
         ctx = manager.get_review_context(db, relation_id, reviewer, user=current_user)
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+    except PermissionError:
+        raise _denied(READ_ONLY)
     if ctx is None:
         raise HTTPException(status_code=404, detail="No review found for this reviewer on this Authority Relation")
     return ctx
@@ -632,14 +779,14 @@ async def submit_review(
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
     payload: dict = Body(...),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
     reviewer = current_user.username if current_user else None
     answers = payload.get("answers", payload) if isinstance(payload, dict) else {}
     try:
         participant = manager.submit_review(db, participant_id, answers=answers, reviewer=reviewer, user=current_user)
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+    except PermissionError:
+        raise _denied(READ_WRITE)
     if not participant:
         raise HTTPException(status_code=404, detail="Review participant not found")
     return {"id": participant.id, "review_status": participant.review_status}

@@ -128,6 +128,31 @@ def _internal_error_response(request: Request, exc: StarletteHTTPException, caus
     )
 
 
+PERMISSION_CHECK_FAILED_CODE = 'permission_check_failed'
+
+
+def permission_check_failure(feature_id: str, exc: BaseException) -> StarletteHTTPException:
+    """The 500 for a permission check that raised (not a denial).
+
+    The exception's type and text go to the server log with an error id, which
+    the client gets with the code; the check's feature id is in the parameters.
+    Raise the result outside the ``except`` block, so the text is not chained.
+    """
+    error_id = new_error_id()
+    logger.error(
+        "Permission check for feature '%s' failed (error id %s): %s: %s",
+        feature_id, error_id, type(exc).__name__, exc, exc_info=exc,
+    )
+    return StarletteHTTPException(
+        status_code=500,
+        detail={
+            'code': PERMISSION_CHECK_FAILED_CODE,
+            'message': f'Could not check your permissions (error id {error_id}). See the server log.',
+            'params': {'errorId': error_id, 'feature': feature_id},
+        },
+    )
+
+
 async def coded_http_exception_handler(request: Request, exc: StarletteHTTPException) -> Response:
     """Answer an HTTP error raised from a ``CodedValueError`` with its code and parameters.
 

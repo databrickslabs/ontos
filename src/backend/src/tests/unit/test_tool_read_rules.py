@@ -736,7 +736,7 @@ class TestReadLevel:
             'data-products': ro, 'data-contracts': ro}
         assert set(scope_read_levels(['*'])) == {
             'data-products', 'data-contracts', 'data-domains', 'teams', 'projects',
-            'semantic-models', 'tags'}
+            'semantic-models', 'tags', 'authority-resolution'}
         assert scope_read_levels(['search:read', 'analytics:read']) == {}
 
     def test_an_api_key_without_product_scopes_reads_no_products(self, world):

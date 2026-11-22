@@ -3,6 +3,7 @@ from fastapi import Request, HTTPException, status, Depends
 from sqlalchemy.orm import Session
 
 # Import manager classes needed for Annotated types
+from src.common.api_errors import permission_check_failure
 from src.controller.settings_manager import SettingsManager
 from src.controller.audit_manager import AuditManager
 from src.controller.authorization_manager import AuthorizationManager # Needed for PermissionCheckerDep
@@ -187,11 +188,8 @@ async def require_permission(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error during permission check (require_permission) for feature '{feature}': {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error checking user permissions."
-        )
+        failure = permission_check_failure(feature, e)
+        raise failure
 
 # --- Helper to get current user for audit logging --- #
 # Defined *after* CurrentUserDep is defined

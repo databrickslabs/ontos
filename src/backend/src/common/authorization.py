@@ -7,6 +7,7 @@ from fastapi.security import APIKeyHeader
 from src.controller.authorization_manager import AuthorizationManager
 from src.models.users import UserInfo
 from src.common.features import FeatureAccessLevel
+from src.common.api_errors import permission_check_failure
 from src.common.logging import get_logger
 from src.common.database import get_db
 from src.common.team_role_override import team_role_overrides
@@ -781,6 +782,7 @@ class PermissionChecker:
                 detail="User has no assigned groups or email, cannot determine permissions."
             )
 
+        failure = None
         try:
             # Applied role override, else team role override + group/email roles.
             effective_permissions = await resolve_effective_permissions(
@@ -810,11 +812,8 @@ class PermissionChecker:
         except HTTPException:
             raise # Re-raise exceptions from dependencies (like 503 from get_auth_manager)
         except Exception as e:
-            logger.error("Unexpected error during permission check for feature '%s'", self.feature_id, exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error checking user permissions."
-            )
+            failure = permission_check_failure(self.feature_id, e)
+        raise failure
 
 # --- Pre-configured Dependency Instances (Optional but convenient) ---
 # You can create instances here for common permission levels

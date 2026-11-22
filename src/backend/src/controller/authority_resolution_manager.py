@@ -22,6 +22,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError, new_error_id
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common import authority_resolution_dna as authority_dna
@@ -50,6 +51,34 @@ from src.repositories.authority_resolution_repository import (
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 
 logger = get_logger(__name__)
+
+
+class AuthorityInvalidError(CodedValueError):
+    """An Authority Relation definition the author must fix; the message says what."""
+
+    code = "authority_invalid"
+
+
+class AuthorityPermissionError(CodedValueError):
+    """The caller's Authority Resolution level does not allow this change."""
+
+    code = "authority_permission_denied"
+
+
+def client_failure_text(tag: str, exc: BaseException) -> str:
+    """The text a client may see for a failed run.
+
+    Our own validation messages go out as they are. Anything else (SQL, warehouse
+    or workspace errors) is logged with an error id and answered with a generic
+    message, so the exception text never reaches a user, an MCP client or the
+    ``error_message`` column read back by the DNA run list.
+    """
+    if isinstance(exc, CodedValueError):
+        return str(exc)
+    error_id = new_error_id()
+    logger.error("[%s] failed (error id %s): %s", tag, error_id, type(exc).__name__, exc_info=exc)
+    return f"The {tag} failed (error id {error_id}); see the server log."
+
 
 ENTITY_TYPE = "authority_relation"
 FEATURE_ID = "authority-resolution"  # search feature filter (common/features.py)
@@ -85,6 +114,8 @@ def ref_key(field_path: str) -> str:
 
 
 DEFAULT_DNA_CEILING = 0.3
+# Compliance category of the checks an AR authors inline (see _create_criterion_policy).
+ARF_CHECK_CATEGORY = "Authority Decision"
 _ALLOWED_STATUSES = ("draft", "active", "needs_review", "retired")
 
 # Evidence SQL runs as the app service principal, so table names and row
@@ -106,7 +137,7 @@ _FILTER_FORBIDDEN = {
 def validate_table_fqn(fqn: str) -> str:
     fqn = (fqn or "").strip()
     if not _FQN_RE.match(fqn):
-        raise ValueError(f"Evidence table '{fqn}' must be a plain catalog.schema.table name.")
+        raise AuthorityInvalidError(f"Evidence table '{fqn}' must be a plain catalog.schema.table name.")
     return fqn
 
 
@@ -120,21 +151,21 @@ def validate_row_filter(row_filter: Optional[str]) -> Optional[str]:
     if "\\" in text:
         # Databricks SQL honours backslash escapes in literals; ANSI-only lexing
         # here could disagree on where a string ends.
-        raise ValueError("Evidence row_filter may not contain backslashes.")
+        raise AuthorityInvalidError("Evidence row_filter may not contain backslashes.")
     pos, prev_ident = 0, False
     while pos < len(text):
         if text[pos:].strip() == "":
             break
         m = _FILTER_TOKEN_RE.match(text, pos)
         if not m or m.end() == pos:
-            raise ValueError(f"Evidence row_filter has unsupported syntax near: {text[pos:pos + 20]!r}")
+            raise AuthorityInvalidError(f"Evidence row_filter has unsupported syntax near: {text[pos:pos + 20]!r}")
         ident = m.group("ident")
         if ident is not None and not ident.startswith("`"):
             word = ident.upper()
             if word in _FILTER_FORBIDDEN:
-                raise ValueError(f"Evidence row_filter may not use '{ident}'.")
+                raise AuthorityInvalidError(f"Evidence row_filter may not use '{ident}'.")
         if m.group("punct") == "(" and prev_ident:
-            raise ValueError("Evidence row_filter may not call functions.")
+            raise AuthorityInvalidError("Evidence row_filter may not call functions.")
         prev_ident = ident is not None and ident.upper() not in _FILTER_KEYWORDS
         pos = m.end()
     return text
@@ -298,8 +329,11 @@ class AuthorityResolutionManager(SearchableAsset):
 
     # ------------------------------------------------------------------ CRUD
 
-    def create_relation(self, db: Session, payload, current_user: Optional[str] = None) -> AuthorityRelationDb:
+    def create_relation(
+        self, db: Session, payload, current_user: Optional[str] = None, caller_is_admin: bool = False,
+    ) -> AuthorityRelationDb:
         data = payload.dict() if hasattr(payload, "dict") else dict(payload)
+        self._refuse_admin_only_changes(data, None, caller_is_admin)
         rel_id = str(uuid.uuid4())
 
         evidence = data.get("evidence_binding")
@@ -425,7 +459,7 @@ class AuthorityResolutionManager(SearchableAsset):
             value = data[key] or None
             data[key] = value
             if value and db.get(model, value) is None:
-                raise ValueError(f"{label} '{value}' not found")
+                raise AuthorityInvalidError(f"{label} '{value}' not found")
 
     @staticmethod
     def _name_of(db: Session, model, entity_id: Optional[str]) -> Optional[str]:
@@ -434,14 +468,64 @@ class AuthorityResolutionManager(SearchableAsset):
         row = db.get(model, entity_id)
         return getattr(row, "name", None) if row else None
 
+    # Settings only an Admin may set or change (permission matrix, ARF 1.2.0):
+    # the MCP identity, the DNA ceiling and the recompute schedule.
+    _ADMIN_ONLY_FIELDS = ("resolver_auth", "dna_max_threshold", "schedule_cron")
+
+    @staticmethod
+    def _refuse_admin_only_changes(
+        data: Dict[str, Any], current: Optional[AuthorityRelationDb], caller_is_admin: bool,
+    ) -> None:
+        """Refuse a change to an Admin-only setting by a non-Admin.
+
+        ``current`` is None on create, so the baseline is the column default. A
+        value that is merely re-sent unchanged is not a change, which keeps an
+        Admin's settings editable by a Read-write author.
+        """
+        if caller_is_admin:
+            return
+
+        def normal(field: str, value: Any) -> Any:
+            if field == "resolver_auth":
+                return value or RESOLVER_AUTH_OBO
+            if field == "dna_max_threshold":
+                return DEFAULT_DNA_CEILING if value is None else float(value)
+            return value or None
+
+        for field in AuthorityResolutionManager._ADMIN_ONLY_FIELDS:
+            if field not in data:
+                continue
+            old = getattr(current, field, None) if current is not None else None
+            if normal(field, data[field]) == normal(field, old):
+                continue
+            raise AuthorityPermissionError(
+                f"Only an Admin can change '{field}' on an Authority Relation.",
+                field=field, required_level="Admin",
+            )
+
     @staticmethod
     def _validate_resolver_auth(value: Optional[str]) -> str:
         value = value or RESOLVER_AUTH_OBO
         if value not in _RESOLVER_AUTH_VALUES:
-            raise ValueError(
+            raise AuthorityInvalidError(
                 f"resolver_auth must be one of {_RESOLVER_AUTH_VALUES}, got '{value}'."
             )
         return value
+
+    def list_reusable_checks(
+        self, db: Session, category: Optional[str] = None, caller_can_read_compliance: bool = False,
+    ) -> List[CompliancePolicyDb]:
+        """Active Compliance Checks an author can reuse as criteria (S13).
+
+        Without Compliance read only the ARF checks ("Authority Decision") are
+        listed; the Compliance library is not exposed to Authority Resolution.
+        """
+        q = db.query(CompliancePolicyDb).filter(CompliancePolicyDb.is_active == True)  # noqa: E712
+        if not caller_can_read_compliance:
+            q = q.filter(CompliancePolicyDb.category == ARF_CHECK_CATEGORY)
+        if category:
+            q = q.filter(CompliancePolicyDb.category == category)
+        return q.order_by(CompliancePolicyDb.name.asc()).all()
 
     def list_family_slugs(self, db: Session) -> List[Dict[str, Any]]:
         """One ``{family_slug, name, status, version}`` row per slug-carrying
@@ -523,11 +607,15 @@ class AuthorityResolutionManager(SearchableAsset):
             setattr(r, "_version_count", counts.get(fid, 1))
         return rows
 
-    def update_relation(self, db: Session, relation_id: str, payload, current_user: Optional[str] = None) -> Optional[AuthorityRelationDb]:
+    def update_relation(
+        self, db: Session, relation_id: str, payload, current_user: Optional[str] = None,
+        caller_is_admin: bool = False,
+    ) -> Optional[AuthorityRelationDb]:
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
             return None
         data = payload.dict(exclude_unset=True) if hasattr(payload, "dict") else dict(payload)
+        self._refuse_admin_only_changes(data, relation, caller_is_admin)
 
         domain_ids = data.pop("domain_ids", None)
         primary_domain_id = data.pop("primary_domain_id", None)
@@ -609,7 +697,7 @@ class AuthorityResolutionManager(SearchableAsset):
                   if v.id != relation.id]
         if others:
             if relation.id == family_id:
-                raise ValueError(
+                raise AuthorityInvalidError(
                     "This is the first version of its family; delete the newer versions first."
                 )
             if relation.slug:
@@ -624,7 +712,7 @@ class AuthorityResolutionManager(SearchableAsset):
                 dependents = sorted({e.relation_family_slug for e in authority_prerequisite_repo.list_dependents(
                     db, prerequisite_family_slug=slug)})
                 if dependents:
-                    raise ValueError(
+                    raise AuthorityInvalidError(
                         f"Authority Relation '{slug}' is a prerequisite of {', '.join(dependents)}; "
                         "remove those edges first."
                     )
@@ -659,7 +747,7 @@ class AuthorityResolutionManager(SearchableAsset):
         """Every version in the AR's family, newest first (mirrors get_product_versions)."""
         source = authority_relation_repo.get(db, relation_id)
         if not source:
-            raise ValueError("Authority Relation not found")
+            raise AuthorityInvalidError("Authority Relation not found")
         family_id = getattr(source, "version_family_id", None) or source.id
         return authority_relation_repo.get_family_versions(db, family_id=family_id)
 
@@ -893,7 +981,7 @@ class AuthorityResolutionManager(SearchableAsset):
             rule = "ASSERT " + rule
         parse_error = authority_dna.rule_parse_error(rule)
         if parse_error:
-            raise ValueError(f"Criterion rule {rule!r} does not parse: {parse_error}")
+            raise AuthorityInvalidError(f"Criterion rule {rule!r} does not parse: {parse_error}")
         pid = str(uuid.uuid4())
         policy = CompliancePolicyDb(
             id=pid,
@@ -902,7 +990,7 @@ class AuthorityResolutionManager(SearchableAsset):
             description=f"Authority decision criterion for Authority Relation {relation_id}",
             failure_message=c.get("failure_message") or None,
             rule=rule,
-            category="Authority Decision",
+            category=ARF_CHECK_CATEGORY,
             severity="high",
             is_active=True,
         )
@@ -951,7 +1039,7 @@ class AuthorityResolutionManager(SearchableAsset):
         head_slug = self._family_slug_of(db, relation)
         if head_slug is None:
             if prerequisites:
-                raise ValueError(
+                raise AuthorityInvalidError(
                     "Authority Relation needs a slug before prerequisites can be set "
                     "— edges are keyed by the stable family-level @id."
                 )
@@ -964,15 +1052,15 @@ class AuthorityResolutionManager(SearchableAsset):
             if not slug:
                 continue
             if slug == head_slug:
-                raise ValueError(
+                raise AuthorityInvalidError(
                     f"An Authority Relation cannot require itself ({slug})."
                 )
             if authority_relation_repo.get_by_slug(db, slug) is None:
-                raise ValueError(
+                raise AuthorityInvalidError(
                     f"Prerequisite '{slug}' does not match any Authority Relation slug."
                 )
             if self._cycle_would_close(db, head_slug, slug):
-                raise ValueError(
+                raise AuthorityInvalidError(
                     f"Adding '{slug}' as a prerequisite of '{head_slug}' would close a cycle."
                 )
             normalised[slug] = {
@@ -1048,7 +1136,7 @@ class AuthorityResolutionManager(SearchableAsset):
             if not field_path:
                 continue
             if ref_type not in self._REF_TYPES:
-                raise ValueError(
+                raise AuthorityInvalidError(
                     f"Resource ref for '{field_path}' has unknown ref_type "
                     f"'{ref_type}' — expected one of {self._REF_TYPES}."
                 )
@@ -1057,19 +1145,19 @@ class AuthorityResolutionManager(SearchableAsset):
                 # ``None`` is treated as "no ref row" by the resolver, so
                 # catch that at the write boundary.
                 if r.get("literal_value") is None:
-                    raise ValueError(
+                    raise AuthorityInvalidError(
                         f"Literal resource ref for '{field_path}' is missing literal_value."
                     )
             elif ref_type == "ontos_entity":
                 entity_type = (r.get("entity_type") or "").strip()
                 entity_id = (r.get("entity_id") or "").strip()
                 if not entity_type or not entity_id:
-                    raise ValueError(
+                    raise AuthorityInvalidError(
                         f"Ontos-entity resource ref for '{field_path}' needs both "
                         "entity_type and entity_id."
                     )
                 if entity_type not in self._ONTOS_ENTITY_TYPES:
-                    raise ValueError(
+                    raise AuthorityInvalidError(
                         f"Ontos-entity resource ref for '{field_path}' has unsupported "
                         f"entity_type '{entity_type}' — expected one of {self._ONTOS_ENTITY_TYPES}."
                     )
@@ -1077,15 +1165,15 @@ class AuthorityResolutionManager(SearchableAsset):
                 service = (r.get("mcp_service_name") or "").strip()
                 tool = (r.get("mcp_tool_name") or "").strip()
                 if not service.startswith(mcp_resolver.SERVICE_PREFIX) or not tool:
-                    raise ValueError(
+                    raise AuthorityInvalidError(
                         f"MCP resource ref for '{field_path}' needs mcp_service_name "
                         f"('{mcp_resolver.SERVICE_PREFIX}…') and mcp_tool_name."
                     )
                 if r.get("mcp_params") is not None and not isinstance(r["mcp_params"], dict):
-                    raise ValueError(f"MCP resource ref for '{field_path}': mcp_params must be an object.")
+                    raise AuthorityInvalidError(f"MCP resource ref for '{field_path}': mcp_params must be an object.")
                 pointer = (r.get("mcp_result_pointer") or "$").strip()
                 if not pointer.startswith("$"):
-                    raise ValueError(
+                    raise AuthorityInvalidError(
                         f"MCP resource ref for '{field_path}': mcp_result_pointer must start with '$'."
                     )
             normalised[field_path] = r
@@ -1254,19 +1342,23 @@ class AuthorityResolutionManager(SearchableAsset):
         if ws is None:
             raise McpResolverError(f"no workspace client for resolver_auth={auth}", kind="permission")
         deadline = rctx.deadline or Deadline(RESOLVE_BUDGET_S)
-        template_ctx = {
-            **req,
-            "request": req,
-            "ar": {
-                "slug": relation.slug,
-                "actor_role": relation.actor_role,
-                "actor_identity": relation.actor_identity,
-                "action": relation.action,
-                "object_type": relation.object_type,
-                "object_id": relation.object_id,
-                "domain_context": relation.domain_context or {},
-            },
+        ar_values = {
+            "slug": relation.slug,
+            "actor_role": relation.actor_role,
+            "actor_identity": relation.actor_identity,
+            "action": relation.action,
+            "object_type": relation.object_type,
+            "object_id": relation.object_id,
+            "domain_context": relation.domain_context or {},
         }
+        if auth == RESOLVER_AUTH_APP_SP:
+            # An app_sp call runs with the app's own rights, so only values the
+            # author defined reach its params (B2): the AR fields and its scope
+            # parameters, never the caller's request.
+            params = (relation.domain_context or {}).get("params") or {}
+            template_ctx = {"ar": ar_values, "ctx": params}
+        else:
+            template_ctx = {**req, "request": req, "ar": ar_values}
         arguments = mcp_resolver.render_params(row.mcp_params or {}, template_ctx)
         try:
             client = rctx.mcp_client_factory(ws, row.mcp_service_name, deadline=deadline)
@@ -1648,11 +1740,11 @@ class AuthorityResolutionManager(SearchableAsset):
                 # canonical request fields the criteria rules reference.
                 rows = self._collect_evidence(relation)
             if not rows:
-                raise ValueError("No evidence rows were read; the DNA-Coefficient cannot be measured.")
+                raise AuthorityInvalidError("No evidence rows were read; the DNA-Coefficient cannot be measured.")
             criteria = self._load_criteria(relation)
             broken = [c.code for c in criteria if authority_dna.rule_parse_error(c.rule)]
             if broken:
-                raise ValueError(f"Criteria with malformed rules: {', '.join(broken)}; fix them before measuring.")
+                raise AuthorityInvalidError(f"Criteria with malformed rules: {', '.join(broken)}; fix them before measuring.")
             result = authority_dna.compute_dnaco(criteria, rows)
 
             # Combine the evidence-based dimensions with the definition-based
@@ -1717,9 +1809,9 @@ class AuthorityResolutionManager(SearchableAsset):
             self._log_timeline(db, relation_id, msg)
             return run
         except Exception as e:
-            logger.error(f"DNAco computation failed for {relation_id}: {e}", exc_info=True)
             authority_dna_run_repo.update(db, db_obj=run, obj_in={
-                "status": "failed", "finished_at": self._now(), "error_message": str(e),
+                "status": "failed", "finished_at": self._now(),
+                "error_message": client_failure_text("DNA-Coefficient computation", e),
             })
             raise
 
@@ -1745,8 +1837,10 @@ class AuthorityResolutionManager(SearchableAsset):
                     "magnitude": run.magnitude if run else None,
                 })
             except Exception as e:
-                logger.warning(f"Scheduled DNAco recompute failed for {r.id}: {e}")
-                results.append({"relation_id": r.id, "status": "failed", "error": str(e)})
+                results.append({
+                    "relation_id": r.id, "status": "failed",
+                    "error": client_failure_text("scheduled DNA-Coefficient recompute", e),
+                })
         return {"scheduled": len(due), "results": results}
 
     # Canonical request fields the criteria rules reference (``obj.<field>``); the
@@ -1844,8 +1938,19 @@ class AuthorityResolutionManager(SearchableAsset):
         t = relation.dna_max_threshold
         return DEFAULT_DNA_CEILING if t is None else t
 
-    def set_status(self, db: Session, relation_id: str, status: str) -> Tuple[Optional[AuthorityRelationDb], Optional[str]]:
-        """Transition an AR's status. Returns (relation, error_message)."""
+    def set_status(
+        self, db: Session, relation_id: str, status: str, caller_is_admin: bool = False,
+    ) -> Tuple[Optional[AuthorityRelationDb], Optional[str]]:
+        """Transition an AR's status. Returns (relation, error_message).
+
+        Activating or retiring an AR is Admin-only; a Read-write author can
+        still move it between draft and needs_review.
+        """
+        if status in (STATUS_ACTIVE, STATUS_RETIRED) and not caller_is_admin:
+            raise AuthorityPermissionError(
+                f"Only an Admin can set an Authority Relation to '{status}'.",
+                status=status, required_level="Admin",
+            )
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
             return None, "not_found"
@@ -1953,6 +2058,34 @@ class AuthorityResolutionManager(SearchableAsset):
             db, ar_ref, req, visited=set(),
             record=record, require_active=require_active, rctx=rctx,
         )
+
+    def test_relation(
+        self,
+        db: Session,
+        relation_id: str,
+        req: Dict[str, Any],
+        *,
+        caller_can_write: bool,
+        caller_is_admin: bool,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """The author's Test dialog: a dry run that records nothing.
+
+        Needs Read-write (B2), and an ``app_sp`` AR is dry-run only by an Admin,
+        since the dry run calls the MCP tool as the app service principal.
+        """
+        if not caller_can_write:
+            raise AuthorityPermissionError(
+                "Testing an Authority Relation needs Read-write on Authority Resolution.",
+                required_level="Read/Write",
+            )
+        relation = self.resolve_relation_ref(db, relation_id)
+        if relation is not None and relation.resolver_auth == RESOLVER_AUTH_APP_SP and not caller_is_admin:
+            raise AuthorityPermissionError(
+                "Only an Admin can test an Authority Relation that resolves as the app service principal.",
+                required_level="Admin",
+            )
+        return self.resolve(db, relation_id, req, record=False, require_active=False, **kwargs)
 
     def _resolve_internal(
         self,
@@ -2095,6 +2228,23 @@ class AuthorityResolutionManager(SearchableAsset):
                 return blocked, reason, chain
         return None, None, chain
 
+    @staticmethod
+    def _bump_usage_counters(db: Session, relation: AuthorityRelationDb, verdict: str) -> None:
+        """Increment the usage counters in one SQL UPDATE.
+
+        Read-modify-write on the ORM object loses increments when two resolves
+        overlap; ``col = col + 1`` is applied by the database itself (S14).
+        """
+        values = {AuthorityRelationDb.usage_count: AuthorityRelationDb.usage_count + 1}
+        if verdict == VERDICT_APPROVED:
+            values[AuthorityRelationDb.approved_count] = AuthorityRelationDb.approved_count + 1
+        elif verdict == VERDICT_DENIED:
+            values[AuthorityRelationDb.denied_count] = AuthorityRelationDb.denied_count + 1
+        db.query(AuthorityRelationDb).filter(AuthorityRelationDb.id == relation.id).update(
+            values, synchronize_session=False,
+        )
+        db.expire(relation, ["usage_count", "approved_count", "denied_count"])
+
     def _finalize_resolve(
         self,
         db: Session,
@@ -2127,12 +2277,7 @@ class AuthorityResolutionManager(SearchableAsset):
                 "reason": reason,
                 "provenance": provenance,
             })
-            counters = {"usage_count": (relation.usage_count or 0) + 1}
-            if verdict == VERDICT_APPROVED:
-                counters["approved_count"] = (relation.approved_count or 0) + 1
-            elif verdict == VERDICT_DENIED:
-                counters["denied_count"] = (relation.denied_count or 0) + 1
-            authority_relation_repo.update(db, db_obj=relation, obj_in=counters)
+            self._bump_usage_counters(db, relation, verdict)
 
         return {
             "verdict": verdict,

@@ -290,3 +290,23 @@ def test_saving_a_mapping_that_names_an_llm_check_policy_is_refused(db_session):
     assert raised.value.status_code == 422
     assert raised.value.__cause__.code == 'compliance_mapping_policy_uses_llm_check'
     config.save_yaml.assert_not_called()
+
+
+def test_activating_a_stored_workflow_with_an_llm_check_validation_step_is_refused(db_session):
+    # Stored without the designer's save check (the YAML load, an import)
+    from src.routes.workflows_routes import _refuse_unrunnable_policy_steps
+
+    manager = WorkflowsManager(db_session)
+    stored = manager.create_workflow(_validation_workflow(
+        f"ASSERT LLM_CHECK(obj.description, '{GRAIN}')",
+    ))
+
+    with pytest.raises(HTTPException) as raised:
+        _refuse_unrunnable_policy_steps(manager, stored)
+
+    assert raised.value.status_code == 400
+    [issue] = raised.value.detail['params']['issues']
+    assert issue['code'] == 'validation_rule_uses_llm_check'
+    # A validation step without LLM_CHECK activates
+    plain = manager.create_workflow(_validation_workflow("ASSERT obj.description != ''"))
+    _refuse_unrunnable_policy_steps(manager, plain)

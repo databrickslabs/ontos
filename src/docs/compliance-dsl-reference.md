@@ -248,7 +248,8 @@ daily quota is shared).
   a policy with `LLM_CHECK` (`policy_check_policy_uses_llm_check`: an error that
   refuses the save of an active workflow; an inactive one saves with a warning
   and is refused when it is activated), a validation step whose rule uses
-  `LLM_CHECK` (`validation_rule_uses_llm_check`), a maturity gate on such a policy
+  `LLM_CHECK` (`validation_rule_uses_llm_check`, also when a stored workflow with
+  one is activated), a maturity gate on such a policy
   (`maturity_gate_policy_uses_llm_check`), a compliance mapping that lists such a
   policy (422 `compliance_mapping_policy_uses_llm_check`), and an `LLM_CHECK` rule
   for a policy that steps or gates already use (409 `llm_check_policy_in_use`) or

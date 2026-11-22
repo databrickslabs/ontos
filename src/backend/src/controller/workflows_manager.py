@@ -492,6 +492,30 @@ class WorkflowsManager:
                 ))
         return errors
 
+    @staticmethod
+    def validation_rule_errors(steps: Iterable[Any]) -> List[CodedMessage]:
+        """Errors for validation steps whose rule uses LLM_CHECK.
+
+        A validation step evaluates its rule without a model
+        (``llm_check_not_available``): it would fail, and block, every entity it
+        checks. Checked on save and again when a stored workflow is activated, so
+        one stored another way (the YAML load, an import) can't be switched on.
+        """
+        from src.controller.compliance_manager import rule_uses_llm_check
+
+        errors = []
+        for step in steps:
+            if step.step_type != StepType.VALIDATION:
+                continue
+            rule = (step.config or {}).get('rule')
+            if isinstance(rule, str) and rule_uses_llm_check(rule):
+                errors.append(CodedMessage(
+                    f"Step '{step.step_id}': the rule uses LLM_CHECK, which is only "
+                    "evaluated in compliance runs, so the step would fail every entity",
+                    'validation_rule_uses_llm_check', step=step.step_id,
+                ))
+        return errors
+
     def toggle_active(
         self,
         workflow_id: str,
@@ -1093,17 +1117,7 @@ class WorkflowsManager:
             if not config.get('rule'):
                 errors.append(_missing(step, "Validation step requires 'rule' in config", ['rule']))
             else:
-                from src.controller.compliance_manager import rule_uses_llm_check
-
-                rule = config.get('rule')
-                if isinstance(rule, str) and rule_uses_llm_check(rule):
-                    # Evaluated without a model (llm_check_not_available): the step
-                    # would fail, and block, every entity it checks
-                    errors.append(CodedMessage(
-                        f"Step '{step.step_id}': the rule uses LLM_CHECK, which is only "
-                        "evaluated in compliance runs, so the step would fail every entity",
-                        'validation_rule_uses_llm_check', step=step.step_id,
-                    ))
+                errors.extend(self.validation_rule_errors([step]))
 
         elif step.step_type == StepType.APPROVAL:
             if not config.get('approvers'):

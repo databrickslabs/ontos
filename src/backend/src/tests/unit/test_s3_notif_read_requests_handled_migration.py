@@ -134,3 +134,34 @@ def test_upgrade_is_idempotent_and_downgrade_keeps_the_marker(migration, engine)
 
     _run(engine, migration.downgrade)
     assert _payloads(engine) == once
+
+
+def test_upgrade_reads_the_rows_in_keyset_batches(migration, engine, monkeypatch):
+    """#1527 review: the upgrade never holds every matching row; each read is one batch."""
+    from sqlalchemy import event
+
+    monkeypatch.setattr(migration, '_BATCH', 2)
+    marked = [_row(f'r-{i}') for i in range(5)]
+    skipped = [_row('a-handled', action_payload='{"handled": true}'),
+               _row('z-handled', action_payload='{"handled": true}')]
+    _seed(engine, marked + skipped + [_row('m-unread', read=False)])
+    before = _payloads(engine)
+    fetched = []
+
+    def count_rows(conn, cursor, statement, params, context, executemany):
+        if statement.lstrip().upper().startswith('SELECT'):
+            fetched.append(statement)
+
+    event.listen(engine, 'after_cursor_execute', count_rows)
+    try:
+        _run(engine, migration.upgrade)
+    finally:
+        event.remove(engine, 'after_cursor_execute', count_rows)
+
+    after = _payloads(engine)
+    assert all(json.loads(after[row['id']])['handled'] is True for row in marked)
+    untouched = ('a-handled', 'z-handled', 'm-unread')
+    assert {key: after[key] for key in untouched} == {key: before[key] for key in untouched}
+    assert fetched and all('LIMIT' in statement.upper() for statement in fetched)
+    # 7 matching rows, 2 per batch: 4 batches, then one empty read ends the loop
+    assert len(fetched) == 5

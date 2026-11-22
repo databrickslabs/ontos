@@ -60,24 +60,31 @@ def _handled(payload):
 
 
 def upgrade() -> None:
+    """Keyset batches by id: at most ``_BATCH`` rows are held at a time."""
     conn = op.get_bind()
-    rows = conn.execute(
-        sa.text(
-            "SELECT id, action_payload FROM notifications "
-            "WHERE read = :read AND type = 'action_required' "
-            "AND action_type IS NOT NULL AND action_type <> '' "
-            "AND action_type <> :approval"
-        ),
-        {'read': True, 'approval': APPROVAL_ACTION_TYPE},
-    ).all()
-    updates = []
-    for row_id, payload in rows:
-        new_payload = _handled(payload)
-        if new_payload is not None:
-            updates.append({'id': row_id, 'payload': new_payload})
-    statement = sa.text("UPDATE notifications SET action_payload = :payload WHERE id = :id")
-    for start in range(0, len(updates), _BATCH):
-        conn.execute(statement, updates[start:start + _BATCH])
+    select = sa.text(
+        "SELECT id, action_payload FROM notifications "
+        "WHERE read = :read AND type = 'action_required' "
+        "AND action_type IS NOT NULL AND action_type <> '' "
+        "AND action_type <> :approval AND id > :after "
+        "ORDER BY id LIMIT :batch"
+    )
+    update = sa.text("UPDATE notifications SET action_payload = :payload WHERE id = :id")
+    after = ''
+    while True:
+        rows = conn.execute(select, {
+            'read': True, 'approval': APPROVAL_ACTION_TYPE, 'after': after, 'batch': _BATCH,
+        }).all()
+        if not rows:
+            break
+        updates = []
+        for row_id, payload in rows:
+            new_payload = _handled(payload)
+            if new_payload is not None:
+                updates.append({'id': row_id, 'payload': new_payload})
+        if updates:
+            conn.execute(update, updates)
+        after = rows[-1][0]
 
 
 def downgrade() -> None:

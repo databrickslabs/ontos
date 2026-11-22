@@ -128,8 +128,10 @@ def test_the_migration_marks_the_read_requests_handled_on_postgres(pg_session):
                              action_payload=json.dumps({'execution_id': 'e-1'}))
     _insert(pg_session, [read_request, unread_request, read_approval])
 
+    migration = _migration()
+    migration._BATCH = 1  # keyset batches by id: one row per read, on Postgres too
     with Operations.context(MigrationContext.configure(pg_session.connection())):
-        _migration().upgrade()
+        migration.upgrade()
     pg_session.flush()
 
     listed = _listed(pg_session)

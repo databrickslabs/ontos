@@ -2272,14 +2272,17 @@ For example key `ontos_context_tier` and value `{ASSET.MATURITY}`. The two varia
 also be used in the main asset entry, next to `{ASSET.ID}`, `{ASSET.TYPE}` and
 `{ASSET.FQN}`.
 
-- The job publishes the level of the latest evaluation: when an asset changes, when its
-  page is opened, or with re-evaluate. It doesn't evaluate assets itself.
+- The job publishes the level of the latest stored evaluation: when an asset changes, or
+  with re-evaluate. It doesn't evaluate assets itself.
 - Only tables and views get the tag; schemas and catalogs don't. The run output counts
   the assets it skipped and why: no `catalog.schema.table` name, an asset type other
   than table or view, or no level (not evaluated yet, or no level reached).
-- A table that loses its level loses the tag at the next run. Keep the key under the
-  same prefix as the other enabled keys (`ontos_` by default): the job only reads and
-  removes tags with that prefix.
+- A table that loses its level loses the tag at the next run. The job removes only a
+  maturity tag it recorded writing, while it still has the value it wrote: a tag set by
+  hand under the same key, or one whose value was changed in Unity Catalog, is kept, also
+  when the table has no level or the maturity card is off. Keep the key under the same
+  prefix as the other enabled keys (`ontos_` by default): the job only reads tags with
+  that prefix.
 
 ### Compliance Best Practices
 

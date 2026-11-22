@@ -189,6 +189,65 @@ def test_a_table_that_loses_its_level_loses_the_tag(tag_sync, uc):
     assert second.removed == 1
 
 
+# --- Key ownership: only the maturity tag the job delivered is removed (#1388 review) ---
+
+_MATURITY_KEY_CFG = dict(MATURITY_CFG, tag_key_format="ontos_maturity")
+
+
+def _sync_key(tag_sync, datasets, previous, configs=None):
+    return tag_sync.sync_tags(
+        MagicMock(), MagicMock(), datasets, tag_sync.DirectLinkInfos(),
+        configs or [_MATURITY_KEY_CFG, TYPE_CFG], "ontos_", previous=previous,
+    )
+
+
+def _recorded(object_name, tags):
+    return {"TABLE": {object_name: dict(tags)}, "SCHEMA": {}, "CATALOG": {}, "COLUMN": {}}
+
+
+def test_a_hand_set_maturity_tag_on_a_table_without_a_level_is_kept(tag_sync, uc):
+    uc[("TABLE", TABLE)] = {"ontos_maturity": "Gold (set by hand)"}
+
+    result = _sync_key(tag_sync, [_dataset(tag_sync)], previous=_recorded(TABLE, {}))
+
+    assert result.errors == []
+    assert uc[("TABLE", TABLE)]["ontos_maturity"] == "Gold (set by hand)"
+    assert "ontos_maturity" not in result.delivered["TABLE"].get(TABLE, {})
+
+
+def test_a_hand_set_maturity_tag_is_kept_when_maturity_is_off(tag_sync, uc):
+    uc[("TABLE", TABLE)] = {"ontos_maturity": "Gold (set by hand)"}
+    disabled = dict(_MATURITY_KEY_CFG, enabled=False)
+
+    _sync_key(tag_sync, [_dataset(tag_sync, asset_maturity_name="1 star",
+                                  asset_maturity_order=2)],
+              previous=_recorded(TABLE, {}), configs=[disabled, TYPE_CFG])
+
+    assert uc[("TABLE", TABLE)]["ontos_maturity"] == "Gold (set by hand)"
+
+
+def test_the_delivered_maturity_tag_is_removed_when_the_level_goes(tag_sync, uc):
+    first = _sync_key(tag_sync, [_dataset(tag_sync, asset_maturity_name="1 star",
+                                          asset_maturity_order=2)], previous=None)
+    assert uc[("TABLE", TABLE)]["ontos_maturity"] == "1 star"
+    assert first.delivered["TABLE"][TABLE]["ontos_maturity"] == "1 star"
+
+    second = _sync_key(tag_sync, [_dataset(tag_sync)], previous=first.delivered)
+
+    assert "ontos_maturity" not in uc[("TABLE", TABLE)]
+    assert second.removed == 1
+
+
+def test_a_delivered_maturity_tag_changed_by_hand_is_kept(tag_sync, uc):
+    first = _sync_key(tag_sync, [_dataset(tag_sync, asset_maturity_name="1 star",
+                                          asset_maturity_order=2)], previous=None)
+    uc[("TABLE", TABLE)]["ontos_maturity"] = "Gold (set by hand)"
+
+    _sync_key(tag_sync, [_dataset(tag_sync)], previous=first.delivered)
+
+    assert uc[("TABLE", TABLE)]["ontos_maturity"] == "Gold (set by hand)"
+
+
 # --- Skip reasons ---------------------------------------------------------------
 
 

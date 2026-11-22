@@ -14,7 +14,7 @@ import ScheduleSelect from '@/components/authority-resolution/schedule-select';
 import McpRefEditor from '@/components/authority-resolution/mcp-ref-editor';
 import { InfoHint, SectionTitle } from '@/components/authority-resolution/info-hint';
 import CriteriaBuilder, {
-  rowsFromCriteria, rowsToPayload, type CriterionRow,
+  hasInvalidWeight, rowsFromCriteria, rowsToPayload, type CriterionRow,
 } from '@/components/authority-resolution/criteria-builder';
 import DomainContextEditor, {
   paramRowsFrom, scopeRowsFrom, toDomainContext, type ParamRow, type ScopeRow,
@@ -22,6 +22,8 @@ import DomainContextEditor, {
 import RuleEditor, {
   itemsFromRule, ruleFromItems, type ItemDraft,
 } from '@/components/authority-resolution/rule-editor';
+import { authorityErrorMessage } from '@/components/authority-resolution/authority-errors';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useApi } from '@/hooks/use-api';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
@@ -43,6 +45,8 @@ interface Props {
   onCreated: (created: AuthorityRelation) => void;
   /** When provided, the dialog edits this relation (PUT) instead of creating a new one. */
   relation?: AuthorityRelation | null;
+  /** Opens the New Version action of the caller, offered when the definition is locked. */
+  onNewVersion?: () => void;
 }
 
 const DEFAULT_COLUMN_MAP = `{
@@ -69,7 +73,7 @@ const newEvidenceSource = (): EvidenceSourceInput => ({
   type: 'delta_table', ref: '', label: '', columnMap: DEFAULT_COLUMN_MAP,
 });
 
-export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCreated, relation }: Props) {
+export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCreated, relation, onNewVersion }: Props) {
   const { t } = useTranslation(['authority-resolution', 'common']);
   const { get, post, put } = useApi();
   const { toast } = useToast();
@@ -111,6 +115,13 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   // The DNA ceiling, the recompute schedule and the app service principal identity are Admin-only.
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const isAdmin = !permissionsLoading && hasPermission('authority-resolution', FeatureAccessLevel.ADMIN);
+  // Active and earlier versions are immutable: the definition is read-only, metadata stays editable.
+  const locked = isEdit && relation?.editable === false;
+  // Empty keeps the 0.3 default; otherwise the ceiling must be within [0, 1].
+  const [dnaServerError, setDnaServerError] = useState(false);
+  const dnaMaxNumber = dnaMax.trim() === '' ? 0.3 : Number(dnaMax);
+  const dnaMaxValid = Number.isFinite(dnaMaxNumber) && dnaMaxNumber >= 0 && dnaMaxNumber <= 1;
+  const dnaMaxError = !dnaMaxValid || dnaServerError;
   // Picker catalog, keyed by (entity_type, search-term). The dialog debounces
   // searches per row so the picker stays cheap even with 100s of concepts.
   const [refCandidates, setRefCandidates] = useState<Record<string, EntityRefCandidate[]>>({});
@@ -285,6 +296,15 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       }
     }
 
+    if (hasInvalidWeight(criteriaRows)) {
+      toast({ title: t('criteria.errors.weightInvalid'), variant: 'destructive' });
+      return;
+    }
+    if (!dnaMaxValid) {
+      toast({ title: t('errors.dnaMaxRange'), variant: 'destructive' });
+      return;
+    }
+
     const evidence_sources: any[] = [];
     for (const s of evidenceSources) {
       if (!s.ref.trim()) continue;
@@ -326,7 +346,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       rule,
       criteria: rowsToPayload(criteriaRows),
       evidence_sources,
-      dna_max_threshold: Number.isFinite(parseFloat(dnaMax)) ? parseFloat(dnaMax) : 0.3,
+      dna_max_threshold: dnaMaxNumber,
       domain_ids: domainIds,
       primary_domain_id: primaryDomainId,
       owner_team_id: ownerTeamId,
@@ -355,12 +375,14 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
     };
 
     setSaving(true);
-    const { data, error } = isEdit
+    const { data, error, errorCode, errorParams, status } = isEdit
       ? await put<AuthorityRelation>(`/api/authority/relations/${relation!.id}`, payload)
       : await post<AuthorityRelation>('/api/authority/relations', payload);
     setSaving(false);
     if (error) {
-      toast({ title: t('common:toast.failed'), description: error, variant: 'destructive' });
+      // Pydantic bounds error on dna_max_threshold: show it on the field.
+      if (status === 422 && /dna_max_threshold/.test(error)) setDnaServerError(true);
+      toast({ title: t('common:toast.failed'), description: authorityErrorMessage(t, error, errorCode, errorParams), variant: 'destructive' });
       return;
     }
     if (!isEdit) reset();
@@ -375,6 +397,17 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
         </DialogHeader>
 
         <div className="space-y-4">
+          {locked && (
+            <Alert>
+              <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                <span>{t('editor.immutableNotice')}</span>
+                {onNewVersion && (
+                  <Button variant="outline" size="sm" onClick={onNewVersion}>{t('details.buttonNewVersion')}</Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+          <fieldset disabled={locked} className="min-w-0 border-0 p-0 m-0">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>{t('editor.labels.name')} *</Label>
@@ -385,12 +418,14 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
               <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder={t('editor.fields.slug.placeholder')} />
             </div>
           </div>
+          </fieldset>
 
           <div className="space-y-1">
             <Label>{t('editor.labels.description')}</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
 
+          <fieldset disabled={locked} className="min-w-0 space-y-4 border-0 p-0 m-0">
           <SectionTitle title={t('editor.sections.authorityRelation')} info={<Trans i18nKey="editor.hints.authorityRelation" ns="authority-resolution" components={{ strong: <strong />, }} />} />
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -441,7 +476,9 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             onChange={setCriteriaRows}
             params={draftContext.value?.params}
             scopeKeys={scopeRows.map((r) => r.key.trim())}
+            readOnly={locked}
           />
+          </fieldset>
 
           <div className="text-sm font-semibold text-muted-foreground pt-2">{t('editor.sections.domains')}</div>
           <DomainMultiSelector
@@ -468,6 +505,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             </div>
           </div>
 
+          <fieldset disabled={locked} className="min-w-0 space-y-4 border-0 p-0 m-0">
           <SectionTitle
             title={t('editor.sections.evidenceSources')}
             info={<Trans i18nKey="editor.sectionDescriptions.evidenceSources" ns="authority-resolution" components={{ strong: <strong />, }} />}
@@ -829,6 +867,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
           <fieldset disabled={!isAdmin} className="contents">
             <ScheduleSelect value={scheduleCron} onChange={setScheduleCron} />
           </fieldset>
+          </fieldset>
 
           <SectionTitle title={t('editor.sections.tags')} />
           <TagSelector value={tags} onChange={setTags} placeholder={t('common:actions.search')} />
@@ -840,7 +879,15 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
                 <Trans i18nKey="editor.hints.dnaMaxThreshold" ns="authority-resolution" components={{ strong: <strong />, }} />
               </InfoHint>
             </Label>
-            <Input value={dnaMax} onChange={(e) => setDnaMax(e.target.value)} disabled={!isAdmin} placeholder={t('editor.fields.dnaMaxThreshold.placeholder')} className="max-w-[200px]" />
+            <Input
+              value={dnaMax}
+              onChange={(e) => { setDnaMax(e.target.value); setDnaServerError(false); }}
+              disabled={!isAdmin || locked}
+              aria-invalid={dnaMaxError || undefined}
+              placeholder={t('editor.fields.dnaMaxThreshold.placeholder')}
+              className="max-w-[200px]"
+            />
+            {dnaMaxError && <p className="text-xs text-destructive">{t('errors.dnaMaxRange')}</p>}
           </div>
         </div>
 

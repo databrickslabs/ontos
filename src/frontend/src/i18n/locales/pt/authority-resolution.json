@@ -114,7 +114,9 @@
     "testContextAdd": "Adicionar chave de contexto",
     "testPendingDuties": "Obrigações pendentes",
     "testScopeCheck": "Verificação do âmbito",
-    "testScopeMissing": "em falta"
+    "testScopeMissing": "em falta",
+    "affirmedEarlierDraft": "Confirmado em um rascunho anterior",
+    "dnaStale": "Medido em um rascunho anterior; recalcular"
   },
   "conceptLinks": {
     "failedLink": "Falha ao vincular o conceito",
@@ -337,13 +339,13 @@
       "nameRequired": "O nome é obrigatório",
       "invalidColumnMap": "Mapa de colunas inválido",
       "columnMapError": "O mapa de colunas de \"{{ref}}\" deve ser um JSON válido."
-    }
+    },
+    "immutableNotice": "Versões ativas e anteriores são imutáveis. Crie uma nova versão para alterar a definição."
   },
   "criteria": {
     "description": "Predicados derivados e agregados que a regra não expressa. A porta aprova apenas se todas as verificações passarem; uma verificação que falha numa decisão passada conta como divergência no coeficiente DNA, ponderada e com o sinal da sua direção. As regras leem a solicitação como obj.<field> / req.<key> e os parâmetros como ctx.<param>.",
     "mode": {
-      "raw": "ASSERT bruto",
-      "existing": "Reutilizar verificação existente"
+      "raw": "ASSERT bruto"
     },
     "fields": {
       "criterionNamePlaceholder": "Nome do critério",
@@ -360,15 +362,27 @@
       "weight": "Peso",
       "dimension": "Dimensão",
       "dimensionPlaceholder": "people",
-      "reusedCheckBadge": "verificação reutilizada"
+      "enabled": "Habilitado"
     },
     "buttons": {
-      "addCriterion": "Adicionar critério"
+      "addCriterion": "Adicionar critério",
+      "addCheck": "Adicionar verificação"
     },
-    "selections": {
-      "selectComplianceCheck": "Selecione uma Verificação de Conformidade…"
+    "variables": "Variáveis:",
+    "addMenu": {
+      "newCheck": "Nova verificação",
+      "fromTemplate": "Do modelo ARF",
+      "copyFromCompliance": "Copiar do Compliance",
+      "noComplianceChecks": "Nenhuma verificação do Compliance disponível"
     },
-    "variables": "Variáveis:"
+    "provenance": {
+      "copiedFromCompliance": "Copiado de {{label}}",
+      "fromTemplate": "Do modelo ARF: {{name}}",
+      "migratedFromCompliance": "Migrado da verificação do Compliance {{label}}"
+    },
+    "errors": {
+      "weightInvalid": "O peso deve ser um número igual ou maior que 0."
+    }
   },
   "mcp": {
     "extraSchemas": {
@@ -626,5 +640,24 @@
     "none": "Sem regra: apenas as verificações regem esta autoridade.",
     "fulfilledWhen": "cumprida quando",
     "prohibitedWhen": "proibido quando"
+  },
+  "errors": {
+    "generic": "Algo deu errado. Tente novamente.",
+    "immutable": "Apenas rascunhos podem ser alterados. Crie uma nova versão para alterar esta definição.",
+    "hasHistory": "Esta versão tem decisões ou execuções de DNA e não pode ser excluída. Retire-a em vez disso.",
+    "duplicateVersion": "A versão {{version}} já existe nesta família. Escolha outra versão.",
+    "invalidVersion": "A versão deve estar no formato X.Y.Z, por exemplo 2.0.0.",
+    "selfAffirmation": "Você criou ou editou por último esta definição, por isso não pode confirmá-la.",
+    "permissionDenied": "Você não tem permissão para esta ação.",
+    "dnaMaxRange": "Insira um valor entre 0 e 1.",
+    "statusConflict": {
+      "no_enabled_checks": "Adicione pelo menos um critério habilitado antes de mudar o status.",
+      "not_measured": "Meça o coeficiente DNA antes de mudar o status.",
+      "dna_stale": "O coeficiente DNA foi medido em um rascunho anterior. Recalcule-o primeiro.",
+      "ceiling_exceeded": "O coeficiente DNA está acima do limite. Aumente o limite ou reduza a divergência.",
+      "affirmations_missing": "Todos os participantes obrigatórios devem confirmar antes da mudança de status.",
+      "affirmations_stale": "As confirmações foram dadas em um rascunho anterior. Confirme novamente a definição atual.",
+      "transition_not_allowed": "Esta mudança de status não é permitida a partir do status atual."
+    }
   }
 }

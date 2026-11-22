@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink, History, Database, GitBranch } from 'lucide-react';
 import { formatDna } from './authority-resolution';
+import { authorityErrorMessage } from '@/components/authority-resolution/authority-errors';
 import { RelativeDate } from '@/components/common/relative-date';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
 import RequestAuthorityActionDialog from '@/components/authority-resolution/request-authority-action-dialog';
@@ -103,14 +104,16 @@ function DnaGauge({ label, value }: { label: string; value: number }) {
 function DnaTile({ relation, t }: { relation: AuthorityRelation; t: (key: string, opts?: any) => string }) {
   const dims = relation.dna_dimensions || null;
   const value = formatDna(relation.dna_magnitude, relation.dna_direction);
+  // A value measured on an earlier draft is shown, but flagged for recompute.
+  const stale = relation.dna_current === false && relation.dna_magnitude != null;
   if (!dims || Object.keys(dims).length === 0) {
-    return <Tile label={t('details.tileDnaco')} value={value} hint={t('details.tileDnacoHint')} />;
+    return <Tile label={t('details.tileDnaco')} value={value} hint={stale ? t('details.dnaStale') : t('details.tileDnacoHint')} />;
   }
   return (
     <HoverCard openDelay={150}>
       <HoverCardTrigger asChild>
         <div className="cursor-help">
-          <Tile label={t('details.tileDnaco')} value={value} hint={t('details.tileDnacoHintHover')} />
+          <Tile label={t('details.tileDnaco')} value={value} hint={stale ? t('details.dnaStale') : t('details.tileDnacoHintHover')} />
         </div>
       </HoverCardTrigger>
       <HoverCardContent className="w-72" align="start">
@@ -224,24 +227,25 @@ export default function AuthorityRelationDetails() {
 
   const activate = async () => {
     setBusy('activate');
-    const { error } = await post<any>(`/api/authority/relations/${relationId}/status`, { status: 'active' });
+    const res = await post<any>(`/api/authority/relations/${relationId}/status`, { status: 'active' });
+    const { error } = res;
     setBusy(null);
-    if (error) toast({ title: t('details.activateFailed'), description: error, variant: 'destructive' });
+    if (error) toast({ title: t('details.activateFailed'), description: authorityErrorMessage(t, error, res.errorCode, res.errorParams), variant: 'destructive' });
     else { toast({ title: t('details.activated') }); fetchRelation(); }
   };
 
   const affirm = async (affirmationId: string) => {
     setBusy(affirmationId);
-    const { error } = await post<any>(`/api/authority/affirmations/${affirmationId}/affirm`, {});
+    const res = await post<any>(`/api/authority/affirmations/${affirmationId}/affirm`, {});
     setBusy(null);
-    if (error) toast({ title: t('details.affirmFailed'), description: error, variant: 'destructive' });
+    if (res.error) toast({ title: t('details.affirmFailed'), description: authorityErrorMessage(t, res.error, res.errorCode, res.errorParams), variant: 'destructive' });
     else fetchRelation();
   };
 
   const remove = async () => {
     if (!confirm(t('details.confirmDelete'))) return;
-    const { error } = await del(`/api/authority/relations/${relationId}`);
-    if (error) toast({ title: t('common:toast.error'), description: error, variant: 'destructive' });
+    const res = await del(`/api/authority/relations/${relationId}`);
+    if (res.error) toast({ title: t('common:toast.error'), description: authorityErrorMessage(t, res.error, res.errorCode, res.errorParams), variant: 'destructive' });
     else { toast({ title: t('common:toast.deleted') }); navigate('/authority-resolution'); }
   };
 
@@ -263,12 +267,12 @@ export default function AuthorityRelationDetails() {
   const createVersion = async () => {
     if (!newVersion.trim()) return;
     setBusy('version');
-    const { data, error } = await post<AuthorityRelation>(
+    const { data, error, errorCode, errorParams } = await post<AuthorityRelation>(
       `/api/authority/relations/${relationId}/versions`,
       { new_version: newVersion.trim(), change_summary: changeSummary.trim() || undefined },
     );
     setBusy(null);
-    if (error) { toast({ title: t('common:toast.error'), description: error, variant: 'destructive' }); return; }
+    if (error) { toast({ title: t('common:toast.error'), description: authorityErrorMessage(t, error, errorCode, errorParams), variant: 'destructive' }); return; }
     setVersionOpen(false);
     toast({ title: t('details.versionCreated'), description: t('details.versionCreatedMsg', { version: newVersion.trim() }) });
     if (data?.id) navigate(`/authority-resolution/${data.id}`);
@@ -385,6 +389,20 @@ export default function AuthorityRelationDetails() {
         <Tile label={t('details.tileDenied')} value={relation.denied_count ?? 0} />
       </div>
 
+      {relation.editable === false && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>{t('editor.immutableNotice')}</span>
+            {canWrite && (
+              <Button variant="outline" size="sm" onClick={openVersionDialog}>
+                <GitBranch className="h-4 w-4 mr-1" /> {t('details.buttonNewVersion')}
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {relation.status !== 'active' && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
@@ -409,7 +427,10 @@ export default function AuthorityRelationDetails() {
                 {a.is_reviewer && <Badge variant="secondary" className="ml-2">{t('details.alsoReviewer')}</Badge>}
               </div>
               <div className="flex items-center gap-2">
-                {a.affirmed ? (
+                {a.affirmed && a.stale && (
+                  <Badge variant="outline">{t('details.affirmedEarlierDraft')}</Badge>
+                )}
+                {a.affirmed && !a.stale ? (
                   <Badge><CheckCircle2 className="h-3 w-3 mr-1" /> {t('details.affirmed')}{a.affirmed_by ? ` · ${a.affirmed_by}` : ''}</Badge>
                 ) : canWrite ? (
                   <Button size="sm" variant="outline" onClick={() => affirm(a.id)} disabled={busy === a.id}>{t('details.buttonAffirm')}</Button>
@@ -584,6 +605,15 @@ export default function AuthorityRelationDetails() {
                     {c.failure_message && (
                       <div className="text-xs text-muted-foreground">↳ {c.failure_message}</div>
                     )}
+                    {c.copied_from && (
+                      <div className="text-xs text-muted-foreground">
+                        {c.copied_from.kind === 'template'
+                          ? t('criteria.provenance.fromTemplate', { name: c.copied_from.label })
+                          : c.copied_from.kind === 'migrated'
+                            ? t('criteria.provenance.migratedFromCompliance', { label: c.copied_from.label })
+                            : t('criteria.provenance.copiedFromCompliance', { label: c.copied_from.label })}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -707,6 +737,7 @@ export default function AuthorityRelationDetails() {
         open={editOpen}
         onOpenChange={setEditOpen}
         relation={relation}
+        onNewVersion={() => { setEditOpen(false); openVersionDialog(); }}
         onCreated={(updated) => {
           setEditOpen(false);
           toast({ title: 'Authority Relation updated', description: updated.name });

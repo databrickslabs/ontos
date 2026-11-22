@@ -114,7 +114,9 @@
     "testContextAdd": "Añadir clave de contexto",
     "testPendingDuties": "Obligaciones pendientes",
     "testScopeCheck": "Comprobación del ámbito",
-    "testScopeMissing": "falta"
+    "testScopeMissing": "falta",
+    "affirmedEarlierDraft": "Confirmado en un borrador anterior",
+    "dnaStale": "Medido en un borrador anterior; recalcular"
   },
   "conceptLinks": {
     "failedLink": "Error al vincular el concepto",
@@ -337,13 +339,13 @@
       "nameRequired": "El nombre es obligatorio",
       "invalidColumnMap": "Mapa de columnas no válido",
       "columnMapError": "El mapa de columnas de \"{{ref}}\" debe ser JSON válido."
-    }
+    },
+    "immutableNotice": "Las versiones activas y anteriores son inmutables. Crea una nueva versión para cambiar la definición."
   },
   "criteria": {
     "description": "Predicados derivados y agregados que la regla no expresa. La puerta aprueba solo si se cumplen todos los controles; un control que falla en una decisión pasada cuenta como divergencia en el coeficiente DNA, ponderada y con el signo de su dirección. Las reglas leen la solicitud como obj.<field> / req.<key> y los parámetros como ctx.<param>.",
     "mode": {
-      "raw": "ASSERT sin procesar",
-      "existing": "Reutilizar verificación existente"
+      "raw": "ASSERT sin procesar"
     },
     "fields": {
       "criterionNamePlaceholder": "Nombre del criterio",
@@ -360,15 +362,27 @@
       "weight": "Peso",
       "dimension": "Dimensión",
       "dimensionPlaceholder": "people",
-      "reusedCheckBadge": "verificación reutilizada"
+      "enabled": "Habilitado"
     },
     "buttons": {
-      "addCriterion": "Agregar criterio"
+      "addCriterion": "Agregar criterio",
+      "addCheck": "Añadir comprobación"
     },
-    "selections": {
-      "selectComplianceCheck": "Seleccione una Verificación de cumplimiento…"
+    "variables": "Variables:",
+    "addMenu": {
+      "newCheck": "Nueva comprobación",
+      "fromTemplate": "Desde plantilla ARF",
+      "copyFromCompliance": "Copiar desde Compliance",
+      "noComplianceChecks": "No hay comprobaciones de Compliance disponibles"
     },
-    "variables": "Variables:"
+    "provenance": {
+      "copiedFromCompliance": "Copiado de {{label}}",
+      "fromTemplate": "De la plantilla ARF: {{name}}",
+      "migratedFromCompliance": "Migrado de la comprobación de Compliance {{label}}"
+    },
+    "errors": {
+      "weightInvalid": "El peso debe ser un número mayor o igual que 0."
+    }
   },
   "mcp": {
     "extraSchemas": {
@@ -626,5 +640,24 @@
     "none": "Sin regla: solo los controles rigen esta autoridad.",
     "fulfilledWhen": "cumplida cuando",
     "prohibitedWhen": "prohibido cuando"
+  },
+  "errors": {
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "immutable": "Solo se pueden modificar los borradores. Crea una nueva versión para cambiar esta definición.",
+    "hasHistory": "Esta versión tiene decisiones o ejecuciones de DNA, así que no se puede eliminar. Retírala en su lugar.",
+    "duplicateVersion": "La versión {{version}} ya existe en esta familia. Elige otra versión.",
+    "invalidVersion": "La versión debe tener el formato X.Y.Z, por ejemplo 2.0.0.",
+    "selfAffirmation": "Creaste o editaste por última vez esta definición, así que no puedes confirmarla.",
+    "permissionDenied": "No tienes permiso para esta acción.",
+    "dnaMaxRange": "Introduce un valor entre 0 y 1.",
+    "statusConflict": {
+      "no_enabled_checks": "Añade al menos un criterio habilitado antes de cambiar el estado.",
+      "not_measured": "Mide el coeficiente DNA antes de cambiar el estado.",
+      "dna_stale": "El coeficiente DNA se midió en un borrador anterior. Recalcúlalo primero.",
+      "ceiling_exceeded": "El coeficiente DNA supera el límite. Aumenta el límite o reduce la divergencia.",
+      "affirmations_missing": "Cada participante requerido debe confirmar antes de cambiar el estado.",
+      "affirmations_stale": "Las confirmaciones se dieron sobre un borrador anterior. Vuelve a confirmar la definición actual.",
+      "transition_not_allowed": "Este cambio de estado no está permitido desde el estado actual."
+    }
   }
 }

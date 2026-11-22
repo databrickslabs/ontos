@@ -114,7 +114,9 @@
     "testContextAdd": "Ajouter une clé de contexte",
     "testPendingDuties": "Obligations en attente",
     "testScopeCheck": "Contrôle du périmètre",
-    "testScopeMissing": "absent"
+    "testScopeMissing": "absent",
+    "affirmedEarlierDraft": "Confirmé sur un brouillon antérieur",
+    "dnaStale": "Mesuré sur un brouillon antérieur ; recalculer"
   },
   "conceptLinks": {
     "failedLink": "Échec de la liaison du concept",
@@ -337,13 +339,13 @@
       "nameRequired": "Le nom est requis",
       "invalidColumnMap": "Correspondance de colonnes invalide",
       "columnMapError": "La correspondance de colonnes pour « {{ref}} » doit être un JSON valide."
-    }
+    },
+    "immutableNotice": "Les versions actives et antérieures sont immuables. Créez une nouvelle version pour modifier la définition."
   },
   "criteria": {
     "description": "Prédicats dérivés et agrégés que la règle n'exprime pas. Le contrôle n'approuve que si chaque vérification réussit ; une vérification qui échoue pour une décision passée compte comme une divergence dans le coefficient DNA, pondérée et signée selon sa direction. Les règles lisent la requête comme obj.<field> / req.<key> et les paramètres comme ctx.<param>.",
     "mode": {
-      "raw": "ASSERT brut",
-      "existing": "Réutiliser un contrôle existant"
+      "raw": "ASSERT brut"
     },
     "fields": {
       "criterionNamePlaceholder": "Nom du critère",
@@ -360,15 +362,27 @@
       "weight": "Poids",
       "dimension": "Dimension",
       "dimensionPlaceholder": "people",
-      "reusedCheckBadge": "contrôle réutilisé"
+      "enabled": "Activé"
     },
     "buttons": {
-      "addCriterion": "Ajouter un critère"
+      "addCriterion": "Ajouter un critère",
+      "addCheck": "Ajouter un contrôle"
     },
-    "selections": {
-      "selectComplianceCheck": "Sélectionner un contrôle de conformité…"
+    "variables": "Variables :",
+    "addMenu": {
+      "newCheck": "Nouveau contrôle",
+      "fromTemplate": "Depuis un modèle ARF",
+      "copyFromCompliance": "Copier depuis Compliance",
+      "noComplianceChecks": "Aucun contrôle Compliance disponible"
     },
-    "variables": "Variables :"
+    "provenance": {
+      "copiedFromCompliance": "Copié depuis {{label}}",
+      "fromTemplate": "Depuis le modèle ARF : {{name}}",
+      "migratedFromCompliance": "Migré depuis le contrôle Compliance {{label}}"
+    },
+    "errors": {
+      "weightInvalid": "Le poids doit être un nombre supérieur ou égal à 0."
+    }
   },
   "mcp": {
     "extraSchemas": {
@@ -626,5 +640,24 @@
     "none": "Aucune règle : seuls les contrôles encadrent cette autorité.",
     "fulfilledWhen": "remplie quand",
     "prohibitedWhen": "interdit quand"
+  },
+  "errors": {
+    "generic": "Une erreur s'est produite. Réessayez.",
+    "immutable": "Seuls les brouillons peuvent être modifiés. Créez une nouvelle version pour changer cette définition.",
+    "hasHistory": "Cette version a des décisions ou des exécutions DNA et ne peut pas être supprimée. Retirez-la plutôt.",
+    "duplicateVersion": "La version {{version}} existe déjà dans cette famille. Choisissez une autre version.",
+    "invalidVersion": "La version doit être au format X.Y.Z, par exemple 2.0.0.",
+    "selfAffirmation": "Vous avez créé ou modifié en dernier cette définition, vous ne pouvez donc pas la confirmer.",
+    "permissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action.",
+    "dnaMaxRange": "Saisissez une valeur entre 0 et 1.",
+    "statusConflict": {
+      "no_enabled_checks": "Ajoutez au moins un critère activé avant de changer le statut.",
+      "not_measured": "Mesurez le coefficient DNA avant de changer le statut.",
+      "dna_stale": "Le coefficient DNA a été mesuré sur un brouillon antérieur. Recalculez-le d'abord.",
+      "ceiling_exceeded": "Le coefficient DNA dépasse le plafond. Relevez le plafond ou réduisez l'écart.",
+      "affirmations_missing": "Chaque participant requis doit confirmer avant le changement de statut.",
+      "affirmations_stale": "Les confirmations portent sur un brouillon antérieur. Confirmez à nouveau la définition actuelle.",
+      "transition_not_allowed": "Ce changement de statut n'est pas autorisé depuis le statut actuel."
+    }
   }
 }

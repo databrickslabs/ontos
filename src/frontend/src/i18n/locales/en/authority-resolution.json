@@ -114,7 +114,9 @@
     "testContextAdd": "Add context key",
     "testPendingDuties": "Pending duties",
     "testScopeCheck": "Scope check",
-    "testScopeMissing": "missing"
+    "testScopeMissing": "missing",
+    "affirmedEarlierDraft": "Affirmed an earlier draft",
+    "dnaStale": "Measured on an earlier draft; recompute"
   },
   "conceptLinks": {
     "failedLink": "Failed to link concept",
@@ -337,13 +339,13 @@
       "nameRequired": "Name is required",
       "invalidColumnMap": "Invalid column map",
       "columnMapError": "Column map for \"{{ref}}\" must be valid JSON."
-    }
+    },
+    "immutableNotice": "Active and earlier versions are immutable. Create a New Version to change the definition."
   },
   "criteria": {
     "description": "Derived and aggregate predicates the rule doesn't express. The gate approves only when every check passes; a check that fails for a past decision counts as a divergence in the DNA-Coefficient, weighted and signed by its direction. Rules read the request as obj.<field> / req.<key> and the parameters as ctx.<param>.",
     "mode": {
-      "raw": "Raw ASSERT",
-      "existing": "Reuse existing check"
+      "raw": "Raw ASSERT"
     },
     "fields": {
       "criterionNamePlaceholder": "Criterion name",
@@ -360,15 +362,27 @@
       "weight": "Weight",
       "dimension": "Dimension",
       "dimensionPlaceholder": "people",
-      "reusedCheckBadge": "reused check"
+      "enabled": "Enabled"
     },
     "buttons": {
-      "addCriterion": "Add criterion"
+      "addCriterion": "Add criterion",
+      "addCheck": "Add check"
     },
-    "selections": {
-      "selectComplianceCheck": "Select a Compliance Check…"
+    "variables": "Variables:",
+    "addMenu": {
+      "newCheck": "New check",
+      "fromTemplate": "From ARF template",
+      "copyFromCompliance": "Copy from Compliance",
+      "noComplianceChecks": "No Compliance checks available"
     },
-    "variables": "Variables:"
+    "provenance": {
+      "copiedFromCompliance": "Copied from {{label}}",
+      "fromTemplate": "From ARF template: {{name}}",
+      "migratedFromCompliance": "Migrated from Compliance check {{label}}"
+    },
+    "errors": {
+      "weightInvalid": "Weight must be a number of 0 or more."
+    }
   },
   "mcp": {
     "extraSchemas": {
@@ -626,5 +640,24 @@
     "none": "No rule: only the checks gate this authority.",
     "fulfilledWhen": "fulfilled when",
     "prohibitedWhen": "prohibited when"
+  },
+  "errors": {
+    "generic": "Something went wrong. Try again.",
+    "immutable": "Only drafts can be changed. Create a New Version to change this definition.",
+    "hasHistory": "This version has decisions or DNA runs, so it cannot be deleted. Retire it instead.",
+    "duplicateVersion": "Version {{version}} already exists in this family. Choose another version.",
+    "invalidVersion": "The version must be in X.Y.Z form, for example 2.0.0.",
+    "selfAffirmation": "You created or last edited this definition, so you cannot affirm it.",
+    "permissionDenied": "You do not have permission for this action.",
+    "dnaMaxRange": "Enter a value between 0 and 1.",
+    "statusConflict": {
+      "no_enabled_checks": "Add at least one enabled criterion before changing the status.",
+      "not_measured": "Measure the DNA-Coefficient before changing the status.",
+      "dna_stale": "The DNA-Coefficient was measured on an earlier draft. Recompute it first.",
+      "ceiling_exceeded": "The DNA-Coefficient is above the ceiling. Raise the ceiling or reduce the divergence.",
+      "affirmations_missing": "Every required participant must affirm before the status changes.",
+      "affirmations_stale": "Affirmations were given on an earlier draft. Affirm the current definition again.",
+      "transition_not_allowed": "This status change is not allowed from the current status."
+    }
   }
 }

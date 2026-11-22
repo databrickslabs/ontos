@@ -114,7 +114,9 @@
     "testContextAdd": "Kontextschlüssel hinzufügen",
     "testPendingDuties": "Offene Pflichten",
     "testScopeCheck": "Prüfung des Geltungsbereichs",
-    "testScopeMissing": "fehlt"
+    "testScopeMissing": "fehlt",
+    "affirmedEarlierDraft": "Für einen älteren Entwurf bestätigt",
+    "dnaStale": "Für einen älteren Entwurf gemessen; neu berechnen"
   },
   "conceptLinks": {
     "failedLink": "Konzept konnte nicht verknüpft werden",
@@ -337,13 +339,13 @@
       "nameRequired": "Name ist erforderlich",
       "invalidColumnMap": "Ungültige Spaltenzuordnung",
       "columnMapError": "Die Spaltenzuordnung für \"{{ref}}\" muss gültiges JSON sein."
-    }
+    },
+    "immutableNotice": "Aktive und ältere Versionen sind unveränderlich. Erstelle eine neue Version, um die Definition zu ändern."
   },
   "criteria": {
     "description": "Abgeleitete und aggregierte Prädikate, die die Regel nicht ausdrückt. Das Gate genehmigt nur, wenn jede Prüfung besteht; eine Prüfung, die bei einer früheren Entscheidung fehlschlägt, zählt als Abweichung im DNA-Koeffizienten, gewichtet und vorzeichenbehaftet nach ihrer Richtung. Regeln lesen die Anfrage als obj.<field> / req.<key> und die Parameter als ctx.<param>.",
     "mode": {
-      "raw": "Rohes ASSERT",
-      "existing": "Vorhandene Prüfung wiederverwenden"
+      "raw": "Rohes ASSERT"
     },
     "fields": {
       "criterionNamePlaceholder": "Kriteriumsname",
@@ -360,15 +362,27 @@
       "weight": "Gewicht",
       "dimension": "Dimension",
       "dimensionPlaceholder": "people",
-      "reusedCheckBadge": "wiederverwendete Prüfung"
+      "enabled": "Aktiv"
     },
     "buttons": {
-      "addCriterion": "Kriterium hinzufügen"
+      "addCriterion": "Kriterium hinzufügen",
+      "addCheck": "Prüfung hinzufügen"
     },
-    "selections": {
-      "selectComplianceCheck": "Compliance-Prüfung auswählen…"
+    "variables": "Variablen:",
+    "addMenu": {
+      "newCheck": "Neue Prüfung",
+      "fromTemplate": "Aus ARF-Vorlage",
+      "copyFromCompliance": "Aus Compliance kopieren",
+      "noComplianceChecks": "Keine Compliance-Prüfungen verfügbar"
     },
-    "variables": "Variablen:"
+    "provenance": {
+      "copiedFromCompliance": "Kopiert aus {{label}}",
+      "fromTemplate": "Aus ARF-Vorlage: {{name}}",
+      "migratedFromCompliance": "Aus Compliance-Prüfung {{label}} migriert"
+    },
+    "errors": {
+      "weightInvalid": "Das Gewicht muss eine Zahl von 0 oder mehr sein."
+    }
   },
   "mcp": {
     "extraSchemas": {
@@ -626,5 +640,24 @@
     "none": "Keine Regel: nur die Prüfungen steuern diese Befugnis.",
     "fulfilledWhen": "erfüllt, wenn",
     "prohibitedWhen": "verboten, wenn"
+  },
+  "errors": {
+    "generic": "Etwas ist schiefgelaufen. Versuche es erneut.",
+    "immutable": "Nur Entwürfe können geändert werden. Erstelle eine neue Version, um diese Definition zu ändern.",
+    "hasHistory": "Diese Version hat Entscheidungen oder DNA-Läufe und kann nicht gelöscht werden. Zieh sie stattdessen zurück.",
+    "duplicateVersion": "Version {{version}} existiert in dieser Familie bereits. Wähle eine andere Version.",
+    "invalidVersion": "Die Version muss im Format X.Y.Z vorliegen, z. B. 2.0.0.",
+    "selfAffirmation": "Du hast diese Definition zuletzt erstellt oder bearbeitet und kannst sie daher nicht bestätigen.",
+    "permissionDenied": "Du hast keine Berechtigung für diese Aktion.",
+    "dnaMaxRange": "Gib einen Wert zwischen 0 und 1 ein.",
+    "statusConflict": {
+      "no_enabled_checks": "Füge vor einer Statusänderung mindestens ein aktives Kriterium hinzu.",
+      "not_measured": "Miss den DNA-Koeffizienten, bevor du den Status änderst.",
+      "dna_stale": "Der DNA-Koeffizient wurde für einen älteren Entwurf gemessen. Berechne ihn zuerst neu.",
+      "ceiling_exceeded": "Der DNA-Koeffizient liegt über der Obergrenze. Erhöhe die Obergrenze oder verringere die Abweichung.",
+      "affirmations_missing": "Jeder erforderliche Teilnehmer muss bestätigen, bevor sich der Status ändert.",
+      "affirmations_stale": "Die Bestätigungen beziehen sich auf einen älteren Entwurf. Bestätige die aktuelle Definition erneut.",
+      "transition_not_allowed": "Diese Statusänderung ist vom aktuellen Status aus nicht erlaubt."
+    }
   }
 }

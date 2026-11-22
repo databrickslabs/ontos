@@ -156,45 +156,32 @@ class AuthorityPrerequisiteRepository(CRUDBase[AuthorityPrerequisiteDb, Dict[str
     def __init__(self):
         super().__init__(AuthorityPrerequisiteDb)
 
-    def list_for_family(
-        self, db: Session, *, relation_family_slug: str,
-    ) -> List[AuthorityPrerequisiteDb]:
-        """Edges where ``relation_family_slug`` is the *downstream* AR —
-        i.e. the ARs this one requires to be satisfied first. Ordered by the
-        author-defined ``display_order`` so the resolver walks them in a
-        stable sequence."""
+    def list_for_relation(self, db: Session, *, relation_id: str) -> List[AuthorityPrerequisiteDb]:
+        """The edges this AR version requires, in the author's display order (the resolver walks them in that sequence)."""
         stmt = (
             select(AuthorityPrerequisiteDb)
-            .where(AuthorityPrerequisiteDb.relation_family_slug == relation_family_slug)
+            .where(AuthorityPrerequisiteDb.relation_id == relation_id)
             .order_by(AuthorityPrerequisiteDb.display_order, AuthorityPrerequisiteDb.prerequisite_family_slug)
         )
         return list(db.execute(stmt).scalars().all())
 
-    def delete_for_family(
-        self, db: Session, *, relation_family_slug: str,
-    ) -> int:
-        """Drop every prerequisite edge rooted at this family slug.
-
-        The manager calls this before re-creating edges on save, giving
-        replace-on-write semantics identical to ``_replace_affirmations``
-        / ``_replace_criteria``. Returns the number of rows removed.
-        """
+    def delete_for_relation(self, db: Session, *, relation_id: str) -> int:
+        """Drop the edges one version owns. Replace-on-write, like the other child rows."""
         return (
             db.query(AuthorityPrerequisiteDb)
-            .filter(AuthorityPrerequisiteDb.relation_family_slug == relation_family_slug)
+            .filter(AuthorityPrerequisiteDb.relation_id == relation_id)
             .delete(synchronize_session=False)
         )
 
     def list_dependents(
         self, db: Session, *, prerequisite_family_slug: str,
     ) -> List[AuthorityPrerequisiteDb]:
-        """Reverse edges — ARs that have the given slug as a prerequisite.
-        Used by the write-time cycle check (``A requires B; adding B
-        requires A`` closes a loop)."""
+        """Edges (from any version) that require the given family slug. Used to refuse
+        deleting the last version of a family others depend on, and by the cycle check."""
         stmt = (
             select(AuthorityPrerequisiteDb)
             .where(AuthorityPrerequisiteDb.prerequisite_family_slug == prerequisite_family_slug)
-            .order_by(AuthorityPrerequisiteDb.relation_family_slug)
+            .order_by(AuthorityPrerequisiteDb.relation_id)
         )
         return list(db.execute(stmt).scalars().all())
 

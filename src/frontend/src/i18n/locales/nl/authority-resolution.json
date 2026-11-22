@@ -114,7 +114,9 @@
     "testContextAdd": "Contextsleutel toevoegen",
     "testPendingDuties": "Openstaande verplichtingen",
     "testScopeCheck": "Bereikcontrole",
-    "testScopeMissing": "ontbreekt"
+    "testScopeMissing": "ontbreekt",
+    "affirmedEarlierDraft": "Bevestigd op een eerder concept",
+    "dnaStale": "Gemeten op een eerder concept; opnieuw berekenen"
   },
   "conceptLinks": {
     "failedLink": "Koppelen van concept mislukt",
@@ -337,13 +339,13 @@
       "nameRequired": "Naam is verplicht",
       "invalidColumnMap": "Ongeldige kolomtoewijzing",
       "columnMapError": "De kolomtoewijzing voor \"{{ref}}\" moet geldige JSON zijn."
-    }
+    },
+    "immutableNotice": "Actieve en eerdere versies zijn onveranderlijk. Maak een nieuwe versie aan om de definitie te wijzigen."
   },
   "criteria": {
     "description": "Afgeleide en geaggregeerde predicaten die de regel niet uitdrukt. De gate keurt alleen goed als elke controle slaagt; een controle die faalt voor een eerdere beslissing telt als afwijking in de DNA-coëfficiënt, gewogen en met het teken van haar richting. Regels lezen het verzoek als obj.<field> / req.<key> en de parameters als ctx.<param>.",
     "mode": {
-      "raw": "Ruwe ASSERT",
-      "existing": "Bestaande controle hergebruiken"
+      "raw": "Ruwe ASSERT"
     },
     "fields": {
       "criterionNamePlaceholder": "Criteriumnaam",
@@ -360,15 +362,27 @@
       "weight": "Gewicht",
       "dimension": "Dimensie",
       "dimensionPlaceholder": "people",
-      "reusedCheckBadge": "hergebruikte controle"
+      "enabled": "Ingeschakeld"
     },
     "buttons": {
-      "addCriterion": "Criterium toevoegen"
+      "addCriterion": "Criterium toevoegen",
+      "addCheck": "Controle toevoegen"
     },
-    "selections": {
-      "selectComplianceCheck": "Selecteer een Compliance Check…"
+    "variables": "Variabelen:",
+    "addMenu": {
+      "newCheck": "Nieuwe controle",
+      "fromTemplate": "Uit ARF-sjabloon",
+      "copyFromCompliance": "Kopiëren uit Compliance",
+      "noComplianceChecks": "Geen Compliance-controles beschikbaar"
     },
-    "variables": "Variabelen:"
+    "provenance": {
+      "copiedFromCompliance": "Gekopieerd uit {{label}}",
+      "fromTemplate": "Uit ARF-sjabloon: {{name}}",
+      "migratedFromCompliance": "Gemigreerd uit Compliance-controle {{label}}"
+    },
+    "errors": {
+      "weightInvalid": "Het gewicht moet een getal van 0 of hoger zijn."
+    }
   },
   "mcp": {
     "extraSchemas": {
@@ -626,5 +640,24 @@
     "none": "Geen regel: alleen de controles bepalen deze bevoegdheid.",
     "fulfilledWhen": "vervuld als",
     "prohibitedWhen": "verboden als"
+  },
+  "errors": {
+    "generic": "Er is iets misgegaan. Probeer het opnieuw.",
+    "immutable": "Alleen concepten kunnen worden gewijzigd. Maak een nieuwe versie aan om deze definitie te wijzigen.",
+    "hasHistory": "Deze versie heeft beslissingen of DNA-runs en kan niet worden verwijderd. Trek hem in plaats daarvan in.",
+    "duplicateVersion": "Versie {{version}} bestaat al in deze familie. Kies een andere versie.",
+    "invalidVersion": "De versie moet in de vorm X.Y.Z zijn, bijvoorbeeld 2.0.0.",
+    "selfAffirmation": "Jij hebt deze definitie als laatste aangemaakt of bewerkt, dus je kunt hem niet bevestigen.",
+    "permissionDenied": "Je hebt geen toestemming voor deze actie.",
+    "dnaMaxRange": "Voer een waarde tussen 0 en 1 in.",
+    "statusConflict": {
+      "no_enabled_checks": "Voeg minstens één ingeschakelde controle toe voordat je de status wijzigt.",
+      "not_measured": "Meet de DNA-coëfficiënt voordat je de status wijzigt.",
+      "dna_stale": "De DNA-coëfficiënt is gemeten op een eerder concept. Bereken hem eerst opnieuw.",
+      "ceiling_exceeded": "De DNA-coëfficiënt is hoger dan het plafond. Verhoog het plafond of verklein de afwijking.",
+      "affirmations_missing": "Elke verplichte deelnemer moet bevestigen voordat de status verandert.",
+      "affirmations_stale": "De bevestigingen gelden voor een eerder concept. Bevestig de huidige definitie opnieuw.",
+      "transition_not_allowed": "Deze statuswijziging is vanuit de huidige status niet toegestaan."
+    }
   }
 }

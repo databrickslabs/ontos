@@ -119,6 +119,11 @@ class AuthorityRelationDb(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     created_by = Column(String, nullable=True)
+    # Who last changed the definition (criteria, evidence, participants, ...). An
+    # affirmation by this user is refused: nobody affirms a definition they changed (B4).
+    definition_edited_by = Column(String, nullable=True)
+    # When this version was first activated; once set it is never editable in place (B6).
+    activated_at = Column(DateTime(timezone=True), nullable=True)
 
     affirmations = relationship(
         "AuthorityAffirmationDb", back_populates="relation",
@@ -173,6 +178,9 @@ class AuthorityAffirmationDb(Base):
     affirmed = Column(Boolean, default=False, nullable=False)
     affirmed_by = Column(String, nullable=True)
     affirmed_at = Column(DateTime(timezone=True), nullable=True)
+    # Definition hash at the time of affirmation; an affirmation counts only while it
+    # matches the AR's current definition hash (B6).
+    definition_hash = Column(String, nullable=True)
 
     # Reviewer facet (the review process / structured elicitation).
     review_status = Column(String, default='na', nullable=False)  # na|pending|in_review|completed
@@ -186,17 +194,14 @@ class AuthorityAffirmationDb(Base):
 
 
 class AuthorityCriterionDb(Base):
-    """An author-configurable decision criterion attached to an AR.
+    """A decision check owned by one AR version (ARF 1.2.0, #859 review B7, S12).
 
-    Mirrors the Maturity-Level → Compliance-Policy link (``MaturityGateDb``): each
-    row binds a reusable **Compliance Check** (its DSL ``ASSERT`` rule is the
-    condition) to an Authority Relation. The gate approves only when every enabled
-    criterion passes; the DNA-Coefficient engine treats a criterion that *fails*
-    for an evidence row as a divergence, weighted by ``weight`` and signed by
-    ``direction`` (the ARF ``arf:direction``). ``direction``/``weight`` are the
-    ARF-specific facets a plain pass/fail check cannot carry, so they live here on
-    the link rather than on the shared policy. Scoped to the versioned AR row; the
-    manager re-creates the links on each version bump.
+    The rule lives on the row: no Compliance Check backs it, so a Compliance edit
+    or delete cannot change an AR, and each version is a self-contained snapshot.
+    The Compliance DSL engine (``ASSERT`` rule) is the condition; the ARF divergence
+    facets ``direction``/``weight``/``dimension`` score it for DNA. ``copied_from``
+    is provenance only (``{kind, label, id?, key?}``), never a live link.
+    New Version copies the rows.
     """
     __tablename__ = 'authority_criteria'
 
@@ -205,22 +210,21 @@ class AuthorityCriterionDb(Base):
         String, ForeignKey('authority_relations.id', ondelete="CASCADE"),
         nullable=False, index=True,
     )
-    compliance_policy_id = Column(
-        String, ForeignKey('compliance_policies.id', ondelete="CASCADE"),
-        nullable=False, index=True,
-    )
+    name = Column(String, nullable=False)
+    rule = Column(Text, nullable=False)              # Compliance-DSL rule (ASSERT ...)
+    failure_message = Column(Text, nullable=True)
     # actual-exceeds-documented | documented-exceeds-actual | neutral
     direction = Column(String, nullable=False, default='neutral')
     weight = Column(Float, nullable=False, default=1.0)
-    # DNAco dimension this criterion contributes to (people|policy|...); structural
-    # is a separate definition-completeness evaluator, not a criterion dimension.
+    # DNAco dimension this check contributes to (people|policy|...); structural
+    # is a separate definition-completeness evaluator, not a check dimension.
     dimension = Column(String, nullable=False, default='people')
     display_order = Column(Integer, nullable=False, default=0)
     enabled = Column(Boolean, nullable=False, default=True)
+    copied_from = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
     relation = relationship("AuthorityRelationDb", back_populates="criteria")
-    compliance_policy = relationship("CompliancePolicyDb", lazy="selectin")
 
 
 class AuthorityDnaRunDb(Base):
@@ -238,6 +242,8 @@ class AuthorityDnaRunDb(Base):
     direction = Column(String, nullable=True)
     per_dimension_scores = Column(JSON, nullable=True)  # {dimension: score} for this run
     error_message = Column(Text, nullable=True)
+    # Definition hash the run measured; activation requires it to match the current hash (B6).
+    definition_hash = Column(String, nullable=True)
 
     relation = relationship("AuthorityRelationDb", back_populates="dna_runs")
 
@@ -344,27 +350,27 @@ class AuthorityResourceRefDb(Base):
 
 
 class AuthorityPrerequisiteDb(Base):
-    """A ``requires_prior_authority`` edge between two Authority Relations.
+    """A ``requires_prior_authority`` edge owned by one AR version (ARF 1.2.0, B7).
 
-    Both endpoints are per-family slugs (never version UUIDs) — the resolver
-    walks these edges at eval time and resolves each slug to its family's
-    active version via :func:`AuthorityResolutionManager.resolve_relation_ref`.
-    Keying by family means a published AR survives version bumps of its
-    prerequisites; the tradeoff is that *replacing* an upstream AR with a
-    new active version can transitively change what the downstream AR
-    does. Cycle detection is enforced at write time; a defensive check
-    also runs during resolve.
+    The edge belongs to the version that declared it (``relation_id``), so editing a
+    draft v2's prerequisites cannot rewire the active v1. The target is a family slug:
+    the resolver walks it to that family's active version at eval time, so an upstream
+    AR's new active version flows to its dependants without re-pointing them.
+    ``prerequisite_version_id`` records the upstream version the edge was saved against
+    (audit and display only; resolution doesn't use it).
 
-    A required prerequisite that comes back ``denied`` / ``no_authority``
-    short-circuits the outer AR to ``denied`` with the chain recorded on
-    ``AuthorityDecisionDb.provenance``. Optional prerequisites surface as
-    advisory warnings on the response but do not block.
+    Cycles are rejected at write time. A required prerequisite that comes back
+    ``denied`` / ``no_authority`` short-circuits the outer AR to ``denied``.
     """
     __tablename__ = 'authority_prerequisites'
 
     id = Column(String, primary_key=True)
-    relation_family_slug = Column(String, nullable=False, index=True)
+    relation_id = Column(
+        String, ForeignKey('authority_relations.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
     prerequisite_family_slug = Column(String, nullable=False, index=True)
+    prerequisite_version_id = Column(String, nullable=True)
     required = Column(Boolean, nullable=False, default=True, server_default='true')
     display_order = Column(Integer, nullable=False, default=0, server_default='0')
     notes = Column(Text, nullable=True)
@@ -372,11 +378,7 @@ class AuthorityPrerequisiteDb(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            'relation_family_slug', 'prerequisite_family_slug',
-            name='uq_authority_prerequisites_edge',
-        ),
-        CheckConstraint(
-            'relation_family_slug <> prerequisite_family_slug',
-            name='ck_authority_prerequisites_no_self_loop',
+            'relation_id', 'prerequisite_family_slug',
+            name='uq_authority_prerequisites_owner_edge',
         ),
     )

@@ -107,7 +107,9 @@
     "testEscalatedLabel": "escalation effettuata",
     "testPrerequisiteChain": "Catena dei prerequisiti",
     "testResolvedRefs": "Riferimenti a risorse risolti",
-    "buttonTestResolve": "Risolvi"
+    "buttonTestResolve": "Risolvi",
+    "affirmedEarlierDraft": "Confermato su una bozza precedente",
+    "dnaStale": "Misurato su una bozza precedente; ricalcolare"
   },
   "conceptLinks": {
     "failedLink": "Impossibile collegare il concetto",
@@ -340,14 +342,14 @@
       "nameRequired": "Il nome è obbligatorio",
       "invalidColumnMap": "Mappa delle colonne non valida",
       "columnMapError": "La mappa delle colonne per \"{{ref}}\" deve essere un JSON valido."
-    }
+    },
+    "immutableNotice": "Le versioni attive e precedenti sono immutabili. Crea una nuova versione per modificare la definizione."
   },
   "criteria": {
     "description": "Il gate approva solo quando ogni criterio abilitato è soddisfatto. Un criterio non soddisfatto per una decisione passata conta come divergenza nel DNA-Coefficient — ponderata e con segno in base alla sua direzione. Una regola composta va bene; suddividi in criteri separati solo se vuoi la divergenza per singolo motivo.",
     "mode": {
       "builder": "Strutturato",
-      "raw": "ASSERT grezzo",
-      "existing": "Riusa controllo esistente"
+      "raw": "ASSERT grezzo"
     },
     "predicate": {
       "allowlist": "Lista dei firmatari autorizzati",
@@ -389,15 +391,27 @@
       "weight": "Peso",
       "dimension": "Dimensione",
       "dimensionPlaceholder": "people",
-      "reusedCheckBadge": "controllo riusato"
+      "enabled": "Attivo"
     },
     "buttons": {
-      "addCriterion": "Aggiungi criterio"
+      "addCriterion": "Aggiungi criterio",
+      "addCheck": "Aggiungi controllo"
     },
-    "selections": {
-      "selectComplianceCheck": "Seleziona un Controllo di conformità…"
+    "assertPrefix": "ASSERT",
+    "addMenu": {
+      "newCheck": "Nuovo controllo",
+      "fromTemplate": "Da modello ARF",
+      "copyFromCompliance": "Copia da Compliance",
+      "noComplianceChecks": "Nessun controllo Compliance disponibile"
     },
-    "assertPrefix": "ASSERT"
+    "provenance": {
+      "copiedFromCompliance": "Copiato da {{label}}",
+      "fromTemplate": "Da modello ARF: {{name}}",
+      "migratedFromCompliance": "Migrato dal controllo Compliance {{label}}"
+    },
+    "errors": {
+      "weightInvalid": "Il peso deve essere un numero maggiore o uguale a 0."
+    }
   },
   "mcp": {
     "extraSchemas": {
@@ -535,6 +549,25 @@
       "submitting": "Invio in corso…",
       "changeStatus": "Cambia stato",
       "sendRequest": "Invia richiesta"
+    }
+  },
+  "errors": {
+    "generic": "Si è verificato un errore. Riprova.",
+    "immutable": "Solo le bozze possono essere modificate. Crea una nuova versione per cambiare questa definizione.",
+    "hasHistory": "Questa versione ha decisioni o esecuzioni DNA e non può essere eliminata. Ritirala invece.",
+    "duplicateVersion": "La versione {{version}} esiste già in questa famiglia. Sceglierne un'altra.",
+    "invalidVersion": "La versione deve avere il formato X.Y.Z, ad esempio 2.0.0.",
+    "selfAffirmation": "Hai creato o modificato per ultimo questa definizione, quindi non puoi confermarla.",
+    "permissionDenied": "Non hai l'autorizzazione per questa azione.",
+    "dnaMaxRange": "Inserisci un valore compreso tra 0 e 1.",
+    "statusConflict": {
+      "no_enabled_checks": "Aggiungi almeno un criterio attivo prima di cambiare lo stato.",
+      "not_measured": "Misura il coefficiente DNA prima di cambiare lo stato.",
+      "dna_stale": "Il coefficiente DNA è stato misurato su una bozza precedente. Ricalcolalo prima.",
+      "ceiling_exceeded": "Il coefficiente DNA supera il limite. Alza il limite o riduci la divergenza.",
+      "affirmations_missing": "Ogni partecipante richiesto deve confermare prima del cambio di stato.",
+      "affirmations_stale": "Le conferme riguardano una bozza precedente. Conferma di nuovo la definizione attuale.",
+      "transition_not_allowed": "Questo cambio di stato non è consentito dallo stato attuale."
     }
   }
 }

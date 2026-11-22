@@ -107,7 +107,9 @@
     "testEscalatedLabel": "エスカレーション済み",
     "testPrerequisiteChain": "前提条件チェーン",
     "testResolvedRefs": "解決済みリソース参照",
-    "buttonTestResolve": "解決"
+    "buttonTestResolve": "解決",
+    "affirmedEarlierDraft": "以前のドラフトで承認済み",
+    "dnaStale": "以前のドラフトで測定済み。再計算してください"
   },
   "conceptLinks": {
     "failedLink": "コンセプトのリンクに失敗しました",
@@ -340,14 +342,14 @@
       "nameRequired": "名前は必須です",
       "invalidColumnMap": "カラムマップが無効です",
       "columnMapError": "「{{ref}}」のカラムマップは有効な JSON である必要があります。"
-    }
+    },
+    "immutableNotice": "有効な版と以前の版は変更できません。定義を変更するには新しいバージョンを作成してください。"
   },
   "criteria": {
     "description": "ゲートは、有効なすべての基準を満たした場合にのみ承認します。過去の決定で満たされなかった基準は、方向に応じて重み付けと符号付けがされ、DNA-Coefficient における乖離としてカウントされます。複合ルールを 1 つにまとめても構いません。理由ごとの乖離が必要な場合にのみ、基準を分割してください。",
     "mode": {
       "builder": "構造化",
-      "raw": "Raw ASSERT",
-      "existing": "既存のチェックを再利用"
+      "raw": "Raw ASSERT"
     },
     "predicate": {
       "allowlist": "署名者の許可リスト",
@@ -389,15 +391,27 @@
       "weight": "重み",
       "dimension": "ディメンション",
       "dimensionPlaceholder": "people",
-      "reusedCheckBadge": "再利用チェック"
+      "enabled": "有効"
     },
     "buttons": {
-      "addCriterion": "基準を追加"
+      "addCriterion": "基準を追加",
+      "addCheck": "チェックを追加"
     },
-    "selections": {
-      "selectComplianceCheck": "コンプライアンスチェックを選択…"
+    "assertPrefix": "ASSERT",
+    "addMenu": {
+      "newCheck": "新しいチェック",
+      "fromTemplate": "ARF テンプレートから",
+      "copyFromCompliance": "Compliance からコピー",
+      "noComplianceChecks": "利用できる Compliance チェックがありません"
     },
-    "assertPrefix": "ASSERT"
+    "provenance": {
+      "copiedFromCompliance": "{{label}} からコピー",
+      "fromTemplate": "ARF テンプレート: {{name}}",
+      "migratedFromCompliance": "Compliance チェック {{label}} から移行"
+    },
+    "errors": {
+      "weightInvalid": "重みは 0 以上の数値で指定してください。"
+    }
   },
   "mcp": {
     "extraSchemas": {
@@ -535,6 +549,25 @@
       "submitting": "送信中…",
       "changeStatus": "ステータスを変更",
       "sendRequest": "リクエストを送信"
+    }
+  },
+  "errors": {
+    "generic": "問題が発生しました。もう一度お試しください。",
+    "immutable": "変更できるのはドラフトのみです。この定義を変更するには新しいバージョンを作成してください。",
+    "hasHistory": "この版には決定または DNA 実行の履歴があるため削除できません。代わりに廃止してください。",
+    "duplicateVersion": "バージョン {{version}} はこのファミリーに既に存在します。別のバージョンを指定してください。",
+    "invalidVersion": "バージョンは X.Y.Z 形式で指定してください(例: 2.0.0)。",
+    "selfAffirmation": "この定義を作成または最後に編集したのはあなたのため、承認できません。",
+    "permissionDenied": "この操作を行う権限がありません。",
+    "dnaMaxRange": "0 から 1 の間の値を入力してください。",
+    "statusConflict": {
+      "no_enabled_checks": "ステータスを変更する前に、有効な基準を 1 つ以上追加してください。",
+      "not_measured": "ステータスを変更する前に DNA 係数を測定してください。",
+      "dna_stale": "DNA 係数は以前のドラフトで測定されています。先に再計算してください。",
+      "ceiling_exceeded": "DNA 係数が上限を超えています。上限を上げるか、乖離を減らしてください。",
+      "affirmations_missing": "ステータスを変更する前に、必須の参加者全員が承認する必要があります。",
+      "affirmations_stale": "承認は以前のドラフトに対するものです。現在の定義を再度承認してください。",
+      "transition_not_allowed": "現在のステータスからこのステータス変更は許可されていません。"
     }
   }
 }

@@ -24,6 +24,9 @@ export interface AuthorityAffirmation {
   is_reviewer?: boolean;
   review_status?: string;           // na | pending | in_review | completed
   review_request_id?: string | null;
+  // True when affirmed on an earlier draft; does not count as affirmed.
+  stale?: boolean;
+  definition_hash?: string | null;
 }
 
 export interface ReviewQuestion {
@@ -66,30 +69,52 @@ export interface EvidenceSource {
   row_filter?: string | null;
 }
 
+// Provenance of a criterion copied from elsewhere. Stored as a label only:
+// the check is owned by the AR version and has no live link.
+export interface CriterionProvenance {
+  kind: 'compliance' | 'template' | 'migrated';
+  label: string;
+  id?: string;
+  key?: string;
+}
+
 export interface AuthorityCriterion {
   id: string;
-  policy_id?: string | null;
   name?: string | null;
   rule?: string | null;              // Compliance-DSL ASSERT rule (the condition)
   failure_message?: string | null;
-  category?: string | null;
   direction: string;                 // actual-exceeds-documented | documented-exceeds-actual | neutral
   weight: number;
   dimension?: string;                // DNAco dimension (people|policy|…)
   order: number;
   enabled: boolean;
+  copied_from?: CriterionProvenance | null;
 }
 
-export interface CriterionInput {
-  policy_id?: string;                // link an existing Compliance Check
-  name?: string;                     // inline-authored check name
-  rule?: string;                     // inline-authored ASSERT rule
-  failure_message?: string;
+// One row of GET /api/authority/criteria/templates (ARF template registry).
+export interface AuthorityCriterionTemplate {
+  key: string;
+  name: string;
+  rule: string;
+  failure_message: string;
+  dimension: string;
   direction: string;
-  weight: number;
+  description?: string | null;
+}
+
+// A criteria write. With template_key set, the server fills name, rule,
+// failure_message, dimension and direction from the template registry.
+export interface CriterionInput {
+  template_key?: string;
+  name?: string;
+  rule?: string;
+  failure_message?: string;
+  direction?: string;
+  weight?: number;
   dimension?: string;
-  order: number;
-  enabled: boolean;
+  order?: number;
+  enabled?: boolean;
+  copied_from?: CriterionProvenance;
 }
 
 export interface ReusableCheck {
@@ -119,6 +144,11 @@ export interface AuthorityRelation {
   version: string;                // semantic version string (e.g. 1.0.0)
   version_family_id?: string | null;
   parent_relation_id?: string | null;
+  // Only drafts are editable, and only the newest version of a family.
+  editable?: boolean;
+  definition_hash?: string | null;
+  definition_edited_by?: string | null;
+  enabled_check_count?: number;
   base_name?: string | null;
   change_summary?: string | null;
   draft_owner_id?: string | null;
@@ -143,6 +173,8 @@ export interface AuthorityRelation {
   dna_direction?: string | null;
   dna_dimensions?: Record<string, number> | null;   // {dimension: score} incl. structural
   dna_measured_at?: string | null;
+  // False with dna_magnitude set: measured on an earlier draft.
+  dna_current?: boolean;
   dna_max_threshold?: number | null;
   schedule_cron?: string | null;
   resolver_auth?: ResolverAuth;

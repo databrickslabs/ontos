@@ -228,3 +228,27 @@ def test_an_editor_save_keeps_the_relationship_ids(db_session):
     orders = _by(_export(manager, db_session, cid)['schema'], 'name')['orders']
     assert orders['relationships'][0]['id'] == 'rel-orders-customer'
     assert orders['properties'][0]['relationships'][0]['id'] == 'rel-prop-customer'
+
+
+def test_role_custom_properties_written_as_a_map_by_older_exports_are_imported(db_session):
+    manager = _manager()
+    doc = _odcs()
+    doc['roles'] = [{'role': 'reader', 'customProperties': {'ttlDays': 30, 'owner': 'ops'}}]
+
+    role = _export(manager, db_session, _upload(manager, db_session, doc))['roles'][0]
+
+    assert role['customProperties'] == [{'property': 'ttlDays', 'value': 30},
+                                        {'property': 'owner', 'value': 'ops'}]
+
+
+def test_the_relationship_routes_return_the_odcs_id_apart_from_the_row_id(db_session):
+    from src.db_models.data_contracts import SchemaObjectRelationshipDb
+    from src.routes.data_contracts_routes import _relationship_db_to_dict
+
+    manager = _manager()
+    _upload(manager, db_session, _with_relationship_ids())
+    row = db_session.query(SchemaObjectRelationshipDb).one()
+
+    item = _relationship_db_to_dict(row)
+
+    assert (item['id'], item['stableId']) == (row.id, 'rel-orders-customer')

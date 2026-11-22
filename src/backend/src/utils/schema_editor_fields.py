@@ -8,7 +8,9 @@ payload leaves them out: the ODCS ids, tags, custom properties and quality
 checks of the object, the ids, quality checks and relationships of its
 columns, and authoritative definitions other than semantic concepts. A
 column's tags are kept when the payload has no `tags` key (the editor sends
-`[]` to clear them).
+`[]` to clear them). The editor owns a column's `physicalName` and
+`transformDescription`: it loads them and leaves the key out to clear one, so
+a missing key clears the value.
 """
 from typing import Any, Dict, List, Optional
 

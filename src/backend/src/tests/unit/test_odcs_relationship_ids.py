@@ -117,3 +117,29 @@ def test_an_editor_save_of_a_v3_1_0_contract_keeps_the_stored_relationship_ids(d
     db_session.expire_all()
     obj = db_session.query(SchemaObjectDb).filter_by(contract_id=cid, name='orders').one()
     assert [r.stable_id for r in obj.properties[0].relationships] == ['rel-2']
+
+
+def test_an_editor_save_without_the_column_physical_name_clears_it():
+    # The editor sends a cleared physicalName / transformDescription as a missing key
+    stored = {'name': 'orders', 'properties': [
+        {'name': 'a', 'physicalName': 'A_COL', 'transformDescription': 'upper(a)'}]}
+
+    merged = keep_unsent_fields({'name': 'orders', 'properties': [{'name': 'a'}]}, stored)
+
+    assert 'physicalName' not in merged['properties'][0]
+    assert 'transformDescription' not in merged['properties'][0]
+
+
+def test_a_schema_object_stored_with_a_legacy_logical_type_exports_none(db_session):
+    from src.db_models.data_contracts import SchemaObjectDb
+    manager = _manager()
+    cid = _upload(manager, db_session, _odcs(schema=[
+        {'name': 'orders', 'logicalType': 'object',
+         'properties': [{'name': 'a', 'logicalType': 'string'}]}]))
+    assert _export(manager, db_session, cid)['schema'][0]['logicalType'] == 'object'
+
+    obj = db_session.query(SchemaObjectDb).filter_by(contract_id=cid).one()
+    obj.logical_type = 'table'
+    db_session.commit()
+
+    assert 'logicalType' not in _export(manager, db_session, cid)['schema'][0]

@@ -1169,7 +1169,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 }
                 if getattr(schema_obj, 'stable_id', None):
                     schema_dict['id'] = schema_obj.stable_id
-                if schema_obj.logical_type:
+                # ODCS v3.1.0 allows only `object` here; other writers store e.g. `table`
+                if schema_obj.logical_type == 'object':
                     schema_dict['logicalType'] = schema_obj.logical_type
                 if schema_obj.physical_name:
                     schema_dict['physicalName'] = schema_obj.physical_name
@@ -3197,6 +3198,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             ValueError: If validation fails
             Exception: If creation fails
         """
+        audits_before = len(owner_restorer.restored) if owner_restorer else 0
         try:
             # Extract core contract fields with robust fallbacks
             name_val = (
@@ -3437,11 +3439,20 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
         except ValueError:
             db.rollback()
+            self._drop_unsaved_owner_audits(owner_restorer, audits_before)
             raise
         except Exception as e:
             db.rollback()
+            self._drop_unsaved_owner_audits(owner_restorer, audits_before)
             logger.error(f"Error creating contract from upload: {e}", exc_info=True)
             raise
+
+    @staticmethod
+    def _drop_unsaved_owner_audits(owner_restorer, audits_before: int) -> None:
+        """Forget the owner audits of an import that rolled back (a batch shares
+        one restorer, and the next committed file would log them.)"""
+        if owner_restorer is not None:
+            del owner_restorer.restored[audits_before:]
 
     def parse_uploaded_entities(
         self, file_content: str, filename: str, content_type: str

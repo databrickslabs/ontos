@@ -183,3 +183,26 @@ def test_a_real_team_member_matching_an_owner_is_kept(db_session, role):
 
     assert [o[0] for o in _owners(db_session, cid)] == ['erin@example.com']
     assert [m.username for m in db_session.get(DataContractDb, cid).team] == ['erin@example.com']
+
+
+def test_a_failed_import_leaves_no_owner_audit_for_the_next_file(db_session, role, monkeypatch):
+    from src.utils.contract_owners import audit_restored
+    manager = _manager()
+    audited = []
+    restorer = OwnerRestorer(allowed=True, audit=audited.append)
+    doc = _odcs(customProperties=[{'property': PROPERTY, 'value': [
+        {'email': 'carol@example.com', 'name': 'Carol', 'role': role.name}]}],
+        support=[{'channel': 'x', 'url': 'u'}])
+
+    def boom(*args, **kwargs):
+        raise RuntimeError('db down')
+
+    # The session's rollback is stubbed: the test's transaction must survive
+    monkeypatch.setattr(db_session, 'rollback', lambda: None)
+    monkeypatch.setattr(manager, '_create_support_channels', boom)
+    with pytest.raises(RuntimeError):
+        manager.create_from_upload(
+            db_session, doc, current_user='alice', owner_restorer=restorer)
+
+    audit_restored(restorer)  # what the next committed file of the batch does
+    assert audited == []

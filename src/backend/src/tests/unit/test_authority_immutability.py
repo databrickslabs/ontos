@@ -8,6 +8,7 @@ measurement and current approvals; the transition table; needs_review comes back
 fresh affirmations.
 """
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -369,3 +370,27 @@ def test_a_resource_ref_change_is_a_definition_change(db_session):
         ResourceRefInput(field_path="object_id", ref_type="literal", literal_value="dp-2")]))
     db_session.commit()
     assert mgr.get_relation(db_session, rel.id).dna_magnitude is None
+
+
+def test_ak7_backfill_marks_only_versions_that_were_past_draft():
+    """ak7: a version already active, needing review or retired had been activated; a draft is not."""
+    import importlib.util
+    from sqlalchemy import create_engine, text
+    path = Path(__file__).resolve().parents[3] / "alembic" / "versions" / "ak7_authority_activation_history.py"
+    spec = importlib.util.spec_from_file_location("ak7_authority_activation_history", path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE authority_relations (id TEXT PRIMARY KEY, status TEXT, "
+                          "updated_at TEXT, activated_at TEXT)"))
+        conn.execute(text("INSERT INTO authority_relations VALUES ('d', 'draft', '2026-01-01', NULL)"))
+        conn.execute(text("INSERT INTO authority_relations VALUES ('a', 'active', '2026-02-01', NULL)"))
+        conn.execute(text("INSERT INTO authority_relations VALUES ('n', 'needs_review', '2026-03-01', NULL)"))
+        conn.execute(text("INSERT INTO authority_relations VALUES ('r', 'retired', '2026-04-01', NULL)"))
+        conn.execute(text("INSERT INTO authority_relations VALUES ('kept', 'active', '2026-05-01', '2026-01-15')"))
+        assert migration.backfill_activated_at(conn) == 3
+        rows = dict(conn.execute(text("SELECT id, activated_at FROM authority_relations")).fetchall())
+    assert rows["d"] is None
+    assert rows["a"] == "2026-02-01" and rows["n"] == "2026-03-01" and rows["r"] == "2026-04-01"
+    assert rows["kept"] == "2026-01-15"  # an existing value is never overwritten

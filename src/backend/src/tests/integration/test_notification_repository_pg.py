@@ -31,7 +31,7 @@ HISTORY = 5
 ANA = RecipientKeys(identities=frozenset({'ana@example.com'}))
 AFTER = datetime(2026, 11, 21, 12, 0, tzinfo=timezone.utc)
 OLD = datetime(2020, 1, 1, 12, 0, tzinfo=timezone.utc)
-_MIGRATION = 's3_notifications_read_requests_handled'
+_MIGRATION = 's3_notif_read_requests_handled'
 
 
 def _check_pg_or_skip():

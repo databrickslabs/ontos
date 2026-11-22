@@ -71,7 +71,7 @@ def _is_decided():
 
     ``read`` alone does not decide: the bell sets it on click, so a request that was only
     opened stays pending. Older builds recorded a decided request only as read; migration
-    ``s3_notifications_read_requests_handled`` gave those rows the ``handled`` marker at the
+    ``s3_notif_read_requests_handled`` gave those rows the ``handled`` marker at the
     upgrade (#1527 review).
     """
     payload = _without_json_whitespace(func.coalesce(NotificationDb.action_payload, ''))

@@ -1,6 +1,6 @@
 """Mark the read request notifications handled
 
-Revision ID: s3_notifications_read_requests_handled
+Revision ID: s3_notif_read_requests_handled
 Revises: s2_document_markdown_import
 Create Date: 2026-11-21
 
@@ -26,7 +26,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = 's3_notifications_read_requests_handled'
+revision: str = 's3_notif_read_requests_handled'
 down_revision: Union[str, None] = 's2_document_markdown_import'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

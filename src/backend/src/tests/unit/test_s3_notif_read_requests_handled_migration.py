@@ -18,7 +18,7 @@ from sqlalchemy.pool import StaticPool
 
 from src.db_models.notifications import NotificationDb
 
-_NAME = 's3_notifications_read_requests_handled'
+_NAME = 's3_notif_read_requests_handled'
 OLD = datetime(2020, 1, 1, 12, 0, 0)
 
 

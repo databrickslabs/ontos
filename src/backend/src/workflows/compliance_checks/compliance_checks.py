@@ -482,7 +482,7 @@ def run_policy(
             "status": run.status,
             "success_count": run.success_count,
             "failure_count": run.failure_count,
-            "score": score,
+            "score": run.score,
             "error": run.error_message,
             "warning": warning,
         }

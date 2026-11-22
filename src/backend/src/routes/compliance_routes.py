@@ -201,26 +201,23 @@ class LlmCheckReadRequiredError(CodedValueError):
     code = 'llm_check_entity_read_required'
 
 
-def llm_check_identity(
+def require_entity_read_for_llm_check(
     request: Request, rule: Optional[str], auth_manager, current_user,
-) -> Optional[RunIdentity]:
-    """Whose permissions a run or test that a user starts reads with, for LLM_CHECK.
+) -> None:
+    """A run or test that a user starts of an LLM_CHECK rule needs read access to
+    the app entity types the rule matches (403 ``llm_check_entity_read_required``).
 
     The model's reasons can quote the text it judged, so a user only gets them
-    for what they can read: Unity Catalog objects are read with the user's own
-    (on-behalf-of) token (``RunIdentity.for_request``; without the token the run
-    fails with ``user_token_required``, except where the app's client is allowed
-    in its place, see ``get_obo_workspace_client``), and the app entity types the
-    rule matches need read access to their feature (403
-    ``llm_check_entity_read_required``). None for a rule without LLM_CHECK: the
-    run then reads as the app, as before. Scheduled runs read as the app.
+    for what they can read. Unity Catalog objects are covered by the run's
+    identity: every run a user starts reads as them (``RunIdentity.for_request``),
+    LLM_CHECK or not; scheduled runs read as the app.
     """
     if not rule_uses_llm_check(rule):
-        return None
+        return
     try:
         entity_types = parse_entity_filter(rule).entity_types
     except Exception:
-        return None  # rejected by the run or the rule check
+        return  # rejected by the run or the rule check
     for entity_type in entity_types:
         feature = APP_ENTITY_FEATURES.get(entity_type)
         if feature and not user_has_feature_level(
@@ -232,7 +229,6 @@ def llm_check_identity(
                 entityType=entity_type,
             )
             raise HTTPException(status_code=403, detail=str(error)) from error
-    return RunIdentity.for_request(request)
 
 
 @router.post("/compliance/policies")
@@ -423,7 +419,7 @@ async def run_policy(
     require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
     require_compliance_admin_for_llm_check(policy.rule, auth_manager, current_user, request)
-    identity = llm_check_identity(request, policy.rule, auth_manager, current_user)
+    require_entity_read_for_llm_check(request, policy.rule, auth_manager, current_user)
 
     # For now, implement inline only; async can be backed by Databricks job later
     # The user's own token reads Unity Catalog, so the stored results hold only
@@ -469,6 +465,8 @@ def _run_payload(run, counts: dict) -> dict:
         **viewer_run_fields(run, counts),
         **_run_codes(run),
         **_run_llm_usage(run),
+        # Over the results the viewer can read, as the coverage (not the stored count)
+        'not_evaluated_count': counts['not_evaluated'],
     }
 
 
@@ -599,10 +597,8 @@ async def test_llm_check(
     require_compliance_admin_for_llm_check(payload.rule, auth_manager, current_user, request)
     # Any rule tested here reads Unity Catalog as the user, LLM_CHECK or not: as the
     # app, its verdict would tell what the user can't read (an existence and value oracle)
-    identity = (
-        llm_check_identity(request, payload.rule, auth_manager, current_user)
-        or RunIdentity.for_request(request)
-    )
+    require_entity_read_for_llm_check(request, payload.rule, auth_manager, current_user)
+    identity = RunIdentity.for_request(request)
     try:
         _throttle_rule_test(current_user.username if current_user else 'unknown')
     except RuleTestRateLimitedError as e:

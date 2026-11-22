@@ -14,7 +14,7 @@ from src.repositories.compliance_repository import compliance_result_repo
 def _run_with_results(db):
     policy = CompliancePolicyDb(id=str(uuid.uuid4()), name='p', is_active=True, rule='x')
     run = ComplianceRunDb(id=str(uuid.uuid4()), policy_id=policy.id, status='succeeded',
-                          success_count=1, failure_count=1, score=50.0, not_evaluated_count=1)
+                          success_count=1, failure_count=2, score=33.33, not_evaluated_count=1)
     db.add_all([policy, run])
     for object_type, object_id, passed, not_evaluated in (
         ('table', 'main.sales.orders', True, False),
@@ -55,7 +55,7 @@ def test_results_and_reasons_of_tables_the_viewer_cannot_read_are_not_returned(d
     with patch('src.common.workspace_client.get_obo_workspace_client', return_value=viewer):
         body = asyncio.run(compliance_routes.get_run_results(
             run.id, request=SimpleNamespace(headers={'x-forwarded-access-token': 't'}),
-            db=db_session, only_failed=False, _=True,
+            db=db_session, only_failed=False, offset=0, limit=500, _=True,
         ))
 
     assert sorted(r['object_id'] for r in body['results']) == [
@@ -63,8 +63,10 @@ def test_results_and_reasons_of_tables_the_viewer_cannot_read_are_not_returned(d
     ]
     assert 'salaries' not in json.dumps(body, default=str)
     assert body['hidden_count'] == 1
+    # Over what the viewer reads (#1387): orders passes, d1 fails; not the stored 33.33
     assert body['run']['score'] == 50.0
     assert body['run']['coverage'] == {'evaluated': 2, 'not_evaluated': 1}
+    assert body['run']['not_evaluated_count'] == 1
 
 
 @pytest.mark.parametrize('status, success, failure, expected', [
@@ -95,7 +97,8 @@ def _results_as(db, run, viewer=None, obo_error=None):
            else {'return_value': viewer})
     with patch('src.common.workspace_client.get_obo_workspace_client', **obo):
         return asyncio.run(compliance_routes.get_run_results(
-            run.id, request=SimpleNamespace(headers={}), db=db, only_failed=False, _=True,
+            run.id, request=SimpleNamespace(headers={}), db=db, only_failed=False,
+            offset=0, limit=500, _=True,
         ))
 
 

@@ -69,7 +69,8 @@ def api(levels):
         have = levels.get(feature)
         return have is not None and order.index(have) >= order.index(required)
 
-    user_identity = object()
+    # The user's identity; its client lists nothing (the run answer's counts)
+    user_identity = SimpleNamespace(workspace_client=lambda: None)
     with patch.object(compliance_routes, 'user_has_feature_level', side_effect=level), \
             patch.object(compliance_routes, 'manager') as manager, \
             patch.object(
@@ -81,6 +82,9 @@ def api(levels):
             error_params=None, warning_code=None, warning_params=None, llm_calls=2,
             llm_cache_hits=1,
         )
+        manager.viewer_run_counts.side_effect = lambda db, runs, checks: {
+            r.id: {'success': 0, 'failure': 0, 'not_evaluated': 0, 'hidden': 0} for r in runs
+        }
         yield SimpleNamespace(
             http=TestClient(app), manager=manager, obo=obo, user_identity=user_identity,
         )
@@ -95,7 +99,6 @@ def test_a_user_run_of_an_llm_check_rule_reads_as_the_user(api):
 
     assert api.http.post('/api/compliance/policies/p1/runs', json={}).status_code == 200
 
-    api.obo.assert_called_once()
     kwargs = api.manager.run_policy_inline.call_args.kwargs
     assert kwargs['run_identity'] is api.user_identity
 
@@ -108,13 +111,14 @@ def test_the_run_answer_has_the_llm_usage(api):
     assert (body['llm_calls'], body['llm_cache_hits']) == (2, 1)
 
 
-def test_a_run_of_a_rule_without_llm_check_keeps_the_app_identity(api):
+def test_a_user_run_of_a_rule_without_llm_check_reads_as_the_user_too(api):
+    # Before, a plain DSL rule started by a user read Unity Catalog as the app
+    # (#1486 review); every user-started run now reads as its user (#1387)
     _policy(api.manager, PLAIN_RULE)
 
     assert api.http.post('/api/compliance/policies/p1/runs', json={}).status_code == 200
 
-    api.obo.assert_not_called()
-    assert api.manager.run_policy_inline.call_args.kwargs['run_identity'] is None
+    assert api.manager.run_policy_inline.call_args.kwargs['run_identity'] is api.user_identity
 
 
 def test_without_the_users_token_the_rule_test_is_refused(api):

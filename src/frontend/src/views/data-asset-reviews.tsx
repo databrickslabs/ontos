@@ -222,6 +222,7 @@ export default function DataAssetReviews() {
                     columns={columns}
                     data={requests}
                     searchColumn="title"
+                    storageKey="data-asset-reviews-sort"
                     toolbarActions={
                         <>
                             <Button onClick={handleOpenCreateDialog} className="gap-2 h-9">

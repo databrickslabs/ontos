@@ -53,6 +53,56 @@ def get_projects_manager(request: Request = None) -> ProjectsManager:
     return projects_manager
 
 
+def _visible_project_ids(
+    db: Session,
+    manager: ProjectsManager,
+    project_ids: List[str],
+    current_user: UserInfo,
+    settings: Settings,
+) -> set:
+    """The ids among ``project_ids`` that ``GET /api/projects`` lists for the caller."""
+    user_groups = current_user.groups or []
+    return manager.visible_project_ids(
+        db,
+        project_ids,
+        user_identifier=current_user.email,
+        user_groups=user_groups,
+        is_admin=is_user_admin(user_groups, settings),
+    )
+
+
+def _require_visible_project(
+    db: Session,
+    manager: ProjectsManager,
+    project_id: str,
+    current_user: UserInfo,
+    settings: Settings,
+    detail: str,
+) -> None:
+    """404 with ``detail`` (the route's answer for a missing project) when the
+    caller can't see the project on the list."""
+    if not _visible_project_ids(db, manager, [project_id], current_user, settings):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+
+
+def _visible_project_or_404(detail: str):
+    """Route dependency: ``_require_visible_project`` on the path's ``project_id``.
+
+    Listed before the feature-level ``PermissionChecker``, so a caller who can't
+    see the project gets the route's 404 for a missing project, not a 403.
+    """
+    def _check(
+        project_id: str,
+        db: DBSessionDep,
+        current_user: CurrentUserDep,
+        settings: Settings = Depends(get_settings),
+        manager = Depends(get_projects_manager),
+    ) -> None:
+        _require_visible_project(db, manager, project_id, current_user, settings, detail)
+
+    return Depends(_check)
+
+
 # Project Routes
 @router.post(
     "/projects",
@@ -146,12 +196,17 @@ def get_all_projects(
 )
 def get_projects_summary(
     db: DBSessionDep,
+    current_user: CurrentUserDep,
+    settings: Settings = Depends(get_settings),
     manager = Depends(get_projects_manager)
 ):
-    """Gets a summary list of projects for dropdowns/selection."""
+    """Gets a summary of the projects the caller sees on the list, for dropdowns/selection."""
     logger.debug("Fetching projects summary")
     try:
-        return manager.get_projects_summary(db=db)
+        summaries = manager.get_projects_summary(db=db)
+        ids = [p.id for p in summaries]
+        visible = _visible_project_ids(db, manager, ids, current_user, settings)
+        return [p for p in summaries if p.id in visible]
     except Exception as e:
         logger.exception(f"Failed to fetch projects summary: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch projects summary")
@@ -165,20 +220,27 @@ def get_projects_summary(
 def get_project(
     project_id: str,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
+    settings: Settings = Depends(get_settings),
     manager = Depends(get_projects_manager)
 ):
-    """Gets a specific project by its ID."""
+    """Gets a project by its ID; 404 for one the caller doesn't see on the list."""
     logger.debug(f"Fetching project with id: {project_id}")
+    not_found = f"Project with id '{project_id}' not found"
+    _require_visible_project(db, manager, project_id, current_user, settings, not_found)
     project = manager.get_project_by_id(db=db, project_id=project_id)
     if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project with id '{project_id}' not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=not_found)
     return project
 
 
 @router.put(
     "/projects/{project_id}",
     response_model=ProjectRead,
-    dependencies=[Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))]
+    dependencies=[
+        _visible_project_or_404("Project not found"),
+        Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    ]
 )
 def update_project(
     project_id: str,
@@ -239,7 +301,10 @@ def update_project(
     "/projects/{project_id}",
     response_model=ProjectRead,
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.ADMIN))]
+    dependencies=[
+        _visible_project_or_404("Project not found"),
+        Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.ADMIN)),
+    ]
 )
 def delete_project(
     project_id: str,
@@ -289,7 +354,10 @@ def delete_project(
 @router.post(
     "/projects/{project_id}/teams",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))]
+    dependencies=[
+        _visible_project_or_404("Project or member not found"),
+        Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    ]
 )
 def assign_team_to_project(
     project_id: str,
@@ -326,7 +394,10 @@ def assign_team_to_project(
 @router.delete(
     "/projects/{project_id}/teams/{team_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))]
+    dependencies=[
+        _visible_project_or_404("Team assignment not found"),
+        Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    ]
 )
 def remove_team_from_project(
     project_id: str,
@@ -359,12 +430,19 @@ def remove_team_from_project(
 def get_project_teams(
     project_id: str,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
+    settings: Settings = Depends(get_settings),
     manager = Depends(get_projects_manager)
 ):
-    """Gets all teams assigned to a project."""
+    """Gets the teams assigned to a project; 404 for one the caller doesn't see on the list."""
     logger.debug(f"Fetching teams for project: {project_id}")
     try:
+        _require_visible_project(
+            db, manager, project_id, current_user, settings, "Project or member not found"
+        )
         return manager.get_project_teams(db=db, project_id=project_id)
+    except HTTPException:
+        raise
     except NotFoundError as e:
         logger.error("Project team member not found for removal %s: %s", project_id, e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project or member not found")
@@ -381,13 +459,19 @@ def get_project_teams(
 def get_user_projects(
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    settings: Settings = Depends(get_settings),
     manager = Depends(get_projects_manager)
 ):
     """Gets all projects that the current user has access to."""
     logger.debug(f"Fetching accessible projects for user: {current_user.email}")
     try:
         user_groups = current_user.groups or []
-        return manager.get_user_projects(db=db, user_identifier=current_user.email, user_groups=user_groups)
+        return manager.get_user_projects(
+            db=db,
+            user_identifier=current_user.email,
+            user_groups=user_groups,
+            is_admin=is_user_admin(user_groups, settings),
+        )
     except Exception as e:
         logger.exception(f"Failed to fetch user projects: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch user projects")
@@ -451,9 +535,14 @@ async def request_project_access(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     notifications_manager: NotificationsManagerDep,
+    settings: Settings = Depends(get_settings),
     manager = Depends(get_projects_manager)
 ):
-    """Request access to a project by sending notifications to project team members."""
+    """Request access to a project by sending notifications to project team members.
+
+    A project the caller doesn't see on the list answers as a missing one, and
+    its teams aren't notified.
+    """
     success = False
     details_for_audit = {
         "params": {"project_id": request.project_id, "requester": current_user.email},
@@ -461,6 +550,8 @@ async def request_project_access(
 
     logger.info(f"User '{current_user.email}' requesting access to project: {request.project_id}")
     try:
+        if not _visible_project_ids(db, manager, [request.project_id], current_user, settings):
+            raise NotFoundError(f"Project with id '{request.project_id}' not found.")
         user_groups = current_user.groups or []
         response = await manager.request_project_access(
             db=db,
@@ -474,17 +565,17 @@ async def request_project_access(
         return response
     except NotFoundError as e:
         db.rollback()
-        logger.error("Project not found for access request %s: %s", project_id, e)
+        logger.error("Project not found for access request %s: %s", request.project_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     except ConflictError as e:
         db.rollback()
-        logger.error("Project access request conflict %s: %s", project_id, e)
+        logger.error("Project access request conflict %s: %s", request.project_id, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Access request conflict")
     except Exception as e:
         db.rollback()
-        logger.exception("Failed to request project access for %s", project_id)
+        logger.exception("Failed to request project access for %s", request.project_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to request project access: {e!s}")
     finally:

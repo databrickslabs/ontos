@@ -138,6 +138,10 @@
     "runAiAnalysis": "KI-Analyse ausführen",
     "aiAnalysisSummary": "Zusammenfassung der KI-Analyse",
     "securityWarning": "Sicherheitswarnung",
+    "aiNotices": {
+      "analysisRefused": "Das Modell hat die Analyse dieses Inhalts abgelehnt. Seine Antwort wird unten als reiner Text angezeigt.",
+      "safetyCheckRefused": "Das Modell hat die Sicherheitsprüfung dieses Inhalts abgelehnt, daher wurde die KI-Analyse blockiert. Bitte prüfen Sie den Inhalt manuell."
+    },
     "modelLabel": "Modell",
     "generatedLabel": "Generiert",
     "modelReviewNotImplemented": "Details zur Modellüberprüfung sind noch nicht implementiert.",

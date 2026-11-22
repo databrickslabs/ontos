@@ -11,6 +11,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from src.common.ontology_type_names import canonical_type_name
 from src.common.logging import get_logger
 from src.connectors.base import AssetConnector, ListAssetsOptions
 from src.controller.connections_manager import ConnectionsManager
@@ -511,9 +512,9 @@ class SchemaImportManager:
                 target_type = path_to_type.get(item.path, "Asset")
                 try:
                     existing = db.query(EntityRelationshipDb).filter(
-                        EntityRelationshipDb.source_type == source_type,
+                        EntityRelationshipDb.source_type == canonical_type_name(source_type),
                         EntityRelationshipDb.source_id == str(source_id),
-                        EntityRelationshipDb.target_type == target_type,
+                        EntityRelationshipDb.target_type == canonical_type_name(target_type),
                         EntityRelationshipDb.target_id == str(target_id),
                         EntityRelationshipDb.relationship_type == rel_type,
                     ).first()
@@ -553,7 +554,7 @@ class SchemaImportManager:
                         existing = db.query(EntityRelationshipDb).filter(
                             EntityRelationshipDb.source_type == "System",
                             EntityRelationshipDb.source_id == str(system_asset_id),
-                            EntityRelationshipDb.target_type == item.asset_type,
+                            EntityRelationshipDb.target_type == canonical_type_name(item.asset_type),
                             EntityRelationshipDb.target_id == str(target_id),
                             EntityRelationshipDb.relationship_type == rel_type,
                         ).first()

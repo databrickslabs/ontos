@@ -70,9 +70,16 @@ if ALEMBIC_DB_PASSWORD:
 
 # --- Include Object Hook (To ignore indexes for Databricks SQL) ---
 def include_object(object, name, type_, reflected, compare_to):
-    """Exclude indexes from Alembic's consideration."""
+    """Exclude indexes and the DDL-managed search_tsv column from Alembic's consideration."""
     if type_ == "index":
         # print(f"Ignoring index: {name}") # Optional: for debugging
+        return False
+    if type_ == "column" and reflected and name == "search_tsv":
+        # search_documents.search_tsv is a Postgres-only GENERATED tsvector column added
+        # by DDL (after_create hook in db_models/search_documents.py and migration
+        # n1_add_search_documents), deliberately absent from the ORM model so SQLite
+        # tests can still build the table. Without this, `alembic check` reports it as
+        # a column to remove.
         return False
     else:
         return True

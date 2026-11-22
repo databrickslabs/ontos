@@ -445,7 +445,7 @@ def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[D
         LEFT JOIN data_domains d ON d.id = ada.domain_id
         LEFT JOIN entity_relationships er
           ON er.source_id = a.id::text
-         AND er.source_type IN ('Table', 'View', 'Metric View')
+         AND er.source_type IN ('Table', 'View', 'MetricView', 'Metric View')
          AND er.target_type = 'DataContract'
          AND er.relationship_type = 'implementsContract'
         LEFT JOIN data_contracts c ON er.target_id = c.id

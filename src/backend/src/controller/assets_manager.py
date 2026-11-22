@@ -5,10 +5,14 @@ from databricks.sdk import WorkspaceClient
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.exc import IntegrityError
 
+from src.controller.entity_data_cleanup import remove_entity_rows
 from src.repositories.assets_repository import asset_type_repo, asset_repo, asset_relationship_repo
 from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
+from src.common.uc_comments import split_column_location
+from src.repositories.business_owners_repository import business_owner_repo
 from src.models.assets import (
+    description_sync_state,
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
     AssetCreate, AssetUpdate, AssetRead, AssetSummary,
     AssetRelationshipCreate, AssetRelationshipRead,
@@ -62,6 +66,7 @@ class AssetsManager(SearchableAsset):
         if db_asset.target_relationships:
             rels.extend([AssetRelationshipRead.model_validate(r) for r in db_asset.target_relationships])
         read.relationships = rels
+        read.description_sync = description_sync_state(db_asset.properties)
         # Attach polymorphic domain assignments from the junction table.
         session = object_session(db_asset)
         if session is not None:
@@ -336,6 +341,7 @@ class AssetsManager(SearchableAsset):
         domain_ids: Optional[List[str]] = None,
         status: Optional[str] = None, name: Optional[str] = None,
         restrict_to_ids: Optional[List[UUID]] = None,
+        owner_email: Optional[str] = None,
     ) -> PaginatedAssetSummary:
         """Gets a paginated page of asset summaries.
 
@@ -343,7 +349,13 @@ class AssetsManager(SearchableAsset):
         UUIDs — used by role-aware Data Product scoping. An empty list
         intentionally yields zero results. Domain filtering (``domain_id`` /
         ``domain_ids``) is any-of via the junction table.
+
+        ``owner_email`` (when not None) keeps only the assets with an active
+        business-owner assignment for that user. It intersects with
+        ``restrict_to_ids``, so it can only narrow the result.
         """
+        if owner_email is not None:
+            restrict_to_ids = self._narrow_to_owned(db, owner_email, restrict_to_ids)
         filter_kwargs = dict(
             asset_type_id=asset_type_id, asset_type_names=asset_type_names,
             platform=platform, domain_id=domain_id, domain_ids=domain_ids, status=status, name=name,
@@ -371,6 +383,26 @@ class AssetsManager(SearchableAsset):
             skip=skip,
             limit=limit,
         )
+
+    @staticmethod
+    def _narrow_to_owned(
+        db: Session, owner_email: str, restrict_to_ids: Optional[List[UUID]],
+    ) -> List[UUID]:
+        """Asset IDs the user actively owns, intersected with ``restrict_to_ids`` if set."""
+        owned: set = set()
+        if owner_email:
+            for ownership in business_owner_repo.get_by_user(
+                db, user_email=owner_email, active_only=True,
+            ):
+                if ownership.object_type != "asset":
+                    continue
+                try:
+                    owned.add(UUID(str(ownership.object_id)))
+                except ValueError:
+                    logger.warning("Skipping ownership with a non-UUID asset id")
+        if restrict_to_ids is not None:
+            owned &= {UUID(str(i)) for i in restrict_to_ids}
+        return sorted(owned, key=str)
 
     def update_asset(self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str) -> AssetRead:
         db_asset = self._asset_repo.get(db, asset_id)
@@ -425,6 +457,43 @@ class AssetsManager(SearchableAsset):
             if "unique constraint" in str(e).lower():
                 raise ConflictError("Asset identity conflict.")
             raise
+
+    @staticmethod
+    def update_table_column_snapshot(db: Session, column: AssetDb) -> None:
+        """Copy a Column asset's new description into its table's ``properties.schema``.
+
+        An imported table or view keeps a snapshot of its columns; the table is
+        the asset on the same platform located at the column's location minus
+        the column name. Called once the column's description is in Unity Catalog.
+        """
+        if getattr(column.asset_type, 'name', None) != 'Column':
+            return
+        split = split_column_location(column.location or '')
+        if split is None:
+            return
+        table_location, column_name = split
+        tables = db.query(AssetDb).filter(
+            AssetDb.location == table_location, AssetDb.platform == column.platform,
+            AssetDb.id != column.id,
+        ).all()
+        for table in tables:
+            schema = (table.properties or {}).get('schema')
+            columns = schema.get('columns') if isinstance(schema, dict) else None
+            if not isinstance(columns, list):
+                continue
+            changed = False
+            new_columns = []
+            for entry in columns:
+                if isinstance(entry, dict) and entry.get('name') == column_name \
+                        and entry.get('description') != column.description:
+                    entry = {**entry, 'description': column.description}
+                    changed = True
+                new_columns.append(entry)
+            if changed:
+                # New dicts, so the JSON column is seen as changed
+                new_schema = {**schema, 'columns': new_columns}
+                table.properties = {**table.properties, 'schema': new_schema}
+        db.flush()
 
     def retype_asset(
         self, db: Session, *, asset_id: UUID, from_type: str, to_type: str,
@@ -508,13 +577,8 @@ class AssetsManager(SearchableAsset):
                     db, entity_type="asset", entity_id=entity_id,
                 ),
             }
-            metadata_counts, paths = self._metadata_manager.remove_all_for_entity(
-                db, entity_type="asset", entity_id=entity_id,
-            )
-            removed.update(metadata_counts)
-            removed["cost_items"] = self._costs_manager.remove_all_for_entity(
-                db, entity_type="asset", entity_id=entity_id,
-            )
+            entity_rows, paths = remove_entity_rows(db, entity_type="asset", entity_id=entity_id)
+            removed.update(entity_rows)
             self._asset_repo.remove(db=db, id=asset_id)
         self._metadata_manager.delete_document_files_after_commit(db, paths, ws)
         return removed
@@ -738,6 +802,35 @@ class AssetsManager(SearchableAsset):
         item = self._build_search_index_item(asset_db_obj)
         if item is not None:
             self._notify_index_upsert(item)
+        else:
+            # Retired assets have no item: drop any entry an earlier version indexed.
+            self._notify_index_remove(f"asset::{asset_db_obj.id}")
+
+    def upsert_search_index_for(self, db: Session, asset_ids: List[UUID]) -> None:
+        """Upsert the given assets in the search index with one batch call.
+
+        For writers that commit later (bulk import): call after the DB commit, so a
+        rolled-back write never leaves index entries behind.
+        """
+        if not asset_ids:
+            return
+        assets = db.query(AssetDb).filter(AssetDb.id.in_(list(asset_ids))).all()
+        if not assets:
+            return
+        domains_map = entity_domain_repo.get_domains_for_entities(
+            db, entity_type="asset", entity_ids=[str(a.id) for a in assets]
+        )
+        items = []
+        for a in assets:
+            item = self._build_search_index_item(
+                a, preloaded_domains=domains_map.get(str(a.id), []),
+            )
+            if item is not None:
+                items.append(item)
+            else:
+                # Retired: drop an entry indexed while the asset was active.
+                self._notify_index_remove(f"asset::{a.id}")
+        self._notify_index_upsert_many(items)
 
     def get_search_index_items(self) -> List[SearchIndexItem]:
         """Index all active assets for unified search."""

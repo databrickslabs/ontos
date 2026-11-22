@@ -212,3 +212,50 @@ describe('LineageEditor incoming steps (#1241)', () => {
     });
   });
 });
+
+describe('LineageEditor "Asset" range', () => {
+  const assetRel = (direction: 'outgoing' | 'incoming') => ({
+    property_iri: `${ONTOS}consumesFrom`,
+    property_name: 'consumesFrom',
+    label: 'consumes from',
+    source_type_iri: direction === 'outgoing' ? `${ONTOS}Table` : `${ONTOS}Asset`,
+    source_type_label: direction === 'outgoing' ? 'Table' : 'Asset',
+    target_type_iri: direction === 'outgoing' ? `${ONTOS}Asset` : `${ONTOS}Table`,
+    target_type_label: direction === 'outgoing' ? 'Asset' : 'Table',
+    cardinality: '0..*',
+    display_context: 'tab',
+    direction,
+  });
+
+  beforeEach(() => {
+    candidate = { id: 'v1', name: 'orders_v', entity_type: 'View', score: 1 };
+  });
+
+  const save = async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <LineageEditor isOpen onOpenChange={() => {}} entityType="Table" entityId="t1" entityName="orders" />,
+    );
+    await user.click(await screen.findByRole('button', { name: /^add$/i }));
+    await user.click(screen.getByRole('button', { name: /review & save/i }));
+    await user.click(await screen.findByRole('button', { name: /save all/i }));
+  };
+
+  it("stores the picked asset's own type as the target", async () => {
+    schema = { type_iri: `${ONTOS}Table`, outgoing: [assetRel('outgoing')], incoming: [] } as any;
+    await save();
+
+    await waitFor(() => {
+      expect(postedRelationship()).toMatchObject({ source_type: 'Table', target_type: 'View', target_id: 'v1' });
+    });
+  });
+
+  it("stores the picked asset's own type as the source", async () => {
+    schema = { type_iri: `${ONTOS}Table`, outgoing: [], incoming: [assetRel('incoming')] } as any;
+    await save();
+
+    await waitFor(() => {
+      expect(postedRelationship()).toMatchObject({ source_type: 'View', source_id: 'v1', target_type: 'Table' });
+    });
+  });
+});

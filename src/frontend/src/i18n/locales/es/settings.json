@@ -140,6 +140,16 @@
         "placeholder": "app_files"
       }
     },
+    "ucDescriptionWriteback": {
+      "title": "Descripciones de activos",
+      "adminOnly": "Solo un administrador puede activar esto.",
+      "label": "Escribir las descripciones de activos en Unity Catalog",
+      "help": "Al guardar la descripción de una tabla, vista o columna de Databricks también se establece su comentario en Unity Catalog, como el usuario que la guarda. Sin los permisos SELECT y MODIFY, la descripción se guarda solo en Ontos y el activo indica que no está sincronizado.",
+      "importLimit": {
+        "label": "Máximo de filas intentadas en Unity Catalog por importación masiva",
+        "help": "Una importación CSV/XLSX intenta como máximo este número de descripciones en Unity Catalog (1–10000), ya sea que las escriba, conserve otro comentario u omita una vista de métricas; las filas por encima del límite se guardan en Ontos con una advertencia."
+      }
+    },
     "instanceIdentity": {
       "title": "Identidad de la instancia",
       "id": {
@@ -406,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "Secciones de inicio",
-        "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol."
+        "description": "Seleccionar qué secciones aparecen en la página de inicio para usuarios con este rol.",
+        "labels": {
+          "JOURNEY": "Inicio por recorrido"
+        },
+        "descriptions": {
+          "JOURNEY": "Sustituye la página de inicio completa por Buscar, Entender, Confiar, Publicar y Mantener. No se puede combinar con otras secciones."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilegios de aprobación",

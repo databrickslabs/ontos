@@ -32,9 +32,11 @@ from src.tools.visibility import INVALID_VISIBILITY_CODE, VISIBILITY_DESCRIPTION
 IRI = 'http://example.com/onto#Order'
 _RO = FeatureAccessLevel.READ_ONLY
 READ = {'data-products': _RO, 'data-contracts': _RO}
-SUE = ToolCaller(email='sue@example.com', auth_path='test', permissions=READ)
-CONSUMER = ToolCaller(email='carl@example.com', auth_path='test', permissions=READ)
-ADMIN = ToolCaller(email='ann@example.com', auth_path='test',
+SUE = ToolCaller(email='sue@example.com', auth_path='test', permissions=READ,
+                 groups=['users'])
+CONSUMER = ToolCaller(email='carl@example.com', auth_path='test', permissions=READ,
+                      groups=['users'])
+ADMIN = ToolCaller(email='ann@example.com', auth_path='test', groups=['users'],
                    products_admin=True, contracts_admin=True,
                    permissions={'semantic-models': _RO})
 NOW = datetime(2026, 10, 1)

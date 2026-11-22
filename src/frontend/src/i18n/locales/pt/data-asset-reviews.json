@@ -138,6 +138,10 @@
     "runAiAnalysis": "Executar Análise de IA",
     "aiAnalysisSummary": "Resumo da Análise de IA",
     "securityWarning": "Aviso de Segurança",
+    "aiNotices": {
+      "analysisRefused": "O modelo se recusou a analisar este conteúdo. A resposta dele aparece abaixo como texto simples.",
+      "safetyCheckRefused": "O modelo se recusou a fazer a verificação de segurança deste conteúdo, então a análise por IA foi bloqueada. Revise o conteúdo manualmente."
+    },
     "modelLabel": "Modelo",
     "generatedLabel": "Gerado",
     "modelReviewNotImplemented": "Detalhes da revisão do modelo ainda não implementados.",

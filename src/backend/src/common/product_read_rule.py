@@ -29,25 +29,20 @@ def is_published_product(product: Any) -> bool:
 
 
 def is_product_read_admin(request: Any, user: Any) -> bool:
-    """Whether ``user`` reads every product: data-products Admin from its groups.
+    """Whether ``user`` reads every product: data-products Admin.
 
-    An applied role override wins over the groups (no team role override), as
-    in the product page's gate.
+    Resolved like the feature checks (``effective_permissions_for_request``): an
+    applied role override replaces everything; otherwise group and email roles
+    and team role overrides combine by highest level per feature.
     """
     if not user:
         return False
     auth_manager = getattr(request.app.state, "authorization_manager", None)
     if not auth_manager:
         return False
-    settings_manager = getattr(request.app.state, "settings_manager", None)
-    applied_role_id = (
-        settings_manager.get_applied_role_override_for_user(user.email)
-        if settings_manager else None
-    )
-    if applied_role_id and settings_manager:
-        eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-    else:
-        eff = auth_manager.get_user_effective_permissions(user.groups or [], None)
+    from src.common.authorization import effective_permissions_for_request
+
+    eff = effective_permissions_for_request(request, user.email, user.groups or [], auth_manager)
     return auth_manager.has_permission(eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN)
 
 

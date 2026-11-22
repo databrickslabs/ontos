@@ -6,7 +6,7 @@ owning team, project member, data-products admin); a status change alone needs
 only the level, as ``change-status``. ``create_draft_data_product`` makes the
 caller the draft owner, as ``POST /api/data-products`` does. Each change writes
 the data-products audit entry of its route (CREATE / UPDATE / CHANGE_STATUS /
-DELETE) with the caller as username.
+DEPRECATE / RETIRE / DELETE) with the caller as username.
 """
 import asyncio
 import uuid
@@ -142,7 +142,7 @@ class TestUpdateNeedsAnOwner:
                     status='deprecated', deprecation_reason='Replaced')
         assert res.success is True, res.error
         assert _stored(world).status == 'deprecated'
-        assert [(e['action'], e['success']) for e in world.audit] == [('CHANGE_STATUS', True)]
+        assert [(e['action'], e['success']) for e in world.audit] == [('DEPRECATE', True)]
         assert world.audit[0]['username'] == NON_OWNER.email
         assert world.audit[0]['details']['new_status'] == 'deprecated'
 
@@ -196,7 +196,7 @@ class TestCreateAndDelete:
         assert res.error_code == 'status_change_blocked'
         assert _stored(world).status == 'active'
         assert [(e['action'], e['success']) for e in world.audit] \
-            == [('CHANGE_STATUS', False)]
+            == [('DEPRECATE', False)]
 
 
 def test_the_route_helper_and_the_tool_share_the_ownership_rule(world):

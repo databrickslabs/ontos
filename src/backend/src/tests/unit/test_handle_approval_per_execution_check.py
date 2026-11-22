@@ -547,3 +547,32 @@ def test_approving_a_step_leaves_the_next_steps_notification_open() -> None:
 
     assert [(r.id, r.read) for r in rows] == [('n-a', True), ('n-b', False)]
     assert 'handled' not in json.loads(rows[1].action_payload)
+
+
+def test_a_loop_back_into_the_decided_step_keeps_the_new_round_open() -> None:
+    from src.db_models.process_workflows import WorkflowExecutionDb
+
+    rows = [_step_row('n-a', 'alice@example.com', 'approve-a')]
+    db = _db_with(rows, pending_step='approve-a')
+
+    def resume_workflow(**kwargs):
+        # The workflow loops back and asks the same step again
+        rows.append(_step_row('n-a2', 'alice@example.com', 'approve-a'))
+        db.query(WorkflowExecutionDb).filter.return_value.first.return_value = ('approve-a',)
+        return SimpleNamespace(id='exec-A', status=SimpleNamespace(value='paused'))
+
+    executor = MagicMock()
+    executor.resume_workflow.side_effect = resume_workflow
+    request = MagicMock()
+    request.json = AsyncMock(
+        return_value={'execution_id': 'exec-A', 'approved': False, 'message': 'redo'}
+    )
+
+    asyncio.run(handle_workflow_approval(
+        request=request, db=db, audit_manager=MagicMock(),
+        current_user=_user('alice@example.com'), executor=executor,
+        notifications_manager=_by_recipient(),
+    ))
+
+    assert [(r.id, r.read) for r in rows] == [('n-a', True), ('n-a2', False)]
+    assert 'handled' not in json.loads(rows[1].action_payload)

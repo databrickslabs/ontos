@@ -763,22 +763,21 @@ class ComplianceManager:
 
         identity = identity or RunIdentity.app()
         needs_uc = any(t in UnityCatalogLoader.SUPPORTED_TYPES for t in entity_types)
+        if not needs_uc:
+            # Only the Unity Catalog loader uses the client. Building one a run on
+            # app entities doesn't use waits on the SDK's retries (5 minutes)
+            # where no workspace answers
+            return None
         try:
             ws = identity.workspace_client()
         except Exception as e:
-            if needs_uc:
-                # A code the UI translates; the exception text stays in the
-                # stored message and the log, not in what the UI shows
-                code = ('user_token_required' if isinstance(e, UserTokenRequiredError)
-                        else 'workspace_client_unavailable')
-                e.error_code, e.error_params = code, {}
-                raise
-            logger.warning(
-                "Workspace client unavailable, policy '%s' (%s) only matches app entities "
-                "and runs without it: %s", policy.name, policy.id, e,
-            )
-            return None
-        if ws is None and needs_uc:
+            # A code the UI translates; the exception text stays in the
+            # stored message and the log, not in what the UI shows
+            code = ('user_token_required' if isinstance(e, UserTokenRequiredError)
+                    else 'workspace_client_unavailable')
+            e.error_code, e.error_params = code, {}
+            raise
+        if ws is None:
             error = RuntimeError(
                 "Databricks workspace client unavailable; this rule matches Unity Catalog "
                 "objects and cannot be evaluated without it"

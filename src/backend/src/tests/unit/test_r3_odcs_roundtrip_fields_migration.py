@@ -104,3 +104,16 @@ def test_downgrade_moves_them_back_and_drops_the_columns(upgraded, migration):
         assert rows == [('p1', 'The order number'), ('p2', None)]
         for table, columns in _NEW_COLUMNS.items():
             assert not columns & _columns(conn, table), table
+
+
+def test_downgrade_keeps_a_transform_description_without_description(upgraded, migration):
+    with upgraded.begin() as conn:
+        conn.execute(text(
+            f"UPDATE {_PROPERTIES} SET transform_description = 'Copied' WHERE id = 'p2'"))
+
+    _run(upgraded, migration.downgrade)
+
+    with upgraded.connect() as conn:
+        rows = conn.execute(text(
+            f"SELECT id, transform_description FROM {_PROPERTIES} ORDER BY id")).all()
+        assert rows == [('p1', 'The order number'), ('p2', 'Copied')]

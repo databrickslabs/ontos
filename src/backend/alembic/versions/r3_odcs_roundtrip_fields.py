@@ -9,6 +9,10 @@
 - ``stable_id`` (the ODCS ``id``) on ``data_contract_pricing``,
   ``data_contract_role_properties`` and both relationship tables.
 
+The downgrade moves the descriptions back to ``transform_description``; a row
+that has both (a ``transformDescription`` stored after the upgrade) keeps its
+description there, as before the upgrade, and loses the transformDescription.
+
 Revision ID: r3_odcs_roundtrip_fields
 Revises: r2_canonical_relationship_types
 Create Date: 2026-11-12 12:00:00.000000
@@ -60,10 +64,11 @@ def downgrade() -> None:
         op.drop_column(table, 'stable_id')
     op.drop_column('data_contract_servers', 'custom_properties_json')
     op.drop_column('data_contract_servers', 'roles_json')
-    # Back to the old layout: the description in transform_description
+    # Back to the old layout: the description in transform_description (a row
+    # without a description keeps its transform_description)
     op.execute(
-        f"UPDATE {_PROPERTIES} SET transform_description = description "
-        "WHERE description IS NOT NULL"
+        f"UPDATE {_PROPERTIES} SET transform_description = "
+        "COALESCE(description, transform_description)"
     )
     op.drop_column(_PROPERTIES, 'tags')
     op.drop_column(_PROPERTIES, 'description')

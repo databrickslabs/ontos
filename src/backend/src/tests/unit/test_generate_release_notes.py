@@ -1,5 +1,7 @@
 """Release notes from commit subjects and trailers (src/scripts/generate_release_notes.py)."""
 import importlib.util
+import itertools
+import os
 import subprocess
 from pathlib import Path
 
@@ -276,9 +278,16 @@ def test_refuses_a_malformed_version(bad):
 # --- git and the CLI --------------------------------------------------------------------------
 
 
+_CLOCK = itertools.count(1_700_000_000, 60)
+
+
 def _git(repo: Path, *args: str) -> str:
+    # Each git call gets a later date, so `git log` order doesn't depend on commits made
+    # within the same second.
+    when = f"{next(_CLOCK)} +0000"
+    env = {**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when}
     return subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True
+        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True, env=env
     ).stdout.strip()
 
 

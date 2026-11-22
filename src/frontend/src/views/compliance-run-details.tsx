@@ -9,6 +9,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
+import { ResultStatusBadge } from '@/components/compliance/result-status-badge';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import {
   CardSkeleton,
@@ -19,7 +20,6 @@ import { complianceRunErrorText } from '@/lib/compliance-run-error';
 import {
   complianceHiddenResultsText,
   complianceResultMessageText,
-  complianceResultStatus,
   complianceRunCoverageText,
   complianceRunScoreText,
   complianceRunWarningText,
@@ -29,6 +29,7 @@ import {
   complianceActionLabel,
   complianceActionOutcomes,
 } from '@/lib/compliance-action-outcome';
+import { llmCheckText, llmUsageText, parseLlmChecks } from '@/lib/compliance-llm-checks';
 
 interface Run {
   id: string; // UUID
@@ -44,6 +45,9 @@ interface Run {
   error_params?: Record<string, unknown> | null;
   warning_code?: string | null;
   warning_params?: Record<string, unknown> | null;
+  llm_calls?: number | null;
+  llm_cache_hits?: number | null;
+  not_evaluated_count?: number | null;
 }
 
 interface Result {
@@ -53,6 +57,7 @@ interface Result {
   object_id: string;
   object_name?: string;
   passed: boolean;
+  not_evaluated?: boolean;
   message?: string;
   details_json?: string;
   created_at: string;
@@ -82,15 +87,36 @@ export default function ComplianceRunDetails() {
       <code className="text-xs bg-muted px-2 py-1 rounded">{row.original.object_name || row.original.object_id}</code>
     ) },
     { accessorKey: 'passed', header: t('common:labels.status'), cell: ({ row }) => (
-      <Badge variant={complianceResultStatus(t, row.original).variant}>
-        {complianceResultStatus(t, row.original).label}
-      </Badge>
+      <ResultStatusBadge
+        passed={row.original.passed}
+        notEvaluated={row.original.not_evaluated}
+        detailsJson={row.original.details_json}
+      />
     ) },
-    { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground break-words">
-        {complianceResultMessageText(t, row.original) || t('compliance:results.empty')}
-      </span>
-    ) },
+    { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => {
+      // The LLM_CHECKs that failed, with the model's reason or the translated code
+      const failedChecks = row.original.passed
+        ? []
+        : parseLlmChecks(row.original.details_json).filter((c) => !c.passed);
+      return (
+        <div className="space-y-1">
+          <span className="text-sm text-muted-foreground break-words">
+            {complianceResultMessageText(t, row.original) || t('compliance:results.empty')}
+          </span>
+          {failedChecks.length > 0 && (
+            <ul className="text-xs text-muted-foreground" data-testid="llm-check-reasons">
+              {failedChecks.map((check, i) => (
+                <li key={i}>
+                  {t('compliance:llmCheck.failedReason', {
+                    criterion: check.criterion, reason: llmCheckText(t, check),
+                  })}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+    } },
     { id: 'actions', header: t('compliance:results.actions'), cell: ({ row }) => {
       const outcomes = complianceActionOutcomes(row.original.details_json);
       if (outcomes.length === 0) {
@@ -224,6 +250,16 @@ export default function ComplianceRunDetails() {
           {run.status !== 'failed' && run.warning_code && (
             <div className="text-sm text-amber-600" data-testid="run-warning">
               {complianceRunWarningText(t, run)}
+            </div>
+          )}
+          {!!run.not_evaluated_count && (
+            <div className="text-sm text-muted-foreground" data-testid="run-not-evaluated">
+              {t('compliance:llmCheck.notEvaluatedCount', { count: run.not_evaluated_count })}
+            </div>
+          )}
+          {llmUsageText(t, run) && (
+            <div className="text-sm text-muted-foreground" data-testid="run-llm-usage">
+              {llmUsageText(t, run)}
             </div>
           )}
         </CardHeader>

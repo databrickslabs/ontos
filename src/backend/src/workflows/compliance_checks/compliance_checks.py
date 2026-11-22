@@ -431,6 +431,7 @@ def run_policy(
     manager: Any,
     entity_limit: Optional[int],
     statement_cache: Any = None,
+    llm_checker: Any = None,
 ) -> Dict[str, Any]:
     """Run a single compliance policy.
 
@@ -460,7 +461,7 @@ def run_policy(
         from src.common.run_identity import RunIdentity
         run = manager.run_policy_inline(
             db, policy=policy_db, limit=entity_limit, statement_cache=statement_cache,
-            run_identity=RunIdentity.app(),
+            run_identity=RunIdentity.app(), llm_checker=llm_checker,
         )
 
         print(f"  Run ID: {run.id}")
@@ -481,7 +482,7 @@ def run_policy(
             "status": run.status,
             "success_count": run.success_count,
             "failure_count": run.failure_count,
-            "score": run.score,
+            "score": score,
             "error": run.error_message,
             "warning": warning,
         }
@@ -620,9 +621,14 @@ def main() -> None:
         # policy run gets its own statement budget and deadline (StatementCache.start_run)
         from src.common.uc_table_enrichment import StatementCache
         statement_cache = StatementCache()
+        # One LLM_CHECK budget for the whole job run, shared by its policies
+        llm_checker = manager.llm_checker(db, purge_expired=True)
 
         for policy in policies:
-            result = run_policy(db, policy, manager, entity_limit, statement_cache)
+            result = run_policy(
+                db, policy, manager, entity_limit,
+                statement_cache=statement_cache, llm_checker=llm_checker,
+            )
             results.append(result)
 
             if result.get("status") in ["succeeded", "running"]:

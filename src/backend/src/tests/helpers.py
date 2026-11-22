@@ -331,3 +331,53 @@ def postgres_aborts(db):
     finally:
         event.remove(connection, 'before_cursor_execute', _before)
         event.remove(connection, 'after_cursor_execute', _after)
+
+
+def llm_reply(content, finish_reason='stop', refusal=None):
+    """A chat completion as the OpenAI client returns it, with one choice."""
+    from types import SimpleNamespace
+
+    message = SimpleNamespace(content=content, refusal=refusal)
+    return SimpleNamespace(choices=[SimpleNamespace(message=message, finish_reason=finish_reason)])
+
+
+class FakeLlm:
+    """An OpenAI-like client for LLM tests.
+
+    ``chat.completions.create`` answers the LLM_CHECK injection scan (a call
+    without the text markers of the verdict prompt) with ``scan`` (default
+    ``SAFE``) and records it in ``scans``. Other calls are recorded in
+    ``calls`` and answered with the given replies in turn (the last one
+    repeats), or with ``answer(kwargs)`` when given. An exception is raised.
+    """
+
+    def __init__(self, *replies, answer=None, scan=None):
+        from types import SimpleNamespace
+
+        self.replies = list(replies)
+        self.answer = answer
+        self.scan = scan if scan is not None else llm_reply('SAFE')
+        self.calls: List[Dict[str, Any]] = []
+        self.scans: List[Dict[str, Any]] = []
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    def with_options(self, **options):
+        """As ``OpenAI.with_options``: the options are kept, the client is the same."""
+        self.options = options
+        return self
+
+    @staticmethod
+    def _raise_or_return(reply):
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    def _create(self, **kwargs):
+        if '<<<TEXT ' not in kwargs['messages'][-1]['content']:
+            self.scans.append(kwargs)
+            return self._raise_or_return(self.scan)
+        self.calls.append(kwargs)
+        if self.answer is not None:
+            return self.answer(kwargs)
+        reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        return self._raise_or_return(reply)

@@ -159,6 +159,115 @@ ASSERT LENGTH(obj.name) <= 64
 ASSERT LOWER(obj.name) = obj.name  # Enforce lowercase
 ```
 
+### LLM Check
+- `LLM_CHECK(text, 'criterion')` - Ask the configured serving endpoint (`LLM_ENDPOINT`)
+  whether the text meets the criterion; true or false, with a short reason
+
+```
+MATCH (t:table)
+ASSERT LLM_CHECK(t.comment, 'states the grain of the table')
+
+MATCH (d:domain)
+ASSERT LLM_CHECK(d.description, 'says who uses the data and for what')
+
+MATCH (t:table)
+ASSERT LENGTH(t.comment) >= 40 AND LLM_CHECK(t.comment, 'states the grain of the table')
+```
+
+Put a deterministic floor next to the check, as in the last example: the
+model's verdict is a judgment, and a text written to steer it (prompt
+injection) is only caught by the safety scan and the prompt, not by code. A
+rule that also requires a minimum length fails short or empty texts without a
+call, whatever the model answers, and saves calls.
+
+**Deterministic floor, for rule authors.** Write every `LLM_CHECK` rule as
+`<floor> AND LLM_CHECK(...)`, where the floor is checked by code:
+
+- non-empty: an empty or missing text fails without a call (`llm_check_empty_text`),
+  also under `NOT`, so `NOT LLM_CHECK(...)` never passes an undocumented object;
+- a minimum length that a useful text can't be shorter than, such as
+  `LENGTH(t.comment) >= 40`: a one-word or placeholder text ("TBD", "table")
+  fails whatever the model answers.
+
+The floor is what a rule still guarantees when the model is wrong or steered;
+the model only judges what the floor lets through. There is no verdict schema
+yet: the reply is one `PASS: <reason>` / `FAIL: <reason>` line.
+
+The criterion must be a string literal: an expression such as `t.name` is
+rejected when the rule is saved (`llm_check_criterion_not_literal`), because it
+would put entity data into the model's instructions. The reason of a failed
+check is the model's text: it is capped at 300 characters and shown as plain
+text next to the result. Before saving, use **Test on a sample entity** in the
+rule editor to try a criterion on one entity (at most 10 tests a minute per user).
+
+- Access: saving, running or testing a rule with `LLM_CHECK` needs admin access
+  to compliance (Data Governance Officers and Admins by default), as `NOTIFY`
+  does (`llm_check_admin_required`). A run or test a user starts reads Unity
+  Catalog with that user's own token, so its results and reasons only cover the
+  objects the user can read; the app entity types the rule matches (data
+  products, contracts, domains, reviews) need read access to their feature
+  (`llm_check_entity_read_required`). Scheduled runs use the app's identity.
+- Data leaves the compliance store: the text under test (descriptions, column
+  comments, owner text) goes to the serving endpoint, Foundation Model APIs or
+  the model behind `LLM_ENDPOINT`, with no redaction of personal data or
+  secrets. `LLM_CHECK` only calls the workspace's own serving endpoints
+  (`<DATABRICKS_HOST>/serving-endpoints`): with an `LLM_BASE_URL` on another
+  host it fails without a call (`llm_check_external_endpoint`).
+- There is no switch for `LLM_CHECK` alone: turning on the LLM features
+  (`LLM_ENABLED`, used by Ask Ontos) also turns it on, for the compliance admins
+  who may save and run such rules.
+- Two phases: the text is first scanned with the injection-check prompt
+  (`LLM_INJECTION_CHECK_PROMPT`). A text the scan doesn't call `SAFE` fails with
+  `llm_check_text_rejected`, and the criterion is never asked.
+
+- Only evaluated in compliance runs, in `ASSERT`. In `WHERE`, in maturity gates
+  and in workflow policy checks the check fails (`llm_check_not_available`), so
+  those are refused when saved: a rule with `LLM_CHECK` in `WHERE`
+  (`llm_check_in_where`; it would skip every entity), a `policy_check` step on
+  a policy with `LLM_CHECK` (`policy_check_policy_uses_llm_check`, an error for
+  an active workflow and a warning for an inactive one), a maturity gate on such a policy
+  (`maturity_gate_policy_uses_llm_check`), and an `LLM_CHECK` rule for a policy
+  that steps or gates already use (409 `llm_check_policy_in_use`).
+- Fails closed: with an empty text (no call), LLM features off
+  (`llm_check_disabled`), no endpoint (`llm_check_no_endpoint`), a refusal, an
+  empty or unfinished reply, or a reply whose first line is not `PASS: <reason>`
+  or `FAIL: <reason>`, the entity doesn't pass, also under `NOT`, and its
+  `ON_PASS` / `ON_FAIL` actions don't run for it. Each call times out after 60 s.
+  Such an entity is **not evaluated**: it counts neither as passed nor as
+  failed, and the run's score covers only the judged entities (the run shows
+  how many were not evaluated). An empty text is the exception: there is
+  nothing to judge, so the entity fails.
+- Cached: a verdict is stored per text, criterion, endpoint, the model the
+  endpoint serves (read from its configuration once per run) and prompts, so a
+  run over unchanged text makes no call, and repointing an endpoint at another
+  model asks again. When the endpoint's configuration can't be read, verdicts
+  are neither read from nor written to the cache (each check calls the model),
+  so a verdict of another model is never reused. The model that answered is stored with the verdict. Calls
+  are made at temperature 0 (endpoints that reject it are called without it). Verdicts older than
+  `COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS` (default 30) are asked again, and
+  deleted when a run starts.
+- Budget: `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN` model calls (default 100; a
+  check makes two, the scan and the verdict; cached verdicts make none; a retry
+  of a transient error, one at most per call, and a call made again without
+  `temperature` count as calls too). It
+  covers one policy run from the UI, and the whole run of the Compliance Checks
+  job, shared by its policies. The checks past it fail with
+  `llm_check_budget_exceeded`, and each policy run reports how many. Each run
+  also shows its model calls and the verdicts it read from the cache
+  (`llm_calls` and `llm_cache_hits` in the run's API answers).
+- Daily quota: the runs and rule tests one user starts may make
+  `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY` model calls a day (UTC,
+  default 400), retries included. The checks past it are not evaluated
+  (`llm_check_daily_quota_exceeded`; the run warns how many), and a rule test
+  that needed a call past it is answered 429 with `Retry-After` (seconds to
+  midnight UTC). Cached verdicts don't count, so a run or test answered from the
+  cache is never refused. A reservation not used is given back to the day it was
+  made on. Scheduled runs have no user: only the per-run budget applies to them.
+- Scheduled runs (the Compliance Checks job) read the LLM settings of the job's
+  environment (`LLM_ENABLED`, `LLM_ENDPOINT`,
+  `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN`); without them, their `LLM_CHECK`s
+  are not evaluated (`llm_check_disabled`).
+
 ## CASE Expressions
 
 Conditional logic for complex rules:

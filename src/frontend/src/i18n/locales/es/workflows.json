@@ -363,6 +363,9 @@
       "unreachableSteps": "Estos pasos no se pueden alcanzar desde el primer paso: {{steps}}.",
       "storedEntityTypeUnknown": "El disparador incluye \"{{entityType}}\", un tipo de entidad que ya no existe. Nunca se activa para él.",
       "storedEntityTypeUnsupported": "El disparador {{trigger}} nunca se activa para {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "El paso \"{{step}}\" comprueba una política que usa LLM_CHECK. LLM_CHECK solo se evalúa en ejecuciones de cumplimiento, así que el paso haría fallar todas las entidades. Selecciona una política sin LLM_CHECK."
     }
   },
   "approvalResponse": {

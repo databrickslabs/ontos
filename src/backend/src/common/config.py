@@ -234,6 +234,23 @@ class Settings(BaseSettings):
         LLM_INJECTION_CHECK_PROMPT_SECURE_DEFAULT,
         env='LLM_INJECTION_CHECK_PROMPT'
     )
+    # Most LLM_CHECK calls one compliance run makes to the serving endpoint (cached
+    # verdicts don't count); the checks past it fail with llm_check_budget_exceeded.
+    COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN: int = Field(
+        100, ge=0, env='COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN'
+    )
+    # Most LLM_CHECK model calls the compliance runs and rule tests one user starts
+    # may make a day (UTC); past it, their checks fail with
+    # llm_check_daily_quota_exceeded and new runs are answered 429. Scheduled runs
+    # have no user and only the per-run budget.
+    COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY: int = Field(
+        400, ge=0, env='COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY'
+    )
+    # Days a cached LLM_CHECK verdict is used; older ones are asked again and
+    # deleted when a compliance run starts.
+    COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS: int = Field(
+        30, ge=1, env='COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS'
+    )
 
     # Sandbox allowlist settings
     sandbox_default_schema: str = Field('sandbox', validation_alias=AliasChoices('SANDBOX_DEFAULT_SCHEMA', 'sandbox_default_schema'))

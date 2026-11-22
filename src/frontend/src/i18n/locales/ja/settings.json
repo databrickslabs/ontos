@@ -1295,6 +1295,9 @@
       "created": "成熟度レベル「{{name}}」を作成しました。",
       "deleted": "成熟度レベル「{{name}}」を削除しました。",
       "cannotDeleteTitle": "削除できません"
+    },
+    "gateErrors": {
+      "maturity_gate_policy_uses_llm_check": "このポリシーは LLM_CHECK を使用しますが、LLM_CHECK はコンプライアンス実行でのみ評価されるため、成熟度ゲートはすべてのエンティティを不合格にします。LLM_CHECK を使用しないポリシーを選択してください。"
     }
   },
   "directory": {

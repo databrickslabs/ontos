@@ -39,7 +39,7 @@ from src.common.authorization import PermissionChecker, get_user_details_from_sd
 from src.common.dependencies import get_db
 from src.common.features import FeatureAccessLevel
 from src.common.manager_dependencies import (
-    get_assets_manager, get_auth_manager, get_metadata_manager,
+    get_assets_manager, get_auth_manager, get_costs_manager, get_metadata_manager,
 )
 from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import SHARED_ENTITY_ID
@@ -293,10 +293,6 @@ def _document_owner(request: Request, db):
     )
 
 
-def _cost_item_owner(request: Request, db):
-    return CostsManager().get_owner(db, id=request.path_params['id'])
-
-
 class RowMetadataPermission:
     """Dependency for the routes that address a row by its id (``/rich-texts/{id}``, ...).
 
@@ -324,7 +320,9 @@ class RowMetadataPermission:
         user_details=Depends(get_user_details_from_sdk),
         auth_manager=Depends(get_auth_manager),
     ) -> None:
-        owner = self.load_owner(request, db)
+        await self._check(request, db, user_details, auth_manager, self.load_owner(request, db))
+
+    async def _check(self, request: Request, db, user_details, auth_manager, owner) -> None:
         if not _is_asset_row(owner):
             await self._domain_checker(request, user_details, auth_manager)
             return
@@ -366,5 +364,24 @@ def document_permission(level: FeatureAccessLevel) -> RowMetadataPermission:
     return RowMetadataPermission(_document_owner, level, "Document not found")
 
 
+class CostItemPermission(RowMetadataPermission):
+    """``RowMetadataPermission`` for ``/cost-items/{id}``: the owner is read with the
+    costs routes' manager (``get_costs_manager``), the one the route itself uses."""
+
+    def __init__(self, level: FeatureAccessLevel):
+        super().__init__(None, level, "Cost item not found")
+
+    async def __call__(
+        self,
+        request: Request,
+        db=Depends(get_db),
+        user_details=Depends(get_user_details_from_sdk),
+        auth_manager=Depends(get_auth_manager),
+        costs_manager: CostsManager = Depends(get_costs_manager),
+    ) -> None:
+        owner = costs_manager.get_owner(db, id=request.path_params['id'])
+        await self._check(request, db, user_details, auth_manager, owner)
+
+
 def cost_item_permission(level: FeatureAccessLevel) -> RowMetadataPermission:
-    return RowMetadataPermission(_cost_item_owner, level, "Cost item not found")
+    return CostItemPermission(level)

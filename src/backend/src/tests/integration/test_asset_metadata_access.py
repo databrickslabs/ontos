@@ -18,6 +18,7 @@ import pytest
 from src.app import app
 from src.common import workspace_client
 from src.common.features import FeatureAccessLevel
+from src.common.manager_dependencies import get_costs_manager
 from src.controller.assets_manager import AssetsManager
 from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
@@ -267,6 +268,27 @@ def test_the_checks_use_the_startup_wired_assets_manager(
 
     assert response.status_code == 200, response.text
     assert calls == [asset.id]
+
+
+def test_the_cost_item_check_uses_the_routes_costs_manager(client, db_session, asset, act_as):
+    """The owner of ``/cost-items/{id}`` is read with the injected ``get_costs_manager``."""
+    ids = _seed(db_session, 'asset', str(asset.id))
+    calls = []
+
+    class Injected(CostsManager):
+        def get_owner(self, db, id):
+            calls.append(id)
+            return super().get_owner(db, id=id)
+
+    app.dependency_overrides[get_costs_manager] = lambda: Injected()
+    try:
+        act_as('Admin')
+        response = client.put(f"/api/cost-items/{ids['cost']}", json={'title': 'C2'})
+    finally:
+        app.dependency_overrides.pop(get_costs_manager, None)
+
+    assert response.status_code == 200, response.text
+    assert ids['cost'] in calls
 
 
 @pytest.mark.parametrize('role', ['Data Steward', 'Data Consumer'])

@@ -10,7 +10,7 @@ from src.common.authorization import PermissionChecker
 from src.common.entity_metadata_access import EntityMetadataPermission, cost_item_permission
 from src.common.logging import get_logger
 from src.controller.costs_manager import CostsManager
-from src.common.manager_dependencies import get_metadata_manager  # reuse style; provide a getter here
+from src.common.manager_dependencies import get_costs_manager, get_metadata_manager
 from src.models.costs import CostItem, CostItemCreate, CostItemUpdate, CostSummary
 
 logger = get_logger(__name__)
@@ -18,10 +18,6 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["Costs"])
 
 FEATURE_ID = "data-domains"  # align with metadata until dedicated feature is added
-
-
-def get_costs_manager() -> CostsManager:
-    return CostsManager()
 
 
 @router.post("/entities/{entity_type}/{entity_id}/cost-items", response_model=CostItem, status_code=status.HTTP_201_CREATED)

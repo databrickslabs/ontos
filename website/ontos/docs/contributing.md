@@ -217,6 +217,32 @@ The script will:
 1. Update all version files
 2. Print next steps for committing and tagging
 
+## Release Notes
+
+Release notes are written at release time from the commits on `development`, so a PR doesn't edit `src/docs/RELEASE_NOTES.md`. Each squash commit gives one bullet, taken from its subject (the PR title). What users or operators must know goes in a trailer of one of the PR's commits; the squash commit keeps every commit message, so the trailer reaches the release branch.
+
+| Trailer | Use it for | Section |
+|---------|------------|---------|
+| `BREAKING CHANGE: <text>` (and `!` in the PR title: `feat(api)!: …`) | a breaking change | ⚠️ Upgrade Notes, marked **BREAKING** |
+| `Upgrade-Note: <what changed, what to check>` | a behaviour change that isn't breaking | ⚠️ Upgrade Notes |
+| `Docs-Note: <text>` | instructions for the docs or for operators | 📝 Docs Notes |
+
+- A trailer starts at the beginning of a line. It continues on the following lines that start with a space or a tab.
+- Put it in the last paragraph of the commit message, the same block as `Co-authored-by:`, with no blank line between them. Git (`git interpret-trailers`) treats only the last paragraph as trailers. The release script also finds a trailer elsewhere in the message, but keep the convention.
+- The same text in several commits (stacked PRs) gives one note. A PR title with `!` and no `BREAKING CHANGE:` trailer gives a breaking note made from the title.
+
+```text
+fix(api): reject unknown fields in product updates
+
+Body of the commit.
+
+Upgrade-Note: PUT /api/data-products/{id} answers 422 to unknown fields.
+  What to check: clients that send extra keys.
+Co-authored-by: Name <name@example.com>
+```
+
+Open PRs that already edit `RELEASE_NOTES.md` can keep that edit; from the next push on, use a trailer instead.
+
 ## Release Process
 
 ### 1. Prepare Release
@@ -236,9 +262,16 @@ git checkout -b release/0.5.0
 python src/scripts/bump_version.py 0.5.0
 ```
 
-### 3. Update Changelog (if maintaining one)
+### 3. Write the Release Notes
 
-Add release notes to `CHANGELOG.md` summarizing changes since last release.
+On the release branch:
+
+```bash
+python src/scripts/generate_release_notes.py --dry-run   # preview
+python src/scripts/generate_release_notes.py
+```
+
+The script reads the commits since the latest `v*` tag (pass another tag as the first argument), skips merge commits, and replaces the `# Release Notes - Unreleased` block of `src/docs/RELEASE_NOTES.md` with a block for the version in `src/pyproject.toml` (`--version` to override). Notes already written by hand in the Unreleased block are kept. See [Release Notes](#release-notes).
 
 ### 4. Commit and Tag
 

@@ -148,3 +148,19 @@ def test_a_new_version_keeps_them(db_session, imported):
     new = manager.clone_contract_for_new_version(db_session, cid, '2.0.0', current_user='alice')
 
     assert _fields(_columns(_export(manager, db_session, new.id))['order_id']) == EXPECTED
+
+
+def test_a_save_without_tags_keeps_them_and_an_empty_list_clears_them(db_session, imported):
+    manager, cid = imported
+
+    def drop_tags(columns):
+        next(c for c in columns if c['name'] == 'order_id').pop('tags', None)
+
+    _editor_save(manager, db_session, cid, drop_tags)
+    assert _columns(_export(manager, db_session, cid))['order_id']['tags'] == ['pii', 'key']
+
+    def clear_tags(columns):
+        next(c for c in columns if c['name'] == 'order_id')['tags'] = []
+
+    _editor_save(manager, db_session, cid, clear_tags)
+    assert 'tags' not in _columns(_export(manager, db_session, cid))['order_id']

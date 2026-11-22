@@ -139,3 +139,44 @@ def test_a_string_implementation_that_looks_like_json_stays_a_string(db_session,
     check = _export(manager, db_session, cid)['schema'][0]['quality'][0]
 
     assert check['implementation'] == implementation
+
+
+# --- YAML dates -----------------------------------------------------------
+
+def test_yaml_dates_in_values_are_imported_as_text(db_session):
+    import yaml
+
+    manager = _manager()
+    doc = yaml.safe_load(
+        "slaProperties: [{property: since, value: 2026-01-01}]\n"
+        "customProperties: [{property: since, value: 2026-01-01T10:00:00}]\n"
+        "roles: [{role: reader, customProperties: [{property: since, value: 2026-01-01}]}]\n")
+
+    exported = _export(manager, db_session, _upload(manager, db_session, _odcs(**doc)))
+
+    assert exported['slaProperties'][0]['value'] == '2026-01-01'
+    assert {c['property']: c['value'] for c in exported['customProperties']}['since'] == (
+        '2026-01-01T10:00:00')
+    assert exported['roles'][0]['customProperties'][0]['value'] == '2026-01-01'
+
+
+# --- implementation through the contract API ------------------------------
+
+@pytest.mark.parametrize('implementation', [
+    {'checks': ['row_count > 0']}, '{"looks": "like json"}', 'plain text'])
+def test_resaving_the_quality_rules_the_api_returns_keeps_the_implementation(
+        db_session, implementation):
+    manager = _manager()
+    cid = _upload(manager, db_session, _odcs(schema=[{'name': 'orders', 'quality': [
+        {'id': 'q', 'name': 'custom check', 'type': 'custom', 'engine': 'soda',
+         'implementation': implementation}]}]))
+
+    for _ in range(2):  # what the contract page sends back
+        rules = [r.model_dump(by_alias=True) for r in _api(manager, db_session, cid).quality_rules]
+        assert all(isinstance(r['implementation'], str) for r in rules)
+        manager.update_contract_with_relations(
+            db_session, cid, DataContractUpdate.model_validate({'qualityRules': rules}),
+            current_user='alice')
+
+    check = _export(manager, db_session, cid)['schema'][0]['quality'][0]
+    assert check['implementation'] == implementation

@@ -6,18 +6,23 @@ descriptions, granularity, relationships, semantic concepts, the columns and
 their custom properties); the others are kept from the stored object when the
 payload leaves them out: the ODCS ids, tags, custom properties and quality
 checks of the object, the ids, quality checks and relationships of its
-columns, and authoritative definitions other than semantic concepts. (A
-column's tags are loaded and sent, so an empty field clears them.)
+columns, and authoritative definitions other than semantic concepts. A
+column's tags are kept when the payload has no `tags` key (the editor sends
+`[]` to clear them).
 """
 from typing import Any, Dict, List, Optional
 
 SEMANTIC_ASSIGNMENT = 'http://databricks.com/ontology/uc/semanticAssignment'
 
 _OBJECT_FIELDS = ('id', 'tags', 'customProperties', 'quality')
-_PROPERTY_FIELDS = ('id', 'quality', 'relationships', 'itemType')
+_PROPERTY_FIELDS = ('id', 'quality', 'relationships', 'tags', 'itemType')
+# Kept only when the key is missing: the editor sends `tags: []` to clear them
+_CLEARABLE = ('tags',)
 
 
 def _sent(payload: Dict[str, Any], key: str) -> bool:
+    if key in _CLEARABLE:
+        return key in payload
     return payload.get(key) is not None
 
 

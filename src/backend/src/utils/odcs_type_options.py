@@ -17,6 +17,9 @@ The import reads all of these, and the flat keys of older exports.
 from typing import Any, Dict, List, Optional, Tuple
 
 OPTION_PROPERTY_PREFIX = 'ontos.'
+# How an object column's `logicalTypeOptions.required` (property names) is stored: the
+# contract API shows the options flat, where `required` is the column's own flag
+OBJECT_REQUIRED_KEY = 'requiredProperties'
 
 # ODCS logicalType values (an `items.logicalType` must be one of them)
 LOGICAL_TYPES = frozenset(
@@ -67,6 +70,8 @@ def split_type_options(
     for key, value in options.items():
         if value is None:
             continue
+        if key == OBJECT_REQUIRED_KEY and logical_type == 'object':
+            key = 'required'
         if key == 'itemType' and logical_type == 'array' and value in LOGICAL_TYPES:
             item_type = value
         elif key != 'itemType' and (allowed is None or key in allowed):
@@ -84,6 +89,9 @@ def read_type_options(prop: Dict[str, Any]) -> Dict[str, Any]:
     nested = prop.get('logicalTypeOptions')
     if isinstance(nested, dict):
         options.update({k: v for k, v in nested.items() if v is not None})
+        if 'required' in options:
+            # an object's required property names; `required` is the column's flag
+            options[OBJECT_REQUIRED_KEY] = options.pop('required')
     items = prop.get('items')
     if isinstance(items, dict) and isinstance(items.get('logicalType'), str):
         options['itemType'] = items['logicalType']

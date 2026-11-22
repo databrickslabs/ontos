@@ -238,3 +238,25 @@ def test_an_editor_save_with_flat_options_keeps_them_nested_in_the_export(db_ses
     columns = _columns(_export(manager, db_session, cid))
     assert columns["day"]["logicalTypeOptions"] == {"format": "dd/MM/yyyy"}
     assert columns["code"]["logicalTypeOptions"] == {"maxLength": 4}
+
+
+def test_the_contract_api_reads_nested_object_and_timestamp_options(db_session):
+    document = _document(nested=True)
+    document["schema"][0]["properties"].append({
+        "name": "address", "logicalType": "object", "required": True,
+        "logicalTypeOptions": {"required": ["street"], "maxProperties": 3},
+    })
+    manager, cid = _upload(db_session, document)
+    db_session.expire_all()
+
+    api = manager._build_contract_api_model(db_session, db_session.get(DataContractDb, cid))
+
+    columns = {c.name: c for c in api.contract_schema[0].properties}
+    # the column's own `required` flag is not replaced by the object's property names
+    assert columns["address"].required is True
+    assert columns["ts"].timezone is True
+    exported = _columns(_export(manager, db_session, cid))
+    assert exported["address"]["logicalTypeOptions"] == {
+        "required": ["street"], "maxProperties": 3}
+    assert exported["address"]["required"] is True
+    assert _errors(_export(manager, db_session, cid), "odcs-json-schema-v3.1.0.json") == []

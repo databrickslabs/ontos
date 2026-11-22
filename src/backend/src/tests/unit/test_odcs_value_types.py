@@ -306,3 +306,34 @@ def test_a_collection_stored_before_goes_out_as_text_and_a_save_keeps_it(
           {'slaProperties': _api(manager, db_session, cid)['slaProperties']})
     assert _by(_export(manager, db_session, cid)['slaProperties'])['latency'][field] == \
         '{"p99": 4}'
+
+
+# --- POST create stores the SLA (it dropped it) --------------------------------
+
+def test_a_created_contract_keeps_its_sla_properties(db_session):
+    from src.models.data_contracts_api import DataContractCreate
+
+    manager = _manager()
+    manager._queue_delivery = lambda *a, **k: None
+    manager._update_search_index = lambda *a, **k: None
+    body = {'name': f'orders-{uuid.uuid4().hex[:6]}', 'version': '1.0.0', 'status': 'draft',
+            'slaProperties': copy.deepcopy(SLA)}
+    created = manager.create_contract_with_relations(
+        db_session, DataContractCreate.model_validate(body), current_user='alice')
+
+    exported = _by(_export(manager, db_session, created.id)['slaProperties'])
+    for item in SLA:
+        assert _typed(exported[item['property']]['value']) == _typed(item['value'])
+        assert exported[item['property']]['id'] == item['id']
+    assert exported['latency']['valueExt'] == 'p99'
+
+
+def test_a_create_with_an_sla_collection_is_refused(db_session):
+    from src.controller.data_contracts_manager import SlaValueCollectionError
+    from src.models.data_contracts_api import DataContractCreate
+
+    body = {'name': f'orders-{uuid.uuid4().hex[:6]}', 'version': '1.0.0', 'status': 'draft',
+            'slaProperties': [{'property': 'latency', 'value': [1]}]}
+    with pytest.raises(SlaValueCollectionError):
+        _manager().create_contract_with_relations(
+            db_session, DataContractCreate.model_validate(body), current_user='alice')

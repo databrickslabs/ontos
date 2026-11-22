@@ -2642,6 +2642,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Create quality checks if provided
             if data_dict.get('qualityRules'):
                 self._create_quality_checks(db, created.id, data_dict['qualityRules'])
+
+            # SLA properties, and the SLA form's four values, as an update stores them
+            if data_dict.get('slaProperties'):
+                self._create_sla_properties(db, created.id, data_dict['slaProperties'])
+            if data_dict.get('sla'):
+                from src.utils.contract_sla import apply_legacy_sla
+                apply_legacy_sla(db, created.id, data_dict['sla'])
             
             # Process semantic links if provided
             if data_dict.get('authoritativeDefinitions'):

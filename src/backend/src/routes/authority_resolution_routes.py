@@ -801,13 +801,17 @@ async def submit_review(
     participant_id: str,
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
+    reviews_manager: DataAssetReviewManagerDep,
     payload: dict = Body(...),
     _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
     reviewer = current_user.username if current_user else None
     answers = payload.get("answers", payload) if isinstance(payload, dict) else {}
     try:
-        participant = manager.submit_review(db, participant_id, answers=answers, reviewer=reviewer, user=current_user)
+        participant = manager.submit_review(
+            db, participant_id, answers=answers, reviewer=reviewer, user=current_user,
+            reviews_manager=reviews_manager,
+        )
     except PermissionError as e:
         raise _failure("submit_review", e)
     if not participant:

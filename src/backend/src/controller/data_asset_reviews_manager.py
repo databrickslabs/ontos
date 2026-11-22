@@ -35,6 +35,16 @@ from src.controller.notifications_manager import NotificationsManager
 # Import correct enum from notifications model
 from src.models.notifications import Notification, NotificationType
 
+AUTHORITY_RELATION_FQN_PREFIX = 'authority-relation://'
+
+
+def authority_relation_id_of(fqns: List[str]) -> Optional[str]:
+    """The Authority Relation id when every FQN is an ``authority-relation://`` reference to one AR."""
+    if not fqns or not all(f.startswith(AUTHORITY_RELATION_FQN_PREFIX) for f in fqns):
+        return None
+    ids = {f[len(AUTHORITY_RELATION_FQN_PREFIX):].split('#')[0] for f in fqns}
+    return ids.pop() if len(ids) == 1 else None
+
 # Import Search Interfaces
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 # Import the registry decorator
@@ -287,10 +297,18 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     "asset_count": len(created_api_obj.assets),
                     "asset_fqns": [a.asset_fqn for a in created_api_obj.assets],
                 }
-                
+                # An Authority Relation review runs the AR review workflow, not the generic
+                # data-asset-review one (which asks a DataSteward to approve). #859 review B10
+                relation_id = authority_relation_id_of(request_data.asset_fqns)
+                if relation_id:
+                    entity_type, entity_id = EntityType.AUTHORITY_RELATION, relation_id
+                    entity_data["relation_id"] = relation_id
+                else:
+                    entity_type, entity_id = EntityType.DATA_ASSET_REVIEW, created_api_obj.id
+
                 executions = trigger_registry.on_request_review(
-                    entity_type=EntityType.DATA_ASSET_REVIEW,
-                    entity_id=created_api_obj.id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
                     entity_name=display_title,
                     entity_data=entity_data,
                     user_email=created_api_obj.requester_email,

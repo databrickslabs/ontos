@@ -5,6 +5,7 @@
 import { screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import i18n from '@/i18n/config';
+import { fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 import CriteriaBuilder, {
   emptyCriterionRow,
@@ -23,8 +24,7 @@ vi.mock('@/hooks/use-api', () => ({ useApi: () => ({ get: mockGet, post: mockPos
 const t = (key: string, options?: any) => i18n.t(key, { ns: 'authority-resolution', ...options }) as string;
 
 const row = (patch: Partial<CriterionRow> = {}): CriterionRow => ({
-  ...emptyCriterionRow(t),
-  mode: 'raw',
+  ...emptyCriterionRow(),
   rawRule: "obj.actor_identity IN ['a']",
   name: 'Approver allowlist',
   ...patch,
@@ -121,3 +121,76 @@ describe('CriteriaBuilder', () => {
     expect(screen.queryByRole('button', { name: /Add check/ })).toBeNull();
   });
 });
+
+describe('variable picker and sample validation', () => {
+  beforeEach(() => {
+    mockGet.mockImplementation(async () => ({ data: [] }));
+    mockPost.mockResolvedValue({ data: { passed: true, message: null } });
+  });
+
+  afterEach(async () => {
+    vi.clearAllMocks();
+    await i18n.changeLanguage('en');
+  });
+
+  it('offers the AR parameters as ctx.<key> and the scope and request fields as req.<key>', () => {
+    renderWithProviders(
+      <CriteriaBuilder rows={[row()]} onChange={() => {}} params={{ threshold: 100 }} scopeKeys={['market']} />,
+    );
+    expect(screen.getByRole('button', { name: 'ctx.threshold' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'req.market' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'req.actor_identity' })).toBeInTheDocument();
+  });
+
+  it('inserts a variable at the cursor, keeping the text on both sides', () => {
+    const onChange = vi.fn();
+    renderWithProviders(
+      <CriteriaBuilder rows={[row({ rawRule: 'obj.value <= 1' })]} onChange={onChange}
+                       params={{ threshold: 100 }} />,
+    );
+    const area = screen.getByDisplayValue('obj.value <= 1') as HTMLTextAreaElement;
+    area.setSelectionRange(0, 0);
+    fireEvent.click(screen.getByRole('button', { name: 'ctx.threshold' }));
+    expect(onChange.mock.calls[0][0][0].rawRule).toBe('ctx.threshold obj.value <= 1');
+  });
+
+  it('inserts after the text at the end when the cursor is there', () => {
+    const onChange = vi.fn();
+    renderWithProviders(
+      <CriteriaBuilder rows={[row({ rawRule: 'obj.value <=' })]} onChange={onChange} params={{ threshold: 1 }} />,
+    );
+    const area = screen.getByDisplayValue('obj.value <=') as HTMLTextAreaElement;
+    area.setSelectionRange(area.value.length, area.value.length);
+    fireEvent.click(screen.getByRole('button', { name: 'ctx.threshold' }));
+    expect(onChange.mock.calls[0][0][0].rawRule).toBe('obj.value <= ctx.threshold');
+  });
+
+  it('validates on a sample with the AR parameters as ctx and its scope keys as req', async () => {
+    renderWithProviders(
+      <CriteriaBuilder rows={[row({ rawRule: 'obj.value <= ctx.threshold' })]} onChange={() => {}}
+                       params={{ threshold: 100 }} scopeKeys={['market']} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: t('criteria.validation.validateButton') }));
+    await screen.findByText(t('criteria.validation.ruleValid'));
+    expect(mockPost).toHaveBeenCalledWith('/api/authority/criteria/validate', expect.objectContaining({
+      rule: 'obj.value <= ctx.threshold',
+      params: { threshold: 100 },
+      context: { market: '' },
+    }));
+  });
+
+  it('validates an ARF template rule that reads a parameter, without offering edits to it', async () => {
+    const tplRow = row({
+      rawRule: 'ASSERT obj.value <= ctx.threshold', name: 'Amount within threshold',
+      templateKey: 'amount_within_threshold', copiedFrom: { kind: 'template', label: 'Amount within threshold', key: 'amount_within_threshold' },
+    });
+    renderWithProviders(<CriteriaBuilder rows={[tplRow]} onChange={() => {}} params={{ threshold: 100 }} />);
+    expect(screen.queryByRole('button', { name: 'ctx.threshold' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: t('criteria.validation.validateButton') }));
+    await screen.findByText(t('criteria.validation.ruleValid'));
+    expect(mockPost).toHaveBeenCalledWith('/api/authority/criteria/validate', expect.objectContaining({
+      rule: 'ASSERT obj.value <= ctx.threshold', params: { threshold: 100 },
+    }));
+  });
+});
+

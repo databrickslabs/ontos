@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronsUpDown, Star, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,8 +17,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { InsideModalContext } from '@/components/ui/modal-context';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useDomains } from '@/hooks/use-domains';
 
@@ -85,12 +83,6 @@ export interface DomainMultiSelectorProps {
   label?: string;
   /** Additional CSS classes */
   className?: string;
-  /**
-   * Radix modal popover. Default: modal inside a Dialog (so the popover stays clickable
-   * there), non-modal elsewhere (a modal popover locks the page behind it). Set to
-   * override.
-   */
-  modal?: boolean;
 }
 
 /**
@@ -107,11 +99,7 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
   maxDomains,
   label,
   className,
-  modal,
 }) => {
-  // Inside a Dialog the popover is modal, so it stays clickable; elsewhere it isn't
-  const insideModal = useContext(InsideModalContext);
-  const popoverModal = modal ?? insideModal;
   const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
@@ -208,9 +196,8 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
         </div>
       )}
 
-      {/* Domain selector. `modal` (opt-in) keeps the popover interactive inside a
-          modal Radix Dialog; see the prop. */}
-      <Popover open={open} onOpenChange={setOpen} modal={popoverModal}>
+      {/* Domain selector */}
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
@@ -264,11 +251,7 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
               onWheel={(e) => e.stopPropagation()}
             >
               {loading ? (
-                <div className="p-2 space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-6 w-full" />
-                  ))}
-                </div>
+                <CommandEmpty>{t('common:states.loadingDomains')}</CommandEmpty>
               ) : filteredDomains.length === 0 ? (
                 <CommandEmpty>{t('common:states.noDomainsFound')}</CommandEmpty>
               ) : (

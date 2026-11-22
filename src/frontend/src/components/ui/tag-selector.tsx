@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { InsideModalContext } from '@/components/ui/modal-context';
 import { cn } from '@/lib/utils';
 import TagChip, { AssignedTag } from './tag-chip';
 import { useApi } from '@/hooks/use-api';
@@ -54,12 +53,6 @@ export interface TagSelectorProps {
   label?: string;
   /** Additional CSS classes */
   className?: string;
-  /**
-   * Radix modal popover. Default: modal inside a Dialog (so the popover stays clickable
-   * there), non-modal elsewhere (a modal popover locks the page behind it). Set to
-   * override.
-   */
-  modal?: boolean;
 }
 
 const TagSelector: React.FC<TagSelectorProps> = ({
@@ -71,12 +64,8 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   allowCreate = true,
   label,
   className,
-  modal,
 }) => {
   const { t } = useTranslation('common');
-  // Inside a Dialog the popover is modal, so it stays clickable; elsewhere it isn't
-  const insideModal = useContext(InsideModalContext);
-  const popoverModal = modal ?? insideModal;
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
@@ -215,9 +204,8 @@ const TagSelector: React.FC<TagSelectorProps> = ({
         </div>
       )}
 
-      {/* Tag selector. `modal` (opt-in) keeps the popover interactive inside a modal
-          Radix Dialog; see the prop. */}
-      <Popover open={open} onOpenChange={setOpen} modal={popoverModal}>
+      {/* Tag selector */}
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"

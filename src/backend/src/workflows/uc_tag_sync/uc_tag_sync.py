@@ -583,8 +583,8 @@ def build_asset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[
 # aggregation (a schema has no maturity of its own).
 
 MATURITY_VARIABLES = ("{ASSET.MATURITY}", "{ASSET.MATURITY_ORDER}")
-# Mirrors MATURITY_ASSET_TYPES in src/controller/entity_dict_builder.py (this job runs
-# without the app package).
+# A deliberate subset of MATURITY_ASSET_TYPES in src/controller/entity_dict_builder.py
+# (this job runs without the app package): metric views get no maturity tag.
 MATURITY_ASSET_TYPES = ("Table", "View")
 
 # Why an asset gets no maturity tag; counted in the run output.

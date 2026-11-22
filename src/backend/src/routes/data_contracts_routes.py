@@ -1699,7 +1699,7 @@ def _owner_restorer(request, audit_manager, auth_manager, current_user):
         )
 
     allowed = user_has_feature_level(
-        auth_manager, current_user, 'business-owners', FeatureAccessLevel.READ_WRITE)
+        auth_manager, current_user, 'business-owners', FeatureAccessLevel.READ_WRITE, request)
     return OwnerRestorer(allowed=allowed, audit=audit)
 
 

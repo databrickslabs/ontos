@@ -149,13 +149,15 @@ class QualityRule(BaseModel):
     schedule: Optional[str] = None
     scheduler: Optional[str] = None
     unit: Optional[str] = None
-    tags: Optional[str] = None
+    # Text from the quality rule form, or the ODCS list (stored as JSON); read back as stored
+    tags: Optional[Union[str, List[str]]] = None
 
     # Type-specific fields
     rule: Optional[str] = None  # for library type
     query: Optional[str] = None  # for sql type
     engine: Optional[str] = None  # for custom type
-    implementation: Optional[str] = None  # for custom type (JSON string)
+    # for custom type: a string or, as ODCS allows, an object (stored as JSON)
+    implementation: Optional[Union[str, Dict[str, Any], List[Any]]] = None
 
     # Comparators for all types
     must_be: Optional[str] = None

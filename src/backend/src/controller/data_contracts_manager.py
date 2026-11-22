@@ -2319,12 +2319,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if value is not None:
                     # The map the contract page sends back holds the values as
                     # the contract API shows them (page_text); one that wasn't
-                    # edited keeps its stored text, other text is stored as is.
-                    # The map has no ids: a property keeps the one it had.
+                    # edited keeps its stored text. An edited text value stays
+                    # text when the stored one was text ("42" -> "43"); other
+                    # text is stored as is. The map has no ids: a property keeps
+                    # the one it had.
                     stable_id, stored = (previous or {}).get(key, (None, None))
                     if isinstance(value, str):
                         unedited = stored is not None and value == page_text(stored)
-                        text = stored if unedited else value
+                        if unedited:
+                            text = stored
+                        elif stored is not None and isinstance(typed_value(stored), str):
+                            text = typed_text(value)
+                        else:
+                            text = value
                     else:
                         text = typed_text(value)
                     custom_prop_db = DataContractCustomPropertyDb(

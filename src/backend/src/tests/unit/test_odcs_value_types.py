@@ -453,3 +453,18 @@ def test_the_update_route_answers_400_with_the_sla_collection_code(db_session, i
     detail = json.loads(response.body)['detail']
     assert detail['code'] == 'sla_value_collection'
     assert detail['params'] == {'property': 'latency', 'field': 'valueExt'}
+
+
+def test_editing_a_text_custom_property_on_the_page_keeps_it_text(db_session, imported):
+    manager, cid = imported
+    page = _api(manager, db_session, cid)['customProperties']
+    # CUSTOM: cp1 is the text "42", cp2 the number 42
+    assert page['cp1'] == '42' and page['cp2'] == '42'
+    page['cp1'] = '43'
+    page['cp2'] = '43'
+
+    _save(manager, db_session, cid, {'customProperties': page})
+
+    exported = _by(_export(manager, db_session, cid)['customProperties'])
+    assert _typed(exported['cp1']['value']) == _typed('43')
+    assert _typed(exported['cp2']['value']) == _typed(43)

@@ -636,21 +636,7 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
             "LLM_CHECK is only evaluated in ASSERT; in WHERE it fails, so the rule "
             "would skip every entity. Move it to ASSERT."
         )
-    if llm_check_calls(parsed):
-        tag_actions = sorted({
-            a.get('type') for a in (parsed.get('on_pass_actions') or [])
-            + (parsed.get('on_fail_actions') or []) if a.get('type') in LLM_CHECK_REFUSED_ACTIONS
-        })
-        if tag_actions:
-            # The verdict picks ON_PASS / ON_FAIL, and an entity's owner can edit the
-            # text the model reads: a steered verdict would change tags, which feed
-            # UC tag sync and other gates. NOTIFY stays: a person reads it
-            raise LlmCheckTagActionError(
-                "A rule with LLM_CHECK can't use ASSIGN_TAG or REMOVE_TAG: the model's "
-                "verdict would change tags. Use NOTIFY, or a separate rule without "
-                "LLM_CHECK for the tag actions.",
-                actions=', '.join(tag_actions),
-            )
+    refuse_llm_check_tag_actions(parsed)
     for call in llm_check_calls(parsed):
         if llm_check_criterion(call) is None:
             raise LlmCheckCriterionError(
@@ -692,9 +678,39 @@ LLM_CHECK_REFUSED_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
 
 
 class LlmCheckTagActionError(CodedValueError):
-    """A rule with LLM_CHECK and ASSIGN_TAG / REMOVE_TAG actions (rejected on save)."""
+    """A rule with LLM_CHECK and ASSIGN_TAG / REMOVE_TAG actions.
+
+    Refused on save, in the YAML load and when a run starts.
+    """
 
     code = 'llm_check_tag_action'
+
+
+def llm_check_tag_actions(parsed: Dict[str, Any]) -> List[str]:
+    """The refused tag actions of a parsed rule with LLM_CHECK, sorted ([] if none)."""
+    if not llm_check_calls(parsed):
+        return []
+    actions = (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
+    return sorted({a.get('type') for a in actions if a.get('type') in LLM_CHECK_REFUSED_ACTIONS})
+
+
+def refuse_llm_check_tag_actions(parsed: Dict[str, Any]) -> None:
+    """Raise ``LlmCheckTagActionError`` for a rule with LLM_CHECK and tag actions.
+
+    The verdict picks ON_PASS / ON_FAIL, and an entity's owner can edit the text the
+    model reads: a steered verdict would change tags, which feed UC tag sync and other
+    gates. NOTIFY stays: a person reads it. Checked wherever a rule gets in (the API
+    save, the YAML load) and again when a run starts, so a rule stored another way
+    writes no tag either.
+    """
+    tag_actions = llm_check_tag_actions(parsed)
+    if tag_actions:
+        raise LlmCheckTagActionError(
+            "A rule with LLM_CHECK can't use ASSIGN_TAG or REMOVE_TAG: the model's "
+            "verdict would change tags. Use NOTIFY, or a separate rule without "
+            "LLM_CHECK for the tag actions.",
+            actions=', '.join(tag_actions),
+        )
 
 
 def llm_check_calls(parsed: Dict[str, Any]) -> list:

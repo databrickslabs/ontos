@@ -218,7 +218,10 @@ daily quota is shared).
   tests a user starts: the user's token reads Unity Catalog, not the model. What
   bounds it is the admin gate above, the per-run budget and the user's daily quota.
 - Actions: a rule with `LLM_CHECK` can't have `ASSIGN_TAG` or `REMOVE_TAG`; saving
-  it is refused (`llm_check_tag_action`). The model's verdict picks
+  it is refused (`llm_check_tag_action`), the default policies YAML load skips such a
+  policy (and leaves a stored one with that id as it is), and a run of such a rule
+  stored some other way fails with the same code before it reads any entity, so no
+  tag is written. The model's verdict picks
   `ON_PASS` / `ON_FAIL`, and an entity's owner can edit the text the model reads,
   so a steered verdict would change tags, which feed Unity Catalog tag sync and
   other gates. `NOTIFY` is allowed: a person reads it. Tag actions on model

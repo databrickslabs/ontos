@@ -37,6 +37,7 @@ from src.common.compliance_llm_check import (
 from src.common.compliance_entities import (
     create_entity_iterator,
     llm_check_calls,
+    llm_check_tag_actions,
     parse_entity_filter,
     EntityFilter,
     TableEnrichment,
@@ -98,6 +99,24 @@ def _rule_actions(rule: Optional[str]) -> List[dict]:
 def rule_sends_notifications(rule: Optional[str]) -> bool:
     """Whether a rule has NOTIFY actions (False if it doesn't parse)."""
     return any(action.get('type') == 'NOTIFY' for action in _rule_actions(rule))
+
+
+def _yaml_rule_refusal(rule: Optional[str]) -> Optional[str]:
+    """Why a policy rule from the YAML file is not loaded, or None to load it.
+
+    The YAML load checks what the API save refuses for a run's writes: tag actions on
+    a rule with LLM_CHECK. A rule that doesn't parse is loaded as before (its runs fail
+    with ``rule_parse_failed``).
+    """
+    if not rule:
+        return None
+    try:
+        refused = llm_check_tag_actions(parse_rule(rule))
+    except Exception:
+        return None
+    if refused:
+        return f"llm_check_tag_action: a rule with LLM_CHECK can't use {', '.join(refused)}"
+    return None
 
 
 def rule_uses_llm_check(rule: Optional[str]) -> bool:
@@ -343,6 +362,13 @@ class ComplianceManager:
             data = yaml.safe_load(f) or []
             for raw in data:
                 model = CompliancePolicy(**{k: v for k, v in raw.items() if k not in {'examples', 'sample_runs'}})
+                refused = _yaml_rule_refusal(model.rule)
+                if refused:
+                    # Not stored (a stored one stays as it is): runs would refuse it anyway
+                    logger.warning(
+                        "Skipped compliance policy %s from %s: %s", model.id, yaml_path, refused,
+                    )
+                    continue
                 # Upsert by id
                 existing = db.get(CompliancePolicyDb, str(model.id))
                 if existing:
@@ -1182,6 +1208,16 @@ class ComplianceManager:
         try:
             # Parse the rule using enhanced DSL
             parsed_rule = parse_rule(policy.rule, source=f"policy '{policy.name}' ({policy.id})")
+            refused = llm_check_tag_actions(parsed_rule)
+            if refused:
+                # Also refused on save and in the YAML load; a rule stored another way
+                # (an older save, the database) fails here before any entity is read,
+                # so a model's verdict writes no tag
+                from src.common.compliance_errors import ComplianceRunError
+                raise ComplianceRunError(
+                    f"A rule with LLM_CHECK can't use {', '.join(refused)}",
+                    'llm_check_tag_action', actions=', '.join(refused),
+                )
 
             # Parse entity filter
             entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)

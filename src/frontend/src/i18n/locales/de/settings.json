@@ -416,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "Startseiten-Bereiche",
-        "description": "Wählen Sie, welche Bereiche auf der Startseite für Benutzer mit dieser Rolle angezeigt werden."
+        "description": "Wählen Sie, welche Bereiche auf der Startseite für Benutzer mit dieser Rolle angezeigt werden.",
+        "labels": {
+          "JOURNEY": "Journey-Startseite"
+        },
+        "descriptions": {
+          "JOURNEY": "Ersetzt die vollständige Startseite durch Finden, Verstehen, Vertrauen, Veröffentlichen und Pflegen. Es lässt sich nicht mit anderen Bereichen kombinieren."
+        }
       },
       "approvalPrivileges": {
         "title": "Genehmigungsrechte",

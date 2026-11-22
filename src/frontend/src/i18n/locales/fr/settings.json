@@ -416,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "Sections d'accueil",
-        "description": "Sélectionnez les sections qui apparaissent sur la page d'accueil pour les utilisateurs avec ce rôle."
+        "description": "Sélectionnez les sections qui apparaissent sur la page d'accueil pour les utilisateurs avec ce rôle.",
+        "labels": {
+          "JOURNEY": "Accueil par parcours"
+        },
+        "descriptions": {
+          "JOURNEY": "Remplace la page d'accueil complète par Trouver, Comprendre, Faire confiance, Publier et Maintenir. Elle ne peut pas être combinée avec d'autres sections."
+        }
       },
       "approvalPrivileges": {
         "title": "Privilèges d'approbation",

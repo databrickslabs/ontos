@@ -30,6 +30,7 @@ from src.models.access_grants import (
     AccessGrantRequestCreate,
     AccessGrantRequestList,
     AccessGrantRequestResponse,
+    AccessGrantRequestStatus,
     AccessGrantResponse,
     AccessGrantRevokePayload,
     AccessGrantSummary,
@@ -245,7 +246,11 @@ async def list_my_pending_requests(
     "/my-requests",
     response_model=AccessGrantRequestList,
     summary="My Requests (all statuses)",
-    description="List all access requests created by the current user (pending, approved, denied, cancelled)."
+    description=(
+        "List the access requests created by the current user (pending, approved, denied, "
+        "cancelled), newest first. `status` keeps one status; `total` counts the matching "
+        "requests, not only the returned page."
+    ),
 )
 async def list_my_requests(
     request: Request,
@@ -254,14 +259,18 @@ async def list_my_requests(
     notifications: NotificationsManagerDep,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    request_status: Optional[AccessGrantRequestStatus] = Query(None, alias="status"),
     _: bool = Depends(PermissionChecker(ACCESS_GRANTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
-    """List all access requests created by the current user."""
+    """List the access requests created by the current user, optionally of one status."""
     if not current_user or not current_user.email:
         raise HTTPException(status_code=401, detail="Authentication required")
     
     manager = get_manager(request, notifications)
-    return manager.get_my_requests(db, current_user.email, limit, offset)
+    return manager.get_my_requests(
+        db, current_user.email, limit, offset,
+        request_status.value if request_status else None,
+    )
 
 
 @router.delete(

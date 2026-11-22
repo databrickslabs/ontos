@@ -10,6 +10,7 @@ from src.repositories.assets_repository import asset_type_repo, asset_repo, asse
 from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.common.uc_comments import split_column_location
+from src.repositories.business_owners_repository import business_owner_repo
 from src.models.assets import (
     description_sync_state,
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
@@ -340,6 +341,7 @@ class AssetsManager(SearchableAsset):
         domain_ids: Optional[List[str]] = None,
         status: Optional[str] = None, name: Optional[str] = None,
         restrict_to_ids: Optional[List[UUID]] = None,
+        owner_email: Optional[str] = None,
     ) -> PaginatedAssetSummary:
         """Gets a paginated page of asset summaries.
 
@@ -347,7 +349,13 @@ class AssetsManager(SearchableAsset):
         UUIDs — used by role-aware Data Product scoping. An empty list
         intentionally yields zero results. Domain filtering (``domain_id`` /
         ``domain_ids``) is any-of via the junction table.
+
+        ``owner_email`` (when not None) keeps only the assets with an active
+        business-owner assignment for that user. It intersects with
+        ``restrict_to_ids``, so it can only narrow the result.
         """
+        if owner_email is not None:
+            restrict_to_ids = self._narrow_to_owned(db, owner_email, restrict_to_ids)
         filter_kwargs = dict(
             asset_type_id=asset_type_id, asset_type_names=asset_type_names,
             platform=platform, domain_id=domain_id, domain_ids=domain_ids, status=status, name=name,
@@ -375,6 +383,26 @@ class AssetsManager(SearchableAsset):
             skip=skip,
             limit=limit,
         )
+
+    @staticmethod
+    def _narrow_to_owned(
+        db: Session, owner_email: str, restrict_to_ids: Optional[List[UUID]],
+    ) -> List[UUID]:
+        """Asset IDs the user actively owns, intersected with ``restrict_to_ids`` if set."""
+        owned: set = set()
+        if owner_email:
+            for ownership in business_owner_repo.get_by_user(
+                db, user_email=owner_email, active_only=True,
+            ):
+                if ownership.object_type != "asset":
+                    continue
+                try:
+                    owned.add(UUID(str(ownership.object_id)))
+                except ValueError:
+                    logger.warning("Skipping ownership with a non-UUID asset id")
+        if restrict_to_ids is not None:
+            owned &= {UUID(str(i)) for i in restrict_to_ids}
+        return sorted(owned, key=str)
 
     def update_asset(self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str) -> AssetRead:
         db_asset = self._asset_repo.get(db, asset_id)

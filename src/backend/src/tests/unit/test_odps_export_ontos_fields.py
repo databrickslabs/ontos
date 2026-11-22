@@ -149,6 +149,8 @@ class TestOwnerTeam:
         imported = _import(product_manager, export)
 
         assert imported.owner_team_id == team.id
+        # the team owns it: the importer isn't stamped as a personal-draft owner
+        assert imported.draft_owner_id is None
         left = {cp.property for cp in imported.customProperties or []}
         assert ONTOS_OWNER_TEAM_PROPERTY not in left
         again = product_manager.build_odps_export(imported.id, db=db_session)

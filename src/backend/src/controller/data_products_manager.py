@@ -459,6 +459,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_data['lifecycle_stage_group_id'] = group_id
             product_data.pop('lifecycleStageGroupId', None)
 
+            # An exported owner team is an owner: restore it before the check below
+            self._apply_imported_owner_team(db_session, product_data)
+
             # Stamp the creator as the single-user owner when no other owner is
             # supplied. Without this, a freshly created product has no
             # project_id, owner_team_id, or draft_owner_id, so the update
@@ -473,8 +476,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 and not product_data.get('project_id')
             ):
                 product_data['draft_owner_id'] = user
-
-            self._apply_imported_owner_team(db_session, product_data)
 
             # Lifecycle fields exported as ontos* customProperties map back to
             # columns on import, checked before anything is created

@@ -115,6 +115,9 @@ class AuthorityRelationDb(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     created_by = Column(String, nullable=True)
+    # Who last changed the definition (criteria, evidence, participants, ...). An
+    # affirmation by this user is refused: nobody affirms a definition they changed (B4).
+    definition_edited_by = Column(String, nullable=True)
 
     affirmations = relationship(
         "AuthorityAffirmationDb", back_populates="relation",
@@ -169,6 +172,9 @@ class AuthorityAffirmationDb(Base):
     affirmed = Column(Boolean, default=False, nullable=False)
     affirmed_by = Column(String, nullable=True)
     affirmed_at = Column(DateTime(timezone=True), nullable=True)
+    # Definition hash at the time of affirmation; an affirmation counts only while it
+    # matches the AR's current definition hash (B6).
+    definition_hash = Column(String, nullable=True)
 
     # Reviewer facet (the review process / structured elicitation).
     review_status = Column(String, default='na', nullable=False)  # na|pending|in_review|completed
@@ -234,6 +240,8 @@ class AuthorityDnaRunDb(Base):
     direction = Column(String, nullable=True)
     per_dimension_scores = Column(JSON, nullable=True)  # {dimension: score} for this run
     error_message = Column(Text, nullable=True)
+    # Definition hash the run measured; activation requires it to match the current hash (B6).
+    definition_hash = Column(String, nullable=True)
 
     relation = relationship("AuthorityRelationDb", back_populates="dna_runs")
 

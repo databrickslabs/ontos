@@ -117,7 +117,7 @@ class AuthorityRelationCreate(BaseModel):
     decision_logic: Optional[Dict[str, Any]] = None
     evidence_binding: Optional[EvidenceBinding] = None
     evidence_sources: Optional[List[EvidenceSource]] = None
-    dna_max_threshold: float = 0.3
+    dna_max_threshold: float = Field(0.3, ge=0, le=1, allow_inf_nan=False)
     dna_scoring_config: Optional[Dict[str, Any]] = None
     schedule_cron: Optional[str] = None
     # Credentials for this AR's mcp_tool refs: ``obo`` (caller's token) or ``app_sp``.
@@ -158,7 +158,7 @@ class AuthorityRelationUpdate(BaseModel):
     decision_logic: Optional[Dict[str, Any]] = None
     evidence_binding: Optional[EvidenceBinding] = None
     evidence_sources: Optional[List[EvidenceSource]] = None
-    dna_max_threshold: Optional[float] = None
+    dna_max_threshold: Optional[float] = Field(None, ge=0, le=1, allow_inf_nan=False)
     dna_scoring_config: Optional[Dict[str, Any]] = None
     schedule_cron: Optional[str] = None
     resolver_auth: Optional[str] = None

@@ -14,6 +14,7 @@ Design notes:
   the AR's compiled ``decision_logic`` and never (re)computes the DNAco. The
   DNAco is an *activation-time* gate only.
 """
+import math
 import re
 import uuid
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ from src.db_models.authority_resolution import (
     AuthorityDecisionDb,
     AuthorityDnaRunDb,
 )
+from src.db_models.business_roles import BusinessRoleDb
 from src.db_models.compliance import CompliancePolicyDb
 from src.db_models.projects import ProjectDb
 from src.db_models.teams import TeamDb
@@ -84,6 +86,12 @@ class AuthorityNotAReviewerError(AuthorityPermissionError):
     """A review was submitted for a participant that is not a reviewer."""
 
     code = "authority_not_a_reviewer"
+
+
+class AuthoritySelfAffirmationError(AuthorityPermissionError):
+    """The signed-in user created, or last changed, the definition they would affirm (B4)."""
+
+    code = "authority_self_affirmation"
 
 
 def client_failure_text(tag: str, exc: BaseException) -> str:
@@ -358,6 +366,8 @@ class AuthorityResolutionManager(SearchableAsset):
     ) -> AuthorityRelationDb:
         data = payload.dict() if hasattr(payload, "dict") else dict(payload)
         self._refuse_admin_only_changes(data, None, caller_is_admin)
+        self._validate_ceiling(data.get("dna_max_threshold", 0.3))
+        self._validate_business_roles(db, data.get("affirmations") or [])
         rel_id = str(uuid.uuid4())
 
         evidence = data.get("evidence_binding")
@@ -394,6 +404,7 @@ class AuthorityResolutionManager(SearchableAsset):
             "owner_team_id": data.get("owner_team_id") or None,
             "project_id": data.get("project_id") or None,
             "created_by": current_user,
+            "definition_edited_by": current_user,
         }
 
         relation = authority_relation_repo.create(db, obj_in={k: v for k, v in fields.items() if k in _MODEL_COLUMNS})
@@ -528,6 +539,35 @@ class AuthorityResolutionManager(SearchableAsset):
             )
 
     @staticmethod
+    def _validate_ceiling(value: Any) -> None:
+        """The DNA ceiling is a fraction in [0, 1]; NaN and infinities are refused (B4)."""
+        if value is None:
+            return
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            raise AuthorityInvalidError("The DNA-Coefficient ceiling must be a number between 0 and 1.")
+        if not math.isfinite(number) or number < 0 or number > 1:
+            raise AuthorityInvalidError(
+                "The DNA-Coefficient ceiling must be between 0 and 1.", value=number,
+            )
+
+    @staticmethod
+    def _validate_business_roles(db: Session, affirmations: List[Any]) -> None:
+        """Each participant's Business Role must exist in Settings (B4)."""
+        for item in affirmations or []:
+            a = item.dict() if hasattr(item, "dict") else dict(item)
+            role_id = a.get("business_role_id")
+            if not role_id:
+                continue
+            try:
+                parsed = uuid.UUID(str(role_id))
+            except (TypeError, ValueError):
+                raise AuthorityInvalidError(f"Business role '{role_id}' does not exist.", role=str(role_id))
+            if db.get(BusinessRoleDb, parsed) is None:
+                raise AuthorityInvalidError(f"Business role '{role_id}' does not exist.", role=str(role_id))
+
+    @staticmethod
     def _validate_resolver_auth(value: Optional[str]) -> str:
         value = value or RESOLVER_AUTH_OBO
         if value not in _RESOLVER_AUTH_VALUES:
@@ -640,6 +680,10 @@ class AuthorityResolutionManager(SearchableAsset):
             return None
         data = payload.dict(exclude_unset=True) if hasattr(payload, "dict") else dict(payload)
         self._refuse_admin_only_changes(data, relation, caller_is_admin)
+        if "dna_max_threshold" in data:
+            self._validate_ceiling(data["dna_max_threshold"])
+        if data.get("affirmations") is not None:
+            self._validate_business_roles(db, data["affirmations"])
 
         domain_ids = data.pop("domain_ids", None)
         primary_domain_id = data.pop("primary_domain_id", None)
@@ -664,6 +708,8 @@ class AuthorityResolutionManager(SearchableAsset):
         # Keep base_name in step with a renamed AR so the family label stays right.
         if "name" in update_data:
             update_data.setdefault("base_name", update_data["name"])
+        if self._touches_definition(data, affirmations, criteria, prerequisites, resource_refs):
+            update_data["definition_edited_by"] = current_user
         relation = authority_relation_repo.update(db, db_obj=relation, obj_in=update_data)
 
         if domain_ids is not None:
@@ -703,6 +749,16 @@ class AuthorityResolutionManager(SearchableAsset):
                 logger.warning(f"DNAco recompute after update failed for {relation_id}: {e}")
         self._reindex(db, relation)
         return relation
+
+    # Fields a PUT may change without touching the definition (metadata only).
+    _METADATA_FIELDS = ("description", "owner_team_id", "project_id", "domain_ids", "primary_domain_id", "tags")
+
+    @classmethod
+    def _touches_definition(cls, data: Dict[str, Any], affirmations, criteria, prerequisites, resource_refs) -> bool:
+        """True when a PUT carries a definition field (see ``_METADATA_FIELDS`` for the rest)."""
+        if any(v is not None for v in (affirmations, criteria, prerequisites, resource_refs)):
+            return True
+        return any(k not in cls._METADATA_FIELDS for k in data)
 
     def delete_relation(self, db: Session, relation_id: str) -> bool:
         """Delete one AR version without breaking its family's identity.
@@ -811,6 +867,7 @@ class AuthorityResolutionManager(SearchableAsset):
             "base_name": base_name,
             "change_summary": change_summary,
             "created_by": current_user,
+            "definition_edited_by": current_user,
         }
         for f in self._VERSION_COPY_FIELDS:
             fields[f] = getattr(source, f, None)
@@ -1436,9 +1493,26 @@ class AuthorityResolutionManager(SearchableAsset):
             raise AuthorityReviewerNotApproverError("This participant is a reviewer, not an approver.")
         if not principal_matches(aff.principal, aff.principal_type, user):
             raise AuthorityNotNamedError("Only the named participant can record this affirmation.")
+        relation = authority_relation_repo.get(db, aff.relation_id)
+        if relation is not None and self._is_definition_author(relation, affirmed_by):
+            raise AuthoritySelfAffirmationError(
+                "The creator or last editor of this definition cannot affirm it.",
+            )
         return authority_affirmation_repo.update(db, db_obj=aff, obj_in={
             "affirmed": True, "affirmed_by": affirmed_by, "affirmed_at": self._now(), "notes": notes,
         })
+
+    @staticmethod
+    def _is_definition_author(relation: AuthorityRelationDb, user: Optional[str]) -> bool:
+        """True when ``user`` created this AR version or last changed its definition (B4)."""
+        if not user:
+            return False
+        who = user.strip().casefold()
+        return who in {
+            (value or "").strip().casefold()
+            for value in (getattr(relation, "created_by", None), getattr(relation, "definition_edited_by", None))
+            if value
+        }
 
     def is_fully_affirmed(self, db: Session, relation_id: str) -> bool:
         # Only APPROVER participants count toward the affirmation gate; pure

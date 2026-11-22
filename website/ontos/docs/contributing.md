@@ -250,9 +250,9 @@ Open PRs that already edit `RELEASE_NOTES.md` can keep that edit; from the next 
 ### 1. Prepare Release
 
 ```bash
-# Ensure you're on main and up to date
-git checkout main
-git pull upstream main
+# Ensure you're on development and up to date (the release notes come from its commits)
+git checkout development
+git pull upstream development
 
 # Create release branch (optional for larger releases)
 git checkout -b release/0.5.0
@@ -266,7 +266,7 @@ python src/scripts/bump_version.py 0.5.0
 
 ### 3. Write the Release Notes
 
-On the release branch:
+On the release branch (cut from `development` in step 1: a branch cut from `main` has none of the commits since the last release):
 
 ```bash
 python src/scripts/generate_release_notes.py --dry-run   # preview

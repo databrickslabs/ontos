@@ -14,6 +14,9 @@ import {
   ColumnDef,
 } from "@tanstack/react-table"
 import { useApi } from '@/hooks/use-api';
+import { usePersistentState } from '@/hooks/use-persistent-state';
+
+const isStoredBoolean = (v: unknown): v is boolean => typeof v === 'boolean';
 import { DataProduct, DataProductStatus, DataProductOwner } from '@/types/data-product';
 import { BatchImportResult, summarizeImport } from '@/types/import-results';
 import { productUploadSuccessText } from '@/lib/upload-text';
@@ -72,7 +75,7 @@ export default function DataProducts() {
   // "Show all versions" toggle — flips include_history on the products list
   // endpoint. Off (default) collapses each family to its newest visible
   // version and surfaces a "N versions" badge per row. See PRD #442.
-  const [includeHistory, setIncludeHistory] = useState(false);
+  const [includeHistory, setIncludeHistory] = usePersistentState('data-products-include-history', false, isStoredBoolean);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<DataProduct | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -103,9 +106,11 @@ export default function DataProducts() {
   const [previewProductTitle, setPreviewProductTitle] = useState('');
 
   // Subscription filter state
-  const [showMySubscriptions, setShowMySubscriptions] = useState(false);
+  const [showMySubscriptions, setShowMySubscriptions] = usePersistentState('data-products-my-subscriptions', false, isStoredBoolean);
   const [mySubscribedProductIds, setMySubscribedProductIds] = useState<Set<string>>(new Set());
   const [_subscriptionsLoading, _setSubscriptionsLoading] = useState(false);
+  // Until the subscriptions have loaded, a restored "My Subscriptions" filter has no ids to match.
+  const [subscriptionsLoaded, setSubscriptionsLoaded] = useState(false);
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevel[]>([]);
 
   const api = useApi();
@@ -215,6 +220,8 @@ export default function DataProducts() {
         }
       } catch (err) {
         console.warn('Failed to fetch subscriptions:', err);
+      } finally {
+        setSubscriptionsLoaded(true);
       }
     };
     
@@ -263,12 +270,12 @@ export default function DataProducts() {
     }
 
     // Apply subscription filter
-    if (showMySubscriptions) {
+    if (showMySubscriptions && subscriptionsLoaded) {
       filtered = filtered.filter(p => mySubscribedProductIds.has(p.id));
     }
 
     return filtered;
-  }, [products, showMySubscriptions, mySubscribedProductIds, searchParams]);
+  }, [products, showMySubscriptions, subscriptionsLoaded, mySubscribedProductIds, searchParams]);
 
   // Function to refetch products list
   const fetchProducts = async () => {

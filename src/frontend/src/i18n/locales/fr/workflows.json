@@ -347,6 +347,22 @@
       "fail": "Échec",
       "true": "Vrai",
       "false": "Faux"
+    },
+    "checks": {
+      "button": "Vérifier",
+      "buttonHint": "Vérifie le workflow et signale les problèmes. Les avertissements n'empêchent pas l'enregistrement.",
+      "clean": "Aucun problème trouvé.",
+      "errorsCount_one": "{{count}} erreur",
+      "errorsCount_other": "{{count}} erreurs",
+      "warningsCount_one": "{{count}} avertissement",
+      "warningsCount_other": "{{count}} avertissements"
+    },
+    "validationWarnings": {
+      "terminalStepHasNext": "L'étape \"{{step}}\" termine le workflow : son lien vers \"{{target}}\" est ignoré et supprimé à l'enregistrement.",
+      "conditionalBranchMissing": "La condition \"{{step}}\" n'a aucune étape sur sa branche {{branch}}. Si la condition est {{branch}}, le workflow se termine avec succès.",
+      "unreachableSteps": "Ces étapes ne sont pas accessibles depuis la première étape : {{steps}}.",
+      "storedEntityTypeUnknown": "Le déclencheur liste \"{{entityType}}\", un type d'entité qui n'existe plus. Il ne se déclenche jamais pour lui.",
+      "storedEntityTypeUnsupported": "Le déclencheur {{trigger}} ne se déclenche jamais pour {{entity}}."
     }
   },
   "approvalResponse": {
@@ -684,6 +700,33 @@
       "suffix": "ou plus pour voir et exécuter ce workflow. Configurez ceci dans Paramètres → Rôles."
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "Planification (cron Quartz)",
+    "cronHint": "6 ou 7 champs : seconde minute heure jour-du-mois mois jour-de-la-semaine [année]. Exemple : {{example}} s'exécute tous les jours à 06:00. Les secondes doivent valoir 0 et les exécutions doivent être espacées d'au moins 5 minutes.",
+    "timezoneLabel": "Fuseau horaire",
+    "timezoneHint": "Un nom IANA comme Europe/Berlin ou America/Sao_Paulo. Vide signifie UTC.",
+    "fields": {
+      "second": "seconde",
+      "minute": "minute",
+      "hour": "heure",
+      "day_of_month": "jour-du-mois",
+      "month": "mois",
+      "day_of_week": "jour-de-la-semaine",
+      "year": "année"
+    },
+    "errors": {
+      "schedule_required": "Un déclencheur planifié nécessite une expression cron.",
+      "cron_field_count": "Une expression cron Quartz comporte 6 ou 7 champs ; celle-ci en a {{fields}}.",
+      "cron_invalid_field": "« {{value}} » n'est pas valide dans le champ {{field}}.",
+      "cron_day_fields_conflict": "Mettez « ? » dans un seul des champs jour-du-mois et jour-de-la-semaine.",
+      "cron_seconds_not_zero": "Le champ des secondes doit valoir 0 : les exécutions démarrent à la minute pile.",
+      "cron_unsupported_character": "« {{character}} » dans le champ {{field}} n'est pas pris en charge dans les planifications de workflows.",
+      "cron_invalid": "Ce n'est pas une expression cron Quartz valide.",
+      "cron_no_upcoming_runs": "Cette expression cron n'a aucune exécution à venir.",
+      "cron_interval_too_short": "Les exécutions planifiées doivent être espacées d'au moins {{minutes}} minutes.",
+      "timezone_invalid": "Fuseau horaire inconnu « {{timezone}} » : utilisez un nom IANA comme Europe/Berlin."
+    }
+  },
   "view": {
     "subtitle": "Configurez des workflows automatisés pour la validation, l'approbation et les notifications.",
     "readOnlyAccess": "(Accès en lecture seule)",
@@ -713,7 +756,9 @@
     "badges": {
       "default": "Par défaut",
       "approval": "Approbation",
-      "process": "Processus"
+      "process": "Processus",
+      "triggerWarnings": "Alerte de déclencheur",
+      "triggerWarningsHint": "Le déclencheur liste des types d'entité qui ne correspondent à aucun événement. Ouvrez le workflow pour les voir."
     },
     "columns": {
       "steps": "Étapes",

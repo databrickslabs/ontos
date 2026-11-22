@@ -1271,6 +1271,18 @@ Link individual columns to business properties.
 - Supports data lineage and impact analysis
 - Facilitates cross-domain data discovery
 
+#### Linked Business Concepts vs. the "Has Concepts" relationship
+
+There are two ways to connect an item to a concept, stored in different places:
+
+| | Linked Business Concepts | "Has Concepts" relationship |
+|---|---|---|
+| Where you add it | The *Linked Business Concepts* field in an item's details (assets, products, contracts, domains) and on schema objects and properties | **Add Relationship** on the item's *Relationships* tab |
+| What it stores | A semantic link (item → concept IRI) | A relationship record `hasSemanticConcept` (item → concept) |
+| Where it shows | The item's details, the concept's *Linked Entities* panel, concept mapping status, search and business lineage | The item's *Relationships* tab and its lineage |
+
+Use **Linked Business Concepts** to say what an item *means*. That's the link the concept's page, search and the glossary coverage read. The "Has Concepts" relationship shows only on the item's side: the concept's page doesn't list it.
+
 ### Contract Lifecycle
 
 #### 1. Draft
@@ -2264,7 +2276,7 @@ Triggers determine when a workflow fires. Available trigger types:
 | **On Update** | Fires when an entity is updated | Notify subscribers of changes |
 | **On Delete** | Fires when an entity is deleted | Archive audit trail |
 | **On Status Change** | Fires when status transitions | Approve publish to production |
-| **Scheduled** | Fires on a cron schedule (does not run yet, see [#941](https://github.com/databrickslabs/ontos/issues/941)) | Daily compliance scans |
+| **Scheduled** | Fires on a Quartz cron schedule, in the workflow's time zone; each slot runs at most once across app instances | Daily compliance scans |
 | **Manual** | Triggered by user action: use **Run** on the Workflows list (see [Running a Manual Workflow](#running-a-manual-workflow)) | On-demand data quality check |
 | **Before Create** | Fires before entity creation (blocking) | Enforce naming policies |
 | **Before Update** | Fires before entity update (blocking) | Validate schema changes |
@@ -2456,7 +2468,7 @@ A workflow whose trigger is **Manual** never fires on its own. To start it, open
 #### Known Limits
 
 - **Scope** is saved but not applied yet ([#1118](https://github.com/databrickslabs/ontos/issues/1118)).
-- **Scheduled** workflows do not run yet ([#941](https://github.com/databrickslabs/ontos/issues/941)).
+- **Scheduled** workflows run on their Quartz cron (`trigger.schedule`, in `trigger.timezone`, default UTC), each slot at most once across app instances. A slot is claimed before its run starts, so a slot whose instance stops right after the claim is not run again; on shutdown the app waits up to 30 seconds for the runs in progress. See the [Workflow Authoring Guide](/user-docs/workflow-authoring-guide) for the cron rules.
 - **Approval steps**: `timeout_days` is accepted but not enforced: a pending approval never expires ([#1119](https://github.com/databrickslabs/ontos/issues/1119)); an admin can cancel it. With `require_all`, every approver decides and any rejection fails the step.
 
 #### Blocking vs Non-Blocking
@@ -3030,7 +3042,10 @@ POST /mcp
 > matching route (and `update_data_product` changes a product's fields only for
 > its owners or a data-products admin, as `PUT /api/data-products/{id}`; each
 > product change is audited under `data-products` and fires the workflow
-> triggers of its route), and data products and
+> triggers of its route; each contract change is audited under
+> `data-contracts` and fires the workflow triggers of its route, and a failing
+> `before_update` workflow refuses `update_data_contract` as it refuses
+> `PUT /api/data-contracts/{id}`), and data products and
 > contracts are returned only when the
 > caller has the feature's Read-only level (data-products, data-contracts) and
 > may read them (published ones, or drafts the caller owns or administers;

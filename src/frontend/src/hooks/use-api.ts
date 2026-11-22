@@ -8,6 +8,8 @@ export interface ApiResponse<T> {
   errorCode?: string | null;
   /** Parameters of a structured error (`detail.params`), for the translated text. */
   errorParams?: Record<string, unknown> | null;
+  /** HTTP status of an error response (e.g. 403 to tell "no access" from "nothing found"). */
+  status?: number;
 }
 
 const hasObjectDetail = (errorBody: any): boolean =>
@@ -72,7 +74,7 @@ export const useApi = () => {
           errorMsg = JSON.stringify(errorBody) || `HTTP error! status: ${response.status}`;
         }
         console.error("[useApi] GET error response from", url, "(", response.status, "):", errorBody);
-        return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
+        return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody), status: response.status };
       }
 
       // Handle successful responses (response.ok is true)
@@ -193,7 +195,7 @@ export const useApi = () => {
           }
 
           console.error("[useApi] POST error response from", url, "(", response.status, "):", errorBody);
-          return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
+          return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody), status: response.status };
       }
 
       // --- Handle Successful Response (response.ok is true) --- 
@@ -273,7 +275,7 @@ export const useApi = () => {
         }
 
         console.error("[useApi] PUT error response from", url, "(", response.status, "):", errorBody);
-        return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
+        return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody), status: response.status };
       }
       
       // Handle successful response
@@ -332,7 +334,7 @@ export const useApi = () => {
         }
 
         console.error("[useApi] PATCH error response from", url, "(", response.status, "):", errorBody);
-        return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
+        return { data: {} as T, error: errorTextOf(errorBody, errorMsg), errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody), status: response.status };
       }
 
       const data = await response.json();
@@ -349,6 +351,7 @@ export const useApi = () => {
     setLoading(true);
     let responseData: T = {} as T;
     let errorMsg: string | null = null;
+    let errorStatus: number | undefined;
     try {
       const response = await fetch(url, { method: 'DELETE' });
 
@@ -387,6 +390,7 @@ export const useApi = () => {
           }
           console.error("[useApi] DELETE error response from", url, "(", response.status, "):", errorBody);
           errorMsg = errorTextOf(errorBody, errorMsg ?? '');
+          errorStatus = response.status;
       } else {
           // Success - check if there's response data (some DELETE endpoints return data)
           const contentType = response.headers.get('Content-Type');
@@ -408,7 +412,7 @@ export const useApi = () => {
     } finally {
       setLoading(false);
     }
-    return { data: responseData, error: errorMsg };
+    return { data: responseData, error: errorMsg, ...(errorStatus !== undefined ? { status: errorStatus } : {}) };
   }, []);
 
   return { get, post, put, patch, delete: delete_, loading };

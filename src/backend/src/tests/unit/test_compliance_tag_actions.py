@@ -134,6 +134,8 @@ class TestTagsManagerTagAdapter:
             )
 
         assert result.success is False
+        # An unexpected error is reported by code, never with its text
+        assert (result.code, result.error) == ('action_failed', 'Action failed')
         # The failing write left nothing behind, the earlier one survived, and the session works.
         assert _associations(db_session, 'data_product', 'prod-bad') == []
         assert len(_associations(db_session, 'data_product', 'prod-ok')) == 1

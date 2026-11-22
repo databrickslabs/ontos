@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ColumnDef, RowSelectionState, PaginationState } from '@tanstack/react-table';
 import {
@@ -22,6 +22,7 @@ import AssetImportExportDialog from '@/components/assets/asset-import-export-dia
 import { AssetDeleteDialog } from '@/components/assets/asset-delete-dialog';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
+import { usePersistentState } from '@/hooks/use-persistent-state';
 import { useToast } from '@/hooks/use-toast';
 import { RelativeDate } from '@/components/common/relative-date';
 import {
@@ -59,6 +60,13 @@ function getIconComponent(iconName?: string | null): React.ElementType {
   return ICON_MAP[iconName] || Box;
 }
 
+const ASSET_PAGE_SIZES = [10, 20, 30, 40, 50];
+const isStoredPagination = (v: unknown): v is PaginationState =>
+  typeof v === 'object' && v !== null &&
+  Number.isInteger((v as PaginationState).pageIndex) && (v as PaginationState).pageIndex >= 0 &&
+  ASSET_PAGE_SIZES.includes((v as PaginationState).pageSize);
+const isStoredString = (v: unknown): v is string => typeof v === 'string';
+
 export default function AssetExplorerView() {
   const [assetTypes, setAssetTypes] = useState<AssetTypeRead[]>([]);
   const [assets, setAssets] = useState<AssetRead[]>([]);
@@ -73,9 +81,9 @@ export default function AssetExplorerView() {
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [assetsTotal, setAssetsTotal] = useState(0);
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
-  const [nameFilter, setNameFilter] = useState('');
-  const [debouncedNameFilter, setDebouncedNameFilter] = useState('');
+  const [pagination, setPagination] = usePersistentState<PaginationState>('asset-explorer-pagination', { pageIndex: 0, pageSize: 10 }, isStoredPagination);
+  const [nameFilter, setNameFilter] = usePersistentState('asset-explorer-name-filter', '', isStoredString);
+  const [debouncedNameFilter, setDebouncedNameFilter] = useState(nameFilter);
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
   const [previewAssetTitle, setPreviewAssetTitle] = useState('');
 
@@ -186,9 +194,21 @@ export default function AssetExplorerView() {
     return () => clearTimeout(timer);
   }, [nameFilter]);
 
+  // Go back to the first page when the name filter changes, not on mount: a restored page must survive a remount.
+  const prevDebouncedNameFilter = useRef(debouncedNameFilter);
   useEffect(() => {
+    if (prevDebouncedNameFilter.current === debouncedNameFilter) return;
+    prevDebouncedNameFilter.current = debouncedNameFilter;
     setPagination(prev => prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 });
-  }, [debouncedNameFilter]);
+  }, [debouncedNameFilter, setPagination]);
+
+  // The stored page can be past the end once the total shrinks; clamp to the last page.
+  useEffect(() => {
+    const lastPageIndex = Math.ceil(assetsTotal / pagination.pageSize) - 1;
+    if (assetsTotal > 0 && pagination.pageIndex > lastPageIndex) {
+      setPagination(prev => ({ ...prev, pageIndex: Math.max(0, lastPageIndex) }));
+    }
+  }, [assetsTotal, pagination, setPagination]);
 
   useEffect(() => {
     fetchAssets(selectedTypeId, pagination, debouncedNameFilter);

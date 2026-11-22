@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, Dict, Any, Type
+from typing import List, Optional, Union, Dict, Any, Tuple, Type
 
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -8,6 +8,7 @@ from src.db_models.metadata import (
     RichTextMetadataDb, 
     LinkMetadataDb, 
     DocumentMetadataDb,
+    ImportedMarkdownFileDb,
     MetadataAttachmentDb,
 )
 from src.models.metadata import (
@@ -129,17 +130,109 @@ class DocumentRepository(CRUDBase[DocumentMetadataDb, DocumentCreate, DocumentCr
     def remove_all_for_entity(
         self, db: Session, *, entity_type: str, entity_id: str,
     ) -> List[str]:
-        """Delete the entity's documents; returns the volume paths of their files."""
+        """Delete the entity's documents; returns the volume paths of their uploaded files.
+
+        Imported Markdown documents point to their source file, which isn't the
+        app's to delete: their paths are left out.
+        """
         paths = [
             path for (path,) in db.query(DocumentMetadataDb.storage_path).filter(
                 DocumentMetadataDb.entity_type == entity_type,
                 DocumentMetadataDb.entity_id == entity_id,
+                DocumentMetadataDb.source_path.is_(None),
             )
         ]
         _remove_all_for_entity(
             db, DocumentMetadataDb, entity_type=entity_type, entity_id=entity_id,
         )
         return paths
+
+    def imported_for_entity(
+        self, db: Session, *, entity_type: str, entity_id: str,
+    ) -> List[tuple]:
+        """(id, source path) of the entity's imported Markdown documents."""
+        return [
+            (str(doc_id), path) for (doc_id, path) in db.query(
+                DocumentMetadataDb.id, DocumentMetadataDb.source_path,
+            ).filter(
+                DocumentMetadataDb.entity_type == entity_type,
+                DocumentMetadataDb.entity_id == entity_id,
+                DocumentMetadataDb.source_path.isnot(None),
+            )
+        ]
+
+    def list_by_source_path(self, db: Session, *, source_path: str) -> List[DocumentMetadataDb]:
+        """Documents imported from one source file (one per linked entity)."""
+        return (
+            db.query(DocumentMetadataDb)
+            .filter(DocumentMetadataDb.source_path == source_path)
+            .all()
+        )
+
+    def list_imported_under(self, db: Session, *, folder: str) -> List[DocumentMetadataDb]:
+        """Documents imported from files under a volume folder (subfolders included)."""
+        prefix = folder.rstrip('/') + '/'
+        return (
+            db.query(DocumentMetadataDb)
+            .filter(DocumentMetadataDb.source_path.startswith(prefix, autoescape=True))
+            .all()
+        )
+
+    # --- The text of imported files (once per file) ---
+    def save_imported_file(
+        self, db: Session, *, source_path: str, content_hash: str, content_text: str,
+        size_bytes: Optional[int], user_email: Optional[str],
+    ) -> None:
+        """Store this version of a file's text, unless it is stored already.
+
+        Other versions stay while a document still points to them (one the
+        importer couldn't edit); ``remove_unreferenced_imported_files`` drops
+        the rest.
+        """
+        if db.get(ImportedMarkdownFileDb, (source_path, content_hash)) is None:
+            db.add(ImportedMarkdownFileDb(
+                source_path=source_path, content_hash=content_hash, content_text=content_text,
+                size_bytes=size_bytes, updated_by=user_email,
+            ))
+
+    def imported_texts(
+        self, db: Session, *, source_paths: List[str],
+    ) -> Dict[Tuple[str, str], str]:
+        """(source path, content hash) -> stored text, for every version of these files."""
+        if not source_paths:
+            return {}
+        rows = db.query(
+            ImportedMarkdownFileDb.source_path, ImportedMarkdownFileDb.content_hash,
+            ImportedMarkdownFileDb.content_text,
+        ).filter(ImportedMarkdownFileDb.source_path.in_(set(source_paths)))
+        return {(path, digest): text for path, digest, text in rows}
+
+    def remove_unreferenced_imported_files(self, db: Session, *, source_paths: List[str]) -> int:
+        """Delete the stored versions of these files that no document points to any more."""
+        paths = {path for path in source_paths if path}
+        if not paths:
+            return 0
+        db.flush()
+        referenced = set(
+            db.query(DocumentMetadataDb.source_path, DocumentMetadataDb.content_hash)
+            .filter(DocumentMetadataDb.source_path.in_(paths)).distinct()
+        )
+        stored = db.query(ImportedMarkdownFileDb).filter(
+            ImportedMarkdownFileDb.source_path.in_(paths)).all()
+        removed = 0
+        for row in stored:
+            if (row.source_path, row.content_hash) not in referenced:
+                db.delete(row)
+                removed += 1
+        return removed
+
+    def list_imported(self, db: Session) -> List[DocumentMetadataDb]:
+        """Every document imported from a Markdown file."""
+        return (
+            db.query(DocumentMetadataDb)
+            .filter(DocumentMetadataDb.source_path.isnot(None))
+            .all()
+        )
 
     def list_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> List[DocumentMetadataDb]:
         """List documents directly attached to an entity."""

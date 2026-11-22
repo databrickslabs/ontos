@@ -1,11 +1,11 @@
 import uuid
-from datetime import datetime
 from typing import Any, Callable, List, Optional, Dict
 import json
 
 from sqlalchemy.orm import Session # Import Session for type hinting
 from pydantic import ValidationError # Import for error handling
 
+from src.common.timestamps import utc_now
 from src.models.notifications import Notification, NotificationType # Import the enum too
 # Import SettingsManager for role lookups
 from typing import TYPE_CHECKING
@@ -244,7 +244,7 @@ class NotificationsManager:
         notification was silently lost.
         """
         try:
-            now = datetime.utcnow()
+            now = utc_now()
             notification_id = str(uuid.uuid4())
             
             # Construct the Notification Pydantic model internally
@@ -537,7 +537,7 @@ class NotificationsManager:
                     "entity_id": entity_id,
                     "data": data,
                 },
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
                 read=False,
                 can_delete=True,
             )
@@ -580,7 +580,7 @@ class NotificationsManager:
             # Update the notification
             update_data = {
                 'read': True,
-                'updated_at': datetime.utcnow(),
+                'updated_at': utc_now(),
             }
             
             # Update action_payload with completion details
@@ -593,7 +593,7 @@ class NotificationsManager:
             
             existing_payload['completed'] = True
             existing_payload['completed_by'] = completed_by
-            existing_payload['completed_at'] = datetime.utcnow().isoformat()
+            existing_payload['completed_at'] = utc_now().isoformat()
             if notes:
                 existing_payload['completion_notes'] = notes
             

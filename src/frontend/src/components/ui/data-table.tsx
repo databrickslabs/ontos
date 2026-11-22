@@ -50,6 +50,28 @@ const ChevronsRight = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
 /** Minimum width (px) kept by a column without a declared size in `fixedLayout`. */
 const FLEXIBLE_COLUMN_MIN_WIDTH = 130;
 
+/** Page sizes offered by the client-side page size picker. */
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50];
+
+/** Search, column filters and client-side page, persisted under `${storageKey}:view`. */
+interface StoredTableView {
+  columnFilters?: ColumnFiltersState;
+  globalFilter?: string;
+  pageIndex?: number;
+  pageSize?: number;
+}
+
+function readStoredView(key: string | undefined): StoredTableView {
+  if (!key) return {};
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    console.warn('Failed to load table view from localStorage:', error);
+    return {};
+  }
+}
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -180,22 +202,45 @@ export function DataTable<TData, TValue>({
     }
   }, [isSortingControlled, onSortingChange, sorting]);
 
-  // Controlled page size (client-side pagination only). The page index is
-  // kept here; page size changes are reported to the parent.
-  const isPageSizeControlled = controlledPageSize !== undefined && !manualPagination;
-  const [internalPageIndex, setInternalPageIndex] = React.useState(0);
-  const handleControlledPagination: OnChangeFn<PaginationState> = React.useCallback((updater) => {
-    const prev = { pageIndex: internalPageIndex, pageSize: controlledPageSize ?? 10 };
+  // Search, column filters and client-side page are restored from `${storageKey}:view`.
+  // Stored column filters for columns that no longer exist are dropped.
+  const viewStorageKey = storageKey ? `${storageKey}:view` : undefined;
+  const [storedView] = React.useState<StoredTableView>(() => readStoredView(viewStorageKey));
+
+  // Client-side pagination keeps the page index and page size here. A controlled
+  // page size is owned by the parent; changes are reported to it.
+  const isClientPaged = !manualPagination;
+  const isPageSizeControlled = controlledPageSize !== undefined && isClientPaged;
+  const storedPageIndex = storedView.pageIndex;
+  const storedPageSize = storedView.pageSize;
+  const [internalPageIndex, setInternalPageIndex] = React.useState(() =>
+    typeof storedPageIndex === 'number' && Number.isInteger(storedPageIndex) && storedPageIndex >= 0
+      ? storedPageIndex
+      : 0);
+  const [internalPageSize, setInternalPageSize] = React.useState(() =>
+    typeof storedPageSize === 'number' && PAGE_SIZE_OPTIONS.includes(storedPageSize)
+      ? storedPageSize
+      : 10);
+  const clientPageSize = isPageSizeControlled ? (controlledPageSize ?? 10) : internalPageSize;
+  const handleClientPagination: OnChangeFn<PaginationState> = React.useCallback((updater) => {
+    const prev = { pageIndex: internalPageIndex, pageSize: clientPageSize };
     const next = typeof updater === 'function' ? updater(prev) : updater;
     setInternalPageIndex(next.pageIndex);
     if (next.pageSize !== prev.pageSize) {
+      setInternalPageSize(next.pageSize);
       onPageSizeChange?.(next.pageSize);
     }
-  }, [internalPageIndex, controlledPageSize, onPageSizeChange]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  }, [internalPageIndex, clientPageSize, onPageSizeChange]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(() => {
+    const knownColumnIds = new Set(columns.map((c) => String(c.id ?? (c as { accessorKey?: string }).accessorKey)));
+    const stored = Array.isArray(storedView.columnFilters) ? storedView.columnFilters : [];
+    return stored.filter((filter) => typeof filter?.id === 'string' && knownColumnIds.has(filter.id));
+  });
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({});
-  const [globalFilter, setGlobalFilter] = React.useState("");
+  // An uncontrolled search is restored; a controlled one is owned by the parent.
+  const [globalFilter, setGlobalFilter] = React.useState(() =>
+    !onSearchChange && typeof storedView.globalFilter === 'string' ? storedView.globalFilter : "");
 
   // Use controlled or internal row selection state
   const isControlled = controlledRowSelection !== undefined;
@@ -219,6 +264,24 @@ export function DataTable<TData, TValue>({
       }
     }
   }, [sorting, storageKey, isSortingControlled]);
+
+  // Persist search, column filters and the client-side page to `${storageKey}:view`.
+  // Only the key the view was restored from is written: after a storageKey change
+  // the in-memory view belongs to the old key, so it is not copied into the new one.
+  const restoredViewKey = React.useRef(viewStorageKey);
+  React.useEffect(() => {
+    if (!viewStorageKey || viewStorageKey !== restoredViewKey.current) return;
+    const view: StoredTableView = {
+      columnFilters,
+      ...(onSearchChange ? {} : { globalFilter }),
+      ...(isClientPaged ? { pageIndex: internalPageIndex, pageSize: clientPageSize } : {}),
+    };
+    try {
+      localStorage.setItem(viewStorageKey, JSON.stringify(view));
+    } catch (error) {
+      console.warn('Failed to save table view to localStorage:', error);
+    }
+  }, [viewStorageKey, columnFilters, globalFilter, onSearchChange, isClientPaged, internalPageIndex, clientPageSize]);
 
   // Add default select column (omitted when selectable is false)
   const tableColumns: ColumnDef<TData, TValue>[] = React.useMemo(() => [
@@ -265,8 +328,8 @@ export function DataTable<TData, TValue>({
     ...(manualPagination && onPaginationChange
       ? { onPaginationChange }
       : {}),
-    ...(isPageSizeControlled
-      ? { onPaginationChange: handleControlledPagination }
+    ...(isClientPaged
+      ? { onPaginationChange: handleClientPagination }
       : {}),
     state: {
       sorting,
@@ -275,8 +338,8 @@ export function DataTable<TData, TValue>({
       rowSelection,
       globalFilter,
       ...(manualPagination && paginationState ? { pagination: paginationState } : {}),
-      ...(isPageSizeControlled
-        ? { pagination: { pageIndex: internalPageIndex, pageSize: controlledPageSize } }
+      ...(isClientPaged
+        ? { pagination: { pageIndex: internalPageIndex, pageSize: clientPageSize } }
         : {}),
     },
     initialState: {
@@ -300,21 +363,23 @@ export function DataTable<TData, TValue>({
     }
   }, [globalFilter, columnFilters, table]);
 
-  // Controlled page size: a controlled search does not touch globalFilter, so
+  // Client-side pagination: a controlled search does not touch globalFilter, so
   // go back to the first page when it changes, and clamp the page index when
-  // the data shrinks below the current page.
+  // the data shrinks below the current page. With no data at all (still
+  // loading) the stored page is kept so it can be restored once rows arrive;
+  // when data is present but filtered down to nothing, the page goes to the first.
   const prevSearchValue = React.useRef(searchValue);
-  const controlledPageCount = isPageSizeControlled ? table.getPageCount() : 0;
+  const clientPageCount = isClientPaged ? table.getPageCount() : 0;
   React.useEffect(() => {
-    if (!isPageSizeControlled) return;
+    if (!isClientPaged) return;
     if (prevSearchValue.current !== searchValue) {
       prevSearchValue.current = searchValue;
       setInternalPageIndex(0);
       return;
     }
-    const maxIndex = Math.max(0, controlledPageCount - 1);
-    if (internalPageIndex > maxIndex) setInternalPageIndex(maxIndex);
-  }, [isPageSizeControlled, searchValue, controlledPageCount, internalPageIndex]);
+    const maxIndex = Math.max(clientPageCount - 1, 0);
+    if ((clientPageCount > 0 || data.length > 0) && internalPageIndex > maxIndex) setInternalPageIndex(maxIndex);
+  }, [isClientPaged, searchValue, clientPageCount, internalPageIndex, data.length]);
 
   // Fixed layout: only columns whose definition declares a `size` get that width. TanStack merges a
   // default size of 150 into every resolved column, so the declared sizes are read from `columns`.
@@ -526,7 +591,7 @@ export function DataTable<TData, TValue>({
                 <SelectValue placeholder={table.getState().pagination.pageSize} />
               </SelectTrigger>
               <SelectContent side="top">
-                {[10, 20, 30, 40, 50].map((pageSize) => (
+                {PAGE_SIZE_OPTIONS.map((pageSize) => (
                   <SelectItem key={pageSize} value={`${pageSize}`}>
                     {pageSize}
                   </SelectItem>
@@ -535,7 +600,9 @@ export function DataTable<TData, TValue>({
             </Select>
           </div>
           <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-            {t('pagination.page')} {table.getState().pagination.pageIndex + 1} {t('of')}{" "}
+            {t('pagination.page')} {(isClientPaged
+              ? Math.min(table.getState().pagination.pageIndex, Math.max(clientPageCount - 1, 0))
+              : table.getState().pagination.pageIndex) + 1} {t('of')}{" "}
             {table.getPageCount() ?? 0} {/* Handle zero pages */}
           </div>
           <div className="flex items-center space-x-2">

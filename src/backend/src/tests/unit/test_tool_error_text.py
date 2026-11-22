@@ -12,9 +12,11 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import src.tools as tools_pkg
+from src.common.features import FeatureAccessLevel
 from src.routes.mcp_routes import MCPHandler
 from src.tools.base import (
     TOOL_FAILED_CODE,
+    ToolCaller,
     ToolContext,
     ToolResult,
     tool_failure,
@@ -53,13 +55,18 @@ def test_tool_failure_has_code_error_id_and_logs_the_text(caplog):
     assert SECRET in caplog.text
 
 
+# get_domain needs Read-only on data-domains (as GET /api/data-domains/{id}).
+DOMAIN_READER = ToolCaller(email="carl@example.com", auth_path="test",
+                           permissions={"data-domains": FeatureAccessLevel.READ_ONLY})
+
+
 def test_result_without_code_serializes_as_before():
     assert ToolResult(success=False, error="nope").to_dict() == {"error": "nope"}
     assert ToolResult(success=True, data={"a": 1}).to_dict() == {"a": 1}
 
 
 def test_tool_hides_exception_text_and_logs_it(caplog):
-    ctx = ToolContext(db=MagicMock(), settings=MagicMock())
+    ctx = ToolContext(db=MagicMock(), settings=MagicMock(), caller=DOMAIN_READER)
     ctx.db.query.side_effect = RuntimeError(SECRET)
     with caplog.at_level(logging.ERROR):
         res = _run(GetDomainTool().execute(ctx, domain_id="d-1"))

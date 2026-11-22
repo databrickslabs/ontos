@@ -34,7 +34,7 @@ from src.db_models.data_products import DataProductDb
 from src.models.data_products import ChangeStatusPayload
 from src.models.lifecycle import DATA_PRODUCT_TRANSITIONS
 from src.routes import data_product_routes
-from src.tests.unit.test_tool_error_text import SECRET, _assert_generic
+from src.tests.unit.test_tool_error_text import DOMAIN_READER, SECRET, _assert_generic
 from src.tools.base import TOOL_FAILED_CODE, ToolContext, tool_failure
 from src.tools.domains import GetDomainTool
 
@@ -116,7 +116,7 @@ class TestToolFailure:
         assert SECRET in caplog.text
 
     def test_a_tool_returns_the_refusal(self):
-        ctx = ToolContext(db=MagicMock(), settings=MagicMock())
+        ctx = ToolContext(db=MagicMock(), settings=MagicMock(), caller=DOMAIN_READER)
         ctx.db.query.side_effect = StatusChangeBlockedError('approved', 'active', [])
 
         res = asyncio.run(GetDomainTool().execute(ctx, domain_id='d-1'))

@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src.db_models.access_grants import (
     AccessGrantDb,
@@ -426,10 +427,11 @@ class AccessGrantsManager:
         db: Session,
         email: str,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
+        status: Optional[str] = None,
     ) -> AccessGrantRequestList:
-        """Get all requests made by a user (any status: pending, approved, denied, etc.)."""
-        requests, total = self._request_repo.get_all_for_user(db, email, limit, offset)
+        """Get the requests made by a user: any status, or only `status` when given."""
+        requests, total = self._request_repo.get_all_for_user(db, email, limit, offset, status)
         return AccessGrantRequestList(
             requests=[AccessGrantRequestResponse.model_validate(r) for r in requests],
             total=total
@@ -739,7 +741,7 @@ class AccessGrantsManager:
         try:
             notification = Notification(
                 id=str(uuid.uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
                 type=NotificationType.ACTION_REQUIRED,
                 title="New Access Grant Request",
                 subtitle=f"From: {request.requester_email}",
@@ -801,7 +803,7 @@ class AccessGrantsManager:
             
             notification = Notification(
                 id=str(uuid.uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
                 type=NotificationType.INFO if approved else NotificationType.WARNING,
                 title=title,
                 description=description,
@@ -865,7 +867,7 @@ class AccessGrantsManager:
             
             notification = Notification(
                 id=str(uuid.uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
                 type=NotificationType.WARNING,
                 title="Access Revoked",
                 description=description,
@@ -920,7 +922,7 @@ class AccessGrantsManager:
         try:
             notification = Notification(
                 id=str(uuid.uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=utc_now(),
                 type=NotificationType.WARNING,
                 title="Access Expiring Soon",
                 description=(

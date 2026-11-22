@@ -172,9 +172,7 @@ export default function App() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="ucapp-theme">
       <TooltipProvider>
-        <Router future={{ 
-          v7_relativeSplatPath: true,
-        }}>
+        <Router>
           <RouteGuards />
           <Layout>
             <RouteErrorBoundary>

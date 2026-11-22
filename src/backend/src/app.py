@@ -172,6 +172,41 @@ def _warn_unmatched_trigger_entity_types() -> None:
         logger.warning("Failed checking workflow trigger entity types: %s", e, exc_info=True)
 
 
+def _warn_team_role_overrides_to_review() -> None:
+    """Log the team entries whose role overrides admins should review after #1245.
+
+    - Group entries with a role override: they now apply to every member of the
+      group, not only to users also listed on the team by name.
+    - User entries with a role override whose identifier has no ``@``: usually a
+      group saved as a user entry, which now applies only to a user with that
+      exact identifier, not to the group's members.
+
+    One line each lists the entries (team, identifier, role) with a count. Nothing
+    is changed.
+    """
+    try:
+        from src.common.database import get_session_factory
+        from src.controller.teams_manager import teams_manager as _teams_manager
+        with get_session_factory()() as db:
+            groups = _teams_manager.group_role_override_entries(db)
+            users = _teams_manager.user_role_override_entries_without_email(db)
+        if groups:
+            logger.warning(
+                "%d team group entries with a role override apply to every member of the group "
+                "(team, group, role): %s. Review them in Settings > Teams.",
+                len(groups), groups,
+            )
+        if users:
+            logger.warning(
+                "%d team user entries with a role override have no email-like identifier and apply only "
+                "to a user with that identifier (team, identifier, role): %s. If they name a group, "
+                "change their type to group in Settings > Teams.",
+                len(users), users,
+            )
+    except Exception as e:
+        logger.warning("Failed checking team role overrides: %s", e, exc_info=True)
+
+
 # Application Startup Event
 async def startup_event():
     import os
@@ -225,6 +260,7 @@ async def startup_event():
     _seed_default_workflows()
 
     initialize_managers(app)  # Soft-fails internally for ws_client; sets health["ws_ok"]
+    _warn_team_role_overrides_to_review()  # after the Admin Team is seeded
     
     # Initialize Git service for indirect delivery mode
     try:
@@ -314,6 +350,7 @@ async def startup_event():
 # Application Shutdown Event
 async def shutdown_event():
     logger.info("Running application shutdown event...")
+    _stop_workflow_scheduler()
     logger.info("Application shutdown complete.")
 
 # --- FastAPI App Instantiation (AFTER defining lifecycle functions) ---
@@ -599,13 +636,24 @@ def _managers_running() -> bool:
 
 
 def _stop_job_polling() -> None:
-    """Stop the running managers' job poller before they are replaced."""
+    """Stop the running managers' job poller and workflow scheduler before they are replaced."""
     jobs_manager = getattr(app.state, "jobs_manager", None)
     if jobs_manager is not None:
         try:
             jobs_manager.stop_background_polling()
         except Exception as e:
             logger.warning(f"Could not stop the job poller before re-initializing: {e}")
+    _stop_workflow_scheduler()
+
+
+def _stop_workflow_scheduler() -> None:
+    """Stop the workflow scheduler thread (#941), if one runs."""
+    scheduler = getattr(app.state, "workflow_scheduler", None)
+    if scheduler is not None:
+        try:
+            scheduler.stop()
+        except Exception as e:
+            logger.warning(f"Could not stop the workflow scheduler: {e}")
 
 
 def _close_replaced_manager_session(old_session) -> None:

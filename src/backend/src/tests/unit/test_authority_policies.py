@@ -379,7 +379,7 @@ def test_approved_policy_documents_are_immutable(db_session, mgrs):
 
 def test_metadata_entity_types_include_the_authority_entities():
     from src.models.metadata import DocumentCreate
-    for kind in ("authority_relation", "authority_policy", "concept", "compliance_policy"):
+    for kind in ("authority_relation", "authority_policy", "concept"):
         DocumentCreate(entity_id="x", entity_type=kind, title="t")
 
 

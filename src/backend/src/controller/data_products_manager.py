@@ -13,6 +13,8 @@ from typing import Dict, Iterable, List, Optional, Any, Set
 from uuid import UUID
 from pathlib import Path
 
+from src.controller.entity_data_cleanup import remove_entity_data
+from src.common.timestamps import utc_now
 from src.common.api_errors import CodedValueError
 from src.common.notification_i18n import notification_i18n_data
 
@@ -1031,15 +1033,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         try:
             # Get product info and subscribers before deletion
             product_db = self._repo.get(db=self._db, id=product_id)
-            product_name = product_db.name if product_db else None
-            deletion_notice = (
-                self._collect_deletion_notice(
-                    product_id=product_id, product_name=product_name, deleted_by=user
-                )
-                if product_db else None
+            if not product_db:
+                # Nothing to delete: touch nothing on the shared session.
+                return False
+            product_name = product_db.name
+            deletion_notice = self._collect_deletion_notice(
+                product_id=product_id, product_name=product_name, deleted_by=user
             )
 
             entity_domain_repo.remove_all_for_entity(self._db, entity_type="data_product", entity_id=product_id)
+            remove_entity_data(self._db, entity_type="data_product", entity_id=product_id, ws=self._ws_client)
             deleted_obj = self._repo.remove(db=self._db, id=product_id)
 
             if deleted_obj:
@@ -1811,7 +1814,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If product not found or invalid transition
         """
-        from datetime import datetime
         from uuid import uuid4
         from src.common.workflow_triggers import (
             get_trigger_registry, request_submitted_message, request_workflow_outcome,
@@ -1843,7 +1845,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             requested_deprecation = requested_deprecation_data(db, 'data_product', details)
 
-        now = datetime.utcnow()
+        now = utc_now()
         request_id = str(uuid4())
         
         # Fire the ON_REQUEST_STATUS_CHANGE trigger
@@ -1926,7 +1928,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If product not found or invalid decision
         """
-        from datetime import datetime
         from uuid import uuid4
         from src.models.notifications import NotificationType, Notification
         from src.controller.change_log_manager import change_log_manager
@@ -1939,7 +1940,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if decision not in ('approve', 'deny', 'clarify'):
             raise ValueError("Decision must be 'approve', 'deny', or 'clarify'")
         
-        now = datetime.utcnow()
+        now = utc_now()
         notification_title = ""
         notification_desc = ""
         
@@ -2495,13 +2496,27 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             new_product_api_model = DataProductCreate(**new_product_data)
             created_db_obj = self._repo.create(db=self._db, obj_in=new_product_api_model)
 
-            # Carry the source product's domain assignments onto the new version.
-            d_ids, d_primary = self._resolve_product_domain_assignment(new_product_data)
-            if d_ids:
-                entity_domain_repo.set_domains_for_entity(
-                    self._db, entity_type="data_product", entity_id=created_db_obj.id,
-                    domain_ids=d_ids, primary_domain_id=d_primary, assigned_by="system",
+            # The version's rows (product, domains, tags) are committed together here,
+            # on the manager's startup session, not the request's, so nothing else
+            # commits them. Any failure from the product flush on rolls all of them back.
+            try:
+                # Carry the source product's domain assignments onto the new version.
+                d_ids, d_primary = self._resolve_product_domain_assignment(new_product_data)
+                if d_ids:
+                    entity_domain_repo.set_domains_for_entity(
+                        self._db, entity_type="data_product", entity_id=created_db_obj.id,
+                        domain_ids=d_ids, primary_domain_id=d_primary, assigned_by="system",
+                    )
+
+                # Copy the tag assignments with their values (#1489).
+                entity_tag_repo.copy_tags_for_entity(
+                    self._db, source_id=original_product_id, target_id=created_db_obj.id,
+                    entity_type="data_product", assigned_by="system",
                 )
+                self._db.commit()
+            except Exception:
+                self._db.rollback()
+                raise
 
             logger.info(f"Successfully created new version {request.new_version} (ID: {created_db_obj.id})")
             result = self._attach_domains(DataProductApi.model_validate(created_db_obj))
@@ -2840,21 +2855,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         )
                         db.add(new_member)
             
-            # Clone tags via entity_tag_repo
-            try:
-                source_tags = entity_tag_repo.get_tags_for_entity(
-                    db, entity_type='data_product', entity_id=product_id
-                )
-                for tag_assignment in source_tags:
-                    entity_tag_repo.assign_tag_to_entity(
-                        db,
-                        obj_in=AssignedTagCreate(tag_id=tag_assignment.tag_id),
-                        entity_type='data_product',
-                        entity_id=new_id
-                    )
-            except Exception as e:
-                logger.warning(f"Could not clone tags: {e}")
-            
+            # Copy the tag assignments with their values (#1489). A failure
+            # propagates: the handler below rolls the new version back.
+            entity_tag_repo.copy_tags_for_entity(
+                db, source_id=product_id, target_id=new_id,
+                entity_type='data_product', assigned_by=current_user,
+            )
+
             db.commit()
             db.refresh(new_product)
             
@@ -2995,6 +3002,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise PermissionError("Not owner of this draft")
         
         try:
+            entity_domain_repo.remove_all_for_entity(db, entity_type="data_product", entity_id=draft_id)
+            remove_entity_data(db, entity_type="data_product", entity_id=draft_id, ws=self._ws_client)
             data_product_repo.remove(db, id=draft_id)
             db.commit()
             logger.info(f"Discarded personal draft {draft_id}")
@@ -3595,7 +3604,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     except Exception as e:
                         logger.warning(f"Failed to create AssignedTagCreate from string {tag_data}: {e}")
 
-            if not assigned_tags:
+            # An explicit empty list removes every tag (#1435). A list whose entries
+            # couldn't be read is not taken as "no tags", so it keeps the current ones.
+            if not assigned_tags and tags_data:
                 logger.debug(f"No valid tags to assign to ODPS product {product_id}")
                 return
 
@@ -5084,7 +5095,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             try:
                 notification = Notification(
                     id=str(uuid.uuid4()),
-                    created_at=datetime.utcnow(),
+                    created_at=utc_now(),
                     type=notif_type,
                     title=title,
                     description=description,

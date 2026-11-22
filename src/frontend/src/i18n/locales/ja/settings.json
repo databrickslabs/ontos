@@ -140,6 +140,16 @@
         "placeholder": "app_files"
       }
     },
+    "ucDescriptionWriteback": {
+      "title": "アセットの説明",
+      "adminOnly": "管理者のみがこれを有効にできます。",
+      "label": "アセットの説明を Unity Catalog に書き込む",
+      "help": "Databricks のテーブル、ビュー、列の説明を保存すると、保存したユーザーとして Unity Catalog のコメントも設定されます。SELECT と MODIFY の権限がない場合、説明は Ontos にのみ保存され、アセットには同期されていないことが表示されます。",
+      "importLimit": {
+        "label": "一括インポートごとに Unity Catalog で試行する行の上限",
+        "help": "CSV/XLSX インポートで Unity Catalog に試行する説明はこの数まで (1–10000) です。書き込む場合も、別のコメントを保持する場合も、メトリックビューをスキップする場合も数えます。上限を超えた行は警告付きで Ontos に保存されます。"
+      }
+    },
     "instanceIdentity": {
       "title": "インスタンスの識別情報",
       "id": {
@@ -406,7 +416,13 @@
     "privileges": {
       "homeSections": {
         "title": "ホームセクション",
-        "description": "このロールを持つユーザーのホームページに表示されるセクションを選択します。"
+        "description": "このロールを持つユーザーのホームページに表示されるセクションを選択します。",
+        "labels": {
+          "JOURNEY": "ジャーニーホーム"
+        },
+        "descriptions": {
+          "JOURNEY": "完全なホームページを、検索・理解・信頼・公開・保守の流れに置き換えます。他のセクションとは併用できません。"
+        }
       },
       "approvalPrivileges": {
         "title": "承認権限",

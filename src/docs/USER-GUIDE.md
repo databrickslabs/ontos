@@ -2292,7 +2292,7 @@ earlier run is removed. Change `<n>` to set another threshold. A malformed varia
   prefix as the other enabled keys (`ontos_` by default): the job only reads tags with
   that prefix. The prefix is the common prefix of all enabled keys: a key without it (for
   example `agent_readable` next to `ontos_*` keys) empties that prefix, and the job then
-  falls back to `x_ontos_`, so it stops reading the `ontos_` tags.
+  falls back to `x_ontos_`, so it stops reading and removing the `ontos_` tags.
 - The threshold variable gives `false` to every asset the job reads without a level,
   including the assets it skips for their type (for example metric views).
 

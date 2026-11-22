@@ -439,8 +439,14 @@ without a token sees none, except with `ENV=LOCAL` or `OBO_ALLOW_SP_FALLBACK=tru
 check uses the app's client and so hides nothing the app can read. The run's counts, score and
 coverage, in the results and in the run list, are computed over the same visible results, so
 they say nothing about the hidden objects; the results come in pages of up to 500 (`offset`,
-`limit`), with `total` counting every visible result. The policy list, the stats and the trend
-still use the stored scores, which are per policy and name no object.
+`limit`), with `total` counting every visible result.
+
+> **Policy scores and trends are org-wide; run results are per viewer.** The policy list
+> (`compliance` of each policy), the stats (`overall_compliance`, critical issues) and the trend
+> (`GET /api/compliance/trend`) use the score each run stored when it ended, over every object
+> the run evaluated, including objects the viewer can't read. Every reader sees the same values
+> there. They name no object, so they don't show what a viewer can't read, but they can differ
+> from the score in a run's results, which counts only the viewer's visible results.
 
 A failed run shows why as a code the UI translates (`error_code`, `error_params`): the app's own
 codes, and `run_failed` for any other error (a Databricks SDK or database error, say). The

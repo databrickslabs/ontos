@@ -2209,6 +2209,11 @@ Click on a run to see:
 - **Actions Taken**: Tags assigned, notifications sent
 - **Historical Trend**: Score over time
 
+The results, counts and score of a run cover only the Unity Catalog objects you can read; the
+others are counted as hidden. The policy list, the compliance stats and the trend are org-wide:
+they use each run's stored score over every object it evaluated, so they are the same for every
+reader and can differ from the score you see in a run's results.
+
 #### Filtering Results
 
 - **Status**: Show only failures or passes

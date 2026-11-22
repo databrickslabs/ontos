@@ -120,7 +120,9 @@ class TestAssetMaturityRoutes:
         assert report['achieved_level_order'] == 1
         assert [lv['level_name'] for lv in report['levels']] == ['Described']
         assert 'gone' not in response.text
-        assert [n['code'] for n in report['notices']] == ['maturity_uc_table_unreadable']
+        assert [n['code'] for n in report['notices']] == [
+            'maturity_uc_table_unreadable', 'maturity_level_partial',
+        ]
         assert report['notices'][0]['params'] == {'tableName': FQN}
 
         assert db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).count() == 0
@@ -439,3 +441,120 @@ class TestAssetMaturityReadsAsTheUser:
         snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).all()
         assert [s.achieved_level_order for s in snapshots] == [2]
         user_client.tables.get.assert_called_with(full_name=FQN)
+
+
+class TestAssetMaturityVisibleToUcReaders:
+    """Stored maturity results come from the evaluator's UC read: a reader without their
+    own UC read of the table gets none of them (#1352 review)."""
+
+    @pytest.fixture
+    def tokens(self, monkeypatch):
+        """A workspace client per user token: A and C can read the table, B can't."""
+        from unittest.mock import MagicMock
+
+        from databricks.sdk.errors import PermissionDenied
+        from src.common import workspace_client as workspace_client_module
+
+        readable = TableInfo(full_name=FQN, columns=[
+            ColumnInfo(name='id', comment='Order id', type_text='bigint'),
+        ])
+        clients = {}
+        for token, can_read in (('token-a', True), ('token-b', False), ('token-c', True)):
+            ws = MagicMock()
+            if can_read:
+                ws.tables.get.return_value = readable
+            else:
+                ws.tables.get.side_effect = PermissionDenied('no SELECT on main.sales.orders')
+            clients[token] = ws
+
+        def obo(request, *args, **kwargs):
+            return clients[request.headers['x-forwarded-access-token']]
+
+        monkeypatch.setattr(workspace_client_module, 'get_obo_workspace_client', obo)
+        return clients
+
+    @staticmethod
+    def _as(token):
+        return {'x-forwarded-access-token': token}
+
+    def _stored_by_a(self, client, db_session):
+        _asset_ladder(client, db_session)
+        asset = _asset(db_session, description='Orders')
+        response = client.post(f'/api/assets/{asset.id}/maturity/evaluate',
+                               headers=self._as('token-a'))
+        assert response.status_code == 200, response.text
+        assert response.json()['achieved_level_order'] == 2
+        return asset
+
+    def test_a_reader_without_uc_read_gets_no_history(
+            self, client, db_session, tokens, fired):
+        asset = self._stored_by_a(client, db_session)
+
+        response = client.get(f'/api/assets/{asset.id}/maturity/history',
+                              headers=self._as('token-b'))
+
+        assert response.status_code == 200, response.text
+        assert response.json() == []
+        tokens['token-b'].tables.get.assert_called_with(full_name=FQN)
+
+    def test_a_reader_with_uc_read_gets_the_history(
+            self, client, db_session, tokens, fired):
+        asset = self._stored_by_a(client, db_session)
+
+        response = client.get(f'/api/assets/{asset.id}/maturity/history',
+                              headers=self._as('token-c'))
+
+        assert response.status_code == 200, response.text
+        history = response.json()
+        assert [s['achieved_level_order'] for s in history] == [2]
+
+    def test_a_reader_without_uc_read_does_not_get_the_stored_level(
+            self, client, db_session, tokens, fired):
+        asset = self._stored_by_a(client, db_session)
+
+        for method, path in (('get', 'maturity'), ('post', 'maturity/evaluate')):
+            response = getattr(client, method)(f'/api/assets/{asset.id}/{path}',
+                                               headers=self._as('token-b'))
+
+            assert response.status_code == 200, response.text
+            report = response.json()
+            # Only what B's own read proves: level 1 (no UC field), never the stored 2
+            assert report['achieved_level_order'] == 1, path
+            assert [lv['level_order'] for lv in report['levels']] == [1]
+            assert 'Documented columns' not in response.text
+            assert [n['code'] for n in report['notices']] == [
+                'maturity_uc_table_unreadable', 'maturity_level_partial',
+            ]
+        snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id))
+        assert [s.achieved_level_order for s in snapshots] == [2]
+
+    def test_history_fails_closed_when_the_reader_has_no_client(
+            self, client, db_session, tokens, fired, monkeypatch):
+        from src.common import workspace_client as workspace_client_module
+
+        asset = self._stored_by_a(client, db_session)
+
+        def broken(*args, **kwargs):
+            raise RuntimeError('client could not be built')
+
+        monkeypatch.setattr(workspace_client_module, 'get_obo_workspace_client', broken)
+        response = client.get(f'/api/assets/{asset.id}/maturity/history')
+
+        assert response.status_code == 200, response.text
+        assert response.json() == []
+
+    def test_history_of_an_asset_without_a_uc_table_needs_no_uc_read(
+            self, client, db_session, tokens, fired):
+        _asset_ladder(client, db_session)
+        asset = _asset(db_session, description='Orders')
+        asset.platform = 'snowflake'
+        db_session.flush()
+        response = client.post(f'/api/assets/{asset.id}/maturity/evaluate',
+                               headers=self._as('token-b'))
+        assert response.status_code == 200, response.text
+
+        response = client.get(f'/api/assets/{asset.id}/maturity/history',
+                              headers=self._as('token-b'))
+
+        assert [s['achieved_level_order'] for s in response.json()] == [1]
+        tokens['token-b'].tables.get.assert_not_called()

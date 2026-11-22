@@ -20,6 +20,7 @@ from src.controller.entity_dict_builder import (
     UnsupportedMaturityAssetTypeError,
     build_asset_dict,
     uc_table_name,
+    uc_table_readable,
 )
 from src.controller.maturity_evaluator import (
     MaturityEvaluator,
@@ -242,6 +243,29 @@ def test_no_workspace_client_leaves_uc_fields_absent(db_session, provider):
     assert not UC_TABLE_FIELDS & d.keys()
 
 
+def test_uc_table_readable_is_true_only_when_the_table_reads(db_session):
+    asset = _asset(db_session)
+
+    assert uc_table_readable(asset, lambda: _ws(_table([]))) is True
+    assert uc_table_readable(asset, lambda: _ws(error=PermissionDenied('no grant'))) is False
+    assert uc_table_readable(asset, lambda: _ws(error=NotFound('gone'))) is False
+    assert uc_table_readable(asset, lambda: _ws(error=RuntimeError('timeout'))) is False
+    assert uc_table_readable(asset, None) is False
+
+    def no_token():
+        raise RuntimeError('no user token')
+
+    assert uc_table_readable(asset, no_token) is False
+
+
+def test_uc_table_readable_without_a_uc_table_needs_no_client(db_session):
+    asset = _asset(db_session, platform='Snowflake')
+    ws = _ws(error=PermissionDenied('no grant'))
+
+    assert uc_table_readable(asset, lambda: ws) is True
+    ws.tables.get.assert_not_called()
+
+
 def test_workspace_client_that_fails_to_build_is_unavailable(db_session):
     asset = _asset(db_session)
 
@@ -359,9 +383,13 @@ def test_uc_read_failure_keeps_the_stored_level(db_session, error):
 
         assert registry.return_value.on_maturity_change.call_count == events_before
 
-    # The response keeps the stored level and says why the fields are missing
-    assert report.achieved_level_order == 2 and report.achieved_level_name == 'Has columns'
-    assert report.notices and report.notices[0].code.startswith('maturity_uc_table_')
+    # The response holds only the certain level (the stored level 2 came from another UC
+    # read) and says why the fields are missing and that the level may be higher
+    assert report.achieved_level_order == 1 and report.achieved_level_name == 'Named'
+    assert [lv.level_order for lv in report.levels] == [1] and report.stored is False
+    assert report.notices[0].code.startswith('maturity_uc_table_')
+    assert report.notices[1].code == 'maturity_level_partial'
+    assert report.notices[1].params == {'tableName': FQN}
     # No snapshot, no event: the history still ends at level 2
     snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=eid).all()
     assert [s.achieved_level_order for s in snapshots] == [2]
@@ -725,7 +753,9 @@ def test_unreadable_table_keeps_the_certain_part_of_the_ladder(db_session):
     # Level 2 needs the table, so only level 1 is reported.
     assert report.achieved_level_order == 1 and len(report.levels) == 1
     assert report.gates_total == 1 and report.gates_passed == 1
-    assert [n.code for n in report.notices] == ['maturity_uc_table_unreadable']
+    assert [n.code for n in report.notices] == [
+        'maturity_uc_table_unreadable', 'maturity_level_partial',
+    ]
 
 
 def test_unreadable_table_still_stores_a_certain_rise(db_session):
@@ -782,13 +812,13 @@ def test_uc_read_failure_stores_a_certain_drop_to_no_level(db_session):
     assert kwargs['from_level'] == 2 and kwargs['to_level'] is None
 
 
-def test_kept_level_is_reported_with_its_certain_level(db_session):
+def test_unreadable_table_reports_the_certain_level_below_the_stored_one(db_session):
     asset = _asset(db_session)
     _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
     _level(db_session, 2, 'Has columns', ['ASSERT obj.column_count > 0'])
     eid = str(asset.id)
-    # A table without columns: level 2 fails, so level 1 is stored
-    MaturityEvaluator(_ws(_table([]))).evaluate(
+    # Another reader's UC read stored level 2
+    MaturityEvaluator(_ws(_table([('id', 'Order id')]))).evaluate(
         db_session, entity_type='Asset', entity_id=eid, persist=True,
     )
 
@@ -796,32 +826,48 @@ def test_kept_level_is_reported_with_its_certain_level(db_session):
         db_session, entity_type='Asset', entity_id=eid, persist=False,
     )
 
-    # Stored level 1 is kept; it is the certain level, so it is reported
-    assert report.achieved_level_order == 1
+    # A reader who can't read the table doesn't get the stored level 2 or its gates
+    assert report.achieved_level_order == 1 and report.achieved_level_name == 'Named'
     assert [lv.level_order for lv in report.levels] == [1]
     assert report.gates_total == 1 and report.gates_passed == 1
+    assert 'Has columns' not in report.model_dump_json()
+    assert [n.code for n in report.notices] == [
+        'maturity_uc_table_unreadable', 'maturity_level_partial',
+    ]
 
 
-def test_kept_level_without_its_certain_level_reports_no_levels(db_session):
+def test_unreadable_table_without_a_certain_level_reports_none(db_session):
     asset = _asset(db_session)
-    _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
-    _level(db_session, 2, 'Has columns', ['ASSERT obj.column_count > 0'])
+    _level(db_session, 1, 'Has columns', ['ASSERT obj.column_count > 0'])
     eid = str(asset.id)
     MaturityEvaluator(_ws(_table([('id', 'Order id')]))).evaluate(
         db_session, entity_type='Asset', entity_id=eid, persist=True,
     )
-    # Level 2 is stored; its result needs the table, which is now unreadable
-    db_session.query(MaturitySnapshotDb).filter_by(entity_id=eid).update(
-        {'achieved_level_order': 2})
-    db_session.flush()
 
     report = MaturityEvaluator(_ws(error=NotFound('gone'))).evaluate(
-        db_session, entity_type='Asset', entity_id=eid, persist=False,
+        db_session, entity_type='Asset', entity_id=eid, persist=True,
     )
 
-    # Level 2 isn't among the certain levels, so none are reported: the counts agree
-    assert report.achieved_level_order == 2
+    assert report.achieved_level_order is None and report.achieved_level_name is None
     assert report.levels == [] and report.gates_total == 0 and report.gates_passed == 0
+    assert report.stored is False
+    snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=eid).all()
+    assert [s.achieved_level_order for s in snapshots] == [1]
+
+
+def test_a_computed_report_never_reads_the_stored_snapshot(db_session):
+    asset = _asset(db_session)
+    _ladder_with_a_uc_gate(db_session)
+    MaturityEvaluator(_ws(_table([('id', 'Order id')]))).evaluate(
+        db_session, entity_type='Asset', entity_id=str(asset.id), persist=True,
+    )
+
+    with patch.object(maturity_repo, 'get_latest_snapshot') as latest:
+        MaturityEvaluator(_ws(error=PermissionDenied('no grant'))).evaluate(
+            db_session, entity_type='Asset', entity_id=str(asset.id), persist=False,
+        )
+
+    latest.assert_not_called()
 
 
 def test_row_lock_is_taken_after_the_uc_read_and_before_the_snapshot_read(db_session):
@@ -896,9 +942,9 @@ def test_report_says_whether_it_was_stored(db_session):
 
     assert run(_ws(_table([('id', 'Id')])), False).stored is False
     assert run(_ws(_table([('id', 'Id')])), True).stored is True
-    # An unreadable table keeps the stored level and stores nothing
+    # An unreadable table keeps the stored level, stores nothing and reports the certain level
     kept = run(_ws(error=NotFound('gone')), True)
-    assert kept.achieved_level_order == 2 and kept.stored is False
+    assert kept.achieved_level_order == 1 and kept.stored is False
 
 
 def test_evaluator_reads_the_table_with_the_given_run_identity(db_session):
@@ -933,4 +979,6 @@ def test_user_without_a_token_gets_the_client_unavailable_code(db_session):
         run_identity=RunIdentity(no_token, on_behalf_of_user=True),
     ).evaluate(db_session, entity_type='Asset', entity_id=str(asset.id), persist=False)
 
-    assert [n.code for n in report.notices] == ['maturity_uc_table_client_unavailable']
+    assert [n.code for n in report.notices] == [
+        'maturity_uc_table_client_unavailable', 'maturity_level_partial',
+    ]

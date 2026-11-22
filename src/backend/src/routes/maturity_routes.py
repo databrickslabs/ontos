@@ -441,9 +441,23 @@ def get_asset_maturity_history(
     asset_id: UUID, db: DBSessionDep, request: Request, current_user: CurrentUserDep,
     limit: int = 50,
 ):
-    """Get maturity evaluation history for an asset."""
+    """Get maturity evaluation history for an asset.
+
+    A snapshot's level and gate results come from the Unity Catalog read of
+    whoever ran that evaluation. So the history of an asset that points to a UC
+    table is returned only to a reader whose own UC read of the table succeeds
+    now (their token, as an evaluation reads it); anyone else gets no snapshots.
+    """
+    from src.common.run_identity import RunIdentity
+    from src.controller.entity_dict_builder import uc_table_readable
+    from src.db_models.assets import AssetDb
     from src.routes.assets_routes import _ensure_asset_readable, assets_manager
     _ensure_asset_readable(request, db, current_user, assets_manager, asset_id)
+    asset = db.get(AssetDb, asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail=f"Asset {asset_id} not found")
+    if not uc_table_readable(asset, RunIdentity.for_request(request).workspace_client):
+        return []
     return maturity_repo.list_snapshots(
         db, entity_type="Asset", entity_id=str(asset_id), limit=limit,
     )

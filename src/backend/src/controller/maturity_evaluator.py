@@ -252,59 +252,40 @@ class MaturityEvaluator:
         )
 
         if uc_gate_ran:
+            # The levels up to the first uncertain one don't depend on UC fields, and the
+            # first other level adds to them when it certainly fails. The report holds only
+            # those certain levels: what this reader's own data proves. A level stored from
+            # someone else's UC read never reaches a reader who can't read the table.
+            certain_levels = prefix_len + (1 if blocker_certain else 0)
+            report.levels = report.levels[:certain_levels]
+            report.gates_total = sum(len(lr.gates) for lr in report.levels)
+            report.gates_passed = sum(1 for lr in report.levels for gr in lr.gates if gr.passed)
+            report.achieved_level_order = prefix_order
+            report.achieved_level_name = prefix_name
+            report.notices = [uc_notice]
+            if not blocker_certain:
+                # The table could take the asset higher
+                report.notices.append(_partial_notice(uc_notice))
+            achieved_order = prefix_order
+            achieved_name = prefix_name
+            if not persist:
+                return report
+            # Stored only when certain: the rest of the ladder can't be reached, or the
+            # certain levels rise above the stored level. Anything else would be a drop or
+            # a rise that the unreadable table could change, so the stored level stays.
             previous = maturity_repo.get_latest_snapshot(
                 db, entity_type=entity_type, entity_id=entity_id
             )
             prev_order = previous.achieved_level_order if previous else None
-            # The levels up to the first uncertain one don't depend on UC fields. Their
-            # result is certain when the first other level certainly fails (the rest of the
-            # ladder can't be reached), or when it rises above the stored level. Anything
-            # else would be a drop or a rise that the unreadable table could change, so
-            # the stored level is kept.
             certain_rise = prefix_order is not None and (
                 prev_order is None or prefix_order > prev_order
             )
-            certain_levels = prefix_len + (1 if blocker_certain else 0)
-            if blocker_certain or certain_rise:
-                report.levels = report.levels[:certain_levels]
-                report.gates_total = sum(len(lr.gates) for lr in report.levels)
-                report.gates_passed = sum(
-                    1 for lr in report.levels for gr in lr.gates if gr.passed
-                )
-                report.achieved_level_order = prefix_order
-                report.achieved_level_name = prefix_name
-                report.notices = [uc_notice]
-                achieved_order = prefix_order
-                achieved_name = prefix_name
-            else:
+            if not (blocker_certain or certain_rise):
                 logger.warning(
                     "Maturity of %s %s not updated: its UC table could not be read (%s)",
                     entity_type, entity_id, uc_notice.code,
                 )
-                # The levels reported are the certain ones, and only when they include the
-                # stored level (the level the report says is achieved); otherwise none are
-                # reported, so the counts and the achieved level always agree.
-                kept = level_results[:prefix_len]
-                if prev_order is None or any(lr.level_order == prev_order for lr in kept):
-                    kept_levels = kept
-                else:
-                    kept_levels = []
-                return MaturityReport(
-                    entity_type=entity_type,
-                    entity_id=entity_id,
-                    entity_name=entity_name,
-                    achieved_level_order=prev_order,
-                    achieved_level_name=previous.achieved_level_name if previous else None,
-                    total_levels=len(levels),
-                    gates_passed=sum(
-                        1 for lr in kept_levels for gr in lr.gates if gr.passed
-                    ),
-                    gates_total=sum(len(lr.gates) for lr in kept_levels),
-                    evaluated_at=datetime.now(timezone.utc),
-                    evaluated_by=evaluated_by,
-                    levels=kept_levels,
-                    notices=[uc_notice],
-                )
+                return report
 
         if persist:
             # Detect level change for trigger / change log
@@ -500,6 +481,20 @@ def _uc_notice(entity_dict: Dict[str, Any]) -> Optional[MaturityNotice]:
     return MaturityNotice(
         code=code,
         message=_UC_STATUS_MESSAGES[status].format(tableName=table_name),
+        params={"tableName": table_name},
+    )
+
+
+PARTIAL_LEVEL_CODE = "maturity_level_partial"
+
+
+def _partial_notice(uc_notice: MaturityNotice) -> MaturityNotice:
+    """The report counts only the gates that don't need the unreadable table."""
+    table_name = uc_notice.params.get("tableName")
+    return MaturityNotice(
+        code=PARTIAL_LEVEL_CODE,
+        message=f"The level counts only the gates that don't need table {table_name}; "
+                "the asset may reach a higher level.",
         params={"tableName": table_name},
     )
 

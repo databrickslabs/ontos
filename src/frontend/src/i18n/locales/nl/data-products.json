@@ -1016,7 +1016,8 @@
     "maturity_uc_table_client_unavailable": "Unity Catalog is niet bereikbaar, dus de velden van tabel {{tableName}} ontbreken.",
     "maturity_uc_table_unreadable": "Tabel {{tableName}} kan niet uit Unity Catalog worden gelezen, dus de velden ontbreken.",
     "maturity_uc_table_read_failed": "Tabel {{tableName}} kon niet uit Unity Catalog worden gelezen, dus de velden ontbreken.",
-    "maturity_gate_error": "Gate {{gateName}} kon niet worden geëvalueerd. De details staan in het serverlogboek."
+    "maturity_gate_error": "Gate {{gateName}} kon niet worden geëvalueerd. De details staan in het serverlogboek.",
+    "maturity_level_partial": "Het niveau telt alleen de controles die tabel {{tableName}} niet nodig hebben; het asset kan een hoger niveau halen."
   },
   "maturityResult": {
     "notStored": "Nu berekend en niet opgeslagen: de geschiedenis toont de opgeslagen evaluaties. Evalueer opnieuw om dit resultaat op te slaan.",

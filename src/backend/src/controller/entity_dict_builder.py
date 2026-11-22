@@ -286,6 +286,18 @@ def _add_uc_table_fields(
     d["uc_fields_available"] = True
 
 
+def uc_table_readable(asset, get_workspace_client: Optional[Callable[[], Any]]) -> bool:
+    """Whether this client reads the UC table the asset points to (True without one).
+
+    The read a maturity evaluation makes, so a stored result is shown to exactly
+    the readers an evaluation would show it to. Fails closed: no client, a refused
+    read or any other read error is False.
+    """
+    d: Dict[str, Any] = {"id": str(asset.id)}
+    _add_uc_table_fields(d, asset, get_workspace_client)
+    return d["uc_table_name"] is None or d["uc_table_status"] == UC_TABLE_READ
+
+
 def _add_asset_owners(db: Session, d: Dict[str, Any], asset_id: str) -> None:
     from src.db_models.business_owners import BusinessOwnerDb
 

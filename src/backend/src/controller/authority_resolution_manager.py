@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from src.common.api_errors import CodedValueError, client_failure
 from src.common.logging import get_logger
+from src.models.tags import AssignedTagCreate
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common import authority_definition as definition
 from src.common import authority_resolution_dna as authority_dna
@@ -39,7 +40,9 @@ from src.db_models.authority_resolution import (
     AuthorityDecisionDb,
     AuthorityDnaRunDb,
 )
+from src.db_models.business_owners import BusinessOwnerDb
 from src.db_models.business_roles import BusinessRoleDb
+from src.db_models.metadata import LinkMetadataDb, RichTextMetadataDb
 from src.db_models.compliance import CompliancePolicyDb
 from src.db_models.projects import ProjectDb
 from src.db_models.teams import TeamDb
@@ -104,6 +107,26 @@ class AuthorityStatusError(CodedValueError):
     http_status = 409
 
 
+class AuthorityInvalidVersionError(AuthorityInvalidError):
+    """A version string that is not X.Y.Z."""
+
+    code = "authority_invalid_version"
+
+
+class AuthorityDuplicateVersionError(CodedValueError):
+    """A version string the family already has (N6)."""
+
+    code = "authority_duplicate_version"
+    http_status = 409
+
+
+class AuthorityHasHistoryError(CodedValueError):
+    """A delete refused because the version has decisions or DNA runs (S1). Retire it instead."""
+
+    code = "authority_has_history"
+    http_status = 409
+
+
 class AuthoritySelfAffirmationError(AuthorityPermissionError):
     """The signed-in user created, or last changed, the definition they would affirm (B4)."""
 
@@ -129,6 +152,8 @@ def client_failure_text(tag: str, exc: BaseException) -> str:
 
 
 ENTITY_TYPE = "authority_relation"
+# A version string is MAJOR.MINOR.PATCH (N6).
+_SEMVER_RE = re.compile(r"\d+\.\d+\.\d+")
 FEATURE_ID = "authority-resolution"  # search feature filter (common/features.py)
 
 # Verdicts returned by the runtime gate.
@@ -386,12 +411,10 @@ class AuthorityResolutionManager(SearchableAsset):
         """The definition as it is stored (see ``authority_definition`` for what it covers)."""
         criteria = [self._criterion_dict(c) for c in authority_criterion_repo.list_for_relation(
             db, relation_id=relation.id)]
-        family = self._family_slug_of(db, relation)
         prerequisites = [
             {"prerequisite_family_slug": e.prerequisite_family_slug,
              "required": e.required, "display_order": e.display_order}
-            for e in (authority_prerequisite_repo.list_for_family(db, relation_family_slug=family)
-                      if family else [])
+            for e in authority_prerequisite_repo.list_for_relation(db, relation_id=relation.id)
         ]
         refs = [
             {**{k: getattr(r, k) for k in definition.RESOURCE_REF_KEYS},
@@ -523,6 +546,7 @@ class AuthorityResolutionManager(SearchableAsset):
     ) -> AuthorityRelationDb:
         data = payload.dict() if hasattr(payload, "dict") else dict(payload)
         self._refuse_admin_only_changes(data, None, caller_is_admin)
+        self._check_version_format(data.get("version") or "1.0.0")
         self._validate_ceiling(data.get("dna_max_threshold", 0.3))
         self._validate_business_roles(db, data.get("affirmations") or [])
         rel_id = str(uuid.uuid4())
@@ -694,6 +718,15 @@ class AuthorityResolutionManager(SearchableAsset):
                 f"Only an Admin can change '{field}' on an Authority Relation.",
                 field=field, required_level="Admin",
             )
+
+    @staticmethod
+    def _check_version_format(version: Any) -> str:
+        text = str(version or "")
+        if not _SEMVER_RE.fullmatch(text):
+            raise AuthorityInvalidVersionError(
+                f"Version '{text}' must look like 1.0.0 (major.minor.patch).", version=text,
+            )
+        return text
 
     @staticmethod
     def _validate_ceiling(value: Any) -> None:
@@ -938,6 +971,15 @@ class AuthorityResolutionManager(SearchableAsset):
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
             return False
+        decisions = db.query(AuthorityDecisionDb).filter(AuthorityDecisionDb.relation_id == relation_id).count()
+        dna_runs = db.query(AuthorityDnaRunDb).filter(AuthorityDnaRunDb.relation_id == relation_id).count()
+        if decisions or dna_runs:
+            # Deleting would erase the audit trail of what this version decided (S1).
+            raise AuthorityHasHistoryError(
+                "This version has decisions or DNA-Coefficient runs and cannot be deleted. "
+                "Retire it instead, so its history is kept.",
+                decisions=decisions, dna_runs=dna_runs,
+            )
         family_id = getattr(relation, "version_family_id", None) or relation.id
         others = [v for v in authority_relation_repo.get_family_versions(db, family_id=family_id)
                   if v.id != relation.id]
@@ -955,19 +997,24 @@ class AuthorityResolutionManager(SearchableAsset):
         else:
             slug = self._family_slug_of(db, relation)
             if slug:
-                dependents = sorted({e.relation_family_slug for e in authority_prerequisite_repo.list_dependents(
-                    db, prerequisite_family_slug=slug)})
+                dependents = sorted({
+                    self._family_slug_of(db, owner)
+                    for owner in (authority_relation_repo.get(db, e.relation_id)
+                                  for e in authority_prerequisite_repo.list_dependents(
+                                      db, prerequisite_family_slug=slug))
+                    if owner is not None and owner.id != relation.id
+                } - {None})
                 if dependents:
                     raise AuthorityInvalidError(
                         f"Authority Relation '{slug}' is a prerequisite of {', '.join(dependents)}; "
                         "remove those edges first."
                     )
-                authority_prerequisite_repo.delete_for_family(db, relation_family_slug=slug)
             from src.db_models.semantic_links import EntitySemanticLinkDb
             db.query(EntitySemanticLinkDb).filter(
                 EntitySemanticLinkDb.entity_type == ENTITY_TYPE,
                 EntitySemanticLinkDb.entity_id == family_id,
             ).delete(synchronize_session=False)
+        authority_prerequisite_repo.delete_for_relation(db, relation_id=relation_id)
         entity_domain_repo.remove_all_for_entity(db, entity_type=ENTITY_TYPE, entity_id=relation_id)
         authority_relation_repo.remove(db, id=relation_id)
         db.flush()
@@ -1016,9 +1063,14 @@ class AuthorityResolutionManager(SearchableAsset):
         source = authority_relation_repo.get(db, relation_id)
         if not source:
             return None
+        new_version = self._check_version_format(new_version)
+        family_id = getattr(source, "version_family_id", None) or source.id
+        if any(v.version == new_version for v in authority_relation_repo.get_family_versions(db, family_id=family_id)):
+            raise AuthorityDuplicateVersionError(
+                f"Version {new_version} already exists in this family.", version=new_version,
+            )
 
         new_id = str(uuid.uuid4())
-        family_id = getattr(source, "version_family_id", None) or source.id
         base_name = getattr(source, "base_name", None) or source.name
 
         fields = {
@@ -1042,24 +1094,15 @@ class AuthorityResolutionManager(SearchableAsset):
             db, obj_in={k: v for k, v in fields.items() if k in _MODEL_COLUMNS}
         )
 
-        # Carry the source's domain assignments onto the new version.
-        domains = entity_domain_repo.get_domains_for_entity(
-            db, entity_type=ENTITY_TYPE, entity_id=source.id
-        )
+        # Carry the source's domain assignments onto the new version (primary flag kept).
+        domains = entity_domain_repo.get_domains_for_entity(db, entity_type=ENTITY_TYPE, entity_id=source.id)
         if domains:
-            domain_ids = [getattr(d, "id", None) or (d.get("id") if isinstance(d, dict) else None) for d in domains]
-            domain_ids = [d for d in domain_ids if d]
-            primary = next(
-                (getattr(d, "id", None) or (d.get("id") if isinstance(d, dict) else None)
-                 for d in domains
-                 if getattr(d, "is_primary", None) or (isinstance(d, dict) and d.get("is_primary"))),
-                None,
+            entity_domain_repo.set_domains_for_entity(
+                db, entity_type=ENTITY_TYPE, entity_id=new_id,
+                domain_ids=[d.domain_id for d in domains],
+                primary_domain_id=next((d.domain_id for d in domains if d.is_primary), None),
+                assigned_by=current_user,
             )
-            if domain_ids:
-                entity_domain_repo.set_domains_for_entity(
-                    db, entity_type=ENTITY_TYPE, entity_id=new_id,
-                    domain_ids=domain_ids, primary_domain_id=primary, assigned_by=current_user,
-                )
 
         # Clone the version's own decision checks (each version owns its copy).
         for c in authority_criterion_repo.list_for_relation(db, relation_id=source.id):
@@ -1113,21 +1156,65 @@ class AuthorityResolutionManager(SearchableAsset):
                 "mcp_result_pointer": r.mcp_result_pointer or "$",
             })
 
-        # Clone polymorphic tags (best-effort).
-        try:
-            from src.controller.tags_manager import TagsManager
-            tm = TagsManager()
-            assigned = tm.list_assigned_tags(db, entity_id=source.id, entity_type=ENTITY_TYPE)
-            tags_payload = [
-                {"fully_qualified_name": getattr(t, "fully_qualified_name", None),
-                 "assigned_value": getattr(t, "assigned_value", None)}
-                for t in assigned
-                if getattr(t, "fully_qualified_name", None)
-            ]
-            if tags_payload:
-                self._set_tags(db, new_id, tags_payload, current_user)
-        except Exception as e:  # pragma: no cover - tag clone is best-effort
-            logger.warning(f"Could not clone tags onto new AR version {new_id}: {e}")
+        # Clone the tags with their values. A failed copy fails the new version: a version
+        # without the tags its source had would be a different snapshot.
+        from src.controller.tags_manager import TagsManager
+        tm = TagsManager()
+        tags_payload = [
+            AssignedTagCreate(tag_fqn=t.fully_qualified_name, assigned_value=t.assigned_value)
+            for t in tm.list_assigned_tags(db, entity_id=source.id, entity_type=ENTITY_TYPE)
+            if getattr(t, "fully_qualified_name", None)
+        ]
+        if tags_payload:
+            tm.set_tags_for_entity(db, entity_id=new_id, entity_type=ENTITY_TYPE, tags=tags_payload,
+                                   user_email=current_user, commit=False)
+
+        # Owners and metadata (rich text and links; documents stay with their source).
+        for owner in db.query(BusinessOwnerDb).filter(
+            BusinessOwnerDb.object_type == ENTITY_TYPE,
+            BusinessOwnerDb.object_id == source.id,
+            BusinessOwnerDb.is_active.is_(True),
+        ).all():
+            db.add(BusinessOwnerDb(
+                id=uuid.uuid4(), object_type=ENTITY_TYPE, object_id=new_id,
+                user_email=owner.user_email, user_name=owner.user_name,
+                role_id=owner.role_id, is_active=True,
+            ))
+        for row in db.query(RichTextMetadataDb).filter(
+            RichTextMetadataDb.entity_type == ENTITY_TYPE,
+            RichTextMetadataDb.entity_id == source.id,
+            RichTextMetadataDb.is_shared.is_(False),
+        ).all():
+            db.add(RichTextMetadataDb(
+                id=uuid.uuid4(), entity_id=new_id, entity_type=ENTITY_TYPE, title=row.title,
+                short_description=row.short_description, content_markdown=row.content_markdown,
+                is_shared=False, level=row.level, inheritable=row.inheritable,
+                created_by=current_user, updated_by=current_user,
+            ))
+        for row in db.query(LinkMetadataDb).filter(
+            LinkMetadataDb.entity_type == ENTITY_TYPE,
+            LinkMetadataDb.entity_id == source.id,
+            LinkMetadataDb.is_shared.is_(False),
+        ).all():
+            db.add(LinkMetadataDb(
+                id=uuid.uuid4(), entity_id=new_id, entity_type=ENTITY_TYPE, title=row.title,
+                short_description=row.short_description, url=row.url, is_shared=False,
+                level=row.level, inheritable=row.inheritable,
+                created_by=current_user, updated_by=current_user,
+            ))
+        db.flush()
+
+        # The prerequisite edges this version declares are copied; the copy is its own.
+        for edge in authority_prerequisite_repo.list_for_relation(db, relation_id=source.id):
+            authority_prerequisite_repo.create(db, obj_in={
+                "id": str(uuid.uuid4()),
+                "relation_id": new_id,
+                "prerequisite_family_slug": edge.prerequisite_family_slug,
+                "prerequisite_version_id": edge.prerequisite_version_id,
+                "required": edge.required,
+                "display_order": edge.display_order,
+                "notes": edge.notes,
+            })
 
         self._log_timeline(
             db, new_id,
@@ -1293,20 +1380,21 @@ class AuthorityResolutionManager(SearchableAsset):
     ) -> bool:
         """Would adding (``head_slug`` → ``candidate_prereq_slug``) close a cycle?
 
-        Walks the candidate upstream slug's transitive prerequisites via
-        ``list_for_family``; if ``head_slug`` appears in that closure the new
-        edge would form a cycle. Called on save so authors never land an
-        edge the resolve-time detector would have to abort on.
+        Walks the candidate upstream family's own edges, through each family's
+        active version; if ``head_slug`` appears in that closure the new edge
+        would form a cycle. Called on save so authors never land an edge the
+        resolve-time detector would have to abort on.
         """
         if head_slug == candidate_prereq_slug:
             return True
         seen = {candidate_prereq_slug}
         stack = [candidate_prereq_slug]
         while stack:
-            s = stack.pop()
-            for e in authority_prerequisite_repo.list_for_family(
-                db, relation_family_slug=s,
-            ):
+            slug = stack.pop()
+            upstream = self.resolve_relation_ref(db, slug)
+            if upstream is None:
+                continue
+            for e in authority_prerequisite_repo.list_for_relation(db, relation_id=upstream.id):
                 if e.prerequisite_family_slug == head_slug:
                     return True
                 if e.prerequisite_family_slug not in seen:
@@ -1317,22 +1405,23 @@ class AuthorityResolutionManager(SearchableAsset):
     def _replace_prerequisites(
         self, db: Session, relation: AuthorityRelationDb, prerequisites: List[Any],
     ) -> None:
-        """Replace the AR's declared prerequisite chain.
+        """Replace the prerequisite edges this AR version declares (B7).
 
-        Edges are keyed by family slug (per the pin — agents never see
-        version UUIDs), so the AR must carry a slug for this to be meaningful.
-        Rejects self-loops and any edge whose upstream family already depends
-        on ``head`` through its own transitive prerequisites.
+        Each edge is owned by ``relation``, so another version's edges are never
+        touched. The target is a family slug, resolved to its active version at
+        eval time; ``prerequisite_version_id`` records the version seen at save.
+        Rejects self-loops and any edge whose upstream family already depends on
+        this one through its own prerequisites. The AR needs a family slug first,
+        since other ARs name it by that slug.
         """
         head_slug = self._family_slug_of(db, relation)
         if head_slug is None:
             if prerequisites:
                 raise AuthorityInvalidError(
                     "Authority Relation needs a slug before prerequisites can be set "
-                    "— edges are keyed by the stable family-level @id."
+                    "— other Authority Relations name it by that stable family-level @id."
                 )
             return
-        # Deduplicate by candidate slug (last writer wins its required/order).
         normalised: Dict[str, Dict[str, Any]] = {}
         for idx, item in enumerate(prerequisites):
             p = item.dict() if hasattr(item, "dict") else dict(item)
@@ -1343,7 +1432,8 @@ class AuthorityResolutionManager(SearchableAsset):
                 raise AuthorityInvalidError(
                     f"An Authority Relation cannot require itself ({slug})."
                 )
-            if authority_relation_repo.get_by_slug(db, slug) is None:
+            target = authority_relation_repo.get_by_slug(db, slug)
+            if target is None:
                 raise AuthorityInvalidError(
                     f"Prerequisite '{slug}' does not match any Authority Relation slug."
                 )
@@ -1351,22 +1441,20 @@ class AuthorityResolutionManager(SearchableAsset):
                 raise AuthorityInvalidError(
                     f"Adding '{slug}' as a prerequisite of '{head_slug}' would close a cycle."
                 )
+            upstream = self.resolve_relation_ref(db, slug)
             normalised[slug] = {
                 "required": bool(p.get("required", True)),
                 "display_order": int(p.get("display_order", idx)),
                 "notes": p.get("notes"),
+                "prerequisite_version_id": upstream.id if upstream is not None else None,
             }
-        authority_prerequisite_repo.delete_for_family(
-            db, relation_family_slug=head_slug,
-        )
+        authority_prerequisite_repo.delete_for_relation(db, relation_id=relation.id)
         for slug, cfg in normalised.items():
             authority_prerequisite_repo.create(db, obj_in={
                 "id": str(uuid.uuid4()),
-                "relation_family_slug": head_slug,
+                "relation_id": relation.id,
                 "prerequisite_family_slug": slug,
-                "required": cfg["required"],
-                "display_order": cfg["display_order"],
-                "notes": cfg["notes"],
+                **cfg,
             })
 
     def list_prerequisites(
@@ -1374,12 +1462,7 @@ class AuthorityResolutionManager(SearchableAsset):
     ) -> List[Dict[str, Any]]:
         """The AR's declared prerequisites with each upstream slug resolved
         for display (name + status of the active family version)."""
-        head_slug = self._family_slug_of(db, relation)
-        if head_slug is None:
-            return []
-        edges = authority_prerequisite_repo.list_for_family(
-            db, relation_family_slug=head_slug,
-        )
+        edges = authority_prerequisite_repo.list_for_relation(db, relation_id=relation.id)
         out: List[Dict[str, Any]] = []
         for e in edges:
             target = self.resolve_relation_ref(db, e.prerequisite_family_slug)
@@ -2356,9 +2439,23 @@ class AuthorityResolutionManager(SearchableAsset):
         updated = authority_relation_repo.update(db, db_obj=relation, obj_in=changes)
         if status == STATUS_RETIRED:
             self._clear_affirmations(db, relation_id)
+        if status == STATUS_ACTIVE:
+            self._retire_other_active_versions(db, updated)
         self._log_timeline(db, relation_id, f"Status changed from {previous} to {status}.")
         self._reindex(db, updated)
         return updated
+
+    def _retire_other_active_versions(self, db: Session, relation: AuthorityRelationDb) -> None:
+        """Activating a version retires the family's other active ones (S2), so a pinned
+        UUID can't keep answering with a superseded verdict. Each gets a timeline entry."""
+        family_id = getattr(relation, "version_family_id", None) or relation.id
+        for other in authority_relation_repo.get_family_versions(db, family_id=family_id):
+            if other.id == relation.id or other.status != STATUS_ACTIVE:
+                continue
+            authority_relation_repo.update(db, db_obj=other, obj_in={"status": STATUS_RETIRED})
+            self._clear_affirmations(db, other.id)
+            self._log_timeline(db, other.id, f"Retired: version {relation.version} was activated in its place.")
+            self._log_timeline(db, relation.id, f"Retired the earlier active version {other.version}.")
 
     # --------------------------------------------------------- runtime gate
 
@@ -2482,7 +2579,8 @@ class AuthorityResolutionManager(SearchableAsset):
         """The slug (or id) of the first app_sp AR in this AR's prerequisite walk, itself included.
 
         A dry run walks the prerequisites and calls their MCP refs as the app SP,
-        so one app_sp AR anywhere in the chain counts (B2).
+        so one app_sp AR anywhere in the chain counts (B2). Each version walks its
+        own edges, and an upstream family is walked through its active version.
         """
         seen: set = set()
         stack = [relation]
@@ -2490,11 +2588,10 @@ class AuthorityResolutionManager(SearchableAsset):
             current = stack.pop()
             if current.resolver_auth == RESOLVER_AUTH_APP_SP:
                 return current.slug or current.id
-            family = self._family_slug_of(db, current)
-            if not family or family in seen:
+            if current.id in seen:
                 continue
-            seen.add(family)
-            for edge in authority_prerequisite_repo.list_for_family(db, relation_family_slug=family):
+            seen.add(current.id)
+            for edge in authority_prerequisite_repo.list_for_relation(db, relation_id=current.id):
                 upstream = self.resolve_relation_ref(db, edge.prerequisite_family_slug)
                 if upstream is not None:
                     stack.append(upstream)
@@ -2542,7 +2639,7 @@ class AuthorityResolutionManager(SearchableAsset):
             visited.add(head_slug)
             try:
                 outer_verdict, blocker_reason, chain = self._walk_prerequisites(
-                    db, head_slug, req, visited,
+                    db, relation.id, head_slug, req, visited,
                     require_active=require_active, rctx=rctx,
                 )
             finally:
@@ -2585,6 +2682,7 @@ class AuthorityResolutionManager(SearchableAsset):
     def _walk_prerequisites(
         self,
         db: Session,
+        owner_id: str,
         head_slug: str,
         req: Dict[str, Any],
         visited: set,
@@ -2608,9 +2706,8 @@ class AuthorityResolutionManager(SearchableAsset):
         order (always populated for the caller to persist).
         """
         chain: List[Dict[str, Any]] = []
-        edges = authority_prerequisite_repo.list_for_family(
-            db, relation_family_slug=head_slug,
-        )
+        # The version being resolved owns the edges: another version's edges never apply.
+        edges = authority_prerequisite_repo.list_for_relation(db, relation_id=owner_id)
         for e in edges:
             pre_slug = e.prerequisite_family_slug
             inner = self._resolve_internal(
@@ -2853,10 +2950,11 @@ class AuthorityResolutionManager(SearchableAsset):
             ]
 
             unmet: List[str] = []
-            if slug:
+            owner = self.resolve_relation_ref(db, slug) if slug else None
+            if owner is not None:
                 visited = {slug}
                 _, _, chain = self._walk_prerequisites(
-                    db, slug, req, visited, require_active=True, rctx=rctx,
+                    db, owner.id, slug, req, visited, require_active=True, rctx=rctx,
                 )
                 unmet = [e["slug"] for e in chain if e["required"] and e["verdict"] != VERDICT_APPROVED]
 

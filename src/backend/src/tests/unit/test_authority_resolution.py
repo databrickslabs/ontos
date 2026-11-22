@@ -333,9 +333,19 @@ def test_create_new_version_snapshots_definition(db_session):
     from src.models.authority_resolution import (
         AuthorityRelationCreate, CriterionInput, AffirmationInput, EvidenceSource,
     )
+    from src.db_models.business_owners import BusinessOwnerDb
+    from src.db_models.business_roles import BusinessRoleDb
+    from src.db_models.data_domains import DataDomain
+    import uuid as _uuid
+
     mgr = AuthorityResolutionManager()
+    domain = DataDomain(id=str(_uuid.uuid4()), name=f"Versioned domain {_uuid.uuid4().hex[:6]}",
+                        created_by="setup@x.com")
+    role = BusinessRoleDb(id=_uuid.uuid4(), name=f"Versioned role {_uuid.uuid4().hex[:6]}", category="governance")
+    db_session.add_all([domain, role])
+    db_session.flush()
     src = mgr.create_relation(db_session, AuthorityRelationCreate(
-        name="Versioned AR", object_id="dp-1",
+        name="Versioned AR", object_id="dp-1", domain_ids=[domain.id], primary_domain_id=domain.id,
         evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
         criteria=[CriterionInput(name="Authorized", rule="obj.actor_identity IN ['rsm-east']",
                                  direction=DIR_ACTUAL_EXCEEDS, weight=1.5, dimension="people")],
@@ -346,6 +356,8 @@ def test_create_new_version_snapshots_definition(db_session):
     # Simulate the source having been measured/used.
     src.dna_magnitude = 0.6
     src.usage_count = 5
+    db_session.add(BusinessOwnerDb(id=_uuid.uuid4(), object_type="authority_relation", object_id=src.id,
+                                   user_email="owner@x.com", user_name="Owner", role_id=role.id, is_active=True))
     db_session.commit()
 
     v2 = mgr.create_new_version(db_session, src.id, "2.0.0", change_summary="raised the cap",
@@ -365,6 +377,12 @@ def test_create_new_version_snapshots_definition(db_session):
     # Measured/observed state reset on the new draft.
     assert v2.dna_magnitude is None
     assert v2.usage_count == 0
+
+    # Domains (primary kept), owners and the prerequisite edges were cloned too (B8).
+    assert [(d["domain_id"], d["is_primary"]) for d in mgr.to_read_dict(db_session, v2)["domains"]] == [
+        (domain.id, True)]
+    assert [o.user_email for o in db_session.query(BusinessOwnerDb).filter_by(
+        object_type="authority_relation", object_id=v2.id).all()] == ["owner@x.com"]
 
     # Criteria + affirmations were cloned onto the new row.
     v2_crit = mgr._load_criteria(v2)
@@ -622,58 +640,50 @@ def test_resource_ref_cascades_on_relation_delete(db_session):
     assert db_session.query(AuthorityResourceRefDb).filter_by(relation_id=rel_id).count() == 0
 
 
-def test_prerequisite_edge_rejects_self_loop(db_session):
-    """A self-referential prerequisite is a cycle by definition; the DB
-    check-constraint rejects it at write time so the resolve-time cycle
-    detector never has to fire for the trivial case."""
-    import uuid
-    from sqlalchemy.exc import IntegrityError
-    from src.db_models.authority_resolution import AuthorityPrerequisiteDb
+def test_prerequisite_self_loop_is_refused_by_the_manager(db_session):
+    """A self-referential prerequisite is a cycle by definition. The edge is owned
+    by a version, so the manager (not a SQL CHECK on family slugs) refuses it."""
+    from src.controller.authority_resolution_manager import AuthorityInvalidError, AuthorityResolutionManager
+    from src.models.authority_resolution import AuthorityRelationUpdate, PrerequisiteInput
 
-    db_session.add(AuthorityPrerequisiteDb(
-        id=str(uuid.uuid4()),
-        relation_family_slug="trade-promotion",
-        prerequisite_family_slug="trade-promotion",
-    ))
-    with pytest.raises(IntegrityError):
-        db_session.commit()
+    mgr = AuthorityResolutionManager()
+    rel = _make_ar(mgr, db_session, slug="self-loop", name="Self")
+    db_session.commit()
+    with pytest.raises(AuthorityInvalidError, match="cannot require itself"):
+        mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
+            prerequisites=[PrerequisiteInput(prerequisite_family_slug="self-loop")]))
     db_session.rollback()
 
 
 def test_prerequisite_edge_round_trips(db_session):
-    """Two ARs in distinct families can be wired as an A→B prerequisite,
-    retrieved by downstream family slug (``list_for_family``), and by
-    upstream family slug (``list_dependents`` — used by the write-time
-    cycle check)."""
+    """An edge is owned by the version that declares it. It is read back from that version
+    (``list_for_relation``) and found from its upstream slug (``list_dependents``)."""
     import uuid
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
     from src.db_models.authority_resolution import AuthorityPrerequisiteDb
     from src.repositories.authority_resolution_repository import authority_prerequisite_repo
 
+    mgr = AuthorityResolutionManager()
+    downstream = _make_ar(mgr, db_session, slug="trade-promotion", name="Downstream")
+    db_session.commit()
     db_session.add(AuthorityPrerequisiteDb(
-        id=str(uuid.uuid4()),
-        relation_family_slug="trade-promotion",
-        prerequisite_family_slug="market-compliance",
-        display_order=0,
+        id=str(uuid.uuid4()), relation_id=downstream.id,
+        prerequisite_family_slug="market-compliance", display_order=0,
     ))
     db_session.add(AuthorityPrerequisiteDb(
-        id=str(uuid.uuid4()),
-        relation_family_slug="trade-promotion",
-        prerequisite_family_slug="budget-delegation",
-        display_order=1,
+        id=str(uuid.uuid4()), relation_id=downstream.id,
+        prerequisite_family_slug="budget-delegation", display_order=1,
     ))
     db_session.commit()
 
-    deps = authority_prerequisite_repo.list_for_family(
-        db_session, relation_family_slug="trade-promotion",
-    )
+    deps = authority_prerequisite_repo.list_for_relation(db_session, relation_id=downstream.id)
     assert [e.prerequisite_family_slug for e in deps] == [
         "market-compliance", "budget-delegation",
     ]
-
     rev = authority_prerequisite_repo.list_dependents(
         db_session, prerequisite_family_slug="market-compliance",
     )
-    assert [e.relation_family_slug for e in rev] == ["trade-promotion"]
+    assert [e.relation_id for e in rev] == [downstream.id]
 
 
 def test_resolver_auth_defaults_to_obo(db_session):
@@ -843,10 +853,10 @@ def test_cycle_in_prerequisite_chain_returns_conflict(db_session):
     _make_ar(mgr, db_session, slug="a", name="A")
     _make_ar(mgr, db_session, slug="b", name="B",
              prerequisites=[dict(prerequisite_family_slug="a")])
-    # Hand-craft the reverse edge so the write-time check doesn't see it.
+    # Hand-craft the reverse edge (owned by a's version) so the write-time check doesn't see it.
     db_session.add(AuthorityPrerequisiteDb(
         id=str(_uuid.uuid4()),
-        relation_family_slug="a",
+        relation_id=mgr.resolve_relation_ref(db_session, "a").id,
         prerequisite_family_slug="b",
     ))
     db_session.commit()

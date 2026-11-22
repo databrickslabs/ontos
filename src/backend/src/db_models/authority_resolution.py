@@ -346,27 +346,27 @@ class AuthorityResourceRefDb(Base):
 
 
 class AuthorityPrerequisiteDb(Base):
-    """A ``requires_prior_authority`` edge between two Authority Relations.
+    """A ``requires_prior_authority`` edge owned by one AR version (ARF 1.2.0, B7).
 
-    Both endpoints are per-family slugs (never version UUIDs) — the resolver
-    walks these edges at eval time and resolves each slug to its family's
-    active version via :func:`AuthorityResolutionManager.resolve_relation_ref`.
-    Keying by family means a published AR survives version bumps of its
-    prerequisites; the tradeoff is that *replacing* an upstream AR with a
-    new active version can transitively change what the downstream AR
-    does. Cycle detection is enforced at write time; a defensive check
-    also runs during resolve.
+    The edge belongs to the version that declared it (``relation_id``), so editing a
+    draft v2's prerequisites cannot rewire the active v1. The target is a family slug:
+    the resolver walks it to that family's active version at eval time, so an upstream
+    AR's new active version flows to its dependants without re-pointing them.
+    ``prerequisite_version_id`` records the upstream version the edge was saved against
+    (audit and display only; resolution doesn't use it).
 
-    A required prerequisite that comes back ``denied`` / ``no_authority``
-    short-circuits the outer AR to ``denied`` with the chain recorded on
-    ``AuthorityDecisionDb.provenance``. Optional prerequisites surface as
-    advisory warnings on the response but do not block.
+    Cycles are rejected at write time. A required prerequisite that comes back
+    ``denied`` / ``no_authority`` short-circuits the outer AR to ``denied``.
     """
     __tablename__ = 'authority_prerequisites'
 
     id = Column(String, primary_key=True)
-    relation_family_slug = Column(String, nullable=False, index=True)
+    relation_id = Column(
+        String, ForeignKey('authority_relations.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
     prerequisite_family_slug = Column(String, nullable=False, index=True)
+    prerequisite_version_id = Column(String, nullable=True)
     required = Column(Boolean, nullable=False, default=True, server_default='true')
     display_order = Column(Integer, nullable=False, default=0, server_default='0')
     notes = Column(Text, nullable=True)
@@ -374,11 +374,7 @@ class AuthorityPrerequisiteDb(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            'relation_family_slug', 'prerequisite_family_slug',
-            name='uq_authority_prerequisites_edge',
-        ),
-        CheckConstraint(
-            'relation_family_slug <> prerequisite_family_slug',
-            name='ck_authority_prerequisites_no_self_loop',
+            'relation_id', 'prerequisite_family_slug',
+            name='uq_authority_prerequisites_owner_edge',
         ),
     )

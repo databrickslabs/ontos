@@ -477,6 +477,11 @@
       "elicitation": "構造化ヒアリング",
       "placeholder": "回答を入力…"
     },
+    "outcome": {
+      "label": "結果",
+      "approve": "承認: Authority Relation は実務と一致しています",
+      "needsClarification": "要確認: Authority Relation は実務と一致していません"
+    },
     "actions": {
       "submitReview": "レビューを送信"
     }

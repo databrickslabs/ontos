@@ -24,6 +24,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from src.common.api_errors import CodedValueError, client_failure
+from src.common.review_access import AUTHORITY_RELATION_FQN_PREFIX, authority_relation_fqn
+from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src.models.tags import AssignedTagCreate
 from src.models.authority_resolution import EvidenceBinding, EvidenceSource
@@ -87,6 +89,12 @@ class AuthorityReviewerNotApproverError(AuthorityPermissionError):
     """An affirmation was sent for a reviewer row, which only reviews."""
 
     code = "authority_reviewer_not_approver"
+
+
+class AuthorityReviewOutcomeError(CodedValueError):
+    """A review outcome other than approve or needs clarification."""
+
+    code = "authority_invalid_review_outcome"
 
 
 class AuthorityNotAReviewerError(AuthorityPermissionError):
@@ -272,6 +280,12 @@ def _validate_evidence(binding: Optional[Dict[str, Any]], sources: Optional[List
         if (s.get("type") or "delta_table") in ("delta_table", "asset") and s.get("ref"):
             validate_table_fqn(s["ref"])
         validate_row_filter(s.get("row_filter"))
+
+
+# The two outcomes of an AR review (#859 review, decided 2026-11-22)
+AR_REVIEW_APPROVE = "approve"
+AR_REVIEW_NEEDS_CLARIFICATION = "needs_clarification"
+AR_REVIEW_OUTCOMES = (AR_REVIEW_APPROVE, AR_REVIEW_NEEDS_CLARIFICATION)
 
 
 def principal_matches(principal: Optional[str], principal_type: Optional[str], user: Any) -> bool:
@@ -1975,17 +1989,18 @@ class AuthorityResolutionManager(SearchableAsset):
     ) -> Optional[Dict[str, Any]]:
         """Start the review process.
 
-        For each reviewer participant we (a) pre-create a per-reviewer Asset
-        Review targeting that principal — its ``asset_fqn`` is
-        ``authority-relation://{id}`` so the reviewer's task opens the
-        role-specific AR review editor, and creating it fires the standard
-        data-asset-review workflow (notification + approval) — and (b) mark the
-        participant ``in_review`` and store the Asset Review's id so the owner
-        can track and link to it. We then fire the AR-level ``on_request_review``
-        trigger, which the ``authority-relation-review-request`` default workflow
-        consumes to record the overall review process. All workflow/review side
-        effects are best-effort and never break the request. Returns None if the
-        AR does not exist.
+        For each reviewer participant we (a) pre-create a per-reviewer Asset Review
+        targeting that principal (its ``asset_fqn`` is ``authority-relation://{id}``, so
+        the reviewer's task opens the role-specific AR review editor), and (b) mark the
+        participant ``in_review`` and store the Asset Review's id so the owner can track
+        it. The per-reviewer Asset Reviews fire no trigger of their own.
+
+        Then the AR-level ``on_request_review`` trigger fires once, with the AR's id,
+        asset FQN and the reviewers in ``entity_data``. The
+        ``authority-relation-review-request`` default workflow notifies those reviewers
+        (one notification each, no DataSteward approval, #859 review B10, S8). When no
+        workflow runs, each reviewer gets a direct notification. Side effects are
+        best-effort. Returns None if the AR does not exist.
         """
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
@@ -2006,7 +2021,7 @@ class AuthorityResolutionManager(SearchableAsset):
                         DataAssetReviewRequestCreate(
                             requester_email=requester_email or a.principal,
                             reviewer_email=a.principal,
-                            asset_fqns=[f"authority-relation://{relation_id}"],
+                            asset_fqns=[authority_relation_fqn(relation_id)],
                             title=f"Authority Relation review: {relation.name}",
                             notes=(
                                 f"Confirm whether this Authority Relation reflects reality (reviewer role: {a.role})."
@@ -2021,31 +2036,66 @@ class AuthorityResolutionManager(SearchableAsset):
                     logger.warning(f"Could not create Asset Review for reviewer {a.principal} on AR {relation_id}: {e}")
             authority_affirmation_repo.update(db, db_obj=a, obj_in={
                 "review_status": "in_review",
-                "review_request_id": review_request_id or f"authority-relation://{relation_id}#{a.id}",
+                "review_request_id": review_request_id or f"{AUTHORITY_RELATION_FQN_PREFIX}{relation_id}#{a.id}",
             })
-        # Fire the AR-level workflow trigger (best-effort — never breaks the request).
-        try:
-            from src.common.workflow_triggers import fire_trigger_safe
-            from src.models.process_workflows import EntityType
-            fire_trigger_safe(
-                db, "on_request_review",
-                entity_type=EntityType.AUTHORITY_RELATION,
-                entity_id=relation_id,
-                entity_name=relation.name,
-                entity_data={
-                    "asset_fqn": f"authority-relation://{relation_id}",
-                    "reviewers": [{"principal": a.principal, "role": a.role} for a in reviewers],
-                    "status": relation.status,
-                },
-                user_email=owner,
-            )
-        except Exception as e:  # pragma: no cover - trigger is environment-dependent
-            logger.warning(f"on_request_review trigger failed for AR {relation_id}: {e}")
+        reviewer_refs = [{"principal": a.principal, "role": a.role} for a in reviewers]
+        notified = self._notify_reviewers(db, relation, reviewer_refs, owner)
         return {
             "relation_id": relation_id,
             "reviewers_notified": len(reviewers),
             "reviews_created": reviews_created,
+            "notifications_sent": notified,
         }
+
+    @staticmethod
+    def _notify_reviewers(db: Session, relation: Any, reviewers: List[Dict[str, Any]], owner: Optional[str]) -> int:
+        """Fire the AR-level review trigger once; direct notifications when no workflow runs.
+
+        Returns the number of reviewers notified directly (0 when the workflow notified them).
+        Best-effort: a failure is logged and the review still starts.
+        """
+        relation_id = relation.id
+        executions: List[Any] = []
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+            executions = get_trigger_registry(db).on_request_review(
+                entity_type=EntityType.AUTHORITY_RELATION,
+                entity_id=relation_id,
+                entity_name=relation.name,
+                entity_data={
+                    "id": relation_id,
+                    "asset_fqn": authority_relation_fqn(relation_id),
+                    "reviewers": reviewers,
+                    "status": relation.status,
+                },
+                user_email=owner,
+                blocking=False,
+            )
+        except Exception as e:  # pragma: no cover - trigger is environment-dependent
+            logger.warning(f"on_request_review trigger failed for AR {relation_id}: {e}")
+        if executions:
+            return 0
+        direct = 0
+        from src.models.notifications import Notification, NotificationType
+        from src.repositories.notification_repository import notification_repo
+        for reviewer in reviewers:
+            try:
+                notification_repo.create(db=db, obj_in=Notification(
+                    id=str(uuid.uuid4()),
+                    type=NotificationType.INFO,
+                    title=f"Review requested: {relation.name}",
+                    description=f"You have been asked to review Authority Relation '{relation.name}'.",
+                    recipient=reviewer["principal"],
+                    link=f"/authority-resolution/{relation_id}",
+                    created_at=utc_now(),
+                    read=False,
+                    can_delete=True,
+                ))
+                direct += 1
+            except Exception as e:  # pragma: no cover - best-effort
+                logger.warning(f"Could not notify reviewer {reviewer['principal']} for AR {relation_id}: {e}")
+        return direct
 
     def get_review_context(
         self, db: Session, relation_id: str, reviewer: str, user: Any = None,
@@ -2094,9 +2144,17 @@ class AuthorityResolutionManager(SearchableAsset):
     def submit_review(
         self, db: Session, participant_id: str, answers: Dict[str, Any],
         reviewer: Optional[str] = None, user: Any = None,
+        reviews_manager: Optional[Any] = None, outcome: str = AR_REVIEW_APPROVE,
     ) -> Optional[AuthorityAffirmationDb]:
-        """Persist a reviewer's elicited answers and mark their review complete.
-        Raises ``PermissionError`` unless ``user`` is that reviewer."""
+        """Persist a reviewer's answers and their outcome, and close their Asset Review.
+
+        ``outcome`` is ``approve`` (the default) or ``needs_clarification`` (the AR does
+        not match practice). The Asset Review's ReviewedAsset takes that status and the
+        request closes with it (#859 review B10). Ordering: the Asset Review is closed
+        first, so a failure there raises before the answers are recorded and the
+        reviewer can retry. The close is idempotent. Raises ``PermissionError`` unless
+        ``user`` is that reviewer.
+        """
         participant = authority_affirmation_repo.get(db, participant_id)
         if not participant:
             return None
@@ -2104,10 +2162,55 @@ class AuthorityResolutionManager(SearchableAsset):
             raise AuthorityNotAReviewerError("This participant is not a reviewer.")
         if not principal_matches(participant.principal, participant.principal_type, user):
             raise AuthorityNotNamedError("Only the named reviewer can submit this review.")
+        if outcome not in AR_REVIEW_OUTCOMES:
+            raise AuthorityReviewOutcomeError(
+                f"Unknown review outcome '{outcome}'; use approve or needs_clarification.",
+                outcome=outcome,
+            )
+        self._close_asset_review(
+            db, participant.review_request_id, participant.relation_id, outcome, reviews_manager,
+        )
         return authority_affirmation_repo.update(db, db_obj=participant, obj_in={
-            "review_answers": answers,
+            "review_answers": {**(answers or {}), "outcome": outcome},
             "review_status": "completed",
         })
+
+    @staticmethod
+    def _close_asset_review(
+        db: Session, request_id: Optional[str], relation_id: str, outcome: str, reviews_manager: Optional[Any],
+    ) -> None:
+        """Set the AR's ReviewedAsset in a per-reviewer Asset Review to the outcome, and close the request.
+
+        Runs on the request's session (``db``): the review repositories only flush, so the
+        Asset Review writes and the affirmation write below commit or roll back together
+        with the request. Nothing is swallowed: a failure propagates, so the answers are
+        not recorded without the Asset Review closed. A synthetic request id (no Asset
+        Review was created) or no manager is a no-op.
+        """
+        if reviews_manager is None or not request_id or str(request_id).startswith(AUTHORITY_RELATION_FQN_PREFIX):
+            return
+        from src.models.data_asset_reviews import (
+            DataAssetReviewRequestUpdateStatus,
+            ReviewedAssetStatus,
+            ReviewedAssetUpdate,
+            ReviewRequestStatus,
+        )
+        approved = outcome == AR_REVIEW_APPROVE
+        asset_status = ReviewedAssetStatus.APPROVED if approved else ReviewedAssetStatus.NEEDS_CLARIFICATION
+        request_status = ReviewRequestStatus.APPROVED if approved else ReviewRequestStatus.NEEDS_REVIEW
+        request = reviews_manager.get_review_request(request_id, db=db)
+        if request is None:
+            return
+        fqn = authority_relation_fqn(relation_id)
+        for asset in request.assets:
+            if asset.asset_fqn == fqn and asset.status != asset_status:
+                reviews_manager.update_reviewed_asset_status(
+                    request_id, asset.id, ReviewedAssetUpdate(status=asset_status), db=db,
+                )
+        if request.status != request_status:
+            reviews_manager.update_review_request_status(
+                request_id, DataAssetReviewRequestUpdateStatus(status=request_status), db=db,
+            )
 
     def get_review_tracking(self, db: Session, relation_id: str, reviews_manager: Optional[Any] = None) -> Optional[Dict[str, Any]]:
         """Owner-facing tracking for an AR's review process: per-reviewer Asset
@@ -2127,7 +2230,7 @@ class AuthorityResolutionManager(SearchableAsset):
             rid = getattr(a, "review_request_id", None)
             # Only real Asset Review ids are linkable; the synthetic fallback
             # marker (used when no Asset Review could be created) is not.
-            linkable = bool(rid) and not str(rid).startswith("authority-relation://")
+            linkable = bool(rid) and not str(rid).startswith(AUTHORITY_RELATION_FQN_PREFIX)
             request_status = None
             request_title = None
             if linkable:
@@ -2156,7 +2259,8 @@ class AuthorityResolutionManager(SearchableAsset):
             import json as _json
             from src.repositories.process_workflows_repository import workflow_execution_repo
             target_ids = {relation_id} | review_ids
-            for exe in workflow_execution_repo.list_all(db, limit=100):
+            # Filtered in SQL by the ids (S10); the exact entity_id check below stays
+            for exe in workflow_execution_repo.list_for_entity_ids(db, sorted(target_ids)):
                 entity_id = None
                 tc = getattr(exe, "trigger_context", None)
                 if tc:
@@ -2197,7 +2301,15 @@ class AuthorityResolutionManager(SearchableAsset):
                 })
         except Exception as e:  # pragma: no cover - env dependent
             logger.warning(f"Could not load governing workflow for AR {relation_id}: {e}")
-        return {"relation_id": relation_id, "reviews": reviews, "workflows": workflows}
+        all_reviewed = bool(reviewers) and all(
+            getattr(a, "review_status", None) == "completed" for a in reviewers
+        )
+        return {
+            "relation_id": relation_id,
+            "reviews": reviews,
+            "workflows": workflows,
+            "all_reviewed": all_reviewed,
+        }
 
     # ------------------------------------------------------- DNA-Coefficient
 

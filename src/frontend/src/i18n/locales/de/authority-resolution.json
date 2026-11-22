@@ -477,6 +477,11 @@
       "elicitation": "Strukturierte Erhebung",
       "placeholder": "Ihre Antwort…"
     },
+    "outcome": {
+      "label": "Ergebnis",
+      "approve": "Freigeben: die Authority Relation entspricht der Praxis",
+      "needsClarification": "Klärungsbedarf: die Authority Relation entspricht nicht der Praxis"
+    },
     "actions": {
       "submitReview": "Überprüfung übermitteln"
     }

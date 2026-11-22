@@ -38,6 +38,9 @@ logger = get_logger(__name__)
 # Asset-review statuses in which the reviewer can still decide
 _OPEN_REVIEW_STATUSES = ('queued', 'in_review')
 
+# Prefix of the asset FQN of an Authority Relation in an asset review
+AUTHORITY_RELATION_FQN_PREFIX = 'authority-relation://'
+
 # Prefix of the asset FQN of an app entity in an asset review
 _FQN_PREFIXES = {'data_product': 'product:', 'data_contract': 'contract:'}
 
@@ -176,4 +179,58 @@ def caller_is_pending_reviewer(
             )
     except Exception:
         logger.exception("Reviewer access check failed for %s %s; denying", entity_type, entity_id)
+        return False
+
+
+def authority_relation_fqn(relation_id: str) -> str:
+    """The asset FQN of an Authority Relation's asset review."""
+    return f"{AUTHORITY_RELATION_FQN_PREFIX}{relation_id}"
+
+
+def authority_relation_id_of(fqns: Iterable[str]) -> Optional[str]:
+    """The Authority Relation id when every FQN is an ``authority-relation://`` reference to one AR."""
+    fqns = list(fqns)
+    if not fqns or not all(f.startswith(AUTHORITY_RELATION_FQN_PREFIX) for f in fqns):
+        return None
+    ids = {f[len(AUTHORITY_RELATION_FQN_PREFIX):].split('#')[0] for f in fqns}
+    return ids.pop() if len(ids) == 1 else None
+
+
+def caller_is_named_authority_reviewer(db: Session, user: Any, request_id: str) -> bool:
+    """Whether ``user`` is a named reviewer of an Authority Relation Asset Review, in any status.
+
+    The reviewer is recorded on the AR's affirmation that ``start_review`` linked to the
+    request, and matched like ``submit_review`` matches (a group member counts). Both
+    facts are server-created, so the request body can't name a reviewer (R5, #1306).
+    It stays true after the reviewer submits, so they can still open their request.
+    Read only; fails closed in a savepoint.
+    """
+    from src.controller.authority_resolution_manager import principal_matches
+    from src.db_models.authority_resolution import AuthorityAffirmationDb
+    from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
+
+    if user is None or not request_id:
+        return False
+    try:
+        with db.begin_nested():
+            if db.query(DataAssetReviewRequestDb.id).filter(DataAssetReviewRequestDb.id == request_id).first() is None:
+                return False
+            ar_assets = db.query(ReviewedAssetDb).filter(
+                ReviewedAssetDb.review_request_id == request_id,
+                ReviewedAssetDb.asset_fqn.startswith(AUTHORITY_RELATION_FQN_PREFIX),
+            ).all()
+            for asset in ar_assets:
+                relation_id = authority_relation_id_of([asset.asset_fqn])
+                if relation_id is None:
+                    continue
+                affirmations = db.query(AuthorityAffirmationDb).filter(
+                    AuthorityAffirmationDb.relation_id == relation_id,
+                    AuthorityAffirmationDb.review_request_id == request_id,
+                    AuthorityAffirmationDb.is_reviewer.is_(True),
+                ).all()
+                if any(principal_matches(a.principal, a.principal_type, user) for a in affirmations):
+                    return True
+            return False
+    except Exception:
+        logger.exception("Authority reviewer access check failed for request %s; denying", request_id)
         return False

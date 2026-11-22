@@ -477,6 +477,11 @@
       "elicitation": "Structured elicitation",
       "placeholder": "Your answer…"
     },
+    "outcome": {
+      "label": "Outcome",
+      "approve": "Approve: the AR matches practice",
+      "needsClarification": "Needs clarification: the AR does not match practice"
+    },
     "actions": {
       "submitReview": "Submit review"
     }

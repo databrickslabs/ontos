@@ -477,6 +477,11 @@
       "elicitation": "Elicitazione strutturata",
       "placeholder": "La tua risposta…"
     },
+    "outcome": {
+      "label": "Esito",
+      "approve": "Approva: la Authority Relation corrisponde alla pratica",
+      "needsClarification": "Serve chiarimento: la Authority Relation non corrisponde alla pratica"
+    },
     "actions": {
       "submitReview": "Invia revisione"
     }

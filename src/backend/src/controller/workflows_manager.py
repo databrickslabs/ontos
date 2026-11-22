@@ -38,6 +38,8 @@ from src.models.process_workflows import (
     TemplateVarGroup,
     TemplateVarsResponse,
     ends_process_run,
+    coerce_flag,
+    is_best_effort_step_type,
     is_conditional_step_type,
 )
 from src.repositories.process_workflows_repository import process_workflow_repo
@@ -129,6 +131,16 @@ def _schedules_changed() -> None:
     from src.controller.workflow_scheduler import notify_schedules_changed
 
     notify_schedules_changed()
+
+
+def _fail_flow_ignored(step: WorkflowStepCreate) -> CodedMessage:
+    """``fail_flow_on_failure: false`` on a step that always fails the run (B9): a warning, the flag is ignored."""
+    step_type = getattr(step.step_type, 'value', step.step_type)
+    return CodedMessage(
+        f"Step '{step.step_id}': fail_flow_on_failure: false is ignored; a failure of this step fails the run. "
+        "It applies only to notification and webhook steps",
+        'fail_flow_on_failure_ignored', step=step.step_id, step_type=step_type,
+    )
 
 
 def _step_issue(step: WorkflowStepCreate, issue: Dict[str, Any]) -> CodedMessage:
@@ -759,6 +771,16 @@ class WorkflowsManager:
                         f"a {branch} condition ends the workflow as succeeded",
                         'conditional_branch_missing', step=step.step_id, branch=branch,
                     ))
+
+        # fail_flow_on_failure: false on a step that always fails the run is ignored at run time (B9)
+        for step in workflow.steps:
+            config = step.config or {}
+            if (
+                'fail_flow_on_failure' in config
+                and not is_best_effort_step_type(step.step_type)
+                and not coerce_flag(config['fail_flow_on_failure'], default=True)
+            ):
+                warnings.append(_fail_flow_ignored(step))
 
         # Check for unreachable steps (warning only)
         reachable = set()

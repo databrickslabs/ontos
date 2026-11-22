@@ -75,6 +75,8 @@ DB_POOL_TIMEOUT=10
 
 **Note:** The `DB_POOL_RECYCLE=3600` default is especially important for Lakebase deployments, as it ensures connections are refreshed before OAuth tokens expire.
 
+**Connection budget per replica:** `DB_POOL_SIZE` + `DB_MAX_OVERFLOW` + `WORKFLOW_SCHEDULER_MAX_WORKERS` + 1, which is 20 with the defaults (5 + 10 + 4 + 1). The last two terms are the workflow scheduler's own engine, apart from the request pool. Multiply by the number of replicas and keep the total under the database's maximum connections, leaving room for other clients. A Lakebase compute allows 105 connections at 0.5 CU, 218 at 1 CU and 443 at 2 CU (see the Lakebase compute documentation), so five replicas on the defaults use 100 of the 105 of a 0.5 CU instance.
+
 ### Application Settings
 
 | Variable | Description | Example | Required |

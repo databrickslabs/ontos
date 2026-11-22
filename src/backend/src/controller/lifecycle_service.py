@@ -30,6 +30,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
 
 from src.common.api_errors import CodedValueError, InvalidStatusTransitionError
@@ -255,6 +256,23 @@ def row_session(row: Any) -> Optional[Session]:
 
 
 # --------------------------------------------------------------------------- the service
+
+_GROUP_NAME_CONSTRAINT = 'uq_lifecycle_stage_groups_type_name'
+
+
+def _is_group_name_clash(exc: IntegrityError) -> bool:
+    """Whether ``exc`` is the unique (entity type, name) constraint of the groups.
+
+    Postgres names the constraint; SQLite (tests) lists its columns.
+    """
+    diag = getattr(getattr(exc, 'orig', None), 'diag', None)
+    if getattr(diag, 'constraint_name', None) == _GROUP_NAME_CONSTRAINT:
+        return True
+    text_ = str(getattr(exc, 'orig', exc))
+    return _GROUP_NAME_CONSTRAINT in text_ or (
+        'lifecycle_stage_groups.entity_type, lifecycle_stage_groups.name' in text_
+    )
+
 
 class LifecycleService:
 
@@ -1149,6 +1167,17 @@ class LifecycleService:
                 db, row, data['stages'], data.get('transitions') or [],
             )
             db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            # The name check above runs before the lock: a create or rename racing
+            # another one with the same name meets the unique constraint on flush
+            if _is_group_name_clash(exc):
+                raise LifecycleGroupConflictError(
+                    'lifecycle_group_name_taken',
+                    f"A {data['entity_type']} lifecycle named '{data['name']}' already exists",
+                    name=data['name'],
+                ) from None
+            raise
         except Exception:
             db.rollback()
             raise

@@ -95,6 +95,21 @@ describe('AuthorityRelationDetails', () => {
     expect(screen.getAllByRole('button', { name: tr('details.buttonNewVersion') }).length).toBeGreaterThan(0);
   });
 
+  it('shows where a copied check came from, read-only', async () => {
+    serveRelation({
+      ...relation,
+      editable: true,
+      criteria: [{
+        id: 'c1', name: 'Cap', rule: 'ASSERT obj.value <= 1', failure_message: null,
+        direction: 'neutral', weight: 1, dimension: 'people', order: 0, enabled: true,
+        copied_from: { kind: 'compliance', label: 'Discount cap' },
+      }],
+    });
+    renderDetails();
+
+    expect(await screen.findByText(tr('criteria.provenance.copiedFromCompliance').replace('{{label}}', 'Discount cap'))).toBeInTheDocument();
+  });
+
   it('shows an editable AR without the notice', async () => {
     serveRelation({ ...relation, editable: true });
     renderDetails();

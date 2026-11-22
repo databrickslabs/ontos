@@ -596,6 +596,15 @@ export default function AuthorityRelationDetails() {
                     {c.failure_message && (
                       <div className="text-xs text-muted-foreground">↳ {c.failure_message}</div>
                     )}
+                    {c.copied_from && (
+                      <div className="text-xs text-muted-foreground">
+                        {c.copied_from.kind === 'template'
+                          ? t('criteria.provenance.fromTemplate', { name: c.copied_from.label })
+                          : c.copied_from.kind === 'migrated'
+                            ? t('criteria.provenance.migratedFromCompliance', { label: c.copied_from.label })
+                            : t('criteria.provenance.copiedFromCompliance', { label: c.copied_from.label })}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

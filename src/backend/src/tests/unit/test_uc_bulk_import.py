@@ -527,6 +527,7 @@ def test_the_job_writes_timezone_aware_timestamps(engine):
 def _postgres_engine(lock_free):
     conn = MagicMock()
     conn.execute.return_value.scalar.return_value = lock_free
+    conn.execute.return_value.one.return_value = (123, datetime(2026, 1, 1))
     engine = MagicMock()
     engine.dialect.name = 'postgresql'
     engine.connect.return_value.execution_options.return_value = conn
@@ -657,7 +658,8 @@ def _dead_connection(engine, conn):
     def execute(statement, *_args, **_kwargs):
         if 'pg_advisory_unlock' in str(statement):
             raise OperationalError('SELECT pg_advisory_unlock', {}, Exception('server closed'))
-        return MagicMock(scalar=MagicMock(return_value=True))
+        return MagicMock(scalar=MagicMock(return_value=True),
+                         one=MagicMock(return_value=(123, datetime(2026, 1, 1))))
 
     conn.execute.side_effect = execute
 

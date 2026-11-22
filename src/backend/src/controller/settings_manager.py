@@ -95,6 +95,7 @@ DEFAULT_ROLES = [
 # These should be validated against allowed_levels in ensure_default_roles_exist
 DEFAULT_ROLE_PERMISSIONS = {
     "Data Governance Officer": {
+        'authority-resolution': FeatureAccessLevel.ADMIN,
         'data-domains': FeatureAccessLevel.ADMIN,
         'data-products': FeatureAccessLevel.ADMIN,
         'data-contracts': FeatureAccessLevel.ADMIN,
@@ -118,6 +119,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
     },
     "Data Steward": {
+        'authority-resolution': FeatureAccessLevel.READ_WRITE,
         'data-domains': FeatureAccessLevel.READ_WRITE,
         'data-products': FeatureAccessLevel.READ_WRITE,
         'data-contracts': FeatureAccessLevel.READ_WRITE,
@@ -138,6 +140,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
     },
     "Data Consumer": {
+        'authority-resolution': FeatureAccessLevel.READ_ONLY,
         'data-domains': FeatureAccessLevel.READ_ONLY,
         'data-products': FeatureAccessLevel.READ_ONLY,
         'data-contracts': FeatureAccessLevel.READ_ONLY,
@@ -152,6 +155,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
     },
     "Data Producer": {
+        'authority-resolution': FeatureAccessLevel.READ_ONLY,
         'data-domains': FeatureAccessLevel.READ_ONLY,
         'data-products': FeatureAccessLevel.READ_WRITE,
         'data-contracts': FeatureAccessLevel.READ_WRITE,
@@ -166,6 +170,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
     },
     "Security Officer": {
+        'authority-resolution': FeatureAccessLevel.READ_ONLY,
         'security-features': FeatureAccessLevel.ADMIN,
         'entitlements': FeatureAccessLevel.ADMIN,
         'entitlements-sync': FeatureAccessLevel.ADMIN,

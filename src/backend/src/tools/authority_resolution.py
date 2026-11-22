@@ -17,10 +17,33 @@ from typing import Any
 
 from starlette.concurrency import run_in_threadpool
 
+from src.common.features import FeatureAccessLevel
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 from src.controller.authority_resolution_manager import AuthorityResolutionManager
 
 _manager = AuthorityResolutionManager()
+
+FEATURE_ID = "authority-resolution"
+
+
+# Token scopes that let a call write Authority Resolution data.
+_WRITE_SCOPES = ("*", "authority:*", "authority:write")
+
+
+def _may_record(ctx: Any) -> bool:
+    """Whether this caller's resolve may write a decision row (S14).
+
+    Records only when both hold: the token permits writes (no token restriction,
+    i.e. Ask Ontos, or a token scoped ``authority:write`` / ``authority:*`` / ``*``),
+    and the caller holds Read-write on the feature. A read-scoped token never
+    records, even for a user with Read-write. Fails closed when there is no caller.
+    """
+    caller = getattr(ctx, "caller", None)
+    if caller is None:
+        return False
+    if caller.token_scopes is not None and not any(s in _WRITE_SCOPES for s in caller.token_scopes):
+        return False
+    return caller.has_level(FEATURE_ID, FeatureAccessLevel.READ_WRITE)
 
 
 def _app_sp_workspace_client():
@@ -44,7 +67,9 @@ class ResolveAuthorityTool(BaseTool):
         "the context is outside its scope (a missing context key included) — in "
         "which case defer to a human. The response lists the scope checks "
         "(scope_check), the prerequisite ARs walked (prerequisite_chain) and where "
-        "each AR field value came from (resolved_refs)."
+        "each AR field value came from (resolved_refs). The decision is recorded "
+        "only for a caller with write access (authority:write); a read-only caller "
+        "gets the verdict without a record."
     )
     parameters = {
         "ar_id": {"type": "string", "description": "Authority Relation id or slug to resolve against."},
@@ -58,6 +83,7 @@ class ResolveAuthorityTool(BaseTool):
     }
     required_params = ["ar_id"]
     required_scope = "authority:read"
+    required_permission = (FEATURE_ID, FeatureAccessLevel.READ_ONLY)
     category = "authority"
 
     async def execute(self, ctx: ToolContext, **kwargs: Any) -> ToolResult:
@@ -79,13 +105,17 @@ class ResolveAuthorityTool(BaseTool):
                 if req.get(k) is None:
                     req[k] = v
         # Resolves may make blocking MCP/HTTP calls; keep them off the event loop.
-        result = await run_in_threadpool(
-            _manager.resolve,
-            ctx.db, ar_id, req,
-            semantic_models_manager=ctx.semantic_models_manager,
-            obo_ws_factory=ctx.obo_workspace_client_factory,
-            app_ws_factory=_app_sp_workspace_client,
-        )
+        try:
+            result = await run_in_threadpool(
+                _manager.resolve,
+                ctx.db, ar_id, req,
+                record=_may_record(ctx),
+                semantic_models_manager=ctx.semantic_models_manager,
+                obo_ws_factory=ctx.obo_workspace_client_factory,
+                app_ws_factory=_app_sp_workspace_client,
+            )
+        except Exception as e:
+            return ToolResult(success=False, **tool_failure("resolve_authority", e))
         return ToolResult(success=True, data=result)
 
 
@@ -109,22 +139,26 @@ class FindAuthorityForConceptTool(BaseTool):
     }
     required_params = ["concept_iri"]
     required_scope = "authority:read"
+    required_permission = (FEATURE_ID, FeatureAccessLevel.READ_ONLY)
     category = "authority"
 
     async def execute(self, ctx: ToolContext, **kwargs: Any) -> ToolResult:
         concept_iri = kwargs.get("concept_iri")
         if not concept_iri:
             return ToolResult(success=False, error="concept_iri is required")
-        result = await run_in_threadpool(
-            _manager.find_authority_for_concept,
-            ctx.db, concept_iri,
-            context=kwargs.get("context") or {},
-            domains=kwargs.get("domains") or [],
-            request=kwargs.get("request") or {},
-            semantic_models_manager=ctx.semantic_models_manager,
-            obo_ws_factory=ctx.obo_workspace_client_factory,
-            app_ws_factory=_app_sp_workspace_client,
-        )
+        try:
+            result = await run_in_threadpool(
+                _manager.find_authority_for_concept,
+                ctx.db, concept_iri,
+                context=kwargs.get("context") or {},
+                domains=kwargs.get("domains") or [],
+                request=kwargs.get("request") or {},
+                semantic_models_manager=ctx.semantic_models_manager,
+                obo_ws_factory=ctx.obo_workspace_client_factory,
+                app_ws_factory=_app_sp_workspace_client,
+            )
+        except Exception as e:
+            return ToolResult(success=False, **tool_failure("find_authority_for_concept", e))
         return ToolResult(success=True, data=result)
 
 
@@ -139,6 +173,7 @@ class GetAuthorityRelationTool(BaseTool):
     }
     required_params = ["ar_id"]
     required_scope = "authority:read"
+    required_permission = (FEATURE_ID, FeatureAccessLevel.READ_ONLY)
     category = "authority"
 
     async def execute(self, ctx: ToolContext, **kwargs: Any) -> ToolResult:
@@ -168,6 +203,7 @@ class ComputeDnaCoefficientTool(BaseTool):
     }
     required_params = ["ar_id"]
     required_scope = "authority:write"
+    required_permission = (FEATURE_ID, FeatureAccessLevel.READ_WRITE)
     category = "authority"
 
     async def execute(self, ctx: ToolContext, **kwargs: Any) -> ToolResult:

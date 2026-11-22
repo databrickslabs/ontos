@@ -8,6 +8,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Loader2, AlertCircle, ClipboardCheck, RefreshCw } from 'lucide-react';
 
@@ -43,6 +45,15 @@ export default function RequestAuthorityActionDialog({
   const [requestType, setRequestType] = useState<RequestType>('review');
   const [message, setMessage] = useState('');
   const [targetStatus, setTargetStatus] = useState('');
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const isAdmin = !permissionsLoading && hasPermission('authority-resolution', FeatureAccessLevel.ADMIN);
+  // Taking an AR into or out of service (active or retired, on either side) is Admin-only;
+  // Read-write may move it between draft and needs_review only.
+  const currentStatus = (relationStatus || '').toLowerCase();
+  const inService = (s: string) => s === 'active' || s === 'retired';
+  const statusOptions = AR_STATUSES.filter(
+    (s) => s !== currentStatus && (isAdmin || (!inService(s) && !inService(currentStatus))),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -166,7 +177,7 @@ export default function RequestAuthorityActionDialog({
               <Select value={targetStatus} onValueChange={setTargetStatus} disabled={submitting}>
                 <SelectTrigger><SelectValue placeholder={t('request.form.statusPlaceholder')} /></SelectTrigger>
                 <SelectContent>
-                  {AR_STATUSES.filter((s) => s !== (relationStatus || '').toLowerCase()).map((s) => (
+                  {statusOptions.map((s) => (
                     <SelectItem key={s} value={s}>{t(`status.${s}`, { defaultValue: s })}</SelectItem>
                   ))}
                 </SelectContent>

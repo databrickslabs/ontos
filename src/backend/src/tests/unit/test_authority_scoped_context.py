@@ -475,3 +475,14 @@ def test_concept_lookup_treats_a_conditional_prerequisite_as_viable(db_session):
     out = mgr.find_authority_for_concept(db_session, "urn:c", {}, request={"cosign_present": False})
     assert out["resolved"] == "tp"
     assert out["candidates"][0]["unmet_prerequisites"] == []
+
+
+def test_rule_errors_are_coded_so_routes_answer_400():
+    """An author mistake in the rule is a coded error (authority_invalid), not a
+    bare ValueError the routes would answer as an unexpected failure."""
+    from src.common import authority_rule
+    from src.common.api_errors import CodedValueError
+    with pytest.raises(CodedValueError) as e:
+        authority_rule.compile_rule({"permission": {"constraint": [
+            {"leftOperand": "arf:market", "operator": "noSuchOperator", "rightOperand": "DE"}]}})
+    assert e.value.code == "authority_invalid"

@@ -366,6 +366,8 @@ class MCPHandler:
         # self._identity_mode); the identity itself is verified just below.
         ctx = self._create_tool_context()
         ctx.caller = await self._resolve_caller(tool_name)
+        # The token's scopes ride on the caller: a read-scoped token never writes, whoever it acts for.
+        ctx.caller.token_scopes = tuple(self._token_info.scopes or ())
 
         # Execute the tool with audit logging
         success = False

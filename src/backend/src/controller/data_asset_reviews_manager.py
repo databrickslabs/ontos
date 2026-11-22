@@ -35,15 +35,7 @@ from src.controller.notifications_manager import NotificationsManager
 # Import correct enum from notifications model
 from src.models.notifications import Notification, NotificationType
 
-AUTHORITY_RELATION_FQN_PREFIX = 'authority-relation://'
-
-
-def authority_relation_id_of(fqns: List[str]) -> Optional[str]:
-    """The Authority Relation id when every FQN is an ``authority-relation://`` reference to one AR."""
-    if not fqns or not all(f.startswith(AUTHORITY_RELATION_FQN_PREFIX) for f in fqns):
-        return None
-    ids = {f[len(AUTHORITY_RELATION_FQN_PREFIX):].split('#')[0] for f in fqns}
-    return ids.pop() if len(ids) == 1 else None
+from src.common.review_access import AUTHORITY_RELATION_FQN_PREFIX, authority_relation_id_of
 
 # Import Search Interfaces
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -127,7 +119,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return AssetType.MDM_MATCH
         if fqn.startswith('term-mapping://'):
             return AssetType.CONCEPT_MAPPING_SUGGESTION
-        if fqn.startswith('authority-relation://'):
+        if fqn.startswith(AUTHORITY_RELATION_FQN_PREFIX):
             return AssetType.AUTHORITY_RELATION
         if fqn.startswith('knowledge-concept://'):
             return AssetType.KNOWLEDGE_CONCEPT
@@ -283,6 +275,12 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             display_title = created_api_obj.title
 
             # --- Trigger workflow for review request --- #
+            # An Authority Relation's per-reviewer request is not a data-asset review: its
+            # workflow and notifications come from start_review, once per AR (B10, S8, #859
+            # review item 5). The generic data-asset-review workflow asks a DataSteward to approve.
+            if authority_relation_id_of(request_data.asset_fqns):
+                self._update_search_index(created_api_obj)
+                return created_api_obj
             try:
                 from src.common.workflow_triggers import get_trigger_registry
                 from src.models.process_workflows import EntityType
@@ -297,18 +295,10 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     "asset_count": len(created_api_obj.assets),
                     "asset_fqns": [a.asset_fqn for a in created_api_obj.assets],
                 }
-                # An Authority Relation review runs the AR review workflow, not the generic
-                # data-asset-review one (which asks a DataSteward to approve). #859 review B10
-                relation_id = authority_relation_id_of(request_data.asset_fqns)
-                if relation_id:
-                    entity_type, entity_id = EntityType.AUTHORITY_RELATION, relation_id
-                    entity_data["relation_id"] = relation_id
-                else:
-                    entity_type, entity_id = EntityType.DATA_ASSET_REVIEW, created_api_obj.id
 
                 executions = trigger_registry.on_request_review(
-                    entity_type=entity_type,
-                    entity_id=entity_id,
+                    entity_type=EntityType.DATA_ASSET_REVIEW,
+                    entity_id=created_api_obj.id,
                     entity_name=display_title,
                     entity_data=entity_data,
                     user_email=created_api_obj.requester_email,
@@ -350,10 +340,10 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected error creating review request: {e}")
             raise
 
-    def get_review_request(self, request_id: str) -> Optional[DataAssetReviewRequestApi]:
-        """Gets a review request by its ID."""
+    def get_review_request(self, request_id: str, db: Optional[Session] = None) -> Optional[DataAssetReviewRequestApi]:
+        """Gets a review request by its ID. ``db``: the caller's session (default: the manager's own)."""
         try:
-            request_db = self._repo.get(db=self._db, id=request_id)
+            request_db = self._repo.get(db=db if db is not None else self._db, id=request_id)
             if request_db:
                 api_obj = DataAssetReviewRequestApi.from_orm(request_db)
                 if not (api_obj.title and api_obj.title.strip()):
@@ -390,16 +380,19 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected error listing review requests: {e}")
             raise
 
-    def update_review_request_status(self, request_id: str, update_data: DataAssetReviewRequestUpdateStatus) -> Optional[DataAssetReviewRequestApi]:
-        """Updates the overall status of a review request."""
+    def update_review_request_status(
+        self, request_id: str, update_data: DataAssetReviewRequestUpdateStatus, db: Optional[Session] = None,
+    ) -> Optional[DataAssetReviewRequestApi]:
+        """Updates the overall status of a review request, on ``db`` (default: the manager's own session)."""
+        session = db if db is not None else self._db
         try:
-            db_obj = self._repo.get(db=self._db, id=request_id)
+            db_obj = self._repo.get(db=session, id=request_id)
             if not db_obj:
                 logger.warning(f"Attempted to update status for non-existent review request: {request_id}")
                 return None
             
             from_status = db_obj.status.value if hasattr(db_obj.status, 'value') else str(db_obj.status)
-            updated_db_obj = self._repo.update_request_status(db=self._db, db_obj=db_obj, status=update_data.status, notes=update_data.notes)
+            updated_db_obj = self._repo.update_request_status(db=session, db_obj=db_obj, status=update_data.status, notes=update_data.notes)
             to_status = updated_db_obj.status.value if hasattr(updated_db_obj.status, 'value') else str(updated_db_obj.status)
 
             # --- Reflect the reviewer decision onto a KNOWLEDGE_CONCEPT --- #
@@ -416,7 +409,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     from src.common.workflow_triggers import get_trigger_registry
                     from src.models.process_workflows import EntityType, TriggerType
                     
-                    trigger_registry = get_trigger_registry(self._db)
+                    trigger_registry = get_trigger_registry(session)
                     entity_data = {
                         "id": updated_db_obj.id,
                         "requester_email": updated_db_obj.requester_email,
@@ -642,15 +635,18 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected error updating review request {request_id}: {e}")
             raise
 
-    def update_reviewed_asset_status(self, request_id: str, asset_id: str, update_data: ReviewedAssetUpdate) -> Optional[ReviewedAssetApi]:
-        """Updates the status and comments of a specific asset within a review."""
+    def update_reviewed_asset_status(
+        self, request_id: str, asset_id: str, update_data: ReviewedAssetUpdate, db: Optional[Session] = None,
+    ) -> Optional[ReviewedAssetApi]:
+        """Updates the status and comments of a specific asset within a review, on ``db`` (default: the manager's own)."""
+        session = db if db is not None else self._db
         try:
-            db_asset_obj = self._repo.get_asset(db=self._db, request_id=request_id, asset_id=asset_id)
+            db_asset_obj = self._repo.get_asset(db=session, request_id=request_id, asset_id=asset_id)
             if not db_asset_obj:
                 logger.warning(f"Attempted to update non-existent asset {asset_id} in request {request_id}")
                 return None
             
-            updated_db_asset_obj = self._repo.update_asset_status(db=self._db, db_asset_obj=db_asset_obj, status=update_data.status, comments=update_data.comments)
+            updated_db_asset_obj = self._repo.update_asset_status(db=session, db_asset_obj=db_asset_obj, status=update_data.status, comments=update_data.comments)
             
             # TODO: Check if all assets are reviewed and potentially update overall request status?
             

@@ -29,6 +29,7 @@ from src.common.dependencies import DBSessionDep, AuditCurrentUserDep, DataAsset
 from src.common.features import FeatureAccessLevel
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authority_resolution_manager import (
+    AR_REVIEW_APPROVE,
     AuthorityPermissionError,
     AuthorityResolutionManager,
 )
@@ -807,10 +808,11 @@ async def submit_review(
 ):
     reviewer = current_user.username if current_user else None
     answers = payload.get("answers", payload) if isinstance(payload, dict) else {}
+    outcome = payload.get("outcome", AR_REVIEW_APPROVE) if isinstance(payload, dict) else AR_REVIEW_APPROVE
     try:
         participant = manager.submit_review(
             db, participant_id, answers=answers, reviewer=reviewer, user=current_user,
-            reviews_manager=reviews_manager,
+            reviews_manager=reviews_manager, outcome=outcome,
         )
     except PermissionError as e:
         raise _failure("submit_review", e)

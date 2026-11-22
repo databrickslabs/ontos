@@ -2648,6 +2648,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 self._create_sla_properties(db, created.id, data_dict['slaProperties'])
             if data_dict.get('sla'):
                 from src.utils.contract_sla import apply_legacy_sla
+                db.flush()  # the form's values replace the rows just added (no autoflush)
                 apply_legacy_sla(db, created.id, data_dict['sla'])
             
             # Process semantic links if provided

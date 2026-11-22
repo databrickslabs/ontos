@@ -337,3 +337,23 @@ def test_a_create_with_an_sla_collection_is_refused(db_session):
     with pytest.raises(SlaValueCollectionError):
         _manager().create_contract_with_relations(
             db_session, DataContractCreate.model_validate(body), current_user='alice')
+
+
+def test_a_create_with_sla_properties_and_the_sla_form_values_stores_each_once(db_session):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+    from src.models.data_contracts_api import DataContractCreate
+
+    manager = _manager()
+    manager._queue_delivery = lambda *a, **k: None
+    manager._update_search_index = lambda *a, **k: None
+    # a body copied from GET carries both shapes
+    body = {'name': f'orders-{uuid.uuid4().hex[:6]}', 'version': '1.0.0', 'status': 'draft',
+            'slaProperties': [{'property': 'uptimeTarget', 'value': 99.5, 'unit': '%'}],
+            'sla': {'uptimeTarget': 99.9}}
+    created = manager.create_contract_with_relations(
+        db_session, DataContractCreate.model_validate(body), current_user='alice')
+    db_session.commit()
+
+    rows = db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=created.id, property='uptimeTarget').all()
+    assert len(rows) == 1

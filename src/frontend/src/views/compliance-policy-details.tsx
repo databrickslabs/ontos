@@ -346,7 +346,15 @@ export default function CompliancePolicyDetails() {
           <CardHeader>
             <CardTitle className="text-xl">{t('compliance:policyDetails.runSummary.title')}</CardTitle>
             <CardDescription>
-              {t('compliance:policyDetails.runSummary.lastRunStarted', { date: new Date(activeRun.started_at).toLocaleString() })} • {t('compliance:policyDetails.runSummary.statusLabel')} <span className="font-medium">{activeRun.status}</span>
+              {t('compliance:policyDetails.runSummary.lastRunStarted', {
+                date: new Date(activeRun.started_at).toLocaleString(),
+              })}{' '}
+              • {t('compliance:policyDetails.runSummary.statusLabel')}{' '}
+              <span className="font-medium">
+                {t(`compliance:runStatus.${activeRun.status}`, {
+                  defaultValue: activeRun.status,
+                })}
+              </span>
             </CardDescription>
             {activeRun.status === 'failed' && (
               <div className="text-sm text-destructive">{t('compliance:policyDetails.runSummary.errorLabel')} {complianceRunErrorText(t, activeRun)}</div>
@@ -431,7 +439,9 @@ export default function CompliancePolicyDetails() {
               {runs.map(r => (
                 <button key={r.id} onClick={() => setActiveRun(r)} className={`text-left p-2 rounded border ${activeRun?.id === r.id ? 'bg-muted' : ''}`}>
                   <div className="flex items-center gap-3">
-                    <Badge variant="outline">{r.status}</Badge>
+                    <Badge variant="outline">
+                      {t(`compliance:runStatus.${r.status}`, { defaultValue: r.status })}
+                    </Badge>
                     <div className="text-sm">{new Date(r.started_at).toLocaleString()}</div>
                     <div className="ml-auto text-sm">
                       {t('compliance:policyDetails.runsList.scoreLabel')}{' '}

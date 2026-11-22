@@ -81,4 +81,21 @@ describe('ComplianceRunDetails', () => {
     );
     await waitFor(() => expect(screen.queryByTestId('results-paging')).toBeNull());
   });
+
+  it('translates the run status and falls back to the raw value when unknown', async () => {
+    get.mockResolvedValue({
+      data: { run: { ...RUN, status: 'succeeded' }, results: [], total: 0, hidden_count: 0 },
+    });
+    await i18n.changeLanguage('pt');
+    const { unmount } = renderPage();
+    expect(await screen.findByText('Concluída')).toBeInTheDocument();
+    expect(screen.queryByText('succeeded')).not.toBeInTheDocument();
+    unmount();
+
+    get.mockResolvedValue({
+      data: { run: { ...RUN, status: 'weird' }, results: [], total: 0, hidden_count: 0 },
+    });
+    renderPage();
+    expect(await screen.findByText('weird')).toBeInTheDocument();
+  });
 });

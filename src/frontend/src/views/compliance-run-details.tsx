@@ -204,7 +204,9 @@ export default function ComplianceRunDetails() {
           <CardTitle className="text-xl">{t('compliance:runDetails.runTitle', { id: run.id })}</CardTitle>
           <CardDescription>
             {t('compliance:runDetails.statusLabel')}{' '}
-            <span className="font-medium">{run.status}</span> •{' '}
+            <span className="font-medium">
+              {t(`compliance:runStatus.${run.status}`, { defaultValue: run.status })}
+            </span> •{' '}
             {t('compliance:runDetails.scoreLabel')}{' '}
             <span className="font-medium" data-testid="run-score">
               {complianceRunScoreText(t, run)}

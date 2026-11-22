@@ -96,6 +96,11 @@
       "filteredAll": "Gefiltert nach allen – letzte Ausführung {{date}}"
     }
   },
+  "runStatus": {
+    "running": "Läuft",
+    "succeeded": "Erfolgreich",
+    "failed": "Fehlgeschlagen"
+  },
   "resultsPaging": {
     "shownOfTotal": "{{shown}} von {{total}} Ergebnissen werden angezeigt.",
     "loadMore": "Mehr laden"

@@ -96,6 +96,11 @@
       "filteredAll": "すべてに絞り込み — 最新の実行 {{date}}"
     }
   },
+  "runStatus": {
+    "running": "実行中",
+    "succeeded": "成功",
+    "failed": "失敗"
+  },
   "resultsPaging": {
     "shownOfTotal": "{{total}} 件中 {{shown}} 件の結果を表示しています。",
     "loadMore": "さらに読み込む"

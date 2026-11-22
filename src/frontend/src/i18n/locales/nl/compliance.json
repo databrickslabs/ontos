@@ -96,6 +96,11 @@
       "filteredAll": "Gefilterd op alles — laatste uitvoering {{date}}"
     }
   },
+  "runStatus": {
+    "running": "Wordt uitgevoerd",
+    "succeeded": "Geslaagd",
+    "failed": "Mislukt"
+  },
   "resultsPaging": {
     "shownOfTotal": "{{shown}} van {{total}} resultaten worden getoond.",
     "loadMore": "Meer laden"

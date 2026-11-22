@@ -373,3 +373,30 @@ def test_an_update_with_sla_properties_and_the_sla_form_values_stores_each_once(
     rows = db_session.query(DataContractSlaPropertyDb).filter_by(
         contract_id=cid, property='uptimeTarget').all()
     assert len(rows) == 1
+
+
+@pytest.mark.parametrize('sla', [None, {'uptimeTarget': None}])
+def test_an_empty_sla_form_keeps_the_sla_properties_sent_with_it(db_session, imported, sla):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+
+    manager, cid = imported
+    _save(manager, db_session, cid, {
+        'slaProperties': [{'property': 'uptimeTarget', 'value': 99.5, 'unit': '%'}],
+        'sla': sla})
+    db_session.commit()
+
+    rows = db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=cid, property='uptimeTarget').all()
+    assert [r.value for r in rows] == ['99.5']
+
+
+def test_an_sla_form_save_alone_still_clears_an_emptied_field(db_session, imported):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+
+    manager, cid = imported
+    _save(manager, db_session, cid, {'sla': {'uptimeTarget': 99.9}})
+    _save(manager, db_session, cid, {'sla': {'uptimeTarget': None}})
+    db_session.commit()
+
+    assert db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=cid, property='uptimeTarget').count() == 0

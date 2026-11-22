@@ -49,23 +49,29 @@ def legacy_sla_from_rows(rows: Iterable[DataContractSlaPropertyDb]) -> Optional[
     return sla or None
 
 
-def apply_legacy_sla(db, contract_id: str, sla: Optional[Dict[str, Any]]) -> None:
+def apply_legacy_sla(db, contract_id: str, sla: Optional[Dict[str, Any]],
+                     only_set: bool = False) -> None:
     """Store the SLA form's values: each of the four fields replaces its SLA
-    property, and a field left empty removes it."""
+    property, and a field left empty removes it. ``only_set`` (the same request
+    also sent ``slaProperties``, which replaced them all): only the fields with a
+    value replace their property, an empty one leaves it as sent."""
     values: Dict[str, Any] = {}
     for key, value in (sla or {}).items():
         field = _SNAKE_TO_FIELD.get(key, key)
         if field in LEGACY_SLA_FIELDS:
             values[field] = value
+    fields = [f for f in LEGACY_SLA_FIELDS if not only_set or values.get(f) is not None]
+    if not fields:
+        return
 
     db.query(DataContractSlaPropertyDb).filter(
         DataContractSlaPropertyDb.contract_id == contract_id,
-        DataContractSlaPropertyDb.property.in_(list(LEGACY_SLA_FIELDS)),
+        DataContractSlaPropertyDb.property.in_(fields),
     ).delete(synchronize_session=False)
 
     for field, (unit, _kind) in LEGACY_SLA_FIELDS.items():
         value = values.get(field)
-        if value is None:
+        if value is None or field not in fields:
             continue
         db.add(DataContractSlaPropertyDb(
             contract_id=contract_id, property=field, value=str(value), unit=unit,

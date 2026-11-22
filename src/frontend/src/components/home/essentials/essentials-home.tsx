@@ -126,6 +126,16 @@ function Empty({ children }: { children: ReactNode }) {
  * shows only when the user can read what it needs, and links only to features the user's
  * menus show (maturity filter and the role's "show in navigation" flag, #1325).
  */
+/** The approvals queue route answers 403 unless the user reads data contracts or products. */
+export function readsApprovalQueue(
+  hasPermission: (id: string, level: FeatureAccessLevel) => boolean,
+): boolean {
+  return (
+    hasPermission('data-contracts', FeatureAccessLevel.READ_ONLY) ||
+    hasPermission('data-products', FeatureAccessLevel.READ_ONLY)
+  );
+}
+
 export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps) {
   const { t } = useTranslation(['home', 'data-asset-reviews']);
   const appName = useUICustomizationStore((s) => s.getAppName());
@@ -149,9 +159,7 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
   // My Requests has no feature permission of its own; its API needs access-grants read.
   // The approvals queue route answers 403 unless the user reads data contracts or data
   // products; without either the card is not shown and the request is not made.
-  const approvals =
-    hasPermission('data-contracts', FeatureAccessLevel.READ_ONLY) ||
-    hasPermission('data-products', FeatureAccessLevel.READ_ONLY);
+  const approvals = readsApprovalQueue(hasPermission);
   const myRequests = hasPermission('access-grants', FeatureAccessLevel.READ_ONLY)
     ? shown('my-requests')
     : null;

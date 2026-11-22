@@ -18,7 +18,7 @@ import ConnectedOverviewTile from '@/components/home/connected-overview-tile';
 import { tileRegistry, tileOrder } from '@/tiles';
 import { Card, CardContent } from '@/components/ui/card';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
-import EssentialsHome from '@/components/home/essentials/essentials-home';
+import EssentialsHome, { readsApprovalQueue } from '@/components/home/essentials/essentials-home';
 
 export default function Home() {
   const { t } = useTranslation(['home', 'common']);
@@ -80,6 +80,20 @@ export default function Home() {
           {/* A group union can add sections the role editor keeps off a journey role itself. */}
           {orderedSections.includes(HomeSection.DATA_CURATION) && <DataCurationSection />}
           {orderedSections.includes(HomeSection.DISCOVERY) && <DiscoverySection />}
+          {/* A group union can add REQUIRED_ACTIONS. The journey's approvals card shows it
+              for users who read contracts or products; the others get the role-request
+              actions here, without the queue they can't read. */}
+          {orderedSections.includes(HomeSection.REQUIRED_ACTIONS)
+            && !readsApprovalQueue(hasPermission) && (
+            <Card className="mb-8" data-testid="journey-required-actions">
+              <div className="px-6 py-4 border-b bg-muted/30">
+                <h3 className="font-semibold text-sm">{t('home:myActions.approvals')}</h3>
+              </div>
+              <CardContent className="p-0 max-h-[400px] overflow-auto">
+                <RequiredActionsSection fetchQueue={false} />
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 

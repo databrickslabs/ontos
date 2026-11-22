@@ -461,7 +461,6 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             value={domainIds}
             primaryDomainId={primaryDomainId}
             onChange={(ids, primary) => { setDomainIds(ids); setPrimaryDomainId(primary); }}
-            modal
           />
 
           <div className="text-sm font-semibold text-muted-foreground pt-2">{t('editor.sections.ownership')}</div>
@@ -847,7 +846,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
           </fieldset>
 
           <SectionTitle title={t('editor.sections.tags')} />
-          <TagSelector value={tags} onChange={setTags} placeholder={t('common:actions.search')} modal />
+          <TagSelector value={tags} onChange={setTags} placeholder={t('common:actions.search')} />
 
           <div className="space-y-1 pt-2">
             <Label className="flex items-center gap-1.5">

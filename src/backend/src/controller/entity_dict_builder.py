@@ -4,6 +4,7 @@ Produces a flat dict with raw entity fields + computed relationship/governance
 counts so that maturity gate rules can use simple assertions like
 ``obj.business_term_count > 0`` or ``obj.certification_level >= 2``.
 """
+import json
 import re
 import uuid
 from datetime import datetime, timezone
@@ -34,6 +35,11 @@ UC_TABLE_CLIENT_UNAVAILABLE = "client_unavailable"
 # anyone whether the table exists
 UC_TABLE_UNREADABLE = "unreadable"
 UC_TABLE_READ_FAILED = "read_failed"
+# Key of each gate result of a stored asset snapshot: the UC table it was evaluated
+# against (null for none)
+SNAPSHOT_UC_TABLE_KEY = "uc_table_name"
+# ``snapshot_uc_table`` result for gate results that can't be parsed
+SNAPSHOT_UC_TABLE_UNKNOWN = object()
 
 _UC_PLATFORMS = {"databricks", "unity catalog", "unity_catalog"}
 _UC_NAME_PART = re.compile(r"^[^./:\s][^./:]*$")
@@ -255,7 +261,15 @@ def _add_uc_table_fields(
     d: Dict[str, Any], asset, get_workspace_client: Optional[Callable[[], Any]],
 ) -> None:
     """Merge the UC table's column fields, or record why they are absent."""
-    full_name = uc_table_name(asset.platform, asset.location)
+    _add_uc_table_fields_of(d, uc_table_name(asset.platform, asset.location),
+                            get_workspace_client)
+
+
+def _add_uc_table_fields_of(
+    d: Dict[str, Any], full_name: Optional[str],
+    get_workspace_client: Optional[Callable[[], Any]],
+) -> None:
+    """Merge the column fields of the UC table ``full_name`` (None: no table)."""
     d["uc_table_name"] = full_name
     d["uc_table_status"] = None
     d["uc_fields_available"] = False
@@ -293,9 +307,44 @@ def uc_table_readable(asset, get_workspace_client: Optional[Callable[[], Any]]) 
     the readers an evaluation would show it to. Fails closed: no client, a refused
     read or any other read error is False.
     """
-    d: Dict[str, Any] = {"id": str(asset.id)}
-    _add_uc_table_fields(d, asset, get_workspace_client)
+    return uc_table_name_readable(
+        uc_table_name(asset.platform, asset.location), get_workspace_client,
+        asset_id=str(asset.id),
+    )
+
+
+def uc_table_name_readable(
+    full_name: Optional[str], get_workspace_client: Optional[Callable[[], Any]],
+    *, asset_id: Optional[str] = None,
+) -> bool:
+    """Whether this client reads the UC table ``full_name`` (True for None).
+
+    Same read and same fail-closed rule as ``uc_table_readable``, for a table
+    that a stored snapshot was evaluated against.
+    """
+    d: Dict[str, Any] = {"id": asset_id}
+    _add_uc_table_fields_of(d, full_name, get_workspace_client)
     return d["uc_table_name"] is None or d["uc_table_status"] == UC_TABLE_READ
+
+
+def snapshot_uc_table(gate_results_json: Optional[str], current: Optional[str]) -> Any:
+    """The UC table a stored asset snapshot was evaluated against.
+
+    Read from its gate results; a snapshot whose gate results don't record it
+    (no gates) falls back to ``current``, the table the asset points to now.
+    Gate results that can't be parsed give ``SNAPSHOT_UC_TABLE_UNKNOWN``.
+    """
+    try:
+        gates = json.loads(gate_results_json) if gate_results_json else []
+    except (TypeError, ValueError):
+        return SNAPSHOT_UC_TABLE_UNKNOWN
+    if not isinstance(gates, list):
+        return SNAPSHOT_UC_TABLE_UNKNOWN
+    for gate in gates:
+        if isinstance(gate, dict) and SNAPSHOT_UC_TABLE_KEY in gate:
+            table = gate[SNAPSHOT_UC_TABLE_KEY]
+            return table if table is None or isinstance(table, str) else SNAPSHOT_UC_TABLE_UNKNOWN
+    return current
 
 
 def _add_asset_owners(db: Session, d: Dict[str, Any], asset_id: str) -> None:

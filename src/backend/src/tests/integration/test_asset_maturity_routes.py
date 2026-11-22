@@ -558,3 +558,60 @@ class TestAssetMaturityVisibleToUcReaders:
 
         assert [s['achieved_level_order'] for s in response.json()] == [1]
         tokens['token-b'].tables.get.assert_not_called()
+
+    def test_the_timeline_change_row_has_no_level(
+            self, client, db_session, tokens, fired):
+        asset = self._stored_by_a(client, db_session)
+
+        response = client.get(f'/api/entities/Asset/{asset.id}/timeline',
+                              params={'filter_type': 'changes'},
+                              headers=self._as('token-b'))
+
+        assert response.status_code == 200, response.text
+        changes = [e for e in response.json()['timeline']
+                   if e['metadata']['action'] == 'MATURITY_CHANGED']
+        # The row says the level changed; the level itself stays in the gated history
+        assert len(changes) == 1
+        assert 'maturity_level' not in changes[0]['content']
+
+    def test_snapshots_stay_gated_by_their_table_after_the_asset_leaves_it(
+            self, client, db_session, tokens, fired):
+        asset = self._stored_by_a(client, db_session)
+        asset.platform = 'snowflake'
+        db_session.flush()
+        # Evaluated without a UC table now: B's own snapshot
+        response = client.post(f'/api/assets/{asset.id}/maturity/evaluate',
+                               headers=self._as('token-b'))
+        assert response.status_code == 200, response.text
+
+        def history(token):
+            response = client.get(f'/api/assets/{asset.id}/maturity/history',
+                                  headers=self._as(token))
+            assert response.status_code == 200, response.text
+            return [s['achieved_level_order'] for s in response.json()]
+
+        # A's snapshot came from main.sales.orders: only its readers see it
+        assert history('token-b') == [1]
+        assert sorted(history('token-c')) == [1, 2]
+        tokens['token-b'].tables.get.assert_called_with(full_name=FQN)
+
+    def test_snapshots_stay_gated_by_their_table_when_the_asset_points_elsewhere(
+            self, client, db_session, tokens, fired):
+        asset = self._stored_by_a(client, db_session)
+        asset.location = 'main.sales.refunds'
+        db_session.flush()
+        # B can read the new table, not the one A's snapshot was evaluated against
+        refunds = TableInfo(full_name='main.sales.refunds', columns=[])
+
+        def get(full_name):
+            if full_name == FQN:
+                raise NotFound('no SELECT on main.sales.orders')
+            return refunds
+
+        tokens['token-b'].tables.get.side_effect = get
+
+        response = client.get(f'/api/assets/{asset.id}/maturity/history',
+                              headers=self._as('token-b'))
+
+        assert response.status_code == 200, response.text
+        assert response.json() == []

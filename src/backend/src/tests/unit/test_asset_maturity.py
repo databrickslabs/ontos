@@ -16,14 +16,17 @@ from databricks.sdk.service.catalog import ColumnInfo, TableInfo
 
 from src.common.compliance_dsl import evaluate_rule_on_object
 from src.controller.entity_dict_builder import (
+    SNAPSHOT_UC_TABLE_UNKNOWN,
     UC_TABLE_FIELDS,
     UnsupportedMaturityAssetTypeError,
     build_asset_dict,
+    snapshot_uc_table,
     uc_table_name,
     uc_table_readable,
 )
 from src.controller.maturity_evaluator import (
     MaturityEvaluator,
+    _change_log_details,
     evaluate_asset_maturity_on_change,
 )
 from src.db_models.assets import AssetDb, AssetTypeDb
@@ -264,6 +267,28 @@ def test_uc_table_readable_without_a_uc_table_needs_no_client(db_session):
 
     assert uc_table_readable(asset, lambda: ws) is True
     ws.tables.get.assert_not_called()
+
+
+def test_snapshot_uc_table_reads_the_table_its_gates_recorded():
+    recorded = json.dumps([{'gate_id': 'g1', 'uc_table_name': 'main.sales.orders'}])
+    no_table = json.dumps([{'gate_id': 'g1', 'uc_table_name': None}])
+
+    assert snapshot_uc_table(recorded, None) == 'main.sales.orders'
+    assert snapshot_uc_table(recorded, 'main.sales.refunds') == 'main.sales.orders'
+    assert snapshot_uc_table(no_table, 'main.sales.orders') is None
+    # Nothing recorded (no gates): the table the asset points to now
+    assert snapshot_uc_table('[]', 'main.sales.orders') == 'main.sales.orders'
+    assert snapshot_uc_table(None, None) is None
+    # Fails closed on what it can't read
+    for bad in ('not json', '{}', json.dumps([{'uc_table_name': 3}])):
+        assert snapshot_uc_table(bad, None) is SNAPSHOT_UC_TABLE_UNKNOWN
+
+
+def test_an_asset_change_row_records_no_level():
+    assert _change_log_details('Asset', 1, 2) is None
+    assert _change_log_details('DataProduct', 1, 2) == {
+        'from_maturity_level': 1, 'to_maturity_level': 2,
+    }
 
 
 def test_workspace_client_that_fails_to_build_is_unavailable(db_session):

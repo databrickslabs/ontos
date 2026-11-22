@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from src.common.logging import get_logger
 from src.common.run_identity import RunIdentity
 from src.controller.entity_dict_builder import (
+    SNAPSHOT_UC_TABLE_KEY,
     UC_TABLE_FIELDS,
     build_asset_dict,
     build_data_product_dict,
@@ -294,7 +295,7 @@ class MaturityEvaluator:
             )
             prev_level = prev_snapshot.achieved_level_order if prev_snapshot else None
 
-            self._persist(db, report)
+            self._persist(db, report, uc_table_name=entity_dict.get("uc_table_name"))
             report.stored = True
 
             if achieved_order != prev_level:
@@ -338,8 +339,17 @@ class MaturityEvaluator:
         return False, None, True
 
     @staticmethod
-    def _persist(db: Session, report: MaturityReport) -> None:
-        """Persist a snapshot and update the cached maturity level on the entity."""
+    def _persist(db: Session, report: MaturityReport, *,
+                 uc_table_name: Optional[str] = None) -> None:
+        """Persist a snapshot and update the cached maturity level on the entity.
+
+        An asset's gate results also record the UC table they were evaluated
+        against (``uc_table_name``, null for none): the history shows a snapshot
+        only to readers of that table, even after the asset points elsewhere.
+        """
+        table_marker = (
+            {SNAPSHOT_UC_TABLE_KEY: uc_table_name} if report.entity_type == "Asset" else {}
+        )
         gate_results_data = []
         for lr in report.levels:
             for gr in lr.gates:
@@ -355,6 +365,7 @@ class MaturityEvaluator:
                     **({"message_code": gr.message_code,
                         "message_params": gr.message_params} if gr.message_code else {}),
                     **({} if gr.evaluated else {"evaluated": False}),
+                    **table_marker,
                 })
 
         maturity_repo.create_snapshot(
@@ -404,10 +415,7 @@ class MaturityEvaluator:
                 entity_id=entity_id,
                 action="MATURITY_CHANGED",
                 username=evaluated_by or "system",
-                details={
-                    "from_maturity_level": from_level,
-                    "to_maturity_level": to_level,
-                },
+                details=_change_log_details(entity_type, from_level, to_level),
             )
         except Exception as e:
             logger.warning(f"Failed to log maturity change: {e}")
@@ -451,6 +459,20 @@ def _lock_asset_row(db: Session, asset_id: str) -> None:
     except ValueError:
         return
     db.query(AssetDb.id).filter(AssetDb.id == asset_uuid).with_for_update().first()
+
+
+def _change_log_details(entity_type: str, from_level: Optional[int],
+                        to_level: Optional[int]) -> Optional[Dict[str, Any]]:
+    """The levels a ``MATURITY_CHANGED`` row records, or None for an asset.
+
+    An asset's levels can come from the evaluator's own Unity Catalog read, and the
+    entity timeline shows change rows to every reader of the asset. So an asset's row
+    only says that the level changed; the levels stay in the history, which is shown
+    only to readers of the table.
+    """
+    if entity_type == "Asset":
+        return None
+    return {"from_maturity_level": from_level, "to_maturity_level": to_level}
 
 
 def _update_entity_cache(db: Session, *, entity_type: str, entity_id: str,

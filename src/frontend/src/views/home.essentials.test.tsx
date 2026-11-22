@@ -258,6 +258,52 @@ describe('Home by role home section', () => {
     expect(screen.queryByTestId('required-actions')).not.toBeInTheDocument();
   });
 
+  describe('REQUIRED_ACTIONS added to the journey by a group union', () => {
+    const applyUnion = () => {
+      state.roles = [
+        {
+          id: 'journey', name: 'Journey', assigned_groups: ['g'],
+          home_sections: [HomeSection.JOURNEY],
+        },
+        {
+          id: 'actions', name: 'Actions', assigned_groups: ['g'],
+          home_sections: [HomeSection.REQUIRED_ACTIONS],
+        },
+      ];
+      state.applied = null;
+      useUserStore.setState({
+        userInfo: { email: 'me@x.com', username: 'me', user: 'me', ip: null, groups: ['g'] } as any,
+      });
+    };
+
+    it('shows the role-request actions to a user who reads no contracts or products', () => {
+      state.perms = { assets: RO, 'data-catalog': RO };
+      applyUnion();
+      renderWithProviders(<Home />);
+      const card = screen.getByTestId('journey-required-actions');
+      expect(within(card).getByTestId('required-actions')).toHaveAttribute(
+        'data-fetch-queue', 'false',
+      );
+      expect(screen.queryByTestId('essentials-approvals')).not.toBeInTheDocument();
+    });
+
+    it('shows them once, in the approvals card, to a user who reads contracts', () => {
+      applyUnion();
+      renderWithProviders(<Home />);
+      expect(screen.getAllByTestId('required-actions')).toHaveLength(1);
+      expect(screen.getByTestId('essentials-approvals')).toBeInTheDocument();
+      expect(screen.queryByTestId('journey-required-actions')).not.toBeInTheDocument();
+    });
+
+    it('leaves them out when no role of the union has the section', () => {
+      state.perms = { assets: RO, 'data-catalog': RO };
+      applyUnion();
+      state.roles = [state.roles[0]];
+      renderWithProviders(<Home />);
+      expect(screen.queryByTestId('required-actions')).not.toBeInTheDocument();
+    });
+  });
+
   it('Publish lists owned assets with gaps and offers a review request', async () => {
     applyJourneyRole();
     renderWithProviders(<Home />);

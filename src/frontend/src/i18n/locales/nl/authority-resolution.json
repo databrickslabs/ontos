@@ -505,6 +505,11 @@
       "elicitation": "Gestructureerde uitvraag",
       "placeholder": "Je antwoord…"
     },
+    "outcome": {
+      "label": "Resultaat",
+      "approve": "Goedkeuren: de Authority Relation komt overeen met de praktijk",
+      "needsClarification": "Verduidelijking nodig: de Authority Relation komt niet overeen met de praktijk"
+    },
     "actions": {
       "submitReview": "Beoordeling indienen"
     }

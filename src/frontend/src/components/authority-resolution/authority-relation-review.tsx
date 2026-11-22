@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import NativeSelect from '@/components/ui/native-select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { DialogSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
@@ -49,6 +50,8 @@ export default function AuthorityRelationReview({ relationId, reviewer, onComple
 
   const [ctx, setCtx] = useState<AuthorityReviewContext | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // approve (the default) or needs_clarification: the AR does not match practice
+  const [outcome, setOutcome] = useState<'approve' | 'needs_clarification'>('approve');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -77,7 +80,7 @@ export default function AuthorityRelationReview({ relationId, reviewer, onComple
     setSaving(true);
     const { error } = await post<any>(
       `/api/authority/participants/${ctx.participant_id}/submit-review`,
-      { answers },
+      { answers, outcome },
     );
     setSaving(false);
     if (error) {
@@ -148,6 +151,19 @@ export default function AuthorityRelationReview({ relationId, reviewer, onComple
         <div className="text-sm font-semibold text-muted-foreground">
           {ctx.details ? t('review.questionnaire.confirmation') : t('review.questionnaire.elicitation')}
         </div>
+        {!completed && (
+          <div className="space-y-1">
+            <Label htmlFor="ar-review-outcome">{t('review.outcome.label')}</Label>
+            <NativeSelect
+              id="ar-review-outcome"
+              value={outcome}
+              onChange={(e) => setOutcome(e.target.value as 'approve' | 'needs_clarification')}
+            >
+              <option value="approve">{t('review.outcome.approve')}</option>
+              <option value="needs_clarification">{t('review.outcome.needsClarification')}</option>
+            </NativeSelect>
+          </div>
+        )}
         {ctx.questionnaire.map((q) => (
           <div key={q.id} className="space-y-1">
             <Label>{q.text}</Label>

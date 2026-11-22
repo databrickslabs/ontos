@@ -505,6 +505,11 @@
       "elicitation": "Elicitación estructurada",
       "placeholder": "Su respuesta…"
     },
+    "outcome": {
+      "label": "Resultado",
+      "approve": "Aprobar: la Authority Relation coincide con la práctica",
+      "needsClarification": "Necesita aclaración: la Authority Relation no coincide con la práctica"
+    },
     "actions": {
       "submitReview": "Enviar revisión"
     }

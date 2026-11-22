@@ -20,6 +20,11 @@ OPTION_PROPERTY_PREFIX = 'ontos.'
 # How an object column's `logicalTypeOptions.required` (property names) is stored: the
 # contract API shows the options flat, where `required` is the column's own flag
 OBJECT_REQUIRED_KEY = 'requiredProperties'
+# ODCS options the schema editor neither shows nor sends: an editor save keeps them
+# (utils/schema_editor_fields); the contract API and a flat save carry them as is
+EDITOR_UNSENT_OPTIONS = ('exclusiveMinimum', 'exclusiveMaximum', 'uniqueItems',
+                         'minProperties', 'maxProperties', OBJECT_REQUIRED_KEY,
+                         'defaultTimezone')
 
 # ODCS logicalType values (an `items.logicalType` must be one of them)
 LOGICAL_TYPES = frozenset(

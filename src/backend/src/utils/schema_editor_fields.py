@@ -14,6 +14,8 @@ a missing key clears the value.
 """
 from typing import Any, Dict, List, Optional
 
+from src.utils.odcs_type_options import EDITOR_UNSENT_OPTIONS, read_type_options
+
 SEMANTIC_ASSIGNMENT = 'http://databricks.com/ontology/uc/semanticAssignment'
 
 _OBJECT_FIELDS = ('id', 'tags', 'customProperties', 'quality')
@@ -70,6 +72,12 @@ def keep_unsent_fields(payload: Dict[str, Any], stored: Dict[str, Any]) -> Dict[
             if isinstance(items, dict) and previous.get('itemType') is None:
                 # a v3.x export writes the item type as items.logicalType
                 previous = {**previous, 'itemType': items.get('logicalType')}
+            # the stored options the editor doesn't send (a v3.x export has them nested)
+            stored_options = read_type_options(previous)
+            for key in EDITOR_UNSENT_OPTIONS:
+                value = previous.get(key, stored_options.get(key))
+                if not _sent(column, key) and value is not None:
+                    column[key] = value
             for key in _PROPERTY_FIELDS:
                 if not _sent(column, key) and previous.get(key) is not None:
                     column[key] = previous[key]

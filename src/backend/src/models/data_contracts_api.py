@@ -46,8 +46,9 @@ class ColumnProperty(BaseModel):
     pattern: Optional[str] = None
 
     # Number/Integer constraints
-    minimum: Optional[Union[int, float]] = None
-    maximum: Optional[Union[int, float]] = None
+    # (on a date / timestamp / time column ODCS bounds are date-time text)
+    minimum: Optional[Union[int, float, str]] = None
+    maximum: Optional[Union[int, float, str]] = None
     multipleOf: Optional[Union[int, float]] = None
     precision: Optional[int] = None
 
@@ -61,6 +62,15 @@ class ColumnProperty(BaseModel):
     itemType: Optional[str] = None
     minItems: Optional[int] = None
     maxItems: Optional[int] = None
+
+    # Other ODCS logicalTypeOptions (the editors don't show them; utils/odcs_type_options)
+    exclusiveMinimum: Optional[Union[bool, int, float, str]] = None
+    exclusiveMaximum: Optional[Union[bool, int, float, str]] = None
+    uniqueItems: Optional[bool] = None
+    minProperties: Optional[int] = None
+    maxProperties: Optional[int] = None
+    requiredProperties: Optional[List[str]] = None  # an object's logicalTypeOptions.required
+    defaultTimezone: Optional[str] = None
 
     # Semantic concepts for business glossary integration
     semanticConcepts: Optional[List[Dict[str, Any]]] = Field(

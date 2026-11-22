@@ -260,3 +260,75 @@ def test_the_contract_api_reads_nested_object_and_timestamp_options(db_session):
         "required": ["street"], "maxProperties": 3}
     assert exported["address"]["required"] is True
     assert _errors(_export(manager, db_session, cid), "odcs-json-schema-v3.1.0.json") == []
+
+
+# --- options the editors don't show survive the contract API and saves --------------
+
+UNSHOWN = {
+    "address": ("object", {"required": ["street"], "minProperties": 1, "maxProperties": 3}),
+    "tags": ("array", {"minItems": 1, "uniqueItems": True}),
+    "ts": ("timestamp", {"format": "yyyy", "defaultTimezone": "UTC",
+                         "minimum": "2020-01-01T00:00:00Z", "exclusiveMaximum": True}),
+    "day": ("date", {"minimum": "2020-01-01", "maximum": "2030-12-31"}),
+}
+
+
+def _unshown_contract(db_session):
+    document = _document(nested=True)
+    document["schema"][0]["properties"] = [
+        {"name": name, "logicalType": logical_type, "logicalTypeOptions": dict(options)}
+        for name, (logical_type, options) in UNSHOWN.items()
+    ]
+    return _upload(db_session, document)
+
+
+def _api_columns(manager, db_session, cid):
+    db_session.expire_all()
+    api = manager._build_contract_api_model(db_session, db_session.get(DataContractDb, cid))
+    return api, {c.name: c for c in api.contract_schema[0].properties}
+
+
+def test_the_contract_api_reads_date_bounds_and_unshown_options(db_session):
+    manager, cid = _unshown_contract(db_session)
+
+    _, columns = _api_columns(manager, db_session, cid)
+
+    assert columns["day"].minimum == "2020-01-01"
+    assert columns["address"].requiredProperties == ["street"]
+    assert columns["tags"].uniqueItems is True
+    assert columns["ts"].defaultTimezone == "UTC"
+
+
+def test_a_save_of_what_the_api_returns_keeps_the_options(db_session):
+    from src.models.data_contracts_api import DataContractUpdate
+
+    manager, cid = _unshown_contract(db_session)
+    before = _stored(db_session, cid)
+    api, _ = _api_columns(manager, db_session, cid)
+    schema = api.model_dump(by_alias=True)["schema"]
+
+    manager.update_contract_with_relations(
+        db_session, cid, DataContractUpdate.model_validate({"schema": schema}),
+        current_user="alice")
+    db_session.commit()
+
+    assert _stored(db_session, cid) == before
+
+
+def test_an_editor_save_that_doesnt_send_them_keeps_the_options(db_session):
+    manager, cid = _unshown_contract(db_session)
+    before = _stored(db_session, cid)
+
+    # the schema editor sends only the fields it shows
+    manager.update_contract_with_relations(db_session, cid, {"schema": [{
+        "name": "orders", "properties": [
+            {"name": "address", "logicalType": "object"},
+            {"name": "tags", "logicalType": "array", "minItems": 1},
+            {"name": "ts", "logicalType": "timestamp", "format": "yyyy",
+             "minimum": "2020-01-01T00:00:00Z"},
+            {"name": "day", "logicalType": "date", "minimum": "2020-01-01",
+             "maximum": "2030-12-31"},
+        ]}]}, current_user="alice")
+    db_session.commit()
+
+    assert _stored(db_session, cid) == before

@@ -304,3 +304,16 @@ def test_a_write_waits_for_the_other_runs_write_transaction(pg, lock_name):
             assert other.execute(text('SELECT pg_try_advisory_xact_lock(hashtext(:n))'),
                                  {'n': job.IMPORT_WRITE_LOCK_NAME}).scalar() is True
             other.rollback()
+
+
+def test_a_reused_pid_does_not_pass_the_fence(pg, lock_name):
+    """Same pid, another session start: the pid of a dead lock session reused by
+    another session must not count as this run's lock."""
+    with job.single_flight(pg) as run_lock:
+        assert run_lock.backend_start is not None
+        with pg.begin() as conn:
+            run_lock.fence(conn)  # the real session passes
+        stale = job.RunLock(run_lock.pid, run_lock.backend_start - timedelta(seconds=1))
+        with pytest.raises(job.LockLostError):
+            with pg.begin() as conn:
+                stale.fence(conn)

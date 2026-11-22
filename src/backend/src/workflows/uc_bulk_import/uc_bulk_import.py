@@ -144,11 +144,13 @@ LOCK_HELD_EXIT_CODE = 3
 # commits before the next run's first write begins its find, or fails its check.
 IMPORT_WRITE_LOCK_NAME = "ontos.uc_bulk_import.write"
 
+# A session is its pid and its start time: the OS can reuse a dead session's pid
 _LOCK_HELD_SQL = text("""
     SELECT EXISTS (
-        SELECT 1 FROM pg_locks
-        WHERE locktype = 'advisory' AND granted AND pid = :pid AND objsubid = 1
-          AND ((classid::bigint << 32) | objid::bigint) = hashtext(:name)::bigint
+        SELECT 1 FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+        WHERE l.locktype = 'advisory' AND l.granted AND l.pid = :pid AND l.objsubid = 1
+          AND a.backend_start = :backend_start
+          AND ((l.classid::bigint << 32) | l.objid::bigint) = hashtext(:name)::bigint
     )
 """)
 
@@ -158,11 +160,13 @@ class LockLostError(RuntimeError):
 
 
 class RunLock:
-    """The run lock this run holds: ``pid`` is the server process of the lock
-    connection (None on databases without advisory locks)."""
+    """The run lock this run holds: ``pid`` and ``backend_start`` identify the
+    server session of the lock connection (pid None on databases without
+    advisory locks)."""
 
-    def __init__(self, pid: Optional[int]):
+    def __init__(self, pid: Optional[int], backend_start: Optional[datetime] = None):
         self.pid = pid
+        self.backend_start = backend_start
 
     def fence(self, conn) -> None:
         """First statement of each write transaction. Raises ``LockLostError``
@@ -179,7 +183,9 @@ class RunLock:
             return
         conn.execute(text("SELECT pg_advisory_xact_lock(hashtext(:name))"),
                      {"name": IMPORT_WRITE_LOCK_NAME})
-        held = conn.execute(_LOCK_HELD_SQL, {"pid": self.pid, "name": IMPORT_LOCK_NAME}).scalar()
+        held = conn.execute(_LOCK_HELD_SQL, {
+            "pid": self.pid, "backend_start": self.backend_start, "name": IMPORT_LOCK_NAME,
+        }).scalar()
         if not held:
             raise LockLostError("The import lock was lost: this run stopped before writing")
 
@@ -212,8 +218,11 @@ def single_flight(engine: Engine):
         ).scalar())
         try:
             if acquired:
-                pid = conn.execute(text("SELECT pg_backend_pid()")).scalar()
-                yield RunLock(pid)
+                pid, backend_start = conn.execute(text(
+                    "SELECT pid, backend_start FROM pg_stat_activity "
+                    "WHERE pid = pg_backend_pid()"
+                )).one()
+                yield RunLock(pid, backend_start)
             else:
                 yield None
         finally:

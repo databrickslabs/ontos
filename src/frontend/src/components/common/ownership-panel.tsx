@@ -28,6 +28,7 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import type { BusinessOwnerRead, OwnerObjectType } from '@/types/business-owner';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 
 export interface ImportedContact {
   username?: string;
@@ -57,6 +58,18 @@ interface OwnershipPanelProps {
   /** Ontos Team name for display */
   ownerTeamName?: string;
 }
+
+
+// Stands in for the owners while they load (see ContentSkeleton)
+const sampleOwner = (id: string, name: string, role: string): BusinessOwnerRead => ({
+  id, object_type: 'data_product' as OwnerObjectType, object_id: 'sample', user_email: `${id}@example.com`,
+  user_name: name, role_id: role, role_name: role, is_active: true,
+  assigned_at: '2026-01-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+});
+const OWNERS_SAMPLE = {
+  current: [sampleOwner('o1', 'Sample Owner Name', 'Data Owner'), sampleOwner('o2', 'Another Owner', 'Steward')],
+  previous: [] as BusinessOwnerRead[],
+};
 
 export function OwnershipPanel({
   objectType,
@@ -153,6 +166,72 @@ export function OwnershipPanel({
 
   const hasImportedContacts = importedContacts && importedContacts.length > 0;
 
+  const renderOwnerLists = (current: BusinessOwnerRead[], previous: BusinessOwnerRead[]) => (
+    <div className="space-y-3">
+      {/* Current owners */}
+      {current.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {t('panel.currentOwners')}
+          </p>
+          {current.map((owner) => (
+            <div key={owner.id} className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{owner.user_name || owner.user_email}</span>
+                {owner.role_name && (
+                  <Badge variant="outline" className="text-xs">{owner.role_name}</Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <RelativeDate date={owner.assigned_at} className="text-xs text-muted-foreground" />
+                {canAssign && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    onClick={() => setRemoveTarget(owner)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Previous owners (collapsible) */}
+      {showHistory && previous.length > 0 && (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              {t('panel.previousOwners')}
+            </p>
+            {previous.map((owner) => (
+              <div key={owner.id} className="flex items-center justify-between text-sm opacity-60">
+                <div className="flex items-center gap-2">
+                  <span>{owner.user_name || owner.user_email}</span>
+                  {owner.role_name && (
+                    <Badge variant="outline" className="text-xs">{owner.role_name}</Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {owner.removal_reason && (
+                    <span className="text-xs italic text-muted-foreground">{owner.removal_reason}</span>
+                  )}
+                  {owner.removed_at && (
+                    <RelativeDate date={owner.removed_at} className="text-xs text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <>
       <Card className={className}>
@@ -190,77 +269,14 @@ export function OwnershipPanel({
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : currentOwners.length === 0 && previousOwners.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">{t('panel.noOwners')}</p>
-          ) : (
-            <div className="space-y-3">
-              {/* Current owners */}
-              {currentOwners.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {t('panel.currentOwners')}
-                  </p>
-                  {currentOwners.map((owner) => (
-                    <div key={owner.id} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{owner.user_name || owner.user_email}</span>
-                        {owner.role_name && (
-                          <Badge variant="outline" className="text-xs">{owner.role_name}</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <RelativeDate date={owner.assigned_at} className="text-xs text-muted-foreground" />
-                        {canAssign && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                            onClick={() => setRemoveTarget(owner)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Previous owners (collapsible) */}
-              {showHistory && previousOwners.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      {t('panel.previousOwners')}
-                    </p>
-                    {previousOwners.map((owner) => (
-                      <div key={owner.id} className="flex items-center justify-between text-sm opacity-60">
-                        <div className="flex items-center gap-2">
-                          <span>{owner.user_name || owner.user_email}</span>
-                          {owner.role_name && (
-                            <Badge variant="outline" className="text-xs">{owner.role_name}</Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {owner.removal_reason && (
-                            <span className="text-xs italic text-muted-foreground">{owner.removal_reason}</span>
-                          )}
-                          {owner.removed_at && (
-                            <RelativeDate date={owner.removed_at} className="text-xs text-muted-foreground" />
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          <ContentSkeleton
+            data={isLoading ? null : { current: currentOwners, previous: previousOwners }}
+            sample={OWNERS_SAMPLE}
+            empty={currentOwners.length === 0 && previousOwners.length === 0}
+            emptyMessage={<p className="text-sm text-muted-foreground py-2">{t('panel.noOwners')}</p>}
+          >
+            {({ current, previous }) => renderOwnerLists(current, previous)}
+          </ContentSkeleton>
 
           {/* Imported Contacts (from ODCS/ODPS) - read-only, collapsible */}
           {hasImportedContacts && (

@@ -17,7 +17,7 @@ import {
   Table as TanStackTable,
 } from "@tanstack/react-table";
 
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "./card";
 import { cn } from "@/lib/utils";
+import { SkeletonLine, skeletonWidth } from "@/components/common/list-view-skeleton";
 
 // Double angle bracket svgs for pagination
 const ChevronsLeft = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M15.79 14.77a.75.75 0 01-1.06 0l-4.25-4.25a.75.75 0 010-1.06l4.25-4.25a.75.75 0 111.06 1.06L12.31 10l3.48 3.71a.75.75 0 010 1.06zm-6.75 0a.75.75 0 01-1.06 0l-4.25-4.25a.75.75 0 010-1.06l4.25-4.25a.75.75 0 111.06 1.06L5.56 10l3.48 3.71a.75.75 0 010 1.06z" clipRule="evenodd" /></svg>;
@@ -505,16 +506,20 @@ export function DataTable<TData, TValue>({
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={tableColumns.length}
-                      className="h-24 text-center"
-                    >
-                      <div className="flex justify-center items-center">
-                        <Loader2 className="animate-spin h-8 w-8 text-primary" />
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  // Placeholder rows in the real columns, so the table keeps its shape
+                  [...Array(Math.min(table.getState().pagination?.pageSize ?? 5, 10))].map((_, r) => (
+                    <TableRow key={`skeleton-${r}`} aria-hidden="true">
+                      {table.getVisibleLeafColumns().map((column, c) => (
+                        <TableCell key={column.id}>
+                          <SkeletonLine
+                            height="h-4"
+                            width=""
+                            style={{ width: `${skeletonWidth(r * 3 + c, 40, 80)}px`, maxWidth: '100%' }}
+                          />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
                 ) : table.getRowModel().rows?.length ? (
                   table.getRowModel().rows.map((row) => (
                     <TableRow

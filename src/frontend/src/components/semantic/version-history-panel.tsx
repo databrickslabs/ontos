@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
 import { usePagination, PaginationControls } from '@/components/common/paginated-list';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 
 // ---------------------------------------------------------------------------
 // VersionHistoryPanel — drives the signed-off versioning contract §1 (version
@@ -35,6 +36,14 @@ interface VersionInfo {
   replaces_iri?: string | null;
   replaced_by_iris: string[];
 }
+
+const VERSIONS_SAMPLE: VersionInfo = {
+  iri: 'sample', label: 'sample', current_version: 2, replaced_by_iris: [],
+  versions: [
+    { version: 2, is_current: true, status: 'approved', created_at: '2026-01-01T00:00:00Z', created_by: 'sample.editor@example.com' },
+    { version: 1, is_current: false, status: 'approved', created_at: '2025-12-01T00:00:00Z', created_by: 'sample.editor@example.com' },
+  ],
+};
 
 interface VersionDetail {
   // The /version/detail endpoint returns the frozen text as `definition`.
@@ -169,7 +178,9 @@ export function VersionHistoryPanel({
   // Newest-first. is_current entry sorts to the top regardless of ordering.
   // Computed unconditionally (empty when not loaded) so the pagination hook
   // below is always called in the same order — Rules of Hooks.
-  const versions = info ? [...info.versions].sort((a, b) => b.version - a.version) : [];
+  // While loading, a sample history in skeleton mode (ContentSkeleton)
+  const shownInfo = loading ? VERSIONS_SAMPLE : info;
+  const versions = shownInfo ? [...shownInfo.versions].sort((a, b) => b.version - a.version) : [];
   const onlyOne = versions.length <= 1;
 
   // Cap long histories at 10 per page rather than rendering an unbounded list.
@@ -180,22 +191,7 @@ export function VersionHistoryPanel({
     pageCount: versionPageCount,
   } = usePagination(versions, 10);
 
-  if (loading) {
-    return (
-      <div className="rounded-lg border bg-card p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <History className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium">{title}</h3>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          {t('common:loading', 'Loading…')}
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !info) {
+  if (!loading && (error || !info)) {
     return (
       <div className="rounded-lg border bg-card p-3">
         <div className="flex items-center gap-2 mb-2">
@@ -225,6 +221,7 @@ export function VersionHistoryPanel({
         </p>
       )}
 
+      <ContentSkeleton loading={loading}>
       {onlyOne ? (
         <p className="text-xs text-muted-foreground">
           {t('semantic-models:versionHistory.none', 'No previous versions yet.')}
@@ -328,6 +325,7 @@ export function VersionHistoryPanel({
           onPageChange={setVersionPage}
         />
       )}
+      </ContentSkeleton>
     </div>
   );
 }

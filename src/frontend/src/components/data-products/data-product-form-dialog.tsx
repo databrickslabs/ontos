@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -863,12 +864,13 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
         
-        {isLoadingProduct ? (
-            <div className="flex justify-center items-center h-[60vh]">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="ml-2">{t('data-products:form.loadingDetails')}</p>
-            </div>
-         ) : (
+        {/* While the product loads, the (still empty) form in skeleton mode */}
+        <ContentSkeleton
+          loading={isLoadingProduct}
+          label={t('data-products:form.loadingDetails')}
+          className="flex-grow flex flex-col min-h-0"
+          contentClassName="flex-grow flex flex-col min-h-0"
+        >
             <Tabs 
               value={activeTab} 
               onValueChange={(value) => handleTabChange(value as 'ui' | 'json')} // Cast value here
@@ -1473,7 +1475,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                   </DialogFooter>
                 </TabsContent>
             </Tabs>
-         )}
+        </ContentSkeleton>
       </DialogContent>
     </Dialog>
   );

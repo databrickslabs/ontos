@@ -4,11 +4,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw, TrendingUp,
+  CheckCircle2, XCircle, AlertTriangle, RefreshCw, TrendingUp,
   ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { MaturityBadge } from '@/components/common/maturity-badge';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import type { MaturityReport, LevelResult, MaturitySnapshot } from '@/types/maturity';
+
+// Stands in for the report on the first load (see ContentSkeleton)
+const sampleLevel = (order: number, name: string, achieved: boolean): LevelResult => ({
+  level_order: order, level_name: name, level_icon: null, level_color: null, achieved,
+  gates: [{ gate_id: `g${order}`, policy_id: `p${order}`, policy_name: 'Sample gate', required: true, passed: achieved, message: null }],
+});
+const MATURITY_SAMPLE: MaturityReport = {
+  entity_type: 'DataProduct', entity_id: 'sample', entity_name: null,
+  achieved_level_order: 2, achieved_level_name: 'Managed', total_levels: 3, gates_passed: 2, gates_total: 3,
+  levels: [sampleLevel(1, 'Defined', true), sampleLevel(2, 'Managed', true), sampleLevel(3, 'Certified', false)],
+  evaluated_at: '2026-01-01T00:00:00Z', evaluated_by: null,
+};
 
 interface MaturityPanelProps {
   entityType: 'DataProduct' | 'DataContract';
@@ -63,18 +76,10 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
 
   useEffect(() => { fetchReport(); fetchHistory(); }, [fetchReport, fetchHistory]);
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-sm text-muted-foreground">{t('data-products:maturity.evaluating')}</span>
-        </CardContent>
-      </Card>
-    );
-  }
+  // While loading (also on re-evaluate), the report in skeleton mode: the current one, or a sample
+  const shown = isLoading ? (report ?? MATURITY_SAMPLE) : report;
 
-  if (error || !report) {
+  if (!isLoading && (error || !shown)) {
     return (
       <Card>
         <CardContent className="py-6 text-center">
@@ -88,6 +93,7 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
   }
 
   return (
+    <ContentSkeleton loading={isLoading}>
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
@@ -97,12 +103,12 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
           </span>
           <div className="flex items-center gap-2">
             <span className="text-sm font-normal text-muted-foreground">
-              {t('data-products:maturity.gatesPassed', { passed: report.gates_passed, total: report.gates_total })}
+              {t('data-products:maturity.gatesPassed', { passed: shown!.gates_passed, total: shown!.gates_total })}
             </span>
             <MaturityBadge
-              levelName={report.achieved_level_name}
-              levelOrder={report.achieved_level_order}
-              totalLevels={report.total_levels}
+              levelName={shown!.achieved_level_name}
+              levelOrder={shown!.achieved_level_order}
+              totalLevels={shown!.total_levels}
             />
             <Button variant="ghost" size="icon" className="h-7 w-7"
               onClick={() => { fetchReport(true); fetchHistory(); }}
@@ -114,7 +120,7 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Level progression */}
-        {report.levels.map((level: LevelResult) => {
+        {shown!.levels.map((level: LevelResult) => {
           const isExpanded = expandedLevel === level.level_order;
           const hasWarnings = level.gates.some(g => !g.passed && !g.required);
           const hasFails = level.gates.some(g => !g.passed && g.required);
@@ -192,5 +198,6 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
         )}
       </CardContent>
     </Card>
+    </ContentSkeleton>
   );
 }

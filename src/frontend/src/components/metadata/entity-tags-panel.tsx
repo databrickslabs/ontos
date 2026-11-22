@@ -5,11 +5,19 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Tags, Pencil, Loader2, RefreshCcw } from 'lucide-react';
 import TagSelector from '@/components/ui/tag-selector';
 import TagChip, { AssignedTag } from '@/components/ui/tag-chip';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { useApi } from '@/hooks/use-api';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
+
+// Stands in for the tags while they load (see ContentSkeleton)
+const sampleTag = (id: string, name: string): AssignedTag => ({
+  tag_id: id, tag_name: name, namespace_id: 'sample', namespace_name: 'default', status: 'active',
+  fully_qualified_name: `default/${name}`, assigned_at: '2026-01-01T00:00:00Z',
+});
+const TAGS_SAMPLE: AssignedTag[] = [sampleTag('t1', 'sample-tag'), sampleTag('t2', 'pii'), sampleTag('t3', 'finance')];
 
 interface Props {
   /** Stable identifier of the entity the tags are assigned to (e.g. a table's full path). */
@@ -120,18 +128,18 @@ const EntityTagsPanel: React.FC<Props> = ({ entityId, entityType }) => {
               </Button>
             </div>
           </div>
-        ) : loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> {t('common:actions.loading')}
-          </div>
-        ) : assignedTags.length === 0 ? (
-          <div className="text-sm text-muted-foreground">{t('tags.noTags') || 'No tags applied.'}</div>
         ) : (
-          <div className="flex flex-wrap gap-1">
-            {assignedTags.map(tag => (
-              <TagChip key={tag.tag_id} tag={tag} size="sm" displayFormat="long" />
-            ))}
-          </div>
+          <ContentSkeleton
+            loading={loading}
+            empty={assignedTags.length === 0}
+            emptyMessage={<div className="text-sm text-muted-foreground">{t('tags.noTags') || 'No tags applied.'}</div>}
+          >
+            <div className="flex flex-wrap gap-1">
+              {(loading ? TAGS_SAMPLE : assignedTags).map(tag => (
+                <TagChip key={tag.tag_id} tag={tag} size="sm" displayFormat="long" />
+              ))}
+            </div>
+          </ContentSkeleton>
         )}
       </CardContent>
     </Card>

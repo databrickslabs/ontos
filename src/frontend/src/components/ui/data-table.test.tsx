@@ -79,6 +79,21 @@ const names = (container: HTMLElement) =>
 beforeEach(() => localStorage.clear());
 
 describe('DataTable', () => {
+  it('shows placeholder rows in the real columns while loading, not a spinner', () => {
+    const { container } = render(<DataTable columns={columns} data={[]} isLoading />);
+    expect(container.querySelector('.animate-spin')).toBeNull();
+    const headerCells = container.querySelectorAll('thead th').length;
+    const placeholderRows = container.querySelectorAll('tbody tr[aria-hidden="true"]');
+    expect(placeholderRows.length).toBeGreaterThan(0);
+    expect(placeholderRows.length).toBeLessThanOrEqual(10);
+    for (const row of placeholderRows) expect(row.querySelectorAll('td')).toHaveLength(headerCells);
+    // Same widths on every render (no Math.random)
+    const widths = () => [...container.querySelectorAll('tbody td > div')].map((d) => (d as HTMLElement).style.width);
+    const first = widths();
+    expect(first.length).toBeGreaterThan(0);
+    expect(widths()).toEqual(first);
+  });
+
   describe('defaults (no new props)', () => {
     it('sorts by the name column, persists sorting via storageKey, and renders no footer', () => {
       const { container } = render(

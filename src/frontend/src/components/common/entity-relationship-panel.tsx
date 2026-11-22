@@ -18,6 +18,7 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import { AddRelationshipDialog } from '@/components/common/add-relationship-dialog';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 
 interface RelationshipRecord {
   id: string;
@@ -41,6 +42,20 @@ interface RelationshipSummary {
   incoming: RelationshipRecord[];
   total: number;
 }
+
+const sampleRelationship = (id: string, name: string, type: string, label: string): RelationshipRecord => ({
+  id, source_type: type, source_id: id, target_type: type, target_id: id,
+  relationship_type: label, relationship_label: label, source_name: name, target_name: name,
+  created_at: '2026-01-01T00:00:00Z',
+});
+const RELATIONSHIPS_SAMPLE: RelationshipSummary = {
+  entity_type: 'sample', entity_id: 'sample', total: 3,
+  outgoing: [sampleRelationship('r1', 'Sample related dataset', 'Dataset', 'has dataset')],
+  incoming: [
+    sampleRelationship('r2', 'Sample data product name', 'DataProduct', 'depends on'),
+    sampleRelationship('r3', 'Another data product', 'DataProduct', 'depends on'),
+  ],
+};
 
 interface EntityRelationshipPanelProps {
   entityType: string;
@@ -123,8 +138,10 @@ export function EntityRelationshipPanel({
     }
   };
 
-  const outgoing = data?.outgoing || [];
-  const incoming = data?.incoming || [];
+  // While loading, the panel renders a sample in skeleton mode (ContentSkeleton)
+  const shown = loading ? RELATIONSHIPS_SAMPLE : data;
+  const outgoing = shown?.outgoing || [];
+  const incoming = shown?.incoming || [];
   const total = outgoing.length + incoming.length;
 
   const typeCounts = useMemo(() => {
@@ -147,24 +164,6 @@ export function EntityRelationshipPanel({
     ? incoming.filter(r => r.source_type === typeFilter)
     : incoming;
   const filteredTotal = filteredOutgoing.length + filteredIncoming.length;
-
-  if (loading) {
-    return (
-      <Card className={className}>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Link2 className="h-4 w-4" />
-            {resolvedTitle}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-6">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   if (error) {
     return (
@@ -193,7 +192,7 @@ export function EntityRelationshipPanel({
             <CardTitle className="text-base flex items-center gap-2">
               <Link2 className="h-4 w-4" />
               {resolvedTitle}
-              <Badge variant="secondary" className="ml-1 text-xs">{total}</Badge>
+              {!loading && <Badge variant="secondary" className="ml-1 text-xs">{total}</Badge>}
             </CardTitle>
             {canEdit && (
               <Button variant="outline" size="sm" onClick={() => setIsAddOpen(true)}>
@@ -203,6 +202,7 @@ export function EntityRelationshipPanel({
           </div>
         </CardHeader>
         <CardContent>
+          <ContentSkeleton loading={loading}>
           {total === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
               {t('common:entityRelationships.noneFound')}
@@ -319,6 +319,7 @@ export function EntityRelationshipPanel({
               )}
             </div>
           )}
+          </ContentSkeleton>
         </CardContent>
       </Card>
 

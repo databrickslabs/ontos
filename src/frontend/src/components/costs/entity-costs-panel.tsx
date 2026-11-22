@@ -8,11 +8,19 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Plus, RefreshCcw, Trash2, Pencil, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, RefreshCcw, Trash2, Pencil, ArrowLeft, ArrowRight } from 'lucide-react';
 import type { EntityKind, CostItem, CostItemCreate, CostItemUpdate, CostCenter, CostSummary } from '@/types/costs';
 import { formatCents } from '@/types/costs';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+// Stands in for the cost items while they load (see ContentSkeleton)
+const sampleCost = (id: string, title: string, amount: number): CostItem => ({
+  id, entity_id: 'sample', entity_type: 'data_product' as EntityKind, title, cost_center: 'INFRASTRUCTURE',
+  amount_cents: amount, currency: 'USD', start_month: '2026-01-01', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+});
+const COSTS_SAMPLE: CostItem[] = [sampleCost('c1', 'Sample compute cost', 125000), sampleCost('c2', 'Storage', 42000)];
 
 type Props = { entityId: string; entityType: EntityKind };
 
@@ -206,11 +214,12 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
 
         <Separator />
 
-        {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t('metadata:costs.loading')}</div>
-        ) : items.length === 0 ? (
-          <div className="text-sm text-muted-foreground">{t('metadata:costs.noItemsForMonth')}</div>
-        ) : (
+        {/* While loading, a sample in skeleton mode (ContentSkeleton) */}
+        <ContentSkeleton
+          loading={loading}
+          empty={items.length === 0}
+          emptyMessage={<div className="text-sm text-muted-foreground">{t('metadata:costs.noItemsForMonth')}</div>}
+        >
           <Table>
             <TableHeader>
               <TableRow>
@@ -222,7 +231,7 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map(it => (
+              {(loading ? COSTS_SAMPLE : items).map(it => (
                 <TableRow key={it.id}>
                   <TableCell className="font-medium">{it.title || '—'}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
@@ -246,7 +255,7 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
               ))}
             </TableBody>
           </Table>
-        )}
+        </ContentSkeleton>
 
         <Dialog open={showForm} onOpenChange={setShowForm}>
           <DialogContent className="max-w-xl">

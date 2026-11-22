@@ -300,6 +300,39 @@ def test_saving_a_rule_with_llm_check_in_where_is_refused(api):
     api.manager.create_policy.assert_not_called()
 
 
+@pytest.mark.parametrize('action, refused', [
+    ("ON_FAIL ASSIGN_TAG needs_docs: 'yes'", 'ASSIGN_TAG'),
+    ("ON_PASS REMOVE_TAG needs_docs", 'REMOVE_TAG'),
+])
+def test_saving_an_llm_check_rule_with_a_tag_action_is_refused(api, action, refused):
+    # A steered verdict would change tags, which feed UC tag sync and other gates
+    rule = f"MATCH (t:table)\nASSERT LLM_CHECK(t.comment, 'x')\n{action}"
+
+    response = api.http.post('/api/compliance/policies', json=_payload(rule))
+
+    assert response.status_code == 422, response.text
+    detail = response.json()['detail']
+    assert (detail['code'], detail['params']) == ('llm_check_tag_action', {'actions': refused})
+    api.manager.create_policy.assert_not_called()
+
+
+def test_an_llm_check_rule_can_still_notify(api):
+    rule = ("MATCH (t:table)\nASSERT LLM_CHECK(t.comment, 'x')\n"
+            "ON_FAIL NOTIFY 'steward@example.com'")
+
+    response = api.http.post('/api/compliance/policies', json=_payload(rule))
+
+    assert response.status_code != 422, response.text
+
+
+def test_a_tag_action_without_llm_check_is_still_saved(api):
+    rule = "MATCH (t:table)\nASSERT t.comment != ''\nON_FAIL ASSIGN_TAG needs_docs: 'yes'"
+
+    response = api.http.post('/api/compliance/policies', json=_payload(rule))
+
+    assert response.status_code != 422, response.text
+
+
 def test_the_rule_test_without_a_workspace_client_answers_503(api):
     error = RuntimeError('no workspace')
     error.error_code = 'workspace_client_unavailable'

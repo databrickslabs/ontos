@@ -268,6 +268,7 @@
       "llm_check_truncated": "Het antwoord van het model werd niet afgemaakt.",
       "llm_check_invalid_reply": "Het antwoord van het model was geen PASS- of FAIL-oordeel.",
       "llm_check_empty_text": "De tekst is leeg.",
+      "llm_check_text_too_short": "Niet gecontroleerd: de tekst is te kort om te beoordelen.",
       "rule_evaluation_failed": "De regel kon niet worden geëvalueerd op deze entiteit.",
       "llm_check_text_rejected": "Niet gecontroleerd: de veiligheidscontrole heeft de tekst gemarkeerd (bijvoorbeeld instructies aan het model).",
       "llm_check_daily_quota_exceeded": "Niet gecontroleerd: u hebt uw modelaanroepen voor vandaag gebruikt.",
@@ -278,6 +279,7 @@
       "llm_check_test_rate_limited": "Te veel tests in korte tijd. Probeer het over {{retryAfter}} seconden opnieuw.",
       "llm_check_entity_read_required": "Deze regel gebruikt LLM_CHECK op {{entityType}}-entiteiten. Voor uitvoeren of testen is leestoegang daartoe nodig.",
       "llm_check_admin_required": "Deze regel gebruikt LLM_CHECK. Opslaan, uitvoeren of testen vereist beheerderstoegang tot compliance.",
+      "llm_check_tag_action": "Een regel met LLM_CHECK kan ASSIGN_TAG en REMOVE_TAG niet gebruiken ({{actions}}): het oordeel van het model zou tags wijzigen. Gebruik NOTIFY, of een aparte regel zonder LLM_CHECK voor de tagacties.",
       "llm_check_daily_quota_exceeded": "U hebt uw {{limit}} LLM_CHECK-modelaanroepen voor vandaag gebruikt. Probeer het over {{retryAfter}} seconden opnieuw (de telling begint om middernacht UTC opnieuw).",
       "llm_check_policy_in_use": "Dit beleid wordt gebruikt door {{workflowSteps}} beleidscontroles in workflows en {{maturityGates}} volwassenheidspoorten. Die kunnen LLM_CHECK niet evalueren, dus daar zou elke entiteit mislukken. Verwijder het beleid daar eerst, of gebruik LLM_CHECK in een apart beleid.",
       "llm_check_in_where": "LLM_CHECK wordt alleen in de ASSERT geëvalueerd. In de WHERE mislukt het, dus de regel slaat elke entiteit over. Verplaats het naar de ASSERT."

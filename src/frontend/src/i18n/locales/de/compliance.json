@@ -268,6 +268,7 @@
       "llm_check_truncated": "Die Antwort des Modells wurde nicht abgeschlossen.",
       "llm_check_invalid_reply": "Die Antwort des Modells war kein PASS- oder FAIL-Urteil.",
       "llm_check_empty_text": "Der Text ist leer.",
+      "llm_check_text_too_short": "Nicht geprüft: Der Text ist zu kurz für eine Bewertung.",
       "rule_evaluation_failed": "Die Regel konnte für diese Entität nicht ausgewertet werden.",
       "llm_check_text_rejected": "Nicht geprüft: Die Sicherheitsprüfung hat den Text markiert (zum Beispiel Anweisungen an das Modell).",
       "llm_check_daily_quota_exceeded": "Nicht geprüft: Sie haben Ihre Modellaufrufe für heute aufgebraucht.",
@@ -278,6 +279,7 @@
       "llm_check_test_rate_limited": "Zu viele Tests in kurzer Zeit. Versuchen Sie es in {{retryAfter}} Sekunden erneut.",
       "llm_check_entity_read_required": "Diese Regel verwendet LLM_CHECK für {{entityType}}-Entitäten. Zum Ausführen oder Testen ist Lesezugriff darauf nötig.",
       "llm_check_admin_required": "Diese Regel verwendet LLM_CHECK. Speichern, Ausführen oder Testen erfordert Administratorzugriff auf Compliance.",
+      "llm_check_tag_action": "Eine Regel mit LLM_CHECK kann ASSIGN_TAG und REMOVE_TAG nicht verwenden ({{actions}}): Das Urteil des Modells würde Tags ändern. Verwenden Sie NOTIFY oder eine separate Regel ohne LLM_CHECK für die Tag-Aktionen.",
       "llm_check_daily_quota_exceeded": "Sie haben Ihre {{limit}} LLM_CHECK-Modellaufrufe für heute aufgebraucht. Versuchen Sie es in {{retryAfter}} Sekunden erneut (die Zählung beginnt um Mitternacht UTC neu).",
       "llm_check_policy_in_use": "Diese Richtlinie wird von {{workflowSteps}} Workflow-Richtlinienprüfungen und {{maturityGates}} Reifegrad-Gates verwendet. Diese können LLM_CHECK nicht auswerten, daher würde dort jede Entität abgelehnt. Entfernen Sie die Richtlinie zuerst dort, oder verwenden Sie LLM_CHECK in einer eigenen Richtlinie.",
       "llm_check_in_where": "LLM_CHECK wird nur im ASSERT ausgewertet. Im WHERE schlägt es fehl, sodass die Regel jede Entität überspringt. Verschieben Sie es in das ASSERT."

@@ -636,6 +636,21 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
             "LLM_CHECK is only evaluated in ASSERT; in WHERE it fails, so the rule "
             "would skip every entity. Move it to ASSERT."
         )
+    if llm_check_calls(parsed):
+        tag_actions = sorted({
+            a.get('type') for a in (parsed.get('on_pass_actions') or [])
+            + (parsed.get('on_fail_actions') or []) if a.get('type') in LLM_CHECK_REFUSED_ACTIONS
+        })
+        if tag_actions:
+            # The verdict picks ON_PASS / ON_FAIL, and an entity's owner can edit the
+            # text the model reads: a steered verdict would change tags, which feed
+            # UC tag sync and other gates. NOTIFY stays: a person reads it
+            raise LlmCheckTagActionError(
+                "A rule with LLM_CHECK can't use ASSIGN_TAG or REMOVE_TAG: the model's "
+                "verdict would change tags. Use NOTIFY, or a separate rule without "
+                "LLM_CHECK for the tag actions.",
+                actions=', '.join(tag_actions),
+            )
     for call in llm_check_calls(parsed):
         if llm_check_criterion(call) is None:
             raise LlmCheckCriterionError(
@@ -669,6 +684,17 @@ class LlmCheckInWhereError(CodedValueError):
     """A rule with LLM_CHECK in WHERE (rejected on save)."""
 
     code = 'llm_check_in_where'
+
+
+# The actions a rule with LLM_CHECK can't have: they write on a model's verdict.
+# Revisit once model verdicts can go through Authority Resolution (#831)
+LLM_CHECK_REFUSED_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
+
+
+class LlmCheckTagActionError(CodedValueError):
+    """A rule with LLM_CHECK and ASSIGN_TAG / REMOVE_TAG actions (rejected on save)."""
+
+    code = 'llm_check_tag_action'
 
 
 def llm_check_calls(parsed: Dict[str, Any]) -> list:

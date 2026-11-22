@@ -7,6 +7,19 @@ import pytest
 from src.db_models.data_domains import DataDomain
 from src.tests.helpers import FakeLlm, llm_reply
 
+
+@pytest.fixture(autouse=True)
+def floor(monkeypatch):
+    """LLM_CHECK's minimum text length: 1 here, as these tests judge short texts;
+    ``floor(n)`` sets it (the floor's own tests)."""
+    from src.common import compliance_llm_check
+
+    def set_floor(chars):
+        monkeypatch.setattr(compliance_llm_check, 'LLM_CHECK_MIN_TEXT_CHARS', chars)
+    set_floor(1)
+    return set_floor
+
+
 GRAIN = 'states the grain of the table'
 RULE = f"MATCH (d:domain)\nASSERT LLM_CHECK(d.description, '{GRAIN}')"
 

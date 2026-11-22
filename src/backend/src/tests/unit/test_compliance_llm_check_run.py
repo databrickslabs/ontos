@@ -5,12 +5,27 @@ import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
 from src.controller.compliance_manager import ComplianceManager, run_score_fields
 from src.db_models.compliance import CompliancePolicyDb, ComplianceResultDb
 from src.tests.helpers import FakeLlm, llm_reply as _reply
+
+
+@pytest.fixture(autouse=True)
+def floor(monkeypatch):
+    """LLM_CHECK's minimum text length: 1 here, as these tests judge short texts;
+    ``floor(n)`` sets it (the floor's own tests)."""
+    from src.common import compliance_llm_check
+
+    def set_floor(chars):
+        monkeypatch.setattr(compliance_llm_check, 'LLM_CHECK_MIN_TEXT_CHARS', chars)
+    set_floor(1)
+    return set_floor
+
 
 GRAIN = 'states the grain of the table'
 RULE = f"MATCH (d:domain)\nASSERT LLM_CHECK(d.description, '{GRAIN}')"

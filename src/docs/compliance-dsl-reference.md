@@ -180,14 +180,18 @@ injection) is only caught by the safety scan and the prompt, not by code. A
 rule that also requires a minimum length fails short or empty texts without a
 call, whatever the model answers, and saves calls.
 
-**Deterministic floor, for rule authors.** Write every `LLM_CHECK` rule as
-`<floor> AND LLM_CHECK(...)`, where the floor is checked by code:
+**Deterministic floor.** `LLM_CHECK` itself checks, in code and before any call:
 
 - non-empty: an empty or missing text fails without a call (`llm_check_empty_text`),
   also under `NOT`, so `NOT LLM_CHECK(...)` never passes an undocumented object;
-- a minimum length that a useful text can't be shorter than, such as
-  `LENGTH(t.comment) >= 40`: a one-word or placeholder text ("TBD", "table")
-  fails whatever the model answers.
+- a minimum length of 20 characters (without the spaces around it): a shorter,
+  placeholder text ("TBD", "table") fails without a call
+  (`llm_check_text_too_short`), also under `NOT`, whatever a model would answer.
+
+Both count as failures in the score (there is nothing to judge), not as not
+evaluated, and, as for every check without a verdict, the entity's `ON_PASS` /
+`ON_FAIL` actions don't run. A rule can raise the floor for its texts, as in the last example
+(`LENGTH(t.comment) >= 40 AND LLM_CHECK(...)`).
 
 The floor is what a rule still guarantees when the model is wrong or steered;
 the model only judges what the floor lets through. There is no verdict schema
@@ -198,15 +202,28 @@ rejected when the rule is saved (`llm_check_criterion_not_literal`), because it
 would put entity data into the model's instructions. The reason of a failed
 check is the model's text: it is capped at 300 characters and shown as plain
 text next to the result. Before saving, use **Test on a sample entity** in the
-rule editor to try a criterion on one entity (at most 10 tests a minute per user).
+rule editor to try a criterion on one entity (at most 10 tests a minute per user,
+counted per app process: with several replicas the limit is per replica; the
+daily quota is shared).
 
 - Access: saving, running or testing a rule with `LLM_CHECK` needs admin access
   to compliance (Data Governance Officers and Admins by default), as `NOTIFY`
   does (`llm_check_admin_required`). A run or test a user starts reads Unity
-  Catalog with that user's own token, so its results and reasons only cover the
-  objects the user can read; the app entity types the rule matches (data
-  products, contracts, domains, reviews) need read access to their feature
-  (`llm_check_entity_read_required`). Scheduled runs use the app's identity.
+  Catalog with that user's own token, as every run a user starts does, so its
+  results and reasons only cover the objects the user can read; the app entity
+  types the rule matches (data products, contracts, domains, reviews) need read
+  access to their feature (`llm_check_entity_read_required`). Scheduled runs use
+  the app's identity.
+- The serving endpoint is called with the app's identity, also for runs and
+  tests a user starts: the user's token reads Unity Catalog, not the model. What
+  bounds it is the admin gate above, the per-run budget and the user's daily quota.
+- Actions: a rule with `LLM_CHECK` can't have `ASSIGN_TAG` or `REMOVE_TAG`; saving
+  it is refused (`llm_check_tag_action`). The model's verdict picks
+  `ON_PASS` / `ON_FAIL`, and an entity's owner can edit the text the model reads,
+  so a steered verdict would change tags, which feed Unity Catalog tag sync and
+  other gates. `NOTIFY` is allowed: a person reads it. Tag actions on model
+  verdicts can be revisited once verdicts can go through Authority Resolution
+  (#831) before anything is written.
 - Data leaves the compliance store: the text under test (descriptions, column
   comments, owner text) goes to the serving endpoint, Foundation Model APIs or
   the model behind `LLM_ENDPOINT`, with no redaction of personal data or
@@ -245,7 +262,10 @@ rule editor to try a criterion on one entity (at most 10 tests a minute per user
   so a verdict of another model is never reused. The model that answered is stored with the verdict. Calls
   are made at temperature 0 (endpoints that reject it are called without it). Verdicts older than
   `COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS` (default 30) are asked again, and
-  deleted when a run starts.
+  deleted when a run starts. The cache is shared by every user and run: a
+  verdict and its reason are keyed by the text, not by who asked, so a user can
+  see a reason first written for another user's run over the same text (only
+  for objects they can read, see the results filter).
 - Budget: `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN` model calls (default 100; a
   check makes two, the scan and the verdict; cached verdicts make none; a retry
   of a transient error, one at most per call, and a call made again without

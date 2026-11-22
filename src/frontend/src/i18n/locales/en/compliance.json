@@ -268,6 +268,7 @@
       "llm_check_truncated": "The model's reply did not finish.",
       "llm_check_invalid_reply": "The model's reply was not a PASS or FAIL verdict.",
       "llm_check_empty_text": "The text is empty.",
+      "llm_check_text_too_short": "Not checked: the text is too short to judge.",
       "rule_evaluation_failed": "The rule could not be evaluated on this entity.",
       "llm_check_text_rejected": "Not checked: the safety check flagged the text (for example, instructions to the model).",
       "llm_check_daily_quota_exceeded": "Not checked: you used your model calls for today.",
@@ -278,6 +279,7 @@
       "llm_check_test_rate_limited": "Too many tests in a short time. Try again in {{retryAfter}} seconds.",
       "llm_check_entity_read_required": "This rule uses LLM_CHECK on {{entityType}} entities. Running or testing it needs read access to them.",
       "llm_check_admin_required": "This rule uses LLM_CHECK. Saving, running or testing it requires admin access to compliance.",
+      "llm_check_tag_action": "A rule with LLM_CHECK can't use ASSIGN_TAG or REMOVE_TAG ({{actions}}): the model's verdict would change tags. Use NOTIFY, or a separate rule without LLM_CHECK for the tag actions.",
       "llm_check_daily_quota_exceeded": "You used your {{limit}} LLM_CHECK model calls for today. Try again in {{retryAfter}} seconds (the count starts over at midnight UTC).",
       "llm_check_policy_in_use": "This policy is used by {{workflowSteps}} workflow policy checks and {{maturityGates}} maturity gates. They can't evaluate LLM_CHECK, so it would fail every entity there. Remove the policy from them first, or use LLM_CHECK in a separate policy.",
       "llm_check_in_where": "LLM_CHECK is only evaluated in ASSERT. In WHERE it fails, so the rule skips every entity. Move it to ASSERT."

@@ -15,7 +15,22 @@ from src.common.compliance_dsl import (
 from src.common.compliance_entities import validate_rule
 from src.tests.helpers import FakeLlm, llm_reply as _reply
 
+
+@pytest.fixture(autouse=True)
+def floor(monkeypatch):
+    """LLM_CHECK's minimum text length: 1 here, as these tests judge short texts;
+    ``floor(n)`` sets it (the floor's own tests)."""
+    from src.common import compliance_llm_check
+
+    def set_floor(chars):
+        monkeypatch.setattr(compliance_llm_check, 'LLM_CHECK_MIN_TEXT_CHARS', chars)
+    set_floor(1)
+    return set_floor
+
+
 GRAIN = 'states the grain of the table'
+# The floor as the app sets it (the ``floor`` fixture lowers it for the other tests)
+REAL_FLOOR = llm.LLM_CHECK_MIN_TEXT_CHARS
 RULE = f"MATCH (t:table)\nASSERT LLM_CHECK(t.comment, '{GRAIN}')"
 
 
@@ -141,6 +156,37 @@ def test_empty_text_fails_without_a_call_also_under_not(rule, comment):
     assert raised.value.code == llm.EMPTY_TEXT
     assert evaluator.llm_checks[0].code == llm.EMPTY_TEXT
     assert fake.calls == []
+
+
+@pytest.mark.parametrize('rule', [
+    f"ASSERT LLM_CHECK(t.comment, '{GRAIN}')",
+    f"ASSERT NOT LLM_CHECK(t.comment, '{GRAIN}')",
+])
+@pytest.mark.parametrize('comment', ['TBD', '  table  ', 'x' * (REAL_FLOOR - 1)])
+def test_a_text_below_the_floor_fails_without_a_call_also_under_not(
+    rule, comment, floor,
+):
+    # The deterministic floor in code (#1486 review): whatever a model would answer
+    floor(REAL_FLOOR)
+    fake = FakeLlm(_reply('PASS: ok'))
+    evaluator = Evaluator({'comment': comment}, llm_checker=_checker(fake))
+
+    with pytest.raises(llm.LlmCheckError) as raised:
+        evaluator.evaluate(parse_rule(rule)['assert_clause'])
+
+    assert raised.value.code == llm.TEXT_TOO_SHORT
+    assert fake.calls == [] and fake.scans == []
+    # A failure in the score, as an empty text: not "not evaluated"
+    assert llm.counts_as_failure(llm.TEXT_TOO_SHORT)
+
+
+def test_a_text_at_the_floor_is_sent_to_the_model(floor):
+    floor(REAL_FLOOR)
+    fake = FakeLlm(_reply('PASS: states it'))
+
+    _, result = _assert({'comment': 'y' * REAL_FLOOR}, _checker(fake))
+
+    assert result is True and len(fake.calls) == 1
 
 
 # --- Fail closed ------------------------------------------------------------

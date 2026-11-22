@@ -54,6 +54,9 @@ LLM_CHECK_MAX_TOKENS = 2048
 LLM_CHECK_REASON_MAX_CHARS = 300
 # Longest text sent to the model; a longer one fails with llm_check_text_too_long.
 LLM_CHECK_MAX_TEXT_CHARS = 20000
+# The shortest text LLM_CHECK sends to the model (stripped); shorter ones fail
+# without a call (llm_check_text_too_short), the floor the rule always has
+LLM_CHECK_MIN_TEXT_CHARS = 20
 # Per call: seconds before a call fails (llm_check_call_failed), and retries. The
 # SDK defaults (600 s, 2 retries) could hold a run for hours on a hung endpoint.
 # The SDK retries nothing: a retry is made here, so it counts in the budget and
@@ -81,6 +84,8 @@ EMPTY_REPLY = 'llm_check_empty_reply'
 TRUNCATED = 'llm_check_truncated'
 INVALID_REPLY = 'llm_check_invalid_reply'
 EMPTY_TEXT = 'llm_check_empty_text'  # no text to judge (no call)
+# Shorter than LLM_CHECK_MIN_TEXT_CHARS (stripped): fails without a call
+TEXT_TOO_SHORT = 'llm_check_text_too_short'
 TEXT_REJECTED = 'llm_check_text_rejected'  # the injection scan didn't find the text safe
 # LLM_BASE_URL points outside the Databricks workspace: entity text isn't sent there
 EXTERNAL_ENDPOINT = 'llm_check_external_endpoint'
@@ -99,6 +104,7 @@ _MESSAGES = {
     TRUNCATED: "LLM_CHECK failed: the model's reply did not finish",
     INVALID_REPLY: "LLM_CHECK failed: the model's reply is not a PASS or FAIL verdict",
     EMPTY_TEXT: "LLM_CHECK was not run: the text is empty",
+    TEXT_TOO_SHORT: "LLM_CHECK was not run: the text is too short to judge",
     TEXT_REJECTED: "LLM_CHECK was not run: the safety check flagged the text",
     QUOTA_EXCEEDED: "LLM_CHECK was not run: you used your model calls for today",
     EXTERNAL_ENDPOINT: (
@@ -130,11 +136,12 @@ Keep the reason under 200 characters. If you cannot tell, answer FAIL."""
 def counts_as_failure(code: Optional[str]) -> bool:
     """Whether a check without a verdict still fails the entity in the run's score.
 
-    An empty text has nothing to judge, so it fails (missing documentation). Any
-    other code (budget, quota, no endpoint, refusal, call failure...) says nothing
-    about the entity: it is not evaluated, and left out of the score.
+    An empty text, or one shorter than ``LLM_CHECK_MIN_TEXT_CHARS``, has nothing
+    to judge, so it fails (missing documentation). Any other code (budget, quota,
+    no endpoint, refusal, call failure...) says nothing about the entity: it is
+    not evaluated, and left out of the score.
     """
-    return code == EMPTY_TEXT
+    return code in (EMPTY_TEXT, TEXT_TOO_SHORT)
 
 
 @dataclass(frozen=True)
@@ -484,6 +491,10 @@ class LlmChecker:
             # Nothing to judge: no verdict, so it fails closed like the errors
             raise self._error(criterion, EMPTY_TEXT)
         text = str(text)
+        if len(text.strip()) < LLM_CHECK_MIN_TEXT_CHARS:
+            # The deterministic floor, in code: a placeholder ("TBD", "table") fails
+            # whatever a model would answer, and costs no call
+            raise self._error(criterion, TEXT_TOO_SHORT)
         if not self._enabled:
             raise self._error(criterion, DISABLED)
         if not self._endpoint:

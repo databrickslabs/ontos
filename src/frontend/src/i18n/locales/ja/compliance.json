@@ -268,6 +268,7 @@
       "llm_check_truncated": "モデルの回答が完了しませんでした。",
       "llm_check_invalid_reply": "モデルの回答が PASS または FAIL の判定ではありませんでした。",
       "llm_check_empty_text": "テキストが空です。",
+      "llm_check_text_too_short": "チェックされていません: テキストが短すぎて判定できません。",
       "rule_evaluation_failed": "このエンティティでルールを評価できませんでした。",
       "llm_check_text_rejected": "未チェック: 安全性チェックがテキストを検出しました (モデルへの指示など)。",
       "llm_check_daily_quota_exceeded": "未チェック: 本日のモデル呼び出しを使い切りました。",
@@ -278,6 +279,7 @@
       "llm_check_test_rate_limited": "短時間にテストが多すぎます。{{retryAfter}} 秒後にもう一度お試しください。",
       "llm_check_entity_read_required": "このルールは {{entityType}} エンティティに LLM_CHECK を使用します。実行またはテストするには、それらへの読み取りアクセスが必要です。",
       "llm_check_admin_required": "このルールは LLM_CHECK を使用します。保存、実行、テストにはコンプライアンスの管理者アクセスが必要です。",
+      "llm_check_tag_action": "LLM_CHECK を含むルールでは ASSIGN_TAG と REMOVE_TAG ({{actions}}) を使えません。モデルの判定でタグが変わってしまうためです。NOTIFY を使うか、タグ操作は LLM_CHECK のない別のルールにしてください。",
       "llm_check_daily_quota_exceeded": "本日の LLM_CHECK のモデル呼び出し {{limit}} 回を使い切りました。{{retryAfter}} 秒後にもう一度お試しください (カウントは UTC の午前 0 時にリセットされます)。",
       "llm_check_policy_in_use": "このポリシーは {{workflowSteps}} 件のワークフローのポリシーチェックと {{maturityGates}} 件の成熟度ゲートで使用されています。それらは LLM_CHECK を評価できないため、そこではすべてのエンティティが不合格になります。先にそれらからポリシーを外すか、別のポリシーで LLM_CHECK を使用してください。",
       "llm_check_in_where": "LLM_CHECK は ASSERT でのみ評価されます。WHERE では失敗するため、ルールはすべてのエンティティをスキップします。ASSERT に移動してください。"

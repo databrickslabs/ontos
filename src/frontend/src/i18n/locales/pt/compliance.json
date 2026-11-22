@@ -268,6 +268,7 @@
       "llm_check_truncated": "A resposta do modelo não terminou.",
       "llm_check_invalid_reply": "A resposta do modelo não foi um veredito PASS ou FAIL.",
       "llm_check_empty_text": "O texto está vazio.",
+      "llm_check_text_too_short": "Não verificado: o texto é curto demais para ser avaliado.",
       "rule_evaluation_failed": "Não foi possível avaliar a regra nesta entidade.",
       "llm_check_text_rejected": "Não verificado: a verificação de segurança sinalizou o texto (por exemplo, instruções para o modelo).",
       "llm_check_daily_quota_exceeded": "Não verificado: você usou suas chamadas ao modelo de hoje.",
@@ -278,6 +279,7 @@
       "llm_check_test_rate_limited": "Testes demais em pouco tempo. Tente de novo em {{retryAfter}} segundos.",
       "llm_check_entity_read_required": "Esta regra usa LLM_CHECK em entidades {{entityType}}. Executá-la ou testá-la exige acesso de leitura a elas.",
       "llm_check_admin_required": "Esta regra usa LLM_CHECK. Salvá-la, executá-la ou testá-la exige acesso de administrador à conformidade.",
+      "llm_check_tag_action": "Uma regra com LLM_CHECK não pode usar ASSIGN_TAG nem REMOVE_TAG ({{actions}}): o veredito do modelo mudaria tags. Use NOTIFY, ou uma regra separada sem LLM_CHECK para as ações de tag.",
       "llm_check_daily_quota_exceeded": "Você usou suas {{limit}} chamadas ao modelo de LLM_CHECK de hoje. Tente de novo em {{retryAfter}} segundos (a contagem recomeça à meia-noite UTC).",
       "llm_check_policy_in_use": "Esta política é usada por {{workflowSteps}} verificações de política de workflows e {{maturityGates}} gates de maturidade. Eles não avaliam LLM_CHECK, então lá todas as entidades seriam reprovadas. Remova a política deles primeiro, ou use LLM_CHECK em uma política separada.",
       "llm_check_in_where": "LLM_CHECK só é avaliado no ASSERT. No WHERE ele falha, então a regra ignora todas as entidades. Mova-o para o ASSERT."

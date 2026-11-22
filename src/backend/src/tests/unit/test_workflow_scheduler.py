@@ -1240,3 +1240,29 @@ def test_a_run_raising_on_the_daemon_pool_ends_and_frees_its_workflow(db_session
         assert scheduler.wait_for_runs(timeout=5)
     assert len(ran) == 1
     scheduler.drain(timeout=1)
+
+
+def test_a_run_s_start_budget_does_not_include_the_claims_before_it(tmp_path):
+    """The budget counts from the pass's now: slow claims earlier in the pass use it up."""
+    import time
+
+    from sqlalchemy import create_engine
+
+    from src.common.database import Base
+    from src.controller.workflow_scheduler import _Schedule
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'budget.db'}")
+    Base.metadata.create_all(engine, tables=[Base.metadata.tables['scheduler_claims']])
+    deferred = _Deferred()
+    scheduler = WorkflowScheduler(sessionmaker(bind=engine), instance_id='a',
+                                  run_executor=deferred)
+    schedule = _Schedule(workflow_id='w', cron=EVERY_5, tz=None, changed_at=CHANGED)
+    slot = _at(minute=5)
+    try:
+        scheduler._pass_started = time.monotonic() - 100  # the pass began 100 s ago
+        assert scheduler._fire(schedule, slot, slot) is True
+    finally:
+        engine.dispose()
+    start_by = deferred.pending[0][3]['start_by']
+    # 5 minutes to the next slot, 100 s of them already gone
+    assert 190 < start_by - time.monotonic() < 200

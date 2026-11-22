@@ -260,6 +260,10 @@ class WorkflowScheduler:
         # scheduled workflow (no database access); True = ``_schedules`` is current.
         self._has_scheduled: Optional[bool] = None
         self._run_lock = threading.Lock()
+        # ``time.monotonic()`` when the current pass began: the budget of a run to start
+        # (``_start_budget``) is measured from the pass's ``now``, so it ends at the same
+        # instant however long the claims before this one took.
+        self._pass_started: Optional[float] = None
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -397,6 +401,7 @@ class WorkflowScheduler:
     def run_once(self, now: Optional[datetime] = None) -> Optional[float]:
         """Fire the due slots; return the seconds until the next deadline (None: none)."""
         with self._run_lock:
+            self._pass_started = time.monotonic()
             explicit_now = now
             now = _utc(now) if now else self._clock()
             check_requested, self._change_check_requested = self._change_check_requested, False
@@ -615,7 +620,10 @@ class WorkflowScheduler:
             logger.info(f"Slot {slot.isoformat()} of {key} was claimed by another instance")
             return True
         workflow_id = schedule.workflow_id
-        start_by = time.monotonic() + self._start_budget(schedule, slot, now)
+        # From the pass's start, not from now: the claims before this one took time that
+        # the run's budget (counted from the pass's ``now``) must not get back.
+        started = self._pass_started if self._pass_started is not None else time.monotonic()
+        start_by = started + self._start_budget(schedule, slot, now)
         failed: Optional[str] = None
         # Submitted and registered under the lock drain() takes to set ``_closing``:
         # either drain() sees the run (and cancels it if queued) or it is never submitted.

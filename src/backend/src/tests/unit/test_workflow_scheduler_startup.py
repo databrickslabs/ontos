@@ -1,5 +1,6 @@
 """The app starts the workflow scheduler with its settings and stops it (#941)."""
 import os
+import threading
 
 os.environ['TESTING'] = 'true'
 
@@ -53,9 +54,11 @@ def test_a_failing_start_does_not_stop_the_startup():
 class _FakeScheduler:
     def __init__(self):
         self.stopped = 0
+        self.stopped_in = None
 
     def stop(self):
         self.stopped += 1
+        self.stopped_in = threading.current_thread()
 
 
 @pytest.fixture
@@ -78,3 +81,10 @@ def test_a_re_initialization_stops_the_old_scheduler(fake_scheduler):
 async def test_the_shutdown_stops_the_scheduler(fake_scheduler):
     await app_module.shutdown_event()
     assert fake_scheduler.stopped == 1
+
+
+@pytest.mark.asyncio
+async def test_the_shutdown_stop_runs_off_the_event_loop(fake_scheduler):
+    """stop() joins the scheduler thread and drains the runs: it must not block the loop."""
+    await app_module.shutdown_event()
+    assert fake_scheduler.stopped_in is not threading.current_thread()

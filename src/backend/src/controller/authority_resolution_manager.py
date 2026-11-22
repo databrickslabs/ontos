@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from src.common.api_errors import CodedValueError, client_failure
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
+from src.common import authority_definition as definition
 from src.common import authority_resolution_dna as authority_dna
 from src.common.authority_resolution_dna import Criterion, DIR_NONE
 from src.common.authority_check_templates import get_template
@@ -89,6 +90,20 @@ class AuthorityNotAReviewerError(AuthorityPermissionError):
     code = "authority_not_a_reviewer"
 
 
+class AuthorityImmutableError(CodedValueError):
+    """An edit to an active, retired or earlier version. Create a New Version instead (B6)."""
+
+    code = "authority_immutable"
+    http_status = 409
+
+
+class AuthorityStatusError(CodedValueError):
+    """A status change the lifecycle refuses; ``params.reason`` says which gate failed (S3, B5, B6)."""
+
+    code = "authority_status_conflict"
+    http_status = 409
+
+
 class AuthoritySelfAffirmationError(AuthorityPermissionError):
     """The signed-in user created, or last changed, the definition they would affirm (B4)."""
 
@@ -127,6 +142,21 @@ STATUS_DRAFT = "draft"
 STATUS_ACTIVE = "active"
 STATUS_NEEDS_REVIEW = "needs_review"
 STATUS_RETIRED = "retired"
+
+# Allowed status changes (S3), in one place. A status not listed is refused.
+# Leaving needs_review for draft is refused once the version was activated (it would
+# make a published snapshot editable). Retiring clears the affirmations, so a
+# retired version comes back only with fresh ones.
+_ALLOWED_TRANSITIONS = {
+    STATUS_DRAFT: {STATUS_NEEDS_REVIEW, STATUS_ACTIVE, STATUS_RETIRED},
+    STATUS_NEEDS_REVIEW: {STATUS_DRAFT, STATUS_ACTIVE, STATUS_RETIRED},
+    STATUS_ACTIVE: {STATUS_NEEDS_REVIEW, STATUS_RETIRED},
+    STATUS_RETIRED: {STATUS_ACTIVE},
+}
+
+# Reason code and message when an AR has no enabled decision check (B5).
+REASON_NO_ENABLED_CHECKS = "no_enabled_checks"
+NO_ENABLED_CHECKS_MESSAGE = "This Authority Relation has no enabled decision checks."
 
 # Controlled vocabulary for the Action element (ARF §3.2 business domain).
 ACTION_VOCAB = {"approve", "escalate", "override", "delegate", "veto"}
@@ -317,6 +347,135 @@ class AuthorityResolutionManager(SearchableAsset):
     def _now() -> datetime:
         return datetime.utcnow()
 
+    # ------------------------------------------------ definition and hash (B6)
+
+    @staticmethod
+    def _version_tuple(version: Any) -> Tuple[int, ...]:
+        parts = [int(p) for p in str(version or "").split(".") if p.isdigit()]
+        return tuple(parts) or (0,)
+
+    def _latest_version(self, db: Session, relation: AuthorityRelationDb) -> Optional[AuthorityRelationDb]:
+        """The family's highest version string (ties go to the newest row)."""
+        family_id = getattr(relation, "version_family_id", None) or relation.id
+        best: Optional[AuthorityRelationDb] = None
+        for v in authority_relation_repo.get_family_versions(db, family_id=family_id):
+            if best is None or self._version_tuple(v.version) > self._version_tuple(best.version):
+                best = v
+        return best
+
+    def is_editable(self, db: Session, relation: AuthorityRelationDb) -> bool:
+        """Only a draft that was never activated, and is the family's latest version, can be edited.
+
+        Active, retired and needs_review versions, and every older version, are
+        immutable: a change goes through New Version (B6).
+        """
+        if relation.status != STATUS_DRAFT or getattr(relation, "activated_at", None) is not None:
+            return False
+        latest = self._latest_version(db, relation)
+        return latest is None or latest.id == relation.id
+
+    @staticmethod
+    def _criterion_dict(c: Any) -> Dict[str, Any]:
+        return {
+            "name": c.name, "rule": c.rule, "failure_message": c.failure_message,
+            "direction": c.direction, "weight": c.weight, "dimension": c.dimension,
+            "display_order": c.display_order, "enabled": c.enabled,
+        }
+
+    def _stored_view(self, db: Session, relation: AuthorityRelationDb) -> Dict[str, Any]:
+        """The definition as it is stored (see ``authority_definition`` for what it covers)."""
+        criteria = [self._criterion_dict(c) for c in authority_criterion_repo.list_for_relation(
+            db, relation_id=relation.id)]
+        family = self._family_slug_of(db, relation)
+        prerequisites = [
+            {"prerequisite_family_slug": e.prerequisite_family_slug,
+             "required": e.required, "display_order": e.display_order}
+            for e in (authority_prerequisite_repo.list_for_family(db, relation_family_slug=family)
+                      if family else [])
+        ]
+        refs = [
+            {**{k: getattr(r, k) for k in definition.RESOURCE_REF_KEYS},
+             "mcp_result_pointer": r.mcp_result_pointer or "$"}
+            for r in authority_resource_ref_repo.list_for_relation(db, relation_id=relation.id)
+        ]
+        participants = [
+            {k: getattr(a, k, None) for k in definition.PARTICIPANT_KEYS}
+            for a in authority_affirmation_repo.list_for_relation(db, relation_id=relation.id)
+        ]
+        scalars = {k: getattr(relation, k, None) for k in ("name", *definition.DEFINITION_FIELDS)}
+        return definition.definition_view(scalars, criteria, prerequisites, refs, participants)
+
+    def definition_hash(self, db: Session, relation: AuthorityRelationDb) -> str:
+        """The hash of the AR's current definition. Runs and affirmations store it."""
+        return definition.definition_hash(self._stored_view(db, relation))
+
+    def _incoming_view(
+        self, db: Session, relation: AuthorityRelationDb, data: Dict[str, Any],
+        criteria: Optional[List[Any]], affirmations: Optional[List[Any]],
+        prerequisites: Optional[List[Any]], resource_refs: Optional[List[Any]],
+    ) -> Dict[str, Any]:
+        """The definition a PUT would produce, in the same canonical form as the stored one.
+
+        A list the PUT doesn't carry is taken from the stored definition.
+        """
+        stored = self._stored_view(db, relation)
+        scalars = {k: (data[k] if k in data else getattr(relation, k, None))
+                   for k in ("name", *definition.DEFINITION_FIELDS)}
+        if "resolver_auth" in data:
+            scalars["resolver_auth"] = data["resolver_auth"] or RESOLVER_AUTH_OBO
+        if "dna_max_threshold" in data and data["dna_max_threshold"] is None:
+            scalars["dna_max_threshold"] = DEFAULT_DNA_CEILING
+        crit = stored["criteria"] if criteria is None else [
+            self._normalise_criterion(c, i) for i, c in enumerate(criteria)]
+        prereqs = stored["prerequisites"] if prerequisites is None else list(
+            self._prerequisite_rows(prerequisites).values())
+        refs = stored["resource_refs"] if resource_refs is None else self._resource_ref_rows(resource_refs)
+        parts = stored["participants"] if affirmations is None else [
+            self._participant_row(a) for a in affirmations]
+        return definition.definition_view(scalars, crit, prereqs, refs, parts)
+
+    @staticmethod
+    def _participant_row(item: Any) -> Dict[str, Any]:
+        a = item.dict() if hasattr(item, "dict") else dict(item)
+        return {
+            "principal": a.get("principal"), "principal_type": a.get("principal_type") or "user",
+            "role": a.get("role"), "business_role_id": a.get("business_role_id"),
+            "role_category": a.get("role_category"),
+            "is_approver": a.get("is_approver", True), "is_reviewer": a.get("is_reviewer", False),
+            "required": a.get("required", True),
+        }
+
+    @staticmethod
+    def _prerequisite_rows(prerequisites: List[Any]) -> Dict[str, Dict[str, Any]]:
+        """Prerequisite edges as they will be stored: one per slug, the last one wins."""
+        rows: Dict[str, Dict[str, Any]] = {}
+        for idx, item in enumerate(prerequisites):
+            p = item.dict() if hasattr(item, "dict") else dict(item)
+            slug = (p.get("prerequisite_family_slug") or "").strip()
+            if not slug:
+                continue
+            rows[slug] = {
+                "prerequisite_family_slug": slug,
+                "required": bool(p.get("required", True)),
+                "display_order": int(p.get("display_order", idx)),
+            }
+        return rows
+
+    @staticmethod
+    def _resource_ref_rows(refs: List[Any]) -> List[Dict[str, Any]]:
+        rows: Dict[str, Dict[str, Any]] = {}
+        for item in refs:
+            r = item.dict() if hasattr(item, "dict") else dict(item)
+            field_path = (r.get("field_path") or "").strip()
+            if not field_path:
+                continue
+            rows[field_path] = {
+                **{k: r.get(k) for k in definition.RESOURCE_REF_KEYS},
+                "field_path": field_path,
+                "mcp_result_pointer": r.get("mcp_result_pointer") or "$",
+            }
+        return list(rows.values())
+
     def _load_criteria(self, relation: AuthorityRelationDb) -> List[Criterion]:
         """The AR's enabled decision checks as engine ``Criterion`` objects.
 
@@ -351,7 +510,7 @@ class AuthorityResolutionManager(SearchableAsset):
             bool(relation.object_id),                                 # governs a concrete object
             bool(relation.evidence_sources
                  or (relation.evidence_binding or {}).get("source_table_fqn")),  # evidence bound
-            len(relation.criteria or []) > 0,                         # has decision criteria
+            any(getattr(c, "enabled", True) for c in (relation.criteria or [])),  # has an enabled decision check
             any(getattr(a, "is_approver", True) for a in (relation.affirmations or [])),  # has an approver
         ]
         missing = sum(1 for ok in checks if not ok)
@@ -673,6 +832,15 @@ class AuthorityResolutionManager(SearchableAsset):
         self, db: Session, relation_id: str, payload, current_user: Optional[str] = None,
         caller_is_admin: bool = False,
     ) -> Optional[AuthorityRelationDb]:
+        """Edit an AR. Only a draft's definition can change (B6).
+
+        A change to the definition of an active, retired, needs-review or older
+        version is refused with ``authority_immutable`` (409): create a New Version.
+        Metadata (description, owner, project, domains, tags) can change on any
+        version. On a draft, a change to the behaviour hash clears the DNA
+        measurement; the affirmations of the earlier definition stop counting
+        because their hash no longer matches.
+        """
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
             return None
@@ -698,15 +866,27 @@ class AuthorityResolutionManager(SearchableAsset):
         self._validate_scoping(db, data)
         if "resolver_auth" in data:
             data["resolver_auth"] = self._validate_resolver_auth(data["resolver_auth"])
-        update_data = {k: v for k, v in data.items() if k in _MODEL_COLUMNS}
 
-        # Versioning parity with Data Products / Contracts: edits mutate the
-        # current row in place (no auto-bump). A new immutable snapshot is
-        # created only via the explicit "New Version" action (create_new_version).
+        before = self._stored_view(db, relation)
+        incoming = self._incoming_view(db, relation, data, criteria, affirmations, prerequisites, resource_refs)
+        definition_changes = definition.definition_fingerprint(before) != definition.definition_fingerprint(incoming)
+        editable = self.is_editable(db, relation)
+        if not editable:
+            if definition_changes:
+                raise AuthorityImmutableError(
+                    "Only a draft can be edited. Create a New Version to change this Authority Relation.",
+                    status=relation.status, version=relation.version,
+                )
+            # Metadata only: the definition is unchanged, so nothing in it is written.
+            for key in ("name", *definition.DEFINITION_FIELDS):
+                data.pop(key, None)
+            criteria = affirmations = prerequisites = resource_refs = None
+
+        update_data = {k: v for k, v in data.items() if k in _MODEL_COLUMNS}
         # Keep base_name in step with a renamed AR so the family label stays right.
         if "name" in update_data:
             update_data.setdefault("base_name", update_data["name"])
-        if self._touches_definition(data, affirmations, criteria, prerequisites, resource_refs):
+        if editable and definition_changes:
             update_data["definition_edited_by"] = current_user
         relation = authority_relation_repo.update(db, db_obj=relation, obj_in=update_data)
 
@@ -728,35 +908,23 @@ class AuthorityResolutionManager(SearchableAsset):
         self._set_tags(db, relation_id, getattr(payload, "tags", None), current_user)
 
         # Replace helpers bulk-delete without session sync; drop the stale
-        # selectin-loaded collections so the recompute scores the new definition.
+        # selectin-loaded collections before comparing the stored definition again.
         db.flush()
         db.expire(relation, ["criteria", "affirmations"])
-
-        # Re-created participants start unaffirmed: an active AR can't stay active
-        # without its required affirmations.
-        if (relation.status == STATUS_ACTIVE and affirmations is not None
-                and not self.is_fully_affirmed(db, relation_id)):
-            relation = authority_relation_repo.update(db, db_obj=relation, obj_in={"status": STATUS_NEEDS_REVIEW})
-            self._log_timeline(db, relation_id, "Participants changed; status set to needs_review until re-affirmed.")
-
-        # Changing an active AR triggers recompute + re-review (best-effort recompute).
-        if relation.status == STATUS_ACTIVE:
-            try:
-                self.compute_dnaco(db, relation_id)
-            except Exception as e:  # pragma: no cover - evidence read is environment-dependent
-                logger.warning(f"DNAco recompute after update failed for {relation_id}: {e}")
+        if editable and definition_changes:
+            after = self._stored_view(db, relation)
+            if definition.definition_hash(after) != definition.definition_hash(before):
+                relation = authority_relation_repo.update(db, db_obj=relation, obj_in={
+                    "dna_magnitude": None, "dna_direction": None,
+                    "dna_dimensions": None, "dna_measured_at": None,
+                })
+                self._log_timeline(
+                    db, relation_id,
+                    "Definition changed: the DNA-Coefficient and the affirmations of the earlier "
+                    "definition no longer count. Measure and affirm this draft again.",
+                )
         self._reindex(db, relation)
         return relation
-
-    # Fields a PUT may change without touching the definition (metadata only).
-    _METADATA_FIELDS = ("description", "owner_team_id", "project_id", "domain_ids", "primary_domain_id", "tags")
-
-    @classmethod
-    def _touches_definition(cls, data: Dict[str, Any], affirmations, criteria, prerequisites, resource_refs) -> bool:
-        """True when a PUT carries a definition field (see ``_METADATA_FIELDS`` for the rest)."""
-        if any(v is not None for v in (affirmations, criteria, prerequisites, resource_refs)):
-            return True
-        return any(k not in cls._METADATA_FIELDS for k in data)
 
     def delete_relation(self, db: Session, relation_id: str) -> bool:
         """Delete one AR version without breaking its family's identity.
@@ -988,7 +1156,7 @@ class AuthorityResolutionManager(SearchableAsset):
             )] = old
         carried = {
             k: {f: getattr(o, f, None) for f in (
-                "affirmed", "affirmed_by", "affirmed_at", "notes",
+                "affirmed", "affirmed_by", "affirmed_at", "notes", "definition_hash",
                 "review_status", "review_answers", "review_request_id",
             )}
             for k, o in prior.items()
@@ -1015,6 +1183,7 @@ class AuthorityResolutionManager(SearchableAsset):
                 "affirmed": bool(keep.get("affirmed")),
                 "affirmed_by": keep.get("affirmed_by"),
                 "affirmed_at": keep.get("affirmed_at"),
+                "definition_hash": keep.get("definition_hash"),
                 "notes": keep.get("notes"),
                 "review_status": keep.get("review_status") or ("pending" if is_reviewer else "na"),
                 "review_answers": keep.get("review_answers"),
@@ -1538,6 +1707,7 @@ class AuthorityResolutionManager(SearchableAsset):
             )
         return authority_affirmation_repo.update(db, db_obj=aff, obj_in={
             "affirmed": True, "affirmed_by": affirmed_by, "affirmed_at": self._now(), "notes": notes,
+            "definition_hash": self.definition_hash(db, relation) if relation is not None else None,
         })
 
     @staticmethod
@@ -1552,13 +1722,25 @@ class AuthorityResolutionManager(SearchableAsset):
             if value
         }
 
-    def is_fully_affirmed(self, db: Session, relation_id: str) -> bool:
-        # Only APPROVER participants count toward the affirmation gate; pure
-        # reviewers/interviewees do not. (is_approver defaults True for rows
-        # created before the reviewer/approver split.)
+    @staticmethod
+    def _approvers(db: Session, relation_id: str) -> List[AuthorityAffirmationDb]:
+        """Only APPROVER participants count toward the affirmation gate; pure
+        reviewers/interviewees do not. (is_approver defaults True for rows
+        created before the reviewer/approver split.)"""
         affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation_id)
-        required = [a for a in affs if a.required and getattr(a, "is_approver", True)]
-        return len(required) > 0 and all(a.affirmed for a in required)
+        return [a for a in affs if a.required and getattr(a, "is_approver", True)]
+
+    def is_fully_affirmed(self, db: Session, relation_id: str) -> bool:
+        """Every required approver has affirmed the AR's *current* definition (B6).
+
+        An affirmation of an earlier draft does not count.
+        """
+        relation = authority_relation_repo.get(db, relation_id)
+        if relation is None:
+            return False
+        approvers = self._approvers(db, relation_id)
+        current = self.definition_hash(db, relation)
+        return bool(approvers) and all(a.affirmed and a.definition_hash == current for a in approvers)
 
     # ------------------------------------------------------- review process
 
@@ -1867,6 +2049,7 @@ class AuthorityResolutionManager(SearchableAsset):
             "relation_id": relation_id,
             "status": "running",
             "started_at": self._now(),
+            "definition_hash": self.definition_hash(db, relation),
         })
 
         try:
@@ -1931,6 +2114,8 @@ class AuthorityResolutionManager(SearchableAsset):
             if relation.status == STATUS_ACTIVE and overall > self._ceiling(relation):
                 agg["status"] = STATUS_NEEDS_REVIEW
                 auto_flagged = True
+                # Coming back to active needs fresh affirmations (S3).
+                self._clear_affirmations(db, relation_id)
             authority_relation_repo.update(db, db_obj=relation, obj_in=agg)
 
             # Record the run on the entity timeline (Comments).
@@ -2074,19 +2259,81 @@ class AuthorityResolutionManager(SearchableAsset):
         t = relation.dna_max_threshold
         return DEFAULT_DNA_CEILING if t is None else t
 
+    @staticmethod
+    def _clear_affirmations(db: Session, relation_id: str) -> None:
+        for aff in authority_affirmation_repo.list_for_relation(db, relation_id=relation_id):
+            authority_affirmation_repo.update(db, db_obj=aff, obj_in={
+                "affirmed": False, "affirmed_by": None, "affirmed_at": None,
+            })
+
+    @staticmethod
+    def _check_transition(relation: AuthorityRelationDb, status: str) -> None:
+        """The allowed status changes, from ``_ALLOWED_TRANSITIONS`` (S3)."""
+        current = relation.status
+        allowed = status in _ALLOWED_TRANSITIONS.get(current, set())
+        if current == STATUS_NEEDS_REVIEW and status == STATUS_DRAFT and getattr(relation, "activated_at", None):
+            allowed = False
+        if not allowed:
+            raise AuthorityStatusError(
+                f"An Authority Relation cannot go from '{current}' to '{status}'.",
+                reason="transition_not_allowed", **{"from": current, "to": status},
+            )
+
+    def _check_activation(self, db: Session, relation: AuthorityRelationDb) -> None:
+        """The gates for activation: an enabled check (B5); a measurement and the
+        approvals of the current definition (B6); the ceiling. Raises AuthorityStatusError."""
+        if not self._load_criteria(relation):
+            raise AuthorityStatusError(
+                "Add at least one enabled decision check before activating this version.",
+                reason="no_enabled_checks",
+            )
+        if relation.dna_magnitude is None:
+            raise AuthorityStatusError("The DNA-Coefficient has not been measured yet.", reason="not_measured")
+        current = self.definition_hash(db, relation)
+        latest_ok = next(
+            (r for r in authority_dna_run_repo.list_for_relation(db, relation_id=relation.id, limit=50)
+             if r.status == "succeeded"),
+            None,
+        )
+        if latest_ok is None or latest_ok.definition_hash != current:
+            raise AuthorityStatusError(
+                "The DNA-Coefficient was measured on an earlier draft. Measure this definition again.",
+                reason="dna_stale",
+            )
+        ceiling = self._ceiling(relation)
+        if relation.dna_magnitude > ceiling:
+            raise AuthorityStatusError(
+                f"DNA-Coefficient {relation.dna_magnitude} exceeds the maximum {ceiling}.",
+                reason="ceiling_exceeded", magnitude=relation.dna_magnitude, ceiling=ceiling,
+            )
+        approvers = self._approvers(db, relation.id)
+        if not approvers:
+            raise AuthorityStatusError(
+                "Name at least one required approver before activation.", reason="affirmations_missing",
+            )
+        if any(a.affirmed and a.definition_hash != current for a in approvers):
+            raise AuthorityStatusError(
+                "An approver affirmed an earlier draft. Affirm this definition again.",
+                reason="affirmations_stale",
+            )
+        if not all(a.affirmed for a in approvers):
+            raise AuthorityStatusError(
+                "All required affirmations must be completed before activation.",
+                reason="affirmations_missing",
+            )
+
     def set_status(
         self, db: Session, relation_id: str, status: str, caller_is_admin: bool = False,
-    ) -> Tuple[Optional[AuthorityRelationDb], Optional[str]]:
-        """Transition an AR's status. Returns (relation, error_message).
+    ) -> Optional[AuthorityRelationDb]:
+        """Move an AR to another status. Returns None when the AR does not exist.
 
-        Activating or retiring an AR is Admin-only; a Read-write author can
-        still move it between draft and needs_review.
+        Taking an AR into or out of service (active or retired, either side) is
+        Admin-only; a Read-write author moves it between draft and needs_review.
+        Refusals raise ``AuthorityStatusError`` with the failed gate as ``reason``.
         """
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
-            return None, "not_found"
-        # Taking an AR into or out of service (active or retired, either side) is
-        # Admin-only; a Read-write author moves it between draft and needs_review.
+            return None
         in_service = (STATUS_ACTIVE, STATUS_RETIRED)
         if (status in in_service or relation.status in in_service) and not caller_is_admin:
             raise AuthorityPermissionError(
@@ -2095,24 +2342,23 @@ class AuthorityResolutionManager(SearchableAsset):
                 **{"from": relation.status, "to": status, "required_level": "Admin"},
             )
         if status not in _ALLOWED_STATUSES:
-            return relation, f"Unknown status '{status}' — expected one of {_ALLOWED_STATUSES}."
+            raise AuthorityInvalidError(f"Unknown status '{status}' — expected one of {_ALLOWED_STATUSES}.")
+        if status == relation.status:
+            return relation
+        self._check_transition(relation, status)
         if status == STATUS_ACTIVE:
-            # Activation gate: DNAco measured & within ceiling, AND fully affirmed.
-            if relation.dna_magnitude is None:
-                return relation, "DNA-Coefficient has not been measured yet."
-            if relation.dna_magnitude > self._ceiling(relation):
-                return relation, (
-                    f"DNA-Coefficient {relation.dna_magnitude} exceeds the maximum "
-                    f"{self._ceiling(relation)}."
-                )
-            if not self.is_fully_affirmed(db, relation_id):
-                return relation, "All required affirmations must be completed before activation."
+            self._check_activation(db, relation)
+
         previous = relation.status
-        updated = authority_relation_repo.update(db, db_obj=relation, obj_in={"status": status})
-        if previous != status:
-            self._log_timeline(db, relation_id, f"Status changed from {previous} to {status}.")
+        changes: Dict[str, Any] = {"status": status}
+        if status == STATUS_ACTIVE and getattr(relation, "activated_at", None) is None:
+            changes["activated_at"] = self._now()
+        updated = authority_relation_repo.update(db, db_obj=relation, obj_in=changes)
+        if status == STATUS_RETIRED:
+            self._clear_affirmations(db, relation_id)
+        self._log_timeline(db, relation_id, f"Status changed from {previous} to {status}.")
         self._reindex(db, updated)
-        return updated, None
+        return updated
 
     # --------------------------------------------------------- runtime gate
 
@@ -2127,6 +2373,8 @@ class AuthorityResolutionManager(SearchableAsset):
         the first that fails denies (with its failure message). No criteria = an
         unconstrained gate (approve).
         """
+        if not self._load_criteria(relation):
+            return VERDICT_NO_AUTHORITY, NO_ENABLED_CHECKS_MESSAGE
         obj = {k: v for k, v in req.items() if not str(k).startswith(REF_KEY_PREFIX)}
         for r in resolved_refs or []:
             obj[ref_key(r["field_path"])] = r.get("value")
@@ -2327,9 +2575,12 @@ class AuthorityResolutionManager(SearchableAsset):
             out["resolver_failure"] = True
             return out
         verdict, reason = self._evaluate_decision(relation, req, resolved_refs)
-        return self._finalize_resolve(
+        out = self._finalize_resolve(
             db, relation, req, verdict, reason, chain, resolved_refs, record,
         )
+        if verdict == VERDICT_NO_AUTHORITY and not self._load_criteria(relation):
+            out["reason_code"] = REASON_NO_ENABLED_CHECKS
+        return out
 
     def _walk_prerequisites(
         self,
@@ -2677,6 +2928,14 @@ class AuthorityResolutionManager(SearchableAsset):
         criteria = authority_criterion_repo.list_for_relation(db, relation_id=relation.id)
         domains = entity_domain_repo.get_domains_for_entity(db, entity_type=ENTITY_TYPE, entity_id=relation.id)
         fully_affirmed = self.is_fully_affirmed(db, relation.id)
+        current_hash = self.definition_hash(db, relation)
+        latest_ok = next(
+            (r for r in authority_dna_run_repo.list_for_relation(db, relation_id=relation.id, limit=50)
+             if r.status == "succeeded"),
+            None,
+        )
+        dna_current = bool(relation.dna_magnitude is not None and latest_ok is not None
+                           and latest_ok.definition_hash == current_hash)
         # The slug is the family-level agent @id but physically lives on one
         # version row (new versions have none). Surface the family's slug on
         # every version so it stays visible as the stable identifier.
@@ -2741,6 +3000,12 @@ class AuthorityResolutionManager(SearchableAsset):
             "schedule_cron": relation.schedule_cron,
             "resolver_auth": getattr(relation, "resolver_auth", None) or RESOLVER_AUTH_OBO,
             "fully_affirmed": fully_affirmed,
+            "definition_hash": current_hash,
+            "definition_edited_by": getattr(relation, "definition_edited_by", None),
+            "activated_at": getattr(relation, "activated_at", None),
+            "editable": self.is_editable(db, relation),
+            "dna_current": dna_current,
+            "enabled_check_count": sum(1 for c in criteria if c.enabled),
             "usage_count": relation.usage_count,
             "approved_count": relation.approved_count,
             "denied_count": relation.denied_count,
@@ -2757,6 +3022,8 @@ class AuthorityResolutionManager(SearchableAsset):
                     "is_reviewer": getattr(a, "is_reviewer", False),
                     "review_status": getattr(a, "review_status", "na"),
                     "review_request_id": getattr(a, "review_request_id", None),
+                    "definition_hash": a.definition_hash,
+                    "stale": bool(a.affirmed and a.definition_hash != current_hash),
                 }
                 for a in affs
             ],

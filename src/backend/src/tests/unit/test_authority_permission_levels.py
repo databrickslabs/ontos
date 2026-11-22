@@ -16,6 +16,7 @@ from src.controller.authority_resolution_manager import (
     AuthorityInvalidError,
     AuthorityPermissionError,
     AuthorityResolutionManager,
+    AuthorityStatusError,
     STATUS_ACTIVE,
     VERDICT_APPROVED,
 )
@@ -30,7 +31,13 @@ ADMIN = FeatureAccessLevel.ADMIN
 FEATURE = "authority-resolution"
 
 
+# An always-passing enabled check: a version needs one to resolve (B5). The DSL
+# treats a missing operand in != as unequal, so this passes for any request.
+PASS_CHECK = {"name": "Not blocked", "rule": "ASSERT obj.actor_identity != 'nobody'"}
+
+
 def _make_ar(mgr, db, *, slug=None, name="AR", caller_is_admin=True, **kwargs):
+    kwargs.setdefault("criteria", [PASS_CHECK])
     return mgr.create_relation(db, AuthorityRelationCreate(name=name, slug=slug, **kwargs),
                                caller_is_admin=caller_is_admin)
 
@@ -61,8 +68,8 @@ def test_non_admin_can_move_between_draft_and_needs_review(db_session):
     mgr = AuthorityResolutionManager()
     rel = _make_ar(mgr, db_session, slug="levels-review")
     db_session.commit()
-    updated, err = mgr.set_status(db_session, rel.id, "needs_review", caller_is_admin=False)
-    assert err is None and updated.status == "needs_review"
+    updated = mgr.set_status(db_session, rel.id, "needs_review", caller_is_admin=False)
+    assert updated.status == "needs_review"
 
 
 def test_non_admin_cannot_create_with_app_sp_identity(db_session):
@@ -128,7 +135,7 @@ def _update(**fields):
 def _sp_ar_with_pinned_market(mgr, db, slug):
     from src.models.authority_resolution import ResourceRefInput
     rel = mgr.create_relation(db, AuthorityRelationCreate(
-        name=f"SP {slug}", slug=slug, resolver_auth="app_sp",
+        name=f"SP {slug}", slug=slug, resolver_auth="app_sp", criteria=[PASS_CHECK],
         resource_refs=[ResourceRefInput(
             field_path="actor_identity", ref_type="mcp_tool",
             mcp_service_name="mcp-services/hr.org.ontos_identity", mcp_tool_name="get_role_holder",
@@ -495,10 +502,8 @@ def test_set_status_needs_admin_to_take_an_ar_into_or_out_of_service(db_session)
     db_session.commit()
 
     # Read-write moves between draft and needs_review (neither side in service).
-    _, err = mgr.set_status(db_session, rel.id, "needs_review", caller_is_admin=False)
-    assert err is None
-    _, err = mgr.set_status(db_session, rel.id, "draft", caller_is_admin=False)
-    assert err is None
+    assert mgr.set_status(db_session, rel.id, "needs_review", caller_is_admin=False).status == "needs_review"
+    assert mgr.set_status(db_session, rel.id, "draft", caller_is_admin=False).status == "draft"
 
     # Into service: refused.
     with pytest.raises(AuthorityPermissionError):
@@ -512,13 +517,14 @@ def test_set_status_needs_admin_to_take_an_ar_into_or_out_of_service(db_session)
     assert exc.value.params["from"] == STATUS_ACTIVE
     assert db_session.query(AuthorityRelationDb).get(rel.id).status == STATUS_ACTIVE
 
-    # Reopening a retired AR: refused for a non-Admin, allowed for an Admin.
+    # A retired AR goes back only to active (S3), and only with an Admin and fresh affirmations.
     rel.status = "retired"
     db_session.commit()
     with pytest.raises(AuthorityPermissionError):
         mgr.set_status(db_session, rel.id, "draft", caller_is_admin=False)
-    _, err = mgr.set_status(db_session, rel.id, "draft", caller_is_admin=True)
-    assert err is None
+    with pytest.raises(AuthorityStatusError) as exc:
+        mgr.set_status(db_session, rel.id, "draft", caller_is_admin=True)
+    assert exc.value.params["reason"] == "transition_not_allowed"
 
 
 def test_resolve_route_records_by_default_for_write_callers_only(monkeypatch):

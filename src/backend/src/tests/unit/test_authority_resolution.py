@@ -18,6 +18,7 @@ from src.common.authority_resolution_dna import (
     DIR_NONE,
 )
 from src.controller.authority_resolution_manager import (
+    AuthorityStatusError,
     AuthorityResolutionManager,
     VERDICT_APPROVED,
     VERDICT_DENIED,
@@ -206,15 +207,20 @@ def test_gate_denies_action_mismatch():
 
 def test_gate_disabled_criterion_is_skipped():
     mgr = AuthorityResolutionManager()
-    rel = _relation(_link("ASSERT obj.actor_identity IN ['rsm-east']", enabled=False, order=0))
+    rel = _relation(_link("ASSERT obj.actor_identity IN ['rsm-east']", enabled=False, order=0),
+                    _link("ASSERT obj.actor_identity != 'nobody'", order=1))
     verdict, _ = mgr._evaluate_decision(rel, {"actor_identity": "intruder"})
     assert verdict == VERDICT_APPROVED
 
 
-def test_gate_no_criteria_approves():
+def test_gate_with_no_enabled_check_is_no_authority_not_approval():
+    """B5: a version with no enabled check approves nothing; the reason is coded."""
+    from src.controller.authority_resolution_manager import NO_ENABLED_CHECKS_MESSAGE, VERDICT_NO_AUTHORITY
     mgr = AuthorityResolutionManager()
-    verdict, _ = mgr._evaluate_decision(_relation(), {"actor_identity": "anyone"})
-    assert verdict == VERDICT_APPROVED
+    verdict, reason = mgr._evaluate_decision(_relation(), {"actor_identity": "anyone"})
+    assert (verdict, reason) == (VERDICT_NO_AUTHORITY, NO_ENABLED_CHECKS_MESSAGE)
+    only_disabled = _relation(_link("ASSERT obj.value <= 1", enabled=False))
+    assert mgr._evaluate_decision(only_disabled, {"value": 9})[0] == VERDICT_NO_AUTHORITY
 
 
 # ------------------------------------------------------------- maturity
@@ -687,6 +693,12 @@ def test_resolver_auth_defaults_to_obo(db_session):
 # ---------------------------------------------------------------------------
 
 
+def _pass_criteria():
+    """One enabled check that passes for any request (a version needs one to resolve, B5)."""
+    from src.models.authority_resolution import CriterionInput
+    return [CriterionInput(name="Not blocked", rule="ASSERT obj.actor_identity != 'nobody'")]
+
+
 def _make_ar(mgr, db, *, slug, name, criteria=None, prerequisites=None):
     """Helper for prereq tests — slug is mandatory because edges are keyed by it."""
     from src.models.authority_resolution import (
@@ -694,7 +706,7 @@ def _make_ar(mgr, db, *, slug, name, criteria=None, prerequisites=None):
     )
     return mgr.create_relation(db, AuthorityRelationCreate(
         name=name, slug=slug,
-        criteria=[CriterionInput(**c) for c in (criteria or [])],
+        criteria=[CriterionInput(**c) for c in criteria] if criteria is not None else _pass_criteria(),
         prerequisites=[PrerequisiteInput(**p) for p in (prerequisites or [])],
     ))
 
@@ -1229,7 +1241,7 @@ def _make_mcp_ar(mgr, db, *, slug, resolver_auth="obo", criteria=None, pointer="
     return mgr.create_relation(db, AuthorityRelationCreate(
         name=f"MCP AR {slug}", slug=slug, resolver_auth=resolver_auth,
         actor_role="Trade Marketing Director",
-        criteria=[CriterionInput(**c) for c in (criteria or [])],
+        criteria=[CriterionInput(**c) for c in criteria] if criteria is not None else _pass_criteria(),
         resource_refs=[ResourceRefInput(
             field_path="actor_identity", ref_type="mcp_tool",
             mcp_service_name="mcp-services/hr.org.ontos_identity",
@@ -1727,15 +1739,16 @@ def test_empty_evidence_sample_fails_the_run_and_leaves_dna_unmeasured(db_sessio
     from src.repositories.authority_resolution_repository import authority_dna_run_repo
 
     mgr = AuthorityResolutionManager()
-    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="No evidence AR"))
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="No evidence AR", criteria=_pass_criteria()))
     db_session.commit()
     with pytest.raises(ValueError, match="No evidence rows"):
         mgr.compute_dnaco(db_session, rel.id, rows=[])
     runs = authority_dna_run_repo.list_for_relation(db_session, relation_id=rel.id)
     assert runs[0].status == "failed"
     assert rel.dna_magnitude is None
-    _, err = mgr.set_status(db_session, rel.id, "active", caller_is_admin=True)
-    assert "not been measured" in err
+    with pytest.raises(AuthorityStatusError) as exc:
+        mgr.set_status(db_session, rel.id, "active", caller_is_admin=True)
+    assert exc.value.params["reason"] == "not_measured"
 
 
 def test_collect_evidence_keeps_raw_columns_and_applies_aliases(monkeypatch):
@@ -1758,64 +1771,76 @@ def test_zero_dna_ceiling_is_respected(db_session):
 
     mgr = AuthorityResolutionManager()
     rel = mgr.create_relation(db_session, AuthorityRelationCreate(
-        name="Zero tolerance", dna_max_threshold=0.0,
+        name="Zero tolerance", dna_max_threshold=0.0, criteria=_pass_criteria(),
         affirmations=[AffirmationInput(role="Approver", principal="a@x.com")]),
         caller_is_admin=True)
     db_session.commit()
     aff = mgr.to_read_dict(db_session, rel)["affirmations"][0]
     mgr.affirm(db_session, aff["id"], affirmed_by="a@x.com", user=_user("a@x.com"))
+    # A current, successful measurement (so the hash gate passes), then a magnitude above the ceiling.
+    mgr.compute_dnaco(db_session, rel.id, rows=[{"actor_identity": "a"}])
     rel.dna_magnitude = 0.1
-    _, err = mgr.set_status(db_session, rel.id, "active", caller_is_admin=True)
-    assert err and "exceeds the maximum 0.0" in err
+    db_session.commit()
+    with pytest.raises(AuthorityStatusError) as exc:
+        mgr.set_status(db_session, rel.id, "active", caller_is_admin=True)
+    assert exc.value.params["reason"] == "ceiling_exceeded"
+    assert "exceeds the maximum 0.0" in str(exc.value)
 
 
 def test_set_status_rejects_unknown_status(db_session):
-    from src.controller.authority_resolution_manager import AuthorityResolutionManager
+    from src.controller.authority_resolution_manager import AuthorityInvalidError, AuthorityResolutionManager
     from src.models.authority_resolution import AuthorityRelationCreate
 
     mgr = AuthorityResolutionManager()
     rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="Status AR"))
-    _, err = mgr.set_status(db_session, rel.id, "activ")
-    assert err and "Unknown status" in err
+    with pytest.raises(AuthorityInvalidError, match="Unknown status"):
+        mgr.set_status(db_session, rel.id, "activ")
     assert rel.status == "draft"
 
 
-def test_replacing_participants_on_active_ar_requires_reaffirmation(db_session):
-    from src.controller.authority_resolution_manager import AuthorityResolutionManager, STATUS_ACTIVE
+def test_participants_of_an_active_ar_cannot_change(db_session):
+    """B6: an active version is a snapshot. Changing its approvers is a definition change, so 409."""
+    from src.controller.authority_resolution_manager import (
+        AuthorityImmutableError, AuthorityResolutionManager, STATUS_ACTIVE,
+    )
     from src.models.authority_resolution import (
         AuthorityRelationCreate, AuthorityRelationUpdate, AffirmationInput,
     )
 
     mgr = AuthorityResolutionManager()
-    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="Reaffirm AR"))
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(
+        name="Reaffirm AR", criteria=_pass_criteria(),
+        affirmations=[AffirmationInput(role="Approver", principal="old@x.com")]))
     rel.status = STATUS_ACTIVE
     db_session.commit()
-    updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
-        affirmations=[AffirmationInput(role="Approver", principal="new@x.com")]))
-    assert updated.status == "needs_review"
+    with pytest.raises(AuthorityImmutableError) as exc:
+        mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
+            affirmations=[AffirmationInput(role="Approver", principal="new@x.com")]))
+    assert exc.value.code == "authority_immutable" and exc.value.http_status == 409
+    # The refused PUT wrote nothing.
+    assert [a.principal for a in mgr.get_relation(db_session, rel.id).affirmations] == ["old@x.com"]
 
 
-def test_update_recompute_scores_the_new_criteria(db_session, monkeypatch):
-    """After a criteria replace, the recompute must not use the stale collection."""
-    from src.controller.authority_resolution_manager import AuthorityResolutionManager, STATUS_ACTIVE
+def test_editing_a_draft_check_clears_the_measurement_and_the_recompute_scores_the_new_rule(db_session, monkeypatch):
+    """After a draft's checks change, the old measurement no longer counts; a fresh run scores the new rule."""
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
     from src.models.authority_resolution import (
-        AuthorityRelationCreate, AuthorityRelationUpdate, CriterionInput, AffirmationInput,
+        AuthorityRelationCreate, AuthorityRelationUpdate, CriterionInput,
     )
 
     mgr = AuthorityResolutionManager()
     rel = mgr.create_relation(db_session, AuthorityRelationCreate(
-        name="Stale AR", dna_max_threshold=0.5,
-        criteria=[CriterionInput(name="loose", rule="obj.value <= 100")],
-        affirmations=[AffirmationInput(role="Approver", principal="a@x.com")]),
-        caller_is_admin=True)
-    db_session.commit()
-    _ = list(rel.criteria)  # load the collection
-    rel.status = STATUS_ACTIVE
+        name="Draft AR", criteria=[CriterionInput(name="loose", rule="obj.value <= 100")]))
     db_session.commit()
     monkeypatch.setattr(mgr, "_collect_evidence", lambda _rel: [{"actor_identity": "a", "value": 50}])
+    first = mgr.compute_dnaco(db_session, rel.id)
+    assert first.per_dimension_scores.get("people", 0.0) == 0.0  # the loose rule passes every row
+
     updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
         criteria=[CriterionInput(name="strict", rule="obj.value <= 10", failure_message="over")]))
-    assert updated.status == "needs_review"  # the strict rule diverges on every row
+    assert updated.dna_magnitude is None
+    run = mgr.compute_dnaco(db_session, rel.id)
+    assert run.per_dimension_scores["people"] > 0  # the strict rule diverges on every row
 
 
 @pytest.mark.parametrize("bad", [
@@ -1907,29 +1932,30 @@ def test_malformed_rule_rejected_on_write_and_conflict_at_resolve(db_session):
 
 
 
-def test_resaving_unchanged_participants_keeps_signoffs_and_status(db_session):
-    from src.controller.authority_resolution_manager import AuthorityResolutionManager, STATUS_ACTIVE
+def test_resaving_unchanged_participants_keeps_signoffs(db_session):
+    """Re-saving the same definition keeps its affirmations. A changed approver list is a
+    changed definition: the earlier affirmations stop counting, and the draft stays a draft."""
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
     from src.models.authority_resolution import (
         AuthorityRelationCreate, AuthorityRelationUpdate, AffirmationInput,
     )
 
     mgr = AuthorityResolutionManager()
     parts = [AffirmationInput(role="Approver", principal="a@x.com")]
-    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="Keep signoffs", affirmations=parts))
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(
+        name="Keep signoffs", criteria=_pass_criteria(), affirmations=parts))
     db_session.commit()
     aff = mgr.to_read_dict(db_session, rel)["affirmations"][0]
     mgr.affirm(db_session, aff["id"], affirmed_by="a@x.com", user=_user("a@x.com"))
-    rel.status = STATUS_ACTIVE
     db_session.commit()
 
-    updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
-        description="typo fix", affirmations=parts))
-    assert updated.status == STATUS_ACTIVE
+    mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(description="typo fix", affirmations=parts))
     assert mgr.is_fully_affirmed(db_session, rel.id)
 
     updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
         affirmations=[AffirmationInput(role="Approver", principal="b@x.com")]))
-    assert updated.status == "needs_review"
+    assert updated.status == "draft"
+    assert not mgr.is_fully_affirmed(db_session, rel.id)
 
 
 def test_dnaco_run_fails_on_malformed_stored_rule(db_session):
@@ -2060,8 +2086,8 @@ def test_search_index_one_entry_per_family_and_status_timeline(db_session):
     mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(description="now searchable"))
     assert search.upserts[-1].description == "now searchable"
 
-    _, err = mgr.set_status(db_session, rel.id, "retired", caller_is_admin=True)
-    assert err is None and search.upserts[-1].extra_data["status"] == "retired"
+    retired = mgr.set_status(db_session, rel.id, "retired", caller_is_admin=True)
+    assert retired.status == "retired" and search.upserts[-1].extra_data["status"] == "retired"
     timeline = [c.comment for c in db_session.query(CommentDb).filter(
         CommentDb.entity_type == "authority_relation", CommentDb.entity_id == rel.id)]
     assert any("Status changed from draft to retired" in c for c in timeline)

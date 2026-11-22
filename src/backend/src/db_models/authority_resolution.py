@@ -118,6 +118,8 @@ class AuthorityRelationDb(Base):
     # Who last changed the definition (criteria, evidence, participants, ...). An
     # affirmation by this user is refused: nobody affirms a definition they changed (B4).
     definition_edited_by = Column(String, nullable=True)
+    # When this version was first activated; once set it is never editable in place (B6).
+    activated_at = Column(DateTime(timezone=True), nullable=True)
 
     affirmations = relationship(
         "AuthorityAffirmationDb", back_populates="relation",

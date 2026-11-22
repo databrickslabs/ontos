@@ -422,3 +422,34 @@ def test_a_read_modify_write_with_both_shapes_keeps_the_sent_sla_properties(
         'sla-up', 'orders', 'operational', '99.5')
     # a form field the ODCS list doesn't have is still added
     assert rows['maxDowntimeMinutes'].value == '30'
+
+
+def test_the_update_route_answers_400_with_the_sla_collection_code(db_session, imported):
+    import asyncio
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from fastapi import HTTPException
+
+    from src.common.api_errors import coded_http_exception_handler
+    from src.models.data_contracts_api import DataContractUpdate
+    from src.routes.data_contracts_routes import update_contract
+
+    manager, cid = imported
+    manager._queue_delivery = lambda *a, **k: None
+    manager._update_search_index = lambda *a, **k: None
+    body = DataContractUpdate.model_validate(
+        {'slaProperties': [{'property': 'latency', 'value': 4, 'valueExt': {'p99': 4}}]})
+
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(update_contract(
+            cid, SimpleNamespace(client=None), db_session, MagicMock(), MagicMock(),
+            SimpleNamespace(username='alice', email='alice@example.com'),
+            contract_data=body, manager=manager))
+
+    response = asyncio.run(coded_http_exception_handler(MagicMock(), raised.value))
+    assert response.status_code == 400
+    detail = json.loads(response.body)['detail']
+    assert detail['code'] == 'sla_value_collection'
+    assert detail['params'] == {'property': 'latency', 'field': 'valueExt'}

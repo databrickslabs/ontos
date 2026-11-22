@@ -187,6 +187,33 @@ def _is_draft_stage(db, group_id: Optional[str], key: Optional[str]) -> bool:
     return lifecycle_service.category_of(db, 'data_contract', row) == 'draft'
 
 
+class SlaValueCollectionError(CodedValueError):
+    """An SLA ``value`` or ``valueExt`` that is a list or an object: ODCS allows a
+    string, number, boolean or null there (``AnyNonCollectionType``)."""
+
+    code = 'sla_value_collection'
+
+    def __init__(self, sla_property: str, field: str):
+        super().__init__(
+            f"SLA property '{sla_property}': {field} must be a string, number, boolean "
+            "or null, not a list or an object.",
+            property=sla_property, field=field,
+        )
+
+
+def check_sla_values(sla_properties: Any) -> None:
+    """Refuse SLA properties whose ``value`` or ``valueExt`` is a collection, before
+    anything is stored (the export would write them typed and fail the schema)."""
+    if not isinstance(sla_properties, list):
+        return
+    for item in sla_properties:
+        if not isinstance(item, dict):
+            continue
+        for field in ('value', 'valueExt'):
+            if isinstance(item.get(field), (list, dict)):
+                raise SlaValueCollectionError(str(item.get('property') or ''), field)
+
+
 def relationship_stable_id(rel_data: Dict[str, Any], from_document: bool) -> Optional[str]:
     """The ODCS id of an incoming relationship: its `id` in an ODCS document,
     `stableId` in an API payload (where `id` is the row id)."""
@@ -2304,7 +2331,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     def _create_sla_properties(self, db, contract_id: str, sla_properties_data: List[dict]):
         """Create SLA properties from ODCS slaProperties array."""
         from src.db_models.data_contracts import DataContractSlaPropertyDb
-        
+
+        check_sla_values(sla_properties_data)
         for sla_prop_data in sla_properties_data:
             if not isinstance(sla_prop_data, dict):
                 continue
@@ -2931,6 +2959,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # values are SLA properties of their own (see utils/contract_sla.py)
             if data_dict.get('slaProperties') is not None:
                 from src.db_models.data_contracts import DataContractSlaPropertyDb
+                check_sla_values(data_dict['slaProperties'])  # before the rows go
                 db.query(DataContractSlaPropertyDb).filter(
                     DataContractSlaPropertyDb.contract_id == contract_id
                 ).delete(synchronize_session=False)

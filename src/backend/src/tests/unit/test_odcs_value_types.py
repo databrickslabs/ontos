@@ -252,3 +252,37 @@ def test_the_relationship_routes_return_the_odcs_id_apart_from_the_row_id(db_ses
     item = _relationship_db_to_dict(row)
 
     assert (item['id'], item['stableId']) == (row.id, 'rel-orders-customer')
+
+
+# --- SLA values are never collections (ODCS AnyNonCollectionType) ------------
+
+@pytest.mark.parametrize('field,bad', [
+    ('valueExt', {'p99': 4}), ('valueExt', ['p99']), ('value', {'a': 1}), ('value', [1]),
+])
+def test_an_import_with_an_sla_collection_is_refused(db_session, field, bad):
+    from src.controller.data_contracts_manager import SlaValueCollectionError
+
+    document = _odcs()
+    document['slaProperties'] = [{'property': 'latency', 'value': 4, field: bad}]
+
+    with pytest.raises(SlaValueCollectionError) as err:
+        _upload(_manager(), db_session, document)
+
+    assert err.value.code == 'sla_value_collection'
+    assert err.value.params == {'property': 'latency', 'field': field}
+    db_session.rollback()
+    assert db_session.query(DataContractDb).filter_by(name=document['name']).count() == 0
+
+
+@pytest.mark.parametrize('field', ['value', 'valueExt'])
+def test_an_update_with_an_sla_collection_is_refused(db_session, imported, field):
+    from src.controller.data_contracts_manager import SlaValueCollectionError
+
+    manager, cid = imported
+    sla = _api(manager, db_session, cid)['slaProperties']
+    sla[0][field] = {'nested': True}
+
+    with pytest.raises(SlaValueCollectionError) as err:
+        _save(manager, db_session, cid, {'slaProperties': sla})
+
+    assert err.value.params == {'property': sla[0]['property'], 'field': field}

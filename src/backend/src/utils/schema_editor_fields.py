@@ -16,13 +16,11 @@ SEMANTIC_ASSIGNMENT = 'http://databricks.com/ontology/uc/semanticAssignment'
 
 _OBJECT_FIELDS = ('id', 'tags', 'customProperties', 'quality')
 _PROPERTY_FIELDS = ('id', 'quality', 'relationships', 'tags', 'itemType')
-# Kept only when the key is missing: the editor sends `tags: []` to clear them
-_CLEARABLE = ('tags',)
 
 
 def _sent(payload: Dict[str, Any], key: str) -> bool:
-    if key in _CLEARABLE:
-        return key in payload
+    # A column's `tags: []` is sent (the editor clears them that way); a missing
+    # key or null is not
     return payload.get(key) is not None
 
 

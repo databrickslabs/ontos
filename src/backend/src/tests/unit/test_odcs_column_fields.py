@@ -164,3 +164,14 @@ def test_a_save_without_tags_keeps_them_and_an_empty_list_clears_them(db_session
 
     _editor_save(manager, db_session, cid, clear_tags)
     assert 'tags' not in _columns(_export(manager, db_session, cid))['order_id']
+
+
+def test_a_save_with_null_tags_keeps_them(db_session, imported):
+    manager, cid = imported
+
+    def null_tags(columns):
+        next(c for c in columns if c['name'] == 'order_id')['tags'] = None
+
+    _editor_save(manager, db_session, cid, null_tags)
+
+    assert _columns(_export(manager, db_session, cid))['order_id']['tags'] == ['pii', 'key']

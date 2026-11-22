@@ -66,6 +66,7 @@
     "resourceDetail": "Ressourcendetail",
     "prefixPlaceholder": "z. B. example.org/banking",
     "resourceLoading": "Wird geladen…",
+    "resourceLoadFailed": "Die Ressourcendetails konnten nicht geladen werden.",
     "noTriples": "Keine Triples für diese Ressource.",
     "blankNodeExpanded": "(leerer Knoten, unten erweitert)",
     "hover": {

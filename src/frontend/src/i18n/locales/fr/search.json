@@ -66,6 +66,7 @@
     "resourceDetail": "Détail de la ressource",
     "prefixPlaceholder": "par ex. example.org/banking",
     "resourceLoading": "Chargement…",
+    "resourceLoadFailed": "Impossible de charger les détails de la ressource.",
     "noTriples": "Aucun triplet pour cette ressource.",
     "blankNodeExpanded": "(nœud anonyme, développé ci-dessous)",
     "hover": {

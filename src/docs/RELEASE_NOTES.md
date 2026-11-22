@@ -139,6 +139,10 @@
 
 ## 🐛 Bug Fixes
 
+- **home**: the Self-Service buttons on the home page stay disabled until the user's teams have loaded. Before, a click during loading skipped the team membership check and opened the dialog.
+- **comments**: the comment and change timeline shows a placeholder until it has loaded, instead of briefly showing "No comments yet". It also no longer shows the previous entity's entries while another entity's load.
+- **search**: in the knowledge graph search, the resource details show an error when they can't be loaded. Before, they stayed on "Loading…".
+- **data-contracts**: the Self-Service dialog's Create button no longer shows "Working…" while the dialog loads its default catalog and schema.
 - **ui**: lists and pickers that open from a popover inside a dialog can be clicked again, such as the contract list of a deliverable's **Link contract** dialog. Before, the list showed over the dialog but clicks went to the dialog under it: the lockfile held several copies of `@radix-ui/react-dismissable-layer`, and a dialog only lets through the layers of its own copy. The frontend now pins one copy, 1.1.19, with an npm override. Components that used another copy now use 1.1.19 too: DropdownMenu and NavigationMenu (1.1.11 before), Dialog, Toast and Tooltip (1.1.17 before)
 - **assets**: creating, renaming or deleting an asset through `/api/assets` updates the global search index again. The routes used an AssetsManager without the search manager, so the index was not updated until a rebuild. Bulk import now indexes the assets it wrote, in one batch after the import commits, and a failed import leaves no index entries.
 - **workflows**: decided workflow approvals leave My actions on the home page, also when the approver had opened the notification or the approval was resumed or cancelled elsewhere. A reviewer's read access to the entity through an approval ends once that approval is decided (on a require-all step, only the targets still pending keep it)

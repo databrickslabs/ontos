@@ -25,6 +25,8 @@ from sqlalchemy.orm import Session
 from src.common.timestamps import utc_now
 from src.db_models.process_workflows import WorkflowStepDb, WorkflowExecutionDb
 from src.models.process_workflows import (
+    coerce_flag,
+    is_best_effort_step_type,
     ProcessWorkflow,
     WorkflowStep,
     WorkflowExecution,
@@ -192,6 +194,9 @@ class StepResult:
     # Set by a Conditional that evaluated cleanly: the step passed, and its
     # result picks on_pass (True) or on_fail (False). None: follow ``passed``.
     branch: Optional[bool] = None
+    # A failure the run went on past (a best-effort step with fail_flow_on_failure off).
+    # The step is recorded as failed, but the run succeeded: the UI shows it as non-fatal.
+    non_fatal: bool = False
 
     def takes_pass_branch(self) -> bool:
         return self.passed if self.branch is None else self.branch
@@ -201,7 +206,20 @@ class StepResult:
         entry: Dict[str, Any] = {'passed': self.passed, 'message': self.message, 'data': self.data}
         if self.branch is not None:
             entry['branch'] = 'true' if self.branch else 'false'
+        if self.non_fatal:
+            entry['non_fatal'] = True
         return entry
+
+
+# Key of a step execution's result data that marks a non-fatal failure (see StepResult.non_fatal)
+NON_FATAL_DATA_KEY = 'non_fatal'
+
+
+def _recorded_data(result: StepResult) -> Optional[Dict[str, Any]]:
+    """The result data stored with a step execution, with the non-fatal marker when set."""
+    if not result.non_fatal:
+        return result.data
+    return {**(result.data or {}), NON_FATAL_DATA_KEY: True}
 
 
 def _next_step_id(
@@ -212,14 +230,15 @@ def _next_step_id(
 
     A conditional's branches are its true and false results, so a condition that
     couldn't be evaluated has no branch: the run ends there, failed. A failed
-    non-fatal step (``continue_on_failure``) continues via ``on_pass``.
+    non-fatal step (``continue_on_failure``) follows its ``on_fail`` when set, else
+    continues via ``on_pass``.
     """
     if ends_process_run(getattr(workflow, 'workflow_type', None), step.step_type):
         return None
     if is_conditional_step_type(step.step_type) and result.branch is None:
         return None
     if continue_on_failure and not result.passed:
-        return step.on_pass
+        return step.on_fail or step.on_pass
     return step.on_pass if result.takes_pass_branch() else step.on_fail
 
 
@@ -3259,6 +3278,8 @@ class WorkflowExecutor:
             start_time = time.time()
             result = self._execute_step(step, context)
             duration_ms = (time.time() - start_time) * 1000
+            # Decided before the result is recorded: a failure the run goes on past is marked non_fatal
+            route_passed = self._route_after(step, result)
             
             # Record step execution
             step_status = StepExecutionStatus.SUCCEEDED if result.passed else StepExecutionStatus.FAILED
@@ -3270,7 +3291,7 @@ class WorkflowExecutor:
                 step_name=step.name,
                 status=step_status.value,
                 passed=result.passed,
-                result_data=result.data,
+                result_data=_recorded_data(result),
                 error_message=result.error,
                 message=result.message,
                 duration_ms=duration_ms,
@@ -3298,18 +3319,6 @@ class WorkflowExecutor:
                 )
                 break
             
-            # A step may opt out of failing the whole flow (e.g. best-effort
-            # notifications): when fail_flow_on_failure is off, a failed step is
-            # logged and the flow continues via on_pass rather than terminating.
-            route_passed = result.passed or (
-                not is_conditional_step_type(step.step_type) and not self._step_fail_flow(step)
-            )
-            if not result.passed and route_passed:
-                logger.warning(
-                    f"Step '{step.step_id}' failed but is non-fatal "
-                    f"(fail_flow_on_failure=false); continuing. Error: {result.error}"
-                )
-
             # Determine next step
             current_step_id = _next_step_id(
                 workflow, step, result, continue_on_failure=route_passed,
@@ -3928,6 +3937,8 @@ class WorkflowExecutor:
             start_time = time.time()
             result = self._execute_step(step, context)
             duration_ms = (time.time() - start_time) * 1000
+            # Decided before the result is recorded: a failure the run goes on past is marked non_fatal
+            route_passed = self._route_after(step, result)
             
             # Record step execution
             step_status = StepExecutionStatus.SUCCEEDED if result.passed else StepExecutionStatus.FAILED
@@ -3939,7 +3950,7 @@ class WorkflowExecutor:
                 step_name=step.name,
                 status=step_status.value,
                 passed=result.passed,
-                result_data=result.data,
+                result_data=_recorded_data(result),
                 error_message=result.error,
                 message=result.message,
                 duration_ms=duration_ms,
@@ -3967,16 +3978,6 @@ class WorkflowExecutor:
                 )
                 break
             
-            # Non-fatal steps (fail_flow_on_failure=false) continue via on_pass.
-            route_passed = result.passed or (
-                not is_conditional_step_type(step.step_type) and not self._step_fail_flow(step)
-            )
-            if not result.passed and route_passed:
-                logger.warning(
-                    f"Step '{step.step_id}' failed but is non-fatal "
-                    f"(fail_flow_on_failure=false); continuing. Error: {result.error}"
-                )
-
             # Determine next step
             next_step_id = _next_step_id(
                 workflow, step, result, continue_on_failure=route_passed,
@@ -4344,20 +4345,39 @@ class WorkflowExecutor:
             # Don't fail the workflow for status update issues
     
     def _step_fail_flow(self, step: WorkflowStep) -> bool:
-        """Whether a failure of this step should fail the whole flow.
+        """Whether a failure of this step fails the whole flow.
 
-        Reads ``fail_flow_on_failure`` from the step config (default ``True`` —
-        strict). Set it ``false`` on best-effort steps (e.g. notifications) so a
-        step failure logs and the flow continues via ``on_pass`` instead of
-        terminating the execution.
+        ``fail_flow_on_failure: false`` is honoured only on best-effort steps
+        (notification, webhook): an approval, gate or script always fails the run
+        (#859 review B9). It is read as a boolean, so the string ``"false"`` counts (N7).
         """
+        if not is_best_effort_step_type(step.step_type):
+            return True
         config = step.config or {}
         if isinstance(config, str):
             try:
                 config = json.loads(config)
             except Exception:
                 config = {}
-        return bool(config.get("fail_flow_on_failure", True))
+        return coerce_flag(config.get("fail_flow_on_failure", True), default=True)
+
+    def _route_after(self, step: WorkflowStep, result: StepResult) -> bool:
+        """Whether the run goes on past this step's result.
+
+        A failed best-effort step whose flag is off doesn't fail the run: the result
+        is marked ``non_fatal`` and the run follows the step's ``on_fail`` if set,
+        else its ``on_pass`` (see ``_next_step_id``).
+        """
+        if result.passed:
+            return True
+        if is_conditional_step_type(step.step_type) or self._step_fail_flow(step):
+            return False
+        result.non_fatal = True
+        logger.warning(
+            f"Step '{step.step_id}' failed but is non-fatal "
+            f"(fail_flow_on_failure=false); continuing. Error: {result.error}"
+        )
+        return True
 
     # A reviewed product goes active through the lifecycle steps it still
     # needs, or back to draft; each step is a transition_status call.

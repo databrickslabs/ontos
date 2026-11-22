@@ -38,6 +38,7 @@ from src.models.process_workflows import (
     TemplateVarGroup,
     TemplateVarsResponse,
     ends_process_run,
+    is_best_effort_step_type,
     is_conditional_step_type,
 )
 from src.repositories.process_workflows_repository import process_workflow_repo
@@ -129,6 +130,15 @@ def _schedules_changed() -> None:
     from src.controller.workflow_scheduler import notify_schedules_changed
 
     notify_schedules_changed()
+
+
+def _fail_flow_not_allowed(step: WorkflowStepCreate) -> CodedMessage:
+    """``fail_flow_on_failure`` is set on a step that must fail the run when it fails (B9)."""
+    step_type = getattr(step.step_type, 'value', step.step_type)
+    return CodedMessage(
+        f"Step '{step.step_id}': fail_flow_on_failure applies only to notification and webhook steps",
+        'fail_flow_on_failure_not_allowed', step=step.step_id, step_type=step_type,
+    )
 
 
 def _step_issue(step: WorkflowStepCreate, issue: Dict[str, Any]) -> CodedMessage:
@@ -1076,6 +1086,9 @@ class WorkflowsManager:
         """Validate step configuration based on type."""
         errors = []
         config = step.config or {}
+
+        if 'fail_flow_on_failure' in config and not is_best_effort_step_type(step.step_type):
+            errors.append(_fail_flow_not_allowed(step))
 
         if step.step_type == StepType.VALIDATION:
             if not config.get('rule'):

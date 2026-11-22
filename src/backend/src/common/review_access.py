@@ -38,6 +38,9 @@ logger = get_logger(__name__)
 # Asset-review statuses in which the reviewer can still decide
 _OPEN_REVIEW_STATUSES = ('queued', 'in_review')
 
+# Prefix of the asset FQN of an Authority Relation in an asset review
+AUTHORITY_RELATION_FQN_PREFIX = 'authority-relation://'
+
 # Prefix of the asset FQN of an app entity in an asset review
 _FQN_PREFIXES = {'data_product': 'product:', 'data_contract': 'contract:'}
 
@@ -176,4 +179,45 @@ def caller_is_pending_reviewer(
             )
     except Exception:
         logger.exception("Reviewer access check failed for %s %s; denying", entity_type, entity_id)
+        return False
+
+
+def caller_is_pending_authority_reviewer(db: Session, user: Any, request_id: str) -> bool:
+    """Whether ``user`` is the named reviewer of an open Authority Relation Asset Review.
+
+    Such a review's ReviewedAsset is ``authority-relation://{id}``, and the reviewer is
+    recorded on the AR's affirmation that ``start_review`` linked to the request. Both
+    facts are server-created, so the request body can't name a reviewer (R5, #1306).
+    Read only; fails closed in a savepoint.
+    """
+    from src.db_models.authority_resolution import AuthorityAffirmationDb
+    from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
+
+    identities = _identities(user)
+    if not identities or not request_id:
+        return False
+    try:
+        with db.begin_nested():
+            request = db.query(DataAssetReviewRequestDb).filter(
+                DataAssetReviewRequestDb.id == request_id,
+                DataAssetReviewRequestDb.status.in_(_OPEN_REVIEW_STATUSES),
+            ).first()
+            if request is None:
+                return False
+            ar_assets = db.query(ReviewedAssetDb).filter(
+                ReviewedAssetDb.review_request_id == request_id,
+                ReviewedAssetDb.asset_fqn.startswith(AUTHORITY_RELATION_FQN_PREFIX),
+            ).all()
+            for asset in ar_assets:
+                relation_id = asset.asset_fqn[len(AUTHORITY_RELATION_FQN_PREFIX):].split('#')[0]
+                affirmations = db.query(AuthorityAffirmationDb).filter(
+                    AuthorityAffirmationDb.relation_id == relation_id,
+                    AuthorityAffirmationDb.review_request_id == request_id,
+                    AuthorityAffirmationDb.is_reviewer.is_(True),
+                ).all()
+                if any(str(a.principal or '').strip().lower() in identities for a in affirmations):
+                    return True
+            return False
+    except Exception:
+        logger.exception("Authority reviewer access check failed for request %s; denying", request_id)
         return False

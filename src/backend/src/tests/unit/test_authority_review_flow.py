@@ -178,3 +178,37 @@ def test_tracking_lists_only_this_ars_executions(db_session):
 
 def test_list_for_entity_ids_with_no_ids_queries_nothing(db_session):
     assert workflow_execution_repo.list_for_entity_ids(db_session, []) == []
+
+
+def test_pending_ar_reviewer_can_read_their_review_request(db_session):
+    """R5: the named reviewer of an open AR Asset Review may read it (#1306 scope)."""
+    from src.common.review_access import caller_is_pending_authority_reviewer
+
+    mgr, rel = _two_reviewer_ar(db_session)
+    rm = _reviews_manager(db_session)
+    mgr.start_review(db_session, rel.id, owner='owner@x.com', reviews_manager=rm)
+    requests = _review_requests(db_session, mgr, rel, rm)
+    mine = requests['rev1@x.com']['review_request_id']
+
+    assert caller_is_pending_authority_reviewer(db_session, _user('rev1@x.com'), mine) is True
+    assert caller_is_pending_authority_reviewer(db_session, _user('REV1@x.com'), mine) is True
+    # Another reviewer of the same AR, or the owner, doesn't read this request
+    assert caller_is_pending_authority_reviewer(db_session, _user('rev2@x.com'), mine) is False
+    assert caller_is_pending_authority_reviewer(db_session, _user('owner@x.com'), mine) is False
+    # A request id that isn't one of ours
+    assert caller_is_pending_authority_reviewer(db_session, _user('rev1@x.com'), str(uuid.uuid4())) is False
+
+
+def test_pending_ar_reviewer_loses_read_once_their_review_is_submitted(db_session):
+    from src.common.review_access import caller_is_pending_authority_reviewer
+
+    mgr, rel = _two_reviewer_ar(db_session)
+    rm = _reviews_manager(db_session)
+    mgr.start_review(db_session, rel.id, owner='owner@x.com', reviews_manager=rm)
+    parts = _participants(mgr, db_session, rel)
+    mine = _review_requests(db_session, mgr, rel, rm)['rev1@x.com']['review_request_id']
+    mgr.submit_review(db_session, parts['rev1@x.com']['id'], {'q1': 'yes'},
+                      user=_user('rev1@x.com'), reviews_manager=rm)
+    db_session.commit()
+
+    assert caller_is_pending_authority_reviewer(db_session, _user('rev1@x.com'), mine) is False

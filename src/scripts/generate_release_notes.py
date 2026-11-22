@@ -3,7 +3,8 @@
 Write the release notes of a version into src/docs/RELEASE_NOTES.md from git history.
 
 Run on the release branch. Reads the commits in `<last tag>..HEAD` (merge commits
-skipped) and replaces the `# Release Notes - Unreleased` block with a
+skipped, and commits of a PR already named in the tag's first-parent history,
+i.e. in a past release's squash commit) and replaces the `# Release Notes - Unreleased` block with a
 `# Release Notes - v<version> (<date>)` block, keeping the notes written by hand
 in the Unreleased block.
 
@@ -35,7 +36,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 UPGRADE_HEADING = "## ⚠️ Upgrade Notes"
 DOCS_HEADING = "## 📝 Docs Notes"
@@ -75,6 +76,7 @@ _TRAILER_RE = re.compile(
 )
 _SUBJECT_RE = re.compile(r"^(\w+)(?:\(([^)]+)\))?(!)?: (.+)$")
 _PR_RE = re.compile(r"\(#(\d+)\)\s*$")
+_ANY_PR_RE = re.compile(r"\(#(\d+)\)")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(\.\d+)?$")
 _BULLET_RE = re.compile(r"^[-*+]\s")
 # A note shorter than this is only "already written by hand" on an exact match.
@@ -331,6 +333,30 @@ def git_commits(since: str, repo: Optional[Path] = None) -> List[Commit]:
     return commits
 
 
+def released_prs(tag: str, repo: Optional[Path] = None) -> Set[str]:
+    """PR numbers named in the messages of the tag's first-parent history.
+
+    Releases reach main as squash commits whose body lists every development
+    commit, so the development commits of a past release are not ancestors of
+    its tag: ``<tag>..HEAD`` alone would list them again.
+    """
+    result = subprocess.run(
+        ["git", "log", "--first-parent", "--format=%B", tag],
+        capture_output=True, text=True, check=True, cwd=repo,
+    )
+    return set(_ANY_PR_RE.findall(result.stdout))
+
+
+def drop_released(commits: List[Commit], released: Set[str]) -> List[Commit]:
+    """The commits whose subject's PR number is not in ``released``."""
+    kept = []
+    for commit in commits:
+        match = _PR_RE.search(commit.subject)
+        if not match or match.group(1) not in released:
+            kept.append(commit)
+    return kept
+
+
 def last_tag(repo: Optional[Path] = None) -> str:
     """The latest ``v*`` tag reachable from HEAD."""
     result = subprocess.run(
@@ -382,7 +408,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         since = args.since_tag or last_tag()
         version = normalize_version(args.version or get_current_version())
         date = args.date or datetime.now().strftime("%Y-%m-%d")
-        commits = git_commits(since)
+        commits = drop_released(git_commits(since), released_prs(since))
         text = RELEASE_NOTES_PATH.read_text(encoding="utf-8")
         new_text, block = update_notes(text, commits, version, date)
     except subprocess.CalledProcessError as exc:

@@ -350,7 +350,7 @@ python src/scripts/generate_release_notes.py --dry-run   # preview
 python src/scripts/generate_release_notes.py
 ```
 
-The script reads the commits since the latest `v*` tag (pass another tag as the first argument), skips merge commits, and replaces the `# Release Notes - Unreleased` block of `src/docs/RELEASE_NOTES.md` with a block for the version in `src/pyproject.toml` (`--version` to override). Notes already written by hand in the Unreleased block are kept. See [Release Notes](#release-notes).
+The script reads the commits since the latest `v*` tag (pass another tag as the first argument), skips merge commits and the PRs already listed in a past release's squash commit on `main`, and replaces the `# Release Notes - Unreleased` block of `src/docs/RELEASE_NOTES.md` with a block for the version in `src/pyproject.toml` (`--version` to override). Notes already written by hand in the Unreleased block are kept. See [Release Notes](#release-notes).
 
 ### 4. Commit and Tag
 

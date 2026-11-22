@@ -309,3 +309,35 @@ def test_cli_writes_in_place_and_dry_run_writes_nothing(repo, tmp_path, monkeypa
 
     assert rn.main(["--version", "1.2.0", "--date", "2026-11-22"]) == 2
     assert "already" in capsys.readouterr().err
+
+
+def test_commits_of_a_past_release_squashed_on_main_are_not_listed_again(tmp_path):
+    """Releases reach main as one squash commit, so their development commits are not
+    ancestors of the tag and ``<tag>..HEAD`` alone would list them again."""
+    repo = tmp_path / "flow"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "commit.gpgsign", "false")
+    _git(repo, "config", "tag.gpgsign", "false")
+
+    def make(message: str) -> None:
+        _git(repo, "commit", "-q", "--allow-empty", "-m", f"{message}\n\n{CO_AUTHOR}")
+
+    make("chore: initial")
+    _git(repo, "switch", "-q", "-c", "development")
+    make("feat(a): released in v1.1.0 (#1)")
+    _git(repo, "switch", "-q", "main")
+    make("chore: release v1.1.0 (#10)\n\n* feat(a): released in v1.1.0 (#1)")
+    _git(repo, "tag", "v1.1.0")
+    _git(repo, "switch", "-q", "development")
+    _git(repo, "merge", "-q", "--no-ff", "main", "-m", f"chore: back-merge main\n\n{CO_AUTHOR}")
+    make("feat(b): new after the release (#2)")
+
+    commits = rn.git_commits("v1.1.0", repo)
+    assert [c.subject for c in commits] == [
+        "feat(b): new after the release (#2)", "feat(a): released in v1.1.0 (#1)",
+    ]
+    kept = rn.drop_released(commits, rn.released_prs("v1.1.0", repo))
+    assert [c.subject for c in kept] == ["feat(b): new after the release (#2)"]

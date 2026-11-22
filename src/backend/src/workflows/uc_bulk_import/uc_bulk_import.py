@@ -127,6 +127,12 @@ def create_engine_from_params(
     return create_engine(url, pool_pre_ping=True)
 
 
+def is_pooler_host(host: str) -> bool:
+    """A Lakebase pooler host (``<endpoint>-pooler.<domain>``): it runs in
+    transaction mode, which doesn't keep the job's session advisory lock."""
+    return (host or "").split(".", 1)[0].lower().endswith("-pooler")
+
+
 # Lock key of the job: ``data_products.name`` has no unique constraint and the
 # job finds then inserts, so two overlapping runs could insert duplicates.
 IMPORT_LOCK_NAME = "ontos.uc_bulk_import"
@@ -1061,6 +1067,11 @@ def main():
     current_user = ws.current_user.me().user_name
     print(f"  Running as: {current_user}")
     
+    if is_pooler_host(args.postgres_host):
+        print(f"\n❌ postgres_host '{args.postgres_host}' is a connection pooler: the import "
+              "lock needs a direct connection (use the host without '-pooler')")
+        sys.exit(1)
+
     print("\nConnecting to database...")
     engine = create_engine_from_params(
         ws_client=ws,
@@ -1072,6 +1083,10 @@ def main():
     )
     print("  Database connection established")
     
+    if dry_run:
+        # A dry run writes nothing: it neither needs the lock nor blocks a real run
+        run_import(args, ws, engine, patterns, dry_run, verbose, current_user, NO_LOCK)
+        return
     with single_flight(engine) as run_lock:
         if run_lock is None:
             print("\nAnother UC Bulk Import run holds the lock: this run imported nothing")

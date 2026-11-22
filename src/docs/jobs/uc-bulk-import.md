@@ -221,7 +221,8 @@ and fails with exit code `1`: each write first checks that the run still holds
 the lock, so two runs never write at the same time. The lock needs a direct
 database connection: a transaction-mode connection pooler doesn't support it.
 The job uses the app's own database host (`PGHOST`) unless the job's
-`postgres_host` parameter is set.
+`postgres_host` parameter is set; a Lakebase pooler host (`...-pooler...`) is
+refused with exit code `1`. A dry run writes nothing and doesn't take the lock.
 
 ## Examples
 

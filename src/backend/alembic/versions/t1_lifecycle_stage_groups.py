@@ -19,7 +19,7 @@ counted in the migration log. Downgrade drops the column and the tables (the
 stage keys stay in ``status``; ``archived`` isn't restored).
 
 Revision ID: t1_lifecycle_stage_groups
-Revises: s2_document_markdown_import
+Revises: o3_uc_bulk_import_sources
 Create Date: 2026-11-12
 """
 import logging
@@ -33,7 +33,7 @@ from alembic import op
 logger = logging.getLogger("alembic.runtime.migration")
 
 revision: str = "t1_lifecycle_stage_groups"
-down_revision: Union[str, Sequence[str], None] = "s2_document_markdown_import"
+down_revision: Union[str, Sequence[str], None] = "o3_uc_bulk_import_sources"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -19,7 +19,8 @@ import {
     MetricViewDefinition,
     TablePreview,
     ReviewedAssetUpdate,
-    AssetAnalysisResponse
+    AssetAnalysisResponse,
+    DataAssetReviewRequest,
 } from '@/types/data-asset-review';
 import { LLMConfig } from '@/types/llm';
 import { DataTable } from "@/components/ui/data-table"; // For table preview
@@ -390,8 +391,12 @@ export default function AssetReviewEditor({
                 <AuthorityRelationReview
                     relationId={relationId}
                     reviewer={reviewerEmail}
-                    onCompleted={() => {
-                        onReviewSave({
+                    onCompleted={async () => {
+                        // The submit closed this Asset Review on the server; the list shows
+                        // what the server stored, not a local guess.
+                        const response = await get<DataAssetReviewRequest>(`/api/data-asset-reviews/${requestId}`);
+                        const stored = response.data?.assets?.find((a) => a.id === asset.id);
+                        onReviewSave(stored ?? {
                             ...asset,
                             status: ReviewedAssetStatus.APPROVED,
                             updated_at: new Date().toISOString(),

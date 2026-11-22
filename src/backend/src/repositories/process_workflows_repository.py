@@ -370,6 +370,33 @@ class WorkflowExecutionRepository:
         
         return query.order_by(WorkflowExecutionDb.started_at.desc()).offset(offset).limit(limit).all()
 
+    def list_for_entity_ids(
+        self,
+        db: Session,
+        entity_ids: List[str],
+        *,
+        limit: int = 200,
+    ) -> List[WorkflowExecutionDb]:
+        """Executions whose trigger context names one of the entity ids, newest first.
+
+        The SQL filter is a substring match on each id (ids are UUIDs or AR ids, so it
+        is narrow); callers compare the stored ``entity_id`` exactly.
+        """
+        ids = [i for i in entity_ids if i]
+        if not ids:
+            return []
+        return (
+            db.query(WorkflowExecutionDb)
+            .options(
+                joinedload(WorkflowExecutionDb.step_executions),
+                joinedload(WorkflowExecutionDb.workflow),
+            )
+            .filter(or_(*[WorkflowExecutionDb.trigger_context.contains(i) for i in ids]))
+            .order_by(WorkflowExecutionDb.started_at.desc())
+            .limit(limit)
+            .all()
+        )
+
     def get(self, db: Session, execution_id: str) -> Optional[WorkflowExecutionDb]:
         """Get an execution by ID."""
         return (

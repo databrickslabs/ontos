@@ -1,7 +1,7 @@
 """Authority Resolution — scoped domain context + ODRL-shaped rule
 
 Revision ID: al1_authority_scoped_context
-Revises: ak8_authority_prerequisites_by_version
+Revises: ak9_default_workflow_review_flow
 Create Date: 2026-11-12
 
 Adds nullable ``authority_relations.rule`` (JSON, the ODRL-shaped rule:
@@ -21,7 +21,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = 'al1_authority_scoped_context'
-down_revision: Union[str, None] = 'ak8_authority_prerequisites_by_version'
+down_revision: Union[str, None] = 'ak9_default_workflow_review_flow'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

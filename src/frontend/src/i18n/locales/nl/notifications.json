@@ -193,7 +193,7 @@
         "notify-rejected": "Uw wijziging van de metric view '{{entity_name}}' is afgewezen."
       },
       "authority-relation-review-request": {
-        "notify-owner": "Het reviewproces voor Authority Relation '{{entity_name}}' is gestart. Elke toegewezen reviewer heeft een Asset Review ontvangen om in te vullen."
+        "notify-reviewer": "Je bent gevraagd de Authority Relation '{{entity_name}}' te beoordelen. Rond je Asset Review af om te bevestigen dat ze de werkelijkheid weergeeft."
       }
     },
     "approval": {

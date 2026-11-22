@@ -17,7 +17,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useDomains } from '@/hooks/use-domains';
 
@@ -197,10 +196,8 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
         </div>
       )}
 
-      {/* Domain selector. `modal` is required so the popover stays interactive
-          when rendered inside a modal Radix Dialog (otherwise the dialog marks
-          the portaled popover as pointer-events:none and clicks fall through). */}
-      <Popover open={open} onOpenChange={setOpen} modal>
+      {/* Domain selector */}
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
@@ -254,11 +251,7 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
               onWheel={(e) => e.stopPropagation()}
             >
               {loading ? (
-                <div className="p-2 space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-6 w-full" />
-                  ))}
-                </div>
+                <CommandEmpty>{t('common:states.loadingDomains')}</CommandEmpty>
               ) : filteredDomains.length === 0 ? (
                 <CommandEmpty>{t('common:states.noDomainsFound')}</CommandEmpty>
               ) : (

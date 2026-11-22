@@ -120,6 +120,11 @@ export function getStepErrorText(
   });
 }
 
+// A failed step the run went on past (a best-effort step with fail_flow_on_failure off)
+function isNonFatalRun(run: Pick<WorkflowStepExecutionResult, 'result_data'> | undefined): boolean {
+  return run?.result_data?.non_fatal === true;
+}
+
 // The branch a Conditional step took ('true' / 'false'), from its last run
 export function getConditionalBranch(
   run: Pick<WorkflowStepExecutionResult, 'result_data'> | undefined
@@ -214,6 +219,7 @@ function SimpleWorkflowFlow({
         const lastRun = state === 'failed' || state === 'succeeded' ? getLastStepRun(step, execution) : undefined;
         const errorText = state === 'failed' && lastRun ? getStepErrorText(lastRun, t) : undefined;
         const branch = state === 'succeeded' ? getConditionalBranch(lastRun) : undefined;
+        const nonFatal = state === 'failed' && isNonFatalRun(lastRun);
         const Icon = getStepIcon(step.step_type);
         const color = getStepColor(step.step_type);
         
@@ -252,6 +258,11 @@ function SimpleWorkflowFlow({
                 {branch && (
                   <div className="text-xs text-muted-foreground mt-1">
                     {t(`workflows:execution.conditionalBranch.${branch}`)}
+                  </div>
+                )}
+                {nonFatal && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {t('workflows:execution.nonFatal')}
                   </div>
                 )}
               </div>

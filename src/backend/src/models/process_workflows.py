@@ -159,6 +159,35 @@ def is_conditional_step_type(step_type: Any) -> bool:
     return getattr(step_type, 'value', step_type) == StepType.CONDITIONAL.value
 
 
+# Steps whose failure may be non-fatal (``fail_flow_on_failure: false``). Anything else
+# (an approval, a gate, a script) fails the run when it fails, whatever the config says.
+BEST_EFFORT_STEP_TYPES = frozenset({StepType.NOTIFICATION.value, StepType.WEBHOOK.value})
+
+
+def is_best_effort_step_type(step_type: Any) -> bool:
+    """Whether a step of this type (enum or stored string) may opt out of failing the run."""
+    return getattr(step_type, 'value', step_type) in BEST_EFFORT_STEP_TYPES
+
+
+def coerce_flag(value: Any, default: bool) -> bool:
+    """A boolean step option as stored: JSON booleans, and the strings a YAML or form wrote.
+
+    ``bool("false")`` is True, so strings are read by their words. An unreadable value
+    keeps ``default``.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        word = value.strip().lower()
+        if word in ('true', 'yes', 'on', '1'):
+            return True
+        if word in ('false', 'no', 'off', '0'):
+            return False
+    return default
+
+
 def ends_process_run(workflow_type: Any, step_type: Any) -> bool:
     """Whether a step of a workflow of this type ends the run, so its links are dropped."""
     return (getattr(workflow_type, 'value', workflow_type) or WorkflowType.PROCESS.value) \

@@ -204,9 +204,8 @@ const TagSelector: React.FC<TagSelectorProps> = ({
         </div>
       )}
 
-      {/* Tag selector. `modal` keeps the popover interactive inside a modal
-          Radix Dialog (see DomainMultiSelector for the rationale). */}
-      <Popover open={open} onOpenChange={setOpen} modal>
+      {/* Tag selector */}
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"

@@ -26,7 +26,11 @@ from src.common.workspace_client import get_workspace_client_dependency
 from databricks.sdk import WorkspaceClient
 from src.common.workspace_client import get_obo_workspace_client
 
-from src.common.authorization import PermissionChecker
+from src.common.authorization import PermissionChecker, get_user_details_from_sdk, user_has_feature_level
+from src.common.manager_dependencies import get_auth_manager
+from src.common.review_access import caller_is_named_authority_reviewer
+from src.controller.authorization_manager import AuthorizationManager
+from src.models.users import UserInfo
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep,
@@ -130,12 +134,24 @@ def list_review_requests(
 @router.get("/data-asset-reviews/{request_id}", response_model=DataAssetReviewRequestApi)
 def get_review_request(
     request_id: str,
+    request: Request,
     manager: DataAssetReviewManagerDep,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
+    user: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
-    """Get a specific data asset review request by its ID."""
+    """Get a specific data asset review request by its ID.
+
+    Read-only on ``data-asset-reviews``, or a named reviewer of an Authority
+    Relation review, in any status (R5): an AR reviewer opens their task without that feature.
+    """
     logger.info(f"Fetching data asset review request ID: {request_id}")
+    if not user_has_feature_level(auth_manager, user, 'data-asset-reviews', FeatureAccessLevel.READ_ONLY, request):
+        if not caller_is_named_authority_reviewer(db, user, request_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions for feature 'data-asset-reviews'. Required level: Read-only.",
+            )
     try:
         request = manager.get_review_request(request_id=request_id)
         if request is None:

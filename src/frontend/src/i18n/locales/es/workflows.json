@@ -574,7 +574,8 @@
       "started": "Iniciado",
       "waitingAt": "En espera en",
       "progress": "Progreso"
-    }
+    },
+    "nonFatal": "Falló, la ejecución continuó"
   },
   "nodes": {
     "checklistTitle": "Lista de comprobación",

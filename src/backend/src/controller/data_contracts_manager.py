@@ -140,6 +140,7 @@ from src.utils.property_custom_properties import (
     stable_ids_by_property,
 )
 from src.repositories.teams_repository import team_repo
+from src.utils.odcs_type_options import nests_type_options, read_type_options
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.controller.domain_export_adapter import (
     domain_export_adapter,
@@ -1292,9 +1293,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                         logical_type_options.pop('timezone', None)
                                     # customFormat is not an ODCS key
                                     logical_type_options.pop('customFormat', None)
-                                prop_dict.update(logical_type_options)  # Merge constraints into property
                             except (json.JSONDecodeError, TypeError):
-                                pass
+                                logical_type_options = None
+                            if isinstance(logical_type_options, dict) and logical_type_options:
+                                if nests_type_options(db_obj.api_version):
+                                    prop_dict['logicalTypeOptions'] = logical_type_options
+                                else:  # v3.0.x: the options on the property, as before
+                                    prop_dict.update(logical_type_options)
                         if prop.items_logical_type:
                             prop_dict['itemType'] = prop.items_logical_type
 
@@ -1931,7 +1936,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 else:
                     prop_dict = prop_data
 
-                logical_type_options = {}
+                logical_type_options = read_type_options(prop_dict)
                 for field in ['minLength', 'maxLength', 'pattern']:
                     if prop_dict.get(field) is not None:
                         logical_type_options[field] = prop_dict[field]

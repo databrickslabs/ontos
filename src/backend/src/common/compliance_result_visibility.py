@@ -107,6 +107,32 @@ def visible_results(
     return shown, len(results) - len(shown)
 
 
+# A stored result as ``ComplianceResultRepository.typed_result_rows`` reads it:
+# (run_id, object_type, object_id, passed, not_evaluated)
+ResultRow = Tuple[str, str, str, bool, bool]
+
+
+def result_outcome(passed: bool, not_evaluated: bool) -> str:
+    """'passed', 'failed' or 'not_evaluated' (stored as not passed, not a failure)."""
+    if passed:
+        return 'passed'
+    return 'not_evaluated' if not_evaluated else 'failed'
+
+
+def hidden_result_tallies(
+    rows: Iterable[ResultRow], checks: ViewerReadChecks,
+) -> Dict[str, Dict[str, int]]:
+    """Per run id, the results the viewer can't read, by outcome (``result_outcome``).
+    Runs without a hidden result are left out."""
+    tallies: Dict[str, Dict[str, int]] = {}
+    for run_id, object_type, object_id, passed, not_evaluated in rows:
+        if checks.can_read(object_type, object_id):
+            continue
+        per_run = tallies.setdefault(run_id, {'passed': 0, 'failed': 0, 'not_evaluated': 0})
+        per_run[result_outcome(passed, not_evaluated)] += 1
+    return tallies
+
+
 def viewer_read_checks(request: Any) -> ViewerReadChecks:
     """Read checks with the requesting user's own token (``RunIdentity.for_request``)."""
     from src.common.run_identity import RunIdentity

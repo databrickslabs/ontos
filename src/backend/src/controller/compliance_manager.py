@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
-
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 import json
 import uuid
 import yaml
@@ -39,6 +38,9 @@ from src.common.uc_table_enrichment import (
     groups_for_fields,
     unavailable_fields_read,
 )
+
+if TYPE_CHECKING:
+    from src.common.compliance_result_visibility import ViewerReadChecks
 
 
 logger = get_logger(__name__)
@@ -249,6 +251,29 @@ def run_score_fields(run: ComplianceRunDb, not_evaluated: int = 0) -> Dict[str, 
     return {
         'score': run.score if _run_scored(run) else None,
         'coverage': {'evaluated': evaluated, 'not_evaluated': int(not_evaluated or 0)},
+    }
+
+
+def viewer_run_fields(run: ComplianceRunDb, counts: Dict[str, int]) -> Dict[str, object]:
+    """A run's counts, ``score`` and ``coverage`` over the results one viewer can
+    read (``counts``: ``ComplianceManager.viewer_run_counts``), and ``hidden_count``.
+
+    Without a hidden result they are the stored ones (``run_score_fields``). With
+    some, the score is recomputed from the visible passes and failures, so it
+    says nothing about the objects the viewer can't read.
+    """
+    success, failure = counts['success'], counts['failure']
+    hidden = counts['hidden']
+    fields = run_score_fields(run, counts['not_evaluated'])
+    if hidden:
+        evaluated = success + failure
+        fields['score'] = (
+            round(100.0 * success / evaluated, 2)
+            if run.status == 'succeeded' and evaluated else None
+        )
+        fields['coverage']['evaluated'] = evaluated
+    return {
+        'success_count': success, 'failure_count': failure, **fields, 'hidden_count': hidden,
     }
 
 
@@ -708,6 +733,73 @@ class ComplianceManager:
     def list_results(self, db: Session, *, run_id: str, only_failed: bool = False, limit: int = 1000) -> List[ComplianceResultDb]:
         return compliance_result_repo.list_for_run(db, run_id=run_id, only_failed=only_failed, limit=limit)
 
+    def viewer_run_counts(
+        self, db: Session, runs: List[ComplianceRunDb], checks: 'ViewerReadChecks',
+    ) -> Dict[str, Dict[str, int]]:
+        """Per run id: ``success``, ``failure`` and ``not_evaluated`` over the results
+        the viewer can read (``checks``), and ``hidden``, how many they can't.
+
+        The stored counts less the hidden results: only results on Unity Catalog
+        objects are checked (app entities are visible to compliance readers), and
+        runs seeded without results keep their counts.
+        """
+        from src.common.compliance_result_visibility import (
+            UC_RESULT_TYPES, hidden_result_tallies,
+        )
+
+        ids = [r.id for r in runs]
+        not_evaluated = self.not_evaluated_counts(db, ids)
+        hidden = hidden_result_tallies(
+            compliance_result_repo.typed_result_rows(db, ids, UC_RESULT_TYPES), checks,
+        )
+        counts: Dict[str, Dict[str, int]] = {}
+        for run in runs:
+            h = hidden.get(run.id, {})
+            counts[run.id] = {
+                'success': max(0, (run.success_count or 0) - h.get('passed', 0)),
+                'failure': max(0, (run.failure_count or 0) - h.get('failed', 0)),
+                'not_evaluated': max(0, not_evaluated.get(run.id, 0) - h.get('not_evaluated', 0)),
+                'hidden': sum(h.values()),
+            }
+        return counts
+
+    def viewer_results_page(
+        self, db: Session, *, run_id: str, checks: 'ViewerReadChecks',
+        only_failed: bool = False, offset: int = 0, limit: int = 500,
+    ) -> Tuple[List[ComplianceResultDb], int, int]:
+        """One page of the run's results the viewer can read, newest first.
+
+        Returns ``(page, total, hidden)``: ``total`` counts every visible result
+        (all pages), ``hidden`` the results left out, both under ``only_failed``.
+        """
+        from src.common.compliance_result_visibility import (
+            UC_RESULT_TYPES, hidden_result_tallies,
+        )
+
+        hidden_by_outcome = hidden_result_tallies(
+            compliance_result_repo.typed_result_rows(db, [run_id], UC_RESULT_TYPES), checks,
+        ).get(run_id, {})
+        hidden = (hidden_by_outcome.get('failed', 0) if only_failed
+                  else sum(hidden_by_outcome.values()))
+        total = compliance_result_repo.count_for_run(
+            db, run_id=run_id, only_failed=only_failed,
+        ) - hidden
+        page: List[ComplianceResultDb] = []
+        skipped = 0
+        if limit > 0:
+            for r in compliance_result_repo.iter_for_run(
+                db, run_id=run_id, only_failed=only_failed,
+            ):
+                if not checks.can_read(r.object_type, r.object_id):
+                    continue
+                if skipped < offset:
+                    skipped += 1
+                    continue
+                page.append(r)
+                if len(page) >= limit:
+                    break
+        return page, max(0, total), hidden
+
     # --- DSL evaluation (minimal): iterate over UC and app objects ---
     def _evaluate_rule_on_object(self, rule: str, obj: Dict[str, any]) -> Tuple[bool, Optional[str]]:
         return eval_dsl(rule, obj)
@@ -1031,7 +1123,7 @@ class ComplianceManager:
             logger.exception("Compliance inline run failed")
             # The entities evaluated before the error stored NOTIFY as done; send those.
             self._flush_notifications(db, notifier, policy, failed=failure, passed=success)
-            from src.common.compliance_errors import run_error_code
+            from src.common.compliance_errors import public_run_error, run_error_code
             error_code, error_params = run_error_code(e)
             self.complete_run(
                 db, run, success_count=success, failure_count=failure, score=None,
@@ -1047,7 +1139,11 @@ class ComplianceManager:
                     entity_id=policy.id,
                     action='RUN',
                     username=current_user,
-                    details={"run_id": run.id, "status": run.status, "score": run.score, "error": str(e)}
+                    # The code, not the exception text: the timeline has other readers
+                    details={
+                        "run_id": run.id, "status": run.status, "score": run.score,
+                        "error_code": public_run_error(run.status, error_code, None)[0],
+                    }
                 )
             except Exception as log_err:
                 logger.warning(f"Failed to log change for failed policy run: {log_err}")

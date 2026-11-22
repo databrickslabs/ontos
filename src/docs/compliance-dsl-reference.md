@@ -436,7 +436,16 @@ The results of a run list only the Unity Catalog objects the viewer can read: th
 checked with the viewer's own token when the results are opened (one listing per schema),
 whoever started the run. The others are counted (`hidden_count`), not listed. A viewer
 without a token sees none, except with `ENV=LOCAL` or `OBO_ALLOW_SP_FALLBACK=true`, where the
-check uses the app's client and so hides nothing the app can read.
+check uses the app's client and so hides nothing the app can read. The run's counts, score and
+coverage, in the results and in the run list, are computed over the same visible results, so
+they say nothing about the hidden objects; the results come in pages of up to 500 (`offset`,
+`limit`), with `total` counting every visible result. The policy list, the stats and the trend
+still use the stored scores, which are per policy and name no object.
+
+A failed run shows why as a code the UI translates (`error_code`, `error_params`): the app's own
+codes, and `run_failed` for any other error (a Databricks SDK or database error, say). The
+error text is not sent, as it can name objects or hosts the reader can't see; it stays in the
+app log.
 
 ### Application Entities
 - `type` - Entity type

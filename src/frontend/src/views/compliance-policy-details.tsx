@@ -55,7 +55,6 @@ type Run = {
   failure_count: number;
   score: number | null;
   coverage?: { evaluated?: number; not_evaluated?: number } | null;
-  error_message?: string;
   error_code?: string | null;
   error_params?: Record<string, unknown> | null;
   warning_code?: string | null;
@@ -349,7 +348,7 @@ export default function CompliancePolicyDetails() {
             <CardDescription>
               {t('compliance:policyDetails.runSummary.lastRunStarted', { date: new Date(activeRun.started_at).toLocaleString() })} • {t('compliance:policyDetails.runSummary.statusLabel')} <span className="font-medium">{activeRun.status}</span>
             </CardDescription>
-            {activeRun.status === 'failed' && activeRun.error_message && (
+            {activeRun.status === 'failed' && (
               <div className="text-sm text-destructive">{t('compliance:policyDetails.runSummary.errorLabel')} {complianceRunErrorText(t, activeRun)}</div>
             )}
             {activeRun.status !== 'failed' && activeRun.warning_code && (

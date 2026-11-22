@@ -96,6 +96,10 @@
       "filteredAll": "Filtré sur tout — dernière exécution {{date}}"
     }
   },
+  "resultsPaging": {
+    "shownOfTotal": "{{shown}} résultats affichés sur {{total}}.",
+    "loadMore": "Charger plus"
+  },
   "runDetails": {
     "runTitle": "Exécution {{id}}",
     "viewPolicy": "Voir la politique",
@@ -174,6 +178,7 @@
   "runErrors": {
     "entities_load_failed": "Les entités {{entityType}} n'ont pas pu être chargées ; la règle n'a donc pas pu être évaluée.",
     "rule_parse_failed": "La règle n'a pas pu être analysée : {{detail}}",
+    "run_failed": "L'exécution a échoué. Les détails figurent dans le journal de l'app.",
     "user_token_required": "Cette règle vérifie des objets Unity Catalog, lus avec votre connexion Databricks, et la requête n'en avait pas ; elle n'a donc pas pu s'exécuter.",
     "workspace_client_unavailable": "L'espace de travail Databricks n'est pas disponible et cette règle vérifie des objets Unity Catalog ; elle n'a donc pas pu s'exécuter.",
     "tags_load_failed": "Les tags des entités {{entityType}} n'ont pas pu être chargés ; la règle n'a donc pas pu être évaluée."

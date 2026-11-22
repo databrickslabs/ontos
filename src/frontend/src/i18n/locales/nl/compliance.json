@@ -96,6 +96,10 @@
       "filteredAll": "Gefilterd op alles — laatste uitvoering {{date}}"
     }
   },
+  "resultsPaging": {
+    "shownOfTotal": "{{shown}} van {{total}} resultaten worden getoond.",
+    "loadMore": "Meer laden"
+  },
   "runDetails": {
     "runTitle": "Uitvoering {{id}}",
     "viewPolicy": "Beleid Bekijken",
@@ -174,6 +178,7 @@
   "runErrors": {
     "entities_load_failed": "De {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd.",
     "rule_parse_failed": "De regel kon niet worden geparseerd: {{detail}}",
+    "run_failed": "De run is mislukt. De details staan in het app-logboek.",
     "user_token_required": "Deze regel controleert Unity Catalog-objecten, die met uw Databricks-aanmelding worden gelezen, en het verzoek had die niet, dus kon hij niet worden uitgevoerd.",
     "workspace_client_unavailable": "De Databricks-workspace is niet beschikbaar en deze regel controleert Unity Catalog-objecten, dus kon hij niet worden uitgevoerd.",
     "tags_load_failed": "De tags van de {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd."

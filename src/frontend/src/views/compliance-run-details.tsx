@@ -40,7 +40,6 @@ interface Run {
   failure_count: number;
   score: number | null;
   coverage?: { evaluated?: number; not_evaluated?: number } | null;
-  error_message?: string;
   error_code?: string | null;
   error_params?: Record<string, unknown> | null;
   warning_code?: string | null;
@@ -73,6 +72,9 @@ export default function ComplianceRunDetails() {
   const [results, setResults] = useState<Result[]>([]);
   const [onlyFailed, setOnlyFailed] = useState(true);
   const [hiddenCount, setHiddenCount] = useState(0);
+  // Visible results on every page; the backend sends one page at a time
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const columns: ColumnDef<Result>[] = useMemo(() => [
     { accessorKey: 'object_type', header: t('common:labels.type') },
@@ -120,7 +122,9 @@ export default function ComplianceRunDetails() {
       const res = await get<any>(`/api/compliance/runs/${runId}/results?only_failed=${onlyFailed ? 'true' : 'false'}`);
       if (!res.data) throw new Error(res.error || t('compliance:errors.loadRunResultsFailed'));
       setRun(res.data.run);
-      setResults(Array.isArray(res.data.results) ? res.data.results : []);
+      const page = Array.isArray(res.data.results) ? res.data.results : [];
+      setResults(page);
+      setTotal(Number(res.data.total) || page.length);
       setHiddenCount(Number(res.data.hidden_count) || 0);
       setDynamicTitle(t('compliance:runDetails.runTitle', { id: runId }));
     } catch (e: any) {
@@ -132,6 +136,25 @@ export default function ComplianceRunDetails() {
       setLoading(false);
     }
   }, [get, runId, onlyFailed, setDynamicTitle, t]);
+
+  const loadMore = useCallback(async () => {
+    if (!runId) return;
+    setLoadingMore(true);
+    try {
+      const res = await get<any>(
+        `/api/compliance/runs/${runId}/results?only_failed=${onlyFailed ? 'true' : 'false'}`
+        + `&offset=${results.length}`,
+      );
+      if (!res.data) throw new Error(res.error || t('compliance:errors.loadRunResultsFailed'));
+      const page: Result[] = Array.isArray(res.data.results) ? res.data.results : [];
+      setResults((prev) => [...prev, ...page]);
+      setTotal(Number(res.data.total) || 0);
+    } catch (e: any) {
+      setError(e.message || t('compliance:errors.loadFailed'));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [get, runId, onlyFailed, results.length, t]);
 
   useEffect(() => {
     setStaticSegments([{ label: t('compliance:title'), path: '/compliance' }]);
@@ -193,7 +216,7 @@ export default function ComplianceRunDetails() {
               {complianceRunCoverageText(t, run)}
             </div>
           )}
-          {run.status === 'failed' && run.error_message && (
+          {run.status === 'failed' && (
             <div className="text-sm text-destructive">{t('compliance:runDetails.errorLabel')} {complianceRunErrorText(t, run)}</div>
           )}
           {run.status !== 'failed' && run.warning_code && (
@@ -216,6 +239,16 @@ export default function ComplianceRunDetails() {
             </div>
           )}
           <DataTable columns={columns} data={results} searchColumn="object_name" />
+          {total > results.length && (
+            <div className="flex items-center justify-between mt-3" data-testid="results-paging">
+              <span className="text-sm text-muted-foreground">
+                {t('compliance:resultsPaging.shownOfTotal', { shown: results.length, total })}
+              </span>
+              <Button size="sm" variant="outline" onClick={loadMore} disabled={loadingMore}>
+                {t('compliance:resultsPaging.loadMore')}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

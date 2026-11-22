@@ -214,6 +214,14 @@ def check_sla_values(sla_properties: Any) -> None:
                 raise SlaValueCollectionError(str(item.get('property') or ''), field)
 
 
+def sla_value(text: Optional[str]) -> Any:
+    """A stored SLA ``value`` / ``valueExt`` with its type. A list or object (rows
+    written before collections were refused) stays its stored JSON text, as it was
+    exported before, so the export stays valid and a page save isn't refused."""
+    value = typed_value(text)
+    return text if isinstance(value, (list, dict)) else value
+
+
 def relationship_stable_id(rel_data: Dict[str, Any], from_document: bool) -> Optional[str]:
     """The ODCS id of an incoming relationship: its `id` in an ODCS document,
     `stableId` in an API payload (where `id` is the row id)."""
@@ -1524,9 +1532,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     sla_item['id'] = prop.stable_id
                 # With their JSON type (see _create_sla_properties)
                 if prop.value not in (None, ''):
-                    sla_item['value'] = typed_value(prop.value)
+                    sla_item['value'] = sla_value(prop.value)
                 if prop.value_ext not in (None, ''):
-                    sla_item['valueExt'] = typed_value(prop.value_ext)
+                    sla_item['valueExt'] = sla_value(prop.value_ext)
 
                 if prop.unit:
                     sla_item['unit'] = prop.unit
@@ -7550,8 +7558,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         sla_properties = [
             {k: v for k, v in {
                 # Typed, as stored, with the ODCS id (a read-modify-write stores the same)
-                'id': sp.stable_id, 'property': sp.property, 'value': typed_value(sp.value),
-                'valueExt': typed_value(sp.value_ext), 'unit': sp.unit,
+                'id': sp.stable_id, 'property': sp.property, 'value': sla_value(sp.value),
+                'valueExt': sla_value(sp.value_ext), 'unit': sp.unit,
                 'element': sp.element, 'driver': sp.driver,
             }.items() if v is not None}
             for sp in (getattr(db_contract, 'sla_properties', None) or [])

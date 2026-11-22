@@ -286,3 +286,23 @@ def test_an_update_with_an_sla_collection_is_refused(db_session, imported, field
         _save(manager, db_session, cid, {'slaProperties': sla})
 
     assert err.value.params == {'property': sla[0]['property'], 'field': field}
+
+
+@pytest.mark.parametrize('field,column', [('valueExt', 'value_ext'), ('value', 'value')])
+def test_a_collection_stored_before_goes_out_as_text_and_a_save_keeps_it(
+        db_session, imported, field, column):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+
+    manager, cid = imported
+    row = db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=cid, property='latency').one()
+    setattr(row, column, '{"p99": 4}')  # what development wrote with json.dumps
+    db_session.commit()
+
+    exported = _by(_export(manager, db_session, cid)['slaProperties'])['latency']
+    assert exported[field] == '{"p99": 4}'
+    # the contract page sends back what the API returns: not refused
+    _save(manager, db_session, cid,
+          {'slaProperties': _api(manager, db_session, cid)['slaProperties']})
+    assert _by(_export(manager, db_session, cid)['slaProperties'])['latency'][field] == \
+        '{"p99": 4}'

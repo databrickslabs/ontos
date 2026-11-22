@@ -29,6 +29,9 @@ _NOT_FOUND_MARKERS = (
 
 # A save waits at most this long for its comment statement
 DEFAULT_TIMEOUT_SECONDS = 60
+# A single save waits at most this long for each read of a comment (before and after the write):
+# the asset row stays locked meanwhile, and the SDK's own timeout is minutes
+SINGLE_READ_TIMEOUT_SECONDS = 10
 # The shortest wait the Statement Execution API accepts, other than 0 (don't wait)
 _MIN_WAIT_SECONDS = 5
 
@@ -43,6 +46,20 @@ class CommentWriteError(RuntimeError):
     def __init__(self, reason: str, message: str):
         super().__init__(message)
         self.reason = reason
+
+
+def normalize_comment(text: Optional[str]) -> Optional[str]:
+    """``text`` as Unity Catalog may store it, for comparing comments: None when empty.
+
+    Line endings become a line feed, trailing blanks of each line and the blanks around
+    the whole text go, so a comment Unity Catalog normalised still equals what was written.
+    Blanks are all Unicode whitespace (``str.isspace``), also a no-break space or U+2028, at the
+    end of a line or at either end of the text.
+    """
+    if not text:
+        return None
+    lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    return '\n'.join(line.rstrip() for line in lines).strip() or None
 
 
 def split_column_location(location: str) -> Optional[Tuple[str, str]]:
@@ -151,6 +168,10 @@ def execute_statement(
 
     Raises ``StatementError`` unless it succeeded, ``TimeoutError`` when it is
     still running after ``timeout_seconds`` (then it is cancelled).
+
+    ``timeout_seconds`` is not a hard limit: the first request has no timeout of its own
+    and the loop polls once a second, so a caller's budget can be overrun by that request
+    plus about a second per statement.
     """
     from databricks.sdk.service.sql import StatementState
 

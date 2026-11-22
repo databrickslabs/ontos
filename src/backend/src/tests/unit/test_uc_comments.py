@@ -229,3 +229,12 @@ def test_a_missing_column_is_not_found():
         read_comment(ws, 'main.sales.orders', 'gone')
 
     assert raised.value.reason == NOT_FOUND
+
+
+@pytest.mark.parametrize('text, expected', [
+    (None, None), ('', None), ('  \r\n ', None), ('a', 'a'),
+    ('a \r\nb\t\n', 'a\nb'), ('a\rb', 'a\nb'), ('  a b  ', 'a b'),
+    ('a\u00a0', 'a'), ('\u00a0a\u2028', 'a'),
+])
+def test_normalize_comment_ignores_line_endings_and_trailing_blanks(text, expected):
+    assert uc_comments.normalize_comment(text) == expected

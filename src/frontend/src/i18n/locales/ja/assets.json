@@ -47,6 +47,7 @@
       "uc_description_import_write_limit": "このインポートは Unity Catalog で試行する行の上限 {{limit}} 件に達したため、{{object}} の説明は書き込まれませんでした。",
       "uc_description_import_writes_failed": "アセットはインポートされましたが、説明を Unity Catalog に書き込めませんでした。",
       "uc_description_existing_comment": "{{object}} には Unity Catalog に別のコメントが既にあるため、説明はそこに書き込まれませんでした。説明をそのコメントに合わせるか、Unity Catalog でコメントを変更してから、もう一度保存してください。",
+      "uc_description_write_unverified": "{{object}} の説明は Unity Catalog に書き込まれましたが、確認のためにコメントを読み戻せませんでした。もう一度保存して確認してください。",
       "uc_description_unsupported_text": "{{object}} の説明に Unity Catalog が保存できない文字が含まれているため、そこには書き込まれませんでした。",
       "uc_description_import_time_budget": "このインポートは Unity Catalog への書き込みに割り当てられた時間を使い切ったため、{{object}} の説明はそこに書き込まれませんでした。",
       "uc_description_import_writes_uc": "{{object}} の説明は Unity Catalog に書き込まれます。そこに別のコメントが既にある場合、そのコメントは保持され、その行に警告が表示されます。",

@@ -1,7 +1,7 @@
 """a note, link or document stored on an entity is not a shared library row
 
 Revision ID: o3_unshare_entity_metadata_rows
-Revises: s2_document_markdown_import
+Revises: s3_notif_read_requests_handled
 Create Date: 2026-11-19 00:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'o3_unshare_entity_metadata_rows'
-down_revision: Union[str, None] = 's2_document_markdown_import'
+down_revision: Union[str, None] = 's3_notif_read_requests_handled'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -745,8 +745,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         An edit of a product that is not a draft that breaks consumers (removed
         ports, a repointed output port, an unlinked contract) raises
-        ``VersioningRequiredError`` unless ``force_update`` is set. Every caller
-        goes through this check: the REST route, the assistant and MCP tools.
+        ``VersioningRequiredError`` unless an admin forces it (``force_update`` and
+        ``user_is_admin``). The REST route, the assistant and the MCP tools go
+        through this check. The one writer that does not is the UC bulk import job
+        (``workflows/uc_bulk_import``): it runs as a separate Databricks job with its
+        own database connection and no app user, and links output port contracts
+        with SQL.
 
         Fires the ``on_update`` workflows once the product is updated (PUT
         /data-products/{id}, the assistant tool), with the fields sent.
@@ -793,7 +797,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # repeat it.
             check_status_unchanged(db_obj.status, product_data_dict.get('status'))
 
-            if not force_update and (db_obj.status or '').lower() not in ('', 'draft'):
+            # Only an admin may force a breaking edit through; others get the 409.
+            forced = force_update and user_is_admin
+            if not forced and (db_obj.status or '').lower() not in ('', 'draft'):
                 impact = self.analyze_update_impact(
                     product_id=product_id,
                     proposed_changes=product_update_model.model_dump(

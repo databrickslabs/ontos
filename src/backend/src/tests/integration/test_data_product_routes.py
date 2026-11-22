@@ -251,6 +251,34 @@ class TestDataProductRoutes:
         assert response.status_code == 200, response.text
         assert [p["name"] for p in response.json()["outputPorts"]] == ["a"]
 
+    def test_a_non_admin_owner_cannot_force_a_breaking_edit(
+        self, client, db_session, mock_test_user, sample_product_data
+    ):
+        """X-Force-Update is honoured for admins only: an owner with Read/Write gets 409."""
+        from src.db_models.data_products import DataProductDb
+        from src.db_models.settings import AppRoleDb
+
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a", "b"])
+        # The caller owns the product, so only the versioning check can refuse the edit
+        db_session.get(DataProductDb, product_id).draft_owner_id = mock_test_user.email
+        group = f"product-writer-{uuid.uuid4().hex[:6]}"
+        db_session.add(AppRoleDb(
+            id=str(uuid.uuid4()), name=f"Product writer {group}", description="test role",
+            feature_permissions=json.dumps({"data-products": "Read/Write"}),
+            assigned_groups=json.dumps([group]), home_sections="[]",
+            approval_privileges="{}", is_admin=False,
+        ))
+        db_session.commit()
+        mock_test_user.groups = [group]  # Read/Write on data-products, not an admin
+        kept = sample_product_data["outputPorts"][:1]
+        update = {**sample_product_data, "id": product_id, "outputPorts": kept}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update,
+                              headers={"X-Force-Update": "true"})
+
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["user_can_override"] is False
+
     def test_update_active_product_adding_output_port_is_not_breaking(
         self, client, sample_product_data
     ):

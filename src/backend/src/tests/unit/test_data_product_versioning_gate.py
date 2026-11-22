@@ -72,13 +72,26 @@ def test_an_admin_is_told_the_edit_can_be_forced(manager, db_session):
     assert err.value.user_can_override is True
 
 
-def test_force_update_applies_the_edit(manager, db_session):
+def test_an_admin_forcing_the_update_applies_the_edit(manager, db_session):
     row = _product(db_session)
 
-    manager.update_product(row.id, _keep_first(row), db=db_session, user=OWNER, force_update=True)
+    manager.update_product(row.id, _keep_first(row), db=db_session, user=OWNER,
+                           force_update=True, user_is_admin=True)
 
     db_session.refresh(row)
     assert len(row.output_ports) == 1
+
+
+def test_a_non_admin_forcing_the_update_is_still_refused(manager, db_session):
+    row = _product(db_session)
+
+    with pytest.raises(VersioningRequiredError) as err:
+        manager.update_product(row.id, _keep_first(row), db=db_session, user=OWNER,
+                               force_update=True)
+
+    assert err.value.user_can_override is False
+    db_session.refresh(row)
+    assert len(row.output_ports) == 2
 
 
 def test_a_draft_may_remove_ports(manager, db_session):

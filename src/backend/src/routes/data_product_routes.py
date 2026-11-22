@@ -2099,13 +2099,6 @@ async def update_data_product(
     try:
         logger.info(f"Updating data product ID: {product_id}")
 
-        # The manager refuses a breaking edit of a non-draft product (409 below)
-        # unless the caller forces it; an admin may force, others get a new version.
-        force_update = request.headers.get('X-Force-Update') == 'true'
-        from src.common.authorization import is_user_admin
-        from src.common.config import get_settings
-        user_is_admin = is_user_admin(current_user.groups, get_settings())
-
         # Delegate to manager (includes auth check)
         user_groups = current_user.groups or []
         # PR I: exclude_unset preserves partial-update semantics. Without it,
@@ -2152,6 +2145,14 @@ async def update_data_product(
                 "Failed to resolve data-products admin level for product update; "
                 "falling back to ownership cascade"
             )
+
+        # The manager refuses a breaking edit of a non-draft product (409 below)
+        # unless an admin forces it: an app admin or a data-products Admin, the
+        # same admins who may edit any product. Others get a new version.
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+        user_is_admin = is_feature_admin or is_user_admin(current_user.groups, get_settings())
+        force_update = request.headers.get('X-Force-Update') == 'true' and user_is_admin
 
         # Fires the on_update workflows (update_product)
         updated_product_response = manager.update_product_with_auth(

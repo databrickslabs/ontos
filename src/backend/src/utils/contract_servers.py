@@ -10,6 +10,8 @@ the ones a type requires (``format`` for azure, ``dataset`` for bigquery ...).
 import json
 from typing import Any, Dict, List, Optional
 
+from src.utils.odcs_values import strict_loads
+
 # Server fields that are columns of the server row (or JSON columns), not key/value rows
 SERVER_COLUMNS = ('id', 'server', 'type', 'description', 'environment', 'roles',
                   'customProperties', 'properties')
@@ -42,7 +44,7 @@ def odcs_property_value(key: str, text: Optional[str]) -> Any:
             return text
     if text[:1] in ('[', '{'):
         try:
-            return json.loads(text)
+            return strict_loads(text)
         except ValueError:
             return text
     return text
@@ -58,7 +60,7 @@ def json_list(text: Optional[str]) -> Optional[List[Any]]:
     if not text:
         return None
     try:
-        value = json.loads(text)
+        value = strict_loads(text)
     except (TypeError, ValueError):
         return None
     return value if isinstance(value, list) and value else None

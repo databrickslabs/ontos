@@ -14,6 +14,8 @@ JSON text (the columns are text), and exported in the shape they came in.
 import json
 from typing import Any, Dict, Optional
 
+from src.utils.odcs_values import strict_loads
+
 # column -> accepted keys (ODCS name first)
 _SCALAR_OPERATORS = {
     'must_be': ('mustBe', 'must_be'),
@@ -54,7 +56,7 @@ def _as_value(text: Optional[str]) -> Any:
     if text is None:
         return None
     try:
-        return json.loads(text)
+        return strict_loads(text)
     except (TypeError, ValueError):
         return text
 
@@ -68,9 +70,14 @@ def tags_text(tags: Any) -> Optional[str]:
 
 
 def implementation_text(implementation: Any) -> Optional[str]:
-    """A custom check's ``implementation`` for its text column: a string as is,
-    an object (ODCS allows both) as JSON."""
-    if implementation is None or isinstance(implementation, str):
+    """A custom check's ``implementation`` for its text column: a string as is
+    (JSON-quoted when it would read back as an object or a quoted string), an
+    object (ODCS allows both) as JSON."""
+    if implementation is None:
+        return None
+    if isinstance(implementation, str):
+        if implementation.lstrip()[:1] in ('{', '"'):
+            return json.dumps(implementation)
         return implementation
     return json.dumps(implementation)
 
@@ -80,7 +87,7 @@ def odcs_tags(text: Optional[str]) -> Optional[list]:
     if not text:
         return None
     try:
-        value = json.loads(text)
+        value = strict_loads(text)
     except (TypeError, ValueError):
         value = text
     if isinstance(value, str):
@@ -92,13 +99,15 @@ def odcs_tags(text: Optional[str]) -> Optional[list]:
 
 
 def odcs_implementation(text: Optional[str]) -> Any:
-    """The stored implementation: an object stored as JSON decoded, text as is."""
-    if not text or text.lstrip()[:1] not in ('{', '['):
+    """The stored implementation: an object (or a quoted string) as written by
+    ``implementation_text``; any other text, arrays included, as is."""
+    if not text or text.lstrip()[:1] not in ('{', '"'):
         return text
     try:
-        return json.loads(text)
+        value = strict_loads(text)
     except (TypeError, ValueError):
         return text
+    return value if isinstance(value, (dict, str)) else text
 
 
 def operator_columns(rule: Dict[str, Any]) -> Dict[str, Optional[str]]:

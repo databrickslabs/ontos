@@ -8,6 +8,7 @@ export and comes back on import. Other SLA properties are left alone.
 from typing import Any, Dict, Iterable, Optional
 
 from src.db_models.data_contracts import DataContractSlaPropertyDb
+from src.utils.odcs_values import typed_value
 
 # API field (also the SLA property name) -> (unit, number type)
 LEGACY_SLA_FIELDS: Dict[str, tuple] = {
@@ -41,7 +42,8 @@ def legacy_sla_from_rows(rows: Iterable[DataContractSlaPropertyDb]) -> Optional[
         spec = LEGACY_SLA_FIELDS.get(row.property)
         if spec is None or row.value is None:
             continue
-        value = _number(row.value, spec[1])
+        # Text that reads as a number is stored JSON-quoted ('"99.9"')
+        value = _number(typed_value(row.value), spec[1])
         if value is not None:
             sla[row.property] = value
     return sla or None

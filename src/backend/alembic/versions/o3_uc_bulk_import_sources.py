@@ -1,7 +1,7 @@
 """record the tables the UC Bulk Import job imported into each product and contract
 
 Revision ID: o3_uc_bulk_import_sources
-Revises: o2_step_execution_message
+Revises: s2_document_markdown_import
 Create Date: 2026-11-19 12:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'o3_uc_bulk_import_sources'
-down_revision: Union[str, None] = 'o2_step_execution_message'
+down_revision: Union[str, None] = 's2_document_markdown_import'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -118,6 +118,21 @@ def test_trailer_keys_match_without_case_and_need_the_start_of_the_line():
     ]
 
 
+def test_trailers_inside_fenced_code_blocks_are_not_read():
+    body = (
+        "Upgrade-Note: before the fence\n"
+        "```text\nUpgrade-Note: in a backtick fence\n```\n"
+        "~~~~\nDocs-Note: in a tilde fence\n~~~\nDocs-Note: a shorter fence does not close\n"
+        "```\nDocs-Note: nor one of the other character\n~~~~~\n"
+        "Docs-Note: after the fence\n"
+        "  ```\n  Upgrade-Note: fence indented by up to 3 spaces\n  ```\n"
+        "````\nBREAKING CHANGE: an unclosed fence runs to the end\n"
+    )
+    assert rn.parse_trailers(body) == [
+        (rn.UPGRADE, "before the fence"), (rn.DOCS, "after the fence"),
+    ]
+
+
 # --- collect ----------------------------------------------------------------------------------
 
 

@@ -79,6 +79,11 @@ _PR_RE = re.compile(r"\(#(\d+)\)\s*$")
 _ANY_PR_RE = re.compile(r"\(#(\d+)\)")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(\.\d+)?$")
 _BULLET_RE = re.compile(r"^[-*+]\s")
+# A fenced code block opens with 3+ backticks or tildes (up to 3 spaces before them; a
+# backtick fence's info string has no backtick) and closes with a line of the same
+# character, at least as long.
+_FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}(?=[^`]*$)|~{3,})")
+_FENCE_CLOSE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})\s*$")
 # A note shorter than this is only "already written by hand" on an exact match.
 _MIN_CONTAINED_KEY = 20
 
@@ -121,11 +126,13 @@ def parse_trailers(body: str) -> List[Tuple[str, str]]:
 
     A trailer starts at the beginning of a line, anywhere in the body (in the
     final trailer block next to `Co-authored-by:` or in its own paragraph), and
-    continues on the following lines that start with whitespace.
+    continues on the following lines that start with whitespace. Lines inside a
+    fenced code block (an unclosed fence runs to the end) are not read.
     """
     found: List[Tuple[str, str]] = []
     kind = ""
     parts: Optional[List[str]] = None
+    fence = ""  # the opening fence of the code block the line is in
 
     def close() -> None:
         if parts:
@@ -134,8 +141,19 @@ def parse_trailers(body: str) -> List[Tuple[str, str]]:
                 found.append((kind, text))
 
     for line in body.splitlines():
+        if fence:
+            closing = _FENCE_CLOSE_RE.match(line)
+            mark = closing.group(1) if closing else ""
+            if mark[:1] == fence[0] and len(mark) >= len(fence):
+                fence = ""
+            continue
+        opening = _FENCE_OPEN_RE.match(line)
         match = _TRAILER_RE.match(line)
-        if match:
+        if opening:
+            close()
+            parts = None
+            fence = opening.group(1)
+        elif match:
             close()
             kind = TRAILER_KINDS[match.group(1).lower()]
             parts = [match.group(2).strip()]

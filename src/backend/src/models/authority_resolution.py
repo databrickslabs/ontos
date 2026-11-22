@@ -65,6 +65,7 @@ class CriterionInput(BaseModel):
     from Compliance arrives with its rule and ``copied_from``. ``weight`` is a finite
     number of 0 or more; ``order`` defaults to the check's position.
     """
+    id: Optional[str] = None                    # the stored check this one is (saved ones keep their rule)
     name: Optional[str] = None
     rule: Optional[str] = None
     failure_message: Optional[str] = None

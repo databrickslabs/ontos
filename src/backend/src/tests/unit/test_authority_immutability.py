@@ -372,8 +372,9 @@ def test_a_resource_ref_change_is_a_definition_change(db_session):
     assert mgr.get_relation(db_session, rel.id).dna_magnitude is None
 
 
-def test_ak7_backfill_marks_only_versions_that_were_past_draft():
-    """ak7: a version already active, needing review or retired had been activated; a draft is not."""
+def test_ak7_backfill_marks_only_versions_that_were_activated():
+    """ak7: active and retired versions had been activated. A needs_review version only if a
+    production decision (source 'mcp') was recorded for it. Drafts and dry runs don't count."""
     import importlib.util
     from sqlalchemy import create_engine, text
     path = Path(__file__).resolve().parents[3] / "alembic" / "versions" / "ak7_authority_activation_history.py"
@@ -384,13 +385,21 @@ def test_ak7_backfill_marks_only_versions_that_were_past_draft():
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE authority_relations (id TEXT PRIMARY KEY, status TEXT, "
                           "updated_at TEXT, activated_at TEXT)"))
-        conn.execute(text("INSERT INTO authority_relations VALUES ('d', 'draft', '2026-01-01', NULL)"))
-        conn.execute(text("INSERT INTO authority_relations VALUES ('a', 'active', '2026-02-01', NULL)"))
-        conn.execute(text("INSERT INTO authority_relations VALUES ('n', 'needs_review', '2026-03-01', NULL)"))
-        conn.execute(text("INSERT INTO authority_relations VALUES ('r', 'retired', '2026-04-01', NULL)"))
-        conn.execute(text("INSERT INTO authority_relations VALUES ('kept', 'active', '2026-05-01', '2026-01-15')"))
+        conn.execute(text("CREATE TABLE authority_decisions (id TEXT PRIMARY KEY, relation_id TEXT, source TEXT)"))
+        rows = [
+            ("draft", "draft", None), ("active", "active", None), ("retired", "retired", None),
+            ("review-mcp", "needs_review", None), ("review-dry", "needs_review", None),
+            ("review-evidence", "needs_review", None), ("kept", "active", "2026-01-15"),
+        ]
+        for rid, status, act in rows:
+            conn.execute(text("INSERT INTO authority_relations VALUES (:id, :st, '2026-02-01', :act)"),
+                         {"id": rid, "st": status, "act": act})
+        conn.execute(text("INSERT INTO authority_decisions VALUES ('d1', 'review-mcp', 'mcp')"))
+        conn.execute(text("INSERT INTO authority_decisions VALUES ('d2', 'review-dry', 'test')"))
+        conn.execute(text("INSERT INTO authority_decisions VALUES ('d3', 'review-evidence', 'evidence')"))
         assert migration.backfill_activated_at(conn) == 3
-        rows = dict(conn.execute(text("SELECT id, activated_at FROM authority_relations")).fetchall())
-    assert rows["d"] is None
-    assert rows["a"] == "2026-02-01" and rows["n"] == "2026-03-01" and rows["r"] == "2026-04-01"
-    assert rows["kept"] == "2026-01-15"  # an existing value is never overwritten
+        got = dict(conn.execute(text("SELECT id, activated_at FROM authority_relations")).fetchall())
+    assert got["draft"] is None
+    assert got["review-dry"] is None and got["review-evidence"] is None
+    assert got["active"] == got["retired"] == got["review-mcp"] == "2026-02-01"
+    assert got["kept"] == "2026-01-15"  # an existing value is never overwritten

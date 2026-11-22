@@ -9,6 +9,7 @@ on SQLite where SQLite can run them.
 """
 import importlib.util
 import uuid
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -250,14 +251,29 @@ def test_delete_with_decisions_is_409_and_keeps_the_history(db_session):
     assert db_session.query(AuthorityDecisionDb).filter_by(relation_id=rel.id).count() == 1
 
 
-def test_delete_with_dna_runs_is_refused_too(db_session):
+def test_a_dna_only_draft_can_be_deleted_and_its_runs_go_with_it(db_session):
+    """Review #8: a measured draft with no recorded decision is an abandoned draft. Its runs
+    and evidence rows are removed with it, and no Admin is needed to clean it up."""
+    from src.db_models.authority_resolution import AuthorityDnaRunDb
     mgr = AuthorityResolutionManager()
     rel = _ar(mgr, db_session, "hist-run")
     mgr.compute_dnaco(db_session, rel.id, rows=[{"actor_identity": "a"}])
     db_session.commit()
+    assert mgr.delete_relation(db_session, rel.id) is True
+    db_session.commit()
+    assert db_session.query(AuthorityDnaRunDb).filter_by(relation_id=rel.id).count() == 0
+
+
+def test_a_recorded_decision_or_an_activation_blocks_delete(db_session):
+    mgr = AuthorityResolutionManager()
+    rel = _ar(mgr, db_session, "hist-activated")
+    _activate_directly(db_session, rel)
+    rel.activated_at = datetime.utcnow()
+    rel.status = STATUS_RETIRED
+    db_session.commit()
     with pytest.raises(AuthorityHasHistoryError) as exc:
         mgr.delete_relation(db_session, rel.id)
-    assert exc.value.params["dna_runs"] == 1
+    assert exc.value.params["activated"] is True
 
 
 def test_delete_of_a_draft_without_history_still_works(db_session):

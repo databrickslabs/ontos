@@ -155,11 +155,15 @@ def test_copied_from_compliance_is_stored_as_provenance_only(db_session):
     assert "policy_id" not in crit and "category" not in crit
 
 
-def test_client_cannot_claim_a_migrated_provenance(db_session):
+def test_migrated_provenance_from_the_ui_is_accepted_and_an_unknown_kind_is_not(db_session):
+    """The UI echoes ak6's 'migrated' provenance back on save; that must not be a 400."""
     mgr = AuthorityResolutionManager()
+    rel = _saved(mgr, db_session, criteria=[CriterionInput(
+        name="x", rule="obj.value <= 1", copied_from={"kind": "migrated", "label": "x", "id": "p-1"})])
+    assert mgr.to_read_dict(db_session, rel)["criteria"][0]["copied_from"]["kind"] == "migrated"
     with pytest.raises(AuthorityInvalidError):
         _saved(mgr, db_session, criteria=[CriterionInput(
-            name="x", rule="obj.value <= 1", copied_from={"kind": "migrated", "label": "x"})])
+            name="y", rule="obj.value <= 1", copied_from={"kind": "bogus", "label": "y"})])
     db_session.rollback()
 
 

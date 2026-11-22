@@ -71,10 +71,30 @@ def canonical(value: Any) -> Any:
             value = value.astimezone(timezone.utc).replace(tzinfo=None)
         return value.isoformat()
     if isinstance(value, Mapping):
-        return {str(k): canonical(v) for k, v in sorted(value.items(), key=lambda kv: str(kv[0]))}
+        # A key whose value is absent or empty is the same as no key: a payload that
+        # leaves a default out and a stored row that holds it hash alike (review #2).
+        out = {}
+        for k, v in sorted(value.items(), key=lambda kv: str(kv[0])):
+            cv = canonical(v)
+            if cv is None or cv == {} or cv == []:
+                continue
+            out[str(k)] = cv
+        return out
     if isinstance(value, (list, tuple)):
         return [canonical(v) for v in value]
     return str(value)
+
+
+def _ranked(rows: Iterable[Mapping[str, Any]], order_key: str) -> List[Dict[str, Any]]:
+    """Rows with ``order_key`` replaced by their rank. Only the order is part of the
+    definition, so a demo pack's 1, 2 and a dialog's 0, 1 are the same definition."""
+    ordered = sorted(
+        (dict(r) for r in rows),
+        key=lambda r: (r.get(order_key) if r.get(order_key) is not None else 0, str(r)),
+    )
+    for rank, row in enumerate(ordered):
+        row[order_key] = rank
+    return ordered
 
 
 def _rows(items: Iterable[Mapping[str, Any]], keys: Iterable[str]) -> List[Dict[str, Any]]:
@@ -93,8 +113,8 @@ def definition_view(
     """The whole definition, canonical, including ``name`` (for the immutability check)."""
     return {
         "scalars": {k: canonical(scalars.get(k)) for k in ("name", *DEFINITION_FIELDS)},
-        "criteria": _rows(criteria, CRITERION_KEYS),
-        "prerequisites": _rows(prerequisites, PREREQUISITE_KEYS),
+        "criteria": _rows(_ranked(criteria, "display_order"), CRITERION_KEYS),
+        "prerequisites": _rows(_ranked(prerequisites, "display_order"), PREREQUISITE_KEYS),
         "resource_refs": _rows(resource_refs, RESOURCE_REF_KEYS),
         "participants": _rows(participants, PARTICIPANT_KEYS),
     }

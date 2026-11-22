@@ -182,6 +182,34 @@ class TestGroupNames:
         assert err.value.code == 'lifecycle_group_name_required'
 
 
+class TestRacingNames:
+    """#1518 review: the name check runs before the lock, so a create or rename racing
+    another one hits the unique constraint on flush; it answers 409, not a 500."""
+
+    def _check_misses(self, monkeypatch):
+        # The racing save commits between this save's name check and its flush
+        monkeypatch.setattr(lifecycle_stage_groups_repo, 'get_by_name', lambda *a, **k: None)
+
+    def test_a_racing_create_with_the_same_name_is_a_name_conflict(
+            self, db_session, monkeypatch):
+        lifecycle_service.save_group(db_session, _looping_group('Foo'), 'admin')
+        self._check_misses(monkeypatch)
+        with pytest.raises(LifecycleGroupConflictError) as err:
+            lifecycle_service.save_group(db_session, _looping_group('Foo'), 'admin')
+        assert err.value.code == 'lifecycle_group_name_taken'
+        assert err.value.params == {'name': 'Foo'}
+
+    def test_a_racing_rename_to_a_taken_name_is_a_name_conflict(self, db_session, monkeypatch):
+        lifecycle_service.save_group(db_session, _looping_group('Foo'), 'admin')
+        bar_id = lifecycle_service.save_group(db_session, _looping_group('Bar'), 'admin').id
+        self._check_misses(monkeypatch)
+        with pytest.raises(LifecycleGroupConflictError) as err:
+            lifecycle_service.save_group(db_session, _looping_group('Foo'), 'admin',
+                                         group_id=bar_id)
+        assert err.value.code == 'lifecycle_group_name_taken'
+        assert err.value.params == {'name': 'Foo'}
+
+
 class TestConcurrentEdits:
     def test_a_save_based_on_an_older_read_is_refused(self, db_session):
         from datetime import datetime, timezone

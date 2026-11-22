@@ -24,6 +24,12 @@ import TagSelector from '@/components/ui/tag-selector'
 import { tagsForCreate, tagsForUpdate } from '@/lib/tag-payload'
 import type { AssignedTag } from '@/components/ui/tag-chip'
 import { useProjectContext } from '@/stores/project-store'
+import { useLifecycleStageGroups } from '@/hooks/use-lifecycle-stage-groups'
+import LifecycleGroupPicker, {
+  initialStage,
+  selectedGroup,
+} from '@/components/lifecycle/lifecycle-group-picker'
+import { orderedStages, stageLabel } from '@/lib/lifecycle-stages'
 
 type BasicFormProps = {
   isOpen: boolean
@@ -33,6 +39,7 @@ type BasicFormProps = {
     name?: string
     version?: string
     status?: string
+    lifecycle_stage_group_id?: string | null
     owner_team_id?: string
     project_id?: string
     domain?: string
@@ -46,10 +53,9 @@ type BasicFormProps = {
   }
 }
 
-// The lifecycle statuses of a contract (src.models.lifecycle). Certification
-// is a separate field, and an existing contract's status changes only through
-// Change Status.
-const statuses = ['draft', 'proposed', 'under_review', 'approved', 'active', 'deprecated', 'retired']
+// A new contract starts in a stage of its lifecycle stage group (the API's
+// stages); an existing contract's status changes only through Change Status.
+// Certification is a separate field.
 
 export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSubmit, initial }: BasicFormProps) {
   const { t } = useTranslation(['data-contracts', 'common'])
@@ -79,6 +85,21 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
 
   // Track initial form values to detect changes
   const [initialFormValues, setInitialFormValues] = useState<any>(null)
+
+  // The lifecycle stage group of a new contract (the edited contract's own)
+  const { groups } = useLifecycleStageGroups('data_contract')
+  const [groupId, setGroupId] = useState<string | null>(null)
+  const group = selectedGroup(groups, isEdit ? initial?.lifecycle_stage_group_id : groupId)
+  const initialKey = initialStage(group)?.key
+  // Create: the group's stages; edit: the contract's status as it is
+  const groupStages = group ? orderedStages(group) : []
+  const statusStages = isEdit || !groupStages.length
+    ? [groupStages.find((st) => st.key === status)
+      ?? { key: status, label: t(`data-contracts:status.${status}`, status) }]
+    : groupStages
+  useEffect(() => {
+    if (isOpen && !isEdit && initialKey) setStatus(initialKey)
+  }, [isOpen, isEdit, initialKey, groupId])
 
   // Fetch teams and projects when dialog opens
   useEffect(() => {
@@ -134,6 +155,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     setName(initValues.name)
     setVersion(initValues.version)
     setStatus(initValues.status)
+    if (!initial) setGroupId(null)
     setOwnerTeamId(initValues.ownerTeamId)
     setProjectId(initValues.projectId)
     setDomainIds(initValues.domainIds)
@@ -202,6 +224,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         name: name.trim(),
         version: version.trim() || '0.0.1',
         status: status || 'draft',
+        ...(!isEdit && groupId ? { lifecycle_stage_group_id: groupId } : {}),
         owner_team_id: ownerTeamId && ownerTeamId !== '__none__' ? ownerTeamId : undefined,
         project_id: projectId && projectId !== '__none__' ? projectId : undefined,
         kind: 'DataContract',
@@ -268,6 +291,15 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
             />
           </div>
 
+          {!isEdit && (
+            <LifecycleGroupPicker
+              groups={groups}
+              value={groupId}
+              onChange={setGroupId}
+              id="contract-lifecycle-group"
+            />
+          )}
+
           {/* Version & Status */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -286,9 +318,9 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(statuses.includes(status) ? statuses : [status, ...statuses]).map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {t(`data-contracts:status.${s}`, s)}
+                  {statusStages.map((stage) => (
+                    <SelectItem key={stage.key} value={stage.key}>
+                      {stageLabel(stage, t)}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -4,6 +4,10 @@ export type DataContractListItem = {
   name: string
   version: string
   status: string
+  /** Lifecycle Stage Group; null = the default data contract group */
+  lifecycle_stage_group_id?: string | null
+  /** Stage Category of `status` */
+  status_category?: string | null
   publication_scope?: string | null
   published_at?: string | null
   published_by?: string | null
@@ -259,6 +263,10 @@ export interface DataContract {
   apiVersion: string
   version: string
   status: string
+  /** Lifecycle Stage Group; null = the default data contract group */
+  lifecycle_stage_group_id?: string | null
+  /** Stage Category of `status` */
+  status_category?: string | null
   name: string
   // Set when the contract moves to `deprecated`
   deprecation_reason?: string | null
@@ -412,6 +420,8 @@ export type DataContractCreate = {
   name: string
   version?: string
   status?: string
+  /** Lifecycle Stage Group; omitted = the default data contract group */
+  lifecycle_stage_group_id?: string
   owner_team_id?: string // UUID of the owning team
   project_id?: string // Project association
   kind?: string

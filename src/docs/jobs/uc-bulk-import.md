@@ -215,8 +215,13 @@ To run immediately:
 **Overlapping runs:** one run imports at a time. A run that starts while another
 one is importing (it can't take the job's database lock) imports nothing and
 fails with exit code `3`, so it shows as failed rather than green; errors while
-importing exit with `1`. The lock needs a direct database connection: a
-transaction-mode connection pooler doesn't support it.
+importing exit with `1`. A run whose lock connection ends mid-run (the database
+then releases its lock, and another run can take it) stops before its next write
+and fails with exit code `1`: each write first checks that the run still holds
+the lock, so two runs never write at the same time. The lock needs a direct
+database connection: a transaction-mode connection pooler doesn't support it.
+The job uses the app's own database host (`PGHOST`) unless the job's
+`postgres_host` parameter is set.
 
 ## Examples
 

@@ -133,13 +133,62 @@ IMPORT_LOCK_NAME = "ontos.uc_bulk_import"
 # Exit code of a run that finds another run holding the lock: the run fails, so a
 # scheduler shows it red rather than green, with a code distinct from errors (1).
 LOCK_HELD_EXIT_CODE = 3
+# Transaction-level lock every write transaction takes before its fence check
+# (see ``RunLock.fence``): a write transaction of a run that lost the lock then
+# commits before the next run's first write begins its find, or fails its check.
+IMPORT_WRITE_LOCK_NAME = "ontos.uc_bulk_import.write"
+
+_LOCK_HELD_SQL = text("""
+    SELECT EXISTS (
+        SELECT 1 FROM pg_locks
+        WHERE locktype = 'advisory' AND granted AND pid = :pid AND objsubid = 1
+          AND ((classid::bigint << 32) | objid::bigint) = hashtext(:name)::bigint
+    )
+""")
+
+
+class LockLostError(RuntimeError):
+    """This run's lock connection ended, so another run may hold the lock now."""
+
+
+class RunLock:
+    """The run lock this run holds: ``pid`` is the server process of the lock
+    connection (None on databases without advisory locks)."""
+
+    def __init__(self, pid: Optional[int]):
+        self.pid = pid
+
+    def fence(self, conn) -> None:
+        """First statement of each write transaction. Raises ``LockLostError``
+        when the lock connection is gone (the server released its lock with it).
+
+        The check runs inside the write transaction, under the write lock: a
+        check made before the transaction would leave a window in which the lock
+        is lost and a second run finds (before this one commits) and inserts the
+        same entities. Under the write lock, a run's find waits for the commit of
+        the other run's write transaction, and the check passes only while this
+        run still holds the run lock, which no other run can hold at the same time.
+        """
+        if self.pid is None:
+            return
+        conn.execute(text("SELECT pg_advisory_xact_lock(hashtext(:name))"),
+                     {"name": IMPORT_WRITE_LOCK_NAME})
+        held = conn.execute(_LOCK_HELD_SQL, {"pid": self.pid, "name": IMPORT_LOCK_NAME}).scalar()
+        if not held:
+            raise LockLostError("The import lock was lost: this run stopped before writing")
+
+
+# Databases without advisory locks (the unit tests): nothing to fence
+NO_LOCK = RunLock(None)
 
 
 @contextmanager
 def single_flight(engine: Engine):
-    """Yield True when this run holds the job's Postgres advisory lock (session
-    level, held on its own connection until the block ends), False when another
-    run holds it. Other databases (the unit tests) have no such lock: True.
+    """Yield a ``RunLock`` when this run holds the job's Postgres advisory lock
+    (session level, held on its own connection until the block ends), None when
+    another run holds it. Other databases (the unit tests) have no such lock:
+    ``NO_LOCK``. Every write transaction calls ``RunLock.fence`` first, so a run
+    whose lock connection ended stops before its next write.
 
     The lock connection runs in autocommit, so it sits ``idle`` (not ``idle in
     transaction``) while the import runs on other connections: a server
@@ -148,7 +197,7 @@ def single_flight(engine: Engine):
     Lakebase's PgBouncer, opt-in and not offered to OAuth roles) doesn't
     support advisory locks."""
     if engine.dialect.name != "postgresql":
-        yield True
+        yield NO_LOCK
         return
     conn = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
     try:
@@ -156,7 +205,11 @@ def single_flight(engine: Engine):
             text("SELECT pg_try_advisory_lock(hashtext(:name))"), {"name": IMPORT_LOCK_NAME}
         ).scalar())
         try:
-            yield acquired
+            if acquired:
+                pid = conn.execute(text("SELECT pg_backend_pid()")).scalar()
+                yield RunLock(pid)
+            else:
+                yield None
         finally:
             if acquired:
                 try:
@@ -447,7 +500,7 @@ def qualify_table_name(full_name: str, default_catalog: Optional[str], default_s
 
 
 def find_existing(
-    engine: Engine, table: str, name: str
+    conn, table: str, name: str
 ) -> Optional[Tuple[str, Optional[str], Optional[str]]]:
     """(id, status, version_family_id) of the row a discovered entity matches, by
     name: the key both the skip and the update strategies use. Versions of an
@@ -458,8 +511,7 @@ def find_existing(
     personal = "" if table == "data_domains" else " AND draft_owner_id IS NULL"
     sql = text(f"SELECT {columns} FROM {table} WHERE name = :name{personal} "
                "ORDER BY created_at DESC LIMIT 1")
-    with engine.connect() as conn:
-        row = conn.execute(sql, {"name": name}).first()
+    row = conn.execute(sql, {"name": name}).first()
     if row is None:
         return None
     return (row[0], None, None) if len(row) == 1 else (row[0], row[1], row[2])
@@ -541,7 +593,8 @@ def create_contracts(
     default_catalog: Optional[str],
     default_schema: Optional[str],
     dry_run: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    run_lock: RunLock = NO_LOCK,
 ) -> Dict[str, int]:
     """Create data contracts from discovered objects.
 
@@ -580,31 +633,34 @@ def create_contracts(
             if verbose:
                 print(f"  Processing contract: {contract_name}")
 
-            existing = find_existing(engine, "data_contracts", contract_name)
-            existing_id = existing[0] if existing else None
-            if existing_id:
-                if conflict_strategy == 'skip':
-                    if verbose:
-                        print(f"    Skipped (already exists)")
+            now = datetime.now(timezone.utc)
+            # One transaction, the find included: a contract whose schema objects
+            # failed would be skipped by every later run, and the fence (before the
+            # find) keeps a run that lost its lock from writing.
+            with engine.begin() as conn:
+                if not dry_run:
+                    run_lock.fence(conn)
+                existing = find_existing(conn, "data_contracts", contract_name)
+                existing_id = existing[0] if existing else None
+                if existing_id:
+                    if conflict_strategy == 'skip':
+                        if verbose:
+                            print(f"    Skipped (already exists)")
+                        stats["skipped"] += 1
+                        continue
+                    elif conflict_strategy == 'error':
+                        raise ValueError(f"Contract '{contract_name}' already exists")
+                if existing_id and should_skip_update('contract', contract_name, existing[1]):
                     stats["skipped"] += 1
                     continue
-                elif conflict_strategy == 'error':
-                    raise ValueError(f"Contract '{contract_name}' already exists")
-            if existing_id and should_skip_update('contract', contract_name, existing[1]):
-                stats["skipped"] += 1
-                continue
 
-            if dry_run:
-                verb = "update" if existing_id else "create"
-                print(f"  [DRY-RUN] Would {verb} contract: {contract_name} "
-                      f"with {len(objects)} schema objects")
-                stats["updated" if existing_id else "created"] += 1
-                continue
+                if dry_run:
+                    verb = "update" if existing_id else "create"
+                    print(f"  [DRY-RUN] Would {verb} contract: {contract_name} "
+                          f"with {len(objects)} schema objects")
+                    stats["updated" if existing_id else "created"] += 1
+                    continue
 
-            now = datetime.now(timezone.utc)
-            # One transaction: a contract whose schema objects failed would be
-            # skipped by every later run.
-            with engine.begin() as conn:
                 if existing_id:
                     contract_id, family_id = existing_id, existing[2]
                     present = set(conn.execute(present_sql, {"id": contract_id}).scalars())
@@ -647,6 +703,8 @@ def create_contracts(
                 print(f"    {outcome.capitalize()}, {added} schema object(s) added")
             stats[outcome] += 1
 
+        except LockLostError:
+            raise
         except Exception as e:
             print(f"  Error creating contract {contract_name}: {e}")
             if verbose:
@@ -663,7 +721,8 @@ def create_products(
     default_catalog: Optional[str],
     default_schema: Optional[str],
     dry_run: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    run_lock: RunLock = NO_LOCK,
 ) -> Dict[str, int]:
     """Create data products from discovered objects.
 
@@ -714,31 +773,34 @@ def create_products(
             if verbose:
                 print(f"  Processing product: {product_name}")
 
-            existing = find_existing(engine, "data_products", product_name)
-            existing_id = existing[0] if existing else None
-            if existing_id:
-                if conflict_strategy == 'skip':
-                    if verbose:
-                        print(f"    Skipped (already exists)")
+            now = datetime.now(timezone.utc)
+            # One transaction, the find included: a product whose ports failed
+            # would be skipped by every later run, and the fence (before the find)
+            # keeps a run that lost its lock from writing.
+            with engine.begin() as conn:
+                if not dry_run:
+                    run_lock.fence(conn)
+                existing = find_existing(conn, "data_products", product_name)
+                existing_id = existing[0] if existing else None
+                if existing_id:
+                    if conflict_strategy == 'skip':
+                        if verbose:
+                            print(f"    Skipped (already exists)")
+                        stats["skipped"] += 1
+                        continue
+                    elif conflict_strategy == 'error':
+                        raise ValueError(f"Product '{product_name}' already exists")
+                if existing_id and should_skip_update('product', product_name, existing[1]):
                     stats["skipped"] += 1
                     continue
-                elif conflict_strategy == 'error':
-                    raise ValueError(f"Product '{product_name}' already exists")
-            if existing_id and should_skip_update('product', product_name, existing[1]):
-                stats["skipped"] += 1
-                continue
 
-            if dry_run:
-                verb = "update" if existing_id else "create"
-                print(f"  [DRY-RUN] Would {verb} product: {product_name} "
-                      f"with {len(objects)} output ports")
-                stats["updated" if existing_id else "created"] += 1
-                continue
+                if dry_run:
+                    verb = "update" if existing_id else "create"
+                    print(f"  [DRY-RUN] Would {verb} product: {product_name} "
+                          f"with {len(objects)} output ports")
+                    stats["updated" if existing_id else "created"] += 1
+                    continue
 
-            now = datetime.now(timezone.utc)
-            # One transaction: a product whose ports failed would be skipped
-            # by every later run.
-            with engine.begin() as conn:
                 if existing_id:
                     product_id, family_id = existing_id, existing[2]
                     present = set(conn.execute(present_sql, {"id": product_id}).scalars())
@@ -786,6 +848,8 @@ def create_products(
                 print(f"    {outcome.capitalize()}, {added} output port(s) added")
             stats[outcome] += 1
 
+        except LockLostError:
+            raise
         except Exception as e:
             print(f"  Error creating product {product_name}: {e}")
             if verbose:
@@ -801,7 +865,8 @@ def create_domains(
     conflict_strategy: str,
     created_by: str,
     dry_run: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    run_lock: RunLock = NO_LOCK,
 ) -> Dict[str, int]:
     """Create data domains from discovered objects.
 
@@ -824,28 +889,30 @@ def create_domains(
             if verbose:
                 print(f"  Processing domain: {domain_name}")
 
-            existing = find_existing(engine, "data_domains", domain_name)
-            existing_id = existing[0] if existing else None
-            if existing_id:
-                if conflict_strategy == 'skip':
-                    if verbose:
-                        print(f"    Skipped (already exists)")
-                    stats["skipped"] += 1
-                    continue
-                elif conflict_strategy == 'error':
-                    raise ValueError(f"Domain '{domain_name}' already exists")
-                if verbose:
-                    print(f"    Unchanged (already exists)")
-                stats["unchanged"] += 1
-                continue
-
-            if dry_run:
-                print(f"  [DRY-RUN] Would create domain: {domain_name}")
-                stats["created"] += 1
-                continue
-
             now = datetime.now(timezone.utc)
             with engine.begin() as conn:
+                if not dry_run:
+                    run_lock.fence(conn)
+                existing = find_existing(conn, "data_domains", domain_name)
+                existing_id = existing[0] if existing else None
+                if existing_id:
+                    if conflict_strategy == 'skip':
+                        if verbose:
+                            print(f"    Skipped (already exists)")
+                        stats["skipped"] += 1
+                        continue
+                    elif conflict_strategy == 'error':
+                        raise ValueError(f"Domain '{domain_name}' already exists")
+                    if verbose:
+                        print(f"    Unchanged (already exists)")
+                    stats["unchanged"] += 1
+                    continue
+
+                if dry_run:
+                    print(f"  [DRY-RUN] Would create domain: {domain_name}")
+                    stats["created"] += 1
+                    continue
+
                 conn.execute(domain_sql, {
                     "id": str(uuid4()),
                     "name": domain_name,
@@ -858,6 +925,8 @@ def create_domains(
                 print(f"    Created")
             stats["created"] += 1
 
+        except LockLostError:
+            raise
         except Exception as e:
             print(f"  Error creating domain {domain_name}: {e}")
             if verbose:
@@ -871,7 +940,8 @@ def link_products_to_contracts(
     engine: Engine,
     discovered: Dict[str, Dict[str, List[DiscoveredObject]]],
     dry_run: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    run_lock: RunLock = NO_LOCK,
 ) -> int:
     """
     Link products to contracts when same table has both tags.
@@ -920,12 +990,12 @@ def link_products_to_contracts(
                 linked += 1
                 continue
 
-            # Versions share the contract's name: link the newest, as matching does
-            contract = find_existing(engine, "data_contracts", contract_name)
-            if not contract:
-                continue
-
             with engine.begin() as conn:
+                run_lock.fence(conn)
+                # Versions share the contract's name: link the newest, as matching does
+                contract = find_existing(conn, "data_contracts", contract_name)
+                if not contract:
+                    continue
                 result = conn.execute(update_sql, {
                     "contract_id": contract[0],
                     "product_name": product_name,
@@ -1002,14 +1072,20 @@ def main():
     )
     print("  Database connection established")
     
-    with single_flight(engine) as acquired:
-        if not acquired:
+    with single_flight(engine) as run_lock:
+        if run_lock is None:
             print("\nAnother UC Bulk Import run holds the lock: this run imported nothing")
             sys.exit(LOCK_HELD_EXIT_CODE)
-        run_import(args, ws, engine, patterns, dry_run, verbose, current_user)
+        try:
+            run_import(args, ws, engine, patterns, dry_run, verbose, current_user, run_lock)
+        except LockLostError as e:
+            # Another run may be importing now: this one stops, and fails
+            print(f"\n❌ {e}")
+            sys.exit(1)
 
 
-def run_import(args, ws, engine, patterns, dry_run, verbose, current_user):
+def run_import(args, ws, engine, patterns, dry_run, verbose, current_user,
+               run_lock: RunLock = NO_LOCK):
     # Scan Unity Catalog
     print("\n" + "=" * 80)
     print("Phase 1: Scanning Unity Catalog Tags")
@@ -1058,7 +1134,8 @@ def run_import(args, ws, engine, patterns, dry_run, verbose, current_user):
             args.default_catalog,
             args.default_schema,
             dry_run=dry_run,
-            verbose=verbose
+            verbose=verbose,
+            run_lock=run_lock,
         )
         summary['contracts'] = contract_stats
         print(f"  Created: {contract_stats['created']}, Updated: {contract_stats['updated']}, "
@@ -1074,7 +1151,8 @@ def run_import(args, ws, engine, patterns, dry_run, verbose, current_user):
             args.default_catalog,
             args.default_schema,
             dry_run=dry_run,
-            verbose=verbose
+            verbose=verbose,
+            run_lock=run_lock,
         )
         summary['products'] = product_stats
         print(f"  Created: {product_stats['created']}, Updated: {product_stats['updated']}, "
@@ -1089,7 +1167,8 @@ def run_import(args, ws, engine, patterns, dry_run, verbose, current_user):
             args.conflict_strategy,
             created_by=current_user,
             dry_run=dry_run,
-            verbose=verbose
+            verbose=verbose,
+            run_lock=run_lock,
         )
         summary['domains'] = domain_stats
         print(f"  Created: {domain_stats['created']}, Updated: {domain_stats['updated']}, "
@@ -1101,7 +1180,8 @@ def run_import(args, ws, engine, patterns, dry_run, verbose, current_user):
         print(f"\n" + "=" * 80)
         print("Phase 4: Linking Products to Contracts")
         print("=" * 80)
-        linked = link_products_to_contracts(engine, discovered, dry_run=dry_run, verbose=verbose)
+        linked = link_products_to_contracts(
+            engine, discovered, dry_run=dry_run, verbose=verbose, run_lock=run_lock)
         summary['linked'] = linked
         print(f"✓ Linked {linked} product ports to contracts")
     

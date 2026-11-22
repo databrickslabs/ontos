@@ -540,8 +540,8 @@ def _statements(conn):
 def test_a_run_holds_the_advisory_lock_and_releases_it():
     engine, conn = _postgres_engine(lock_free=True)
 
-    with job.single_flight(engine) as acquired:
-        assert acquired is True
+    with job.single_flight(engine) as run_lock:
+        assert isinstance(run_lock, job.RunLock)
         assert [s for s in _statements(conn) if 'unlock' in s] == []
 
     assert 'pg_try_advisory_lock' in _statements(conn)[0]
@@ -555,22 +555,22 @@ def test_a_run_holds_the_advisory_lock_and_releases_it():
 def test_an_overlapping_run_does_not_get_the_lock():
     engine, conn = _postgres_engine(lock_free=False)
 
-    with job.single_flight(engine) as acquired:
-        assert acquired is False
+    with job.single_flight(engine) as run_lock:
+        assert run_lock is None
 
     assert all('unlock' not in s for s in _statements(conn))
     conn.close.assert_called_once()
 
 
 def test_databases_without_advisory_locks_always_run(engine):
-    with job.single_flight(engine) as acquired:
-        assert acquired is True
+    with job.single_flight(engine) as run_lock:
+        assert run_lock is job.NO_LOCK
 
 
 def test_a_run_refused_by_the_lock_fails_with_its_own_exit_code():
     @contextmanager
     def lock_held(_engine):
-        yield False
+        yield None
 
     argv = ['uc_bulk_import.py', '--entity_patterns', '[]', '--lakebase_instance_name', 'x',
             '--postgres_host', 'h', '--postgres_db', 'd']
@@ -666,8 +666,8 @@ def test_a_lock_connection_that_died_does_not_mask_a_successful_run(capsys):
     engine, conn = _postgres_engine(lock_free=True)
     _dead_connection(engine, conn)
 
-    with job.single_flight(engine) as acquired:
-        assert acquired is True
+    with job.single_flight(engine) as run_lock:
+        assert run_lock is not None
 
     assert 'lock was lost' in capsys.readouterr().out
     conn.close.assert_called_once()
@@ -684,3 +684,61 @@ def test_a_lock_connection_that_died_keeps_the_exit_code_of_the_run(code, capsys
 
     assert exited.value.code == code
     assert 'lock was lost' in capsys.readouterr().out
+
+
+def test_a_run_that_lost_its_lock_fails_with_exit_code_1():
+    @contextmanager
+    def lock_lost(_engine):
+        yield job.RunLock(pid=1)
+
+    argv = ['uc_bulk_import.py', '--entity_patterns', '[]', '--lakebase_instance_name', 'x',
+            '--postgres_host', 'h', '--postgres_db', 'd']
+    with patch.object(sys, 'argv', argv), patch.object(job, 'WorkspaceClient'), \
+            patch.object(job, 'create_engine_from_params'), \
+            patch.object(job, 'single_flight', lock_lost), \
+            patch.object(job, 'run_import', side_effect=job.LockLostError('lost')):
+        with pytest.raises(SystemExit) as exited:
+            job.main()
+
+    assert exited.value.code == 1
+
+
+class _LostLock(job.RunLock):
+    def __init__(self):
+        super().__init__(pid=1)
+
+    def fence(self, conn):
+        raise job.LockLostError('lost')
+
+
+@pytest.mark.parametrize('create', ['products', 'contracts', 'domains'])
+def test_a_run_that_lost_its_lock_writes_nothing_and_stops(engine, create):
+    objects = _discovered()
+    with pytest.raises(job.LockLostError):
+        if create == 'domains':
+            job.create_domains(engine, objects, 'skip', created_by='job', run_lock=_LostLock())
+        else:
+            getattr(job, f'create_{create}')(
+                engine, objects, 'skip', None, None, run_lock=_LostLock())
+
+    for table in ('data_products', 'data_contracts', 'data_domains', 'uc_bulk_import_sources'):
+        assert _count(engine, table) == 0
+
+
+def test_linking_stops_when_the_lock_was_lost(engine):
+    _, contracts = _import_contract(engine)
+    _import(engine)
+    discovered = {'product': _discovered(), 'contract': contracts}
+
+    with pytest.raises(job.LockLostError):
+        job.link_products_to_contracts(engine, discovered, run_lock=_LostLock())
+    with engine.connect() as conn:
+        assert conn.execute(text(
+            'SELECT COUNT(*) FROM data_product_output_ports WHERE contract_id IS NOT NULL'
+        )).scalar() == 0
+
+
+def test_a_dry_run_needs_no_lock_check(engine):
+    stats = job.create_products(engine, _discovered(), 'skip', None, None,
+                                dry_run=True, run_lock=_LostLock())
+    assert stats == _stats(created=1)

@@ -2,8 +2,9 @@
 
 The unit tests run the job on SQLite, which has no advisory locks, no
 ``timestamptz`` and a looser NOT NULL story for raw SQL. This module runs the
-job's SQL on Postgres and **auto-skips** when none is reachable, so it is safe
-in CI. Point it at a throwaway database (a local one or a Lakebase branch)::
+job's SQL on Postgres and **auto-skips** when none is reachable. CI's integration
+job sets ``UC_BULK_IMPORT_TEST_PG_URL`` to its Postgres service. Locally, point it
+at a throwaway database (a local one or a Lakebase branch)::
 
     UC_BULK_IMPORT_TEST_PG_URL=postgresql+psycopg2://user:pw@localhost:5432/db \\
         hatch -e dev run pytest src/tests/integration/test_uc_bulk_import_pg.py
@@ -76,6 +77,7 @@ def lock_name(monkeypatch):
     # Advisory locks are database-wide: a name per test keeps parallel runs apart
     name = f'ontos.uc_bulk_import.test.{uuid.uuid4().hex}'
     monkeypatch.setattr(job, 'IMPORT_LOCK_NAME', name)
+    monkeypatch.setattr(job, 'IMPORT_WRITE_LOCK_NAME', f'{name}.write')
     return name
 
 
@@ -92,8 +94,8 @@ def _lock_holder_states(admin, name):
 def test_the_lock_is_held_outside_a_transaction(admin, lock_name):
     engine = create_engine(_PG_URL)
     try:
-        with job.single_flight(engine) as acquired:
-            assert acquired is True
+        with job.single_flight(engine) as run_lock:
+            assert run_lock is not None
             # In a transaction, idle_in_transaction_session_timeout (or a
             # transaction-mode pooler) could end the session and drop the lock.
             assert _lock_holder_states(admin, lock_name) == ['idle']
@@ -105,8 +107,8 @@ def test_the_lock_is_held_outside_a_transaction(admin, lock_name):
 def test_a_run_whose_lock_connection_was_terminated_finishes_normally(admin, lock_name, capsys):
     engine = create_engine(_PG_URL)
     try:
-        with job.single_flight(engine) as acquired:
-            assert acquired is True
+        with job.single_flight(engine) as run_lock:
+            assert run_lock is not None
             with admin.begin() as conn:
                 conn.execute(text("""
                     SELECT pg_terminate_backend(l.pid) FROM pg_locks l
@@ -122,13 +124,13 @@ def test_a_run_whose_lock_connection_was_terminated_finishes_normally(admin, loc
 def test_an_overlapping_run_does_not_get_the_lock(admin, lock_name):
     first, second = create_engine(_PG_URL), create_engine(_PG_URL)
     try:
-        with job.single_flight(first) as acquired:
-            assert acquired is True
+        with job.single_flight(first) as run_lock:
+            assert run_lock is not None
             with job.single_flight(second) as overlapping:
-                assert overlapping is False
+                assert overlapping is None
         # Released when the first run ends
-        with job.single_flight(second) as acquired_later:
-            assert acquired_later is True
+        with job.single_flight(second) as later:
+            assert later is not None
     finally:
         first.dispose()
         second.dispose()
@@ -228,3 +230,77 @@ def test_update_matches_the_newest_version_and_keeps_deleted_ports_deleted(pg):
         _stats(unchanged=1)
     with pg.connect() as conn:
         assert conn.execute(text('SELECT COUNT(*) FROM data_product_output_ports')).scalar() == 0
+
+
+def _terminate(admin, pid):
+    with admin.begin() as conn:
+        conn.execute(text('SELECT pg_terminate_backend(:pid)'), {'pid': pid})
+
+
+def _names(engine, table):
+    with engine.connect() as conn:
+        return sorted(conn.execute(text(f'SELECT name FROM {table}')).scalars())
+
+
+def _products(*names):
+    return {n: _objects(n, 'p')[n] for n in names}
+
+
+def test_a_run_that_lost_its_lock_mid_run_stops_before_its_next_write(pg, admin, lock_name):
+    """Two runs: the first loses its lock connection after its first product, the
+    second takes the lock and imports everything; the first then writes nothing."""
+    second_engine = create_engine(pg.url, connect_args={
+        'options': f'-csearch_path={_schema_of(pg)}'})
+    try:
+        with job.single_flight(pg) as first:
+            assert job.create_products(pg, _products('sales'), 'skip', None, None,
+                                       run_lock=first) == _stats(created=1)
+            _terminate(admin, first.pid)
+
+            with job.single_flight(second_engine) as second:
+                assert second is not None  # the lock was free for another run
+                assert job.create_products(
+                    second_engine, _products('sales', 'marketing'), 'skip', None, None,
+                    run_lock=second) == _stats(created=1, skipped=1)
+
+                with pytest.raises(job.LockLostError):
+                    job.create_products(pg, _products('marketing'), 'skip', None, None,
+                                        run_lock=first)
+                with pytest.raises(job.LockLostError):
+                    job.create_domains(pg, _objects('finance', 'd', ['main.finance'],
+                                                    'SCHEMA'),
+                                       'skip', created_by='job', run_lock=first)
+    finally:
+        second_engine.dispose()
+
+    # No duplicate 'marketing', no domain from the run without the lock
+    assert _names(pg, 'data_products') == ['marketing', 'sales']
+    assert _names(pg, 'data_domains') == []
+
+
+def _schema_of(engine):
+    with engine.connect() as conn:
+        return conn.execute(text('SELECT current_schema()')).scalar()
+
+
+def test_a_write_waits_for_the_other_runs_write_transaction(pg, lock_name):
+    """The fence takes the write lock first: a run's find can't run while another
+    run's write transaction is still open, so it sees that run's committed rows."""
+    with job.single_flight(pg) as run_lock:
+        with pg.begin() as conn:
+            run_lock.fence(conn)
+            held = conn.execute(text("""
+                SELECT COUNT(*) FROM pg_locks
+                WHERE locktype = 'advisory' AND granted AND pid = pg_backend_pid()
+                  AND ((classid::bigint << 32) | objid::bigint) = hashtext(:name)::bigint
+            """), {'name': job.IMPORT_WRITE_LOCK_NAME}).scalar()
+            assert held == 1
+            with pg.connect() as other:
+                assert other.execute(text('SELECT pg_try_advisory_xact_lock(hashtext(:n))'),
+                                     {'n': job.IMPORT_WRITE_LOCK_NAME}).scalar() is False
+                other.rollback()
+        # Released at commit
+        with pg.connect() as other:
+            assert other.execute(text('SELECT pg_try_advisory_xact_lock(hashtext(:n))'),
+                                 {'n': job.IMPORT_WRITE_LOCK_NAME}).scalar() is True
+            other.rollback()

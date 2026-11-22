@@ -76,3 +76,75 @@ def test_scoped_user_is_narrowed_never_widened(client, below, monkeypatch):
                         lambda self, db, **kw: allowed)
     res = client.get('/api/assets', params={'below_first_maturity_level': 'true'})
     assert _names(res.json()) == {'theirs_below'}
+
+
+# --- The stored level of a UC table reaches only readers of that table (#1352 review) ---
+
+FQN = 'main.sales.orders'
+
+
+@pytest.fixture
+def uc_below(db_session, below, monkeypatch):
+    """mine_below points to a UC table that token-a can read and token-b can't."""
+    from unittest.mock import MagicMock
+
+    from databricks.sdk.errors import PermissionDenied
+    from databricks.sdk.service.catalog import TableInfo
+    from src.common import workspace_client as workspace_client_module
+
+    below['mine_below'].location = FQN
+    db_session.flush()
+    clients = {'token-a': MagicMock(), 'token-b': MagicMock()}
+    clients['token-a'].tables.get.return_value = TableInfo(full_name=FQN, columns=[])
+    clients['token-b'].tables.get.side_effect = PermissionDenied('no SELECT')
+
+    def obo(request, *args, **kwargs):
+        return clients[request.headers['x-forwarded-access-token']]
+
+    monkeypatch.setattr(workspace_client_module, 'get_obo_workspace_client', obo)
+    return clients
+
+
+def _home_count(client, token):
+    return client.get('/api/assets', headers={'x-forwarded-access-token': token}, params={
+        'owned_by_me': 'true', 'below_first_maturity_level': 'true',
+    })
+
+
+def test_a_reader_of_the_uc_table_gets_it_in_the_count(client, uc_below):
+    res = _home_count(client, 'token-a')
+
+    assert res.status_code == 200
+    assert _names(res.json()) == {'mine_below'} and res.json()['total'] == 1
+    uc_below['token-a'].tables.get.assert_called_once_with(full_name=FQN)
+
+
+def test_a_caller_without_uc_read_does_not_get_it(client, uc_below):
+    res = _home_count(client, 'token-b')
+
+    assert res.status_code == 200
+    assert _names(res.json()) == set() and res.json()['total'] == 0
+    uc_below['token-b'].tables.get.assert_called_once_with(full_name=FQN)
+
+
+def test_the_count_fails_closed_without_a_client(client, uc_below, monkeypatch):
+    from src.common import workspace_client as workspace_client_module
+
+    def broken(*args, **kwargs):
+        raise RuntimeError('client could not be built')
+
+    monkeypatch.setattr(workspace_client_module, 'get_obo_workspace_client', broken)
+    res = client.get('/api/assets', params={
+        'owned_by_me': 'true', 'below_first_maturity_level': 'true',
+    })
+
+    assert res.status_code == 200
+    assert res.json()['total'] == 0
+
+
+def test_the_uc_table_is_not_read_without_the_flag(client, uc_below):
+    res = client.get('/api/assets', headers={'x-forwarded-access-token': 'token-b'},
+                     params={'owned_by_me': 'true'})
+
+    assert 'mine_below' in _names(res.json())
+    uc_below['token-b'].tables.get.assert_not_called()

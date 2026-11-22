@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
 
 from databricks.sdk import WorkspaceClient
@@ -363,6 +363,7 @@ class AssetsManager(SearchableAsset):
         restrict_to_ids: Optional[List[UUID]] = None,
         owner_email: Optional[str] = None,
         below_first_maturity_level: bool = False,
+        uc_workspace_client: Optional[Callable[[], Any]] = None,
     ) -> PaginatedAssetSummary:
         """Gets a paginated page of asset summaries.
 
@@ -377,12 +378,17 @@ class AssetsManager(SearchableAsset):
 
         ``below_first_maturity_level`` keeps only the assets whose latest maturity
         evaluation reached no level (tables and views; never-evaluated assets are
-        left out). It narrows the same way.
+        left out). It narrows the same way. A stored level comes from the Unity
+        Catalog read of whoever evaluated it, so an asset that points to a UC table
+        is kept only when ``uc_workspace_client`` (the caller's own client factory)
+        reads that table now; without one, such assets are left out.
         """
         if owner_email is not None:
             restrict_to_ids = self._narrow_to_owned(db, owner_email, restrict_to_ids)
         if below_first_maturity_level:
-            restrict_to_ids = self._narrow_to_below_first_level(db, restrict_to_ids)
+            restrict_to_ids = self._narrow_to_below_first_level(
+                db, restrict_to_ids, uc_workspace_client,
+            )
         filter_kwargs = dict(
             asset_type_id=asset_type_id, asset_type_names=asset_type_names,
             platform=platform, domain_id=domain_id, domain_ids=domain_ids, status=status, name=name,
@@ -434,8 +440,11 @@ class AssetsManager(SearchableAsset):
     @staticmethod
     def _narrow_to_below_first_level(
         db: Session, restrict_to_ids: Optional[List[UUID]],
+        uc_workspace_client: Optional[Callable[[], Any]] = None,
     ) -> List[UUID]:
-        """Asset IDs below the first maturity level, intersected with ``restrict_to_ids``."""
+        """Asset IDs below the first maturity level, intersected with ``restrict_to_ids``,
+        and, for an asset that points to a UC table, readable with
+        ``uc_workspace_client`` (one ``tables.get`` per such asset; fails closed)."""
         below: set = set()
         candidates = None if restrict_to_ids is None else [str(i) for i in restrict_to_ids]
         for entity_id in maturity_repo.entity_ids_below_first_level(
@@ -447,6 +456,10 @@ class AssetsManager(SearchableAsset):
                 logger.warning("Skipping a maturity snapshot with a non-UUID asset id")
         if restrict_to_ids is not None:
             below &= {UUID(str(i)) for i in restrict_to_ids}
+        if below:
+            from src.controller.entity_dict_builder import uc_table_readable
+            rows = db.query(AssetDb).filter(AssetDb.id.in_(list(below))).all()
+            below = {row.id for row in rows if uc_table_readable(row, uc_workspace_client)}
         return sorted(below, key=str)
 
     def update_asset(self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str) -> AssetRead:

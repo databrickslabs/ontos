@@ -167,3 +167,36 @@ def test_a_tie_on_evaluated_at_picks_the_same_snapshot_every_time(db_session, gr
         db_session, entity_type="Asset", entity_id=str(graph.never.id),
     )
     assert latest.id == high
+
+
+# --- A UC table's stored level only for a caller who reads the table -----------------
+
+def _ws(readable):
+    from unittest.mock import MagicMock
+
+    from databricks.sdk.errors import PermissionDenied
+
+    ws = MagicMock()
+    if readable:
+        ws.tables.get.return_value = object()
+    else:
+        ws.tables.get.side_effect = PermissionDenied("no SELECT")
+    return ws
+
+
+def test_a_uc_table_is_kept_only_when_the_callers_client_reads_it(db_session, graph):
+    graph.below.location = "main.sales.below"
+    db_session.flush()
+
+    def names(client_factory):
+        return _names(AssetsManager().get_all_assets(
+            db=db_session, owner_email=ME, below_first_maturity_level=True,
+            uc_workspace_client=client_factory,
+        ))
+
+    reader = _ws(True)
+    assert names(lambda: reader) == {"below", "dropped"}
+    reader.tables.get.assert_called_once_with(full_name="main.sales.below")
+    # No UC read: the stored level of the UC table stays hidden, the others are kept
+    assert names(lambda: _ws(False)) == {"dropped"}
+    assert names(None) == {"dropped"}

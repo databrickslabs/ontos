@@ -17,6 +17,7 @@ from src.controller.metric_views_manager import (
     MetricViewNotFoundError, MetricViewsManager, UserClientUnavailableError, UserTokenRequiredError,
 )
 from src.common.workspace_client import get_obo_workspace_client
+from src.common.run_identity import RunIdentity
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.controller.uc_description_sync_manager import (
     SyncOutcome, UcDescriptionSyncManager, write_failed_warning,
@@ -406,6 +407,11 @@ def get_all_assets(
         restrict_to_ids=restrict_ids,
         owner_email=(current_user.email or "") if owned_by_me else None,
         below_first_maturity_level=below_first_maturity_level,
+        # A stored level is shown only to a caller who reads its UC table themselves
+        uc_workspace_client=(
+            RunIdentity.for_request(request).workspace_client
+            if below_first_maturity_level else None
+        ),
     )
 
 

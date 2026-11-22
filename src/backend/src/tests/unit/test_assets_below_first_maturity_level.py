@@ -80,14 +80,22 @@ def test_keeps_the_assets_whose_latest_snapshot_has_no_level(db_session, graph):
     assert result.total == 2
 
 
-def test_without_the_owner_filter_it_keeps_every_asset_below(db_session, graph):
-    result = AssetsManager().get_all_assets(db=db_session, below_first_maturity_level=True)
-    assert _names(result) == {"below", "dropped", "other_owner"}
+def test_without_the_owner_filter_it_is_refused(db_session, graph, monkeypatch):
+    """Unbounded, it would read a UC table per asset below in the estate (#1506 review)."""
+    from src.controller.assets_manager import BelowFirstLevelNeedsOwnerError
+
+    calls = []
+    monkeypatch.setattr(maturity_repo, "latest_snapshots_below_first_level",
+                        lambda *a, **k: calls.append(1) or [], raising=False)
+    with pytest.raises(BelowFirstLevelNeedsOwnerError) as err:
+        AssetsManager().get_all_assets(db=db_session, below_first_maturity_level=True)
+    assert err.value.code == "below_first_maturity_level_needs_owned_by_me"
+    assert calls == []
 
 
 def test_narrows_restrict_to_ids(db_session, graph):
     result = AssetsManager().get_all_assets(
-        db=db_session, below_first_maturity_level=True,
+        db=db_session, owner_email=ME, below_first_maturity_level=True,
         restrict_to_ids=[graph.below.id, graph.leveled.id],
     )
     assert _names(result) == {"below"}
@@ -97,8 +105,36 @@ def test_no_asset_levels_means_no_asset_is_below(db_session, graph):
     for level in maturity_repo.get_all_ordered(db_session, entity_type="Asset"):
         maturity_repo.delete(db_session, db_obj=level)
     db_session.flush()
-    result = AssetsManager().get_all_assets(db=db_session, below_first_maturity_level=True)
+    result = AssetsManager().get_all_assets(
+        db=db_session, owner_email=ME, below_first_maturity_level=True,
+    )
     assert result.total == 0
+
+
+def test_the_asset_rows_are_loaded_in_chunks(db_session, graph, monkeypatch):
+    from sqlalchemy import event
+
+    from src.controller import assets_manager as assets_manager_module
+
+    monkeypatch.setattr(assets_manager_module, "IN_CLAUSE_CHUNK", 1, raising=False)
+    statements = []
+
+    def record(conn, cursor, statement, params, context, executemany):
+        if "FROM assets" in statement and "assets.id IN" in statement:
+            statements.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        result = AssetsManager().get_all_assets(
+            db=db_session, owner_email=ME, below_first_maturity_level=True,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    assert _names(result) == {"below", "dropped"}
+    # One asset query per chunk of one id (below, dropped), then the page itself
+    chunked = [s for s in statements if "LIMIT" not in s and "count(" not in s]
+    assert len(chunked) == 2
 
 
 def test_a_snapshot_taken_without_levels_does_not_count(db_session, graph):
@@ -135,13 +171,13 @@ def test_the_manager_passes_the_owner_candidates_to_the_repository(
     db_session, graph, monkeypatch,
 ):
     seen = {}
-    real = maturity_repo.entity_ids_below_first_level
+    real = maturity_repo.latest_snapshots_below_first_level
 
     def spy(db, *, entity_type, entity_ids=None):
         seen["ids"] = None if entity_ids is None else {str(i) for i in entity_ids}
         return real(db, entity_type=entity_type, entity_ids=entity_ids)
 
-    monkeypatch.setattr(maturity_repo, "entity_ids_below_first_level", spy)
+    monkeypatch.setattr(maturity_repo, "latest_snapshots_below_first_level", spy)
     AssetsManager().get_all_assets(
         db=db_session, owner_email=ME, below_first_maturity_level=True,
     )
@@ -200,3 +236,27 @@ def test_a_uc_table_is_kept_only_when_the_callers_client_reads_it(db_session, gr
     # No UC read: the stored level of the UC table stays hidden, the others are kept
     assert names(lambda: _ws(False)) == {"dropped"}
     assert names(None) == {"dropped"}
+
+
+def test_a_snapshot_stays_gated_by_the_table_it_was_evaluated_against(db_session, graph):
+    """The asset points to no UC table now; its latest snapshot came from one."""
+    import json
+
+    graph.below.platform = "snowflake"
+    db_session.add(MaturitySnapshotDb(
+        entity_type="Asset", entity_id=str(graph.below.id), achieved_level_order=None,
+        total_levels=4, evaluated_at=NOW + timedelta(minutes=1),
+        gate_results_json=json.dumps([{"gate_id": "g", "uc_table_name": "main.sales.old"}]),
+    ))
+    db_session.flush()
+
+    def names(client_factory):
+        return _names(AssetsManager().get_all_assets(
+            db=db_session, owner_email=ME, below_first_maturity_level=True,
+            uc_workspace_client=client_factory,
+        ))
+
+    reader = _ws(True)
+    assert names(lambda: reader) == {"below", "dropped"}
+    reader.tables.get.assert_called_once_with(full_name="main.sales.old")
+    assert names(lambda: _ws(False)) == {"dropped"}

@@ -11,7 +11,7 @@ from src.common.version_visibility import is_visible_consumer
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.common.uc_comments import split_column_location
 from src.repositories.business_owners_repository import business_owner_repo
-from src.repositories.maturity_repository import maturity_repo
+from src.repositories.maturity_repository import IN_CLAUSE_CHUNK, maturity_repo
 from src.models.assets import (
     description_sync_state,
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
@@ -22,6 +22,7 @@ from src.models.assets import (
     PHYSICAL_TABLE_ASSET_TYPES, public_properties, with_internal_properties,
 )
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
+from src.common.api_errors import CodedValueError
 from src.common.errors import ConflictError, NotFoundError, ValidationError
 from src.common.logging import get_logger
 from src.common.odcs_logical_types import column_logical_type, schemas_for_version
@@ -36,6 +37,19 @@ logger = get_logger(__name__)
 _UNSET = object()
 
 ONTOS_NS = "http://ontos.app/ontology#"
+
+
+class BelowFirstLevelNeedsOwnerError(CodedValueError):
+    """``below_first_maturity_level`` without ``owned_by_me``: refused, since it
+    reads the caller's UC grant on every candidate table."""
+
+    code = 'below_first_maturity_level_needs_owned_by_me'
+
+    def __init__(self):
+        super().__init__(
+            "below_first_maturity_level=true needs owned_by_me=true: it reads each "
+            "candidate table in Unity Catalog with your token."
+        )
 
 
 class AssetsManager(SearchableAsset):
@@ -378,11 +392,15 @@ class AssetsManager(SearchableAsset):
 
         ``below_first_maturity_level`` keeps only the assets whose latest maturity
         evaluation reached no level (tables and views; never-evaluated assets are
-        left out). It narrows the same way. A stored level comes from the Unity
-        Catalog read of whoever evaluated it, so an asset that points to a UC table
+        left out). It narrows the same way, and needs ``owner_email``
+        (``BelowFirstLevelNeedsOwnerError`` without it): it reads a UC table per
+        candidate. A stored level comes from the Unity Catalog read of whoever
+        evaluated it, so an asset whose snapshot was evaluated against a UC table
         is kept only when ``uc_workspace_client`` (the caller's own client factory)
         reads that table now; without one, such assets are left out.
         """
+        if below_first_maturity_level and owner_email is None:
+            raise BelowFirstLevelNeedsOwnerError()
         if owner_email is not None:
             restrict_to_ids = self._narrow_to_owned(db, owner_email, restrict_to_ids)
         if below_first_maturity_level:
@@ -442,25 +460,48 @@ class AssetsManager(SearchableAsset):
         db: Session, restrict_to_ids: Optional[List[UUID]],
         uc_workspace_client: Optional[Callable[[], Any]] = None,
     ) -> List[UUID]:
-        """Asset IDs below the first maturity level, intersected with ``restrict_to_ids``,
-        and, for an asset that points to a UC table, readable with
-        ``uc_workspace_client`` (one ``tables.get`` per such asset; fails closed)."""
-        below: set = set()
+        """Asset IDs below the first maturity level, intersected with ``restrict_to_ids``.
+
+        The latest snapshot of an asset is kept only when ``uc_workspace_client``
+        reads the UC table it was evaluated against (the history's rule: that
+        table, or the asset's current one when the snapshot doesn't record it;
+        one ``tables.get`` per table; fails closed).
+        """
+        from src.controller.entity_dict_builder import (
+            SNAPSHOT_UC_TABLE_UNKNOWN, snapshot_uc_table, uc_table_name, uc_table_name_readable,
+        )
+
+        snapshot_of: Dict[UUID, Optional[str]] = {}
         candidates = None if restrict_to_ids is None else [str(i) for i in restrict_to_ids]
-        for entity_id in maturity_repo.entity_ids_below_first_level(
+        for entity_id, gate_results_json in maturity_repo.latest_snapshots_below_first_level(
             db, entity_type="Asset", entity_ids=candidates,
         ):
             try:
-                below.add(UUID(str(entity_id)))
+                snapshot_of[UUID(str(entity_id))] = gate_results_json
             except ValueError:
                 logger.warning("Skipping a maturity snapshot with a non-UUID asset id")
+        below = sorted(snapshot_of, key=str)
         if restrict_to_ids is not None:
-            below &= {UUID(str(i)) for i in restrict_to_ids}
-        if below:
-            from src.controller.entity_dict_builder import uc_table_readable
-            rows = db.query(AssetDb).filter(AssetDb.id.in_(list(below))).all()
-            below = {row.id for row in rows if uc_table_readable(row, uc_workspace_client)}
-        return sorted(below, key=str)
+            allowed = {UUID(str(i)) for i in restrict_to_ids}
+            below = [i for i in below if i in allowed]
+        readable: Dict[Any, bool] = {}
+        kept: List[UUID] = []
+        # Chunked like the candidate list (bind-parameter limits)
+        for start in range(0, len(below), IN_CLAUSE_CHUNK):
+            chunk = below[start:start + IN_CLAUSE_CHUNK]
+            for row in db.query(AssetDb).filter(AssetDb.id.in_(chunk)).all():
+                table = snapshot_uc_table(
+                    snapshot_of[row.id], uc_table_name(row.platform, row.location),
+                )
+                if table is SNAPSHOT_UC_TABLE_UNKNOWN:
+                    continue
+                if table not in readable:
+                    readable[table] = uc_table_name_readable(
+                        table, uc_workspace_client, asset_id=str(row.id),
+                    )
+                if readable[table]:
+                    kept.append(row.id)
+        return sorted(kept, key=str)
 
     def update_asset(self, db: Session, *, asset_id: UUID, asset_in: AssetUpdate, current_user_id: str) -> AssetRead:
         db_asset = self._asset_repo.get(db, asset_id)

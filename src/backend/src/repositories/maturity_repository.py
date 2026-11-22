@@ -1,6 +1,6 @@
 """Repository for maturity levels, gates, and snapshots."""
 import copy
-from typing import Any, List, Optional, Sequence
+from typing import Any, List, Optional, Sequence, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select, and_
@@ -18,7 +18,7 @@ SHARED_LEVEL_ENTITY_TYPES = ("DataProduct", "DataContract")
 
 
 # Candidate ids per IN clause (keeps under the bind-parameter limits)
-_ID_CHUNK = 5000
+IN_CLAUSE_CHUNK = 5000
 
 
 class MaturityLevelRepository:
@@ -189,7 +189,20 @@ class MaturityLevelRepository:
         self, db: Session, *, entity_type: str,
         entity_ids: Optional[Sequence[Any]] = None,
     ) -> List[str]:
-        """Ids of the entities whose latest snapshot reached no level.
+        """Ids of the entities whose latest snapshot reached no level
+        (``latest_snapshots_below_first_level`` without the gate results)."""
+        return [
+            entity_id for entity_id, _ in self.latest_snapshots_below_first_level(
+                db, entity_type=entity_type, entity_ids=entity_ids,
+            )
+        ]
+
+    def latest_snapshots_below_first_level(
+        self, db: Session, *, entity_type: str,
+        entity_ids: Optional[Sequence[Any]] = None,
+    ) -> List[Tuple[str, Optional[str]]]:
+        """``(entity_id, gate_results_json)`` of the latest snapshot of each entity
+        whose latest snapshot reached no level.
 
         Only snapshots taken with levels defined count (``total_levels > 0``), and
         nothing counts while ``entity_type`` has no level of its own: an entity
@@ -205,13 +218,14 @@ class MaturityLevelRepository:
             return []
         candidates = None if entity_ids is None else [str(i) for i in entity_ids]
         chunks = [None] if candidates is None else [
-            candidates[i:i + _ID_CHUNK] for i in range(0, len(candidates), _ID_CHUNK)
+            candidates[i:i + IN_CLAUSE_CHUNK] for i in range(0, len(candidates), IN_CLAUSE_CHUNK)
         ]
-        found: List[str] = []
+        found: List[Tuple[str, Optional[str]]] = []
         for chunk in chunks:
             ranked = (
                 db.query(
                     MaturitySnapshotDb.entity_id.label("entity_id"),
+                    MaturitySnapshotDb.gate_results_json.label("gate_results_json"),
                     MaturitySnapshotDb.achieved_level_order.label("achieved_level_order"),
                     MaturitySnapshotDb.total_levels.label("total_levels"),
                     func.row_number().over(
@@ -228,7 +242,7 @@ class MaturityLevelRepository:
                 ranked = ranked.filter(MaturitySnapshotDb.entity_id.in_(chunk))
             sub = ranked.subquery()
             rows = (
-                db.query(sub.c.entity_id)
+                db.query(sub.c.entity_id, sub.c.gate_results_json)
                 .filter(
                     sub.c.rn == 1,
                     sub.c.achieved_level_order.is_(None),
@@ -236,7 +250,7 @@ class MaturityLevelRepository:
                 )
                 .all()
             )
-            found.extend(r.entity_id for r in rows)
+            found.extend((r.entity_id, r.gate_results_json) for r in rows)
         return found
 
     def get_latest_snapshot(self, db: Session, *, entity_type: str,

@@ -55,11 +55,11 @@ def test_owner_gets_their_assets_below_the_first_level(client, below):
     assert res.json()['total'] == 1
 
 
-def test_without_owned_by_me_it_lists_every_asset_below(client, below):
+def test_without_owned_by_me_it_is_refused_with_a_code(client, below):
+    """Unbounded, it would read a UC table per asset below in the estate (#1506 review)."""
     res = client.get('/api/assets', params={'below_first_maturity_level': 'true', 'limit': 500})
-    names = _names(res.json())
-    assert {'mine_below', 'theirs_below'} <= names
-    assert not names & {'mine_leveled', 'mine_never'}
+    assert res.status_code == 400, res.text
+    assert res.json()['detail']['code'] == 'below_first_maturity_level_needs_owned_by_me'
 
 
 def test_without_the_flag_nothing_changes(client, below):
@@ -74,8 +74,17 @@ def test_scoped_user_is_narrowed_never_widened(client, below, monkeypatch):
     allowed = [below['mine_leveled'].id, below['theirs_below'].id]
     monkeypatch.setattr(AssetsManager, 'resolve_accessible_asset_ids',
                         lambda self, db, **kw: allowed)
-    res = client.get('/api/assets', params={'below_first_maturity_level': 'true'})
-    assert _names(res.json()) == {'theirs_below'}
+    res = client.get('/api/assets', params={
+        'owned_by_me': 'true', 'below_first_maturity_level': 'true',
+    })
+    # mine_below is owned and below, but not in the caller's scope
+    assert res.status_code == 200, res.text
+    assert _names(res.json()) == set()
+    allowed.append(below['mine_below'].id)
+    res = client.get('/api/assets', params={
+        'owned_by_me': 'true', 'below_first_maturity_level': 'true',
+    })
+    assert _names(res.json()) == {'mine_below'}
 
 
 # --- The stored level of a UC table reaches only readers of that table (#1352 review) ---

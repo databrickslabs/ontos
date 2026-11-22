@@ -12,7 +12,9 @@ from src.models.assets import (
     DeletePreviewItem, CascadeDeleteRequest, CascadeDeleteResult,
 )
 from src.common import manager_dependencies
-from src.controller.assets_manager import AssetsManager, assets_manager
+from src.controller.assets_manager import (
+    AssetsManager, BelowFirstLevelNeedsOwnerError, assets_manager,
+)
 from src.controller.metric_views_manager import (
     MetricViewNotFoundError, MetricViewsManager, UserClientUnavailableError, UserTokenRequiredError,
 )
@@ -358,7 +360,10 @@ def get_all_assets(
     ),
     below_first_maturity_level: bool = Query(
         False,
-        description="Only tables and views whose latest maturity evaluation reached no level",
+        description=(
+            "Only tables and views whose latest maturity evaluation reached no level; "
+            "needs owned_by_me=true (400 below_first_maturity_level_needs_owned_by_me)"
+        ),
     ),
 ):
     """Lists all assets with optional filters. Returns paginated results.
@@ -380,6 +385,10 @@ def get_all_assets(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Authentication required.",
         )
+    if below_first_maturity_level and not owned_by_me:
+        # One UC read per candidate table: bounded only by the caller's own assets
+        error = BelowFirstLevelNeedsOwnerError()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
     # Producers + Admins (READ_WRITE+) keep full visibility.
     is_unscoped = _user_has_assets_feature(request, current_user, FeatureAccessLevel.READ_WRITE)

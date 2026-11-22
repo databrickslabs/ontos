@@ -198,3 +198,11 @@ def test_re_importing_an_export_keeps_the_original_domain_as_a_list(client, uplo
         c["property"]: c["value"] for c in _export(client, new_id)["customProperties"]
     }["ontosOriginalDomain"]
     assert original == ["maximal-domain"]
+
+
+def test_a_new_version_gets_its_own_creation_timestamp(client, uploaded):
+    _, product_id = uploaded
+    resp = client.post(f"/api/data-products/{product_id}/versions", json={"new_version": "3.0.0"})
+    assert resp.status_code == 201, resp.text
+    exported = _export(client, resp.json()["id"])
+    assert not str(exported["productCreatedTs"]).startswith("2024-06-07")

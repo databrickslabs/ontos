@@ -1117,6 +1117,39 @@ def test_the_change_log_of_an_unreadable_assets_metadata_is_empty(
         assert response.json().get('timeline', []) == [], url
 
 
+def _plain_timeline_calls(asset, entity_type):
+    return [
+        (f'/api/entities/{entity_type}/{asset.id}/timeline', {}),
+        (f'/api/entities/{entity_type}/{asset.id}/timeline/count', {}),
+    ]
+
+
+@pytest.mark.parametrize('entity_type', ['asset', 'Asset'])
+def test_the_plain_asset_change_log_of_an_unreadable_asset_is_empty(
+        client, db_session, asset, act_as, entity_type):
+    """#1354 review: the plain ``asset`` type is gated like ``asset:*`` (same asset rule)."""
+    _log(db_session, entity_type, str(asset.id))
+    act_as('Data Steward')
+
+    for url, kwargs in _plain_timeline_calls(asset, entity_type):
+        response = client.get(url, **kwargs)
+        assert response.status_code == 200, (url, response.text)
+        assert response.json()['total_count'] == 0, url
+        assert response.json().get('timeline', []) == [], url
+
+
+@pytest.mark.parametrize('role', ['Admin', 'Data Steward'])
+def test_the_plain_asset_change_log_of_a_readable_asset_is_listed(
+        client, db_session, asset, act_as, linked_to_an_accessible_product, role):
+    _log(db_session, 'asset', str(asset.id))
+    act_as(role)
+
+    for url, kwargs in _plain_timeline_calls(asset, 'asset'):
+        response = client.get(url, **kwargs)
+        assert response.status_code == 200, (url, response.text)
+        assert response.json()['total_count'] >= 1, url
+
+
 def test_the_change_log_of_another_entity_type_stays_visible(
         client, db_session, asset, act_as):
     _log(db_session, 'data_product:rich_text', 'product-1')

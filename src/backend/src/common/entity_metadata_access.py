@@ -159,10 +159,11 @@ def asset_metadata_log_readable(
 
     ``MetadataManager`` logs the changes of an asset's notes, links, documents and
     attachments under ``asset:rich_text``, ``asset:link``, ... with the asset's id:
-    those need the asset to be readable. Every other type answers yes.
+    those need the asset to be readable, and so does the plain ``asset`` type (the
+    asset's own changes, any casing). Every other type answers yes.
     """
-    prefix, sep, _kind = str(entity_type or '').partition(':')
-    if not sep or not _is_asset(prefix):
+    prefix, _sep, _kind = str(entity_type or '').partition(':')
+    if not _is_asset(prefix):
         return True
     return _asset_readable(request, db, user_details, entity_id)
 

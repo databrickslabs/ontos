@@ -574,7 +574,8 @@
       "started": "開始",
       "waitingAt": "待機中のステップ",
       "progress": "進捗"
-    }
+    },
+    "nonFatal": "失敗しましたが、実行は続行しました"
   },
   "nodes": {
     "checklistTitle": "チェックリスト",

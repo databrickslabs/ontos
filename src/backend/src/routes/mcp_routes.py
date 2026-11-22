@@ -366,6 +366,8 @@ class MCPHandler:
         # self._identity_mode); the identity itself is verified just below.
         ctx = self._create_tool_context()
         ctx.caller = await self._resolve_caller(tool_name)
+        # The token's scopes ride on the caller: a read-scoped token never writes, whoever it acts for.
+        ctx.caller.token_scopes = tuple(self._token_info.scopes or ())
 
         # Execute the tool with audit logging
         success = False
@@ -556,8 +558,16 @@ class MCPHandler:
             data_contracts_manager=getattr(app.state, "data_contracts_manager", None),
             semantic_models_manager=getattr(app.state, "semantic_models_manager", None),
             costs_manager=None,  # Add if needed
-            search_manager=getattr(app.state, "search_manager", None)
+            search_manager=getattr(app.state, "search_manager", None),
+            obo_workspace_client_factory=self._obo_factory(),
         )
+
+    def _obo_factory(self):
+        if not self._request.headers.get("x-forwarded-access-token"):
+            return None
+        from src.common.workspace_client import get_obo_workspace_client
+        request = self._request
+        return lambda: get_obo_workspace_client(request)
 
 
 def _tool_error_result(text: str, structured: Dict[str, Any]) -> Dict[str, Any]:

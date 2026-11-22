@@ -50,6 +50,7 @@ roles:
       comments: Read/Write
       process-workflows: Read-only  # View workflows; admins manage definitions
       access-grants: Admin  # DGO approves access grants
+      authority-resolution: Admin  # DGO approves Authority Relations and policies
     home_sections:
       - REQUIRED_ACTIONS
       - DISCOVERY
@@ -87,6 +88,7 @@ roles:
       comments: Read/Write
       process-workflows: Read-only  # View workflows; admins manage definitions
       access-grants: Read/Write  # Can request grants on behalf of stewarded data
+      authority-resolution: Read/Write  # Author drafts, run DNAco, review
     home_sections:
       - REQUIRED_ACTIONS
       - DISCOVERY
@@ -122,6 +124,7 @@ roles:
       comments: Read/Write
       process-workflows: Read-only  # View workflows that affect own requests
       access-grants: Read-only  # See own grants
+      authority-resolution: Read-only  # View and resolve
     home_sections:
       - DISCOVERY
 
@@ -142,6 +145,7 @@ roles:
       comments: Read/Write
       process-workflows: Read-only  # View workflows triggered by own products
       access-grants: Read/Write  # Can request grants for own products
+      authority-resolution: Read-only  # View and resolve
     home_sections:
       - DATA_CURATION
       - DISCOVERY
@@ -169,6 +173,7 @@ roles:
       comments: Read/Write
       process-workflows: Read-only  # View workflows; admins manage definitions
       access-grants: Admin  # Security Officer approves access grants
+      authority-resolution: Read-only  # View and resolve
     home_sections:
       - REQUIRED_ACTIONS
       - DISCOVERY

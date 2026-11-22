@@ -392,7 +392,7 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   on_certify: ['data_contract', 'data_product'],
   on_decertify: ['data_contract', 'data_product'],
   // Request triggers
-  on_request_review: ['data_contract', 'data_product', 'data_asset_review'],
+  on_request_review: ['data_contract', 'data_product', 'data_asset_review', 'authority_relation'],
   on_request_access: ['access_grant', 'role', 'project'],
   on_request_publish: ['data_contract', 'data_product'],
   on_request_deploy: ['data_contract'],

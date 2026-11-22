@@ -191,6 +191,9 @@
         "notify-requester": "La tua modifica alla metric view '{{entity_name}}' è stata inviata per l’approvazione.",
         "notify-approved": "La tua modifica alla metric view '{{entity_name}}' è stata approvata ed è in consegna.",
         "notify-rejected": "La tua modifica alla metric view '{{entity_name}}' è stata rifiutata."
+      },
+      "authority-relation-review-request": {
+        "notify-reviewer": "Ti è stato chiesto di rivedere la Authority Relation '{{entity_name}}'. Completa la tua Asset Review per confermare che riflette la realtà."
       }
     },
     "approval": {

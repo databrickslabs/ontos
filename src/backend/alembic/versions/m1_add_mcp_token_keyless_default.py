@@ -29,7 +29,8 @@ def _column_exists(conn, table: str, column: str) -> bool:
     return conn.execute(
         sa.text(
             "SELECT 1 FROM information_schema.columns "
-            "WHERE table_name = :t AND column_name = :c"
+            "WHERE table_schema = current_schema() "
+            "AND table_name = :t AND column_name = :c"
         ),
         {"t": table, "c": column},
     ).scalar() is not None

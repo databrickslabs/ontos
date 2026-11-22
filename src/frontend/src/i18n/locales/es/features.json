@@ -90,5 +90,9 @@
   "about": {
     "name": "Acerca de",
     "description": "Información sobre la aplicación y sus características."
+  },
+  "authority-resolution": {
+    "name": "Resolución de autoridad",
+    "description": "Cree Relaciones de autoridad (ARF) y resuelva decisiones de agentes contra ellas."
   }
 }

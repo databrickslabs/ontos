@@ -101,20 +101,32 @@ SCOPE_FEATURES = {
     "projects": "projects",
     "semantic": "semantic-models",
     "tags": "tags",
+    "authority": "authority-resolution",
 }
+
+# Scopes that also grant Read-write on their feature; every other scope is Read-only.
+# Only Authority Resolution has a write scope today (the ARF tools' authority:write).
+_WRITE_SCOPES = {"authority:write", "authority:*"}
 
 
 def scope_read_levels(scopes: Any) -> Dict[str, FeatureAccessLevel]:
-    """Read-only on each feature a token scope names (``<prefix>:read``,
-    ``<prefix>:write`` or ``<prefix>:*``); ``*`` names them all."""
+    """The level each feature a token scope names gets: Read-only for
+    ``<prefix>:read``, ``<prefix>:write`` or ``<prefix>:*``, and Read-write on
+    Authority Resolution for ``authority:write`` / ``authority:*``. ``*`` names
+    every feature (Read-only, Authority Resolution Read-write)."""
     levels: Dict[str, FeatureAccessLevel] = {}
     for scope in scopes or []:
         scope = str(scope)
         if scope == "*":
-            return {f: FeatureAccessLevel.READ_ONLY for f in SCOPE_FEATURES.values()}
+            levels = {f: FeatureAccessLevel.READ_ONLY for f in SCOPE_FEATURES.values()}
+            levels["authority-resolution"] = FeatureAccessLevel.READ_WRITE
+            return levels
         feature = SCOPE_FEATURES.get(scope.split(":", 1)[0])
-        if feature:
-            levels[feature] = FeatureAccessLevel.READ_ONLY
+        if not feature:
+            continue
+        level = FeatureAccessLevel.READ_WRITE if scope in _WRITE_SCOPES else FeatureAccessLevel.READ_ONLY
+        if levels.get(feature) != FeatureAccessLevel.READ_WRITE:
+            levels[feature] = level
     return levels
 
 

@@ -93,6 +93,10 @@
           "in_progress": "em andamento",
           "unknown": "desconhecido"
         }
+      },
+      "authorityResolution": {
+        "title": "Resolução de Autoridade",
+        "description": "Relações de autoridade ativas"
       }
     }
   },

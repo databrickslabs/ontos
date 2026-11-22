@@ -574,7 +574,8 @@
       "started": "Gestart",
       "waitingAt": "Wachtend Bij",
       "progress": "Voortgang"
-    }
+    },
+    "nonFatal": "Mislukt, de run is doorgegaan"
   },
   "nodes": {
     "checklistTitle": "Checklist",

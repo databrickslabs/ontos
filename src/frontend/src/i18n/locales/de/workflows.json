@@ -574,7 +574,8 @@
       "started": "Gestartet",
       "waitingAt": "Wartet bei",
       "progress": "Fortschritt"
-    }
+    },
+    "nonFatal": "Fehlgeschlagen, der Lauf wurde fortgesetzt"
   },
   "nodes": {
     "checklistTitle": "Checkliste",

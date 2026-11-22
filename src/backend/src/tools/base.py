@@ -7,11 +7,11 @@ the LLM Search feature and MCP server endpoints.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from src.common.api_errors import CodedValueError, new_error_id
+from src.common.api_errors import CodedValueError, log_failure
 from src.common.config import Settings
 from src.common.features import ACCESS_LEVEL_ORDER, FeatureAccessLevel
 from src.common.logging import get_logger
@@ -42,10 +42,7 @@ def tool_failure(tag: str, exc: BaseException) -> Dict[str, str]:
         # its message is written for the user, so the client gets it with the code.
         logger.info("[%s] refused: %s: %s", tag, type(exc).__name__, exc)
         return {"error": f"{type(exc).__name__}: {exc}", "error_code": exc.code or TOOL_FAILED_CODE}
-    error_id = new_error_id()
-    logger.error(
-        "[%s] FAILED (error id %s): %s: %s", tag, error_id, type(exc).__name__, exc, exc_info=exc
-    )
+    error_id = log_failure(tag, exc)
     return {"error": tool_failed_message(error_id), "error_code": TOOL_FAILED_CODE}
 
 
@@ -95,6 +92,9 @@ class ToolContext:
     semantic_models_manager: Optional[Any] = None
     costs_manager: Optional[Any] = None
     search_manager: Optional[Any] = None
+    # Lazily builds a WorkspaceClient scoped to the calling user (OBO); None when
+    # the request carried no forwarded user token.
+    obo_workspace_client_factory: Optional[Callable[[], Any]] = None
     # Builds the workspace client the first time a tool reads ``workspace_client``
     # (once per context). An error it raises reaches the tool's caller.
     workspace_client_factory: Optional[Callable[[], Any]] = field(
@@ -196,6 +196,9 @@ class ToolCaller:
     team_ids: set[str] = field(default_factory=set)
     # Projects the caller is a member of; None = every project (admin groups).
     project_ids: Optional[set[str]] = field(default_factory=set)
+    # The scopes of the MCP token the call came with. None = no token (Ask Ontos):
+    # no scope restriction applies. A token's scopes cap what its caller may write.
+    token_scopes: Optional[Tuple[str, ...]] = None
 
     def has_level(self, feature_id: str, required_level: FeatureAccessLevel) -> bool:
         if self.full_access:

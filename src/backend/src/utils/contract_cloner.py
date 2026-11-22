@@ -266,15 +266,9 @@ class ContractCloner:
         for server in source_servers:
             new_server_id = str(uuid4())
 
-            cloned_server = {
-                'id': new_server_id,
-                'contract_id': new_contract_id,
-                'stable_id': getattr(server, 'stable_id', None),
-                'server': server.server,
-                'type': server.type,
-                'description': server.description,
-                'environment': server.environment,
-            }
+            # Every stored field (ODCS id, roles, custom properties ...)
+            cloned_server = _stored_fields(server, exclude={'id', 'contract_id'})
+            cloned_server.update({'id': new_server_id, 'contract_id': new_contract_id})
 
             # Clone server properties
             if hasattr(server, 'properties') and server.properties:

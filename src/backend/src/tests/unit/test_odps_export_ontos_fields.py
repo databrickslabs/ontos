@@ -129,7 +129,8 @@ class TestOwnerTeam:
 
         export = product_manager.build_odps_export(created.id, db=db_session)
 
-        assert _props(export)[ONTOS_OWNER_TEAM_PROPERTY] == "Orders Team"
+        assert _props(export)[ONTOS_OWNER_TEAM_PROPERTY] == {
+            "id": str(team.id), "name": "Orders Team"}
 
     def test_product_without_owner_team_has_no_property(self, product_manager, db_session):
         created = product_manager.create_product(_product("Unowned"), db=db_session, user="a@b.com")
@@ -151,7 +152,31 @@ class TestOwnerTeam:
         left = {cp.property for cp in imported.customProperties or []}
         assert ONTOS_OWNER_TEAM_PROPERTY not in left
         again = product_manager.build_odps_export(imported.id, db=db_session)
-        assert _props(again)[ONTOS_OWNER_TEAM_PROPERTY] == "Orders Team"
+        assert _props(again)[ONTOS_OWNER_TEAM_PROPERTY] == {
+            "id": str(team.id), "name": "Orders Team"}
+
+    def test_a_renamed_team_is_found_by_id(self, product_manager, db_session):
+        team = _team(db_session, "Orders Team")
+        document = {"apiVersion": "v1.0.0", "kind": "DataProduct", "status": "draft",
+                    **_product("Renamed Team"),
+                    "customProperties": [{"property": ONTOS_OWNER_TEAM_PROPERTY,
+                                          "value": {"id": str(team.id), "name": "Old Name"}}]}
+
+        imported = _import(product_manager, document)
+
+        assert imported.owner_team_id == team.id
+
+    def test_an_older_export_with_the_bare_team_name_still_restores_it(
+            self, product_manager, db_session):
+        team = _team(db_session, "Orders Team")
+        document = {"apiVersion": "v1.0.0", "kind": "DataProduct", "status": "draft",
+                    **_product("Bare Team Name"),
+                    "customProperties": [{"property": ONTOS_OWNER_TEAM_PROPERTY,
+                                          "value": "Orders Team"}]}
+
+        imported = _import(product_manager, document)
+
+        assert imported.owner_team_id == team.id
 
     def test_unknown_team_keeps_the_name_as_a_custom_property(self, product_manager, db_session):
         document = {"apiVersion": "v1.0.0", "kind": "DataProduct", "status": "draft",
@@ -163,3 +188,74 @@ class TestOwnerTeam:
         assert imported.owner_team_id is None
         assert _props(product_manager.build_odps_export(imported.id, db=db_session))[
             ONTOS_OWNER_TEAM_PROPERTY] == "Gone"
+
+
+class TestCustomPropertyValueTypes:
+    """A custom property keeps its JSON type: text that looks like another type stays
+    text, as for contracts (#1517's ``typed_text``)."""
+
+    VALUES = {
+        "numText": "42", "boolText": "true", "jsonText": '{"a": 1}', "listText": "[1]",
+        "plain": "plain text", "num": 42, "float": -3.5, "flag": False,
+        "obj": {"nested": [1, "two"]}, "list": ["a", "b"],
+    }
+
+    def _created(self, product_manager, db_session, name):
+        data = _product(name)
+        data["customProperties"] = [
+            {"property": k, "value": v} for k, v in self.VALUES.items()]
+        return product_manager.create_product(data, db=db_session, user="a@b.com")
+
+    def test_export_keeps_the_type_of_each_value(self, product_manager, db_session):
+        created = self._created(product_manager, db_session, "Typed Export")
+
+        props = _props(product_manager.build_odps_export(created.id, db=db_session))
+
+        for key, value in self.VALUES.items():
+            assert props[key] == value and type(props[key]) is type(value), key
+
+    def test_the_api_returns_each_value_with_its_type(self, product_manager, db_session):
+        created = self._created(product_manager, db_session, "Typed Api")
+
+        product = product_manager.get_product(created.id)
+
+        props = {cp.property: cp.value for cp in product.customProperties}
+        for key, value in self.VALUES.items():
+            assert props[key] == value and type(props[key]) is type(value), key
+
+    def test_an_export_round_trips_with_the_same_types(self, product_manager, db_session):
+        created = self._created(product_manager, db_session, "Typed Trip")
+        export = product_manager.build_odps_export(created.id, db=db_session)
+
+        imported = _import(product_manager, export)
+
+        props = _props(product_manager.build_odps_export(imported.id, db=db_session))
+        for key, value in self.VALUES.items():
+            assert props[key] == value and type(props[key]) is type(value), key
+
+    def test_a_read_modify_write_keeps_the_types(self, product_manager, db_session):
+        created = self._created(product_manager, db_session, "Typed Save")
+        product = product_manager.get_product(created.id)
+        payload = product.model_dump(by_alias=False)
+
+        product_manager.update_product(
+            created.id, {"customProperties": payload["customProperties"]},
+            db=db_session, user="a@b.com")
+
+        props = _props(product_manager.build_odps_export(created.id, db=db_session))
+        for key, value in self.VALUES.items():
+            assert props[key] == value and type(props[key]) is type(value), key
+
+    def test_a_row_written_before_reads_with_its_json_type(self):
+        from src.db_models.data_products import CustomPropertyDb
+        from src.models.data_products import CustomProperty
+
+        def read(text):
+            return CustomProperty.model_validate(CustomPropertyDb(property="p", value=text)).value
+
+        # older writes: plain text as is, other values JSON-encoded
+        assert read('{"a": 1}') == {"a": 1}
+        assert read("7") == 7
+        assert read("plain") == "plain"
+        assert read("null") is None
+        assert read(None) is None

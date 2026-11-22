@@ -80,37 +80,10 @@ def _canonical_uuid(value: str) -> Optional[str]:
         return None
 
 
-def _decode_stored_cp_value(value: Any) -> Any:
-    """Give an ODPS custom-property value back its JSON type for the export.
-
-    The TEXT column holds strings verbatim and every other type JSON-encoded, so a
-    stored ``'42'`` or ``'{"a": 1}'`` is a number or an object again here. Only text
-    that JSON-decodes to a number, boolean, list or object (and, for numbers, prints
-    back the same) is converted; any other text stays a string.
-    """
-    if not isinstance(value, str):
-        return value
-    text = value.strip()
-    if text in ('true', 'false'):
-        return text == 'true'
-    if text[:1] in ('[', '{'):
-        try:
-            return json.loads(text)
-        except ValueError:
-            return value
-    try:
-        number = json.loads(text)
-    except ValueError:
-        return value
-    if isinstance(number, (int, float)) and not isinstance(number, bool) \
-            and json.dumps(number) == text:
-        return number
-    return value
-
-
 def _odps_custom_property(cp: Any) -> Dict[str, Any]:
-    """A stored custom property as an ODPS ``customProperties`` item."""
-    item: Dict[str, Any] = {"property": cp.property, "value": _decode_stored_cp_value(cp.value)}
+    """A stored custom property as an ODPS ``customProperties`` item (the API model
+    reads the value back with its JSON type)."""
+    item: Dict[str, Any] = {"property": cp.property, "value": cp.value}
     if getattr(cp, 'description', None):
         item["description"] = cp.description
     return item
@@ -4326,32 +4299,52 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         return members_list
 
     @staticmethod
-    def _owner_team_name(session: Session, team_id: Optional[str]) -> Optional[str]:
-        """Name of the owner team, or None when unset or not found."""
+    def _owner_team_value(session: Session, team_id: Optional[str]) -> Optional[Dict[str, str]]:
+        """The ``ontosOwnerTeam`` value for the owner team: ``{id, name}`` (the shape
+        contracts use), only ``{id}`` when the team no longer exists, None when unset."""
         if not team_id:
             return None
         try:
             team = team_repo.get(session, id=UUID(str(team_id)))
         except (ValueError, TypeError):
-            return None
-        return team.name if team else None
+            team = None
+        return {"id": str(team.id), "name": team.name} if team else {"id": str(team_id)}
 
     @staticmethod
-    def _apply_imported_owner_team(session: Session, product_data: Dict[str, Any]) -> None:
+    def _resolve_owner_team(session: Session, value: Any) -> Optional[str]:
+        """The id of the existing team an ``ontosOwnerTeam`` value names: ``{id, name}``
+        by id, then by name; a bare name (older exports) by name."""
+        if isinstance(value, str):
+            value = {"name": value}
+        if not isinstance(value, dict):
+            return None
+        team_id = value.get("id")
+        if isinstance(team_id, str) and team_id:
+            try:
+                team = team_repo.get(session, id=UUID(team_id))
+            except (ValueError, TypeError):
+                team = None
+            if team:
+                return str(team.id)
+        name = value.get("name")
+        team = team_repo.get_by_name(session, name=name) if isinstance(name, str) and name else None
+        return str(team.id) if team else None
+
+    @classmethod
+    def _apply_imported_owner_team(cls, session: Session, product_data: Dict[str, Any]) -> None:
         """Set ``owner_team_id`` from an exported ``ontosOwnerTeam`` custom property.
 
-        Only when the payload names no owner team and a team with that name exists (the
-        property is then consumed); otherwise it stays a plain custom property.
+        Only when the payload names no owner team and the property names an existing
+        team (the property is then consumed); otherwise it stays a plain custom property.
         """
         props = product_data.get('customProperties')
         if not isinstance(props, list) or product_data.get('owner_team_id'):
             return
         for item in props:
             if isinstance(item, dict) and item.get('property') == ONTOS_OWNER_TEAM_PROPERTY:
-                name = item.get('value')
-                team = team_repo.get_by_name(session, name=name) if isinstance(name, str) else None
-                if team:
-                    product_data['owner_team_id'] = str(team.id)
+                team_id = cls._resolve_owner_team(session, item.get('value'))
+                if team_id:
+                    product_data['owner_team_id'] = team_id
                     props.remove(item)
                 return
 
@@ -4495,9 +4488,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             _upsert_custom_property(odps, prop, value)
         for prop, value in lifecycle_props.items():
             _upsert_custom_property(odps, prop, value)
-        owner_team_name = self._owner_team_name(session, product.owner_team_id)
-        if owner_team_name:
-            _upsert_custom_property(odps, ONTOS_OWNER_TEAM_PROPERTY, owner_team_name)
+        owner_team = self._owner_team_value(session, product.owner_team_id)
+        if owner_team:
+            _upsert_custom_property(odps, ONTOS_OWNER_TEAM_PROPERTY, owner_team)
 
         if product.authoritativeDefinitions:
             odps["authoritativeDefinitions"] = [

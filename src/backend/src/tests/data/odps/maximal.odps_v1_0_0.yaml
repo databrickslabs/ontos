@@ -35,6 +35,10 @@ customProperties:
   description: prod cp description
 - property: prodCpNum
   value: 42
+- property: prodCpNumText
+  value: '42'
+- property: prodCpBoolText
+  value: 'true'
 - property: prodCpObj
   value:
     nested:

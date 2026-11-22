@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, field_serializer, field_validator, model_
 from .tags import AssignedTag, AssignedTagCreate
 
 from src.common.logging import get_logger
+from src.utils.odcs_values import typed_value
 logger = get_logger(__name__)
 
 # Server-managed publication fields (see DataProduct.publication_scope).
@@ -116,6 +117,19 @@ class CustomProperty(BaseModel):
     property: str = Field(..., description="Property name in camelCase")
     value: Any = Field(None, description="Property value (can be any type, including null)")
     description: Optional[str] = Field(None, description="Optional description")
+
+    @model_validator(mode='before')
+    @classmethod
+    def _typed_stored_value(cls, data):
+        # A stored row holds the value as `typed_text` wrote it (plain text as is, any
+        # other value as JSON): read it back with its type. API input is typed already.
+        if isinstance(data, dict) or not hasattr(data, '_sa_instance_state'):
+            return data
+        return {
+            'property': data.property,
+            'value': typed_value(data.value),
+            'description': data.description,
+        }
 
     # Normalize the legacy literal string "null" back to None. Older writes
     # persisted a null value via json.dumps(None) == "null" (fixed on the write

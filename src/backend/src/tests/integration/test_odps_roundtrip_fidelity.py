@@ -172,6 +172,9 @@ def test_the_export_keeps_the_type_of_custom_property_values(client, uploaded):
     props = {c["property"]: c["value"] for c in _export(client, product_id)["customProperties"]}
     assert props["prodCpStr"] == "prod-cp-value"
     assert props["prodCpNum"] == 42
+    # text that looks like another type stays text
+    assert props["prodCpNumText"] == "42"
+    assert props["prodCpBoolText"] == "true"
     assert props["prodCpObj"] == {"nested": [1, "two"]}
 
 

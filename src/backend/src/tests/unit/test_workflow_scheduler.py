@@ -1062,6 +1062,29 @@ def test_the_app_scheduler_uses_a_dedicated_engine_and_disposes_it(monkeypatch):
     assert engine.disposed and scheduler._session_factory is None
 
 
+@pytest.mark.parametrize('failure', [
+    RuntimeError('could not connect to host=db.example password=hunter2'),
+    None,
+])
+def test_the_scheduler_warns_when_it_falls_back_to_the_app_pool(monkeypatch, caplog, failure):
+    from src.common import database
+
+    def create(pool_size, name):
+        if failure is not None:
+            raise failure
+        return None
+
+    monkeypatch.setattr(database, 'create_dedicated_session_factory', create)
+    scheduler = WorkflowScheduler(max_workers=3, run_executor=_Inline())
+    with caplog.at_level('WARNING', logger='src.controller.workflow_scheduler'):
+        scheduler._use_dedicated_engine()
+    warned = [r for r in caplog.records
+              if r.levelname == 'WARNING' and 'connection pool' in r.getMessage()]
+    assert len(warned) == 1
+    assert 'hunter2' not in warned[0].getMessage()
+    assert scheduler._session_factory is None and scheduler._own_engine is None
+
+
 def _fake_settings(env='LOCAL', schema=None):
     from types import SimpleNamespace
 

@@ -319,10 +319,17 @@ class WorkflowScheduler:
             created = create_dedicated_session_factory(
                 self._max_workers + 1, 'workflow_scheduler')
         except Exception as e:
-            logger.error(f"Workflow scheduler uses the app's connection pool: {e}")
+            # Only the exception class: a database error text can carry the connection URL.
+            logger.warning(
+                "Workflow scheduler: could not create its own database engine "
+                f"({type(e).__name__}); falling back to the app's connection pool")
             return
-        if created is not None:
-            self._session_factory, self._own_engine = created
+        if created is None:
+            logger.warning(
+                "Workflow scheduler: the app's database engine is not set up or its session "
+                "factory was replaced; using the app's connection pool")
+            return
+        self._session_factory, self._own_engine = created
 
     def _dispose_own_engine(self) -> None:
         engine, self._own_engine = self._own_engine, None

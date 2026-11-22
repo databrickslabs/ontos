@@ -1,7 +1,7 @@
 """Authority Resolution — scoped domain context + ODRL-shaped rule
 
 Revision ID: al1_authority_scoped_context
-Revises: ak4_authority_resolution_grants
+Revises: ak8_authority_prerequisites_by_version
 Create Date: 2026-11-12
 
 Adds nullable ``authority_relations.rule`` (JSON, the ODRL-shaped rule:
@@ -10,6 +10,9 @@ permission constraints and duties, prohibitions). Rewraps each legacy flat
 never gated a resolve, so they become parameters (``ctx.<key>`` in rules) and
 no existing AR starts refusing requests; authors move keys into the scope
 deliberately. A downgrade unwraps the params again (the scope is dropped).
+
+Re-pointed (batch 2 merge) from ak4 to ak8: it touches only authority_relations.rule
+and domain_context, none of which ak5-ak8 dropped or renamed.
 """
 import json
 from typing import Sequence, Union
@@ -18,7 +21,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = 'al1_authority_scoped_context'
-down_revision: Union[str, None] = 'ak4_authority_resolution_grants'
+down_revision: Union[str, None] = 'ak8_authority_prerequisites_by_version'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

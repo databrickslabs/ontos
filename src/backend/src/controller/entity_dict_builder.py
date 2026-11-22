@@ -152,7 +152,9 @@ def build_authority_relation_dict(db: Session, relation_id: str) -> Optional[Dic
     required_approvers = [a for a in affs if a.required and getattr(a, "is_approver", True)]
     base["affirmer_count"] = sum(1 for a in affs if getattr(a, "is_approver", True))
     base["reviewer_count"] = sum(1 for a in affs if getattr(a, "is_reviewer", False))
-    base["fully_affirmed"] = len(required_approvers) > 0 and all(a.affirmed for a in required_approvers)
+    # The manager's check: an affirmation of an earlier definition does not count (review #5).
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
+    base["fully_affirmed"] = AuthorityResolutionManager().is_fully_affirmed(db, relation_id)
     base["is_active"] = relation.status == "active"
 
     return base

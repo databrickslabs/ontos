@@ -25,9 +25,9 @@
 --
 -- Four core Authority Relations covering distinct governance domains, each with:
 --   • an AR-ladder maturity level cached on the row
---   • authored Compliance-DSL criteria (every criterion must link to a
---     persisted compliance policy — authority_criteria.compliance_policy_id
---     is NOT NULL); they read params as ctx.<key> instead of literals
+--   • two authored Compliance-DSL criteria (every criterion must link to a
+--     check written on the AR (name, rule, failure_message on authority_criteria)
+--     is NOT NULL)
 --   • three N-functional affirmation participants (approver and/or reviewer),
 --     wired to Business Roles, so the Request-Review flow can mint
 --     DataAssetReviewRequests from them
@@ -69,94 +69,39 @@ ON CONFLICT (id) DO NOTHING;
 
 
 -- ============================================================================
--- 2. COMPLIANCE POLICIES (ARF criteria sources)
+-- 2. COMPLIANCE POLICIES (maturity gates only)
 -- ============================================================================
--- Every authority_criteria.compliance_policy_id must resolve, so these must
--- be inserted before the criteria section. Each AR consumes two of these.
+-- Only the policies a maturity gate references stay here. The AR checks below are
+-- owned by their AR version (ARF 1.2.0) and carry their own rule text.
 
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
-('01100001-0005-4000-8000-000000000001', 'Trade Promotion Budget Threshold',
- 'Promotion requests above the VP sign-off threshold must carry explicit VP approval.',
- 'Promotion budget exceeds the delegation threshold without the required VP sign-off.',
- 'MATCH (p:PromotionProposal) ASSERT p.budget_usd <= ctx.threshold_usd OR p.has_vp_sign_off = true',
- 'Governance', 'critical', true, NOW(), NOW()),
-
-('01100002-0005-4000-8000-000000000002', 'Trade Promotion Margin Floor',
- 'Promotions must preserve a minimum expected gross-margin percentage after discount.',
- 'Expected margin after promotion discount is below the configured floor.',
- 'MATCH (p:PromotionProposal) ASSERT p.expected_margin_pct >= ctx.margin_floor_pct',
- 'Data Quality', 'high', true, NOW(), NOW()),
-
-('01100003-0005-4000-8000-000000000003', 'Platform Access MFA Required',
- 'Every production-platform access grant must be bound to an MFA-enabled identity.',
- 'Access grant was issued to a principal that does not have MFA enabled.',
- 'MATCH (g:AccessGrant) ASSERT g.mfa_enabled = true',
- 'Security', 'critical', true, NOW(), NOW()),
-
-('01100004-0005-4000-8000-000000000004', 'Platform Access Segregation of Duties',
- 'Grants must not combine incompatible duties (eg deploy + approve-deploy on the same tier).',
- 'Access grant combines duties that violate segregation-of-duties policy for this tier.',
- 'MATCH (g:AccessGrant) ASSERT g.has_sod_conflict = false',
- 'Security', 'high', true, NOW(), NOW()),
-
-('01100005-0005-4000-8000-000000000005', 'Ontos Role Request Sponsor',
- 'Every app-role request must be sponsored by a recognized Data Steward or Domain Owner.',
- 'Role request has no sponsor, or the sponsor is not a Data Steward or Domain Owner.',
- 'MATCH (r:RoleRequest) ASSERT r.sponsor_role IN [''Data Steward'', ''Domain Owner'']',
- 'Governance', 'high', true, NOW(), NOW()),
-
-('01100006-0005-4000-8000-000000000006', 'Ontos Role Request Expiry',
- 'Elevated-role requests must carry an explicit expiry date (no indefinite grants).',
- 'Role request does not carry an expiry date — indefinite grants are not permitted.',
- 'MATCH (r:RoleRequest) ASSERT r.has_expiry_date = true',
- 'Governance', 'medium', true, NOW(), NOW()),
-
-('01100007-0005-4000-8000-000000000007', 'Data Product No Active Consumers',
- 'A data product may be decommissioned only once it has zero active downstream consumers.',
- 'Data product still has active downstream consumers and cannot be decommissioned.',
- 'MATCH (d:DataProduct) ASSERT d.active_consumer_count = 0',
- 'Data Quality', 'critical', true, NOW(), NOW()),
-
-('01100008-0005-4000-8000-000000000008', 'Data Product Retention Plan Approved',
- 'A decommission package must include a retention/archival plan signed off by the data owner.',
- 'Decommission request has no approved retention/archival plan.',
- 'MATCH (d:DataProduct) ASSERT d.retention_plan_approved = true',
- 'Governance', 'high', true, NOW(), NOW()),
-
--- AR-maturity gate policies (wired into maturity_gates in section 4b). These
--- evaluate against the enriched AuthorityRelation dict surfaced by the
--- maturity evaluator (fully_affirmed, dna_measured, dna_within_ceiling, …) —
--- NOT against domain objects like PromotionProposal above.
 ('01100009-0005-4000-8000-000000000009', 'ARF Maturity — Authored',
  'An Authority Relation row exists (L1). Trivially true for anything that reaches the evaluator.',
  'Authority Relation entity type mismatch.',
  'MATCH (ar:AuthorityRelation) ASSERT ar.entity_type = ''AuthorityRelation''',
  'Governance', 'low', true, NOW(), NOW()),
-
 ('0110000a-0005-4000-8000-000000000010', 'ARF Maturity — Fully Attested',
  'Every required N-functional approver has affirmed the AR (L2).',
  'One or more required approvers have not yet affirmed.',
  'MATCH (ar:AuthorityRelation) ASSERT ar.fully_affirmed = true',
  'Governance', 'high', true, NOW(), NOW()),
-
 ('0110000b-0005-4000-8000-000000000011', 'ARF Maturity — DNA Measured',
  'A DNA-Coefficient has been computed from bound evidence at least once (L3).',
  'DNA-Coefficient has not yet been measured for this AR.',
  'MATCH (ar:AuthorityRelation) ASSERT ar.dna_measured = true',
  'Data Quality', 'medium', true, NOW(), NOW()),
-
 ('0110000c-0005-4000-8000-000000000012', 'ARF Maturity — DNA Within Ceiling',
  'The measured DNA-Coefficient is at or below the AR''s activation ceiling (L4).',
  'DNA-Coefficient exceeds the configured activation ceiling.',
  'MATCH (ar:AuthorityRelation) ASSERT ar.dna_within_ceiling = true',
  'Data Quality', 'high', true, NOW(), NOW()),
-
 ('0110000d-0005-4000-8000-000000000013', 'ARF Maturity — Agent-Called',
  'The AR has been invoked by agents (via MCP) more than 10 times — deterministic autonomous use (L5).',
  'The AR has not yet been called by agents in volume.',
  'MATCH (ar:AuthorityRelation) ASSERT ar.usage_count > 10',
  'Governance', 'medium', true, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
 
 
 
@@ -466,19 +411,14 @@ ON CONFLICT (id) DO NOTHING;
 -- that the plain compliance policy cannot — the DNAco engine signs failures
 -- by direction and weights them per the ``weight`` and ``dimension`` here.
 
-INSERT INTO authority_criteria (id, relation_id, compliance_policy_id, direction, weight, dimension, display_order, enabled, created_at) VALUES
--- AR 1: Trade Promotion
-('0a200002-0005-4000-8000-000000000002', '0a000001-0005-4000-8000-000000000001', '01100002-0005-4000-8000-000000000002', 'documented-exceeds-actual', 0.8, 'people', 2, true, NOW()),
--- AR 2: Platform Access
-('0a200003-0005-4000-8000-000000000003', '0a000002-0005-4000-8000-000000000002', '01100003-0005-4000-8000-000000000003', 'actual-exceeds-documented', 1.0, 'policy', 1, true, NOW()),
-('0a200004-0005-4000-8000-000000000004', '0a000002-0005-4000-8000-000000000002', '01100004-0005-4000-8000-000000000004', 'actual-exceeds-documented', 1.0, 'policy', 2, true, NOW()),
--- AR 3: Ontos Role Request (draft — enabled but not yet measured)
-('0a200005-0005-4000-8000-000000000005', '0a000003-0005-4000-8000-000000000003', '01100005-0005-4000-8000-000000000005', 'documented-exceeds-actual', 0.8, 'people', 1, true, NOW()),
-('0a200006-0005-4000-8000-000000000006', '0a000003-0005-4000-8000-000000000003', '01100006-0005-4000-8000-000000000006', 'neutral',                   0.6, 'policy', 2, true, NOW()),
--- AR 4: DP Decommissioning
-('0a200007-0005-4000-8000-000000000007', '0a000004-0005-4000-8000-000000000004', '01100007-0005-4000-8000-000000000007', 'actual-exceeds-documented', 1.0, 'policy',     1, true, NOW()),
-('0a200008-0005-4000-8000-000000000008', '0a000004-0005-4000-8000-000000000004', '01100008-0005-4000-8000-000000000008', 'documented-exceeds-actual', 0.9, 'structural', 2, true, NOW())
--- AR 5 / AR 6: no checks; their gates are rule constraints over their params
+INSERT INTO authority_criteria (id, relation_id, name, rule, failure_message, direction, weight, dimension, display_order, enabled, copied_from, created_at) VALUES
+('0a200002-0005-4000-8000-000000000002', '0a000001-0005-4000-8000-000000000001', 'Trade Promotion Margin Floor', 'MATCH (p:PromotionProposal) ASSERT p.expected_margin_pct >= ctx.margin_floor_pct', 'Expected margin after promotion discount is below the configured floor.', 'documented-exceeds-actual', 0.8, 'people', 2, true, '{"kind": "migrated", "id": "01100002-0005-4000-8000-000000000002"}', NOW()),
+('0a200003-0005-4000-8000-000000000003', '0a000002-0005-4000-8000-000000000002', 'Platform Access MFA Required', 'MATCH (g:AccessGrant) ASSERT g.mfa_enabled = true', 'Access grant was issued to a principal that does not have MFA enabled.', 'actual-exceeds-documented', 1.0, 'policy', 1, true, '{"kind": "migrated", "id": "01100003-0005-4000-8000-000000000003"}', NOW()),
+('0a200004-0005-4000-8000-000000000004', '0a000002-0005-4000-8000-000000000002', 'Platform Access Segregation of Duties', 'MATCH (g:AccessGrant) ASSERT g.has_sod_conflict = false', 'Access grant combines duties that violate segregation-of-duties policy for this tier.', 'actual-exceeds-documented', 1.0, 'policy', 2, true, '{"kind": "migrated", "id": "01100004-0005-4000-8000-000000000004"}', NOW()),
+('0a200005-0005-4000-8000-000000000005', '0a000003-0005-4000-8000-000000000003', 'Ontos Role Request Sponsor', 'MATCH (r:RoleRequest) ASSERT r.sponsor_role IN [''Data Steward'', ''Domain Owner'']', 'Role request has no sponsor, or the sponsor is not a Data Steward or Domain Owner.', 'documented-exceeds-actual', 0.8, 'people', 1, true, '{"kind": "migrated", "id": "01100005-0005-4000-8000-000000000005"}', NOW()),
+('0a200006-0005-4000-8000-000000000006', '0a000003-0005-4000-8000-000000000003', 'Ontos Role Request Expiry', 'MATCH (r:RoleRequest) ASSERT r.has_expiry_date = true', 'Role request does not carry an expiry date — indefinite grants are not permitted.', 'neutral', 0.6, 'policy', 2, true, '{"kind": "migrated", "id": "01100006-0005-4000-8000-000000000006"}', NOW()),
+('0a200007-0005-4000-8000-000000000007', '0a000004-0005-4000-8000-000000000004', 'Data Product No Active Consumers', 'MATCH (d:DataProduct) ASSERT d.active_consumer_count = 0', 'Data product still has active downstream consumers and cannot be decommissioned.', 'actual-exceeds-documented', 1.0, 'policy', 1, true, '{"kind": "migrated", "id": "01100007-0005-4000-8000-000000000007"}', NOW()),
+('0a200008-0005-4000-8000-000000000008', '0a000004-0005-4000-8000-000000000004', 'Data Product Retention Plan Approved', 'MATCH (d:DataProduct) ASSERT d.retention_plan_approved = true', 'Decommission request has no approved retention/archival plan.', 'documented-exceeds-actual', 0.9, 'structural', 2, true, '{"kind": "migrated", "id": "01100008-0005-4000-8000-000000000008"}', NOW()),
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -517,7 +457,7 @@ INSERT INTO authority_affirmations (
   review_status, review_answers, review_request_id,
   notes, sort_order
 ) VALUES
--- AR 1: Trade Promotion
+-- AR 1: Trade Promotion (its budget check is the rule's duty and constraint)
 ('0a100001-0005-4000-8000-000000000001', '0a000001-0005-4000-8000-000000000001',
  'Trade Marketing Director', '0f000001-0005-4000-8000-000000000001', 'business',
  'lars.george@databricks.com', 'user',
@@ -627,11 +567,12 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 -- 9. AUTHORITY PREREQUISITES (Trade Promotion requires AR 5 + AR 6)
 -- ============================================================================
--- Edges are keyed by family slug, never by version id.
+-- Edges are owned by the AR version that declares them (relation_id). The target is a
+-- family slug; prerequisite_version_id records the upstream version seen when saved.
 
-INSERT INTO authority_prerequisites (id, relation_family_slug, prerequisite_family_slug, required, display_order, notes, created_at) VALUES
-('0a300001-0005-4000-8000-000000000001', 'trade-promotion-budget-approval', 'market-compliance', true, 0, 'Market must be cleared before any promotion approval.', NOW()),
-('0a300002-0005-4000-8000-000000000002', 'trade-promotion-budget-approval', 'budget-delegation', true, 1, 'Budget must sit inside the regional delegation.', NOW())
+INSERT INTO authority_prerequisites (id, relation_id, prerequisite_family_slug, prerequisite_version_id, required, display_order, notes, created_at) VALUES
+('0a300001-0005-4000-8000-000000000001', '0a000001-0005-4000-8000-000000000001', 'market-compliance', '0a000005-0005-4000-8000-000000000005', true, 0, 'Market must be cleared before any promotion approval.', NOW()),
+('0a300002-0005-4000-8000-000000000002', '0a000001-0005-4000-8000-000000000001', 'budget-delegation', '0a000006-0005-4000-8000-000000000006', true, 1, 'Budget must sit inside the regional delegation.', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 

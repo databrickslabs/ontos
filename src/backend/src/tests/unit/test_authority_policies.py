@@ -18,7 +18,9 @@ from fastapi import HTTPException, UploadFile
 from src.controller import authority_policy_manager as apol
 from src.controller.authority_policy_manager import AuthorityPolicyManager
 from src.controller.authority_resolution_manager import (
+    AuthorityImmutableError,
     AuthorityResolutionManager,
+    AuthorityStatusError,
     VERDICT_APPROVED,
     VERDICT_CONDITIONAL,
     VERDICT_DENIED,
@@ -59,7 +61,10 @@ def _ar(rm, db, policy, *, slug="award", refs=("§7.1",), rule=None, criteria=No
         name=f"AR {slug}", slug=slug,
         authority_policy_id=policy.id if policy else None,
         policy_clause_refs=list(refs) if refs else None,
-        rule=rule, criteria=[CriterionInput(**c) for c in (criteria or [])],
+        rule=rule,
+        # A version with neither a rule nor an enabled check approves nothing (batch 2, B5).
+        criteria=[CriterionInput(**c) for c in (criteria if criteria is not None else
+                                                ([] if rule else [{"name": "Not blocked", "rule": "ASSERT obj.value > -1"}]))],
     ))
 
 
@@ -287,8 +292,10 @@ def test_activation_needs_a_valid_policy_root(db_session, mgrs):
     ar = _ar(rm, db_session, _policy(pm, db_session, approve=False))
     ar.dna_magnitude = 0.0
     db_session.flush()
-    _, err = rm.set_status(db_session, ar.id, "active", caller_is_admin=True)
-    assert err and "policy root not approved" in err
+    with pytest.raises(AuthorityStatusError) as exc:
+        rm.set_status(db_session, ar.id, "active", caller_is_admin=True)
+    assert "policy root not approved" in str(exc.value)
+    assert exc.value.params["reason"] == "policy_not_in_force"
 
 
 def test_structural_score_counts_a_valid_cited_policy(db_session, mgrs):
@@ -440,14 +447,16 @@ def test_dropping_the_policy_drops_rule_and_check_clause_citations(db_session, m
     assert [c["policy_clause_ref"] for c in rm.to_read_dict(db_session, ar)["criteria"]] == [None]
 
 
-def test_active_ar_repointed_at_a_draft_goes_to_review(db_session, mgrs):
+def test_active_ar_cannot_be_repointed_at_a_draft_in_place(db_session, mgrs):
+    """Batch 2 (B6): citing another policy is a definition change, so an active AR is 409.
+    The citation moves with a New Version."""
     rm, pm = mgrs
     ar = _ar(rm, db_session, _policy(pm, db_session))
     ar.status = "active"
     db_session.flush()
     draft = _policy(pm, db_session, key="D", approve=False)
-    rm.update_relation(db_session, ar.id, AuthorityRelationUpdate(authority_policy_id=draft.id, policy_clause_refs=[]))
-    assert ar.status == "needs_review"
+    with pytest.raises(AuthorityImmutableError):
+        rm.update_relation(db_session, ar.id, AuthorityRelationUpdate(authority_policy_id=draft.id, policy_clause_refs=[]))
 
 
 def test_deleting_a_policy_removes_its_documents(db_session, mgrs, monkeypatch):

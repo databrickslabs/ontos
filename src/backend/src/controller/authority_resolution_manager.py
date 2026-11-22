@@ -14,6 +14,7 @@ Design notes:
   the AR's compiled ``decision_logic`` and never (re)computes the DNAco. The
   DNAco is an *activation-time* gate only.
 """
+import math
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -24,9 +25,13 @@ from sqlalchemy.orm import Session, object_session
 
 from src.common.api_errors import CodedValueError, client_failure
 from src.common.logging import get_logger
+from src.models.tags import AssignedTagCreate
+from src.models.authority_resolution import EvidenceBinding, EvidenceSource
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
+from src.common import authority_definition as definition
 from src.common import authority_resolution_dna as authority_dna
 from src.common.authority_resolution_dna import Criterion, DIR_NONE
+from src.common.authority_check_templates import get_template
 from src.common.compliance_dsl import evaluate_rule_on_object
 from src.common import authority_rule as arule
 from src.common import mcp_resolver
@@ -38,6 +43,9 @@ from src.db_models.authority_resolution import (
     AuthorityDecisionDb,
     AuthorityDnaRunDb,
 )
+from src.db_models.business_owners import BusinessOwnerDb
+from src.db_models.business_roles import BusinessRoleDb
+from src.db_models.metadata import LinkMetadataDb, RichTextMetadataDb
 from src.db_models.compliance import CompliancePolicyDb
 from src.db_models.projects import ProjectDb
 from src.db_models.teams import TeamDb
@@ -89,6 +97,46 @@ class AuthorityNotAReviewerError(AuthorityPermissionError):
     code = "authority_not_a_reviewer"
 
 
+class AuthorityImmutableError(CodedValueError):
+    """An edit to an active, retired or earlier version. Create a New Version instead (B6)."""
+
+    code = "authority_immutable"
+    http_status = 409
+
+
+class AuthorityStatusError(CodedValueError):
+    """A status change the lifecycle refuses; ``params.reason`` says which gate failed (S3, B5, B6)."""
+
+    code = "authority_status_conflict"
+    http_status = 409
+
+
+class AuthorityInvalidVersionError(AuthorityInvalidError):
+    """A version string that is not X.Y.Z."""
+
+    code = "authority_invalid_version"
+
+
+class AuthorityDuplicateVersionError(CodedValueError):
+    """A version string the family already has (N6)."""
+
+    code = "authority_duplicate_version"
+    http_status = 409
+
+
+class AuthorityHasHistoryError(CodedValueError):
+    """A delete refused because the version has decisions or DNA runs (S1). Retire it instead."""
+
+    code = "authority_has_history"
+    http_status = 409
+
+
+class AuthoritySelfAffirmationError(AuthorityPermissionError):
+    """The signed-in user created, or last changed, the definition they would affirm (B4)."""
+
+    code = "authority_self_affirmation"
+
+
 def client_failure_text(tag: str, exc: BaseException) -> str:
     """The text a client may see for a failed run.
 
@@ -108,6 +156,8 @@ def client_failure_text(tag: str, exc: BaseException) -> str:
 
 
 ENTITY_TYPE = "authority_relation"
+# A version string is MAJOR.MINOR.PATCH (N6).
+_SEMVER_RE = re.compile(r"\d+\.\d+\.\d+")
 FEATURE_ID = "authority-resolution"  # search feature filter (common/features.py)
 
 # Verdicts returned by the runtime gate.
@@ -123,6 +173,21 @@ STATUS_DRAFT = "draft"
 STATUS_ACTIVE = "active"
 STATUS_NEEDS_REVIEW = "needs_review"
 STATUS_RETIRED = "retired"
+
+# Allowed status changes (S3), in one place. A status not listed is refused.
+# Leaving needs_review for draft is refused once the version was activated (it would
+# make a published snapshot editable). Retiring clears the affirmations, so a
+# retired version comes back only with fresh ones.
+_ALLOWED_TRANSITIONS = {
+    STATUS_DRAFT: {STATUS_NEEDS_REVIEW, STATUS_ACTIVE, STATUS_RETIRED},
+    STATUS_NEEDS_REVIEW: {STATUS_DRAFT, STATUS_ACTIVE, STATUS_RETIRED},
+    STATUS_ACTIVE: {STATUS_NEEDS_REVIEW, STATUS_RETIRED},
+    STATUS_RETIRED: {STATUS_ACTIVE},
+}
+
+# Reason code and message when an AR has no enabled decision check (B5).
+REASON_NO_ENABLED_CHECKS = "no_enabled_checks"
+NO_ENABLED_CHECKS_MESSAGE = "This Authority Relation has no enabled decision checks."
 
 # Controlled vocabulary for the Action element (ARF §3.2 business domain).
 ACTION_VOCAB = {"approve", "escalate", "override", "delegate", "veto"}
@@ -144,7 +209,7 @@ def ref_key(field_path: str) -> str:
 
 
 DEFAULT_DNA_CEILING = 0.3
-# Compliance category of the checks an AR authors inline (see _create_criterion_policy).
+# Compliance category of reusable checks written in Compliance for Authority Resolution.
 ARF_CHECK_CATEGORY = "Authority Decision"
 _ALLOWED_STATUSES = ("draft", "active", "needs_review", "retired")
 
@@ -343,29 +408,174 @@ class AuthorityResolutionManager(SearchableAsset):
     def _now() -> datetime:
         return datetime.utcnow()
 
-    def _load_criteria(self, relation: AuthorityRelationDb) -> List[Criterion]:
-        """The AR's enabled decision criteria as engine ``Criterion`` objects.
+    # ------------------------------------------------ definition and hash (B6)
 
-        Each links a Compliance Check (its DSL ``ASSERT`` rule is the condition);
-        ``direction``/``weight`` are the ARF divergence facets on the link. Drives
-        both the runtime gate and the DNA-Coefficient engine — one definition.
+    @staticmethod
+    def _version_tuple(version: Any) -> Tuple[int, ...]:
+        parts = [int(p) for p in str(version or "").split(".") if p.isdigit()]
+        return tuple(parts) or (0,)
+
+    def _latest_version(self, db: Session, relation: AuthorityRelationDb) -> Optional[AuthorityRelationDb]:
+        """The family's highest version string (ties go to the newest row)."""
+        family_id = getattr(relation, "version_family_id", None) or relation.id
+        best: Optional[AuthorityRelationDb] = None
+        for v in authority_relation_repo.get_family_versions(db, family_id=family_id):
+            if best is None or self._version_tuple(v.version) > self._version_tuple(best.version):
+                best = v
+        return best
+
+    def is_editable(self, db: Session, relation: AuthorityRelationDb) -> bool:
+        """Only a draft that was never activated, and is the family's latest version, can be edited.
+
+        Active, retired and needs_review versions, and every older version, are
+        immutable: a change goes through New Version (B6).
+        """
+        if relation.status != STATUS_DRAFT or getattr(relation, "activated_at", None) is not None:
+            return False
+        latest = self._latest_version(db, relation)
+        return latest is None or latest.id == relation.id
+
+    @staticmethod
+    def _normal_scalars(scalars: Dict[str, Any]) -> Dict[str, Any]:
+        """Run the nested evidence values through their models, so a payload that leaves a
+        default out and a stored row that holds it are the same definition (review #2)."""
+        out = dict(scalars)
+        # Scope/params and the rule are hashed in their normalised form, so a re-sent
+        # unchanged definition (or a legacy flat blob) is the same definition.
+        if out.get("domain_context") is not None:
+            out["domain_context"] = arule.normalize_domain_context(out["domain_context"])
+        if out.get("rule") is not None:
+            out["rule"] = arule.normalize_rule(out["rule"])
+        if out.get("evidence_sources") is not None:
+            out["evidence_sources"] = [
+                EvidenceSource(**(e if isinstance(e, dict) else e.dict())).dict()
+                for e in out["evidence_sources"]
+            ]
+        if out.get("evidence_binding") is not None:
+            b = out["evidence_binding"]
+            out["evidence_binding"] = EvidenceBinding(**(b if isinstance(b, dict) else b.dict())).dict()
+        return out
+
+    @staticmethod
+    def _criterion_dict(c: Any) -> Dict[str, Any]:
+        return {
+            "name": c.name, "rule": c.rule, "failure_message": c.failure_message,
+            "direction": c.direction, "weight": c.weight, "dimension": c.dimension,
+            "display_order": c.display_order, "enabled": c.enabled,
+            "policy_clause_ref": getattr(c, "policy_clause_ref", None),
+        }
+
+    def _stored_view(self, db: Session, relation: AuthorityRelationDb) -> Dict[str, Any]:
+        """The definition as it is stored (see ``authority_definition`` for what it covers)."""
+        criteria = [self._criterion_dict(c) for c in authority_criterion_repo.list_for_relation(
+            db, relation_id=relation.id)]
+        prerequisites = [
+            {"prerequisite_family_slug": e.prerequisite_family_slug,
+             "required": e.required, "display_order": e.display_order}
+            for e in authority_prerequisite_repo.list_for_relation(db, relation_id=relation.id)
+        ]
+        refs = [
+            {**{k: getattr(r, k) for k in definition.RESOURCE_REF_KEYS},
+             "mcp_result_pointer": r.mcp_result_pointer or "$"}
+            for r in authority_resource_ref_repo.list_for_relation(db, relation_id=relation.id)
+        ]
+        participants = [
+            {k: getattr(a, k, None) for k in definition.PARTICIPANT_KEYS}
+            for a in authority_affirmation_repo.list_for_relation(db, relation_id=relation.id)
+        ]
+        scalars = self._normal_scalars({k: getattr(relation, k, None) for k in ("name", *definition.DEFINITION_FIELDS)})
+        return definition.definition_view(scalars, criteria, prerequisites, refs, participants)
+
+    def definition_hash(self, db: Session, relation: AuthorityRelationDb) -> str:
+        """The hash of the AR's current definition. Runs and affirmations store it."""
+        return definition.definition_hash(self._stored_view(db, relation))
+
+    def _incoming_view(
+        self, db: Session, relation: AuthorityRelationDb, data: Dict[str, Any],
+        criteria: Optional[List[Any]], affirmations: Optional[List[Any]],
+        prerequisites: Optional[List[Any]], resource_refs: Optional[List[Any]],
+    ) -> Dict[str, Any]:
+        """The definition a PUT would produce, in the same canonical form as the stored one.
+
+        A list the PUT doesn't carry is taken from the stored definition.
+        """
+        stored = self._stored_view(db, relation)
+        scalars = self._normal_scalars({k: (data[k] if k in data else getattr(relation, k, None))
+                                        for k in ("name", *definition.DEFINITION_FIELDS)})
+        if "resolver_auth" in data:
+            scalars["resolver_auth"] = data["resolver_auth"] or RESOLVER_AUTH_OBO
+        if "dna_max_threshold" in data and data["dna_max_threshold"] is None:
+            scalars["dna_max_threshold"] = DEFAULT_DNA_CEILING
+        crit = stored["criteria"] if criteria is None else self._criteria_rows(db, relation.id, criteria)
+        prereqs = stored["prerequisites"] if prerequisites is None else list(
+            self._prerequisite_rows(prerequisites).values())
+        refs = stored["resource_refs"] if resource_refs is None else self._resource_ref_rows(resource_refs)
+        parts = stored["participants"] if affirmations is None else [
+            self._participant_row(a) for a in affirmations]
+        return definition.definition_view(scalars, crit, prereqs, refs, parts)
+
+    @staticmethod
+    def _participant_row(item: Any) -> Dict[str, Any]:
+        a = item.dict() if hasattr(item, "dict") else dict(item)
+        return {
+            "principal": a.get("principal"), "principal_type": a.get("principal_type") or "user",
+            "role": a.get("role"), "business_role_id": a.get("business_role_id"),
+            "role_category": a.get("role_category"),
+            "is_approver": a.get("is_approver", True), "is_reviewer": a.get("is_reviewer", False),
+            "required": a.get("required", True),
+        }
+
+    @staticmethod
+    def _prerequisite_rows(prerequisites: List[Any]) -> Dict[str, Dict[str, Any]]:
+        """Prerequisite edges as they will be stored: one per slug, the last one wins."""
+        rows: Dict[str, Dict[str, Any]] = {}
+        for idx, item in enumerate(prerequisites):
+            p = item.dict() if hasattr(item, "dict") else dict(item)
+            slug = (p.get("prerequisite_family_slug") or "").strip()
+            if not slug:
+                continue
+            rows[slug] = {
+                "prerequisite_family_slug": slug,
+                "required": bool(p.get("required", True)),
+                "display_order": int(p.get("display_order", idx)),
+            }
+        return rows
+
+    @staticmethod
+    def _resource_ref_rows(refs: List[Any]) -> List[Dict[str, Any]]:
+        rows: Dict[str, Dict[str, Any]] = {}
+        for item in refs:
+            r = item.dict() if hasattr(item, "dict") else dict(item)
+            field_path = (r.get("field_path") or "").strip()
+            if not field_path:
+                continue
+            rows[field_path] = {
+                **{k: r.get(k) for k in definition.RESOURCE_REF_KEYS},
+                "field_path": field_path,
+                "mcp_result_pointer": r.get("mcp_result_pointer") or "$",
+            }
+        return list(rows.values())
+
+    def _load_criteria(self, relation: AuthorityRelationDb) -> List[Criterion]:
+        """The AR's enabled decision checks as engine ``Criterion`` objects.
+
+        Each check is owned by this AR version (ARF 1.2.0): its DSL ``ASSERT`` rule is
+        the condition, and ``direction``/``weight``/``dimension`` are the ARF divergence
+        facets. Drives both the runtime gate and the DNA-Coefficient engine.
         """
         out: List[Criterion] = []
         for c in sorted(relation.criteria or [], key=lambda x: (x.display_order or 0)):
             if not getattr(c, "enabled", True):
                 continue
-            policy = getattr(c, "compliance_policy", None)
-            if not policy or not policy.rule:
-                continue
             out.append(Criterion(
                 # Human-readable label (name) preferred so DNAco divergence reasons
-                # and the timeline read cleanly; falls back to slug/id.
-                code=(policy.name or policy.slug or c.id),
-                rule=policy.rule,
+                # and the timeline read cleanly; falls back to the row id.
+                code=(c.name or c.id),
+                rule=c.rule,
                 direction=c.direction or "neutral",
                 weight=c.weight if c.weight is not None else 1.0,
                 dimension=getattr(c, "dimension", None) or "people",
-                message=policy.failure_message or None,
+                message=c.failure_message or None,
                 clause=getattr(c, "policy_clause_ref", None) or None,
             ))
         return out
@@ -381,7 +591,7 @@ class AuthorityResolutionManager(SearchableAsset):
             bool(relation.object_id),                                 # governs a concrete object
             bool(relation.evidence_sources
                  or (relation.evidence_binding or {}).get("source_table_fqn")),  # evidence bound
-            len(relation.criteria or []) > 0 or arule.has_rule(getattr(relation, "rule", None)),  # has decision criteria
+            any(getattr(c, "enabled", True) for c in (relation.criteria or [])) or arule.has_rule(getattr(relation, "rule", None)),  # has an enabled decision check or rule
             any(getattr(a, "is_approver", True) for a in (relation.affirmations or [])),  # has an approver
         ]
         missing = sum(1 for ok in checks if not ok)
@@ -442,6 +652,9 @@ class AuthorityResolutionManager(SearchableAsset):
     ) -> AuthorityRelationDb:
         data = payload.dict() if hasattr(payload, "dict") else dict(payload)
         self._refuse_admin_only_changes(data, None, caller_is_admin)
+        self._check_version_format(data.get("version") or "1.0.0")
+        self._validate_ceiling(data.get("dna_max_threshold", 0.3))
+        self._validate_business_roles(db, data.get("affirmations") or [])
         rel_id = str(uuid.uuid4())
 
         evidence = data.get("evidence_binding")
@@ -484,6 +697,7 @@ class AuthorityResolutionManager(SearchableAsset):
             "owner_team_id": data.get("owner_team_id") or None,
             "project_id": data.get("project_id") or None,
             "created_by": current_user,
+            "definition_edited_by": current_user,
         }
 
         relation = authority_relation_repo.create(db, obj_in={k: v for k, v in fields.items() if k in _MODEL_COLUMNS})
@@ -622,6 +836,44 @@ class AuthorityResolutionManager(SearchableAsset):
             )
 
     @staticmethod
+    def _check_version_format(version: Any) -> str:
+        text = str(version or "")
+        if not _SEMVER_RE.fullmatch(text):
+            raise AuthorityInvalidVersionError(
+                f"Version '{text}' must look like 1.0.0 (major.minor.patch).", version=text,
+            )
+        return text
+
+    @staticmethod
+    def _validate_ceiling(value: Any) -> None:
+        """The DNA ceiling is a fraction in [0, 1]; NaN and infinities are refused (B4)."""
+        if value is None:
+            return
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            raise AuthorityInvalidError("The DNA-Coefficient ceiling must be a number between 0 and 1.")
+        if not math.isfinite(number) or number < 0 or number > 1:
+            raise AuthorityInvalidError(
+                "The DNA-Coefficient ceiling must be between 0 and 1.", value=number,
+            )
+
+    @staticmethod
+    def _validate_business_roles(db: Session, affirmations: List[Any]) -> None:
+        """Each participant's Business Role must exist in Settings (B4)."""
+        for item in affirmations or []:
+            a = item.dict() if hasattr(item, "dict") else dict(item)
+            role_id = a.get("business_role_id")
+            if not role_id:
+                continue
+            try:
+                parsed = uuid.UUID(str(role_id))
+            except (TypeError, ValueError):
+                raise AuthorityInvalidError(f"Business role '{role_id}' does not exist.", role=str(role_id))
+            if db.get(BusinessRoleDb, parsed) is None:
+                raise AuthorityInvalidError(f"Business role '{role_id}' does not exist.", role=str(role_id))
+
+    @staticmethod
     def _validate_resolver_auth(value: Optional[str]) -> str:
         value = value or RESOLVER_AUTH_OBO
         if value not in _RESOLVER_AUTH_VALUES:
@@ -729,11 +981,24 @@ class AuthorityResolutionManager(SearchableAsset):
         self, db: Session, relation_id: str, payload, current_user: Optional[str] = None,
         caller_is_admin: bool = False,
     ) -> Optional[AuthorityRelationDb]:
+        """Edit an AR. Only a draft's definition can change (B6).
+
+        A change to the definition of an active, retired, needs-review or older
+        version is refused with ``authority_immutable`` (409): create a New Version.
+        Metadata (description, owner, project, domains, tags) can change on any
+        version. On a draft, a change to the behaviour hash clears the DNA
+        measurement; the affirmations of the earlier definition stop counting
+        because their hash no longer matches.
+        """
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
             return None
         data = payload.dict(exclude_unset=True) if hasattr(payload, "dict") else dict(payload)
         self._refuse_admin_only_changes(data, relation, caller_is_admin)
+        if "dna_max_threshold" in data:
+            self._validate_ceiling(data["dna_max_threshold"])
+        if data.get("affirmations") is not None:
+            self._validate_business_roles(db, data["affirmations"])
 
         domain_ids = data.pop("domain_ids", None)
         primary_domain_id = data.pop("primary_domain_id", None)
@@ -777,14 +1042,28 @@ class AuthorityResolutionManager(SearchableAsset):
                 data["rule"] if "rule" in data else relation.rule,
                 current_policy_id=relation.authority_policy_id,
             )
-        update_data = {k: v for k, v in data.items() if k in _MODEL_COLUMNS}
 
-        # Versioning parity with Data Products / Contracts: edits mutate the
-        # current row in place (no auto-bump). A new immutable snapshot is
-        # created only via the explicit "New Version" action (create_new_version).
+        before = self._stored_view(db, relation)
+        incoming = self._incoming_view(db, relation, data, criteria, affirmations, prerequisites, resource_refs)
+        definition_changes = definition.definition_fingerprint(before) != definition.definition_fingerprint(incoming)
+        editable = self.is_editable(db, relation)
+        if not editable:
+            if definition_changes:
+                raise AuthorityImmutableError(
+                    "Only a draft can be edited. Create a New Version to change this Authority Relation.",
+                    status=relation.status, version=relation.version,
+                )
+            # Metadata only: the definition is unchanged, so nothing in it is written.
+            for key in ("name", *definition.DEFINITION_FIELDS):
+                data.pop(key, None)
+            criteria = affirmations = prerequisites = resource_refs = None
+
+        update_data = {k: v for k, v in data.items() if k in _MODEL_COLUMNS}
         # Keep base_name in step with a renamed AR so the family label stays right.
         if "name" in update_data:
             update_data.setdefault("base_name", update_data["name"])
+        if editable and definition_changes:
+            update_data["definition_edited_by"] = current_user
         relation = authority_relation_repo.update(db, db_obj=relation, obj_in=update_data)
 
         if domain_ids is not None:
@@ -805,31 +1084,21 @@ class AuthorityResolutionManager(SearchableAsset):
         self._set_tags(db, relation_id, getattr(payload, "tags", None), current_user)
 
         # Replace helpers bulk-delete without session sync; drop the stale
-        # selectin-loaded collections so the recompute scores the new definition.
+        # selectin-loaded collections before comparing the stored definition again.
         db.flush()
         db.expire(relation, ["criteria", "affirmations"])
-
-        # Re-created participants start unaffirmed: an active AR can't stay active
-        # without its required affirmations.
-        if (relation.status == STATUS_ACTIVE and affirmations is not None
-                and not self.is_fully_affirmed(db, relation_id)):
-            relation = authority_relation_repo.update(db, db_obj=relation, obj_in={"status": STATUS_NEEDS_REVIEW})
-            self._log_timeline(db, relation_id, "Participants changed; status set to needs_review until re-affirmed.")
-
-        # An active AR re-pointed at a policy that can't ground it now (draft,
-        # expired, not yet effective) goes to review, as a withdrawal would.
-        if relation.status == STATUS_ACTIVE and relation.authority_policy_id:
-            problem = apol.policy_root_problem(authority_policy_repo.get(db, relation.authority_policy_id))
-            if problem:
-                relation = authority_relation_repo.update(db, db_obj=relation, obj_in={"status": STATUS_NEEDS_REVIEW})
-                self._log_timeline(db, relation_id, f"Cited policy changed ({problem}); status set to needs_review.")
-
-        # Changing an active AR triggers recompute + re-review (best-effort recompute).
-        if relation.status == STATUS_ACTIVE:
-            try:
-                self.compute_dnaco(db, relation_id)
-            except Exception as e:  # pragma: no cover - evidence read is environment-dependent
-                logger.warning(f"DNAco recompute after update failed for {relation_id}: {e}")
+        if editable and definition_changes:
+            after = self._stored_view(db, relation)
+            if definition.definition_hash(after) != definition.definition_hash(before):
+                relation = authority_relation_repo.update(db, db_obj=relation, obj_in={
+                    "dna_magnitude": None, "dna_direction": None,
+                    "dna_dimensions": None, "dna_measured_at": None,
+                })
+                self._log_timeline(
+                    db, relation_id,
+                    "Definition changed: the DNA-Coefficient and the affirmations of the earlier "
+                    "definition no longer count. Measure and affirm this draft again.",
+                )
         self._reindex(db, relation)
         return relation
 
@@ -845,6 +1114,26 @@ class AuthorityResolutionManager(SearchableAsset):
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
             return False
+        # Recorded decisions (resolves made with record=true) and any activation are history.
+        # A DNA measurement is not: an abandoned draft can be deleted, and its runs and
+        # evidence rows go with it (review #8).
+        recorded = db.query(AuthorityDecisionDb).filter(
+            AuthorityDecisionDb.relation_id == relation_id, AuthorityDecisionDb.source == "mcp",
+        ).count()
+        # activated_at is set on the first activation; a version retired straight from draft
+        # was never activated and stays deletable.
+        ever_active = getattr(relation, "activated_at", None) is not None or relation.status == STATUS_ACTIVE
+        if recorded or ever_active:
+            raise AuthorityHasHistoryError(
+                "This version has recorded decisions or was activated, so it cannot be deleted. "
+                "Retire it instead, so its history is kept.",
+                decisions=recorded, activated=ever_active,
+            )
+        for row in db.query(AuthorityDecisionDb).filter(AuthorityDecisionDb.relation_id == relation_id).all():
+            db.delete(row)
+        for row in db.query(AuthorityDnaRunDb).filter(AuthorityDnaRunDb.relation_id == relation_id).all():
+            db.delete(row)
+        db.flush()
         family_id = getattr(relation, "version_family_id", None) or relation.id
         others = [v for v in authority_relation_repo.get_family_versions(db, family_id=family_id)
                   if v.id != relation.id]
@@ -862,19 +1151,24 @@ class AuthorityResolutionManager(SearchableAsset):
         else:
             slug = self._family_slug_of(db, relation)
             if slug:
-                dependents = sorted({e.relation_family_slug for e in authority_prerequisite_repo.list_dependents(
-                    db, prerequisite_family_slug=slug)})
+                dependents = sorted({
+                    self._family_slug_of(db, owner)
+                    for owner in (authority_relation_repo.get(db, e.relation_id)
+                                  for e in authority_prerequisite_repo.list_dependents(
+                                      db, prerequisite_family_slug=slug))
+                    if owner is not None and owner.id != relation.id
+                } - {None})
                 if dependents:
                     raise AuthorityInvalidError(
                         f"Authority Relation '{slug}' is a prerequisite of {', '.join(dependents)}; "
                         "remove those edges first."
                     )
-                authority_prerequisite_repo.delete_for_family(db, relation_family_slug=slug)
             from src.db_models.semantic_links import EntitySemanticLinkDb
             db.query(EntitySemanticLinkDb).filter(
                 EntitySemanticLinkDb.entity_type == ENTITY_TYPE,
                 EntitySemanticLinkDb.entity_id == family_id,
             ).delete(synchronize_session=False)
+        authority_prerequisite_repo.delete_for_relation(db, relation_id=relation_id)
         entity_domain_repo.remove_all_for_entity(db, entity_type=ENTITY_TYPE, entity_id=relation_id)
         authority_relation_repo.remove(db, id=relation_id)
         db.flush()
@@ -924,9 +1218,14 @@ class AuthorityResolutionManager(SearchableAsset):
         source = authority_relation_repo.get(db, relation_id)
         if not source:
             return None
+        new_version = self._check_version_format(new_version)
+        family_id = getattr(source, "version_family_id", None) or source.id
+        if any(v.version == new_version for v in authority_relation_repo.get_family_versions(db, family_id=family_id)):
+            raise AuthorityDuplicateVersionError(
+                f"Version {new_version} already exists in this family.", version=new_version,
+            )
 
         new_id = str(uuid.uuid4())
-        family_id = getattr(source, "version_family_id", None) or source.id
         base_name = getattr(source, "base_name", None) or source.name
 
         fields = {
@@ -941,6 +1240,7 @@ class AuthorityResolutionManager(SearchableAsset):
             "base_name": base_name,
             "change_summary": change_summary,
             "created_by": current_user,
+            "definition_edited_by": current_user,
         }
         for f in self._VERSION_COPY_FIELDS:
             fields[f] = getattr(source, f, None)
@@ -949,38 +1249,30 @@ class AuthorityResolutionManager(SearchableAsset):
             db, obj_in={k: v for k, v in fields.items() if k in _MODEL_COLUMNS}
         )
 
-        # Carry the source's domain assignments onto the new version.
-        domains = entity_domain_repo.get_domains_for_entity(
-            db, entity_type=ENTITY_TYPE, entity_id=source.id
-        )
+        # Carry the source's domain assignments onto the new version (primary flag kept).
+        domains = entity_domain_repo.get_domains_for_entity(db, entity_type=ENTITY_TYPE, entity_id=source.id)
         if domains:
-            domain_ids = [getattr(d, "id", None) or (d.get("id") if isinstance(d, dict) else None) for d in domains]
-            domain_ids = [d for d in domain_ids if d]
-            primary = next(
-                (getattr(d, "id", None) or (d.get("id") if isinstance(d, dict) else None)
-                 for d in domains
-                 if getattr(d, "is_primary", None) or (isinstance(d, dict) and d.get("is_primary"))),
-                None,
+            entity_domain_repo.set_domains_for_entity(
+                db, entity_type=ENTITY_TYPE, entity_id=new_id,
+                domain_ids=[d.domain_id for d in domains],
+                primary_domain_id=next((d.domain_id for d in domains if d.is_primary), None),
+                assigned_by=current_user,
             )
-            if domain_ids:
-                entity_domain_repo.set_domains_for_entity(
-                    db, entity_type=ENTITY_TYPE, entity_id=new_id,
-                    domain_ids=domain_ids, primary_domain_id=primary, assigned_by=current_user,
-                )
 
-        # Clone decision criteria (reuse the reusable Compliance Checks; only the
-        # ARF facet link is per-version).
-        src_criteria = authority_criterion_repo.list_for_relation(db, relation_id=source.id)
-        for c in src_criteria:
+        # Clone the version's own decision checks (each version owns its copy).
+        for c in authority_criterion_repo.list_for_relation(db, relation_id=source.id):
             authority_criterion_repo.create(db, obj_in={
                 "id": str(uuid.uuid4()),
                 "relation_id": new_id,
-                "compliance_policy_id": c.compliance_policy_id,
+                "name": c.name,
+                "rule": c.rule,
+                "failure_message": c.failure_message,
                 "direction": c.direction,
                 "weight": c.weight,
                 "dimension": getattr(c, "dimension", "people"),
                 "display_order": c.display_order,
                 "enabled": c.enabled,
+                "copied_from": c.copied_from,
                 "policy_clause_ref": getattr(c, "policy_clause_ref", None),
             })
 
@@ -1020,21 +1312,65 @@ class AuthorityResolutionManager(SearchableAsset):
                 "mcp_result_pointer": r.mcp_result_pointer or "$",
             })
 
-        # Clone polymorphic tags (best-effort).
-        try:
-            from src.controller.tags_manager import TagsManager
-            tm = TagsManager()
-            assigned = tm.list_assigned_tags(db, entity_id=source.id, entity_type=ENTITY_TYPE)
-            tags_payload = [
-                {"fully_qualified_name": getattr(t, "fully_qualified_name", None),
-                 "assigned_value": getattr(t, "assigned_value", None)}
-                for t in assigned
-                if getattr(t, "fully_qualified_name", None)
-            ]
-            if tags_payload:
-                self._set_tags(db, new_id, tags_payload, current_user)
-        except Exception as e:  # pragma: no cover - tag clone is best-effort
-            logger.warning(f"Could not clone tags onto new AR version {new_id}: {e}")
+        # Clone the tags with their values. A failed copy fails the new version: a version
+        # without the tags its source had would be a different snapshot.
+        from src.controller.tags_manager import TagsManager
+        tm = TagsManager()
+        tags_payload = [
+            AssignedTagCreate(tag_fqn=t.fully_qualified_name, assigned_value=t.assigned_value)
+            for t in tm.list_assigned_tags(db, entity_id=source.id, entity_type=ENTITY_TYPE)
+            if getattr(t, "fully_qualified_name", None)
+        ]
+        if tags_payload:
+            tm.set_tags_for_entity(db, entity_id=new_id, entity_type=ENTITY_TYPE, tags=tags_payload,
+                                   user_email=current_user, commit=False)
+
+        # Owners and metadata (rich text and links; documents stay with their source).
+        for owner in db.query(BusinessOwnerDb).filter(
+            BusinessOwnerDb.object_type == ENTITY_TYPE,
+            BusinessOwnerDb.object_id == source.id,
+            BusinessOwnerDb.is_active.is_(True),
+        ).all():
+            db.add(BusinessOwnerDb(
+                id=uuid.uuid4(), object_type=ENTITY_TYPE, object_id=new_id,
+                user_email=owner.user_email, user_name=owner.user_name,
+                role_id=owner.role_id, is_active=True,
+            ))
+        for row in db.query(RichTextMetadataDb).filter(
+            RichTextMetadataDb.entity_type == ENTITY_TYPE,
+            RichTextMetadataDb.entity_id == source.id,
+            RichTextMetadataDb.is_shared.is_(False),
+        ).all():
+            db.add(RichTextMetadataDb(
+                id=uuid.uuid4(), entity_id=new_id, entity_type=ENTITY_TYPE, title=row.title,
+                short_description=row.short_description, content_markdown=row.content_markdown,
+                is_shared=False, level=row.level, inheritable=row.inheritable,
+                created_by=current_user, updated_by=current_user,
+            ))
+        for row in db.query(LinkMetadataDb).filter(
+            LinkMetadataDb.entity_type == ENTITY_TYPE,
+            LinkMetadataDb.entity_id == source.id,
+            LinkMetadataDb.is_shared.is_(False),
+        ).all():
+            db.add(LinkMetadataDb(
+                id=uuid.uuid4(), entity_id=new_id, entity_type=ENTITY_TYPE, title=row.title,
+                short_description=row.short_description, url=row.url, is_shared=False,
+                level=row.level, inheritable=row.inheritable,
+                created_by=current_user, updated_by=current_user,
+            ))
+        db.flush()
+
+        # The prerequisite edges this version declares are copied; the copy is its own.
+        for edge in authority_prerequisite_repo.list_for_relation(db, relation_id=source.id):
+            authority_prerequisite_repo.create(db, obj_in={
+                "id": str(uuid.uuid4()),
+                "relation_id": new_id,
+                "prerequisite_family_slug": edge.prerequisite_family_slug,
+                "prerequisite_version_id": edge.prerequisite_version_id,
+                "required": edge.required,
+                "display_order": edge.display_order,
+                "notes": edge.notes,
+            })
 
         self._log_timeline(
             db, new_id,
@@ -1063,7 +1399,7 @@ class AuthorityResolutionManager(SearchableAsset):
             )] = old
         carried = {
             k: {f: getattr(o, f, None) for f in (
-                "affirmed", "affirmed_by", "affirmed_at", "notes",
+                "affirmed", "affirmed_by", "affirmed_at", "notes", "definition_hash",
                 "review_status", "review_answers", "review_request_id",
             )}
             for k, o in prior.items()
@@ -1090,6 +1426,7 @@ class AuthorityResolutionManager(SearchableAsset):
                 "affirmed": bool(keep.get("affirmed")),
                 "affirmed_by": keep.get("affirmed_by"),
                 "affirmed_at": keep.get("affirmed_at"),
+                "definition_hash": keep.get("definition_hash"),
                 "notes": keep.get("notes"),
                 "review_status": keep.get("review_status") or ("pending" if is_reviewer else "na"),
                 "review_answers": keep.get("review_answers"),
@@ -1099,82 +1436,160 @@ class AuthorityResolutionManager(SearchableAsset):
 
     # ------------------------------------------------------- decision criteria
 
-    def _replace_criteria(self, db: Session, relation_id: str, criteria: List[Any]) -> None:
-        """Replace the AR's decision-criteria links. Each input either references an
-        existing Compliance Check (``policy_id``) or authors a new one inline
-        (``name`` + ``rule``). Mirrors ``_replace_affirmations``; re-run on each
-        version bump so the criteria travel with the AR version.
-        """
-        authority_criterion_repo.delete_for_relation(db, relation_id=relation_id)
-        for idx, item in enumerate(criteria):
-            c = item.dict() if hasattr(item, "dict") else dict(item)
-            policy_id = c.get("policy_id") or self._create_criterion_policy(db, c, relation_id, idx)
-            if not policy_id:
-                continue
-            authority_criterion_repo.create(db, obj_in={
-                "id": str(uuid.uuid4()),
-                "relation_id": relation_id,
-                "compliance_policy_id": policy_id,
-                "direction": c.get("direction") or "neutral",
-                "weight": c.get("weight") if c.get("weight") is not None else 1.0,
-                "dimension": c.get("dimension") or "people",
-                "display_order": c.get("order", idx),
-                "enabled": c.get("enabled", True),
-                "policy_clause_ref": (c.get("policy_clause_ref") or "").strip() or None,
-            })
+    # Direction values the DNA engine signs; anything else is refused on save.
+    _CRITERION_DIRECTIONS = ("actual-exceeds-documented", "documented-exceeds-actual", "neutral")
+    # Provenance kinds the system writes: copied from Compliance, from an ARF template, or
+    # migrated from a Compliance link by ak6 (the UI echoes that one back).
+    _COPIED_KINDS = ("compliance", "template", "migrated")
 
-    def _create_criterion_policy(self, db: Session, c: Dict[str, Any], relation_id: str, idx: int) -> Optional[str]:
-        """Author a new Compliance Check for an inline criterion and return its id.
+    @staticmethod
+    def _checked_weight(value: Any) -> float:
+        """A check weight is a finite number of 0 or more (N5). 0 stays 0; None is 1.0."""
+        if value is None:
+            return 1.0
+        try:
+            weight = float(value)
+        except (TypeError, ValueError):
+            raise AuthorityInvalidError("A check weight must be a number of 0 or more.")
+        if not math.isfinite(weight) or weight < 0:
+            raise AuthorityInvalidError("A check weight must be a number of 0 or more.", weight=str(value))
+        return weight
 
-        The rule is a Compliance-DSL ``ASSERT`` condition (the ``ASSERT`` keyword is
-        prepended if the author omitted it). Category ``Authority Decision`` mirrors
-        how the Maturity feature tags its seeded policies (``Maturity``).
+    @classmethod
+    @classmethod
+    def _copied_from(cls, value: Any) -> Optional[Dict[str, str]]:
+        """Provenance for a copied check: ``{kind, label, id?, key?}``. Stored, never linked.
+
+        Every kind the system writes is accepted (compliance, template, and migrated from
+        ak6, which the UI echoes back). A matched existing check keeps its stored value
+        (see ``_normalise_criterion``).
         """
-        rule = (c.get("rule") or "").strip()
-        if not rule:
+        if not value:
             return None
+        kind = str(value.get("kind") or "")
+        if kind not in cls._COPIED_KINDS:
+            raise AuthorityInvalidError(f"Unknown check provenance '{kind}'.")
+        out = {"kind": kind, "label": str(value.get("label") or "")[:200]}
+        if value.get("id"):
+            out["id"] = str(value["id"])[:64]
+        if value.get("key"):
+            out["key"] = str(value["key"])[:64]
+        return out
+    def _normalise_criterion(self, item: Any, idx: int, existing: Optional[Any] = None) -> Dict[str, Any]:
+        """One check as the row it is stored as. Validates it; raises AuthorityInvalidError.
+
+        ``existing`` is the stored row this input matches, if any. For an ARF template the
+        rule and failure message come from the registry only when the check is first added;
+        a saved check keeps its stored rule (review #6: the template key is provenance).
+        A matched check also keeps its stored provenance. ``order`` defaults to the position.
+        """
+        c = item.dict() if hasattr(item, "dict") else dict(item)
+        template = None
+        if c.get("template_key"):
+            template = get_template(c["template_key"])
+            if template is None:
+                raise AuthorityInvalidError(f"Unknown ARF check template '{c['template_key']}'.")
+        stored_provenance = dict(existing.copied_from) if existing is not None and existing.copied_from else None
+        if template is not None:
+            # A saved row of this template keeps its stored rule, message, dimension and provenance.
+            kept = existing is not None and bool(stored_provenance) and stored_provenance.get("key") == template.key
+            rule = existing.rule if kept else template.rule
+            failure_message = existing.failure_message if kept else template.failure_message
+            copied_from: Optional[Dict[str, str]] = stored_provenance if kept else {
+                "kind": "template", "label": template.name, "key": template.key}
+            direction = c.get("direction") or (existing.direction if kept else template.direction)
+            dimension = c.get("dimension") or (existing.dimension if kept else template.dimension)
+            name = (c.get("name") or "").strip() or template.name
+        else:
+            rule = (c.get("rule") or "").strip()
+            failure_message = c.get("failure_message") or None
+            copied_from = stored_provenance or self._copied_from(c.get("copied_from"))
+            direction = c.get("direction") or "neutral"
+            dimension = c.get("dimension") or "people"
+            name = (c.get("name") or "").strip() or f"Check {idx + 1}"
+        if not rule:
+            raise AuthorityInvalidError(f"Check {idx + 1} needs a rule.")
         if not authority_dna.has_assert_clause(rule):
             rule = "ASSERT " + rule
         parse_error = authority_dna.rule_parse_error(rule)
         if parse_error:
-            raise AuthorityInvalidError(f"Criterion rule {rule!r} does not parse: {parse_error}")
-        pid = str(uuid.uuid4())
-        policy = CompliancePolicyDb(
-            id=pid,
-            slug=f"ar-criterion-{pid[:12]}",
-            name=c.get("name") or f"Authority criterion {idx + 1}",
-            description=f"Authority decision criterion for Authority Relation {relation_id}",
-            failure_message=c.get("failure_message") or None,
-            rule=rule,
-            category=ARF_CHECK_CATEGORY,
-            severity="high",
-            is_active=True,
-        )
-        db.add(policy)
-        db.flush()
-        return pid
+            raise AuthorityInvalidError(f"Check rule {rule!r} does not parse: {parse_error}")
+        if direction not in self._CRITERION_DIRECTIONS:
+            raise AuthorityInvalidError(f"Check direction '{direction}' is not one of {self._CRITERION_DIRECTIONS}.")
+        order = c.get("order")
+        return {
+            "name": name[:200],
+            "rule": rule,
+            "failure_message": failure_message,
+            "direction": direction,
+            "weight": self._checked_weight(c.get("weight")),
+            "dimension": dimension,
+            "display_order": idx if order is None else int(order),
+            "enabled": bool(c.get("enabled", True)),
+            "copied_from": copied_from,
+            "policy_clause_ref": (c.get("policy_clause_ref") or "").strip() or None,
+        }
 
-    # --------------------------------------------------------- prerequisites
+    def _criteria_rows(self, db: Session, relation_id: str, criteria: List[Any]) -> List[Dict[str, Any]]:
+        """The stored form of each input check, matched to the AR's existing checks.
+
+        A check matches by its ``id``, or for a template by its template key (the first
+        unmatched one). The save and the definition hash both use this, so they agree.
+        """
+        existing = list(authority_criterion_repo.list_for_relation(db, relation_id=relation_id))
+        by_id = {e.id: e for e in existing}
+        used: set = set()
+        rows: List[Dict[str, Any]] = []
+        for idx, item in enumerate(criteria):
+            c = item.dict() if hasattr(item, "dict") else dict(item)
+            match = None
+            if c.get("id") and c["id"] in by_id and c["id"] not in used:
+                match = by_id[c["id"]]
+            elif c.get("template_key"):
+                match = next((e for e in existing if e.id not in used
+                              and (e.copied_from or {}).get("kind") == "template"
+                              and (e.copied_from or {}).get("key") == c["template_key"]), None)
+            if match is not None:
+                used.add(match.id)
+            rows.append(self._normalise_criterion(item, idx, existing=match))
+        return rows
+
+    def _replace_criteria(self, db: Session, relation_id: str, criteria: List[Any]) -> None:
+        """Replace the AR version's own decision checks (ARF 1.2.0, B7 / S12).
+
+        Each check is stored on this version's row, so no Compliance Check is created
+        or linked: saving the AR never duplicates checks, and a Compliance edit can't
+        change it. All rows are validated before the existing ones are replaced.
+        """
+        rows = self._criteria_rows(db, relation_id, criteria)
+        authority_criterion_repo.delete_for_relation(db, relation_id=relation_id)
+        for row in rows:
+            authority_criterion_repo.create(db, obj_in={
+                "id": str(uuid.uuid4()),
+                "relation_id": relation_id,
+                **row,
+            })
 
     def _cycle_would_close(
         self, db: Session, head_slug: str, candidate_prereq_slug: str,
     ) -> bool:
         """Would adding (``head_slug`` → ``candidate_prereq_slug``) close a cycle?
 
-        Walks the candidate upstream slug's transitive prerequisites via
-        ``list_for_family``; if ``head_slug`` appears in that closure the new
-        edge would form a cycle. Called on save so authors never land an
-        edge the resolve-time detector would have to abort on.
+        Walks the candidate upstream family's own edges, through each family's
+        active version; if ``head_slug`` appears in that closure the new edge
+        would form a cycle. Called on save so authors never land an edge the
+        resolve-time detector would have to abort on.
         """
         if head_slug == candidate_prereq_slug:
             return True
         seen = {candidate_prereq_slug}
         stack = [candidate_prereq_slug]
         while stack:
-            s = stack.pop()
-            for e in authority_prerequisite_repo.list_for_family(
-                db, relation_family_slug=s,
-            ):
+            slug = stack.pop()
+            upstream = self.resolve_relation_ref(db, slug)
+            if upstream is None:
+                continue
+            for e in authority_prerequisite_repo.list_for_relation(db, relation_id=upstream.id):
                 if e.prerequisite_family_slug == head_slug:
                     return True
                 if e.prerequisite_family_slug not in seen:
@@ -1185,22 +1600,23 @@ class AuthorityResolutionManager(SearchableAsset):
     def _replace_prerequisites(
         self, db: Session, relation: AuthorityRelationDb, prerequisites: List[Any],
     ) -> None:
-        """Replace the AR's declared prerequisite chain.
+        """Replace the prerequisite edges this AR version declares (B7).
 
-        Edges are keyed by family slug (per the pin — agents never see
-        version UUIDs), so the AR must carry a slug for this to be meaningful.
-        Rejects self-loops and any edge whose upstream family already depends
-        on ``head`` through its own transitive prerequisites.
+        Each edge is owned by ``relation``, so another version's edges are never
+        touched. The target is a family slug, resolved to its active version at
+        eval time; ``prerequisite_version_id`` records the version seen at save.
+        Rejects self-loops and any edge whose upstream family already depends on
+        this one through its own prerequisites. The AR needs a family slug first,
+        since other ARs name it by that slug.
         """
         head_slug = self._family_slug_of(db, relation)
         if head_slug is None:
             if prerequisites:
                 raise AuthorityInvalidError(
                     "Authority Relation needs a slug before prerequisites can be set "
-                    "— edges are keyed by the stable family-level @id."
+                    "— other Authority Relations name it by that stable family-level @id."
                 )
             return
-        # Deduplicate by candidate slug (last writer wins its required/order).
         normalised: Dict[str, Dict[str, Any]] = {}
         for idx, item in enumerate(prerequisites):
             p = item.dict() if hasattr(item, "dict") else dict(item)
@@ -1211,7 +1627,8 @@ class AuthorityResolutionManager(SearchableAsset):
                 raise AuthorityInvalidError(
                     f"An Authority Relation cannot require itself ({slug})."
                 )
-            if authority_relation_repo.get_by_slug(db, slug) is None:
+            target = authority_relation_repo.get_by_slug(db, slug)
+            if target is None:
                 raise AuthorityInvalidError(
                     f"Prerequisite '{slug}' does not match any Authority Relation slug."
                 )
@@ -1219,22 +1636,20 @@ class AuthorityResolutionManager(SearchableAsset):
                 raise AuthorityInvalidError(
                     f"Adding '{slug}' as a prerequisite of '{head_slug}' would close a cycle."
                 )
+            upstream = self.resolve_relation_ref(db, slug)
             normalised[slug] = {
                 "required": bool(p.get("required", True)),
                 "display_order": int(p.get("display_order", idx)),
                 "notes": p.get("notes"),
+                "prerequisite_version_id": upstream.id if upstream is not None else None,
             }
-        authority_prerequisite_repo.delete_for_family(
-            db, relation_family_slug=head_slug,
-        )
+        authority_prerequisite_repo.delete_for_relation(db, relation_id=relation.id)
         for slug, cfg in normalised.items():
             authority_prerequisite_repo.create(db, obj_in={
                 "id": str(uuid.uuid4()),
-                "relation_family_slug": head_slug,
+                "relation_id": relation.id,
                 "prerequisite_family_slug": slug,
-                "required": cfg["required"],
-                "display_order": cfg["display_order"],
-                "notes": cfg["notes"],
+                **cfg,
             })
 
     def list_prerequisites(
@@ -1242,12 +1657,7 @@ class AuthorityResolutionManager(SearchableAsset):
     ) -> List[Dict[str, Any]]:
         """The AR's declared prerequisites with each upstream slug resolved
         for display (name + status of the active family version)."""
-        head_slug = self._family_slug_of(db, relation)
-        if head_slug is None:
-            return []
-        edges = authority_prerequisite_repo.list_for_family(
-            db, relation_family_slug=head_slug,
-        )
+        edges = authority_prerequisite_repo.list_for_relation(db, relation_id=relation.id)
         out: List[Dict[str, Any]] = []
         for e in edges:
             target = self.resolve_relation_ref(db, e.prerequisite_family_slug)
@@ -1570,17 +1980,65 @@ class AuthorityResolutionManager(SearchableAsset):
             raise AuthorityReviewerNotApproverError("This participant is a reviewer, not an approver.")
         if not principal_matches(aff.principal, aff.principal_type, user):
             raise AuthorityNotNamedError("Only the named participant can record this affirmation.")
+        relation = authority_relation_repo.get(db, aff.relation_id)
+        if relation is not None and self._is_definition_author(relation, affirmed_by):
+            raise AuthoritySelfAffirmationError(
+                "The creator or last editor of this definition cannot affirm it.",
+            )
         return authority_affirmation_repo.update(db, db_obj=aff, obj_in={
             "affirmed": True, "affirmed_by": affirmed_by, "affirmed_at": self._now(), "notes": notes,
+            "definition_hash": self.definition_hash(db, relation) if relation is not None else None,
         })
 
-    def is_fully_affirmed(self, db: Session, relation_id: str) -> bool:
-        # Only APPROVER participants count toward the affirmation gate; pure
-        # reviewers/interviewees do not. (is_approver defaults True for rows
-        # created before the reviewer/approver split.)
+    @staticmethod
+    def _is_definition_author(relation: AuthorityRelationDb, user: Optional[str]) -> bool:
+        """True when ``user`` created this AR version or last changed its definition (B4)."""
+        if not user:
+            return False
+        who = user.strip().casefold()
+        return who in {
+            (value or "").strip().casefold()
+            for value in (getattr(relation, "created_by", None), getattr(relation, "definition_edited_by", None))
+            if value
+        }
+
+    @staticmethod
+    def _approvers(db: Session, relation_id: str) -> List[AuthorityAffirmationDb]:
+        """Only APPROVER participants count toward the affirmation gate; pure
+        reviewers/interviewees do not. (is_approver defaults True for rows
+        created before the reviewer/approver split.)"""
         affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation_id)
-        required = [a for a in affs if a.required and getattr(a, "is_approver", True)]
-        return len(required) > 0 and all(a.affirmed for a in required)
+        return [a for a in affs if a.required and getattr(a, "is_approver", True)]
+
+    @staticmethod
+    def _latest_succeeded_run(db: Session, relation_id: str) -> Optional[AuthorityDnaRunDb]:
+        """The newest successful DNA run of a version (the one the activation gate and the read model use)."""
+        return next(
+            (r for r in authority_dna_run_repo.list_for_relation(db, relation_id=relation_id, limit=50)
+             if r.status == "succeeded"),
+            None,
+        )
+
+    def _dna_is_current(self, db: Session, relation: AuthorityRelationDb, current_hash: Optional[str] = None) -> bool:
+        """True when the version is measured and its latest successful run is on the current definition."""
+        if relation.dna_magnitude is None:
+            return False
+        run = self._latest_succeeded_run(db, relation.id)
+        expected = current_hash if current_hash is not None else self.definition_hash(db, relation)
+        return run is not None and run.definition_hash == expected
+
+    def is_fully_affirmed(self, db: Session, relation_id: str, current_hash: Optional[str] = None) -> bool:
+        """Every required approver has affirmed the AR's *current* definition (B6).
+
+        An affirmation of an earlier draft does not count.
+        """
+        relation = authority_relation_repo.get(db, relation_id)
+        if relation is None:
+            return False
+        approvers = self._approvers(db, relation_id)
+        # A caller that already has the hash passes it in, so it is computed once per read.
+        current = current_hash if current_hash is not None else self.definition_hash(db, relation)
+        return bool(approvers) and all(a.affirmed and a.definition_hash == current for a in approvers)
 
     # ------------------------------------------------------- review process
 
@@ -1734,8 +2192,8 @@ class AuthorityResolutionManager(SearchableAsset):
                 "rule": getattr(relation, "rule", None),
                 "criteria": [
                     {
-                        "name": c.compliance_policy.name if c.compliance_policy else None,
-                        "rule": c.compliance_policy.rule if c.compliance_policy else None,
+                        "name": c.name,
+                        "rule": c.rule,
                         "direction": c.direction, "weight": c.weight, "enabled": c.enabled,
                     }
                     for c in sorted(relation.criteria or [], key=lambda x: (x.display_order or 0))
@@ -1890,6 +2348,7 @@ class AuthorityResolutionManager(SearchableAsset):
             "relation_id": relation_id,
             "status": "running",
             "started_at": self._now(),
+            "definition_hash": self.definition_hash(db, relation),
         })
 
         try:
@@ -1962,6 +2421,8 @@ class AuthorityResolutionManager(SearchableAsset):
             if relation.status == STATUS_ACTIVE and overall > self._ceiling(relation):
                 agg["status"] = STATUS_NEEDS_REVIEW
                 auto_flagged = True
+                # Coming back to active needs fresh affirmations (S3).
+                self._clear_affirmations(db, relation_id)
             authority_relation_repo.update(db, db_obj=relation, obj_in=agg)
 
             # Record the run on the entity timeline (Comments).
@@ -2135,19 +2596,92 @@ class AuthorityResolutionManager(SearchableAsset):
         t = relation.dna_max_threshold
         return DEFAULT_DNA_CEILING if t is None else t
 
+    @staticmethod
+    def _clear_affirmations(db: Session, relation_id: str) -> None:
+        for aff in authority_affirmation_repo.list_for_relation(db, relation_id=relation_id):
+            authority_affirmation_repo.update(db, db_obj=aff, obj_in={
+                "affirmed": False, "affirmed_by": None, "affirmed_at": None,
+            })
+
+    @staticmethod
+    def _check_transition(relation: AuthorityRelationDb, status: str) -> None:
+        """The allowed status changes, from ``_ALLOWED_TRANSITIONS`` (S3)."""
+        current = relation.status
+        allowed = status in _ALLOWED_TRANSITIONS.get(current, set())
+        if current == STATUS_NEEDS_REVIEW and status == STATUS_DRAFT and getattr(relation, "activated_at", None):
+            allowed = False
+        if not allowed:
+            raise AuthorityStatusError(
+                f"An Authority Relation cannot go from '{current}' to '{status}'.",
+                reason="transition_not_allowed", **{"from": current, "to": status},
+            )
+
+    def _check_activation(self, db: Session, relation: AuthorityRelationDb) -> None:
+        """The gates for activation: an enabled check (B5); a measurement and the
+        approvals of the current definition (B6); the ceiling. Raises AuthorityStatusError."""
+        if relation.authority_policy_id:
+            problem = apol.policy_root_problem(authority_policy_repo.get(db, relation.authority_policy_id))
+            if problem:
+                raise AuthorityStatusError(f"Cannot activate: {problem}.", reason="policy_not_in_force")
+        if not self._load_criteria(relation):
+            raise AuthorityStatusError(
+                "Add at least one enabled decision check before activating this version.",
+                reason="no_enabled_checks",
+            )
+        if relation.dna_magnitude is None:
+            raise AuthorityStatusError("The DNA-Coefficient has not been measured yet.", reason="not_measured")
+        current = self.definition_hash(db, relation)
+        latest_ok = self._latest_succeeded_run(db, relation.id)
+        if latest_ok is None or latest_ok.definition_hash != current:
+            raise AuthorityStatusError(
+                "The DNA-Coefficient was measured on an earlier draft. Measure this definition again.",
+                reason="dna_stale",
+            )
+        ceiling = self._ceiling(relation)
+        if relation.dna_magnitude > ceiling:
+            raise AuthorityStatusError(
+                f"DNA-Coefficient {relation.dna_magnitude} exceeds the maximum {ceiling}.",
+                reason="ceiling_exceeded", magnitude=relation.dna_magnitude, ceiling=ceiling,
+            )
+        # Upstream versions may have changed since this version's edges were saved (review #7):
+        # re-check every edge against the upstream families' active versions now.
+        head = self._family_slug_of(db, relation)
+        if head:
+            for edge in authority_prerequisite_repo.list_for_relation(db, relation_id=relation.id):
+                if self._cycle_would_close(db, head, edge.prerequisite_family_slug):
+                    raise AuthorityStatusError(
+                        f"Activating this version would close a prerequisite cycle through "
+                        f"'{edge.prerequisite_family_slug}'.",
+                        reason="prerequisite_cycle", prerequisite=edge.prerequisite_family_slug,
+                    )
+        approvers = self._approvers(db, relation.id)
+        if not approvers:
+            raise AuthorityStatusError(
+                "Name at least one required approver before activation.", reason="affirmations_missing",
+            )
+        if any(a.affirmed and a.definition_hash != current for a in approvers):
+            raise AuthorityStatusError(
+                "An approver affirmed an earlier draft. Affirm this definition again.",
+                reason="affirmations_stale",
+            )
+        if not all(a.affirmed for a in approvers):
+            raise AuthorityStatusError(
+                "All required affirmations must be completed before activation.",
+                reason="affirmations_missing",
+            )
+
     def set_status(
         self, db: Session, relation_id: str, status: str, caller_is_admin: bool = False,
-    ) -> Tuple[Optional[AuthorityRelationDb], Optional[str]]:
-        """Transition an AR's status. Returns (relation, error_message).
+    ) -> Optional[AuthorityRelationDb]:
+        """Move an AR to another status. Returns None when the AR does not exist.
 
-        Activating or retiring an AR is Admin-only; a Read-write author can
-        still move it between draft and needs_review.
+        Taking an AR into or out of service (active or retired, either side) is
+        Admin-only; a Read-write author moves it between draft and needs_review.
+        Refusals raise ``AuthorityStatusError`` with the failed gate as ``reason``.
         """
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
-            return None, "not_found"
-        # Taking an AR into or out of service (active or retired, either side) is
-        # Admin-only; a Read-write author moves it between draft and needs_review.
+            return None
         in_service = (STATUS_ACTIVE, STATUS_RETIRED)
         if (status in in_service or relation.status in in_service) and not caller_is_admin:
             raise AuthorityPermissionError(
@@ -2156,29 +2690,37 @@ class AuthorityResolutionManager(SearchableAsset):
                 **{"from": relation.status, "to": status, "required_level": "Admin"},
             )
         if status not in _ALLOWED_STATUSES:
-            return relation, f"Unknown status '{status}' — expected one of {_ALLOWED_STATUSES}."
+            raise AuthorityInvalidError(f"Unknown status '{status}' — expected one of {_ALLOWED_STATUSES}.")
+        if status == relation.status:
+            return relation
+        self._check_transition(relation, status)
         if status == STATUS_ACTIVE:
-            # Activation gate: a valid policy root (when one is cited), DNAco
-            # measured & within ceiling, AND fully affirmed.
-            if relation.authority_policy_id:
-                problem = apol.policy_root_problem(authority_policy_repo.get(db, relation.authority_policy_id))
-                if problem:
-                    return relation, f"Cannot activate: {problem}."
-            if relation.dna_magnitude is None:
-                return relation, "DNA-Coefficient has not been measured yet."
-            if relation.dna_magnitude > self._ceiling(relation):
-                return relation, (
-                    f"DNA-Coefficient {relation.dna_magnitude} exceeds the maximum "
-                    f"{self._ceiling(relation)}."
-                )
-            if not self.is_fully_affirmed(db, relation_id):
-                return relation, "All required affirmations must be completed before activation."
+            self._check_activation(db, relation)
+
         previous = relation.status
-        updated = authority_relation_repo.update(db, db_obj=relation, obj_in={"status": status})
-        if previous != status:
-            self._log_timeline(db, relation_id, f"Status changed from {previous} to {status}.")
+        changes: Dict[str, Any] = {"status": status}
+        if status == STATUS_ACTIVE and getattr(relation, "activated_at", None) is None:
+            changes["activated_at"] = self._now()
+        updated = authority_relation_repo.update(db, db_obj=relation, obj_in=changes)
+        if status == STATUS_RETIRED:
+            self._clear_affirmations(db, relation_id)
+        if status == STATUS_ACTIVE:
+            self._retire_other_active_versions(db, updated)
+        self._log_timeline(db, relation_id, f"Status changed from {previous} to {status}.")
         self._reindex(db, updated)
-        return updated, None
+        return updated
+
+    def _retire_other_active_versions(self, db: Session, relation: AuthorityRelationDb) -> None:
+        """Activating a version retires the family's other active ones (S2), so a pinned
+        UUID can't keep answering with a superseded verdict. Each gets a timeline entry."""
+        family_id = getattr(relation, "version_family_id", None) or relation.id
+        for other in authority_relation_repo.get_family_versions(db, family_id=family_id):
+            if other.id == relation.id or other.status != STATUS_ACTIVE:
+                continue
+            authority_relation_repo.update(db, db_obj=other, obj_in={"status": STATUS_RETIRED})
+            self._clear_affirmations(db, other.id)
+            self._log_timeline(db, other.id, f"Retired: version {relation.version} was activated in its place.")
+            self._log_timeline(db, relation.id, f"Retired the earlier active version {other.version}.")
 
     # --------------------------------------------------------- runtime gate
 
@@ -2256,6 +2798,9 @@ class AuthorityResolutionManager(SearchableAsset):
             rule_criteria = self._rule_criteria(relation)
         except ValueError as e:
             return VERDICT_CONFLICT, f"The Authority Relation's rule is malformed: {e}", []
+        if not rule_criteria and not self._load_criteria(relation):
+            # B5: a version with no rule and no enabled check approves nothing.
+            return VERDICT_NO_AUTHORITY, NO_ENABLED_CHECKS_MESSAGE, []
         duties = [c for c in rule_criteria if c.kind == arule.KIND_DUTY]
         gating = [c for c in rule_criteria if c.kind != arule.KIND_DUTY] + self._load_criteria(relation)
         for c in gating:
@@ -2388,7 +2933,8 @@ class AuthorityResolutionManager(SearchableAsset):
         """The slug (or id) of the first app_sp AR in this AR's prerequisite walk, itself included.
 
         A dry run walks the prerequisites and calls their MCP refs as the app SP,
-        so one app_sp AR anywhere in the chain counts (B2).
+        so one app_sp AR anywhere in the chain counts (B2). Each version walks its
+        own edges, and an upstream family is walked through its active version.
         """
         seen: set = set()
         stack = [relation]
@@ -2396,11 +2942,10 @@ class AuthorityResolutionManager(SearchableAsset):
             current = stack.pop()
             if current.resolver_auth == RESOLVER_AUTH_APP_SP:
                 return current.slug or current.id
-            family = self._family_slug_of(db, current)
-            if not family or family in seen:
+            if current.id in seen:
                 continue
-            seen.add(family)
-            for edge in authority_prerequisite_repo.list_for_family(db, relation_family_slug=family):
+            seen.add(current.id)
+            for edge in authority_prerequisite_repo.list_for_relation(db, relation_id=current.id):
                 upstream = self.resolve_relation_ref(db, edge.prerequisite_family_slug)
                 if upstream is not None:
                     stack.append(upstream)
@@ -2458,38 +3003,37 @@ class AuthorityResolutionManager(SearchableAsset):
             )
 
         head_slug = self._family_slug_of(db, relation)
+        # Edges belong to the version, so walk them by its id even when the family has no slug.
+        head_key = head_slug or relation.id
         chain: List[Dict[str, Any]] = []
-        if head_slug is not None:
-            # Entry-time cycle guard: the walker added our head when it recursed in.
-            if head_slug in visited:
-                return self._finalize_resolve(
-                    db, relation, req,
-                    VERDICT_CONFLICT,
-                    f"cycle detected at {head_slug}",
-                    chain, [], record=False,
-                    policy=citation,
-                )
-            visited.add(head_slug)
-            try:
-                outer_verdict, blocker_reason, chain = self._walk_prerequisites(
-                    db, head_slug, req, visited,
-                    require_active=require_active, rctx=rctx,
-                )
-            finally:
-                visited.discard(head_slug)
-            if outer_verdict is not None:
-                # A blocked outer still materialises its own refs — the
-                # provenance audit trail wants to show *what the AR was
-                # pointing at* even when the chain short-circuited.
-                resolved_refs = self._materialise_refs(db, relation, req, rctx)
-                out = self._finalize_resolve(
-                    db, relation, req, outer_verdict, blocker_reason,
-                    chain, resolved_refs, record, scope_check=scope_results,
-                    policy=citation,
-                )
-                if outer_verdict == VERDICT_NO_AUTHORITY:
-                    out["resolver_failure"] = True
-                return out
+        # Entry-time cycle guard: the walker added our head when it recursed in.
+        if head_key in visited:
+            return self._finalize_resolve(
+                db, relation, req,
+                VERDICT_CONFLICT,
+                f"cycle detected at {head_key}",
+                chain, [], record=False, policy=citation,
+            )
+        visited.add(head_key)
+        try:
+            outer_verdict, blocker_reason, chain = self._walk_prerequisites(
+                db, relation.id, head_key, req, visited,
+                require_active=require_active, rctx=rctx,
+            )
+        finally:
+            visited.discard(head_key)
+        if outer_verdict is not None:
+            # A blocked outer still materialises its own refs — the
+            # provenance audit trail wants to show *what the AR was
+            # pointing at* even when the chain short-circuited.
+            resolved_refs = self._materialise_refs(db, relation, req, rctx)
+            out = self._finalize_resolve(
+                db, relation, req, outer_verdict, blocker_reason,
+                chain, resolved_refs, record, scope_check=scope_results, policy=citation,
+            )
+            if outer_verdict == VERDICT_NO_AUTHORITY:
+                out["resolver_failure"] = True
+            return out
 
         resolved_refs = self._materialise_refs(db, relation, req, rctx)
         mcp_failure = next(
@@ -2514,15 +3058,19 @@ class AuthorityResolutionManager(SearchableAsset):
             verdict = VERDICT_CONDITIONAL
             reason = "permitted once duties are fulfilled: " + ", ".join(
                 d.get("message") or d["duty"] for d in pending)
-        return self._finalize_resolve(
+        out = self._finalize_resolve(
             db, relation, req, verdict, reason, chain, resolved_refs, record,
             scope_check=scope_results, pending_duties=pending, own_pending_duties=own_pending,
             policy=citation,
         )
+        if verdict == VERDICT_NO_AUTHORITY and reason == NO_ENABLED_CHECKS_MESSAGE:
+            out["reason_code"] = REASON_NO_ENABLED_CHECKS
+        return out
 
     def _walk_prerequisites(
         self,
         db: Session,
+        owner_id: str,
         head_slug: str,
         req: Dict[str, Any],
         visited: set,
@@ -2546,9 +3094,8 @@ class AuthorityResolutionManager(SearchableAsset):
         order (always populated for the caller to persist).
         """
         chain: List[Dict[str, Any]] = []
-        edges = authority_prerequisite_repo.list_for_family(
-            db, relation_family_slug=head_slug,
-        )
+        # The version being resolved owns the edges: another version's edges never apply.
+        edges = authority_prerequisite_repo.list_for_relation(db, relation_id=owner_id)
         for e in edges:
             pre_slug = e.prerequisite_family_slug
             inner = self._resolve_internal(
@@ -2834,14 +3381,13 @@ class AuthorityResolutionManager(SearchableAsset):
             ]
 
             unmet: List[str] = []
-            if slug:
-                visited = {slug}
-                _, _, chain = self._walk_prerequisites(
-                    db, slug, req, visited, require_active=True, rctx=rctx,
-                )
-                # A conditional prerequisite passes (its duties carry over), as in resolve.
-                unmet = [e["slug"] for e in chain
-                         if e["required"] and e["verdict"] not in (VERDICT_APPROVED, VERDICT_CONDITIONAL)]
+            head_key = slug or relation.id
+            _, _, chain = self._walk_prerequisites(
+                db, relation.id, head_key, req, {head_key}, require_active=True, rctx=rctx,
+            )
+            # A conditional prerequisite passes (its duties carry over), as in resolve.
+            unmet = [e["slug"] for e in chain
+                     if e["required"] and e["verdict"] not in (VERDICT_APPROVED, VERDICT_CONDITIONAL)]
 
             candidates.append({
                 "family_slug": slug,
@@ -2905,13 +3451,17 @@ class AuthorityResolutionManager(SearchableAsset):
 
     # --------------------------------------------------------- read assembly
 
-    def to_read_dict(self, db: Session, relation: AuthorityRelationDb) -> Dict[str, Any]:
+    def to_read_dict(self, db: Session, relation: AuthorityRelationDb, include_state: bool = True) -> Dict[str, Any]:
+        """The AR as the API returns it. ``include_state=False`` (the list view) skips the
+        per-row lookups for ``editable`` (a family scan) and ``dna_current`` (the runs)."""
         affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation.id)
         # Load criteria via the repo (not relation.criteria) so a create/update
         # response reflects rows just written in the same transaction.
         criteria = authority_criterion_repo.list_for_relation(db, relation_id=relation.id)
         domains = entity_domain_repo.get_domains_for_entity(db, entity_type=ENTITY_TYPE, entity_id=relation.id)
-        fully_affirmed = self.is_fully_affirmed(db, relation.id)
+        current_hash = self.definition_hash(db, relation)
+        fully_affirmed = self.is_fully_affirmed(db, relation.id, current_hash=current_hash)
+        dna_current = self._dna_is_current(db, relation, current_hash) if include_state else None
         # The slug is the family-level agent @id but physically lives on one
         # version row (new versions have none). Surface the family's slug on
         # every version so it stays visible as the stable identifier.
@@ -2980,6 +3530,12 @@ class AuthorityResolutionManager(SearchableAsset):
             "schedule_cron": relation.schedule_cron,
             "resolver_auth": getattr(relation, "resolver_auth", None) or RESOLVER_AUTH_OBO,
             "fully_affirmed": fully_affirmed,
+            "definition_hash": current_hash,
+            "definition_edited_by": getattr(relation, "definition_edited_by", None),
+            "activated_at": getattr(relation, "activated_at", None),
+            "editable": self.is_editable(db, relation) if include_state else None,
+            "dna_current": dna_current,
+            "enabled_check_count": sum(1 for c in criteria if c.enabled),
             "usage_count": relation.usage_count,
             "approved_count": relation.approved_count,
             "denied_count": relation.denied_count,
@@ -2996,22 +3552,23 @@ class AuthorityResolutionManager(SearchableAsset):
                     "is_reviewer": getattr(a, "is_reviewer", False),
                     "review_status": getattr(a, "review_status", "na"),
                     "review_request_id": getattr(a, "review_request_id", None),
+                    "definition_hash": a.definition_hash,
+                    "stale": bool(a.affirmed and a.definition_hash != current_hash),
                 }
                 for a in affs
             ],
             "criteria": [
                 {
                     "id": c.id,
-                    "policy_id": c.compliance_policy_id,
-                    "name": c.compliance_policy.name if c.compliance_policy else None,
-                    "rule": c.compliance_policy.rule if c.compliance_policy else None,
-                    "failure_message": c.compliance_policy.failure_message if c.compliance_policy else None,
-                    "category": c.compliance_policy.category if c.compliance_policy else None,
+                    "name": c.name,
+                    "rule": c.rule,
+                    "failure_message": c.failure_message,
                     "direction": c.direction,
                     "weight": c.weight,
                     "dimension": getattr(c, "dimension", "people"),
                     "order": c.display_order,
                     "enabled": c.enabled,
+                    "copied_from": c.copied_from,
                     "policy_clause_ref": getattr(c, "policy_clause_ref", None),
                 }
                 for c in criteria

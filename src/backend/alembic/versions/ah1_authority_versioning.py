@@ -32,13 +32,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # version: Integer -> String (semantic version string). Cast existing values.
+    # A bare integer becomes 'N.0.0' (ARF 1.2.0 S6); 'version::varchar' gave 'N'.
     op.alter_column(
         'authority_relations', 'version',
         existing_type=sa.Integer(),
         type_=sa.String(),
         existing_nullable=False,
         server_default='1.0.0',
-        postgresql_using='version::varchar',
+        postgresql_using="version || '.0.0'",
     )
     op.add_column('authority_relations', sa.Column('parent_relation_id', sa.String(), nullable=True))
     op.add_column('authority_relations', sa.Column('base_name', sa.String(), nullable=True))
@@ -52,17 +53,20 @@ def upgrade() -> None:
         existing_type=sa.Integer(),
         type_=sa.String(),
         existing_nullable=True,
-        postgresql_using='relation_version::varchar',
+        postgresql_using="relation_version || '.0.0'",
     )
 
 
 def downgrade() -> None:
+    # Postgres can't change the type while the default '1.0.0' is in place (it has to cast
+    # the default too), so the default is dropped first and restored after the cast (S6).
+    # The cast keeps the major version: '1.2.0' -> 1.
     op.alter_column(
         'authority_decisions', 'relation_version',
         existing_type=sa.String(),
         type_=sa.Integer(),
         existing_nullable=True,
-        postgresql_using='relation_version::integer',
+        postgresql_using="split_part(relation_version, '.', 1)::integer",
     )
     op.drop_index('ix_authority_relations_draft_owner_id', table_name='authority_relations')
     op.drop_index('ix_authority_relations_parent_relation_id', table_name='authority_relations')
@@ -73,8 +77,19 @@ def downgrade() -> None:
     op.alter_column(
         'authority_relations', 'version',
         existing_type=sa.String(),
+        existing_nullable=False,
+        server_default=None,
+    )
+    op.alter_column(
+        'authority_relations', 'version',
+        existing_type=sa.String(),
         type_=sa.Integer(),
         existing_nullable=False,
+        postgresql_using="split_part(version, '.', 1)::integer",
+    )
+    op.alter_column(
+        'authority_relations', 'version',
+        existing_type=sa.Integer(),
+        existing_nullable=False,
         server_default='1',
-        postgresql_using='version::integer',
     )

@@ -18,6 +18,7 @@ from src.common.authority_resolution_dna import (
     DIR_NONE,
 )
 from src.controller.authority_resolution_manager import (
+    AuthorityStatusError,
     AuthorityResolutionManager,
     VERDICT_APPROVED,
     VERDICT_DENIED,
@@ -150,11 +151,9 @@ def _relation(*criteria: AuthorityCriterionDb) -> AuthorityRelationDb:
 
 def _link(rule, *, direction=DIR_NEUTRAL, weight=1.0, message=None, order=0,
           enabled=True, name="crit") -> AuthorityCriterionDb:
+    """A check owned by the AR version (ARF 1.2.0): the rule lives on the row."""
     return AuthorityCriterionDb(
-        id=f"crit-{order}", relation_id="ar-1",
-        compliance_policy=CompliancePolicyDb(
-            id=f"pol-{order}", name=name, rule=rule, failure_message=message, is_active=True,
-        ),
+        id=f"crit-{order}", relation_id="ar-1", name=name, rule=rule, failure_message=message,
         direction=direction, weight=weight, display_order=order, enabled=enabled,
     )
 
@@ -208,15 +207,20 @@ def test_gate_denies_action_mismatch():
 
 def test_gate_disabled_criterion_is_skipped():
     mgr = AuthorityResolutionManager()
-    rel = _relation(_link("ASSERT obj.actor_identity IN ['rsm-east']", enabled=False, order=0))
+    rel = _relation(_link("ASSERT obj.actor_identity IN ['rsm-east']", enabled=False, order=0),
+                    _link("ASSERT obj.actor_identity != 'nobody'", order=1))
     verdict, *_ = mgr._evaluate_decision(rel, {"actor_identity": "intruder"})
     assert verdict == VERDICT_APPROVED
 
 
-def test_gate_no_criteria_approves():
+def test_gate_with_no_enabled_check_is_no_authority_not_approval():
+    """B5: a version with no enabled check approves nothing; the reason is coded."""
+    from src.controller.authority_resolution_manager import NO_ENABLED_CHECKS_MESSAGE, VERDICT_NO_AUTHORITY
     mgr = AuthorityResolutionManager()
-    verdict, *_ = mgr._evaluate_decision(_relation(), {"actor_identity": "anyone"})
-    assert verdict == VERDICT_APPROVED
+    verdict, reason, _ = mgr._evaluate_decision(_relation(), {"actor_identity": "anyone"})
+    assert (verdict, reason) == (VERDICT_NO_AUTHORITY, NO_ENABLED_CHECKS_MESSAGE)
+    only_disabled = _relation(_link("ASSERT obj.value <= 1", enabled=False))
+    assert mgr._evaluate_decision(only_disabled, {"value": 9})[0] == VERDICT_NO_AUTHORITY
 
 
 # ------------------------------------------------------------- maturity
@@ -251,12 +255,12 @@ def test_configurable_criteria_gate_and_divergence(db_session):
     ))
     db_session.commit()
 
-    # Inline criteria created Compliance Checks (category tagged), linked to the AR.
+    # Checks are owned by the AR version: two rows, and no Compliance Check was created.
     assert len(rel.criteria) == 2
-    cats = {c.compliance_policy.category for c in rel.criteria}
-    assert cats == {"Authority Decision"}
+    assert db_session.query(CompliancePolicyDb).filter(
+        CompliancePolicyDb.category == "Authority Decision").count() == 0
     # The ASSERT keyword is prepended when the author omits it.
-    assert all(c.compliance_policy.rule.upper().startswith("ASSERT") for c in rel.criteria)
+    assert all(c.rule.upper().startswith("ASSERT") for c in rel.criteria)
 
     # Gate (dry-run, any status): good request approved, bad request denied w/ message.
     ok = mgr.resolve(db_session, rel.id, {"actor_identity": "rsm-east", "value": 0.10},
@@ -329,9 +333,19 @@ def test_create_new_version_snapshots_definition(db_session):
     from src.models.authority_resolution import (
         AuthorityRelationCreate, CriterionInput, AffirmationInput, EvidenceSource,
     )
+    from src.db_models.business_owners import BusinessOwnerDb
+    from src.db_models.business_roles import BusinessRoleDb
+    from src.db_models.data_domains import DataDomain
+    import uuid as _uuid
+
     mgr = AuthorityResolutionManager()
+    domain = DataDomain(id=str(_uuid.uuid4()), name=f"Versioned domain {_uuid.uuid4().hex[:6]}",
+                        created_by="setup@x.com")
+    role = BusinessRoleDb(id=_uuid.uuid4(), name=f"Versioned role {_uuid.uuid4().hex[:6]}", category="governance")
+    db_session.add_all([domain, role])
+    db_session.flush()
     src = mgr.create_relation(db_session, AuthorityRelationCreate(
-        name="Versioned AR", object_id="dp-1",
+        name="Versioned AR", object_id="dp-1", domain_ids=[domain.id], primary_domain_id=domain.id,
         evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
         criteria=[CriterionInput(name="Authorized", rule="obj.actor_identity IN ['rsm-east']",
                                  direction=DIR_ACTUAL_EXCEEDS, weight=1.5, dimension="people")],
@@ -342,6 +356,8 @@ def test_create_new_version_snapshots_definition(db_session):
     # Simulate the source having been measured/used.
     src.dna_magnitude = 0.6
     src.usage_count = 5
+    db_session.add(BusinessOwnerDb(id=_uuid.uuid4(), object_type="authority_relation", object_id=src.id,
+                                   user_email="owner@x.com", user_name="Owner", role_id=role.id, is_active=True))
     db_session.commit()
 
     v2 = mgr.create_new_version(db_session, src.id, "2.0.0", change_summary="raised the cap",
@@ -361,6 +377,12 @@ def test_create_new_version_snapshots_definition(db_session):
     # Measured/observed state reset on the new draft.
     assert v2.dna_magnitude is None
     assert v2.usage_count == 0
+
+    # Domains (primary kept), owners and the prerequisite edges were cloned too (B8).
+    assert [(d["domain_id"], d["is_primary"]) for d in mgr.to_read_dict(db_session, v2)["domains"]] == [
+        (domain.id, True)]
+    assert [o.user_email for o in db_session.query(BusinessOwnerDb).filter_by(
+        object_type="authority_relation", object_id=v2.id).all()] == ["owner@x.com"]
 
     # Criteria + affirmations were cloned onto the new row.
     v2_crit = mgr._load_criteria(v2)
@@ -618,58 +640,50 @@ def test_resource_ref_cascades_on_relation_delete(db_session):
     assert db_session.query(AuthorityResourceRefDb).filter_by(relation_id=rel_id).count() == 0
 
 
-def test_prerequisite_edge_rejects_self_loop(db_session):
-    """A self-referential prerequisite is a cycle by definition; the DB
-    check-constraint rejects it at write time so the resolve-time cycle
-    detector never has to fire for the trivial case."""
-    import uuid
-    from sqlalchemy.exc import IntegrityError
-    from src.db_models.authority_resolution import AuthorityPrerequisiteDb
+def test_prerequisite_self_loop_is_refused_by_the_manager(db_session):
+    """A self-referential prerequisite is a cycle by definition. The edge is owned
+    by a version, so the manager (not a SQL CHECK on family slugs) refuses it."""
+    from src.controller.authority_resolution_manager import AuthorityInvalidError, AuthorityResolutionManager
+    from src.models.authority_resolution import AuthorityRelationUpdate, PrerequisiteInput
 
-    db_session.add(AuthorityPrerequisiteDb(
-        id=str(uuid.uuid4()),
-        relation_family_slug="trade-promotion",
-        prerequisite_family_slug="trade-promotion",
-    ))
-    with pytest.raises(IntegrityError):
-        db_session.commit()
+    mgr = AuthorityResolutionManager()
+    rel = _make_ar(mgr, db_session, slug="self-loop", name="Self")
+    db_session.commit()
+    with pytest.raises(AuthorityInvalidError, match="cannot require itself"):
+        mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
+            prerequisites=[PrerequisiteInput(prerequisite_family_slug="self-loop")]))
     db_session.rollback()
 
 
 def test_prerequisite_edge_round_trips(db_session):
-    """Two ARs in distinct families can be wired as an A→B prerequisite,
-    retrieved by downstream family slug (``list_for_family``), and by
-    upstream family slug (``list_dependents`` — used by the write-time
-    cycle check)."""
+    """An edge is owned by the version that declares it. It is read back from that version
+    (``list_for_relation``) and found from its upstream slug (``list_dependents``)."""
     import uuid
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
     from src.db_models.authority_resolution import AuthorityPrerequisiteDb
     from src.repositories.authority_resolution_repository import authority_prerequisite_repo
 
+    mgr = AuthorityResolutionManager()
+    downstream = _make_ar(mgr, db_session, slug="trade-promotion", name="Downstream")
+    db_session.commit()
     db_session.add(AuthorityPrerequisiteDb(
-        id=str(uuid.uuid4()),
-        relation_family_slug="trade-promotion",
-        prerequisite_family_slug="market-compliance",
-        display_order=0,
+        id=str(uuid.uuid4()), relation_id=downstream.id,
+        prerequisite_family_slug="market-compliance", display_order=0,
     ))
     db_session.add(AuthorityPrerequisiteDb(
-        id=str(uuid.uuid4()),
-        relation_family_slug="trade-promotion",
-        prerequisite_family_slug="budget-delegation",
-        display_order=1,
+        id=str(uuid.uuid4()), relation_id=downstream.id,
+        prerequisite_family_slug="budget-delegation", display_order=1,
     ))
     db_session.commit()
 
-    deps = authority_prerequisite_repo.list_for_family(
-        db_session, relation_family_slug="trade-promotion",
-    )
+    deps = authority_prerequisite_repo.list_for_relation(db_session, relation_id=downstream.id)
     assert [e.prerequisite_family_slug for e in deps] == [
         "market-compliance", "budget-delegation",
     ]
-
     rev = authority_prerequisite_repo.list_dependents(
         db_session, prerequisite_family_slug="market-compliance",
     )
-    assert [e.relation_family_slug for e in rev] == ["trade-promotion"]
+    assert [e.relation_id for e in rev] == [downstream.id]
 
 
 def test_resolver_auth_defaults_to_obo(db_session):
@@ -689,6 +703,12 @@ def test_resolver_auth_defaults_to_obo(db_session):
 # ---------------------------------------------------------------------------
 
 
+def _pass_criteria():
+    """One enabled check that passes for any request (a version needs one to resolve, B5)."""
+    from src.models.authority_resolution import CriterionInput
+    return [CriterionInput(name="Not blocked", rule="ASSERT obj.actor_identity != 'nobody'")]
+
+
 def _make_ar(mgr, db, *, slug, name, criteria=None, prerequisites=None):
     """Helper for prereq tests — slug is mandatory because edges are keyed by it."""
     from src.models.authority_resolution import (
@@ -696,7 +716,7 @@ def _make_ar(mgr, db, *, slug, name, criteria=None, prerequisites=None):
     )
     return mgr.create_relation(db, AuthorityRelationCreate(
         name=name, slug=slug,
-        criteria=[CriterionInput(**c) for c in (criteria or [])],
+        criteria=[CriterionInput(**c) for c in criteria] if criteria is not None else _pass_criteria(),
         prerequisites=[PrerequisiteInput(**p) for p in (prerequisites or [])],
     ))
 
@@ -833,10 +853,10 @@ def test_cycle_in_prerequisite_chain_returns_conflict(db_session):
     _make_ar(mgr, db_session, slug="a", name="A")
     _make_ar(mgr, db_session, slug="b", name="B",
              prerequisites=[dict(prerequisite_family_slug="a")])
-    # Hand-craft the reverse edge so the write-time check doesn't see it.
+    # Hand-craft the reverse edge (owned by a's version) so the write-time check doesn't see it.
     db_session.add(AuthorityPrerequisiteDb(
         id=str(_uuid.uuid4()),
-        relation_family_slug="a",
+        relation_id=mgr.resolve_relation_ref(db_session, "a").id,
         prerequisite_family_slug="b",
     ))
     db_session.commit()
@@ -1231,7 +1251,7 @@ def _make_mcp_ar(mgr, db, *, slug, resolver_auth="obo", criteria=None, pointer="
     return mgr.create_relation(db, AuthorityRelationCreate(
         name=f"MCP AR {slug}", slug=slug, resolver_auth=resolver_auth,
         actor_role="Trade Marketing Director",
-        criteria=[CriterionInput(**c) for c in (criteria or [])],
+        criteria=[CriterionInput(**c) for c in criteria] if criteria is not None else _pass_criteria(),
         resource_refs=[ResourceRefInput(
             field_path="actor_identity", ref_type="mcp_tool",
             mcp_service_name="mcp-services/hr.org.ontos_identity",
@@ -1729,15 +1749,16 @@ def test_empty_evidence_sample_fails_the_run_and_leaves_dna_unmeasured(db_sessio
     from src.repositories.authority_resolution_repository import authority_dna_run_repo
 
     mgr = AuthorityResolutionManager()
-    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="No evidence AR"))
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="No evidence AR", criteria=_pass_criteria()))
     db_session.commit()
     with pytest.raises(ValueError, match="No evidence rows"):
         mgr.compute_dnaco(db_session, rel.id, rows=[])
     runs = authority_dna_run_repo.list_for_relation(db_session, relation_id=rel.id)
     assert runs[0].status == "failed"
     assert rel.dna_magnitude is None
-    _, err = mgr.set_status(db_session, rel.id, "active", caller_is_admin=True)
-    assert "not been measured" in err
+    with pytest.raises(AuthorityStatusError) as exc:
+        mgr.set_status(db_session, rel.id, "active", caller_is_admin=True)
+    assert exc.value.params["reason"] == "not_measured"
 
 
 def test_collect_evidence_keeps_raw_columns_and_applies_aliases(monkeypatch):
@@ -1760,64 +1781,76 @@ def test_zero_dna_ceiling_is_respected(db_session):
 
     mgr = AuthorityResolutionManager()
     rel = mgr.create_relation(db_session, AuthorityRelationCreate(
-        name="Zero tolerance", dna_max_threshold=0.0,
+        name="Zero tolerance", dna_max_threshold=0.0, criteria=_pass_criteria(),
         affirmations=[AffirmationInput(role="Approver", principal="a@x.com")]),
         caller_is_admin=True)
     db_session.commit()
     aff = mgr.to_read_dict(db_session, rel)["affirmations"][0]
     mgr.affirm(db_session, aff["id"], affirmed_by="a@x.com", user=_user("a@x.com"))
+    # A current, successful measurement (so the hash gate passes), then a magnitude above the ceiling.
+    mgr.compute_dnaco(db_session, rel.id, rows=[{"actor_identity": "a"}])
     rel.dna_magnitude = 0.1
-    _, err = mgr.set_status(db_session, rel.id, "active", caller_is_admin=True)
-    assert err and "exceeds the maximum 0.0" in err
+    db_session.commit()
+    with pytest.raises(AuthorityStatusError) as exc:
+        mgr.set_status(db_session, rel.id, "active", caller_is_admin=True)
+    assert exc.value.params["reason"] == "ceiling_exceeded"
+    assert "exceeds the maximum 0.0" in str(exc.value)
 
 
 def test_set_status_rejects_unknown_status(db_session):
-    from src.controller.authority_resolution_manager import AuthorityResolutionManager
+    from src.controller.authority_resolution_manager import AuthorityInvalidError, AuthorityResolutionManager
     from src.models.authority_resolution import AuthorityRelationCreate
 
     mgr = AuthorityResolutionManager()
     rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="Status AR"))
-    _, err = mgr.set_status(db_session, rel.id, "activ")
-    assert err and "Unknown status" in err
+    with pytest.raises(AuthorityInvalidError, match="Unknown status"):
+        mgr.set_status(db_session, rel.id, "activ")
     assert rel.status == "draft"
 
 
-def test_replacing_participants_on_active_ar_requires_reaffirmation(db_session):
-    from src.controller.authority_resolution_manager import AuthorityResolutionManager, STATUS_ACTIVE
+def test_participants_of_an_active_ar_cannot_change(db_session):
+    """B6: an active version is a snapshot. Changing its approvers is a definition change, so 409."""
+    from src.controller.authority_resolution_manager import (
+        AuthorityImmutableError, AuthorityResolutionManager, STATUS_ACTIVE,
+    )
     from src.models.authority_resolution import (
         AuthorityRelationCreate, AuthorityRelationUpdate, AffirmationInput,
     )
 
     mgr = AuthorityResolutionManager()
-    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="Reaffirm AR"))
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(
+        name="Reaffirm AR", criteria=_pass_criteria(),
+        affirmations=[AffirmationInput(role="Approver", principal="old@x.com")]))
     rel.status = STATUS_ACTIVE
     db_session.commit()
-    updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
-        affirmations=[AffirmationInput(role="Approver", principal="new@x.com")]))
-    assert updated.status == "needs_review"
+    with pytest.raises(AuthorityImmutableError) as exc:
+        mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
+            affirmations=[AffirmationInput(role="Approver", principal="new@x.com")]))
+    assert exc.value.code == "authority_immutable" and exc.value.http_status == 409
+    # The refused PUT wrote nothing.
+    assert [a.principal for a in mgr.get_relation(db_session, rel.id).affirmations] == ["old@x.com"]
 
 
-def test_update_recompute_scores_the_new_criteria(db_session, monkeypatch):
-    """After a criteria replace, the recompute must not use the stale collection."""
-    from src.controller.authority_resolution_manager import AuthorityResolutionManager, STATUS_ACTIVE
+def test_editing_a_draft_check_clears_the_measurement_and_the_recompute_scores_the_new_rule(db_session, monkeypatch):
+    """After a draft's checks change, the old measurement no longer counts; a fresh run scores the new rule."""
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
     from src.models.authority_resolution import (
-        AuthorityRelationCreate, AuthorityRelationUpdate, CriterionInput, AffirmationInput,
+        AuthorityRelationCreate, AuthorityRelationUpdate, CriterionInput,
     )
 
     mgr = AuthorityResolutionManager()
     rel = mgr.create_relation(db_session, AuthorityRelationCreate(
-        name="Stale AR", dna_max_threshold=0.5,
-        criteria=[CriterionInput(name="loose", rule="obj.value <= 100")],
-        affirmations=[AffirmationInput(role="Approver", principal="a@x.com")]),
-        caller_is_admin=True)
-    db_session.commit()
-    _ = list(rel.criteria)  # load the collection
-    rel.status = STATUS_ACTIVE
+        name="Draft AR", criteria=[CriterionInput(name="loose", rule="obj.value <= 100")]))
     db_session.commit()
     monkeypatch.setattr(mgr, "_collect_evidence", lambda _rel: [{"actor_identity": "a", "value": 50}])
+    first = mgr.compute_dnaco(db_session, rel.id)
+    assert first.per_dimension_scores.get("people", 0.0) == 0.0  # the loose rule passes every row
+
     updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
         criteria=[CriterionInput(name="strict", rule="obj.value <= 10", failure_message="over")]))
-    assert updated.status == "needs_review"  # the strict rule diverges on every row
+    assert updated.dna_magnitude is None
+    run = mgr.compute_dnaco(db_session, rel.id)
+    assert run.per_dimension_scores["people"] > 0  # the strict rule diverges on every row
 
 
 @pytest.mark.parametrize("bad", [
@@ -1895,12 +1928,11 @@ def test_malformed_rule_rejected_on_write_and_conflict_at_resolve(db_session):
     with pytest.raises(ValueError, match="does not parse"):
         _make_ar(mgr, db_session, slug="bad-rule", name="Bad", criteria=[dict(name="b", rule="obj.value <=")])
 
+    # A malformed rule stored on the row (written before the write-time check, or by hand).
     rel = _make_ar(mgr, db_session, slug="legacy-bad", name="Legacy bad")
-    pid = str(_uuid.uuid4())
-    db_session.add(CompliancePolicyDb(id=pid, slug=f"p-{pid[:8]}", name="broken", rule="ASSERT obj.value <=",
-                                      category="Authority Decision", severity="high", is_active=True))
-    db_session.add(AuthorityCriterionDb(id=str(_uuid.uuid4()), relation_id=rel.id, compliance_policy_id=pid,
-                                        direction="neutral", weight=1.0, display_order=0, enabled=True))
+    db_session.add(AuthorityCriterionDb(id=str(_uuid.uuid4()), relation_id=rel.id, name="broken",
+                                        rule="ASSERT obj.value <=", direction="neutral", weight=1.0,
+                                        display_order=0, enabled=True))
     db_session.commit()
     out = mgr.resolve(db_session, "legacy-bad", {"value": 1}, record=False, require_active=False)
     assert out["verdict"] == VERDICT_CONFLICT
@@ -1910,45 +1942,44 @@ def test_malformed_rule_rejected_on_write_and_conflict_at_resolve(db_session):
 
 
 
-def test_resaving_unchanged_participants_keeps_signoffs_and_status(db_session):
-    from src.controller.authority_resolution_manager import AuthorityResolutionManager, STATUS_ACTIVE
+def test_resaving_unchanged_participants_keeps_signoffs(db_session):
+    """Re-saving the same definition keeps its affirmations. A changed approver list is a
+    changed definition: the earlier affirmations stop counting, and the draft stays a draft."""
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
     from src.models.authority_resolution import (
         AuthorityRelationCreate, AuthorityRelationUpdate, AffirmationInput,
     )
 
     mgr = AuthorityResolutionManager()
     parts = [AffirmationInput(role="Approver", principal="a@x.com")]
-    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="Keep signoffs", affirmations=parts))
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(
+        name="Keep signoffs", criteria=_pass_criteria(), affirmations=parts))
     db_session.commit()
     aff = mgr.to_read_dict(db_session, rel)["affirmations"][0]
     mgr.affirm(db_session, aff["id"], affirmed_by="a@x.com", user=_user("a@x.com"))
-    rel.status = STATUS_ACTIVE
     db_session.commit()
 
-    updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
-        description="typo fix", affirmations=parts))
-    assert updated.status == STATUS_ACTIVE
+    mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(description="typo fix", affirmations=parts))
     assert mgr.is_fully_affirmed(db_session, rel.id)
 
     updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
         affirmations=[AffirmationInput(role="Approver", principal="b@x.com")]))
-    assert updated.status == "needs_review"
+    assert updated.status == "draft"
+    assert not mgr.is_fully_affirmed(db_session, rel.id)
 
 
-def test_dnaco_run_fails_on_malformed_linked_rule(db_session):
+def test_dnaco_run_fails_on_malformed_stored_rule(db_session):
     import uuid as _uuid
     from src.controller.authority_resolution_manager import AuthorityResolutionManager
-    from src.db_models.compliance import CompliancePolicyDb
-    from src.models.authority_resolution import AuthorityRelationCreate, CriterionInput
+    from src.db_models.authority_resolution import AuthorityCriterionDb
+    from src.models.authority_resolution import AuthorityRelationCreate
     from src.repositories.authority_resolution_repository import authority_dna_run_repo
 
-    pid = str(_uuid.uuid4())
-    db_session.add(CompliancePolicyDb(id=pid, slug=f"p-{pid[:8]}", name="broken linked", rule="ASSERT obj.value <=",
-                                      category="Governance", severity="high", is_active=True))
-    db_session.flush()
     mgr = AuthorityResolutionManager()
-    rel = mgr.create_relation(db_session, AuthorityRelationCreate(
-        name="Linked broken", criteria=[CriterionInput(policy_id=pid)]))
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="Stored broken"))
+    db_session.add(AuthorityCriterionDb(id=str(_uuid.uuid4()), relation_id=rel.id, name="broken",
+                                        rule="ASSERT obj.value <=", direction="neutral", weight=1.0,
+                                        display_order=0, enabled=True))
     db_session.commit()
     with pytest.raises(ValueError, match="malformed"):
         mgr.compute_dnaco(db_session, rel.id, rows=[{"value": 1}])
@@ -2065,8 +2096,8 @@ def test_search_index_one_entry_per_family_and_status_timeline(db_session):
     mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(description="now searchable"))
     assert search.upserts[-1].description == "now searchable"
 
-    _, err = mgr.set_status(db_session, rel.id, "retired", caller_is_admin=True)
-    assert err is None and search.upserts[-1].extra_data["status"] == "retired"
+    retired = mgr.set_status(db_session, rel.id, "retired", caller_is_admin=True)
+    assert retired.status == "retired" and search.upserts[-1].extra_data["status"] == "retired"
     timeline = [c.comment for c in db_session.query(CommentDb).filter(
         CommentDb.entity_type == "authority_relation", CommentDb.entity_id == rel.id)]
     assert any("Status changed from draft to retired" in c for c in timeline)

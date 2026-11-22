@@ -89,7 +89,11 @@ def _failure(tag: str, exc: BaseException, coded_status: int = 400,
     error's ``__cause__`` is set here so the coded handler can read its code.
     """
     if isinstance(exc, CodedValueError):
-        status = 403 if isinstance(exc, AuthorityPermissionError) else coded_status
+        if isinstance(exc, AuthorityPermissionError):
+            status = 403
+        else:
+            # A refusal can name its own status (a 409 for an immutable or a stale gate).
+            status = getattr(exc, "http_status", None) or coded_status
         logger.info("[%s] refused: %s", tag, exc.code)
         error = HTTPException(status_code=status, detail=str(exc))
         error.__cause__ = exc
@@ -318,15 +322,11 @@ async def change_status(
 ):
     is_admin = _may(request, user, auth_manager, FEATURE_ID, ADMIN)
     try:
-        relation, error = manager.set_status(db, relation_id, payload.status, caller_is_admin=is_admin)
+        relation = manager.set_status(db, relation_id, payload.status, caller_is_admin=is_admin)
     except Exception as e:
-        raise _failure("set_status", e, coded_status=409)
+        raise _failure("set_status", e, coded_status=400)
     if relation is None:
         raise HTTPException(status_code=404, detail="Authority Relation not found")
-    if error:
-        raise HTTPException(status_code=409, detail={
-            "code": "authority_status_conflict", "message": error, "params": {},
-        })
     return manager.to_read_dict(db, relation)
 
 
@@ -715,6 +715,22 @@ async def list_reusable_checks(
             "failure_message": p.failure_message, "severity": p.severity,
         }
         for p in policies
+    ]
+
+
+@router.get("/authority/criteria/templates")
+async def list_check_templates(
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
+):
+    """The ARF check templates an author can add ("From ARF template"). Shipped with
+    Ontos and defined in code, not as Compliance Checks."""
+    from src.common.authority_check_templates import list_templates
+    return [
+        {
+            "key": t.key, "name": t.name, "rule": t.rule, "failure_message": t.failure_message,
+            "dimension": t.dimension, "direction": t.direction, "description": t.description,
+        }
+        for t in list_templates()
     ]
 
 

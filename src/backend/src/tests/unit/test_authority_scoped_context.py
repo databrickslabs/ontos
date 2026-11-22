@@ -36,6 +36,10 @@ COSIGN_DUTY = {"action": "arf:obtainCoApproval", "name": "CFO co-approval",
 
 
 def _ar(mgr, db, *, slug="tp", scope=None, params=None, rule=None, criteria=None, prerequisites=None):
+    # A version with neither a rule nor an enabled check approves nothing (batch 2, B5),
+    # so a scope-only test AR gets one passing check unless the test gives its own.
+    if criteria is None and rule is None:
+        criteria = [{"name": "Not blocked", "rule": "ASSERT obj.actor_identity != 'nobody'"}]
     return mgr.create_relation(db, AuthorityRelationCreate(
         name=f"AR {slug}", slug=slug,
         domain_context={"scope": scope or [], "params": params or {}},

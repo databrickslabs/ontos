@@ -144,20 +144,84 @@ def test_read_type_options_takes_only_a_map_and_skips_nulls():
     assert read_type_options({}) == {}
 
 
-def test_a_v302_contract_keeps_the_flat_options(db_session):
-    manager, cid = _upload(db_session, _document(api_version="v3.0.2", nested=True))
+def test_a_v302_export_nests_the_options_and_validates(db_session):
+    # v3.0.2 defines logicalTypeOptions too, and its property schema rejects flat keys
+    manager, cid = _upload(db_session, _v302(_document(api_version="v3.0.2", nested=False)))
+    exported = _export(manager, db_session, cid)
 
-    columns = _columns(_export(manager, db_session, cid))
-
-    assert "logicalTypeOptions" not in columns["code"]
-    assert columns["code"]["maxLength"] == 8 and columns["day"]["format"] == "yyyy-MM-dd"
+    columns = _columns(exported)
+    assert columns["code"]["logicalTypeOptions"]["maxLength"] == 8
+    assert "maxLength" not in columns["code"]
+    assert _errors(exported, "odcs-json-schema-v3.0.2.json") == []
+    assert _errors(exported, "odcs-json-schema-v3.0.2-strict.json") == []
 
 
 @pytest.mark.parametrize("version,nested", [
-    (None, True), ("v3.1.0", True), ("v3.2.0", True), ("v3.0.2", False), ("v3.0.0", False),
+    (None, True), ("v3.1.0", True), ("v3.2.0", True), ("v3.0.2", True), ("v3.0.0", True),
+    ("v2.2.2", False),
 ])
 def test_which_versions_nest_the_options(version, nested):
     assert nests_type_options(version) is nested
+
+
+# --- stored options ODCS has no logicalTypeOptions key for -------------------------
+
+EXTRA = {
+    "amount": ("number", {"minimum": 0, "precision": 2}),
+    "ts": ("timestamp", {"format": "yyyy", "customFormat": "yyyy/dd"}),
+    "tags": ("array", {"minItems": 1, "itemType": "string"}),
+    "code": ("string", {"maxLength": 4, "minimum": 1}),
+}
+
+
+def _v302(document):
+    """ODCS v3.0.2 has no `timestamp` logicalType: leave those columns out."""
+    props = document["schema"][0]["properties"]
+    document["schema"][0]["properties"] = [p for p in props if p["logicalType"] != "timestamp"]
+    return document
+
+
+def _extra_document(api_version="v3.1.0"):
+    document = _document(api_version=api_version, nested=False)
+    document["schema"][0]["properties"] = [
+        {"name": name, "logicalType": logical_type, **options}
+        for name, (logical_type, options) in EXTRA.items()
+    ]
+    return _v302(document) if api_version < "v3.1.0" else document
+
+
+@pytest.mark.parametrize("version,schema_file", [
+    ("v3.1.0", "odcs-json-schema-v3.1.0.json"), ("v3.0.2", "odcs-json-schema-v3.0.2.json"),
+])
+def test_an_export_with_non_odcs_options_validates(db_session, version, schema_file):
+    manager, cid = _upload(db_session, _extra_document(version))
+    exported = _export(manager, db_session, cid)
+
+    columns = _columns(exported)
+    assert columns["tags"]["items"] == {"logicalType": "string"}
+    assert columns["tags"]["logicalTypeOptions"] == {"minItems": 1}
+    props = {cp["property"]: cp["value"] for cp in columns["amount"]["customProperties"]}
+    assert props == {"ontos.precision": 2}
+    assert _errors(exported, schema_file) == []
+
+
+def test_non_odcs_options_round_trip_to_the_same_stored_values(db_session):
+    manager, cid = _upload(db_session, _extra_document())
+    stored = _stored(db_session, cid)
+    exported = _export(manager, db_session, cid)
+    exported["id"] = str(uuid.uuid4())
+    exported["name"] = f"{exported['name']}-again"
+
+    manager_again, cid_again = _upload(db_session, exported)
+
+    assert _stored(db_session, cid_again) == stored
+    assert stored["amount"]["precision"] == 2 and stored["tags"]["itemType"] == "string"
+    # the ontos.* entries are options again, not column custom properties
+    again = _columns(_export(manager_again, db_session, cid_again))
+    assert again == _columns(exported)
+    rows = db_session.query(SchemaPropertyDb).filter_by(name="amount").all()
+    assert all(not any(cp.property.startswith("ontos.") for cp in r.custom_properties)
+               for r in rows)
 
 
 def test_an_editor_save_with_flat_options_keeps_them_nested_in_the_export(db_session):

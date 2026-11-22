@@ -140,7 +140,9 @@ from src.utils.property_custom_properties import (
     stable_ids_by_property,
 )
 from src.repositories.teams_repository import team_repo
-from src.utils.odcs_type_options import nests_type_options, read_type_options
+from src.utils.odcs_type_options import (
+    nests_type_options, read_type_options, split_type_options, without_option_properties,
+)
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.controller.domain_export_adapter import (
     domain_export_adapter,
@@ -1284,6 +1286,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                 prop_dict['examples'] = prop.examples
                         if prop.critical_data_element is not None:
                             prop_dict['criticalDataElement'] = prop.critical_data_element
+                        option_props: List[Dict[str, Any]] = []
+                        logical_type_options = None
                         if prop.logical_type_options_json:
                             try:
                                 logical_type_options = json.loads(prop.logical_type_options_json)
@@ -1295,13 +1299,23 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                     logical_type_options.pop('customFormat', None)
                             except (json.JSONDecodeError, TypeError):
                                 logical_type_options = None
-                            if isinstance(logical_type_options, dict) and logical_type_options:
-                                if nests_type_options(db_obj.api_version):
-                                    prop_dict['logicalTypeOptions'] = logical_type_options
-                                else:  # v3.0.x: the options on the property, as before
-                                    prop_dict.update(logical_type_options)
-                        if prop.items_logical_type:
-                            prop_dict['itemType'] = prop.items_logical_type
+                        if not isinstance(logical_type_options, dict):
+                            logical_type_options = {}
+                        if nests_type_options(db_obj.api_version):
+                            # ODCS v3.x: logicalTypeOptions, items.logicalType and
+                            # ontos.* custom properties (utils/odcs_type_options)
+                            if prop.items_logical_type:
+                                logical_type_options['itemType'] = prop.items_logical_type
+                            nested, item_type, option_props = split_type_options(
+                                prop.logical_type, logical_type_options, db_obj.api_version)
+                            if nested:
+                                prop_dict['logicalTypeOptions'] = nested
+                            if item_type:
+                                prop_dict['items'] = {'logicalType': item_type}
+                        else:  # older contracts: the options on the property, as before
+                            prop_dict.update(logical_type_options)
+                            if prop.items_logical_type:
+                                prop_dict['itemType'] = prop.items_logical_type
 
                         # Add missing ODCS property-level fields
 
@@ -1338,6 +1352,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         # Property-level custom properties
                         if prop.custom_properties:
                             prop_dict['customProperties'] = odcs_custom_properties(prop.custom_properties)
+                        if option_props:
+                            prop_dict['customProperties'] = [
+                                *(prop_dict.get('customProperties') or []), *option_props]
 
                         # Property-level quality rules - filter from schema object's quality checks
                         # Quality checks are stored at schema level with property_id linking to specific columns
@@ -1937,6 +1954,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     prop_dict = prop_data
 
                 logical_type_options = read_type_options(prop_dict)
+                # ontos.* custom properties are type options, not custom properties;
+                # an array's items.logicalType is its item type
+                prop_dict = {**prop_dict, **{
+                    key: without_option_properties(prop_dict[key])
+                    for key in ('customProperties', 'custom_properties') if key in prop_dict}}
+                if prop_dict.get('itemType') is None and logical_type_options.get('itemType'):
+                    prop_dict['itemType'] = logical_type_options['itemType']
                 for field in ['minLength', 'maxLength', 'pattern']:
                     if prop_dict.get(field) is not None:
                         logical_type_options[field] = prop_dict[field]

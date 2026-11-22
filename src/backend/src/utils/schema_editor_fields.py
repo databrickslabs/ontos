@@ -66,6 +66,10 @@ def keep_unsent_fields(payload: Dict[str, Any], stored: Dict[str, Any]) -> Dict[
         column = column.model_dump(by_alias=True, exclude_unset=True) if hasattr(column, 'model_dump') else dict(column)
         previous = stored_columns.get(column.get('name'))
         if previous:
+            items = previous.get('items')
+            if isinstance(items, dict) and previous.get('itemType') is None:
+                # a v3.x export writes the item type as items.logicalType
+                previous = {**previous, 'itemType': items.get('logicalType')}
             for key in _PROPERTY_FIELDS:
                 if not _sent(column, key) and previous.get(key) is not None:
                     column[key] = previous[key]

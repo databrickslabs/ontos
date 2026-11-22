@@ -1,26 +1,121 @@
 """A column's ODCS type options (``format``, ``maxLength``, ``timezone`` ...).
 
-They are stored together in ``logical_type_options_json``. ODCS v3.1.0 puts
-them under the property's ``logicalTypeOptions`` (the property schema allows
-no other keys there); older Ontos exports and the editors write them flat on
-the property. The export nests them from v3.1.0 on (a v3.0.x contract keeps
-the flat shape it always had); the import reads both.
-"""
-from typing import Any, Dict, Optional
+They are stored together in ``logical_type_options_json``. ODCS v3.x puts them
+under the property's ``logicalTypeOptions``, with a fixed set of keys per
+``logicalType``; the property schema allows no other keys (bundled schemas:
+v3.0.2 and v3.1.0, ``unevaluatedProperties: false``). Older Ontos exports and
+the editors write them flat on the property.
 
-NESTED_FROM_VERSION = 'v3.1.0'
+The export writes:
+- the options ODCS defines for the column's type under ``logicalTypeOptions``;
+- an array's item type as ``items.logicalType`` (the ODCS place for it);
+- any other stored option (``precision``, ``customFormat`` ...) as a column
+  custom property ``ontos.<option>``, so the export validates and the import
+  reads it back.
+The import reads all of these, and the flat keys of older exports.
+"""
+from typing import Any, Dict, List, Optional, Tuple
+
+OPTION_PROPERTY_PREFIX = 'ontos.'
+
+# ODCS logicalType values (an `items.logicalType` must be one of them)
+LOGICAL_TYPES = frozenset(
+    ('string', 'date', 'timestamp', 'time', 'number', 'integer', 'object', 'array', 'boolean'))
+
+_NUMERIC = frozenset(('multipleOf', 'maximum', 'exclusiveMaximum', 'minimum', 'exclusiveMinimum',
+                      'format'))
+_DATE = frozenset(('format', 'exclusiveMaximum', 'maximum', 'exclusiveMinimum', 'minimum'))
+# The keys `logicalTypeOptions` allows per logicalType (from the bundled schemas); a type
+# not listed has no restriction.
+_ALLOWED_V302 = {
+    'string': frozenset(('minLength', 'maxLength', 'pattern', 'format')),
+    'date': _DATE,
+    'integer': _NUMERIC,
+    'number': _NUMERIC,
+    'object': frozenset(('maxProperties', 'minProperties', 'required')),
+    'array': frozenset(('maxItems', 'minItems', 'uniqueItems')),
+}
+_ALLOWED_V310 = {
+    **_ALLOWED_V302,
+    'timestamp': _DATE | {'timezone', 'defaultTimezone'},
+    'time': _DATE | {'timezone', 'defaultTimezone'},
+}
 
 
 def nests_type_options(api_version: Optional[str]) -> bool:
     """Whether an export of a contract with this ``apiVersion`` writes the options
-    under ``logicalTypeOptions`` (no version: v3.1.0, as the export defaults)."""
-    return (api_version or NESTED_FROM_VERSION) >= NESTED_FROM_VERSION
+    under ``logicalTypeOptions``: every ODCS v3.x (and no version, which the export
+    writes as v3.1.0). v3.0.2 already defines ``logicalTypeOptions`` and rejects
+    the flat keys."""
+    return not api_version or api_version >= 'v3'
+
+
+def _allowed(logical_type: Optional[str], api_version: Optional[str]):
+    table = _ALLOWED_V302 if (api_version or 'v3.1.0') < 'v3.1.0' else _ALLOWED_V310
+    return table.get(logical_type or 'string')
+
+
+def split_type_options(
+    logical_type: Optional[str], options: Dict[str, Any], api_version: Optional[str],
+) -> Tuple[Dict[str, Any], Optional[str], List[Dict[str, Any]]]:
+    """The stored options as the export writes them: ``(logicalTypeOptions, item
+    type for items.logicalType, ontos.* custom properties)``."""
+    allowed = _allowed(logical_type, api_version)
+    nested: Dict[str, Any] = {}
+    extra: List[Dict[str, Any]] = []
+    item_type = None
+    for key, value in options.items():
+        if value is None:
+            continue
+        if key == 'itemType' and logical_type == 'array' and value in LOGICAL_TYPES:
+            item_type = value
+        elif key != 'itemType' and (allowed is None or key in allowed):
+            nested[key] = value
+        else:
+            extra.append({'property': f'{OPTION_PROPERTY_PREFIX}{key}', 'value': value})
+    return nested, item_type, extra
 
 
 def read_type_options(prop: Dict[str, Any]) -> Dict[str, Any]:
-    """The options a property's ``logicalTypeOptions`` holds (a copy; empty when it
-    has none). The caller adds the flat keys of legacy input, which win."""
+    """The options of a property that aren't flat on it: its ``logicalTypeOptions``,
+    ``items.logicalType`` (as ``itemType``) and ``ontos.*`` custom properties. The
+    caller adds the flat keys of legacy input, which win."""
+    options: Dict[str, Any] = {}
     nested = prop.get('logicalTypeOptions')
-    if not isinstance(nested, dict):
+    if isinstance(nested, dict):
+        options.update({k: v for k, v in nested.items() if v is not None})
+    items = prop.get('items')
+    if isinstance(items, dict) and isinstance(items.get('logicalType'), str):
+        options['itemType'] = items['logicalType']
+    for key, value in option_properties(prop.get('customProperties')).items():
+        options.setdefault(key, value)
+    return options
+
+
+def _is_option_property(name: Any) -> bool:
+    return isinstance(name, str) and name.startswith(OPTION_PROPERTY_PREFIX) \
+        and len(name) > len(OPTION_PROPERTY_PREFIX)
+
+
+def option_properties(custom_properties: Any) -> Dict[str, Any]:
+    """The ``ontos.*`` options in a column's custom properties (list or map form)."""
+    if isinstance(custom_properties, dict):
+        items = list(custom_properties.items())
+    elif isinstance(custom_properties, list):
+        items = [(cp.get('property'), cp.get('value'))
+                 for cp in custom_properties if isinstance(cp, dict)]
+    else:
         return {}
-    return {key: value for key, value in nested.items() if value is not None}
+    return {name[len(OPTION_PROPERTY_PREFIX):]: value
+            for name, value in items if _is_option_property(name) and value is not None}
+
+
+def without_option_properties(custom_properties: Any) -> Any:
+    """The column's custom properties without the ``ontos.*`` options (stored as
+    type options, not as custom properties)."""
+    if isinstance(custom_properties, dict):
+        return {k: v for k, v in custom_properties.items() if not _is_option_property(k)}
+    if isinstance(custom_properties, list):
+        return [cp for cp in custom_properties
+                if not (isinstance(cp, dict) and _is_option_property(cp.get('property')))]
+    return custom_properties

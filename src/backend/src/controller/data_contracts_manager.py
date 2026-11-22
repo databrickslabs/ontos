@@ -1034,11 +1034,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         return members_list
 
     def build_odcs_from_db(
-        self, db_obj: DataContractDb, db_session=None, for_export: bool = False,
+        self, db_obj: DataContractDb, db_session=None, for_export: bool = False, *,
+        all_relationship_ids: bool = False,
     ) -> Dict[str, Any]:
-        """The contract as ODCS. ``for_export`` leaves out the stored options ODCS
-        v3.1 doesn't define (``timezone`` on a date, ``customFormat``); the update
-        path reads the stored values with it off, so a save keeps them."""
+        """The contract as an ODCS document. ``for_export`` leaves out the stored
+        options ODCS v3.1 doesn't define (``timezone`` on a date, ``customFormat``);
+        the update path reads the stored values with it off, so a save keeps them.
+        ``all_relationship_ids``: write a relationship's ``id`` whatever the ODCS
+        version (for an editor save, which completes its payload from this document)."""
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
@@ -1128,7 +1131,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
         # Build schema array from relationships
         if hasattr(db_obj, 'schema_objects') and db_obj.schema_objects:
-            relationship_ids = _writes_relationship_ids(db_obj.api_version)
+            relationship_ids = all_relationship_ids or _writes_relationship_ids(db_obj.api_version)
             schema = []
             for schema_obj in db_obj.schema_objects:
                 schema_dict = {
@@ -2748,7 +2751,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 # The stored objects as the export writes them: what an editor
                 # save leaves out is taken from here (utils/schema_editor_fields)
                 stored_objects = {
-                    o['name']: o for o in self.build_odcs_from_db(db_obj, db).get('schema', [])
+                    o['name']: o for o in self.build_odcs_from_db(
+                        db_obj, db, all_relationship_ids=True).get('schema', [])
                 } if existing_schemas else {}
 
                 for s in schema_data:

@@ -14,7 +14,7 @@ that has both (a ``transformDescription`` stored after the upgrade) keeps its
 description there, as before the upgrade, and loses the transformDescription.
 
 Revision ID: r3_odcs_roundtrip_fields
-Revises: s2_document_markdown_import
+Revises: o3_compliance_run_score_nullable
 Create Date: 2026-11-12 12:00:00.000000
 
 """
@@ -26,7 +26,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'r3_odcs_roundtrip_fields'
-down_revision: Union[str, None] = 's2_document_markdown_import'
+down_revision: Union[str, None] = 'o3_compliance_run_score_nullable'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

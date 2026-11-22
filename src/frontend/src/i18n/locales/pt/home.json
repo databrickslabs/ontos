@@ -262,9 +262,9 @@
     },
     "products": {
       "available": "{{count}} produto disponível",
-      "available_plural": "{{count}} produtos disponíveis",
+      "available_other": "{{count}} produtos disponíveis",
       "subscribed": "{{count}} produto assinado",
-      "subscribed_plural": "{{count}} produtos assinados",
+      "subscribed_other": "{{count}} produtos assinados",
       "noProducts": "Nenhum produto de dados encontrado.",
       "adjustFilters": "Tente ajustar sua pesquisa ou filtro.",
       "noSubscriptions": "Você ainda não assinou nenhum produto de dados.",
@@ -277,9 +277,9 @@
     },
     "datasets": {
       "available": "{{count}} conjunto de dados disponível",
-      "available_plural": "{{count}} conjuntos de dados disponíveis",
+      "available_other": "{{count}} conjuntos de dados disponíveis",
       "subscribed": "{{count}} conjunto de dados assinado",
-      "subscribed_plural": "{{count}} conjuntos de dados assinados",
+      "subscribed_other": "{{count}} conjuntos de dados assinados",
       "noDatasets": "Nenhum conjunto de dados encontrado.",
       "adjustFilters": "Tente ajustar sua pesquisa.",
       "noSubscriptions": "Você ainda não assinou nenhum conjunto de dados.",
@@ -300,7 +300,7 @@
     "domainInfo": {
       "parentDomain": "Pai",
       "childDomains": "{{count}} domínio filho",
-      "childDomains_plural": "{{count}} domínios filhos"
+      "childDomains_other": "{{count}} domínios filhos"
     },
     "tilesPerRow": {
       "placeholder": "Cartões",

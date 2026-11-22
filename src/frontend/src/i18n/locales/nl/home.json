@@ -262,9 +262,9 @@
     },
     "products": {
       "available": "{{count}} product beschikbaar",
-      "available_plural": "{{count}} producten beschikbaar",
+      "available_other": "{{count}} producten beschikbaar",
       "subscribed": "{{count}} geabonneerd product",
-      "subscribed_plural": "{{count}} geabonneerde producten",
+      "subscribed_other": "{{count}} geabonneerde producten",
       "noProducts": "Geen dataproducten gevonden.",
       "adjustFilters": "Probeer je zoekterm of filter aan te passen.",
       "noSubscriptions": "Je hebt je nog niet geabonneerd op dataproducten.",
@@ -277,9 +277,9 @@
     },
     "datasets": {
       "available": "{{count}} dataset beschikbaar",
-      "available_plural": "{{count}} datasets beschikbaar",
+      "available_other": "{{count}} datasets beschikbaar",
       "subscribed": "{{count}} geabonneerde dataset",
-      "subscribed_plural": "{{count}} geabonneerde datasets",
+      "subscribed_other": "{{count}} geabonneerde datasets",
       "noDatasets": "Geen datasets gevonden.",
       "adjustFilters": "Probeer je zoekterm aan te passen.",
       "noSubscriptions": "Je hebt je nog niet geabonneerd op datasets.",
@@ -300,7 +300,7 @@
     "domainInfo": {
       "parentDomain": "Ouder",
       "childDomains": "{{count}} subdomein",
-      "childDomains_plural": "{{count}} subdomeinen"
+      "childDomains_other": "{{count}} subdomeinen"
     },
     "tilesPerRow": {
       "placeholder": "Tegels",

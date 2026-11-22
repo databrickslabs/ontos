@@ -400,3 +400,25 @@ def test_an_sla_form_save_alone_still_clears_an_emptied_field(db_session, import
 
     assert db_session.query(DataContractSlaPropertyDb).filter_by(
         contract_id=cid, property='uptimeTarget').count() == 0
+
+
+def test_a_read_modify_write_with_both_shapes_keeps_the_sent_sla_properties(
+        db_session, imported):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+
+    manager, cid = imported
+    sent = {'id': 'sla-up', 'property': 'uptimeTarget', 'value': 99.5, 'unit': '%',
+            'element': 'orders', 'driver': 'operational'}
+    # what GET returns: both the ODCS list and the form's values
+    _save(manager, db_session, cid, {
+        'slaProperties': [sent],
+        'sla': {'uptimeTarget': 99.5, 'maxDowntimeMinutes': 30}})
+    db_session.commit()
+
+    rows = {r.property: r for r in db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=cid)}
+    up = rows['uptimeTarget']
+    assert (up.stable_id, up.element, up.driver, up.value) == (
+        'sla-up', 'orders', 'operational', '99.5')
+    # a form field the ODCS list doesn't have is still added
+    assert rows['maxDowntimeMinutes'].value == '30'

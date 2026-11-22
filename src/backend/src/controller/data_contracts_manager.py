@@ -2650,7 +2650,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 from src.utils.contract_sla import apply_legacy_sla
                 db.flush()  # the form's values replace the rows just added (no autoflush)
                 apply_legacy_sla(db, created.id, data_dict['sla'],
-                                 only_set=bool(data_dict.get('slaProperties')))
+                                 data_dict.get('slaProperties') or None)
             
             # Process semantic links if provided
             if data_dict.get('authoritativeDefinitions'):
@@ -2985,7 +2985,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 from src.utils.contract_sla import apply_legacy_sla
                 db.flush()  # the form's values replace the rows just added (no autoflush)
                 apply_legacy_sla(db, contract_id, data_dict['sla'],
-                                 only_set=data_dict.get('slaProperties') is not None)
+                                 data_dict.get('slaProperties'))
             if 'slaDefaultElement' in data_dict:
                 updated.sla_default_element = data_dict['slaDefaultElement']
 

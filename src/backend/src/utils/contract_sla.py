@@ -5,7 +5,7 @@ response time, data freshness). They have no columns of their own: each one is
 an SLA property named after its API field, so it also goes out with the ODCS
 export and comes back on import. Other SLA properties are left alone.
 """
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from src.db_models.data_contracts import DataContractSlaPropertyDb
 from src.utils.odcs_values import typed_value
@@ -50,17 +50,21 @@ def legacy_sla_from_rows(rows: Iterable[DataContractSlaPropertyDb]) -> Optional[
 
 
 def apply_legacy_sla(db, contract_id: str, sla: Optional[Dict[str, Any]],
-                     only_set: bool = False) -> None:
+                     sla_properties: Optional[List[Any]] = None) -> None:
     """Store the SLA form's values: each of the four fields replaces its SLA
-    property, and a field left empty removes it. ``only_set`` (the same request
-    also sent ``slaProperties``, which replaced them all): only the fields with a
-    value replace their property, an empty one leaves it as sent."""
+    property, and a field left empty removes it. ``sla_properties``: the ODCS
+    SLA properties the same request sent (they replaced them all): only a field
+    with a value whose property they don't have is added; the sent ones keep
+    their id, element, driver and unit."""
+    only_set = sla_properties is not None
+    sent = {p.get('property') for p in sla_properties or [] if isinstance(p, dict)}
     values: Dict[str, Any] = {}
     for key, value in (sla or {}).items():
         field = _SNAKE_TO_FIELD.get(key, key)
         if field in LEGACY_SLA_FIELDS:
             values[field] = value
-    fields = [f for f in LEGACY_SLA_FIELDS if not only_set or values.get(f) is not None]
+    fields = [f for f in LEGACY_SLA_FIELDS
+              if not only_set or (values.get(f) is not None and f not in sent)]
     if not fields:
         return
 

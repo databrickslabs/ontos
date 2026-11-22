@@ -1001,7 +1001,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         return members_list
 
-    def build_odcs_from_db(self, db_obj: DataContractDb, db_session=None) -> Dict[str, Any]:
+    def build_odcs_from_db(
+        self, db_obj: DataContractDb, db_session=None, for_export: bool = False,
+    ) -> Dict[str, Any]:
+        """The contract as ODCS. ``for_export`` leaves out the stored options ODCS
+        v3.1 doesn't define (``timezone`` on a date, ``customFormat``); the update
+        path reads the stored values with it off, so a save keeps them."""
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
@@ -1165,6 +1170,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         if prop.logical_type_options_json:
                             try:
                                 logical_type_options = json.loads(prop.logical_type_options_json)
+                                if for_export:
+                                    if prop.logical_type == 'date':
+                                        # ODCS v3.1 has no timezone on a date
+                                        logical_type_options.pop('timezone', None)
+                                    # customFormat is not an ODCS key
+                                    logical_type_options.pop('customFormat', None)
                                 prop_dict.update(logical_type_options)  # Merge constraints into property
                             except (json.JSONDecodeError, TypeError):
                                 pass

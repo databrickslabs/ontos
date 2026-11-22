@@ -62,6 +62,9 @@ def _upsert_custom_property(data: dict, prop: str, value) -> None:
 import yaml
 from sqlalchemy.orm import Session
 
+from src.controller.entity_data_cleanup import remove_entity_data
+from src.common.timestamps import utc_now
+from src.common.ontology_type_names import canonical_type_name
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
@@ -261,7 +264,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if status is not None:
             contract.status = status
 
-        contract.updated_at = datetime.utcnow()
+        contract.updated_at = utc_now()
         return contract
 
     def delete_contract(self, contract_id: str) -> bool:
@@ -875,7 +878,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             existing = (
                 db_session.query(EntityRelationshipDb)
                 .filter(
-                    EntityRelationshipDb.source_type.in_(PHYSICAL_TABLE_ASSET_TYPES),
+                    EntityRelationshipDb.source_type.in_([canonical_type_name(t) for t in PHYSICAL_TABLE_ASSET_TYPES]),
                     EntityRelationshipDb.source_id == str(asset.id),
                     EntityRelationshipDb.target_type == "DataContract",
                     EntityRelationshipDb.target_id == contract_id,
@@ -2792,15 +2795,20 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         elif isinstance(tag, dict):
                             tag_creates.append(AssignedTagCreate(**tag))
                     
-                    # Set tags for the contract entity
-                    self._tags_manager.set_tags_for_entity(
-                        db,
-                        entity_id=contract_id,
-                        entity_type="data_contract",
-                        tags=tag_creates,
-                        user_email=current_user
-                    )
-                    logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
+                    # An explicit [] removes every tag (#1435); a list whose entries
+                    # couldn't be read keeps the current ones, as for products.
+                    if tags_data and not tag_creates:
+                        logger.warning("No readable tag in the update of contract %s; its tags are kept", contract_id)
+                    else:
+                        # Set tags for the contract entity
+                        self._tags_manager.set_tags_for_entity(
+                            db,
+                            entity_id=contract_id,
+                            entity_type="data_contract",
+                            tags=tag_creates,
+                            user_email=current_user
+                        )
+                        logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
                 except Exception as e:
                     logger.error(f"Failed to update tags for contract {contract_id}: {e}")
                     # Don't fail the entire update if tags fail
@@ -2929,6 +2937,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         # Remove domain assignments, then perform deletion
         entity_domain_repo.remove_all_for_entity(db, entity_type="data_contract", entity_id=contract_id)
+        remove_entity_data(db, entity_type="data_contract", entity_id=contract_id)
         data_contract_repo.remove(db=db, id=contract_id)
         
         # Log to change log for timeline
@@ -4276,7 +4285,82 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.rollback()
             logger.error(f"Error deleting property authoritative definition: {e}", exc_info=True)
             raise
-    
+
+    # --- Workflow Triggers of a Contract Change ---
+    # Run by the REST routes and the assistant tools alike: the blocking
+    # before_update gates before an update; on_create / on_update / on_delete
+    # once the change succeeded (not blocking, a failing workflow only logged).
+
+    @staticmethod
+    def run_update_gates(
+        db: Session, contract: Any, changes: Dict[str, Any], user_email: Optional[str]
+    ) -> tuple[bool, List[Any]]:
+        """Run the before_update gates of an update; ``(passed, executions)``.
+
+        ``changes`` are the fields sent. A gate that raises is logged and lets
+        the update proceed (``(True, [])``).
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType
+        try:
+            return get_trigger_registry(db).before_update(
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=str(contract.id),
+                entity_name=getattr(contract, 'name', None),
+                entity_data=changes,
+                user_email=user_email,
+            )
+        except Exception as e:
+            logger.warning(f"before_update trigger failed for contract {contract.id}: {e}")
+            return True, []
+
+    @staticmethod
+    def fire_create_trigger(db: Session, contract: Any, user_email: Optional[str]) -> None:
+        """Fire on_create for a contract just created."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_create",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=str(contract.id),
+            entity_name=contract.name,
+            entity_data={
+                "contract_id": str(contract.id), "name": contract.name,
+                "status": getattr(contract, 'status', 'draft'),
+            },
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def fire_update_trigger(
+        db: Session, contract_id: str, contract: Any, changes: Dict[str, Any],
+        user_email: Optional[str],
+    ) -> None:
+        """Fire on_update for a contract just updated; ``changes`` are the fields sent."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_update",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=getattr(contract, 'name', None),
+            entity_data=changes,
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def fire_delete_trigger(db: Session, contract_id: str, user_email: Optional[str]) -> None:
+        """Fire on_delete for a contract just deleted."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_delete",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_data={"contract_id": contract_id},
+            user_email=user_email,
+        )
+
     # --- Workflow Transition Methods ---
     
     def transition_status(
@@ -4415,7 +4499,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from src.db_models.data_contracts import DataProfilingRunDb
         from src.repositories.workflow_installations_repository import workflow_installation_repo
         from src.common.config import get_settings
-        from datetime import datetime
         from uuid import uuid4
         import json
         
@@ -4449,7 +4532,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             source='dqx',
             schema_names=json.dumps(schema_names),
             status='pending',
-            started_at=datetime.utcnow(),
+            started_at=utc_now(),
             triggered_by=triggered_by
         )
         db.add(run)
@@ -5558,7 +5641,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid status
         """
-        from datetime import datetime
         from src.common.workflow_triggers import (
             get_trigger_registry, request_submitted_message, request_workflow_outcome,
         )
@@ -5597,7 +5679,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         self._update_search_index(contract, db)
         
-        now = datetime.utcnow()
+        now = utc_now()
         request_id = str(uuid4())
 
         # NOTE: a proposed contract surfaces to stewards through two real paths,
@@ -5761,7 +5843,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found, invalid status, or already published
         """
-        from datetime import datetime
         from src.common.workflow_triggers import (
             get_trigger_registry, request_submitted_message, request_workflow_outcome,
         )
@@ -5779,7 +5860,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if pub_scope != "none":
             raise ValueError("Contract is already published to marketplace.")
         
-        now = datetime.utcnow()
+        now = utc_now()
         request_id = str(uuid4())
         
         # Fire the ON_REQUEST_PUBLISH trigger
@@ -5862,7 +5943,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or deployment policy violated
         """
-        from datetime import datetime
         from src.models.notifications import NotificationType, Notification
         
         contract = data_contract_repo.get(db, id=contract_id)
@@ -5891,7 +5971,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 f"{catalog}{('.' + database_schema) if database_schema else ''}"
             )
         
-        now = datetime.utcnow()
+        now = utc_now()
         
         # Change log entry
         from src.controller.change_log_manager import change_log_manager
@@ -6011,7 +6091,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found, invalid decision, or invalid status
         """
-        from datetime import datetime
         from src.models.notifications import NotificationType, Notification
         
         contract = data_contract_repo.get(db, id=contract_id)
@@ -6023,7 +6102,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Decision must be 'approve', 'reject', or 'clarify'")
         
         from_status = (contract.status or '').lower()
-        now = datetime.utcnow()
+        now = utc_now()
         
         # Update contract status based on decision, through transition_status
         # so the lifecycle check and the before_status_change gates run
@@ -6299,7 +6378,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid decision
         """
-        from datetime import datetime
         from src.models.notifications import NotificationType, Notification
         
         contract = data_contract_repo.get(db, id=contract_id)
@@ -6310,7 +6388,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if decision not in ('approve', 'deny'):
             raise ValueError("Decision must be 'approve' or 'deny'")
         
-        now = datetime.utcnow()
+        now = utc_now()
         response_message = f"Deploy decision '{decision}' recorded successfully"
         result = {"message": response_message}
         
@@ -6439,7 +6517,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid status transition
         """
-        from datetime import datetime
         from src.common.workflow_triggers import (
             get_trigger_registry, request_submitted_message, request_workflow_outcome,
         )
@@ -6469,7 +6546,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             )
             requested = requested_deprecation_data(db, 'data_contract', details)
 
-        now = datetime.utcnow()
+        now = utc_now()
         # Ties the decision to this request (certified deprecation guard)
         request_id = str(uuid4())
 
@@ -6554,7 +6631,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid decision
         """
-        from datetime import datetime
         from src.models.notifications import NotificationType, Notification
         
         contract = data_contract_repo.get(db, id=contract_id)
@@ -6566,7 +6642,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Decision must be 'approve', 'deny', or 'clarify'")
         
         from_status = (contract.status or 'draft').lower()
-        now = datetime.utcnow()
+        now = utc_now()
         
         # Apply status change if approved
         if decision == 'approve':

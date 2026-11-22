@@ -14,12 +14,21 @@ interface ApprovalsQueue {
   products: { id: string; title?: string; status?: string }[];
 }
 
-export default function RequiredActionsSection() {
+interface RequiredActionsSectionProps {
+  /**
+   * Read the contracts/products approval queue. The queue route answers 403 unless the user
+   * reads data contracts or data products; pass `false` to skip the request for them.
+   */
+  fetchQueue?: boolean;
+}
+
+export default function RequiredActionsSection({ fetchQueue = true }: RequiredActionsSectionProps) {
   const { t, i18n } = useTranslation(['home', 'common']);
   const { notifications, isLoading, fetchNotifications, markAsRead } = useNotificationsStore();
   const [approvals, setApprovals] = useState<ApprovalsQueue>({ contracts: [], products: [] });
-  const [loadingApprovals, setLoadingApprovals] = useState<boolean>(true);
-  const [approvalsError, setApprovalsError] = useState<string | null>(null);
+  const [loadingApprovals, setLoadingApprovals] = useState<boolean>(fetchQueue);
+  // A flag, translated at render: the fetch runs once, a language switch must still apply
+  const [approvalsError, setApprovalsError] = useState<boolean>(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogPayload, setDialogPayload] = useState<Record<string, any> | null>(null);
   const [roleRequestPage, setRoleRequestPage] = useState(0);
@@ -31,35 +40,44 @@ export default function RequiredActionsSection() {
   }, [fetchNotifications]);
 
   useEffect(() => {
+    if (!fetchQueue) return;
     const fetchApprovals = async () => {
       setLoadingApprovals(true);
-      setApprovalsError(null);
+      setApprovalsError(false);
       try {
         const res = await fetch('/api/approvals/queue', { cache: 'no-store' });
+        // 403: the role reads neither data contracts nor data products: an empty queue.
+        if (res.status === 403) {
+          setApprovals({ contracts: [], products: [] });
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         setApprovals({
           contracts: Array.isArray(data?.contracts) ? data.contracts : [],
           products: Array.isArray(data?.products) ? data.products : [],
         });
-      } catch (e: any) {
+      } catch {
         setApprovals({ contracts: [], products: [] });
-        setApprovalsError(e?.message || t('requiredActionsSection.loadError'));
+        setApprovalsError(true);
       } finally {
         setLoadingApprovals(false);
       }
     };
     fetchApprovals();
-  }, []);
+  }, [fetchQueue]);
 
   // Filter role access requests separately
   const roleRequests = notifications.filter(
     n => n.type === 'action_required' && n.action_type === 'handle_role_request'
   );
 
-  // Filter workflow approval items separately so they get inline approve/deny
+  // Filter workflow approval items separately so they get inline approve/deny.
+  // Decided ones (payload `handled`, set by the backend for this user's or another
+  // target member's decision) stay in the bell history only; `read` alone keeps them.
   const workflowApprovalNotifications = notifications.filter(
     n => n.type === 'action_required' && n.action_type === 'workflow_approval'
+      && !n.action_payload?.handled
   );
 
   // Filter other action items (excluding role requests and workflow approvals)
@@ -194,7 +212,9 @@ export default function RequiredActionsSection() {
           <ListItemSkeleton count={4} height="h-12" className="space-y-2" />
         </div>
       ) : approvalsError ? (
-        <div className="text-sm text-destructive p-6">{approvalsError}</div>
+        <div className="text-sm text-destructive p-6">
+          {t('requiredActionsSection.loadError')}
+        </div>
       ) : unifiedApprovals.length === 0 && actionItems.length === 0 ? (
         <p className="text-center text-muted-foreground p-12">{t('requiredActionsSection.noActions')}</p>
       ) : (

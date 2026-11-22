@@ -58,7 +58,8 @@
     "failed": "不合格",
     "showFailed": "不合格のみ表示",
     "showAll": "すべて表示",
-    "empty": "-"
+    "empty": "-",
+    "actions": "アクション"
   },
   "policyDetails": {
     "backToList": "一覧に戻る",
@@ -180,6 +181,29 @@
     "rule_trailing_input": "ルールに無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。それ以降は無視されるため、ルールは記述より少ない内容しか検査しません。削除するか、構文を修正してください。"
   },
   "runWarnings": {
-    "rule_trailing_input": "このルールには無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。実行時には無視されるため、ルールは記述より少ない内容しか検査しない可能性があります。ルールを編集して修正してください。"
+    "rule_trailing_input": "このルールには無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。実行時には無視されるため、ルールは記述より少ない内容しか検査しない可能性があります。ルールを編集して修正してください。",
+    "notifications_failed": "この実行ではポリシーの通知 (NOTIFY) を送信できませんでした。結果はすべて記録されています。"
+  },
+  "actionOutcomes": {
+    "status": {
+      "done": "完了",
+      "failed": "失敗"
+    },
+    "types": {
+      "ASSIGN_TAG": "タグ {{target}} を割り当て",
+      "REMOVE_TAG": "タグ {{target}} を削除",
+      "NOTIFY": "{{target}} に通知"
+    },
+    "errors": {
+      "tag_manager_unavailable": "この実行ではタグを変更できません",
+      "tag_not_found": "タグ {{tag}} が見つかりません",
+      "tag_value_not_allowed": "値 {{value}} は {{tag}} に使用できません (使用可能: {{allowed}})",
+      "tag_entity_type_unsupported": "{{entityType}} エンティティにはタグを設定できません",
+      "tag_entity_without_id": "エンティティに ID がありません",
+      "notification_manager_unavailable": "この実行では通知を利用できません",
+      "notify_no_recipients": "{{recipients}} に該当する受信者がいません",
+      "notify_unknown_recipient": "{{recipient}} は既知の受信者ではありません。メールアドレス、group:<名前>、アプリロール、または受信者キーワードを使用してください",
+      "action_failed": "アクションに失敗しました"
+    }
   }
 }

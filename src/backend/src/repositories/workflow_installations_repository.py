@@ -1,9 +1,9 @@
 import json
 from typing import Any, Dict, Optional, Union, List
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.common.repository import CRUDBase
 from src.db_models.workflow_installations import WorkflowInstallationDb
 from src.models.workflow_installations import WorkflowInstallation
@@ -88,7 +88,7 @@ class WorkflowInstallationRepository(CRUDBase[WorkflowInstallationDb, WorkflowIn
                 return db_obj
 
         update_data = {
-            'last_polled_at': datetime.utcnow()
+            'last_polled_at': utc_now()
         }
         if serialized_state is not None:
             update_data['last_job_state'] = serialized_state

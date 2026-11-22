@@ -6,7 +6,7 @@ Provides CRUD operations for workflow definitions and execution management.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Collection, Dict, List, Optional, Union
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,9 @@ from src.common.authorization import (
 from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
 from src.models.notifications import Notification
+from src.common.workflow_approvals import (
+    is_handled, open_approval_ids, open_execution_approvals,
+)
 from src.common.logging import get_logger
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.notifications_manager import NotificationsManager
@@ -36,6 +39,7 @@ from src.models.process_workflows import (
     WorkflowExecution,
     WorkflowListResponse,
     WorkflowExecutionListResponse,
+    WorkflowValidationIssue,
     WorkflowValidationResult,
     StepTypeSchema,
     TemplateVarsResponse,
@@ -791,7 +795,27 @@ def _with_policy_errors(
     added = WorkflowValidationResult(valid=False, errors=errors)
     return WorkflowValidationResult(
         valid=False, errors=[*validation.errors, *added.errors], warnings=validation.warnings,
-        issues=[*validation.issues, *added.issues],
+        issues=[*validation.issues, *added.issues], warning_issues=validation.warning_issues,
+    )
+
+
+def _with_policy_warnings(
+    manager: WorkflowsManager, validation: WorkflowValidationResult, steps,
+) -> WorkflowValidationResult:
+    """The validation plus a warning for each policy_check step with no existing policy.
+
+    For an inactive workflow: it saves, but can't be activated until a policy is selected.
+    """
+    missing = manager.policy_reference_errors(steps)
+    if not missing:
+        return validation
+    return WorkflowValidationResult(
+        valid=validation.valid, errors=validation.errors, issues=validation.issues,
+        warnings=[*validation.warnings, *(str(m) for m in missing)],
+        warning_issues=[
+            *validation.warning_issues,
+            *(WorkflowValidationIssue(code=m.code, message=str(m), params=dict(m.params)) for m in missing),
+        ],
     )
 
 
@@ -906,6 +930,8 @@ async def update_workflow(
         # Activating without touching the steps: the stored steps must be able to run
         _refuse_unrunnable_policy_steps(manager, existing)
     
+    # The designer leaves out schedule and timezone: keep the stored ones
+    workflow.trigger = manager.with_stored_schedule(workflow.trigger, existing.trigger)
     # Validate if steps are being updated
     if workflow.steps is not None:
         # Create a full workflow for validation
@@ -918,7 +944,7 @@ async def update_workflow(
             workflow_type=workflow.workflow_type or existing.workflow_type,
             steps=workflow.steps,
         )
-        validation = manager.validate_workflow(full_workflow)
+        validation = manager.validate_workflow(full_workflow, stored_trigger=existing.trigger)
         validation = _with_policy_errors(
             manager, validation, full_workflow.steps, full_workflow.is_active,
         )
@@ -927,6 +953,12 @@ async def update_workflow(
     # Only a changed trigger is checked: stored workflows keep working and can be edited.
     # Before the overlap check: a confirmed overlap must not end in a refused trigger.
     trigger_errors = manager.trigger_save_errors(workflow.trigger, existing.trigger)
+    if workflow.trigger is not None and workflow.steps is None:
+        # validate_workflow above checks the schedule only when steps are sent
+        trigger_errors = [
+            *trigger_errors,
+            *manager.changed_schedule_errors(workflow.trigger, existing.trigger),
+        ]
     if trigger_errors:
         raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
             WorkflowValidationResult(valid=False, errors=trigger_errors)))
@@ -1172,7 +1204,8 @@ async def validate_workflow(
         if not existing:
             raise HTTPException(status_code=404, detail="Workflow not found")
         stored_trigger = existing.trigger
-    validation = manager.validate_workflow(workflow)
+        workflow.trigger = manager.with_stored_schedule(workflow.trigger, stored_trigger)
+    validation = manager.validate_workflow(workflow, stored_trigger=stored_trigger)
     trigger_errors = manager.trigger_save_errors(workflow.trigger, stored_trigger)
     if trigger_errors:
         # ``errors`` of a result are plain strings: pass ``issues`` too, keeping their codes
@@ -1180,15 +1213,11 @@ async def validate_workflow(
         validation = WorkflowValidationResult(
             valid=False, errors=[*validation.errors, *added.errors],
             warnings=validation.warnings, issues=[*validation.issues, *added.issues],
+            warning_issues=validation.warning_issues,
         )
     if workflow.is_active:
         return _with_policy_errors(manager, validation, workflow.steps, True)
-    missing = manager.policy_reference_errors(workflow.steps)
-    if not missing:
-        return validation
-    return validation.model_copy(
-        update={'warnings': [*validation.warnings, *(str(m) for m in missing)]},
-    )
+    return _with_policy_warnings(manager, validation, workflow.steps)
 
 
 @router.post("/check-condition")
@@ -1352,6 +1381,11 @@ async def resume_workflow_execution(
                 },
             )
 
+        # The step the resume decides, read before the resume moves on
+        decided_step = _pending_step_id(db, execution_id)
+        # Open before the resume: a loop-back into this step opens a new round
+        open_before = open_approval_ids(db, execution_id)
+
         # Resume the workflow
         result = executor.resume_workflow(
             execution_id=execution_id,
@@ -1363,13 +1397,20 @@ async def resume_workflow_execution(
             },
             user_email=user_email,
         )
-        
+
         if not result:
             raise HTTPException(
-                status_code=404, 
+                status_code=404,
                 detail="Execution not found or not in paused state"
             )
-        
+
+        # An approval resumed here (e.g. by an external system) is decided:
+        # close its notifications so My actions stops offering it
+        _mark_step_notifications_handled(
+            db, execution_id, decided_step, approved, user_email, only_ids=open_before,
+        )
+        db.commit()
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',
@@ -1501,17 +1542,6 @@ def _is_for_step(
     return step_id is None or notified_step is None or notified_step == step_id
 
 
-def _is_handled(notification: Union[Notification, NotificationDb]) -> bool:
-    """Whether the approval notification's decision was already recorded."""
-    payload = notification.action_payload
-    if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except ValueError:
-            return False
-    return isinstance(payload, dict) and bool(payload.get('handled'))
-
-
 def _is_own_owner_approval(
     db: Session, execution_id: str, step_id: Optional[str], user_info: UserInfo,
 ) -> bool:
@@ -1619,7 +1649,7 @@ def _assert_caller_authorized_for_execution(
     candidates = [
         n for n in _find_approval_notifications_for_execution(db, execution_id)
         if (n.recipient or n.recipient_role_id) and _is_for_step(n, pending_step)
-        and not (for_read and _is_handled(n))
+        and not (for_read and is_handled(n))
     ]
     if not candidates:
         raise HTTPException(
@@ -1662,19 +1692,21 @@ def _mark_step_notifications_handled(
     approved: bool,
     user_email: Optional[str],
     decision: Optional[str] = None,
+    only_ids: Optional[Collection[str]] = None,
 ) -> None:
-    """Mark the unread approval notifications of ``step_id`` as handled.
+    """Mark the approval notifications of ``step_id`` not yet handled as handled.
 
-    Notifications of later steps, created while the workflow resumed, stay
-    open for their approvers. ``decision`` overrides approved / rejected
-    (``cancelled`` when an admin cancels the step).
+    Read ones too: an approver who opened the notification in the bell still
+    sees it in My actions until it is handled. Notifications of later steps,
+    created while the workflow resumed, stay open for their approvers.
+    ``decision`` overrides approved / rejected (``cancelled`` when an admin
+    cancels the step). ``only_ids`` limits the marking to the notifications
+    open before a resume: a workflow that loops back into the same step opens
+    a new round that must stay open.
     """
-    notifications = db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'workflow_approval',
-        NotificationDb.read == False
-    ).all()
-
-    for notif in notifications:
+    for notif in open_execution_approvals(db, execution_id):
+        if only_ids is not None and notif.id not in only_ids:
+            continue
         try:
             payload = notif.action_payload
             if isinstance(payload, str):
@@ -1711,10 +1743,7 @@ def _mark_decided_approver_notifications(
     from src.common.workflow_executor import approver_key
 
     by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
-    for notif in db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'workflow_approval',
-        NotificationDb.read == False,  # noqa: E712
-    ).all():
+    for notif in open_execution_approvals(db, execution_id):
         try:
             payload = json.loads(notif.action_payload or '{}')
         except (TypeError, ValueError):
@@ -1931,6 +1960,7 @@ async def handle_workflow_approval(
         # Resuming may pause at the next approval step and notify its
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)
+        open_before = open_approval_ids(db, execution_id)
 
         # Resume the workflow. The caller passed the per-execution check, so
         # the decision counts as the approval step's (e.g. for the certified
@@ -1961,7 +1991,9 @@ async def handle_workflow_approval(
                 detail="Execution not found or not in paused state"
             )
 
-        _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
+        _mark_step_notifications_handled(
+            db, execution_id, decided_step, approved, user_email, only_ids=open_before,
+        )
 
         audit_manager.log_action(
             db=db,
@@ -2327,6 +2359,7 @@ async def get_execution(
             'passed': se.passed,
             'result_data': json.loads(se.result_data) if se.result_data else None,
             'error_message': se.error_message,
+            'message': se.message,
             'duration_ms': se.duration_ms,
             'started_at': se.started_at.isoformat() if se.started_at else None,
             'finished_at': se.finished_at.isoformat() if se.finished_at else None,

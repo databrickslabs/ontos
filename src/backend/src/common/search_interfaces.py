@@ -48,6 +48,15 @@ class SearchableAsset(ABC):
         except Exception as e:
             _logger.warning(f"Failed to upsert search index item {item.id}: {e}")
 
+    def _notify_index_upsert_many(self, items: List[SearchIndexItem]) -> None:
+        """Upsert several items in one backend call. Safe no-op if SearchManager not yet wired."""
+        if self._search_manager is None or not items:
+            return
+        try:
+            self._search_manager.upsert_items(items)
+        except Exception as e:
+            _logger.warning(f"Failed to upsert {len(items)} search index items: {e}")
+
     def _notify_index_remove(self, item_id: str) -> None:
         """Remove a single item from the search index. Safe no-op if SearchManager not yet wired."""
         if self._search_manager is None:

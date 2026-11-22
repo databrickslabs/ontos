@@ -48,6 +48,19 @@ def get_entity_relationships_manager(request: Request) -> EntityRelationshipsMan
 # ===================== Create =====================
 
 
+def _concept_label_lookup(request: Request):
+    """``iri -> label`` from the semantic models, or None when they aren't loaded."""
+    semantic_models = getattr(request.app.state, "semantic_models_manager", None)
+    if semantic_models is None:
+        return None
+
+    def lookup(iri: str):
+        concept = semantic_models.get_concept_details(iri)
+        return getattr(concept, "label", None) if concept else None
+
+    return lookup
+
+
 @router.post(
     "",
     response_model=EntityRelationshipRead,
@@ -73,7 +86,10 @@ def create_relationship(
     }
     created_id = None
     try:
-        result = manager.create_relationship(db=db, rel_in=rel_in, current_user_id=current_user.email)
+        result = manager.create_relationship(
+            db=db, rel_in=rel_in, current_user_id=current_user.email,
+            concept_label=_concept_label_lookup(request),
+        )
         success = True
         created_id = str(result.id)
         return result

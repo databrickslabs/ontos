@@ -287,7 +287,7 @@ The `TriggerRegistry` provides a centralized interface for firing events and exe
 
 > **Pre-Creation vs Post-Creation Triggers:** Use `before_create`/`before_update` for inline validation that must pass before an entity is saved. Use `on_create`/`on_update` for asynchronous actions like notifications or tagging that run after the entity is already persisted.
 
-> **Scheduled and Manual:** the `scheduled` trigger does not run yet ([#941](https://github.com/databrickslabs/ontos/issues/941)). A `manual` workflow is started from the **Run** action in the row menu of the Workflows list (or with `POST /api/workflows/{id}/execute`); it asks for the entity type and the entity.
+> **Scheduled and Manual:** a `scheduled` workflow runs on its Quartz cron (`trigger.schedule`, in `trigger.timezone`), each slot at most once across app instances; see the [Workflow Authoring Guide](/user-docs/workflow-authoring-guide) for the rules ([#941](https://github.com/databrickslabs/ontos/issues/941)). A `manual` workflow is started from the **Run** action in the row menu of the Workflows list (or with `POST /api/workflows/{id}/execute`); it asks for the entity type and the entity.
 
 ### Entity Types
 

@@ -797,7 +797,7 @@ export default function DataDomainDetailsView() {
           {([
             { labelKey: 'details.assignedEntities.dataProducts', items: domainProducts, path: (i: any) => `/data-products/${i.id}`, primaryKey: 'primary_domain_id' },
             { labelKey: 'details.assignedEntities.dataContracts', items: domainContracts, path: (i: any) => `/data-contracts/${i.id}`, primaryKey: 'primaryDomainId' },
-            { labelKey: 'details.assignedEntities.assets', items: domainAssets, path: (i: any) => `/governance/assets/${i.id}`, primaryKey: 'primary_domain_id' },
+            { labelKey: 'details.assignedEntities.assets', items: domainAssets, path: (i: any) => `/assets/${i.id}`, primaryKey: 'primary_domain_id' },
           ] as const).map(({ labelKey, items, path, primaryKey }) => (
             <div key={labelKey}>
               <h4 className="text-sm font-semibold text-muted-foreground mb-2">{t(labelKey)} ({items.length})</h4>

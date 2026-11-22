@@ -212,6 +212,10 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
             public_filters = [self.model.owner_team_id.is_(None)]
             if teams_with_domain:
                 public_filters.append(self.model.owner_team_id.notin_(teams_with_domain))
+            else:
+                # No team has a domain, so every owner team is standalone (and
+                # ``NOT IN ()`` is avoided).
+                public_filters.append(self.model.owner_team_id.isnot(None))
 
             if not user_team_ids:
                 # User not in any team → only public projects.

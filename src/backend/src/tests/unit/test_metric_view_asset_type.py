@@ -183,8 +183,9 @@ def test_an_imported_metric_view_is_a_metric_view_asset_with_its_columns(
         (r.source_type, r.relationship_type, r.target_type)
         for r in db_session.query(EntityRelationshipDb).all()
     }
-    assert ("Schema", "hasView", "Metric View") in rels
-    assert ("Metric View", "hasColumn", "Column") in rels
+    # Rows store the ontology local name, as the asset pages look them up.
+    assert ("Schema", "hasView", "MetricView") in rels
+    assert ("MetricView", "hasColumn", "Column") in rels
 
 
 def _legacy_view(db, asset_types, location=METRIC_VIEW):
@@ -246,10 +247,10 @@ def test_a_legacy_view_reimported_as_a_metric_view_is_converted_with_its_links(
     assert asset.id == legacy.id  # converted, not duplicated
     assert asset.asset_type.name == "Metric View"
     links = _links_of(db_session, asset.id)
-    assert ("Metric View", "hasColumn", "Column") in links
-    assert ("Metric View", "implementsContract", "DataContract") in links
-    assert ("OutputPort", "portHasView", "Metric View") in links
-    assert ("Schema", "hasView", "Metric View") in links
+    assert ("MetricView", "hasColumn", "Column") in links
+    assert ("MetricView", "implementsContract", "DataContract") in links
+    assert ("OutputPort", "portHasView", "MetricView") in links
+    assert ("Schema", "hasView", "MetricView") in links
     assert not [link for link in links if "View" in (link[0], link[2])]
     [entry] = _retyped_entries(db_session, asset.id)
     assert entry.username == "u@x.com"
@@ -378,7 +379,7 @@ def test_a_link_that_already_exists_under_the_new_type_is_merged(db_session, ass
         r for r in db_session.query(EntityRelationshipDb).all()
         if r.source_id == vid and r.relationship_type == "hasColumn"
     ]
-    assert [(r.source_type, r.target_id) for r in column_links] == [("Metric View", "column-1")]
+    assert [(r.source_type, r.target_id) for r in column_links] == [("MetricView", "column-1")]
     assert not [link for link in _links_of(db_session, legacy.id) if "View" in link]
     assert manager.retype_asset(
         db_session, asset_id=legacy.id, from_type="View", to_type="Metric View",
@@ -400,7 +401,7 @@ def test_a_converted_metric_view_works_in_the_hierarchy_and_on_ports(
     assert tree is not None
     column_children = [c for c in tree.children if c.entity_type == "Column"]
     assert {c.name for c in column_children} >= {"Region", "Total Revenue"}
-    assert link.target_type == "Metric View"
+    assert link.target_type == "MetricView"
 
 
 def test_a_metric_view_imports_as_a_view_until_the_type_is_seeded(db_session, asset_types):

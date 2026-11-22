@@ -554,13 +554,25 @@ PHYSICAL_TABLE_ASSET_TYPES = ("Table", "View", METRIC_VIEW_ASSET_TYPE)
 # of its measures (#1263). It holds the view's definition, which only users who can
 # read the view in Unity Catalog may see, so asset reads and exports leave it out.
 METRIC_VIEW_PROPERTY = "metric_view"
-INTERNAL_PROPERTY_KEYS = frozenset({METRIC_VIEW_PROPERTY})
+# Why the asset's description is not in Unity Catalog: set when writing it there
+# failed, removed when a later write succeeds (see uc_description_sync_manager).
+DESCRIPTION_SYNC_PROPERTY = "uc_description_sync"
+INTERNAL_PROPERTY_KEYS = frozenset({METRIC_VIEW_PROPERTY, DESCRIPTION_SYNC_PROPERTY})
 
 
 def public_properties(properties: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """An asset's properties without the keys Ontos keeps for itself."""
     if not properties or not any(k in properties for k in INTERNAL_PROPERTY_KEYS):
         return properties
+    return {k: v for k, v in properties.items() if k not in INTERNAL_PROPERTY_KEYS}
+
+
+def without_internal_properties(
+    properties: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """``properties`` minus the internal keys: a client can't set them (they are set by Ontos)."""
+    if properties is None:
+        return None
     return {k: v for k, v in properties.items() if k not in INTERNAL_PROPERTY_KEYS}
 
 
@@ -686,6 +698,19 @@ class AssetUpdate(BaseModel):
     status: Optional[AssetStatus] = None
 
 
+class CodedWarning(BaseModel):
+    """A warning the UI translates by its code; ``message`` is the English fallback."""
+    code: str
+    message: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DescriptionSyncState(CodedWarning):
+    """The asset's description is not in Unity Catalog: why, and since when."""
+    status: str = "out_of_sync"
+    at: Optional[datetime] = None
+
+
 class AssetRead(AssetBase):
     id: UUID
     domains: List[AssignedDomain] = Field(default_factory=list, description="Assigned domains with names + primary flag")
@@ -694,6 +719,8 @@ class AssetRead(AssetBase):
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    description_sync: Optional[DescriptionSyncState] = Field(
+        None, description="Set when the description could not be written to Unity Catalog")
 
     model_config = {"from_attributes": True}
 
@@ -701,6 +728,22 @@ class AssetRead(AssetBase):
     @classmethod
     def _without_internal_properties(cls, value):
         return public_properties(value)
+
+
+def description_sync_state(properties: Optional[Dict[str, Any]]) -> Optional[DescriptionSyncState]:
+    """The stored reason the description is not in Unity Catalog, if any."""
+    stored = (properties or {}).get(DESCRIPTION_SYNC_PROPERTY)
+    if not isinstance(stored, dict):
+        return None
+    try:
+        return DescriptionSyncState.model_validate(stored)
+    except ValueError:
+        return None
+
+
+class AssetUpdateResult(AssetRead):
+    """The updated asset, with warnings about what the save could not do (it still succeeded)."""
+    warnings: List[CodedWarning] = Field(default_factory=list)
 
 
 class AssetSummary(BaseModel):

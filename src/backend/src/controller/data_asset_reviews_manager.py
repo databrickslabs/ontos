@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -17,6 +16,7 @@ import os
 # dependency issues during app startup. We'll import lazily when needed.
 
 # Import API models
+from src.common.timestamps import utc_now
 from src.models.data_asset_reviews import (
     DataAssetReviewRequest as DataAssetReviewRequestApi,
     DataAssetReviewRequestCreate,
@@ -236,7 +236,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                         asset_fqn=fqn,
                         asset_type=asset_type,
                         status=ReviewedAssetStatus.PENDING, # Start as pending
-                        updated_at=datetime.utcnow()
+                        updated_at=utc_now()
                     )
                 )
                 processed_fqns.add(fqn)
@@ -249,6 +249,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             normalized_title = raw_title if raw_title else None
 
             # Prepare the full API model for the repository
+            now = utc_now()
             full_request = DataAssetReviewRequestApi(
                 id=request_id,
                 requester_email=request_data.requester_email,
@@ -256,8 +257,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 title=normalized_title,
                 status=ReviewRequestStatus.QUEUED,
                 notes=request_data.notes,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=now,
+                updated_at=now,
                 assets=assets_to_review
             )
 
@@ -307,7 +308,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                         description=f"Assigned to you by {created_api_obj.requester_email}.",
                         type=NotificationType.INFO,
                         link=f"/data-asset-reviews/{created_api_obj.id}",
-                        created_at=datetime.utcnow(),
+                        created_at=utc_now(),
                     )
                     self._notifications_manager.create_notification(notification)
                     logger.info(f"No workflow configured; sent direct notification to {created_api_obj.reviewer_email}")
@@ -731,18 +732,22 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             # Call the two-phased analysis with user token
             result = llm_service.analyze_content(asset_content, user_token=user_token)
 
-            if not result.success and not result.phase1_passed:
-                # Phase 1 failed - return with security warning
-                # The result.content contains the security warning message
-                logger.warning(f"Phase 1 security check failed for asset {asset_id}: {result.error_message}")
+            if not result.success and (not result.phase1_passed or result.refused):
+                # Phase 1 failed or the model refused: result.content holds the
+                # security warning or the capped refusal, shown as plain text.
+                logger.warning(
+                    f"LLM analysis blocked or refused for asset {asset_id}: "
+                    f"{result.error_message}"
+                )
                 return AssetAnalysisResponse(
                     request_id=request_id,
                     asset_id=asset_id,
-                    analysis_summary=sanitize_markdown_input(result.content),  # Sanitize security warning
+                    analysis_summary=sanitize_markdown_input(result.content),
                     llm_model_used=result.llm_model_used,
                     timestamp=result.timestamp,
-                    phase1_passed=False,
-                    render_as_markdown=False  # Must display as plain text
+                    phase1_passed=result.phase1_passed,
+                    render_as_markdown=False,  # Must display as plain text
+                    notice_code=result.notice_code,
                 )
 
             if not result.success:

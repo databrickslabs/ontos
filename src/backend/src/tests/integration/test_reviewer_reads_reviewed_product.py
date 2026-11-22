@@ -338,3 +338,83 @@ class TestApprovalsQueue:
 
         assert response.status_code == 200, response.text
         assert contract_id in {c['id'] for c in response.json()['contracts']}
+
+
+def _add_role(db_session, group, perms):
+    """A custom role for ``group`` with exactly ``perms`` (no default role has
+    data-products read without data-contracts read)."""
+    import json
+
+    from src.db_models.settings import AppRoleDb
+
+    db_session.add(AppRoleDb(
+        id=str(uuid.uuid4()),
+        name=f'Queue test {uuid.uuid4().hex[:8]}',
+        feature_permissions=json.dumps(perms),
+        assigned_groups=json.dumps([group]),
+        home_sections='[]',
+        approval_privileges='{}',
+        hidden_nav_features='[]',
+    ))
+    db_session.commit()
+
+
+def _add_proposed_contract(db_session):
+    from src.db_models.data_contracts import DataContractDb
+
+    contract_id = str(uuid.uuid4())
+    db_session.add(DataContractDb(
+        id=contract_id, name='Proposed contract', version='1.0.0', status='proposed',
+    ))
+    db_session.commit()
+    return contract_id
+
+
+PRODUCTS_ONLY = ('products.reader@example.com', ['queue-products-only'])
+CONTRACTS_ONLY = ('contracts.reader@example.com', ['queue-contracts-only'])
+# Security Officer: neither data-products nor data-contracts read
+NEITHER = ('security@example.com', ['security-officers'])
+
+
+class TestApprovalsQueueGate:
+    """The queue opens to data-contracts **or** data-products readers, and each
+    item type is filtered by its own read permission."""
+
+    def test_a_products_only_reviewer_sees_the_product_and_no_contract(
+        self, client, as_user, db_session,
+    ):
+        _add_role(db_session, PRODUCTS_ONLY[1][0], {'data-products': 'Read-only'})
+        contract_id = _add_proposed_contract(db_session)
+        product_id = _create_draft(client, as_user, 'Reviewed by a products reader')
+        _request_review(client, as_user, product_id, PRODUCTS_ONLY[0])
+        as_user(PRODUCTS_ONLY)
+
+        response = client.get('/api/approvals/queue')
+
+        assert response.status_code == 200, response.text
+        assert product_id in {p['id'] for p in response.json()['products']}
+        assert contract_id not in {c['id'] for c in response.json()['contracts']}
+        assert response.json()['contracts'] == []
+
+    def test_a_contracts_only_reader_sees_the_contract_and_no_product(
+        self, client, as_user, db_session,
+    ):
+        _add_role(db_session, CONTRACTS_ONLY[1][0], {'data-contracts': 'Read-only'})
+        contract_id = _add_proposed_contract(db_session)
+        product_id = _create_draft(client, as_user, 'Reviewed by a contracts reader')
+        _request_review(client, as_user, product_id, CONTRACTS_ONLY[0])
+        as_user(CONTRACTS_ONLY)
+
+        response = client.get('/api/approvals/queue')
+
+        assert response.status_code == 200, response.text
+        assert contract_id in {c['id'] for c in response.json()['contracts']}
+        assert response.json()['products'] == []
+
+    def test_a_role_with_neither_read_gets_403(self, client, as_user, db_session):
+        _add_proposed_contract(db_session)
+        as_user(NEITHER)
+
+        response = client.get('/api/approvals/queue')
+
+        assert response.status_code == 403, response.text

@@ -1,0 +1,53 @@
+name: stale-prs
+
+# Mark pull requests stale after 30 days with no activity, and close them
+# 30 days after that (60 days of inactivity in total) if nothing happens.
+# Any comment, push, or label change resets the clock and removes the
+# `stale` label. Add the `keep-open` label to exempt a PR. Issues are not
+# touched.
+
+on:
+  schedule:
+    - cron: "30 6 * * *" # daily, 06:30 UTC
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  issues: write # labels and comments on PRs go through the issues API
+  actions: write # lets the action clean up its own state cache between runs
+
+concurrency:
+  group: stale-prs
+  cancel-in-progress: false
+
+jobs:
+  stale:
+    name: mark and close stale PRs
+    # The action calls the GitHub API, and the databrickslabs org enforces an
+    # IP allow list, so it must run on the protected runner group.
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          # PRs only; leave issues alone.
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
+          days-before-pr-stale: 15
+          days-before-pr-close: 15
+          stale-pr-label: stale
+          exempt-pr-labels: keep-open
+          remove-pr-stale-when-updated: true
+          stale-pr-message: >
+            This pull request has had no activity for 30 days, so it has been
+            marked stale. It will be closed in 30 days if there is no further
+            activity. Comment or push a commit to keep it open, or add the
+            `keep-open` label to exempt it.
+          close-pr-message: >
+            Closing this pull request after 60 days without activity. Reopen it
+            (or open a new one) if you would like to pick it back up.
+          # Enough headroom to process every open PR in one run.
+          operations-per-run: 300

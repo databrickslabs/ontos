@@ -5,17 +5,23 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 
 from src.models.assets import (
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
-    AssetCreate, AssetUpdate, AssetRead, AssetSummary,
+    AssetCreate, AssetUpdate, AssetRead, AssetSummary, AssetUpdateResult,
+    without_internal_properties,
     AssetRelationshipCreate, AssetRelationshipRead,
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteRequest, CascadeDeleteResult,
 )
-from src.controller.assets_manager import assets_manager
+from src.common import manager_dependencies
+from src.controller.assets_manager import AssetsManager, assets_manager
 from src.controller.metric_views_manager import (
     MetricViewNotFoundError, MetricViewsManager, UserClientUnavailableError, UserTokenRequiredError,
 )
 from src.common.workspace_client import get_obo_workspace_client
 from src.controller.semantic_links_manager import SemanticLinksManager
+from src.controller.uc_description_sync_manager import (
+    SyncOutcome, UcDescriptionSyncManager, write_failed_warning,
+)
+from src.db_models.assets import AssetDb
 from src.models.metric_views import MetricViewRead
 from src.controller.metric_view_change_requests_manager import (
     ChangeRequestError, MetricViewChangeRequestsManager,
@@ -23,13 +29,14 @@ from src.controller.metric_view_change_requests_manager import (
 from src.models.metric_view_change_requests import (
     MetricViewChangeRequestCreate, MetricViewChangeRequestDetail, MetricViewChangeRequestRead,
 )
-from src.common.authorization import PermissionChecker
+from src.common.authorization import PermissionChecker, effective_permissions_for_request
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep,
     CurrentUserDep,
     AuditManagerDep,
     AuditCurrentUserDep,
+    SettingsDep,
 )
 from src.common.errors import NotFoundError, ConflictError, ValidationError
 from src.common.logging import get_logger
@@ -41,8 +48,17 @@ assets_router = APIRouter(prefix="/api/assets", tags=["Assets"])
 FEATURE_ID = "assets"
 
 
-def get_assets_manager():
-    return assets_manager
+def get_assets_manager(request: Request = None) -> AssetsManager:
+    """The AssetsManager wired at startup (``app.state.assets_manager``).
+
+    That instance has the search manager and the ontology; the module-level
+    singleton has neither, so using it would silently skip the search index
+    update. With a request and no wired manager this raises 503 (same as every
+    other manager dependency). The singleton is returned only without a request.
+    """
+    if request is None:
+        return assets_manager
+    return manager_dependencies.get_assets_manager(request)
 
 
 def _get_data_products_manager(request: Request):
@@ -63,23 +79,11 @@ def _user_has_assets_feature(request: Request, current_user, level: FeatureAcces
     """
     try:
         auth_manager = getattr(request.app.state, "authorization_manager", None)
-        settings_manager = getattr(request.app.state, "settings_manager", None)
         if not auth_manager or not current_user:
             return False
-        applied_role_id = None
-        if settings_manager:
-            try:
-                applied_role_id = settings_manager.get_applied_role_override_for_user(
-                    current_user.email
-                )
-            except Exception:
-                applied_role_id = None
-        if applied_role_id and settings_manager:
-            effective = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-        else:
-            effective = auth_manager.get_user_effective_permissions(
-                current_user.groups or [], None
-            )
+        effective = effective_permissions_for_request(
+            request, current_user.email, current_user.groups or [], auth_manager,
+        )
         return auth_manager.has_permission(effective, FEATURE_ID, level)
     except Exception:
         logger.exception("Failed to check assets feature for user")
@@ -286,26 +290,44 @@ def delete_asset_type(
 
 @assets_router.post(
     "",
-    response_model=AssetRead,
+    response_model=AssetUpdateResult,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
 )
 def create_asset(
     request: Request,
     asset_in: AssetCreate,
+    settings: SettingsDep,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager=Depends(get_assets_manager),
 ):
-    """Creates a new asset."""
+    """Creates a new asset.
+
+    With the Unity Catalog description setting on, a table, view or column
+    description is written there too, as for an update (a new asset has no
+    previous description, so an existing different comment is kept).
+    """
     success = False
     details = {"params": {"name": asset_in.name, "type_id": str(asset_in.asset_type_id)}}
     created_id = None
+    # Clients never set the internal keys (e.g. the Unity Catalog sync mark)
+    asset_in = asset_in.model_copy(
+        update={"properties": without_internal_properties(asset_in.properties)})
     try:
         result = manager.create_asset(db=db, asset_in=asset_in, current_user_id=current_user.email)
+        db.commit()
+        outcome = _write_back_description(
+            db, settings, request, result.id,
+            description_sent=True, previous_description=None, label=result.location,
+        )
         success = True
         created_id = str(result.id)
+        result = AssetUpdateResult(**result.model_dump(), warnings=_warnings_of(outcome))
+        result.description_sync = outcome.state
+        if outcome.audit:
+            details["uc_comment"] = outcome.audit
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}
@@ -348,8 +370,13 @@ def get_all_assets(
     domain_ids: Optional[str] = Query(None, description="Filter by multiple domain IDs, comma-separated (any-of)"),
     asset_status: Optional[str] = Query(None, alias="status"),
     name: Optional[str] = Query(None),
+    owned_by_me: bool = Query(
+        False, description="Only assets the current user owns (active business owner)",
+    ),
 ):
     """Lists all assets with optional filters. Returns paginated results.
+
+    ``owned_by_me`` narrows any of the branches below to the caller's owned assets.
 
     Authorization (issue #347):
     - Users with ``assets:READ_WRITE`` or higher (Producers, Admins): see
@@ -390,6 +417,7 @@ def get_all_assets(
         asset_type_id=asset_type_id, asset_type_names=type_names_list,
         platform=platform, domain_id=domain_id, domain_ids=domain_ids_list, status=asset_status, name=name,
         restrict_to_ids=restrict_ids,
+        owner_email=(current_user.email or "") if owned_by_me else None,
     )
 
 
@@ -400,6 +428,7 @@ def get_all_assets(
 def get_asset(
     asset_id: UUID,
     request: Request,
+    settings: SettingsDep,
     db: DBSessionDep,
     current_user: CurrentUserDep,
     manager=Depends(get_assets_manager),
@@ -419,18 +448,22 @@ def get_asset(
     result = manager.get_asset(db=db, asset_id=asset_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
+    if not UcDescriptionSyncManager(settings).enabled:
+        # Writing to Unity Catalog is off, so an older "not in sync" mark means nothing
+        result.description_sync = None
     return result
 
 
 @assets_router.put(
     "/{asset_id}",
-    response_model=AssetRead,
+    response_model=AssetUpdateResult,
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
 )
 def update_asset(
     asset_id: UUID,
     request: Request,
     asset_in: AssetUpdate,
+    settings: SettingsDep,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
@@ -439,8 +472,39 @@ def update_asset(
     """Updates an existing asset."""
     success = False
     details = {"params": {"asset_id": str(asset_id)}}
+    if asset_in.properties is not None:
+        # model_copy would mark an unsent field as set, so only a sent one is replaced
+        asset_in = asset_in.model_copy(
+            update={"properties": without_internal_properties(asset_in.properties)})
     try:
+        # Read under the row lock this save holds until its commit, so a concurrent save of
+        # the asset can't change the description in between (that would look like a
+        # comment someone else wrote in Unity Catalog)
+        existing = (
+            db.query(AssetDb).filter(AssetDb.id == asset_id)
+            .with_for_update().populate_existing().one_or_none()
+        )
+        previous_description = existing.description if existing is not None else None
+        if existing is not None and 'description' in asset_in.model_fields_set:
+            UcDescriptionSyncManager(settings).keep_baseline(db, existing)
         result = manager.update_asset(db=db, asset_id=asset_id, asset_in=asset_in, current_user_id=current_user.email)
+        # The save is committed before Unity Catalog is written, so Unity Catalog never
+        # gets ahead of a save that failed to commit. With the setting on, a changed
+        # table, view or column description is then written as the user. A failed
+        # write doesn't fail the save: the response carries a coded warning and the
+        # asset's description_sync state.
+        db.commit()
+        outcome = _write_back_description(
+            db, settings, request, asset_id,
+            description_sent='description' in asset_in.model_fields_set,
+            previous_description=previous_description, label=result.location,
+        )
+        result = AssetUpdateResult(**result.model_dump(), warnings=_warnings_of(outcome))
+        result.description_sync = outcome.state
+        if outcome.warning:
+            details["uc_description_warning"] = outcome.warning.code
+        if outcome.audit:
+            details["uc_comment"] = outcome.audit
         success = True
         return result
     except NotFoundError as e:
@@ -575,6 +639,42 @@ def delete_asset(
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="DELETE_ASSET", success=success, details=details,
         )
+
+
+def _warnings_of(outcome: SyncOutcome) -> list:
+    return [outcome.warning] if outcome.warning else []
+
+
+def _write_back_description(
+    db, settings, request: Request, asset_id, *, description_sent: bool,
+    previous_description, label: str,
+) -> SyncOutcome:
+    """Write a committed save's description to Unity Catalog and commit the outcome.
+
+    The column snapshot of a Column asset follows only a write that reached Unity
+    Catalog. Never raises: the save is already committed, so an unexpected failure
+    is a write-failed warning.
+    """
+    try:
+        outcome = UcDescriptionSyncManager(settings).sync_after_update(
+            db, asset_id,
+            description_sent=description_sent,
+            previous_description=previous_description,
+            user_client=lambda: _user_workspace_client(request),
+        )
+        if outcome.in_sync:
+            asset = db.get(AssetDb, asset_id)
+            if asset is not None:
+                AssetsManager.update_table_column_snapshot(db, asset)
+        db.commit()
+        return outcome
+    except Exception as e:
+        db.rollback()
+        # The error's type only: its text and traceback can carry the SQL parameters,
+        # i.e. the description
+        logger.warning("Writing the description of asset %s to Unity Catalog failed: %s",
+                       asset_id, type(e).__name__)
+        return SyncOutcome(warning=write_failed_warning(label or str(asset_id)))
 
 
 def _user_workspace_client(request: Request):

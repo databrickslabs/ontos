@@ -8,15 +8,48 @@ This service provides a secure interface to Databricks-hosted LLM endpoints with
 All interactions use the OpenAI SDK with Databricks endpoints.
 """
 
+import re
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 
 from src.common.config import Settings, get_settings
-from src.common.llm_content import block_types, coerce_message_text
+from src.common.llm_content import (
+    REFUSAL_DISPLAY_MAX_CHARS,
+    REFUSAL_LOG_MAX_CHARS,
+    block_types,
+    coerce_message_text,
+    refusal_text,
+    truncate_text,
+)
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Output budget of the Phase 1 safety check. The answer is one word (SAFE /
+# UNSAFE plus a reason), but reasoning models spend part of the budget on
+# reasoning first: at 256 tokens the reply often had no answer left
+# (finish_reason=length), and the check failed closed on harmless content.
+PHASE1_MAX_TOKENS = 2048
+# Output budget of the Phase 2 content analysis.
+PHASE2_MAX_TOKENS = 2048
+# ``notice_code`` of a refusal; the frontend shows a localized notice for each.
+PHASE1_REFUSED_CODE = "llm_safety_check_refused"
+PHASE2_REFUSED_CODE = "llm_analysis_refused"
+# Fixed reason of a Phase 1 refusal: the refusal itself can quote the
+# injection-check prompt, so it is only logged (truncated), never returned.
+PHASE1_REFUSED_REASON = "Security check failed: the model refused to check the content"
+# The Phase 1 verdict must open the reply ("SAFE" / "UNSAFE: reason"); a
+# substring match passed "NOT SAFE" and "SAFEGUARDS MISSING".
+_PHASE1_VERDICT_RE = re.compile(r"^\s*(UNSAFE|SAFE)\b", re.IGNORECASE)
+
+
+@dataclass
+class _LLMReply:
+    """Answer text (text blocks only), refusal text and finish_reason of one completion."""
+    text: str
+    refusal: str
+    finish_reason: Optional[str] = None
 
 
 @dataclass
@@ -29,6 +62,8 @@ class LLMAnalysisResult:
     llm_model_used: Optional[str] = None
     error_message: Optional[str] = None
     timestamp: datetime = None
+    refused: bool = False  # True if the model refused (shown as plain text, never markdown)
+    notice_code: Optional[str] = None  # Code of the localized notice the UI shows
 
     def __post_init__(self):
         if self.timestamp is None:
@@ -81,8 +116,15 @@ class LLMService:
             user_token: Per-user access token (for Databricks Apps)
 
         Returns:
-            Response content string or None on failure
+            Response content string or None on failure (a refusal is not content)
         """
+        reply = self._complete(messages, max_tokens=max_tokens, user_token=user_token)
+        return reply.text if reply is not None and reply.text else None
+
+    def _complete(
+        self, messages: list[Dict[str, str]], max_tokens: int, user_token: Optional[str] = None
+    ) -> Optional[_LLMReply]:
+        """Call the endpoint; None when there is neither answer text nor a refusal."""
         endpoint = self.get_endpoint()
         if not endpoint:
             logger.error("Cannot call LLM: No endpoint configured")
@@ -107,8 +149,17 @@ class LLMService:
                 # Reasoning models return a block list; keep only the text
                 # blocks so an all-reasoning response counts as "no content".
                 content = coerce_message_text(raw_content).strip()
-                if content:
-                    return content
+                refusal = refusal_text(choice.message)
+                if refusal:
+                    logger.warning(
+                        "LLM refused the request (finish_reason=%s, block types: %s)",
+                        finish_reason,
+                        block_types(raw_content),
+                    )
+                if content or refusal:
+                    return _LLMReply(
+                        text=content, refusal=refusal, finish_reason=finish_reason
+                    )
 
             logger.warning(
                 "LLM returned no content in response (finish_reason=%s, block types: %s)",
@@ -139,24 +190,46 @@ class LLMService:
             {"role": "user", "content": content}
         ]
 
-        response = self._call_llm(messages, max_tokens=256, user_token=user_token)
+        reply = self._complete(messages, max_tokens=PHASE1_MAX_TOKENS, user_token=user_token)
 
-        if response is None:
+        if reply is not None and reply.refusal:
+            # A refusal is not a verdict: fail closed, even next to a "SAFE" text block.
+            logger.warning(
+                "Phase 1 FAILED: the model refused the security check: %s",
+                truncate_text(reply.refusal, REFUSAL_LOG_MAX_CHARS),
+            )
+            return False, PHASE1_REFUSED_REASON
+
+        if reply is None or not reply.text:
             logger.error("Phase 1 security check failed: No response from LLM")
             return False, "Security check failed: Unable to verify content safety"
+        if reply.finish_reason != "stop":
+            # Cut off (length, content filter, unknown): the verdict may be partial.
+            logger.error(
+                "Phase 1 security check failed: reply did not finish (finish_reason=%s)",
+                reply.finish_reason,
+            )
+            return False, "Security check failed: Unable to verify content safety"
+        response = reply.text
 
-        # Check if response indicates content is safe
-        response_upper = response.upper()
-        if "SAFE" in response_upper and "UNSAFE" not in response_upper:
+        # Only a reply that opens with SAFE, and never mentions UNSAFE, passes;
+        # anything else (no verdict, free text) fails closed.
+        match = _PHASE1_VERDICT_RE.match(response)
+        verdict = match.group(1).upper() if match else None
+        if verdict == "SAFE" and "UNSAFE" not in response.upper():
             logger.info("Phase 1 PASSED: Content deemed safe")
             return True, None
-        else:
-            # Extract reason if available
-            reason = response if "UNSAFE" in response_upper else "Content flagged as potentially unsafe"
-            logger.warning(f"Phase 1 FAILED: {reason}")
-            return False, reason
+        reason = (
+            truncate_text(response, REFUSAL_DISPLAY_MAX_CHARS)
+            if verdict == "UNSAFE"
+            else "Content flagged as potentially unsafe"
+        )
+        logger.warning(f"Phase 1 FAILED: {reason}")
+        return False, reason
 
-    def _phase2_content_analysis(self, content: str, user_token: Optional[str] = None) -> Optional[str]:
+    def _phase2_content_analysis(
+        self, content: str, user_token: Optional[str] = None
+    ) -> Optional[_LLMReply]:
         """
         Phase 2: Content analysis with configurable system prompt.
 
@@ -165,7 +238,7 @@ class LLMService:
             user_token: Per-user access token (for Databricks Apps)
 
         Returns:
-            Analysis result or None on failure
+            The reply (answer text and refusal text) or None on failure
         """
         logger.info("Running Phase 2: Content analysis")
 
@@ -182,14 +255,18 @@ class LLMService:
             {"role": "user", "content": content}
         ]
 
-        response = self._call_llm(messages, max_tokens=2048, user_token=user_token)
+        reply = self._complete(messages, max_tokens=PHASE2_MAX_TOKENS, user_token=user_token)
 
-        if response:
-            logger.info("Phase 2 COMPLETED: Content analysis successful")
-        else:
+        if reply is None:
             logger.error("Phase 2 FAILED: No response from LLM")
+        elif reply.refusal:
+            logger.warning(
+                "Phase 2 REFUSED: %s", truncate_text(reply.refusal, REFUSAL_LOG_MAX_CHARS)
+            )
+        else:
+            logger.info("Phase 2 COMPLETED: Content analysis successful")
 
-        return response
+        return reply
 
     def analyze_content(self, content: str, user_token: Optional[str] = None) -> LLMAnalysisResult:
         """
@@ -230,6 +307,7 @@ class LLMService:
         phase1_passed, security_reason = self._phase1_security_check(content, user_token=user_token)
 
         if not phase1_passed:
+            refused = security_reason == PHASE1_REFUSED_REASON
             # Return security failure - content should be displayed as plain text
             warning_message = (
                 f"⚠️ SECURITY WARNING ⚠️\n\n"
@@ -243,13 +321,29 @@ class LLMService:
                 phase1_passed=False,
                 render_as_markdown=False,  # Must display as plain text
                 llm_model_used=endpoint,
-                error_message=security_reason
+                error_message=security_reason,
+                refused=refused,
+                notice_code=PHASE1_REFUSED_CODE if refused else None,
             )
 
         # Phase 2: Content Analysis
         analysis = self._phase2_content_analysis(content, user_token=user_token)
 
-        if analysis is None:
+        if analysis is not None and analysis.refusal:
+            # A refusal is not a vetted analysis, also next to a text block:
+            # return it as a refused result, capped and shown as plain text.
+            return LLMAnalysisResult(
+                success=False,
+                content=truncate_text(analysis.refusal, REFUSAL_DISPLAY_MAX_CHARS),
+                phase1_passed=True,
+                render_as_markdown=False,
+                llm_model_used=endpoint,
+                error_message="The model refused to analyze the content",
+                refused=True,
+                notice_code=PHASE2_REFUSED_CODE,
+            )
+
+        if analysis is None or not analysis.text:
             return LLMAnalysisResult(
                 success=False,
                 content="",
@@ -262,7 +356,7 @@ class LLMService:
         # Success: Both phases passed
         return LLMAnalysisResult(
             success=True,
-            content=analysis,
+            content=analysis.text,
             phase1_passed=True,
             render_as_markdown=True,  # Safe to render as markdown
             llm_model_used=endpoint

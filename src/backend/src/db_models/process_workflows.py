@@ -5,8 +5,14 @@ Stores workflow definitions, steps, and execution history for the visual workflo
 These are different from Databricks job workflows - these are internal process automation workflows.
 """
 
+import json
 import uuid
-from sqlalchemy import text, Column, String, Text, Boolean, Integer, ForeignKey, func, TIMESTAMP, Float
+from datetime import datetime, timezone
+
+from sqlalchemy import (
+    event, inspect, text, Column, String, Text, Boolean, Integer, ForeignKey, func, TIMESTAMP,
+    Float,
+)
 from sqlalchemy.orm import relationship
 
 from src.common.database import Base
@@ -50,6 +56,10 @@ class ProcessWorkflowDb(Base):
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     created_by = Column(String(255), nullable=True)
     updated_by = Column(String(255), nullable=True)
+    # When the trigger's type, schedule or timezone or ``is_active`` last changed (app
+    # clock, set by ``_note_schedule_change``). The scheduler doesn't run a slot before
+    # it, and other edits leave it, so a restart doesn't drop a due slot (#941).
+    schedule_changed_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     # Relationships
     steps = relationship("WorkflowStepDb", back_populates="workflow", cascade="all, delete-orphan", order_by="WorkflowStepDb.order")
@@ -57,6 +67,39 @@ class ProcessWorkflowDb(Base):
 
     def __repr__(self):
         return f"<ProcessWorkflowDb(id='{self.id}', name='{self.name}', is_active={self.is_active})>"
+
+
+def schedule_key(trigger_config):
+    """The parts of a stored trigger that decide when a ``scheduled`` workflow runs."""
+    try:
+        trigger = json.loads(trigger_config or '{}')
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(trigger, dict):
+        return None
+    return trigger.get('type'), trigger.get('schedule'), trigger.get('timezone')
+
+
+@event.listens_for(ProcessWorkflowDb, 'before_insert')
+def _note_schedule_on_insert(_mapper, _connection, target: ProcessWorkflowDb) -> None:
+    if target.schedule_changed_at is None:
+        target.schedule_changed_at = datetime.now(timezone.utc)
+
+
+@event.listens_for(ProcessWorkflowDb, 'before_update')
+def _note_schedule_change(_mapper, _connection, target: ProcessWorkflowDb) -> None:
+    """Move ``schedule_changed_at`` when the schedule or ``is_active`` changes, only then."""
+    state = inspect(target)
+    if state.attrs.schedule_changed_at.history.has_changes():
+        return  # set explicitly
+    active = state.attrs.is_active.history
+    changed = active.has_changes() and bool(active.deleted) and (
+        bool(active.deleted[0]) != bool(target.is_active))
+    trigger = state.attrs.trigger_config.history
+    if not changed and trigger.has_changes() and trigger.deleted:
+        changed = schedule_key(trigger.deleted[0]) != schedule_key(target.trigger_config)
+    if changed:
+        target.schedule_changed_at = datetime.now(timezone.utc)
 
 
 class WorkflowStepDb(Base):
@@ -182,6 +225,10 @@ class WorkflowStepExecutionDb(Base):
     
     # Error message if failed
     error_message = Column(Text, nullable=True)
+
+    # The step's message (StepResult.message), so a resumed run gives later
+    # steps the same ``step_results`` entry as before the pause
+    message = Column(Text, nullable=True)
     
     # Duration in milliseconds
     duration_ms = Column(Float, nullable=True)

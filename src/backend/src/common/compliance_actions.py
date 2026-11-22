@@ -9,6 +9,10 @@ Available Actions:
     - ASSIGN_TAG: Add or update a tag on the entity
     - REMOVE_TAG: Remove a tag from the entity
     - NOTIFY: Trigger notification to recipients
+
+A failed action reports a stable ``code`` (with ``params``) that the UI translates;
+``error`` keeps an English text for logs and API clients. Unexpected exceptions are
+logged and reported as ``action_failed``, never with their raw text.
 """
 
 from abc import ABC, abstractmethod
@@ -19,11 +23,29 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
+# Compliance entity types -> the entity_type Ontos stores tags, owners and business
+# owners under (one map for the tag and notification actions)
+APP_ENTITY_TYPES = {
+    'data_product': 'data_product',
+    'data_contract': 'data_contract',
+    'domain': 'data_domain',
+}
+
+
+class ActionError(ValueError):
+    """An expected action failure, with a code and params the UI can translate."""
+
+    def __init__(self, code: str, message: str, **params: Any):
+        super().__init__(message)
+        self.code = code
+        self.params = {k: '' if v is None else str(v) for k, v in params.items()}
+
+
 class EntityTagManager(Protocol):
     """Protocol for entity tag management."""
 
-    def assign_tag(self, entity_type: str, entity_id: str, key: str, value: str) -> None:
-        """Assign a tag to an entity."""
+    def assign_tag(self, entity_type: str, entity_id: str, key: str, value: Optional[str]) -> None:
+        """Assign a tag to an entity. ``value=None`` assigns the key only (an existing value is kept)."""
         ...
 
     def remove_tag(self, entity_type: str, entity_id: str, key: str) -> None:
@@ -32,7 +54,12 @@ class EntityTagManager(Protocol):
 
 
 class NotificationManager(Protocol):
-    """Protocol for notification management."""
+    """Protocol for notification management.
+
+    A manager may also provide ``notify(recipients, context)``, which NotifyAction
+    prefers: it gets the entity, so it can resolve recipients such as
+    ``entity_owner`` and group notifications per run (see ComplianceRunNotifier).
+    """
 
     def send_notification(self, recipients: str, message: str, subject: str) -> None:
         """Send a notification to recipients."""
@@ -60,6 +87,25 @@ class ActionResult:
     action_type: str
     message: Optional[str] = None
     error: Optional[str] = None
+    code: Optional[str] = None
+    params: Optional[Dict[str, str]] = None
+    # What the action acted on: the tag key, or the NOTIFY recipients
+    target: Optional[str] = None
+
+
+def _failure(action_type: str, error: Exception, target: Optional[str]) -> ActionResult:
+    """A failed ActionResult: coded for ActionError, generic for anything unexpected (logged)."""
+    if isinstance(error, ActionError):
+        logger.warning("%s %s failed: %s", action_type, target, error)
+        return ActionResult(
+            success=False, action_type=action_type, error=str(error),
+            code=error.code, params=error.params, target=target,
+        )
+    logger.error("%s %s failed", action_type, target, exc_info=error)
+    return ActionResult(
+        success=False, action_type=action_type, error='Action failed',
+        code='action_failed', params={}, target=target,
+    )
 
 
 class Action(ABC):
@@ -107,7 +153,7 @@ class FailAction(Action):
 class AssignTagAction(Action):
     """Assign a tag to the entity."""
 
-    def __init__(self, key: str, value: str):
+    def __init__(self, key: str, value: Optional[str] = None):
         self.key = key
         self.value = value
 
@@ -116,7 +162,10 @@ class AssignTagAction(Action):
             return ActionResult(
                 success=False,
                 action_type='ASSIGN_TAG',
-                error='Tag manager not available'
+                error='Tag manager not available',
+                code='tag_manager_unavailable',
+                params={},
+                target=self.key,
             )
 
         try:
@@ -126,18 +175,15 @@ class AssignTagAction(Action):
                 key=self.key,
                 value=self.value
             )
+            shown = self.key if self.value is None else f'{self.key}={self.value}'
             return ActionResult(
                 success=True,
                 action_type='ASSIGN_TAG',
-                message=f'Assigned tag {self.key}={self.value}'
+                message=f'Assigned tag {shown}',
+                target=self.key,
             )
         except Exception as e:
-            logger.exception(f"Failed to assign tag {self.key}={self.value}")
-            return ActionResult(
-                success=False,
-                action_type='ASSIGN_TAG',
-                error=str(e)
-            )
+            return _failure('ASSIGN_TAG', e, self.key)
 
 
 class RemoveTagAction(Action):
@@ -151,7 +197,10 @@ class RemoveTagAction(Action):
             return ActionResult(
                 success=False,
                 action_type='REMOVE_TAG',
-                error='Tag manager not available'
+                error='Tag manager not available',
+                code='tag_manager_unavailable',
+                params={},
+                target=self.key,
             )
 
         try:
@@ -163,15 +212,11 @@ class RemoveTagAction(Action):
             return ActionResult(
                 success=True,
                 action_type='REMOVE_TAG',
-                message=f'Removed tag {self.key}'
+                message=f'Removed tag {self.key}',
+                target=self.key,
             )
         except Exception as e:
-            logger.exception(f"Failed to remove tag {self.key}")
-            return ActionResult(
-                success=False,
-                action_type='REMOVE_TAG',
-                error=str(e)
-            )
+            return _failure('REMOVE_TAG', e, self.key)
 
 
 class NotifyAction(Action):
@@ -185,32 +230,34 @@ class NotifyAction(Action):
             return ActionResult(
                 success=False,
                 action_type='NOTIFY',
-                error='Notification manager not available'
+                error='Notification manager not available',
+                code='notification_manager_unavailable',
+                params={},
+                target=self.recipients,
             )
 
         try:
-            status = 'passed' if context.passed else 'failed'
-            message = f"Compliance rule '{context.rule_name}' {status} for {context.entity_type} '{context.entity_id}'"
-            if context.message:
-                message += f"\n\n{context.message}"
-
-            context.notification_manager.send_notification(
-                recipients=self.recipients,
-                message=message,
-                subject=f"Compliance Alert: {context.rule_name}"
-            )
+            notify = getattr(context.notification_manager, 'notify', None)
+            if callable(notify):
+                notify(self.recipients, context)
+            else:
+                status = 'passed' if context.passed else 'failed'
+                message = f"Compliance rule '{context.rule_name}' {status} for {context.entity_type} '{context.entity_id}'"
+                if context.message:
+                    message += f"\n\n{context.message}"
+                context.notification_manager.send_notification(
+                    recipients=self.recipients,
+                    message=message,
+                    subject=f"Compliance Alert: {context.rule_name}"
+                )
             return ActionResult(
                 success=True,
                 action_type='NOTIFY',
-                message=f'Notified {self.recipients}'
+                message=f'Notified {self.recipients}',
+                target=self.recipients,
             )
         except Exception as e:
-            logger.exception(f"Failed to send notification to {self.recipients}")
-            return ActionResult(
-                success=False,
-                action_type='NOTIFY',
-                error=str(e)
-            )
+            return _failure('NOTIFY', e, self.recipients)
 
 
 class ActionRegistry:
@@ -303,11 +350,7 @@ class ActionExecutor:
 
             except Exception as e:
                 logger.exception(f"Failed to execute action: {action_def}")
-                results.append(ActionResult(
-                    success=False,
-                    action_type=action_def.get('type', 'UNKNOWN'),
-                    error=str(e)
-                ))
+                results.append(_failure(action_def.get('type', 'UNKNOWN'), e, None))
 
         return results
 

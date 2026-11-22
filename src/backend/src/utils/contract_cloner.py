@@ -286,89 +286,50 @@ class ContractCloner:
 
         return cloned_servers
 
+    @staticmethod
+    def _child_rows(rows: List, new_contract_id: str) -> List[Dict]:
+        """Every stored field of the contract's child rows, with new row ids."""
+        out = []
+        for row in rows or []:
+            cloned = _stored_fields(row, exclude={'id', 'contract_id'})
+            cloned.update({'id': str(uuid4()), 'contract_id': new_contract_id})
+            out.append(cloned)
+        return out
+
     def clone_roles(self, source_roles: List, new_contract_id: str) -> List[Dict]:
-        """Clone contract roles"""
-        cloned_roles = []
-
-        for role in source_roles:
-            new_role_id = str(uuid4())
-
-            cloned_role = {
-                'id': new_role_id,
-                'contract_id': new_contract_id,
-                'name': role.name,
-                'description': role.description,
-                'access_type': role.access_type,
-                'directory_group': role.directory_group,
-                'email': role.email,
-            }
-
-            # Clone role properties
-            if hasattr(role, 'properties') and role.properties:
-                cloned_role['properties'] = [
-                    {
-                        'id': str(uuid4()),
-                        'role_id': new_role_id,
-                        'property': prop.property,
-                        'value': prop.value
-                    }
-                    for prop in role.properties
-                ]
-
-            cloned_roles.append(cloned_role)
-
+        """Clone contract roles, with their custom properties (as `properties`)"""
+        cloned_roles = self._child_rows(source_roles, new_contract_id)
+        for cloned_role, role in zip(cloned_roles, source_roles):
+            cloned_role['properties'] = [
+                {**_stored_fields(prop, exclude={'id', 'role_id'}),
+                 'id': str(uuid4()), 'role_id': cloned_role['id']}
+                for prop in getattr(role, 'custom_properties', None) or []
+            ]
         return cloned_roles
 
     def clone_team_members(self, source_team: List, new_contract_id: str) -> List[Dict]:
         """Clone team members"""
-        return [
-            {
-                'id': str(uuid4()),
-                'contract_id': new_contract_id,
-                'email': member.email,
-                'role': member.role,
-                'user_name': member.user_name,
-                'uc_id': member.uc_id
-            }
-            for member in source_team
-        ]
+        return self._child_rows(source_team, new_contract_id)
+
+    def clone_team_metadata(self, source_metadata, new_contract_id: str) -> Optional[Dict]:
+        """Clone the ODCS team object (name, description, tags ...)"""
+        if not source_metadata:
+            return None
+        return self._child_rows([source_metadata], new_contract_id)[0]
 
     def clone_support_channels(self, source_support: List, new_contract_id: str) -> List[Dict]:
         """Clone support channels"""
-        return [
-            {
-                'id': str(uuid4()),
-                'contract_id': new_contract_id,
-                'channel': channel.channel,
-                'url': channel.url
-            }
-            for channel in source_support
-        ]
+        return self._child_rows(source_support, new_contract_id)
 
     def clone_pricing(self, source_pricing, new_contract_id: str) -> Optional[Dict]:
         """Clone pricing information"""
         if not source_pricing:
             return None
-
-        return {
-            'id': str(uuid4()),
-            'contract_id': new_contract_id,
-            'price_amount': source_pricing.price_amount,
-            'price_currency': source_pricing.price_currency,
-            'price_unit': source_pricing.price_unit
-        }
+        return self._child_rows([source_pricing], new_contract_id)[0]
 
     def clone_custom_properties(self, source_props: List, new_contract_id: str) -> List[Dict]:
         """Clone custom properties"""
-        return [
-            {
-                'id': str(uuid4()),
-                'contract_id': new_contract_id,
-                'property': prop.property,
-                'value': prop.value
-            }
-            for prop in source_props
-        ]
+        return self._child_rows(source_props, new_contract_id)
 
     def clone_authoritative_defs(
         self,
@@ -401,19 +362,7 @@ class ContractCloner:
 
     def clone_sla_properties(self, source_sla_props: List, new_contract_id: str) -> List[Dict]:
         """Clone SLA properties"""
-        return [
-            {
-                'id': str(uuid4()),
-                'contract_id': new_contract_id,
-                'property': prop.property,
-                'value': prop.value,
-                'value_ext': prop.value_ext,
-                'unit': prop.unit,
-                'element': prop.element,
-                'driver': prop.driver
-            }
-            for prop in source_sla_props
-        ]
+        return self._child_rows(source_sla_props, new_contract_id)
 
     def _extract_base_name(self, name: str, version: str) -> str:
         """

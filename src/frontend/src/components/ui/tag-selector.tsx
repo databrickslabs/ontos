@@ -53,6 +53,12 @@ export interface TagSelectorProps {
   label?: string;
   /** Additional CSS classes */
   className?: string;
+  /**
+   * Radix modal popover: needed only when the selector sits in a modal Dialog that
+   * must keep the popover clickable. It locks the page behind (pointer-events, aria-hidden,
+   * scroll), so it is off everywhere else.
+   */
+  modal?: boolean;
 }
 
 const TagSelector: React.FC<TagSelectorProps> = ({
@@ -64,6 +70,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   allowCreate = true,
   label,
   className,
+  modal = false,
 }) => {
   const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
@@ -204,9 +211,9 @@ const TagSelector: React.FC<TagSelectorProps> = ({
         </div>
       )}
 
-      {/* Tag selector. `modal` keeps the popover interactive inside a modal
-          Radix Dialog (see DomainMultiSelector for the rationale). */}
-      <Popover open={open} onOpenChange={setOpen} modal>
+      {/* Tag selector. `modal` (opt-in) keeps the popover interactive inside a modal
+          Radix Dialog; see the prop. */}
+      <Popover open={open} onOpenChange={setOpen} modal={modal}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"

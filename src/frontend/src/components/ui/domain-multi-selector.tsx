@@ -84,6 +84,12 @@ export interface DomainMultiSelectorProps {
   label?: string;
   /** Additional CSS classes */
   className?: string;
+  /**
+   * Radix modal popover: needed only when the selector sits in a modal Dialog that
+   * must keep the popover clickable. It locks the page behind (pointer-events, aria-hidden,
+   * scroll), so it is off everywhere else.
+   */
+  modal?: boolean;
 }
 
 /**
@@ -100,6 +106,7 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
   maxDomains,
   label,
   className,
+  modal = false,
 }) => {
   const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
@@ -197,10 +204,9 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
         </div>
       )}
 
-      {/* Domain selector. `modal` is required so the popover stays interactive
-          when rendered inside a modal Radix Dialog (otherwise the dialog marks
-          the portaled popover as pointer-events:none and clicks fall through). */}
-      <Popover open={open} onOpenChange={setOpen} modal>
+      {/* Domain selector. `modal` (opt-in) keeps the popover interactive inside a
+          modal Radix Dialog; see the prop. */}
+      <Popover open={open} onOpenChange={setOpen} modal={modal}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"

@@ -288,6 +288,35 @@ class TestPortIdentity:
         assert any("Removed" in c for c in result.breaking_changes)
 
 
+    def test_reordering_two_same_named_ports_is_not_a_change(self):
+        """The repository updates each by id, so each is compared with itself."""
+        old = _with_ports("outputPorts", [_out(id="p1", contractId="c1"),
+                                          _out(id="p2", contractId="c2")])
+        new = _with_ports("outputPorts", [_out(id="p2", contractId="c2"),
+                                          _out(id="p1", contractId="c1")])
+
+        assert ProductChangeAnalyzer().analyze(old, new).change_type == ChangeType.NONE
+
+    def test_a_same_named_port_without_an_id_takes_the_unpaired_stored_one(self):
+        old = _with_ports("outputPorts", [_out(id="p1", contractId="c1"),
+                                          _out(id="p2", contractId="c2")])
+        new = _with_ports("outputPorts", [_out(contractId="c2"),
+                                          _out(id="p1", contractId="c1")])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert any("Recreated" in c for c in result.breaking_changes)
+        assert not any("contract" in c for c in result.breaking_changes)
+
+    def test_a_port_renamed_under_its_id_is_still_removed_and_added(self):
+        old = _with_ports("outputPorts", [_out(id="p1", name="a")])
+        new = _with_ports("outputPorts", [_out(id="p1", name="b")])
+
+        result = ProductChangeAnalyzer().analyze(old, new)
+
+        assert any("Removed output port: a" in c for c in result.breaking_changes)
+
+
 class TestSnakeCaseKeys:
     """POST /data-products/compare takes caller-supplied dicts: aliases work too."""
 

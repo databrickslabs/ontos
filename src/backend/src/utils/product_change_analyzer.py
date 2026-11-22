@@ -172,7 +172,10 @@ class ProductChangeAnalyzer:
         # Filter out None entries defensively; serialized port lists from
         # partially-populated products can contain holes.
         old_port_map = self._port_map(old_ports)
-        new_port_map = self._port_map(new_ports)
+        if port_type == 'output':
+            new_port_map = self._paired_port_map(old_port_map, new_ports)
+        else:
+            new_port_map = self._port_map(new_ports)
 
         old_names = set(old_port_map.keys())
         new_names = set(new_port_map.keys())
@@ -326,6 +329,42 @@ class ProductChangeAnalyzer:
             while key in result:
                 n += 1
                 key = f"{name}#{n}"
+            result[key] = port
+        return result
+
+    @staticmethod
+    def _paired_port_map(old_map: Dict[str, Dict], ports: List[Dict]) -> Dict[str, Dict]:
+        """New output ports under the key of the stored port they update.
+
+        The repository updates an output port by id, so a sent port takes the key
+        of the stored port with its id and name; the others take the next unpaired
+        stored port of their name, in order, or a key of their own. Reordering two
+        same-named ports so compares each with itself, not with its neighbour.
+        """
+        free = dict(old_map)
+        result: Dict[str, Dict] = {}
+        unpaired = []
+        for port in ports or []:
+            if not port:
+                continue
+            key = next((k for k, old in free.items()
+                        if port.get('id') and old.get('id') == port.get('id')
+                        and old.get('name') == port.get('name')), None)
+            if key is None:
+                unpaired.append(port)
+                continue
+            free.pop(key)
+            result[key] = port
+        for port in unpaired:
+            name = port.get('name')
+            key = next((k for k, old in free.items() if old.get('name') == name), None)
+            if key is None:
+                key, n = name, 1
+                while key in old_map or key in result:
+                    n += 1
+                    key = f"{name}#{n}"
+            else:
+                free.pop(key)
             result[key] = port
         return result
 

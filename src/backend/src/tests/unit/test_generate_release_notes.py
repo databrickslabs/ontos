@@ -364,3 +364,25 @@ def test_commits_of_a_past_release_squashed_on_main_are_not_listed_again(tmp_pat
     ]
     kept = rn.drop_released(commits, rn.released_prs("v1.1.0", repo))
     assert [c.subject for c in kept] == ["feat(b): new after the release (#2)"]
+
+
+def test_only_subjects_and_squashed_commit_lines_name_a_released_pr(tmp_path):
+    """A past release's body that cites an unreleased PR in prose doesn't drop that PR."""
+    repo = tmp_path / "cites"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "commit.gpgsign", "false")
+    _git(repo, "config", "tag.gpgsign", "false")
+    message = (
+        "chore: release v1.1.0 (#10)\n\n"
+        "* feat(a): released in v1.1.0 (#1) (#5)\n\n"
+        "The follow-up (#2) ships in the next release.\n"
+        "- a list item naming (#3)\n"
+        "  * an indented line naming (#4)\n\n"
+        f"{CO_AUTHOR}"
+    )
+    _git(repo, "commit", "-q", "--allow-empty", "-m", message)
+    _git(repo, "tag", "v1.1.0")
+    assert rn.released_prs("v1.1.0", repo) == {"10", "1", "5"}

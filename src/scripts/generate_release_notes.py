@@ -352,17 +352,25 @@ def git_commits(since: str, repo: Optional[Path] = None) -> List[Commit]:
 
 
 def released_prs(tag: str, repo: Optional[Path] = None) -> Set[str]:
-    """PR numbers named in the messages of the tag's first-parent history.
+    """PR numbers named in the tag's first-parent history: in a commit's subject or
+    in a ``* <subject>`` line of its body (an original commit of a squash).
 
     Releases reach main as squash commits whose body lists every development
     commit, so the development commits of a past release are not ancestors of
-    its tag: ``<tag>..HEAD`` alone would list them again.
+    its tag: ``<tag>..HEAD`` alone would list them again. A ``(#N)`` elsewhere in
+    a body (prose citing a PR) does not count.
     """
     result = subprocess.run(
-        ["git", "log", "--first-parent", "--format=%B", tag],
+        ["git", "log", "--first-parent", "--format=%s%x1f%b%x1e", tag],
         capture_output=True, text=True, check=True, cwd=repo,
     )
-    return set(_ANY_PR_RE.findall(result.stdout))
+    found: Set[str] = set()
+    for record in result.stdout.split("\x1e"):
+        subject, _, body = record.strip("\n").partition("\x1f")
+        lines = [subject] + [line for line in body.splitlines() if line.startswith("* ")]
+        for line in lines:
+            found.update(_ANY_PR_RE.findall(line))
+    return found
 
 
 def drop_released(commits: List[Commit], released: Set[str]) -> List[Commit]:

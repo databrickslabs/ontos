@@ -1288,8 +1288,8 @@
     }
   },
   "maturityBulkEvaluation": {
-    "title": "Avaliar todos os assets de tabela e view",
-    "description": "Avalia cada asset de tabela e view do escopo com os níveis de Asset atuais. Um asset avaliado desde o início da execução é ignorado, e só há uma execução por vez.",
+    "title": "Avaliar todos os assets de tabela, view e metric view",
+    "description": "Avalia cada asset de tabela, view e metric view do escopo com os níveis de Asset atuais. Um asset avaliado desde o início da execução é ignorado, e só há uma execução por vez.",
     "catalog": "Catálogo (opcional)",
     "schema": "Schema (opcional)",
     "start": "Avaliar assets",
@@ -1312,7 +1312,7 @@
       "maturity_bulk_skipped_evaluated_in_run": "Avaliado desde o início da execução",
       "maturity_bulk_skipped_not_found": "Asset não encontrado",
       "maturity_bulk_skipped_no_levels": "Sem níveis de Asset",
-      "maturity_bulk_skipped_asset_type": "Não é tabela nem view",
+      "maturity_bulk_skipped_asset_type": "Não é tabela, view nem metric view",
       "maturity_bulk_skipped_not_stored": "Não armazenado: não foi possível ler a tabela",
       "maturity_bulk_evaluation_failed": "Falha na avaliação (veja o log do servidor)",
       "maturity_bulk_run_failed": "A execução parou (veja o log do servidor)",

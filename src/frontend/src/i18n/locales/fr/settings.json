@@ -1270,8 +1270,8 @@
     }
   },
   "maturityBulkEvaluation": {
-    "title": "Évaluer tous les assets table et vue",
-    "description": "Évalue chaque asset table et vue du périmètre avec les niveaux Asset actuels. Un asset évalué depuis le début de l'exécution est ignoré, et une seule exécution à la fois.",
+    "title": "Évaluer tous les assets table, vue et vue de métriques",
+    "description": "Évalue chaque asset table, vue et vue de métriques du périmètre avec les niveaux Asset actuels. Un asset évalué depuis le début de l'exécution est ignoré, et une seule exécution à la fois.",
     "catalog": "Catalogue (facultatif)",
     "schema": "Schéma (facultatif)",
     "start": "Évaluer les assets",
@@ -1294,7 +1294,7 @@
       "maturity_bulk_skipped_evaluated_in_run": "Évalué depuis le début de l'exécution",
       "maturity_bulk_skipped_not_found": "Asset introuvable",
       "maturity_bulk_skipped_no_levels": "Aucun niveau Asset",
-      "maturity_bulk_skipped_asset_type": "Ni table ni vue",
+      "maturity_bulk_skipped_asset_type": "Ni table, ni vue, ni vue de métriques",
       "maturity_bulk_skipped_not_stored": "Non enregistré : la table n'a pas pu être lue",
       "maturity_bulk_evaluation_failed": "Échec de l'évaluation (voir le journal du serveur)",
       "maturity_bulk_run_failed": "L'exécution s'est arrêtée (voir le journal du serveur)",

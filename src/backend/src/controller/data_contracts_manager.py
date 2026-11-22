@@ -2982,6 +2982,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 self._create_sla_properties(db, contract_id, data_dict['slaProperties'])
             if 'sla' in data_dict:
                 from src.utils.contract_sla import apply_legacy_sla
+                db.flush()  # the form's values replace the rows just added (no autoflush)
                 apply_legacy_sla(db, contract_id, data_dict['sla'])
             if 'slaDefaultElement' in data_dict:
                 updated.sla_default_element = data_dict['slaDefaultElement']

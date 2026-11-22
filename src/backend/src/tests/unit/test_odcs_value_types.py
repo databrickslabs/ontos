@@ -357,3 +357,19 @@ def test_a_create_with_sla_properties_and_the_sla_form_values_stores_each_once(d
     rows = db_session.query(DataContractSlaPropertyDb).filter_by(
         contract_id=created.id, property='uptimeTarget').all()
     assert len(rows) == 1
+
+
+def test_an_update_with_sla_properties_and_the_sla_form_values_stores_each_once(
+        db_session, imported):
+    from src.db_models.data_contracts import DataContractSlaPropertyDb
+
+    manager, cid = imported
+    # a body copied from GET carries both shapes
+    _save(manager, db_session, cid, {
+        'slaProperties': [{'property': 'uptimeTarget', 'value': 99.5, 'unit': '%'}],
+        'sla': {'uptimeTarget': 99.9}})
+    db_session.commit()
+
+    rows = db_session.query(DataContractSlaPropertyDb).filter_by(
+        contract_id=cid, property='uptimeTarget').all()
+    assert len(rows) == 1

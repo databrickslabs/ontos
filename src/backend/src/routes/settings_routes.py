@@ -5,6 +5,7 @@ from datetime import datetime
 from databricks.sdk import WorkspaceClient
 from fastapi import APIRouter, Depends, HTTPException, status, Body, Request, BackgroundTasks, Query
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from ..common.workspace_client import get_workspace_client
 from ..controller.settings_manager import SettingsManager
@@ -125,9 +126,14 @@ async def update_settings(
         if 'ontos_instance_name' in settings_payload:
             details['ontos_instance_name'] = settings_payload.get('ontos_instance_name')
 
-        updated = manager.update_settings(settings_payload)
+        # Off the event loop: a save can install, remove or update Databricks jobs and
+        # deploy their code, all blocking calls. It uses its own DB session there.
+        updated, warnings = await run_in_threadpool(
+            manager.update_settings_off_loop, settings_payload,
+        )
         success = True
-        return updated.to_dict()
+        # Saved, with what didn't apply ({code, params, message}; the UI translates the code)
+        return {**updated.to_dict(), 'warnings': warnings}
     except ValueError as e:
         # Validation errors from manager (e.g. invalid branding URL, name too long)
         logger.warning(f"Settings validation error: {e}")

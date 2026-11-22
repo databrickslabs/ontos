@@ -8,23 +8,26 @@ Create Date: 2026-11-22
 install keeps the steps it was seeded with. This migration brings two shipped defaults
 up to date, only where the stored definition is not user-customised (``is_customized``):
 
-* Authority Relation Review Request: one notification to the named reviewer (was: a
-  notification to the owner, which resolved to nobody, and a fail-flow notification).
+* Authority Relation Review Request: one notification to each named reviewer (was: a
+  notification to the owner, which resolved to nobody, and a fail-flow notification), and
+  its description.
   Its DataSteward approval never existed here; the AR's gate is the affirmations.
 * Data Asset Review Request: the reviewer notification goes to the request's reviewer
   (was: the owner), and the three notifications are best-effort
   (``fail_flow_on_failure: false``), so a send failure no longer fails the review.
 
 The step rows are the same as the YAML in ``data/default_workflows.yaml``; a test keeps
-them equal. Data migration only: the downgrade leaves the workflows as they are.
+them equal. A config that can't be parsed is left as it is (logged). Data migration only: the downgrade leaves the workflows as they are.
 """
 import json
+import logging
 import uuid
-from typing import Any, Dict, Sequence, Union
+from typing import Any, Dict, Optional, Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 
+logger = logging.getLogger('alembic.runtime.migration')
 
 revision: str = 'ak9_default_workflow_review_flow'
 down_revision: Union[str, None] = 'ak8_authority_prerequisites_by_version'
@@ -33,12 +36,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 AR_WORKFLOW_NAME = 'Authority Relation Review Request'
+AR_WORKFLOW_DESCRIPTION = (
+    'Handles Authority Relation (ARF) review requests, once per review started. Notifies each named '
+    'reviewer to complete their Asset Review; there is no approval step.'
+)
 DATA_ASSET_WORKFLOW_NAME = 'Data Asset Review Request'
 
 # Replacement steps of the AR review workflow, in YAML form (step_id, name, type, config, on_pass)
 AR_STEPS = (
     ('notify-reviewer', 'Notify Reviewer', 'notification', {
-        'recipients': 'reviewer',
+        'recipients': 'reviewers',
         'template': 'request_submitted',
         'custom_message': (
             "You have been asked to review Authority Relation '${entity_name}'. "
@@ -61,14 +68,17 @@ def _workflow_id(conn, name: str):
     return row[0] if row else None
 
 
-def _load_config(raw: Any) -> Dict[str, Any]:
+def _load_config(raw: Any) -> Optional[Dict[str, Any]]:
+    """The step's config as a dict, or None when it can't be read (the row is then left alone)."""
     if isinstance(raw, dict):
         return dict(raw)
-    try:
-        value = json.loads(raw) if raw else {}
-    except (TypeError, ValueError):
+    if not raw:
         return {}
-    return value if isinstance(value, dict) else {}
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _replace_ar_steps(conn, workflow_id: str) -> None:
@@ -96,6 +106,10 @@ def _update_data_asset_steps(conn, workflow_id: str) -> int:
         if step_id not in BEST_EFFORT_NOTIFY_STEPS:
             continue
         config = _load_config(raw)
+        if config is None:
+            # Never rewrite a config we can't read: the admin can fix that row by hand
+            logger.warning("ak9: step %s of a review workflow has an unreadable config; left unchanged", step_row_id)
+            continue
         before = dict(config)
         if step_id == 'notify-reviewer' and config.get('recipients') == 'owner':
             config['recipients'] = 'reviewer'
@@ -113,6 +127,8 @@ def apply_review_flow_defaults(conn) -> Dict[str, int]:
     ar_id = _workflow_id(conn, AR_WORKFLOW_NAME)
     if ar_id:
         _replace_ar_steps(conn, ar_id)
+        conn.execute(sa.text("UPDATE process_workflows SET description = :d WHERE id = :id"),
+                     {'d': AR_WORKFLOW_DESCRIPTION, 'id': ar_id})
         counts['ar_workflow_steps_replaced'] = 1
     da_id = _workflow_id(conn, DATA_ASSET_WORKFLOW_NAME)
     if da_id:

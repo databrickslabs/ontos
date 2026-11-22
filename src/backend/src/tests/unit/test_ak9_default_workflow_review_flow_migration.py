@@ -26,7 +26,7 @@ def conn(tmp_path):
     with engine.begin() as connection:
         connection.execute(text(
             "CREATE TABLE process_workflows (id VARCHAR PRIMARY KEY, name VARCHAR, "
-            "is_default BOOLEAN, is_customized BOOLEAN)"
+            "description TEXT, is_default BOOLEAN, is_customized BOOLEAN)"
         ))
         connection.execute(text(
             "CREATE TABLE workflow_steps (id VARCHAR PRIMARY KEY, workflow_id VARCHAR, step_id VARCHAR, "
@@ -38,7 +38,8 @@ def conn(tmp_path):
 
 def _workflow(conn, wf_id, name, *, default=True, customized=False):
     conn.execute(text(
-        "INSERT INTO process_workflows VALUES (:id, :name, :d, :c)"
+        "INSERT INTO process_workflows (id, name, description, is_default, is_customized) "
+        "VALUES (:id, :name, 'old description', :d, :c)"
     ), {'id': wf_id, 'name': name, 'd': default, 'c': customized})
 
 
@@ -87,8 +88,11 @@ def test_ar_default_is_replaced_by_the_reviewer_notification_only(conn, migratio
     assert set(steps) == {'notify-reviewer', 'success'}
     stype, config, on_pass = steps['notify-reviewer']
     assert stype == 'notification'
-    assert config['recipients'] == 'reviewer'
+    assert config['recipients'] == 'reviewers'
     assert config['fail_flow_on_failure'] is False
+    assert conn.execute(text("SELECT description FROM process_workflows WHERE id = 'ar'")).scalar() == (
+        migration.AR_WORKFLOW_DESCRIPTION
+    )
     assert on_pass == 'success'
     assert steps['success'][0] == 'pass'
 
@@ -127,6 +131,19 @@ def test_customised_data_asset_default_is_left_alone(conn, migration):
     assert _steps(conn, 'da')['notify-reviewer'][1]['recipients'] == 'owner'
 
 
+def test_an_unreadable_step_config_is_left_untouched(conn, migration, caplog):
+    """A config that doesn't parse is never rewritten: the row is left as it is, and a warning is logged."""
+    _seed_old_data_asset(conn)
+    conn.execute(text("UPDATE workflow_steps SET config = 'not json {' WHERE id = 'da-notify-reviewer'"))
+
+    with caplog.at_level('WARNING'):
+        counts = migration.apply_review_flow_defaults(conn)
+
+    assert conn.execute(text("SELECT config FROM workflow_steps WHERE id = 'da-notify-reviewer'")).scalar() == 'not json {'
+    assert counts['data_asset_steps_updated'] == 2  # the two readable notifications still updated
+    assert 'unreadable config' in caplog.text
+
+
 def test_a_user_workflow_with_the_same_step_names_is_untouched(conn, migration):
     _workflow(conn, 'mine', 'My review', default=False)
     _step(conn, 'mine', 'notify-reviewer', 'notification', {'recipients': 'owner'})
@@ -154,6 +171,7 @@ def test_migration_steps_match_the_shipped_yaml(migration):
 
     expected = [(s['id'], s['name'], s['type'], s.get('config', {}), s.get('on_pass')) for s in ar['steps']]
     assert list(migration.AR_STEPS) == expected
+    assert migration.AR_WORKFLOW_DESCRIPTION == ar['description']
 
 
 def test_revision_chains_on_ak8(migration):

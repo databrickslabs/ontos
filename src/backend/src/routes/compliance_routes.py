@@ -180,9 +180,10 @@ class LlmCheckPolicyInUseError(CodedValueError):
 
 
 def refuse_llm_check_where_it_cannot_run(db, policy_id: str, rule: Optional[str]) -> None:
-    """409 when a policy that workflow policy_check steps or maturity gates use gets a
-    rule with LLM_CHECK: they evaluate it without a model, so it would fail every
-    entity there (a policy check would block every update)."""
+    """409 when a policy that workflow policy_check steps, maturity gates or the
+    self-service compliance mapping use gets a rule with LLM_CHECK: they evaluate it
+    without a model, so it would fail every entity there (a policy check would block
+    every update, self-service every creation)."""
     if not rule_uses_llm_check(rule):
         return
     uses = manager.policy_gate_uses(db, policy_id)
@@ -193,6 +194,25 @@ def refuse_llm_check_where_it_cannot_run(db, policy_id: str, rule: Optional[str]
             **uses,
         )
         raise HTTPException(status_code=409, detail=str(error)) from error
+    from src.controller.self_service_manager import (
+        load_compliance_mapping, mapping_object_types_of,
+    )
+
+    policy = manager.get_policy(db, policy_id)
+    object_types = mapping_object_types_of(load_compliance_mapping(), policy) if policy else []
+    if object_types:
+        error = LlmCheckPolicyInSelfServiceError(
+            f"This policy is in the self-service compliance mapping for "
+            f"{', '.join(object_types)}, which can't evaluate LLM_CHECK",
+            objectTypes=', '.join(object_types),
+        )
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+class LlmCheckPolicyInSelfServiceError(CodedValueError):
+    """An LLM_CHECK rule for a policy that self-service creation evaluates."""
+
+    code = 'llm_check_policy_in_self_service'
 
 
 class LlmCheckReadRequiredError(CodedValueError):

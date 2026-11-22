@@ -957,7 +957,20 @@ async def save_compliance_mapping(
     manager: SettingsManager = Depends(get_settings_manager),
     _: bool = Depends(PermissionChecker('compliance', FeatureAccessLevel.ADMIN)),
 ):
-    """Persist compliance mapping to YAML."""
+    """Persist compliance mapping to YAML.
+
+    422 ``compliance_mapping_policy_uses_llm_check`` when it names a policy with
+    LLM_CHECK: self-service evaluates it without a model, so it would refuse every
+    object of that type.
+    """
+    from src.controller.self_service_manager import (
+        MappingPolicyUsesLlmCheckError, refuse_llm_check_in_mapping,
+    )
+
+    try:
+        refuse_llm_check_in_mapping(db, payload)
+    except MappingPolicyUsesLlmCheckError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     try:
         from src.common.config import get_config_manager
         cfg = get_config_manager()

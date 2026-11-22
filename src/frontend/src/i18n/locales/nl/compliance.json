@@ -282,6 +282,7 @@
       "llm_check_tag_action": "Een regel met LLM_CHECK kan ASSIGN_TAG en REMOVE_TAG niet gebruiken ({{actions}}): het oordeel van het model zou tags wijzigen. Gebruik NOTIFY, of een aparte regel zonder LLM_CHECK voor de tagacties.",
       "llm_check_daily_quota_exceeded": "U hebt uw {{limit}} LLM_CHECK-modelaanroepen voor vandaag gebruikt. Probeer het over {{retryAfter}} seconden opnieuw (de telling begint om middernacht UTC opnieuw).",
       "llm_check_policy_in_use": "Dit beleid wordt gebruikt door {{workflowSteps}} beleidscontroles in workflows en {{maturityGates}} volwassenheidspoorten. Die kunnen LLM_CHECK niet evalueren, dus daar zou elke entiteit mislukken. Verwijder het beleid daar eerst, of gebruik LLM_CHECK in een apart beleid.",
+      "llm_check_policy_in_self_service": "Dit beleid staat in de self-service-compliancetoewijzing voor {{objectTypes}}. Self-service kan LLM_CHECK niet evalueren en zou daar elk object weigeren. Verwijder het beleid eerst uit de toewijzing, of gebruik LLM_CHECK in een apart beleid.",
       "llm_check_in_where": "LLM_CHECK wordt alleen in de ASSERT geëvalueerd. In de WHERE mislukt het, dus de regel slaat elke entiteit over. Verplaats het naar de ASSERT."
     },
     "usage": "LLM_CHECK: {{calls}} modelaanroepen, {{cached}} oordelen uit de cache.",

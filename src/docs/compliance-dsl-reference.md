@@ -240,14 +240,19 @@ daily quota is shared).
   (`LLM_INJECTION_CHECK_PROMPT`). A text the scan doesn't call `SAFE` fails with
   `llm_check_text_rejected`, and the criterion is never asked.
 
-- Only evaluated in compliance runs, in `ASSERT`. In `WHERE`, in maturity gates
-  and in workflow policy checks the check fails (`llm_check_not_available`), so
+- Only evaluated in compliance runs, in `ASSERT`. In `WHERE`, in maturity gates,
+  in workflow policy checks and validation steps, and in self-service creation (the
+  compliance mapping's policies) the check fails (`llm_check_not_available`), so
   those are refused when saved: a rule with `LLM_CHECK` in `WHERE`
   (`llm_check_in_where`; it would skip every entity), a `policy_check` step on
-  a policy with `LLM_CHECK` (`policy_check_policy_uses_llm_check`, an error for
-  an active workflow and a warning for an inactive one), a maturity gate on such a policy
-  (`maturity_gate_policy_uses_llm_check`), and an `LLM_CHECK` rule for a policy
-  that steps or gates already use (409 `llm_check_policy_in_use`).
+  a policy with `LLM_CHECK` (`policy_check_policy_uses_llm_check`: an error that
+  refuses the save of an active workflow; an inactive one saves with a warning
+  and is refused when it is activated), a validation step whose rule uses
+  `LLM_CHECK` (`validation_rule_uses_llm_check`), a maturity gate on such a policy
+  (`maturity_gate_policy_uses_llm_check`), a compliance mapping that lists such a
+  policy (422 `compliance_mapping_policy_uses_llm_check`), and an `LLM_CHECK` rule
+  for a policy that steps or gates already use (409 `llm_check_policy_in_use`) or
+  that the compliance mapping lists (409 `llm_check_policy_in_self_service`).
 - Fails closed: with an empty text (no call), LLM features off
   (`llm_check_disabled`), no endpoint (`llm_check_no_endpoint`), a refusal, an
   empty or unfinished reply, or a reply whose first line is not `PASS: <reason>`

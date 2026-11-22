@@ -365,7 +365,8 @@
       "storedEntityTypeUnsupported": "The {{trigger}} trigger never fires for {{entity}}."
     },
     "llmCheckIssues": {
-      "policyCheckUsesLlmCheck": "Step \"{{step}}\" checks a policy that uses LLM_CHECK. LLM_CHECK is only evaluated in compliance runs, so the step would fail every entity. Select a policy without LLM_CHECK."
+      "policyCheckUsesLlmCheck": "Step \"{{step}}\" checks a policy that uses LLM_CHECK. LLM_CHECK is only evaluated in compliance runs, so the step would fail every entity. Select a policy without LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "Step \"{{step}}\" has a rule that uses LLM_CHECK. LLM_CHECK is only evaluated in compliance runs, so the step would fail every entity. Remove LLM_CHECK from the rule."
     }
   },
   "approvalResponse": {

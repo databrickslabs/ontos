@@ -365,7 +365,8 @@
       "storedEntityTypeUnsupported": "Der Trigger-Typ „{{trigger}}“ löst nie für {{entity}} aus."
     },
     "llmCheckIssues": {
-      "policyCheckUsesLlmCheck": "Schritt \"{{step}}\" prüft eine Richtlinie, die LLM_CHECK verwendet. LLM_CHECK wird nur in Compliance-Läufen ausgewertet, daher würde der Schritt jede Entität ablehnen. Wählen Sie eine Richtlinie ohne LLM_CHECK."
+      "policyCheckUsesLlmCheck": "Schritt \"{{step}}\" prüft eine Richtlinie, die LLM_CHECK verwendet. LLM_CHECK wird nur in Compliance-Läufen ausgewertet, daher würde der Schritt jede Entität ablehnen. Wählen Sie eine Richtlinie ohne LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "Schritt \"{{step}}\" hat eine Regel mit LLM_CHECK. LLM_CHECK wird nur in Compliance-Läufen ausgewertet, daher würde der Schritt jede Entität ablehnen. Entfernen Sie LLM_CHECK aus der Regel."
     }
   },
   "approvalResponse": {

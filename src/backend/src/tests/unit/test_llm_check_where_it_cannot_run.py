@@ -1,10 +1,11 @@
 """LLM_CHECK is refused where it's evaluated without a model (#1479 review).
 
-Workflow policy_check steps and maturity gates evaluate a policy's rule
-without an LLM checker, so LLM_CHECK fails there (llm_check_not_available) for
-every entity, and a policy check would block every update. Saving such a step
-(in an active workflow), adding such a gate, or giving a policy they use an
-LLM_CHECK rule is refused with a code.
+Workflow policy_check and validation steps, maturity gates and the self-service
+compliance mapping evaluate a rule without an LLM checker, so LLM_CHECK fails there
+(llm_check_not_available) for every entity, and a policy check would block every
+update. Saving such a step (a policy check in an active workflow), adding such a gate,
+naming such a policy in the mapping, or giving a policy they use an LLM_CHECK rule is
+refused with a code.
 """
 import asyncio
 import os
@@ -150,3 +151,142 @@ def test_a_maturity_gate_on_an_llm_check_policy_is_refused(db_session):
     assert db_session.query(MaturityGateDb).filter_by(
         compliance_policy_id=policy.id,
     ).count() == 0
+
+
+GRAIN = 'states the grain of the table'
+
+
+# --- Workflow validation steps -----------------------------------------------------
+
+def _validation_workflow(rule):
+    return ProcessWorkflowCreate(
+        name='Check docs',
+        trigger=WorkflowTrigger(type=TriggerType.ON_CREATE, entity_types=['data_product']),
+        steps=[WorkflowStepCreate(
+            step_id='docs', step_type=StepType.VALIDATION, config={'rule': rule},
+        )],
+    )
+
+
+def test_a_validation_step_with_llm_check_is_refused_on_save(db_session):
+    from src.controller.workflows_manager import WorkflowsManager
+
+    result = WorkflowsManager(db_session).validate_workflow(_validation_workflow(
+        f"ASSERT LLM_CHECK(obj.description, '{GRAIN}')",
+    ))
+
+    assert result.valid is False
+    issue = next(i for i in result.issues if i.code == 'validation_rule_uses_llm_check')
+    assert issue.params == {'step': 'docs'}
+
+
+def test_a_validation_step_without_llm_check_saves(db_session):
+    from src.controller.workflows_manager import WorkflowsManager
+
+    result = WorkflowsManager(db_session).validate_workflow(_validation_workflow(
+        "ASSERT obj.description != ''",
+    ))
+
+    assert not [i for i in result.issues if i.code == 'validation_rule_uses_llm_check']
+
+
+# --- Self-service compliance mapping -----------------------------------------------
+
+OBJ_LLM_RULE = f"ASSERT LLM_CHECK(obj.description, '{GRAIN}')"
+
+
+def test_a_mapping_naming_an_llm_check_policy_is_refused(db_session):
+    from src.controller.self_service_manager import (
+        MappingPolicyUsesLlmCheckError, refuse_llm_check_in_mapping,
+    )
+
+    _slugged(db_session, OBJ_LLM_RULE, slug='docs-judged')
+    _slugged(db_session, "ASSERT obj.name != ''", slug='named')
+
+    with pytest.raises(MappingPolicyUsesLlmCheckError) as raised:
+        refuse_llm_check_in_mapping(db_session, {
+            'catalog': {'policies': ['named']},
+            'table': {'policies': ['named', 'docs-judged']},
+        })
+
+    assert raised.value.params == {'objectType': 'table', 'policy': 'docs-judged'}
+
+
+def test_a_mapping_of_policies_without_llm_check_or_unknown_ones_saves(db_session):
+    from src.controller.self_service_manager import refuse_llm_check_in_mapping
+
+    _slugged(db_session, "ASSERT obj.name != ''", slug='named')
+
+    refuse_llm_check_in_mapping(db_session, {
+        'table': {'policies': ['named', 'not-a-policy']}, 'schema': 'not a section',
+    })
+
+
+def test_the_object_types_whose_mapping_names_a_policy(db_session):
+    from src.controller.self_service_manager import mapping_object_types_of
+
+    policy = _slugged(db_session, OBJ_LLM_RULE, slug='docs-judged')
+    mapping = {
+        'catalog': {'policies': [policy.id]},
+        'schema': {'policies': ['other']},
+        'table': {'policies': [policy.name]},
+    }
+
+    assert mapping_object_types_of(mapping, policy) == ['catalog', 'table']
+    assert mapping_object_types_of(None, policy) == []
+
+
+def _slugged(db, rule, slug):
+    policy = CompliancePolicyDb(id=str(uuid.uuid4()), name=f'P {slug}', slug=slug, rule=rule)
+    db.add(policy)
+    db.flush()
+    return policy
+
+
+def test_an_llm_check_rule_for_a_policy_in_the_self_service_mapping_is_refused(db_session):
+    from unittest.mock import patch
+
+    from src.routes import compliance_routes
+
+    policy = _slugged(db_session, PLAIN_RULE, slug='grain')
+    mapping = {'table': {'policies': ['grain']}}
+    with patch('src.controller.self_service_manager.load_compliance_mapping',
+               return_value=mapping):
+        with pytest.raises(HTTPException) as raised:
+            compliance_routes.refuse_llm_check_where_it_cannot_run(
+                db_session, policy.id, LLM_RULE,
+            )
+        assert raised.value.status_code == 409
+        assert raised.value.__cause__.code == 'llm_check_policy_in_self_service'
+        assert raised.value.__cause__.params == {'objectTypes': 'table'}
+
+        # A rule without LLM_CHECK saves
+        compliance_routes.refuse_llm_check_where_it_cannot_run(
+            db_session, policy.id, PLAIN_RULE,
+        )
+    # A policy the mapping doesn't name saves with LLM_CHECK
+    with patch('src.controller.self_service_manager.load_compliance_mapping',
+               return_value={'table': {'policies': ['other']}}):
+        compliance_routes.refuse_llm_check_where_it_cannot_run(
+            db_session, policy.id, LLM_RULE,
+        )
+
+
+def test_saving_a_mapping_that_names_an_llm_check_policy_is_refused(db_session):
+    from unittest.mock import patch
+
+    from src.routes.settings_routes import save_compliance_mapping
+
+    _slugged(db_session, OBJ_LLM_RULE, slug='docs-judged')
+    config = MagicMock()
+    with patch('src.common.config.get_config_manager', return_value=config):
+        with pytest.raises(HTTPException) as raised:
+            asyncio.run(save_compliance_mapping(
+                request=MagicMock(), db=db_session, audit_manager=MagicMock(),
+                current_user=None, payload={'table': {'policies': ['docs-judged']}},
+                manager=MagicMock(), _=True,
+            ))
+
+    assert raised.value.status_code == 422
+    assert raised.value.__cause__.code == 'compliance_mapping_policy_uses_llm_check'
+    config.save_yaml.assert_not_called()

@@ -282,6 +282,7 @@
       "llm_check_tag_action": "Una regola con LLM_CHECK non può usare ASSIGN_TAG né REMOVE_TAG ({{actions}}): il verdetto del modello modificherebbe i tag. Usa NOTIFY, oppure una regola separata senza LLM_CHECK per le azioni sui tag.",
       "llm_check_daily_quota_exceeded": "Hai usato le tue {{limit}} chiamate al modello di LLM_CHECK di oggi. Riprova tra {{retryAfter}} secondi (il conteggio riparte a mezzanotte UTC).",
       "llm_check_policy_in_use": "Questa policy è usata da {{workflowSteps}} verifiche di policy dei workflow e {{maturityGates}} gate di maturità. Non possono valutare LLM_CHECK, quindi lì ogni entità fallirebbe. Rimuovi prima la policy da essi, oppure usa LLM_CHECK in una policy separata.",
+      "llm_check_policy_in_self_service": "Questa policy è nella mappatura di conformità del self-service per {{objectTypes}}. Il self-service non può valutare LLM_CHECK, quindi lì rifiuterebbe ogni oggetto. Rimuovi prima la policy dalla mappatura, oppure usa LLM_CHECK in una policy separata.",
       "llm_check_in_where": "LLM_CHECK viene valutato solo nell'ASSERT. Nel WHERE non riesce, quindi la regola salta ogni entità. Spostalo nell'ASSERT."
     },
     "usage": "LLM_CHECK: {{calls}} chiamate al modello, {{cached}} verdetti dalla cache.",

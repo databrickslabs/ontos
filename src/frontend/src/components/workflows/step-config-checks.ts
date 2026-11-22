@@ -108,6 +108,11 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
         step: params.step,
         defaultValue: fallback,
       });
+    case 'validation_rule_uses_llm_check':
+      return t('workflows:designer.llmCheckIssues.validationRuleUsesLlmCheck', {
+        step: params.step,
+        defaultValue: fallback,
+      });
     default:
       if (isScheduleIssue(issue.code)) return scheduleIssueText(issue, t);
       if (!(issue.code.startsWith('condition_') || issue.code.startsWith('script_'))) {

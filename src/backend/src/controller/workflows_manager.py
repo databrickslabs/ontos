@@ -1092,6 +1092,18 @@ class WorkflowsManager:
         if step.step_type == StepType.VALIDATION:
             if not config.get('rule'):
                 errors.append(_missing(step, "Validation step requires 'rule' in config", ['rule']))
+            else:
+                from src.controller.compliance_manager import rule_uses_llm_check
+
+                rule = config.get('rule')
+                if isinstance(rule, str) and rule_uses_llm_check(rule):
+                    # Evaluated without a model (llm_check_not_available): the step
+                    # would fail, and block, every entity it checks
+                    errors.append(CodedMessage(
+                        f"Step '{step.step_id}': the rule uses LLM_CHECK, which is only "
+                        "evaluated in compliance runs, so the step would fail every entity",
+                        'validation_rule_uses_llm_check', step=step.step_id,
+                    ))
 
         elif step.step_type == StepType.APPROVAL:
             if not config.get('approvers'):

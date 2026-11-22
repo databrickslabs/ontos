@@ -282,6 +282,7 @@
       "llm_check_tag_action": "LLM_CHECK を含むルールでは ASSIGN_TAG と REMOVE_TAG ({{actions}}) を使えません。モデルの判定でタグが変わってしまうためです。NOTIFY を使うか、タグ操作は LLM_CHECK のない別のルールにしてください。",
       "llm_check_daily_quota_exceeded": "本日の LLM_CHECK のモデル呼び出し {{limit}} 回を使い切りました。{{retryAfter}} 秒後にもう一度お試しください (カウントは UTC の午前 0 時にリセットされます)。",
       "llm_check_policy_in_use": "このポリシーは {{workflowSteps}} 件のワークフローのポリシーチェックと {{maturityGates}} 件の成熟度ゲートで使用されています。それらは LLM_CHECK を評価できないため、そこではすべてのエンティティが不合格になります。先にそれらからポリシーを外すか、別のポリシーで LLM_CHECK を使用してください。",
+      "llm_check_policy_in_self_service": "このポリシーは {{objectTypes}} のセルフサービスのコンプライアンスマッピングに含まれています。セルフサービスは LLM_CHECK を評価できないため、そこではすべてのオブジェクトが拒否されます。先にマッピングからポリシーを外すか、別のポリシーで LLM_CHECK を使用してください。",
       "llm_check_in_where": "LLM_CHECK は ASSERT でのみ評価されます。WHERE では失敗するため、ルールはすべてのエンティティをスキップします。ASSERT に移動してください。"
     },
     "usage": "LLM_CHECK: モデル呼び出し {{calls}} 回、キャッシュからの判定 {{cached}} 件。",

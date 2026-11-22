@@ -22,6 +22,20 @@ describe('workflowValidationIssueText', () => {
     );
   });
 
+  it('translates a validation step whose rule uses LLM_CHECK', async () => {
+    const issue = {
+      code: 'validation_rule_uses_llm_check',
+      message: "Step 'grain': the rule uses LLM_CHECK",
+      params: { step: 'grain' },
+    };
+    await i18n.changeLanguage('pt');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'A etapa "grain" tem uma regra que usa LLM_CHECK. LLM_CHECK só é avaliado nas '
+      + 'execuções de conformidade, então a etapa reprovaria todas as entidades. Remova '
+      + 'LLM_CHECK da regra.',
+    );
+  });
+
   it('translates a step pointing at a step that is not in the workflow', async () => {
     const issue = {
       code: 'step_unknown_reference',

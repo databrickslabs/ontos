@@ -171,6 +171,22 @@ def test_allowed_ids_apply_before_pagination_and_facets(seeded):
     assert everything["facets"]["type"] == {"data-product": 1}
 
 
+def test_a_type_prefix_key_restricts_every_type_with_the_prefix(pg_session):
+    """``asset-*`` covers ``asset-table`` and ``asset-view``, not other types (#1637)."""
+    repo.upsert_documents(pg_session, [
+        _item("asset::1", "asset-table", "assets", "Orders table"),
+        _item("asset::2", "asset-view", "assets", "Orders view"),
+        _item("product::1", "data-product", "data-products", "Orders product"),
+    ])
+    pg_session.flush()
+
+    out = repo.search(pg_session, "*", allowed_ids_by_type={"asset-*": ["asset::2"]})
+    assert sorted(r["id"] for r in out["results"]) == ["1", "2"]
+    assert out["facets"]["type"] == {"asset-view": 1, "data-product": 1}
+    assert repo.match_ids(pg_session, "orders", allowed_ids_by_type={"asset-*": []}) == [
+        "product::1"]
+
+
 def test_match_ids_uses_the_search_where(seeded):
     assert sorted(repo.match_ids(seeded, "*", type_filter="data-product")) == [
         "product::1", "product::2"]

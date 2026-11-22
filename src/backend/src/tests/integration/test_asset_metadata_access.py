@@ -1220,3 +1220,101 @@ def test_assets_read_write_reads_an_imported_asset_document(client, db_session, 
 
     assert response.status_code == 200, response.text
     assert response.text == 'secret\n'
+
+
+# --- Search (#1637): assets and the documents imported for them ----------------
+
+ASSETS_READER = 'Assets read-only (#1637)'
+SEARCH_TERM = 'quuxwobble'
+
+
+@pytest.fixture
+def indexed(db_session, asset, client):
+    """The asset and a document imported for it, in the app's search index."""
+    path = '/Volumes/main/docs/context/orders-search.md'
+    doc = DocumentMetadataDb(
+        entity_type='asset', entity_id=str(asset.id), title='Orders runbook',
+        original_filename='orders-search.md', content_type='text/markdown', size_bytes=5,
+        storage_path=path, source_path=path, content_hash='h-search',
+    )
+    db_session.add(doc)
+    db_session.commit()
+    search = app.state.search_manager
+    asset.description = f'{SEARCH_TERM} orders'
+    items = [
+        AssetsManager()._build_search_index_item(asset),
+        MetadataManager().build_document_search_item(doc, f'# Runbook\n\n{SEARCH_TERM} secret\n'),
+    ]
+    search.upsert_items(items)
+    yield SimpleNamespace(asset=f'asset::{asset.id}', doc=f'document::{doc.id}')
+    for item in items:
+        search.remove_item(item.id)
+
+
+@pytest.fixture
+def act_as_assets_reader(act_as):
+    settings_manager = app.state.settings_manager
+    if settings_manager.get_app_role_by_name(ASSETS_READER) is None:
+        settings_manager.create_app_role(AppRoleCreate(
+            name=ASSETS_READER, feature_permissions={'assets': FeatureAccessLevel.READ_ONLY},
+        ))
+    act_as(ASSETS_READER)
+
+
+def _readable_assets(monkeypatch, ids):
+    """The #347 rule (assets of an accessible product) answers ``ids``."""
+    monkeypatch.setattr(
+        AssetsManager, 'resolve_accessible_asset_ids',
+        lambda self, db, *, data_products_manager, is_admin: list(ids),
+    )
+
+
+def _search_ids(client):
+    response = client.get('/api/search', params={'search_term': SEARCH_TERM})
+    assert response.status_code == 200, response.text
+    return {item['id'] for item in response.json()}, response.text
+
+
+def test_search_leaves_out_an_unreadable_asset_and_its_documents(
+        client, indexed, act_as_assets_reader, monkeypatch):
+    """``assets`` Read-only, and the asset is linked to no accessible product."""
+    _readable_assets(monkeypatch, [])
+
+    ids, text = _search_ids(client)
+
+    assert not {indexed.asset, indexed.doc} & ids
+    assert 'secret' not in text
+
+
+def test_search_finds_a_readable_asset_and_its_documents(
+        client, asset, indexed, act_as_assets_reader, monkeypatch):
+    _readable_assets(monkeypatch, [asset.id])
+
+    ids, text = _search_ids(client)
+
+    assert {indexed.asset, indexed.doc} <= ids
+    assert 'secret' in text
+
+
+def test_assets_read_write_finds_every_asset_and_its_documents(
+        client, indexed, act_as, monkeypatch):
+    _readable_assets(monkeypatch, [])
+    act_as(ASSETS_ONLY)
+
+    ids, _text = _search_ids(client)
+
+    assert {indexed.asset, indexed.doc} <= ids
+
+
+def test_search_leaves_out_asset_results_when_the_asset_rule_fails(
+        client, indexed, act_as_assets_reader, monkeypatch):
+    """Fail closed: a lookup that raises hides the asset results, not the whole search."""
+    def broken(self, db, *, data_products_manager, is_admin):
+        raise RuntimeError('lookup failed')
+
+    monkeypatch.setattr(AssetsManager, 'resolve_accessible_asset_ids', broken)
+
+    ids, text = _search_ids(client)
+
+    assert not {indexed.asset, indexed.doc} & ids
+    assert 'secret' not in text

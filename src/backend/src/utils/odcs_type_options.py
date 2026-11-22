@@ -50,6 +50,43 @@ _ALLOWED_V310 = {
 }
 
 
+def _int(v: Any) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _number(v: Any) -> bool:
+    return _int(v) or isinstance(v, float)
+
+
+def _text(v: Any) -> bool:
+    return isinstance(v, str)
+
+
+# Every option a column stores, with the values it can hold (the ColumnProperty field
+# types); other keys, and values of another type, are not stored (one bad value would
+# make the contract API fail to read the whole contract).
+_OPTION_CHECKS = {
+    'minLength': _int, 'maxLength': _int, 'pattern': _text,
+    # numbers, or date-time text on a date / timestamp / time column
+    'minimum': lambda v: _number(v) or _text(v), 'maximum': lambda v: _number(v) or _text(v),
+    'exclusiveMinimum': lambda v: isinstance(v, bool) or _number(v) or _text(v),
+    'exclusiveMaximum': lambda v: isinstance(v, bool) or _number(v) or _text(v),
+    'multipleOf': _number, 'precision': _int,
+    'format': _text, 'timezone': lambda v: isinstance(v, (bool, str)), 'customFormat': _text,
+    'defaultTimezone': _text,
+    'itemType': _text, 'minItems': _int, 'maxItems': _int,
+    'uniqueItems': lambda v: isinstance(v, bool),
+    'minProperties': _int, 'maxProperties': _int,
+    OBJECT_REQUIRED_KEY: lambda v: isinstance(v, list) and all(isinstance(i, str) for i in v),
+}
+
+
+def valid_type_options(options: Dict[str, Any]) -> Dict[str, Any]:
+    """The options a column can store: known keys with a value of their type."""
+    return {k: v for k, v in options.items()
+            if k in _OPTION_CHECKS and v is not None and _OPTION_CHECKS[k](v)}
+
+
 def nests_type_options(api_version: Optional[str]) -> bool:
     """Whether an export of a contract with this ``apiVersion`` writes the options
     under ``logicalTypeOptions``: every ODCS v3.x (and no version, which the export
@@ -106,8 +143,10 @@ def read_type_options(prop: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _is_option_property(name: Any) -> bool:
+    """An ``ontos.<option>`` custom property of a known option (any other stays a
+    custom property)."""
     return isinstance(name, str) and name.startswith(OPTION_PROPERTY_PREFIX) \
-        and len(name) > len(OPTION_PROPERTY_PREFIX)
+        and name[len(OPTION_PROPERTY_PREFIX):] in _OPTION_CHECKS
 
 
 def option_properties(custom_properties: Any) -> Dict[str, Any]:

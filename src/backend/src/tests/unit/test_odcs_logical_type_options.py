@@ -332,3 +332,42 @@ def test_an_editor_save_that_doesnt_send_them_keeps_the_options(db_session):
     db_session.commit()
 
     assert _stored(db_session, cid) == before
+
+
+def test_an_editor_save_keeps_date_time_bounds_it_sends_back_empty(db_session):
+    manager, cid = _unshown_contract(db_session)
+    before = _stored(db_session, cid)
+
+    # the editor parses bounds as numbers: date-time text comes back as null
+    manager.update_contract_with_relations(db_session, cid, {"schema": [{
+        "name": "orders", "properties": [
+            {"name": "address", "logicalType": "object"},
+            {"name": "tags", "logicalType": "array", "minItems": 1},
+            {"name": "ts", "logicalType": "timestamp", "format": "yyyy", "minimum": None},
+            {"name": "day", "logicalType": "date", "minimum": None, "maximum": None},
+        ]}]}, current_user="alice")
+    db_session.commit()
+
+    assert _stored(db_session, cid) == before
+
+
+def test_invalid_or_unknown_nested_options_are_not_stored(db_session):
+    document = _document(nested=True)
+    document["schema"][0]["properties"] = [
+        {"name": "tags", "logicalType": "array",
+         "logicalTypeOptions": {"uniqueItems": "yes", "minItems": 1, "name": "x"}},
+        {"name": "address", "logicalType": "object",
+         "logicalTypeOptions": {"required": "street", "minProperties": "x"}},
+        {"name": "code", "logicalType": "string", "customProperties": [
+            {"property": "ontos.logicalType", "value": "date"},
+            {"property": "ontos.precision", "value": 2}]},
+    ]
+    manager, cid = _upload(db_session, document)
+
+    assert _stored(db_session, cid) == {"tags": {"minItems": 1}, "address": {},
+                                        "code": {"precision": 2}}
+    _, columns = _api_columns(manager, db_session, cid)  # the contract still reads
+    assert columns["code"].logicalType == "string" and columns["tags"].name == "tags"
+    rows = db_session.query(SchemaPropertyDb).filter_by(name="code").all()
+    # an ontos.* name that is no option stays a custom property
+    assert {cp.property for r in rows for cp in r.custom_properties} == {"ontos.logicalType"}

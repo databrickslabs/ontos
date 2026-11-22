@@ -19,6 +19,8 @@ from src.utils.odcs_type_options import EDITOR_UNSENT_OPTIONS, read_type_options
 SEMANTIC_ASSIGNMENT = 'http://databricks.com/ontology/uc/semanticAssignment'
 
 _OBJECT_FIELDS = ('id', 'tags', 'customProperties', 'quality')
+_DATE_TYPES = ('date', 'timestamp', 'time')
+_DATE_BOUNDS = ('minimum', 'maximum')
 _PROPERTY_FIELDS = ('id', 'quality', 'relationships', 'tags', 'itemType')
 
 
@@ -78,6 +80,12 @@ def keep_unsent_fields(payload: Dict[str, Any], stored: Dict[str, Any]) -> Dict[
                 value = previous.get(key, stored_options.get(key))
                 if not _sent(column, key) and value is not None:
                     column[key] = value
+            if column.get('logicalType', previous.get('logicalType')) in _DATE_TYPES:
+                # the editor edits bounds as numbers: a date-time bound comes back empty
+                for key in _DATE_BOUNDS:
+                    value = previous.get(key, stored_options.get(key))
+                    if not _sent(column, key) and isinstance(value, str):
+                        column[key] = value
             for key in _PROPERTY_FIELDS:
                 if not _sent(column, key) and previous.get(key) is not None:
                     column[key] = previous[key]

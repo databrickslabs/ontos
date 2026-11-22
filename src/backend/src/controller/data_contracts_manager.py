@@ -142,7 +142,7 @@ from src.utils.property_custom_properties import (
 from src.repositories.teams_repository import team_repo
 from src.utils.odcs_type_options import (
     EDITOR_UNSENT_OPTIONS, nests_type_options, read_type_options, split_type_options,
-    without_option_properties,
+    valid_type_options, without_option_properties,
 )
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.controller.domain_export_adapter import (
@@ -1977,6 +1977,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 for field in EDITOR_UNSENT_OPTIONS:  # flat as the contract API shows them
                     if prop_dict.get(field) is not None:
                         logical_type_options[field] = prop_dict[field]
+                logical_type_options = valid_type_options(logical_type_options)
 
                 examples_json = None
                 if prop_dict.get('examples'):

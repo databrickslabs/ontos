@@ -35,6 +35,7 @@ def _no_run_in_memory():
 class _Report:
     def __init__(self, order):
         self.achieved_level_order = order
+        self.stored = True  # a stored evaluation, as the real evaluator reports
 
 
 class _FakeEvaluator:

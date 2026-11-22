@@ -742,3 +742,40 @@ def test_a_dry_run_needs_no_lock_check(engine):
     stats = job.create_products(engine, _discovered(), 'skip', None, None,
                                 dry_run=True, run_lock=_LostLock())
     assert stats == _stats(created=1)
+
+
+@pytest.mark.parametrize('host, pooler', [
+    ('ep-cool-1234-pooler.database.cloud.databricks.com', True),
+    ('EP-COOL-1234-POOLER.example.com', True),
+    ('ep-cool-1234.database.cloud.databricks.com', False),
+    ('instance-1.database.cloud.databricks.com', False),
+    ('localhost', False),
+    ('', False),
+])
+def test_pooler_hosts_are_recognised(host, pooler):
+    assert job.is_pooler_host(host) is pooler
+
+
+def test_a_pooler_host_is_refused_before_connecting():
+    argv = ['uc_bulk_import.py', '--entity_patterns', '[]', '--lakebase_instance_name', 'x',
+            '--postgres_host', 'ep-a-pooler.example.com', '--postgres_db', 'd']
+    with patch.object(sys, 'argv', argv), patch.object(job, 'WorkspaceClient'), \
+            patch.object(job, 'create_engine_from_params') as connect:
+        with pytest.raises(SystemExit) as exited:
+            job.main()
+
+    assert exited.value.code == 1
+    connect.assert_not_called()
+
+
+def test_a_dry_run_does_not_take_the_lock():
+    argv = ['uc_bulk_import.py', '--entity_patterns', '[]', '--lakebase_instance_name', 'x',
+            '--postgres_host', 'h', '--postgres_db', 'd', '--dry_run', 'true']
+    with patch.object(sys, 'argv', argv), patch.object(job, 'WorkspaceClient'), \
+            patch.object(job, 'create_engine_from_params'), \
+            patch.object(job, 'single_flight') as single_flight, \
+            patch.object(job, 'run_import') as run_import:
+        job.main()
+
+    single_flight.assert_not_called()
+    assert run_import.call_args.args[-1] is job.NO_LOCK

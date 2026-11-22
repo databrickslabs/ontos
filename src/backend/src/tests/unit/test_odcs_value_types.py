@@ -163,3 +163,68 @@ def test_a_new_version_keeps_the_relationship_ids(db_session):
     orders = _by(_export(manager, db_session, new.id)['schema'], 'name')['orders']
     assert orders['relationships'][0]['id'] == 'rel-orders-customer'
     assert orders['properties'][0]['relationships'][0]['id'] == 'rel-prop-customer'
+
+
+# --- read-modify-write through the contract API ---------------------------
+
+def _api(manager, db_session, contract_id):
+    db_session.expire_all()
+    contract = db_session.get(DataContractDb, contract_id)
+    return manager._build_contract_api_model(db_session, contract).model_dump(by_alias=True)
+
+
+def _save(manager, db_session, contract_id, body):
+    from src.models.data_contracts_api import DataContractUpdate
+
+    manager.update_contract_with_relations(
+        db_session, contract_id, DataContractUpdate.model_validate(body), current_user='alice')
+
+
+@pytest.mark.parametrize('saves', [1, 2])
+def test_saving_the_custom_properties_the_api_returns_changes_nothing(
+        db_session, imported, saves):
+    manager, cid = imported
+    before = _export(manager, db_session, cid)['customProperties']
+
+    for _ in range(saves):  # what the contract page sends after an edit
+        _save(manager, db_session, cid,
+              {'customProperties': _api(manager, db_session, cid)['customProperties']})
+
+    assert _export(manager, db_session, cid)['customProperties'] == before
+
+
+@pytest.mark.parametrize('saves', [1, 2])
+def test_saving_the_sla_properties_the_api_returns_changes_nothing(db_session, imported, saves):
+    manager, cid = imported
+    before = _export(manager, db_session, cid)['slaProperties']
+
+    for _ in range(saves):
+        _save(manager, db_session, cid,
+              {'slaProperties': _api(manager, db_session, cid)['slaProperties']})
+
+    assert _export(manager, db_session, cid)['slaProperties'] == before
+
+
+def test_the_api_returns_the_relationship_row_id_and_odcs_id(db_session):
+    manager = _manager()
+    cid = _upload(manager, db_session, _with_relationship_ids())
+
+    orders = _by(_api(manager, db_session, cid)['schema'], 'name')['orders']
+
+    relationship = orders['relationships'][0]
+    assert relationship['stableId'] == 'rel-orders-customer'
+    assert relationship['id'] and relationship['id'] != 'rel-orders-customer'
+
+
+def test_an_editor_save_keeps_the_relationship_ids(db_session):
+    manager = _manager()
+    cid = _upload(manager, db_session, _with_relationship_ids())
+    orders = _by(_api(manager, db_session, cid)['schema'], 'name')['orders']
+    form = {'name': 'orders', 'relationships': orders['relationships'],
+            'properties': [{'name': 'customer_id', 'logicalType': 'string'}]}
+
+    _save(manager, db_session, cid, {'schema': [form]})
+
+    orders = _by(_export(manager, db_session, cid)['schema'], 'name')['orders']
+    assert orders['relationships'][0]['id'] == 'rel-orders-customer'
+    assert orders['properties'][0]['relationships'][0]['id'] == 'rel-prop-customer'

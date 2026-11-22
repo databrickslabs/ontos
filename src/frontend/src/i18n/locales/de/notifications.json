@@ -193,7 +193,7 @@
         "notify-rejected": "Ihre Änderung an der Metric View '{{entity_name}}' wurde abgelehnt."
       },
       "authority-relation-review-request": {
-        "notify-owner": "Der Review-Prozess für die Authority Relation '{{entity_name}}' wurde gestartet. Jeder zugewiesene Reviewer hat ein Asset Review zur Bearbeitung erhalten."
+        "notify-reviewer": "Sie wurden gebeten, die Authority Relation '{{entity_name}}' zu prüfen. Schließen Sie Ihre Asset Review ab, um zu bestätigen, dass sie die Realität abbildet."
       }
     },
     "approval": {

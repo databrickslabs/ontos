@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 # ODCS v3.1.0 relationship model (schema-level and property-level)
 class SchemaRelationship(BaseModel):
     """ODCS v3.1.0 relationship (foreign key) at schema or property level."""
-    id: Optional[str] = None  # internal DB id (populated on read)
+    id: Optional[str] = None  # ODCS id (v3.2.0)
     type: str = "foreignKey"
     # from is a reserved word in Python; use Field alias
     from_value: Optional[Union[str, List[str]]] = Field(None, alias='from')

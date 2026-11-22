@@ -49,22 +49,32 @@ class AffirmationInput(BaseModel):
     is_reviewer: bool = False
 
 
-class CriterionInput(BaseModel):
-    """One author-configurable decision criterion attached to an AR.
+class CopiedFrom(BaseModel):
+    """Where a copied check came from. Provenance only: the check keeps no live link."""
+    kind: str                                   # compliance | template
+    label: str = Field("", max_length=200)
+    id: Optional[str] = Field(None, max_length=64)
+    key: Optional[str] = Field(None, max_length=64)
 
-    Either link an existing Compliance Check (``policy_id``) or author a new one
-    inline (``name`` + ``rule``, an ``ASSERT`` DSL condition). ``direction`` and
-    ``weight`` are the ARF divergence facets recorded on the link.
+
+class CriterionInput(BaseModel):
+    """One decision check owned by the AR version (ARF 1.2.0).
+
+    The rule is written in the AR: the DSL ``ASSERT`` rule (``rule``), or an ARF
+    template (``template_key``, the server supplies rule and message). A check copied
+    from Compliance arrives with its rule and ``copied_from``. ``weight`` is a finite
+    number of 0 or more; ``order`` defaults to the check's position.
     """
-    policy_id: Optional[str] = None             # link an existing compliance policy
-    name: Optional[str] = None                  # inline-authored policy name
-    rule: Optional[str] = None                  # inline-authored DSL rule (ASSERT obj.… )
+    name: Optional[str] = None
+    rule: Optional[str] = None
     failure_message: Optional[str] = None
-    direction: str = "neutral"                  # actual-exceeds-documented | documented-exceeds-actual | neutral
-    weight: float = 1.0
-    dimension: str = "people"                   # DNAco dimension this criterion scores
-    order: int = 0
+    direction: Optional[str] = None             # actual-exceeds-documented | documented-exceeds-actual | neutral
+    weight: Optional[float] = Field(None, ge=0, allow_inf_nan=False)
+    dimension: Optional[str] = None             # DNAco dimension this check scores (people|policy|...)
+    order: Optional[int] = None
     enabled: bool = True
+    copied_from: Optional[CopiedFrom] = None
+    template_key: Optional[str] = None
 
 
 class PrerequisiteInput(BaseModel):

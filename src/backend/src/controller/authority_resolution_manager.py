@@ -28,6 +28,7 @@ from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common import authority_resolution_dna as authority_dna
 from src.common.authority_resolution_dna import Criterion, DIR_NONE
+from src.common.authority_check_templates import get_template
 from src.common.compliance_dsl import evaluate_rule_on_object
 from src.common import mcp_resolver
 from src.common.mcp_resolver import Deadline, McpHttpClient, McpResolverError
@@ -146,7 +147,7 @@ def ref_key(field_path: str) -> str:
 
 
 DEFAULT_DNA_CEILING = 0.3
-# Compliance category of the checks an AR authors inline (see _create_criterion_policy).
+# Compliance category of reusable checks written in Compliance for Authority Resolution.
 ARF_CHECK_CATEGORY = "Authority Decision"
 _ALLOWED_STATUSES = ("draft", "active", "needs_review", "retired")
 
@@ -317,28 +318,25 @@ class AuthorityResolutionManager(SearchableAsset):
         return datetime.utcnow()
 
     def _load_criteria(self, relation: AuthorityRelationDb) -> List[Criterion]:
-        """The AR's enabled decision criteria as engine ``Criterion`` objects.
+        """The AR's enabled decision checks as engine ``Criterion`` objects.
 
-        Each links a Compliance Check (its DSL ``ASSERT`` rule is the condition);
-        ``direction``/``weight`` are the ARF divergence facets on the link. Drives
-        both the runtime gate and the DNA-Coefficient engine — one definition.
+        Each check is owned by this AR version (ARF 1.2.0): its DSL ``ASSERT`` rule is
+        the condition, and ``direction``/``weight``/``dimension`` are the ARF divergence
+        facets. Drives both the runtime gate and the DNA-Coefficient engine.
         """
         out: List[Criterion] = []
         for c in sorted(relation.criteria or [], key=lambda x: (x.display_order or 0)):
             if not getattr(c, "enabled", True):
                 continue
-            policy = getattr(c, "compliance_policy", None)
-            if not policy or not policy.rule:
-                continue
             out.append(Criterion(
                 # Human-readable label (name) preferred so DNAco divergence reasons
-                # and the timeline read cleanly; falls back to slug/id.
-                code=(policy.name or policy.slug or c.id),
-                rule=policy.rule,
+                # and the timeline read cleanly; falls back to the row id.
+                code=(c.name or c.id),
+                rule=c.rule,
                 direction=c.direction or "neutral",
                 weight=c.weight if c.weight is not None else 1.0,
                 dimension=getattr(c, "dimension", None) or "people",
-                message=policy.failure_message or None,
+                message=c.failure_message or None,
             ))
         return out
 
@@ -895,19 +893,20 @@ class AuthorityResolutionManager(SearchableAsset):
                     domain_ids=domain_ids, primary_domain_id=primary, assigned_by=current_user,
                 )
 
-        # Clone decision criteria (reuse the reusable Compliance Checks; only the
-        # ARF facet link is per-version).
-        src_criteria = authority_criterion_repo.list_for_relation(db, relation_id=source.id)
-        for c in src_criteria:
+        # Clone the version's own decision checks (each version owns its copy).
+        for c in authority_criterion_repo.list_for_relation(db, relation_id=source.id):
             authority_criterion_repo.create(db, obj_in={
                 "id": str(uuid.uuid4()),
                 "relation_id": new_id,
-                "compliance_policy_id": c.compliance_policy_id,
+                "name": c.name,
+                "rule": c.rule,
+                "failure_message": c.failure_message,
                 "direction": c.direction,
                 "weight": c.weight,
                 "dimension": getattr(c, "dimension", "people"),
                 "display_order": c.display_order,
                 "enabled": c.enabled,
+                "copied_from": c.copied_from,
             })
 
         # Clone affirmation participants, resetting their affirmed/review state.
@@ -1025,59 +1024,98 @@ class AuthorityResolutionManager(SearchableAsset):
 
     # ------------------------------------------------------- decision criteria
 
-    def _replace_criteria(self, db: Session, relation_id: str, criteria: List[Any]) -> None:
-        """Replace the AR's decision-criteria links. Each input either references an
-        existing Compliance Check (``policy_id``) or authors a new one inline
-        (``name`` + ``rule``). Mirrors ``_replace_affirmations``; re-run on each
-        version bump so the criteria travel with the AR version.
-        """
-        authority_criterion_repo.delete_for_relation(db, relation_id=relation_id)
-        for idx, item in enumerate(criteria):
-            c = item.dict() if hasattr(item, "dict") else dict(item)
-            policy_id = c.get("policy_id") or self._create_criterion_policy(db, c, relation_id, idx)
-            if not policy_id:
-                continue
-            authority_criterion_repo.create(db, obj_in={
-                "id": str(uuid.uuid4()),
-                "relation_id": relation_id,
-                "compliance_policy_id": policy_id,
-                "direction": c.get("direction") or "neutral",
-                "weight": c.get("weight") if c.get("weight") is not None else 1.0,
-                "dimension": c.get("dimension") or "people",
-                "display_order": c.get("order", idx),
-                "enabled": c.get("enabled", True),
-            })
+    # Direction values the DNA engine signs; anything else is refused on save.
+    _CRITERION_DIRECTIONS = ("actual-exceeds-documented", "documented-exceeds-actual", "neutral")
+    # Provenance kinds an author may send; "migrated" is written by the migration only.
+    _CLIENT_COPIED_KINDS = ("compliance", "template")
 
-    def _create_criterion_policy(self, db: Session, c: Dict[str, Any], relation_id: str, idx: int) -> Optional[str]:
-        """Author a new Compliance Check for an inline criterion and return its id.
+    @staticmethod
+    def _checked_weight(value: Any) -> float:
+        """A check weight is a finite number of 0 or more (N5). 0 stays 0; None is 1.0."""
+        if value is None:
+            return 1.0
+        try:
+            weight = float(value)
+        except (TypeError, ValueError):
+            raise AuthorityInvalidError("A check weight must be a number of 0 or more.")
+        if not math.isfinite(weight) or weight < 0:
+            raise AuthorityInvalidError("A check weight must be a number of 0 or more.", weight=str(value))
+        return weight
 
-        The rule is a Compliance-DSL ``ASSERT`` condition (the ``ASSERT`` keyword is
-        prepended if the author omitted it). Category ``Authority Decision`` mirrors
-        how the Maturity feature tags its seeded policies (``Maturity``).
-        """
-        rule = (c.get("rule") or "").strip()
-        if not rule:
+    @classmethod
+    def _copied_from(cls, value: Any) -> Optional[Dict[str, str]]:
+        """Provenance for a copied check: ``{kind, label, id?, key?}``. Stored, never linked."""
+        if not value:
             return None
+        kind = str(value.get("kind") or "")
+        if kind not in cls._CLIENT_COPIED_KINDS:
+            raise AuthorityInvalidError(f"Unknown check provenance '{kind}'.")
+        out = {"kind": kind, "label": str(value.get("label") or "")[:200]}
+        if value.get("id"):
+            out["id"] = str(value["id"])[:64]
+        if value.get("key"):
+            out["key"] = str(value["key"])[:64]
+        return out
+
+    def _normalise_criterion(self, item: Any, idx: int) -> Dict[str, Any]:
+        """One check as the row it is stored as. Validates it; raises AuthorityInvalidError.
+
+        An ARF template (``template_key``) supplies the rule and failure message: the
+        server fills them, so a client can't change a template's rule while keeping
+        its name. ``order`` defaults to the check's position (N6).
+        """
+        c = item.dict() if hasattr(item, "dict") else dict(item)
+        template = None
+        if c.get("template_key"):
+            template = get_template(c["template_key"])
+            if template is None:
+                raise AuthorityInvalidError(f"Unknown ARF check template '{c['template_key']}'.")
+        rule = template.rule if template else (c.get("rule") or "").strip()
+        if not rule:
+            raise AuthorityInvalidError(f"Check {idx + 1} needs a rule.")
         if not authority_dna.has_assert_clause(rule):
             rule = "ASSERT " + rule
         parse_error = authority_dna.rule_parse_error(rule)
         if parse_error:
-            raise AuthorityInvalidError(f"Criterion rule {rule!r} does not parse: {parse_error}")
-        pid = str(uuid.uuid4())
-        policy = CompliancePolicyDb(
-            id=pid,
-            slug=f"ar-criterion-{pid[:12]}",
-            name=c.get("name") or f"Authority criterion {idx + 1}",
-            description=f"Authority decision criterion for Authority Relation {relation_id}",
-            failure_message=c.get("failure_message") or None,
-            rule=rule,
-            category=ARF_CHECK_CATEGORY,
-            severity="high",
-            is_active=True,
-        )
-        db.add(policy)
-        db.flush()
-        return pid
+            raise AuthorityInvalidError(f"Check rule {rule!r} does not parse: {parse_error}")
+        direction = c.get("direction") or (template.direction if template else "neutral")
+        if direction not in self._CRITERION_DIRECTIONS:
+            raise AuthorityInvalidError(f"Check direction '{direction}' is not one of {self._CRITERION_DIRECTIONS}.")
+        if template is not None:
+            copied_from: Optional[Dict[str, str]] = {"kind": "template", "label": template.name, "key": template.key}
+            failure_message = template.failure_message
+        else:
+            copied_from = self._copied_from(c.get("copied_from"))
+            failure_message = c.get("failure_message") or None
+        name = (c.get("name") or "").strip() or (template.name if template else f"Check {idx + 1}")
+        order = c.get("order")
+        return {
+            "name": name[:200],
+            "rule": rule,
+            "failure_message": failure_message,
+            "direction": direction,
+            "weight": self._checked_weight(c.get("weight")),
+            "dimension": c.get("dimension") or (template.dimension if template else "people"),
+            "display_order": idx if order is None else int(order),
+            "enabled": bool(c.get("enabled", True)),
+            "copied_from": copied_from,
+        }
+
+    def _replace_criteria(self, db: Session, relation_id: str, criteria: List[Any]) -> None:
+        """Replace the AR version's own decision checks (ARF 1.2.0, B7 / S12).
+
+        Each check is stored on this version's row, so no Compliance Check is created
+        or linked: saving the AR never duplicates checks, and a Compliance edit can't
+        change it. All rows are validated before the existing ones are replaced.
+        """
+        rows = [self._normalise_criterion(item, idx) for idx, item in enumerate(criteria)]
+        authority_criterion_repo.delete_for_relation(db, relation_id=relation_id)
+        for row in rows:
+            authority_criterion_repo.create(db, obj_in={
+                "id": str(uuid.uuid4()),
+                "relation_id": relation_id,
+                **row,
+            })
 
     # --------------------------------------------------------- prerequisites
 
@@ -1673,8 +1711,8 @@ class AuthorityResolutionManager(SearchableAsset):
                 "domain_context": relation.domain_context,
                 "criteria": [
                     {
-                        "name": c.compliance_policy.name if c.compliance_policy else None,
-                        "rule": c.compliance_policy.rule if c.compliance_policy else None,
+                        "name": c.name,
+                        "rule": c.rule,
                         "direction": c.direction, "weight": c.weight, "enabled": c.enabled,
                     }
                     for c in sorted(relation.criteria or [], key=lambda x: (x.display_order or 0))
@@ -2725,16 +2763,15 @@ class AuthorityResolutionManager(SearchableAsset):
             "criteria": [
                 {
                     "id": c.id,
-                    "policy_id": c.compliance_policy_id,
-                    "name": c.compliance_policy.name if c.compliance_policy else None,
-                    "rule": c.compliance_policy.rule if c.compliance_policy else None,
-                    "failure_message": c.compliance_policy.failure_message if c.compliance_policy else None,
-                    "category": c.compliance_policy.category if c.compliance_policy else None,
+                    "name": c.name,
+                    "rule": c.rule,
+                    "failure_message": c.failure_message,
                     "direction": c.direction,
                     "weight": c.weight,
                     "dimension": getattr(c, "dimension", "people"),
                     "order": c.display_order,
                     "enabled": c.enabled,
+                    "copied_from": c.copied_from,
                 }
                 for c in criteria
             ],

@@ -188,17 +188,14 @@ class AuthorityAffirmationDb(Base):
 
 
 class AuthorityCriterionDb(Base):
-    """An author-configurable decision criterion attached to an AR.
+    """A decision check owned by one AR version (ARF 1.2.0, #859 review B7, S12).
 
-    Mirrors the Maturity-Level → Compliance-Policy link (``MaturityGateDb``): each
-    row binds a reusable **Compliance Check** (its DSL ``ASSERT`` rule is the
-    condition) to an Authority Relation. The gate approves only when every enabled
-    criterion passes; the DNA-Coefficient engine treats a criterion that *fails*
-    for an evidence row as a divergence, weighted by ``weight`` and signed by
-    ``direction`` (the ARF ``arf:direction``). ``direction``/``weight`` are the
-    ARF-specific facets a plain pass/fail check cannot carry, so they live here on
-    the link rather than on the shared policy. Scoped to the versioned AR row; the
-    manager re-creates the links on each version bump.
+    The rule lives on the row: no Compliance Check backs it, so a Compliance edit
+    or delete cannot change an AR, and each version is a self-contained snapshot.
+    The Compliance DSL engine (``ASSERT`` rule) is the condition; the ARF divergence
+    facets ``direction``/``weight``/``dimension`` score it for DNA. ``copied_from``
+    is provenance only (``{kind, label, id?, key?}``), never a live link.
+    New Version copies the rows.
     """
     __tablename__ = 'authority_criteria'
 
@@ -207,22 +204,21 @@ class AuthorityCriterionDb(Base):
         String, ForeignKey('authority_relations.id', ondelete="CASCADE"),
         nullable=False, index=True,
     )
-    compliance_policy_id = Column(
-        String, ForeignKey('compliance_policies.id', ondelete="CASCADE"),
-        nullable=False, index=True,
-    )
+    name = Column(String, nullable=False)
+    rule = Column(Text, nullable=False)              # Compliance-DSL rule (ASSERT ...)
+    failure_message = Column(Text, nullable=True)
     # actual-exceeds-documented | documented-exceeds-actual | neutral
     direction = Column(String, nullable=False, default='neutral')
     weight = Column(Float, nullable=False, default=1.0)
-    # DNAco dimension this criterion contributes to (people|policy|...); structural
-    # is a separate definition-completeness evaluator, not a criterion dimension.
+    # DNAco dimension this check contributes to (people|policy|...); structural
+    # is a separate definition-completeness evaluator, not a check dimension.
     dimension = Column(String, nullable=False, default='people')
     display_order = Column(Integer, nullable=False, default=0)
     enabled = Column(Boolean, nullable=False, default=True)
+    copied_from = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 
     relation = relationship("AuthorityRelationDb", back_populates="criteria")
-    compliance_policy = relationship("CompliancePolicyDb", lazy="selectin")
 
 
 class AuthorityDnaRunDb(Base):

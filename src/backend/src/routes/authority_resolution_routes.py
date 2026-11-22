@@ -712,6 +712,22 @@ async def list_reusable_checks(
     ]
 
 
+@router.get("/authority/criteria/templates")
+async def list_check_templates(
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
+):
+    """The ARF check templates an author can add ("From ARF template"). Shipped with
+    Ontos and defined in code, not as Compliance Checks."""
+    from src.common.authority_check_templates import list_templates
+    return [
+        {
+            "key": t.key, "name": t.name, "rule": t.rule, "failure_message": t.failure_message,
+            "dimension": t.dimension, "direction": t.direction, "description": t.description,
+        }
+        for t in list_templates()
+    ]
+
+
 @router.post("/authority/criteria/validate")
 async def validate_criterion(
     db: DBSessionDep,

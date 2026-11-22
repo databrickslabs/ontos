@@ -150,11 +150,9 @@ def _relation(*criteria: AuthorityCriterionDb) -> AuthorityRelationDb:
 
 def _link(rule, *, direction=DIR_NEUTRAL, weight=1.0, message=None, order=0,
           enabled=True, name="crit") -> AuthorityCriterionDb:
+    """A check owned by the AR version (ARF 1.2.0): the rule lives on the row."""
     return AuthorityCriterionDb(
-        id=f"crit-{order}", relation_id="ar-1",
-        compliance_policy=CompliancePolicyDb(
-            id=f"pol-{order}", name=name, rule=rule, failure_message=message, is_active=True,
-        ),
+        id=f"crit-{order}", relation_id="ar-1", name=name, rule=rule, failure_message=message,
         direction=direction, weight=weight, display_order=order, enabled=enabled,
     )
 
@@ -251,12 +249,12 @@ def test_configurable_criteria_gate_and_divergence(db_session):
     ))
     db_session.commit()
 
-    # Inline criteria created Compliance Checks (category tagged), linked to the AR.
+    # Checks are owned by the AR version: two rows, and no Compliance Check was created.
     assert len(rel.criteria) == 2
-    cats = {c.compliance_policy.category for c in rel.criteria}
-    assert cats == {"Authority Decision"}
+    assert db_session.query(CompliancePolicyDb).filter(
+        CompliancePolicyDb.category == "Authority Decision").count() == 0
     # The ASSERT keyword is prepended when the author omits it.
-    assert all(c.compliance_policy.rule.upper().startswith("ASSERT") for c in rel.criteria)
+    assert all(c.rule.upper().startswith("ASSERT") for c in rel.criteria)
 
     # Gate (dry-run, any status): good request approved, bad request denied w/ message.
     ok = mgr.resolve(db_session, rel.id, {"actor_identity": "rsm-east", "value": 0.10},
@@ -1895,12 +1893,11 @@ def test_malformed_rule_rejected_on_write_and_conflict_at_resolve(db_session):
     with pytest.raises(ValueError, match="does not parse"):
         _make_ar(mgr, db_session, slug="bad-rule", name="Bad", criteria=[dict(name="b", rule="obj.value <=")])
 
+    # A malformed rule stored on the row (written before the write-time check, or by hand).
     rel = _make_ar(mgr, db_session, slug="legacy-bad", name="Legacy bad")
-    pid = str(_uuid.uuid4())
-    db_session.add(CompliancePolicyDb(id=pid, slug=f"p-{pid[:8]}", name="broken", rule="ASSERT obj.value <=",
-                                      category="Authority Decision", severity="high", is_active=True))
-    db_session.add(AuthorityCriterionDb(id=str(_uuid.uuid4()), relation_id=rel.id, compliance_policy_id=pid,
-                                        direction="neutral", weight=1.0, display_order=0, enabled=True))
+    db_session.add(AuthorityCriterionDb(id=str(_uuid.uuid4()), relation_id=rel.id, name="broken",
+                                        rule="ASSERT obj.value <=", direction="neutral", weight=1.0,
+                                        display_order=0, enabled=True))
     db_session.commit()
     out = mgr.resolve(db_session, "legacy-bad", {"value": 1}, record=False, require_active=False)
     assert out["verdict"] == VERDICT_CONFLICT
@@ -1935,20 +1932,18 @@ def test_resaving_unchanged_participants_keeps_signoffs_and_status(db_session):
     assert updated.status == "needs_review"
 
 
-def test_dnaco_run_fails_on_malformed_linked_rule(db_session):
+def test_dnaco_run_fails_on_malformed_stored_rule(db_session):
     import uuid as _uuid
     from src.controller.authority_resolution_manager import AuthorityResolutionManager
-    from src.db_models.compliance import CompliancePolicyDb
-    from src.models.authority_resolution import AuthorityRelationCreate, CriterionInput
+    from src.db_models.authority_resolution import AuthorityCriterionDb
+    from src.models.authority_resolution import AuthorityRelationCreate
     from src.repositories.authority_resolution_repository import authority_dna_run_repo
 
-    pid = str(_uuid.uuid4())
-    db_session.add(CompliancePolicyDb(id=pid, slug=f"p-{pid[:8]}", name="broken linked", rule="ASSERT obj.value <=",
-                                      category="Governance", severity="high", is_active=True))
-    db_session.flush()
     mgr = AuthorityResolutionManager()
-    rel = mgr.create_relation(db_session, AuthorityRelationCreate(
-        name="Linked broken", criteria=[CriterionInput(policy_id=pid)]))
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="Stored broken"))
+    db_session.add(AuthorityCriterionDb(id=str(_uuid.uuid4()), relation_id=rel.id, name="broken",
+                                        rule="ASSERT obj.value <=", direction="neutral", weight=1.0,
+                                        display_order=0, enabled=True))
     db_session.commit()
     with pytest.raises(ValueError, match="malformed"):
         mgr.compute_dnaco(db_session, rel.id, rows=[{"value": 1}])

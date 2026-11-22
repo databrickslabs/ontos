@@ -559,7 +559,7 @@ def test_stopping_waits_for_runs_in_progress_and_records_the_unstarted_ones(
     release, running = threading.Event(), threading.Event()
     started = []
 
-    def run(self, workflow_id, slot, coalesced):
+    def run(self, workflow_id, slot, coalesced, **_kwargs):
         started.append(workflow_id)
         running.set()
         release.wait(timeout=10)
@@ -902,3 +902,390 @@ def test_a_workflow_gone_after_the_claim_is_skipped(db_session, sessions, state)
     assert claim.outcome == {'status': 'skipped', 'coalesced_slots': 1}
     assert claim.execution_id is None
     assert _executions(db_session, workflow.id) == []
+
+
+# --- follow-ups of #1310: shutdown, late runs, claims, threads, connections --------
+
+def test_a_slot_claimed_while_the_scheduler_stops_is_not_started(db_session, sessions):
+    # A pass still claiming (e.g. a slow Lakebase) when stop() drains: the claim is
+    # recorded as not_started, and nothing is handed to the pool during the exit.
+    workflow = _create(db_session, changed=_at(hour=9, minute=58))
+    pool = _Deferred()
+    scheduler = _scheduler(sessions, run_executor=pool)
+    original = scheduler_claims_repo.claim
+
+    def claim_while_stopping(*args, **kwargs):
+        claimed = original(*args, **kwargs)
+        scheduler.drain(timeout=0)
+        return claimed
+
+    with patch.object(scheduler_claims_repo, 'claim', side_effect=claim_while_stopping):
+        scheduler.run_once(_at(minute=0, second=1))
+    assert pool.pending == []
+    [claim] = _claims(db_session, workflow.id)
+    assert claim.outcome == {'status': 'not_started', 'coalesced_slots': 1}
+    assert _executions(db_session, workflow.id) == []
+
+
+def test_a_drained_scheduler_starts_again_with_a_new_pool(db_session, sessions, monkeypatch):
+    from src.common import database
+
+    monkeypatch.setattr(database, '_request_db_use_listeners', [])
+    workflow = _create(db_session, changed=_at(hour=9, minute=58))
+    scheduler = _scheduler(sessions, run_executor=None)
+    scheduler.run_once(_at(minute=0, second=1))
+    assert scheduler.wait_for_runs(timeout=10)
+    scheduler.drain(timeout=1)
+    assert scheduler._pool is None
+    with patch.object(WorkflowScheduler, '_loop', lambda self: None):
+        scheduler.start()
+    scheduler.run_once(_at(minute=5, second=1))
+    assert scheduler.wait_for_runs(timeout=10)
+    assert [c.outcome['status'] for c in _claims(db_session, workflow.id)] == [
+        'succeeded', 'succeeded']
+
+
+def test_runs_go_to_daemon_threads(db_session, sessions):
+    import threading
+
+    _create(db_session, changed=_at(hour=9, minute=58))
+    daemon = []
+
+    def run(self, *args, **kwargs):
+        daemon.append(threading.current_thread().daemon)
+
+    scheduler = _scheduler(sessions, run_executor=None)
+    with patch.object(WorkflowScheduler, '_run', run):
+        scheduler.run_once(_at(minute=0, second=1))
+        assert scheduler.wait_for_runs(timeout=10)
+    scheduler.drain(timeout=1)
+    assert daemon == [True]
+
+
+@pytest.mark.parametrize('waited, status', [(60, 'succeeded'), (5 * 60, 'skipped')])
+def test_a_run_waiting_for_a_worker_past_its_next_slot_is_not_started(
+        db_session, sessions, waited, status):
+    from src.controller import workflow_scheduler
+
+    workflow = _create(db_session, changed=_at(hour=9, minute=58))
+    pool = _Deferred()
+    scheduler = _scheduler(sessions, run_executor=pool)
+    real = workflow_scheduler.time.monotonic
+    started = real()
+    with patch.object(workflow_scheduler.time, 'monotonic', side_effect=lambda: started):
+        scheduler.run_once(_at(minute=0, second=1))  # 4:59 before the 10:05 slot
+    with patch.object(workflow_scheduler.time, 'monotonic',
+                      side_effect=lambda: started + waited):
+        pool.finish()  # a worker gets free ``waited`` seconds later
+    [claim] = _claims(db_session, workflow.id)
+    assert claim.outcome['status'] == status
+    if status == 'skipped':
+        assert claim.outcome == {'status': 'skipped', 'reason': 'late', 'coalesced_slots': 1}
+        assert _executions(db_session, workflow.id) == []
+    else:
+        assert len(_executions(db_session, workflow.id)) == 1
+
+
+def test_the_start_budget_is_capped_at_24_hours():
+    from src.controller.workflow_scheduler import _Schedule
+
+    weekly = _Schedule(workflow_id='w', cron='0 0 10 ? * MON', tz=None, changed_at=CHANGED)
+    slot = _at(day=5, hour=10)  # a Monday
+    assert WorkflowScheduler._start_budget(weekly, slot, slot) == 24 * 3600
+    every_5 = _Schedule(workflow_id='w', cron=EVERY_5, tz=None, changed_at=CHANGED)
+    assert WorkflowScheduler._start_budget(every_5, slot, slot + _seconds(60)) == 4 * 60
+
+
+def _seconds(n):
+    from datetime import timedelta
+
+    return timedelta(seconds=n)
+
+
+def _old_claim(db, workflow_id, slot):
+    db.add(SchedulerClaimDb(task_key=task_key(workflow_id), slot=slot, claimed_by='old',
+                            outcome={'status': 'succeeded', 'coalesced_slots': 1}))
+    db.commit()
+
+
+def test_old_claims_are_pruned_once_a_day_keeping_each_latest(db_session, sessions):
+    from datetime import timedelta
+
+    workflow = _create(db_session, changed=_at(hour=9, minute=58))
+    other = _create(db_session, name='Other', active=False, changed=_at(hour=9, minute=58))
+    now = _at(minute=0, second=1)
+    _old_claim(db_session, workflow.id, now - timedelta(days=40))
+    _old_claim(db_session, workflow.id, now - timedelta(days=31))
+    _old_claim(db_session, workflow.id, now - timedelta(days=29))
+    _old_claim(db_session, other.id, now - timedelta(days=60))  # its latest: kept
+    scheduler = _scheduler(sessions)
+    scheduler.run_once(now)
+    db_session.expire_all()
+    assert sorted(c.slot.replace(tzinfo=UTC) for c in _claims(db_session, workflow.id)) == [
+        now - timedelta(days=29), _at(minute=0)]
+    assert len(_claims(db_session, other.id)) == 1
+    # Within a day no other prune runs, even with old claims.
+    _old_claim(db_session, workflow.id, now - timedelta(days=50))
+    scheduler.run_once(_at(minute=5, second=1))
+    db_session.expire_all()
+    assert len(_claims(db_session, workflow.id)) == 4
+
+
+def test_a_failing_prune_does_not_stop_the_run(db_session, sessions):
+    workflow = _create(db_session, changed=_at(hour=9, minute=58))
+    with patch.object(scheduler_claims_repo, 'prune', side_effect=RuntimeError('locked')):
+        _scheduler(sessions).run_once(_at(minute=0, second=1))
+    [claim] = _claims(db_session, workflow.id)
+    assert claim.outcome['status'] == 'succeeded'
+
+
+def test_the_app_scheduler_uses_a_dedicated_engine_and_disposes_it(monkeypatch):
+    from src.common import database
+
+    monkeypatch.setattr(database, '_request_db_use_listeners', [])
+    engine = type('Engine', (), {'disposed': False,
+                                 'dispose': lambda self: setattr(self, 'disposed', True)})()
+    factory = object()
+    calls = []
+
+    def create(pool_size, name):
+        calls.append((pool_size, name))
+        return factory, engine
+
+    monkeypatch.setattr(database, 'create_dedicated_session_factory', create)
+    scheduler = WorkflowScheduler(max_workers=3, run_executor=_Inline())
+    with patch.object(WorkflowScheduler, '_loop', lambda self: self._stop.wait(5)):
+        scheduler.start()
+        assert calls == [(4, 'workflow_scheduler')]  # 3 runs + the scheduler thread
+        assert scheduler._session_factory is factory
+        scheduler.stop()
+    assert engine.disposed and scheduler._session_factory is None
+
+
+@pytest.mark.parametrize('failure', [
+    RuntimeError('could not connect to host=db.example password=hunter2'),
+    None,
+])
+def test_the_scheduler_warns_when_it_falls_back_to_the_app_pool(monkeypatch, caplog, failure):
+    from src.common import database
+
+    def create(pool_size, name):
+        if failure is not None:
+            raise failure
+        return None
+
+    monkeypatch.setattr(database, 'create_dedicated_session_factory', create)
+    scheduler = WorkflowScheduler(max_workers=3, run_executor=_Inline())
+    with caplog.at_level('WARNING', logger='src.controller.workflow_scheduler'):
+        scheduler._use_dedicated_engine()
+    warned = [r for r in caplog.records
+              if r.levelname == 'WARNING' and 'connection pool' in r.getMessage()]
+    assert len(warned) == 1
+    assert 'hunter2' not in warned[0].getMessage()
+    assert scheduler._session_factory is None and scheduler._own_engine is None
+
+
+def _fake_settings(env='LOCAL', schema=None):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(DB_ECHO=False, DB_POOL_TIMEOUT=7, DB_POOL_RECYCLE=3600, ENV=env,
+                           DB_USE_PASSWORD_AUTH=False, PGSCHEMA=schema)
+
+
+@pytest.mark.parametrize('env, token_hook', [('LOCAL', False), ('PROD', True)])
+def test_the_dedicated_engine_has_its_own_small_pool_and_the_same_hooks(
+        monkeypatch, tmp_path, env, token_hook):
+    from sqlalchemy import create_engine, text
+
+    from src.common import database
+
+    app_engine = create_engine(f"sqlite:///{tmp_path / 'app.db'}")
+    monkeypatch.setattr(database, '_engine', app_engine)
+    monkeypatch.setattr(database, '_SessionLocal', sessionmaker(bind=app_engine))
+    monkeypatch.setattr(database, 'get_settings', lambda: _fake_settings(env))
+    hooked = []
+    listens_for = database.event.listens_for
+
+    def spy(target, name, *args, **kwargs):
+        hooked.append((target, name))
+        return listens_for(target, name, *args, **kwargs)
+
+    monkeypatch.setattr(database.event, 'listens_for', spy)
+    factory, dedicated = database.create_dedicated_session_factory(5, 'test')
+    try:
+        assert dedicated is not app_engine and dedicated.url == app_engine.url
+        assert dedicated.pool.size() == 5 and dedicated.pool._max_overflow == 0
+        assert dedicated.pool.timeout() == 7
+        # The Lakebase OAuth token goes into its new connections too.
+        assert ((dedicated, 'do_connect') in hooked) is token_hook
+        with factory() as db:
+            assert db.execute(text('select 1')).scalar() == 1
+    finally:
+        dedicated.dispose()
+        app_engine.dispose()
+
+
+def test_no_dedicated_engine_when_the_session_factory_was_replaced(monkeypatch):
+    from sqlalchemy import create_engine
+
+    from src.common import database
+
+    app_engine = create_engine('sqlite://')
+    monkeypatch.setattr(database, '_engine', app_engine)
+    monkeypatch.setattr(database, '_SessionLocal', sessionmaker(bind=create_engine('sqlite://')))
+    assert database.create_dedicated_session_factory(5, 'test') is None
+    monkeypatch.setattr(database, '_engine', None)
+    assert database.create_dedicated_session_factory(5, 'test') is None
+
+
+@pytest.mark.parametrize('previous_minutes', [2, None])  # a short gap, and a normal claim
+def test_fire_returns_its_connection_on_every_path(tmp_path, previous_minutes):
+    """The dedicated pool is small and has no overflow: a leaked session blocks the next."""
+    from datetime import timedelta
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import QueuePool
+
+    from src.common.database import Base
+    from src.controller.workflow_scheduler import _Schedule
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'pool.db'}", poolclass=QueuePool,
+                           pool_size=2, max_overflow=0, pool_timeout=1)
+    Base.metadata.create_all(engine, tables=[Base.metadata.tables['scheduler_claims']])
+    scheduler = WorkflowScheduler(sessionmaker(bind=engine), instance_id='a',
+                                  run_executor=_Deferred())
+    schedule = _Schedule(workflow_id='w', cron=EVERY_5, tz=None, changed_at=CHANGED)
+    try:
+        for n in range(3):
+            slot = _at(minute=5 * (n + 1))
+            if previous_minutes is not None:
+                with sessionmaker(bind=engine)() as db:
+                    db.add(SchedulerClaimDb(task_key=task_key('w'),
+                                            slot=slot - timedelta(minutes=previous_minutes),
+                                            claimed_by='old'))
+                    db.commit()
+            assert scheduler._fire(schedule, slot, slot) is True
+            assert engine.pool.checkedout() == 0
+    finally:
+        engine.dispose()
+
+
+def test_start_after_a_stop_whose_thread_outlived_the_join(sessions, monkeypatch):
+    import threading
+
+    from src.common import database
+
+    monkeypatch.setattr(database, '_request_db_use_listeners', [])
+    release, in_pass = threading.Event(), threading.Event()
+    passes = []
+
+    def slow_pass(self, now=None):
+        passes.append(threading.current_thread())
+        if len(passes) == 1:  # the first pass is slow (a Lakebase cold start)
+            in_pass.set()
+            release.wait(timeout=10)
+        return None
+
+    scheduler = _scheduler(sessions)
+    scheduler._stop_join_seconds = 0.05
+    with patch.object(WorkflowScheduler, 'run_once', slow_pass):
+        scheduler.start()
+        old = scheduler._thread
+        assert in_pass.wait(timeout=5)
+        scheduler.stop()
+        assert old.is_alive()  # still in its pass after the join
+        scheduler.start()
+        new = scheduler._thread
+        assert new is not old and new.is_alive() and scheduler._closing is False
+        release.set()
+        old.join(timeout=5)
+        assert not old.is_alive()  # the old thread ended after its pass
+        assert new.is_alive()
+        scheduler._stop_join_seconds = 5
+        scheduler.stop()
+    assert not new.is_alive()
+
+
+def test_the_drain_cancels_a_run_queued_on_the_daemon_pool(db_session, sessions):
+    import threading
+
+    first = _create(db_session, name='First', changed=_at(hour=9, minute=58))
+    second = _create(db_session, name='Second', changed=_at(hour=9, minute=58))
+    release, running = threading.Event(), threading.Event()
+    started = []
+
+    def run(self, workflow_id, slot, coalesced, **_kwargs):
+        started.append(workflow_id)
+        running.set()
+        release.wait(timeout=10)
+
+    # The app's pool (run_executor=None) with one worker: the second run queues.
+    scheduler = _scheduler(sessions, run_executor=None, max_workers=1)
+    with patch.object(WorkflowScheduler, '_run', run):
+        scheduler.run_once(_at(minute=0, second=1))
+        assert running.wait(timeout=5)
+        pool = scheduler._pool
+        threading.Timer(0.3, release.set).start()
+        scheduler.drain(timeout=5)
+        release.set()
+        pool.shutdown(wait=True)  # the worker has gone through the queue
+        _until(lambda: not scheduler._in_flight)
+    assert len(started) == 1 and not scheduler._in_flight
+    [queued] = {first.id, second.id} - set(started)
+    [claim] = _claims(db_session, queued)
+    assert claim.outcome == {'status': 'not_started', 'coalesced_slots': 1}
+
+
+def _until(condition, timeout=2.0):
+    import time
+
+    deadline = time.monotonic() + timeout
+    while not condition() and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+
+def test_a_run_raising_on_the_daemon_pool_ends_and_frees_its_workflow(db_session, sessions):
+    _create(db_session, changed=_at(hour=9, minute=58))
+
+    def run(self, *args, **kwargs):
+        raise RuntimeError('boom')
+
+    scheduler = _scheduler(sessions, run_executor=None, max_workers=1)
+    with patch.object(WorkflowScheduler, '_run', run):
+        scheduler.run_once(_at(minute=0, second=1))
+        assert scheduler.wait_for_runs(timeout=5)
+        _until(lambda: not scheduler._in_flight)  # the done callback runs right after
+    assert not scheduler._runs and not scheduler._in_flight
+    # The worker survived the exception: the next slot runs on it.
+    ran = []
+    with patch.object(WorkflowScheduler, '_run', lambda self, *a, **k: ran.append(a[0])):
+        scheduler.run_once(_at(minute=5, second=1))
+        assert scheduler.wait_for_runs(timeout=5)
+    assert len(ran) == 1
+    scheduler.drain(timeout=1)
+
+
+def test_a_run_s_start_budget_does_not_include_the_claims_before_it(tmp_path):
+    """The budget counts from the pass's now: slow claims earlier in the pass use it up."""
+    import time
+
+    from sqlalchemy import create_engine
+
+    from src.common.database import Base
+    from src.controller.workflow_scheduler import _Schedule
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'budget.db'}")
+    Base.metadata.create_all(engine, tables=[Base.metadata.tables['scheduler_claims']])
+    deferred = _Deferred()
+    scheduler = WorkflowScheduler(sessionmaker(bind=engine), instance_id='a',
+                                  run_executor=deferred)
+    schedule = _Schedule(workflow_id='w', cron=EVERY_5, tz=None, changed_at=CHANGED)
+    slot = _at(minute=5)
+    try:
+        scheduler._pass_started = time.monotonic() - 100  # the pass began 100 s ago
+        assert scheduler._fire(schedule, slot, slot) is True
+    finally:
+        engine.dispose()
+    start_by = deferred.pending[0][3]['start_by']
+    # 5 minutes to the next slot, 100 s of them already gone
+    assert 190 < start_by - time.monotonic() < 200

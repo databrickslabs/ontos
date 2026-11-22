@@ -2,10 +2,10 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from sqlalchemy import func
+from sqlalchemy import exists, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from src.db_models.scheduler_claims import SchedulerClaimDb
 
@@ -75,6 +75,22 @@ class SchedulerClaimsRepository:
             SchedulerClaimDb.task_key == task_key, SchedulerClaimDb.slot == slot,
         ).update({'outcome': outcome, 'execution_id': execution_id}, synchronize_session=False)
         db.commit()
+
+    def prune(self, db: Session, *, before: datetime) -> int:
+        """Delete the claims of slots before ``before`` and commit; returns the count.
+
+        The latest claim of each task is kept, whatever its age: ``latest_slot``
+        reads it for the minimum gap between two runs.
+        """
+        newer = aliased(SchedulerClaimDb)
+        has_newer = exists().where(
+            newer.task_key == SchedulerClaimDb.task_key, newer.slot > SchedulerClaimDb.slot,
+        )
+        deleted = db.query(SchedulerClaimDb).filter(
+            SchedulerClaimDb.slot < before, has_newer,
+        ).delete(synchronize_session=False)
+        db.commit()
+        return deleted
 
 
 scheduler_claims_repo = SchedulerClaimsRepository()

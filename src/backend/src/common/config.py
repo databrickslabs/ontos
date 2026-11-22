@@ -164,7 +164,16 @@ class Settings(BaseSettings):
         0, env='WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS',
     )
     # Scheduled runs run on a pool of this many threads per instance, so one long
-    # run doesn't hold up the other scheduled workflows.
+    # run doesn't hold up the other scheduled workflows. The scheduler and its runs
+    # use an engine of their own with MAX_WORKERS + 1 connections (no overflow), on
+    # top of DB_POOL_SIZE + DB_MAX_OVERFLOW: count them in the database's limit.
+    # Connections per replica = DB_POOL_SIZE + DB_MAX_OVERFLOW + MAX_WORKERS + 1
+    # (5 + 10 + 4 + 1 = 20 by default); replicas x that must stay under the database's
+    # max connections. A run's own session is on the dedicated engine, but what it
+    # triggers (audit entries, search index updates, tag sync) takes a request-pool
+    # connection for a moment, within DB_POOL_SIZE + DB_MAX_OVERFLOW.
+    # After an in-process restart a run still going after the drain keeps a
+    # connection of the old engine until it ends, on top of these.
     WORKFLOW_SCHEDULER_MAX_WORKERS: int = Field(4, env='WORKFLOW_SCHEDULER_MAX_WORKERS')
     # On shutdown, wait up to this many seconds for scheduled runs in progress. A
     # run cut off by the exit is not run again (each slot runs at most once).

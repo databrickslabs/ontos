@@ -344,7 +344,8 @@ async def startup_event():
 # Application Shutdown Event
 async def shutdown_event():
     logger.info("Running application shutdown event...")
-    _stop_workflow_scheduler()
+    # stop() joins the scheduler thread and drains the runs: not on the event loop.
+    await asyncio.to_thread(_stop_workflow_scheduler)
     logger.info("Application shutdown complete.")
 
 # --- FastAPI App Instantiation (AFTER defining lifecycle functions) ---

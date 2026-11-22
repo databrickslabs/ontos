@@ -74,9 +74,16 @@ EXPECTED = {
     'remove_semantic_link': ('semantic-models', RW),
     # Reads, but admins only: POST /semantic-models/query (Read/Write), one level up
     'execute_sparql_query': ('semantic-models', ADMIN),
+    # Authority Resolution: the ARF tools declare their routes' levels. Resolving is
+    # Read-only (a decision row is written only for a write-capable caller); computing
+    # the DNA-Coefficient writes the AR's measurement, so Read-write.
+    'resolve_authority': ('authority-resolution', RO),
+    'find_authority_for_concept': ('authority-resolution', RO),
+    'get_authority_relation': ('authority-resolution', RO),
+    'compute_dna_coefficient': ('authority-resolution', RW),
 }
 WRITE_PREFIXES = ('create_', 'update_', 'delete_', 'add_', 'remove_', 'assign_', 'set_')
-BELOW = {RW: RO, ADMIN: RW}
+BELOW = {RW: RO, ADMIN: RW, RO: FeatureAccessLevel.NONE}
 
 
 def _run(coro):

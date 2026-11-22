@@ -1213,7 +1213,18 @@ def _mcp_factory(response=None, raises=None):
     return lambda ws, svc, deadline=None: _FakeMcpClient(ws, svc, deadline, response, raises)
 
 
-def _make_mcp_ar(mgr, db, *, slug, resolver_auth="obo", criteria=None, pointer="$.approver"):
+def _pin_app_sp_market(db, rel, market="DE"):
+    """An app_sp ref sees only the AR's own parameters (B2): the market is pinned
+    on the AR (``ctx.market``), never taken from the caller's request."""
+    from src.repositories.authority_resolution_repository import authority_resource_ref_repo
+    rel.domain_context = {"params": {"market": market}}
+    for ref in authority_resource_ref_repo.list_for_relation(db, relation_id=rel.id):
+        ref.mcp_params = {"role": "{{ ar.actor_role }}", "market": "{{ ctx.market }}"}
+    db.commit()
+
+
+def _make_mcp_ar(mgr, db, *, slug, resolver_auth="obo", criteria=None, pointer="$.approver",
+                 caller_is_admin=True):
     from src.models.authority_resolution import (
         AuthorityRelationCreate, CriterionInput, ResourceRefInput,
     )
@@ -1228,7 +1239,7 @@ def _make_mcp_ar(mgr, db, *, slug, resolver_auth="obo", criteria=None, pointer="
             mcp_params={"role": "{{ ar.actor_role }}", "market": "{{ market }}"},
             mcp_result_pointer=pointer,
         )],
-    ))
+    ), caller_is_admin=caller_is_admin)
 
 
 def test_mcp_ref_value_feeds_criteria_via_ref_namespace(db_session):
@@ -1290,7 +1301,7 @@ def test_app_sp_auth_bypasses_caller_identity(db_session):
     )
 
     mgr = AuthorityResolutionManager()
-    _make_mcp_ar(mgr, db_session, slug="sp-gate", resolver_auth="app_sp")
+    _pin_app_sp_market(db_session, _make_mcp_ar(mgr, db_session, slug="sp-gate", resolver_auth="app_sp"))
     db_session.commit()
     obo_ws, app_ws = object(), object()
     out = mgr.resolve(db_session, "sp-gate", {"market": "DE"}, record=False, require_active=False,
@@ -1625,6 +1636,7 @@ def test_mcp_cache_policy_never_caches_obo_or_dry_runs(db_session):
     mgr = AuthorityResolutionManager()
     obo = _make_mcp_ar(mgr, db_session, slug="cache-obo")
     sp = _make_mcp_ar(mgr, db_session, slug="cache-sp", resolver_auth="app_sp")
+    _pin_app_sp_market(db_session, sp)
     obo.status = sp.status = STATUS_ACTIVE
     db_session.commit()
     ws = lambda: object()  # noqa: E731
@@ -1724,7 +1736,7 @@ def test_empty_evidence_sample_fails_the_run_and_leaves_dna_unmeasured(db_sessio
     runs = authority_dna_run_repo.list_for_relation(db_session, relation_id=rel.id)
     assert runs[0].status == "failed"
     assert rel.dna_magnitude is None
-    _, err = mgr.set_status(db_session, rel.id, "active")
+    _, err = mgr.set_status(db_session, rel.id, "active", caller_is_admin=True)
     assert "not been measured" in err
 
 
@@ -1749,12 +1761,13 @@ def test_zero_dna_ceiling_is_respected(db_session):
     mgr = AuthorityResolutionManager()
     rel = mgr.create_relation(db_session, AuthorityRelationCreate(
         name="Zero tolerance", dna_max_threshold=0.0,
-        affirmations=[AffirmationInput(role="Approver", principal="a@x.com")]))
+        affirmations=[AffirmationInput(role="Approver", principal="a@x.com")]),
+        caller_is_admin=True)
     db_session.commit()
     aff = mgr.to_read_dict(db_session, rel)["affirmations"][0]
     mgr.affirm(db_session, aff["id"], affirmed_by="a@x.com", user=_user("a@x.com"))
     rel.dna_magnitude = 0.1
-    _, err = mgr.set_status(db_session, rel.id, "active")
+    _, err = mgr.set_status(db_session, rel.id, "active", caller_is_admin=True)
     assert err and "exceeds the maximum 0.0" in err
 
 
@@ -1795,7 +1808,8 @@ def test_update_recompute_scores_the_new_criteria(db_session, monkeypatch):
     rel = mgr.create_relation(db_session, AuthorityRelationCreate(
         name="Stale AR", dna_max_threshold=0.5,
         criteria=[CriterionInput(name="loose", rule="obj.value <= 100")],
-        affirmations=[AffirmationInput(role="Approver", principal="a@x.com")]))
+        affirmations=[AffirmationInput(role="Approver", principal="a@x.com")]),
+        caller_is_admin=True)
     db_session.commit()
     _ = list(rel.criteria)  # load the collection
     rel.status = STATUS_ACTIVE
@@ -2051,7 +2065,7 @@ def test_search_index_one_entry_per_family_and_status_timeline(db_session):
     mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(description="now searchable"))
     assert search.upserts[-1].description == "now searchable"
 
-    _, err = mgr.set_status(db_session, rel.id, "retired")
+    _, err = mgr.set_status(db_session, rel.id, "retired", caller_is_admin=True)
     assert err is None and search.upserts[-1].extra_data["status"] == "retired"
     timeline = [c.comment for c in db_session.query(CommentDb).filter(
         CommentDb.entity_type == "authority_relation", CommentDb.entity_id == rel.id)]

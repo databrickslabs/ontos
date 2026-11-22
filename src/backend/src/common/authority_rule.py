@@ -37,6 +37,17 @@ from decimal import Decimal
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 from src.common.authority_resolution_dna import Criterion
+from src.common.api_errors import CodedValueError
+
+
+class RuleInvalidError(CodedValueError):
+    """A domain context or rule the author must fix; the message says what.
+
+    Same code as the manager's ``AuthorityInvalidError``, so routes answer 400
+    with the message instead of a generic failure.
+    """
+
+    code = "authority_invalid"
 
 # Criterion kinds: how the gate treats a failure.
 KIND_CHECK = "check"              # a Compliance Check: failure denies
@@ -81,9 +92,9 @@ _DSL_KEYWORDS = frozenset({
 def _check_name(name: str, what: str) -> None:
     """A name rules read as ``<ns>.<name>`` must be an identifier and no DSL keyword."""
     if not _IDENT_RE.match(name):
-        raise ValueError(f"{what} '{name}' must be an identifier (letters, digits, _).")
+        raise RuleInvalidError(f"{what} '{name}' must be an identifier (letters, digits, _).")
     if name.upper() in _DSL_KEYWORDS:
-        raise ValueError(f"{what} '{name}' is a reserved word of the rule language; choose another name.")
+        raise RuleInvalidError(f"{what} '{name}' is a reserved word of the rule language; choose another name.")
 
 
 # --------------------------------------------------------------------------- #
@@ -120,7 +131,7 @@ def normalize_domain_context(value: Any, strict: bool = False) -> Dict[str, Any]
     if not value:
         return {"scope": [], "params": {}}
     if not isinstance(value, dict):
-        raise ValueError("domain_context must be an object.")
+        raise RuleInvalidError("domain_context must be an object.")
     if not is_structured(value):
         return {"scope": [], "params": dict(value)}
     scope = value.get("scope") or []
@@ -133,7 +144,7 @@ def normalize_domain_context(value: Any, strict: bool = False) -> Dict[str, Any]
         ]
     params = value.get("params") or {}
     if not isinstance(scope, list) or not isinstance(params, dict):
-        raise ValueError("domain_context.scope must be a list and domain_context.params an object.")
+        raise RuleInvalidError("domain_context.scope must be a list and domain_context.params an object.")
     for k in params if strict else ():
         _check_name(str(k), "Parameter name")
     validated = [_validate_constraint(c, where="domain_context.scope", allow_reference=False,
@@ -226,14 +237,14 @@ def _validate_constraint(
     c: Any, *, where: str, allow_reference: bool = True, allow_logical: bool = True,
 ) -> Dict[str, Any]:
     if not isinstance(c, dict):
-        raise ValueError(f"{where}: a constraint must be an object.")
+        raise RuleInvalidError(f"{where}: a constraint must be an object.")
     for logical in ("or", "and"):
         if logical in c:
             if not allow_logical:
-                raise ValueError(f"{where}: a scope lists plain constraints (all must hold), not '{logical}'.")
+                raise RuleInvalidError(f"{where}: a scope lists plain constraints (all must hold), not '{logical}'.")
             parts = c[logical]
             if not isinstance(parts, list) or len(parts) < 2:
-                raise ValueError(f"{where}: '{logical}' needs a list of at least two constraints.")
+                raise RuleInvalidError(f"{where}: '{logical}' needs a list of at least two constraints.")
             out = {logical: [_validate_constraint(p, where=where, allow_reference=allow_reference)
                              for p in parts]}
             out.update({k: c[k] for k in _FACETS if c.get(k) is not None})
@@ -241,34 +252,34 @@ def _validate_constraint(
     left = str(c.get("leftOperand") or "").strip()
     op = str(c.get("operator") or "").strip()
     if not _OPERAND_RE.match(left):
-        raise ValueError(f"{where}: leftOperand '{left}' must be a name such as 'payAmount' or 'arf:market'.")
+        raise RuleInvalidError(f"{where}: leftOperand '{left}' must be a name such as 'payAmount' or 'arf:market'.")
     if op not in OPERATORS:
-        raise ValueError(f"{where}: operator '{op}' must be one of {', '.join(OPERATORS)}.")
+        raise RuleInvalidError(f"{where}: operator '{op}' must be one of {', '.join(OPERATORS)}.")
     if left not in REQUEST_OPERANDS:
         _check_name(operand_key(left), f"{where}: context key")
     out = {"leftOperand": left, "operator": op}
     ref = c.get("rightOperandReference")
     if ref is not None:
         if not allow_reference:
-            raise ValueError(f"{where}: a scope compares with values, not references.")
+            raise RuleInvalidError(f"{where}: a scope compares with values, not references.")
         m = _REFERENCE_RE.match(str(ref))
         if not m:
-            raise ValueError(f"{where}: rightOperandReference '{ref}' must be ctx.<param> or req.<key>.")
+            raise RuleInvalidError(f"{where}: rightOperandReference '{ref}' must be ctx.<param> or req.<key>.")
         _check_name(m.group(2), f"{where}: reference")
         out["rightOperandReference"] = str(ref)
     else:
         if "rightOperand" not in c or c["rightOperand"] in (None, "", []):
-            raise ValueError(f"{where}: constraint on '{left}' needs a rightOperand.")
+            raise RuleInvalidError(f"{where}: constraint on '{left}' needs a rightOperand.")
         right = c["rightOperand"]
         if op in ("isAnyOf", "isNoneOf") and not isinstance(right, list):
             right = [right]
         if op not in ("isAnyOf", "isNoneOf") and isinstance(right, list):
-            raise ValueError(f"{where}: '{op}' compares with one value, not a list.")
+            raise RuleInvalidError(f"{where}: '{op}' compares with one value, not a list.")
         for v in right if isinstance(right, list) else [right]:
             if not isinstance(v, (str, int, float, bool)):
-                raise ValueError(f"{where}: rightOperand values must be strings, numbers or booleans.")
+                raise RuleInvalidError(f"{where}: rightOperand values must be strings, numbers or booleans.")
             if isinstance(v, float) and not math.isfinite(v):
-                raise ValueError(f"{where}: rightOperand numbers must be finite.")
+                raise RuleInvalidError(f"{where}: rightOperand numbers must be finite.")
         out["rightOperand"] = right
     if c.get("unit"):
         out["unit"] = str(c["unit"])
@@ -281,29 +292,29 @@ def normalize_rule(rule: Any) -> Optional[Dict[str, Any]]:
     if not rule:
         return None
     if not isinstance(rule, dict):
-        raise ValueError("rule must be an object.")
+        raise RuleInvalidError("rule must be an object.")
     perm = rule.get("permission") or {}
     if not isinstance(perm, dict):
-        raise ValueError("rule.permission must be an object.")
+        raise RuleInvalidError("rule.permission must be an object.")
     constraints = [_validate_constraint(c, where="rule.permission.constraint")
                    for c in perm.get("constraint") or []]
     duties = []
     for d in perm.get("duty") or []:
         if not isinstance(d, dict) or not str(d.get("action") or "").strip():
-            raise ValueError("rule.permission.duty: each duty needs an action (e.g. arf:obtainCoApproval).")
+            raise RuleInvalidError("rule.permission.duty: each duty needs an action (e.g. arf:obtainCoApproval).")
         fulfilled_by = [_validate_constraint(c, where="rule.permission.duty") for c in d.get("constraint") or []]
         if not fulfilled_by:
-            raise ValueError(f"rule.permission.duty '{d['action']}' needs a constraint that tells when it is fulfilled.")
+            raise RuleInvalidError(f"rule.permission.duty '{d['action']}' needs a constraint that tells when it is fulfilled.")
         duty = {"action": str(d["action"]).strip(), "constraint": fulfilled_by}
         duty.update({k: d[k] for k in _FACETS if d.get(k) is not None})
         duties.append(duty)
     prohibitions = []
     for p in rule.get("prohibition") or []:
         if not isinstance(p, dict):
-            raise ValueError("rule.prohibition: each prohibition must be an object.")
+            raise RuleInvalidError("rule.prohibition: each prohibition must be an object.")
         when = [_validate_constraint(c, where="rule.prohibition.constraint") for c in p.get("constraint") or []]
         if not when:
-            raise ValueError("rule.prohibition: each prohibition needs at least one constraint.")
+            raise RuleInvalidError("rule.prohibition: each prohibition needs at least one constraint.")
         prohibition = {"constraint": when}
         prohibition.update({k: p[k] for k in _FACETS if p.get(k) is not None})
         prohibitions.append(prohibition)

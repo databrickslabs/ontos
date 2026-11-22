@@ -287,7 +287,7 @@ def test_activation_needs_a_valid_policy_root(db_session, mgrs):
     ar = _ar(rm, db_session, _policy(pm, db_session, approve=False))
     ar.dna_magnitude = 0.0
     db_session.flush()
-    _, err = rm.set_status(db_session, ar.id, "active")
+    _, err = rm.set_status(db_session, ar.id, "active", caller_is_admin=True)
     assert err and "policy root not approved" in err
 
 

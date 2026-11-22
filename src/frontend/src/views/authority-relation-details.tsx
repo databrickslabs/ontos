@@ -145,6 +145,7 @@ export default function AuthorityRelationDetails() {
   const { get, post, delete: del } = useApi();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const canWrite = !permissionsLoading && hasPermission(FEATURE_ID, FeatureAccessLevel.READ_WRITE);
+  const isAdmin = !permissionsLoading && hasPermission(FEATURE_ID, FeatureAccessLevel.ADMIN);
 
   const [relation, setRelation] = useState<AuthorityRelation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -324,7 +325,7 @@ export default function AuthorityRelationDetails() {
               {busy === 'compute' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
               {t('details.buttonComputeDnaco')}
             </Button>
-            {relation.status !== 'active' && (
+            {isAdmin && relation.status !== 'active' && (
               <Button variant="outline" size="sm" onClick={activate} disabled={busy === 'activate'}>
                 <CheckCircle2 className="h-4 w-4 mr-1" /> {t('details.buttonActivate')}
               </Button>
@@ -339,9 +340,11 @@ export default function AuthorityRelationDetails() {
               onToggle={() => setCommentsOpen(!commentsOpen)}
               className="h-8"
             />
-            <Button variant="destructive" size="sm" onClick={remove}>
-              <Trash2 className="mr-2 h-4 w-4" /> {t('common:actions.delete')}
-            </Button>
+            {isAdmin && (
+              <Button variant="destructive" size="sm" onClick={remove}>
+                <Trash2 className="mr-2 h-4 w-4" /> {t('common:actions.delete')}
+              </Button>
+            )}
           </div>
         )}
       </div>

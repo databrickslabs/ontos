@@ -50,6 +50,7 @@ export default function AuthorityResolution() {
   const { get, delete: del } = useApi();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const canWrite = !permissionsLoading && hasPermission(FEATURE_ID, FeatureAccessLevel.READ_WRITE);
+  const isAdmin = !permissionsLoading && hasPermission(FEATURE_ID, FeatureAccessLevel.ADMIN);
 
   const [relations, setRelations] = useState<AuthorityRelation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,9 +91,16 @@ export default function AuthorityResolution() {
   const handleBulkDelete = async (ids: string[]) => {
     if (ids.length === 0) return;
     if (!confirm(t('list.confirmBulkDelete', { count: ids.length }))) return;
-    const results = await Promise.allSettled(ids.map((id) => del(`/api/authority/relations/${id}`)));
-    const ok = results.filter((r) => r.status === 'fulfilled').length;
+    // useApi resolves with { error } rather than rejecting, so a refused delete is
+    // an error value; a rejection (network) counts as a failure too.
+    const settled = await Promise.allSettled(ids.map((id) => del(`/api/authority/relations/${id}`)));
+    const failures = settled.flatMap((r) => {
+      if (r.status === 'rejected') return [String(r.reason)];
+      return r.value.error ? [String(r.value.error)] : [];
+    });
+    const ok = ids.length - failures.length;
     if (ok > 0) toast({ title: t('common:toast.deleted'), description: t('list.bulkDeleteSuccess', { count: ok }) });
+    if (failures.length > 0) toast({ title: t('common:toast.error'), description: failures[0], variant: 'destructive' });
     fetchRelations();
   };
 
@@ -178,15 +186,17 @@ export default function AuthorityResolution() {
                 <Button variant="ghost" size="icon" title={t('common:actions.edit')} onClick={(e) => { e.stopPropagation(); setEditRelation(r); }}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive hover:text-destructive"
-                  title={t('common:actions.delete')}
-                  onClick={(e) => { e.stopPropagation(); handleDelete(r); }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive"
+                    title={t('common:actions.delete')}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(r); }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -230,7 +240,7 @@ export default function AuthorityResolution() {
               </Button>
             )
           }
-          bulkActions={(selectedRows) => (
+          bulkActions={(selectedRows) => isAdmin ? (
             <Button
               variant="destructive"
               size="sm"
@@ -240,7 +250,7 @@ export default function AuthorityResolution() {
               <Trash2 className="w-4 h-4 mr-1" />
               {t('list.buttonDeleteSelected', { count: selectedRows.length })}
             </Button>
-          )}
+          ) : null}
           onRowClick={(row) => navigate(`${pathname}/${row.original.id}`)}
         />
       )}

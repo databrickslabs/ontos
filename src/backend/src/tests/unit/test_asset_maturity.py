@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
-from databricks.sdk.errors import NotFound, PermissionDenied
+from databricks.sdk.errors import NotFound, PermissionDenied, Unauthenticated
 from databricks.sdk.service.catalog import (
     ColumnInfo, ForeignKeyConstraint, PrimaryKeyConstraint, TableConstraint, TableInfo,
 )
@@ -249,6 +249,7 @@ def test_builder_merges_the_uc_table_key_column_fields(db_session):
 @pytest.mark.parametrize('error,status', [
     (NotFound('Table does not exist: main.sales.orders'), 'unreadable'),
     (PermissionDenied('User does not have SELECT on secret_catalog'), 'unreadable'),
+    (Unauthenticated('Token expired'), 'unauthenticated'),
     (RuntimeError('connection reset by 10.0.0.12'), 'read_failed'),
 ])
 def test_unreadable_table_leaves_uc_fields_absent(db_session, error, status):

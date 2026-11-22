@@ -1423,6 +1423,7 @@
       "maturity_bulk_skipped_not_stored": "Non enregistré : la table n'a pas pu être lue",
       "maturity_bulk_evaluation_failed": "Échec de l'évaluation (voir le journal du serveur)",
       "maturity_bulk_run_failed": "L'exécution s'est arrêtée (voir le journal du serveur)",
+      "maturity_bulk_authentication_failed": "Arrêtée : Unity Catalog a refusé le jeton (il a peut-être expiré) ; relancez-la",
       "maturity_bulk_run_in_progress": "Une évaluation en masse est déjà en cours.",
       "maturity_bulk_scope_invalid": "Le périmètre n'est pas valide."
     }

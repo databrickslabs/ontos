@@ -1423,6 +1423,7 @@
       "maturity_bulk_skipped_not_stored": "Nicht gespeichert: Die Tabelle konnte nicht gelesen werden",
       "maturity_bulk_evaluation_failed": "Bewertung fehlgeschlagen (siehe Server-Log)",
       "maturity_bulk_run_failed": "Der Lauf wurde gestoppt (siehe Server-Log)",
+      "maturity_bulk_authentication_failed": "Gestoppt: Unity Catalog hat das Token abgelehnt (evtl. abgelaufen); erneut ausführen",
       "maturity_bulk_run_in_progress": "Eine Massenbewertung läuft bereits.",
       "maturity_bulk_scope_invalid": "Der Umfang ist ungültig."
     }

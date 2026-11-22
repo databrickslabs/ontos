@@ -9,7 +9,9 @@ batches, with a bounded number of worker threads, and keeps progress and a summa
   counted reason. A level change is logged and fires ON_MATURITY_CHANGE as for any
   evaluation.
 - Errors are counted and coded (``maturity_bulk_evaluation_failed``); the exception text
-  goes to the server log only.
+  goes to the server log only. When Unity Catalog refuses the run's token (it expired
+  during a long run), the run stops and fails with ``maturity_bulk_authentication_failed``
+  instead of reading the remaining tables as unreadable.
 - The summary of the last run is stored in ``app_settings`` so it survives a restart.
   Progress of a running run lives in this process.
 
@@ -36,7 +38,7 @@ from src.controller.entity_dict_builder import (
     MATURITY_ASSET_TYPES,
     UnsupportedMaturityAssetTypeError,
 )
-from src.controller.maturity_evaluator import MaturityEvaluator
+from src.controller.maturity_evaluator import MaturityEvaluator, MaturityUcAuthenticationError
 from src.db_models.app_settings import AppSettingDb
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.repositories.maturity_repository import maturity_repo
@@ -60,6 +62,8 @@ SKIP_ASSET_TYPE = "maturity_bulk_skipped_asset_type"
 SKIP_NOT_STORED = "maturity_bulk_skipped_not_stored"
 ERROR_EVALUATION_FAILED = "maturity_bulk_evaluation_failed"
 ERROR_RUN_FAILED = "maturity_bulk_run_failed"
+# Unity Catalog refused the run's token (it expired during a long run): the run stops
+ERROR_AUTHENTICATION_FAILED = "maturity_bulk_authentication_failed"
 
 SessionFactory = Callable[[], Any]
 
@@ -296,6 +300,11 @@ def _evaluate_one(
             }
     except UnsupportedMaturityAssetTypeError:
         return {"kind": "skipped", "code": SKIP_ASSET_TYPE}
+    except MaturityUcAuthenticationError:
+        logger.warning("Bulk maturity evaluation stopped: Unity Catalog refused the token "
+                       "while reading asset %s", asset_id)
+        return {"kind": "error", "code": ERROR_AUTHENTICATION_FAILED, "asset_id": asset_id,
+                "stop": True}
     except Exception:
         logger.warning("Bulk maturity evaluation failed for asset %s", asset_id, exc_info=True)
         return {"kind": "error", "code": ERROR_EVALUATION_FAILED, "asset_id": asset_id}
@@ -319,7 +328,7 @@ def execute_run(
     Returns the run's final summary (None when the run isn't the registered one).
     """
     make_evaluator = evaluator_factory or (
-        lambda: MaturityEvaluator(run_identity=run_identity)
+        lambda: MaturityEvaluator(run_identity=run_identity, stop_on_uc_auth_failure=True)
     )
     with _lock:
         if _current is None or _current["id"] != run_id:
@@ -337,6 +346,7 @@ def execute_run(
             for _ in asset_ids:
                 _record(run_id, {"kind": "skipped", "code": SKIP_NO_LEVELS})
         else:
+            stopped = False
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 for batch in _batches(asset_ids, batch_size):
                     futures = [
@@ -348,7 +358,20 @@ def execute_run(
                         for asset_id in batch
                     ]
                     for future in as_completed(futures):
-                        _record(run_id, future.result())
+                        if future.cancelled():
+                            continue
+                        outcome = future.result()
+                        _record(run_id, outcome)
+                        if outcome.get("stop") and not stopped:
+                            # A refused token fails every later read: stop instead of
+                            # finishing green with the remaining tables as unreadable
+                            stopped = True
+                            for pending in futures:
+                                pending.cancel()
+                    if stopped:
+                        break
+            if stopped:
+                return _finish(run_id, "failed", session_factory)
         return _finish(run_id, "completed", session_factory)
     except Exception:
         logger.error("Bulk maturity evaluation %s failed", run_id, exc_info=True)

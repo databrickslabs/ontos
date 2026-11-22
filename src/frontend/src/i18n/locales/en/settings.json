@@ -1441,6 +1441,7 @@
       "maturity_bulk_skipped_not_stored": "Not stored: the table couldn't be read",
       "maturity_bulk_evaluation_failed": "Evaluation failed (see the server log)",
       "maturity_bulk_run_failed": "The run stopped (see the server log)",
+      "maturity_bulk_authentication_failed": "Stopped: Unity Catalog refused the token (it may have expired); run it again",
       "maturity_bulk_run_in_progress": "A bulk evaluation is already running.",
       "maturity_bulk_scope_invalid": "The scope is not valid."
     }

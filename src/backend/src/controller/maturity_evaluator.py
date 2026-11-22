@@ -11,11 +11,13 @@ from typing import Any, Callable, Dict, Optional
 
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.run_identity import RunIdentity
 from src.controller.entity_dict_builder import (
     SNAPSHOT_UC_TABLE_KEY,
     UC_TABLE_FIELDS,
+    UC_TABLE_UNAUTHENTICATED,
     build_asset_dict,
     build_data_product_dict,
     build_data_contract_dict,
@@ -39,12 +41,16 @@ _ENTITY_DICT_BUILDERS = {
 _UC_STATUS_CODES = {
     "client_unavailable": "maturity_uc_table_client_unavailable",
     "unreadable": "maturity_uc_table_unreadable",
+    # A refused token reads to the user as an unreadable table
+    UC_TABLE_UNAUTHENTICATED: "maturity_uc_table_unreadable",
     "read_failed": "maturity_uc_table_read_failed",
 }
 _UC_STATUS_MESSAGES = {
     "client_unavailable": "Unity Catalog can't be reached, so the fields of table {tableName} "
                           "are missing.",
     "unreadable": "Table {tableName} can't be read from Unity Catalog, so its fields are missing.",
+    UC_TABLE_UNAUTHENTICATED: "Table {tableName} can't be read from Unity Catalog, so its "
+                              "fields are missing.",
     "read_failed": "Table {tableName} could not be read from Unity Catalog, so its fields "
                    "are missing.",
 }
@@ -52,6 +58,19 @@ GATE_ERROR_CODE = "maturity_gate_error"
 _UC_FIELD_IN_RULE = re.compile(
     r"\.(" + "|".join(sorted(UC_TABLE_FIELDS, key=len, reverse=True)) + r")\b"
 )
+
+
+class MaturityUcAuthenticationError(CodedValueError):
+    """Unity Catalog refused the token the evaluation reads with (expired or revoked)."""
+
+    code = "maturity_uc_authentication_failed"
+
+    def __init__(self, table_name: Optional[str]):
+        super().__init__(
+            "Unity Catalog refused the token while reading table {tableName}.".format(
+                tableName=table_name),
+            tableName=table_name,
+        )
 
 
 def _default_workspace_client():
@@ -73,7 +92,11 @@ class MaturityEvaluator:
     """
 
     def __init__(self, workspace_client: Any = None, *,
-                 run_identity: Optional[RunIdentity] = None):
+                 run_identity: Optional[RunIdentity] = None,
+                 stop_on_uc_auth_failure: bool = False):
+        # A bulk run raises MaturityUcAuthenticationError on a refused token instead of
+        # going on with the table as unreadable
+        self._stop_on_uc_auth_failure = stop_on_uc_auth_failure
         if run_identity is not None:
             self._get_client = run_identity.workspace_client
         elif workspace_client is None:
@@ -102,7 +125,8 @@ class MaturityEvaluator:
 
         Returns None if the entity is not found. Raises
         ``UnsupportedMaturityAssetTypeError`` for an asset that isn't a table
-        or a view.
+        or a view, and ``MaturityUcAuthenticationError`` (before storing anything)
+        when built with ``stop_on_uc_auth_failure`` and Unity Catalog refuses the token.
         """
         if entity_type not in _ENTITY_DICT_BUILDERS and entity_type != "Asset":
             logger.warning("No entity dict builder for type: %s", entity_type)
@@ -111,6 +135,9 @@ class MaturityEvaluator:
         entity_dict = self._build_entity_dict(db, entity_type, entity_id)
         if entity_dict is None:
             return None
+        if (self._stop_on_uc_auth_failure
+                and entity_dict.get("uc_table_status") == UC_TABLE_UNAUTHENTICATED):
+            raise MaturityUcAuthenticationError(entity_dict.get("uc_table_name"))
 
         if persist and entity_type == "Asset":
             # Two evaluations of one asset (two quick edits) run one after the other:

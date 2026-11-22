@@ -229,16 +229,16 @@ def _next_step_id(
     """The step to run after ``step``: none after a Pass or Fail step, else its branch.
 
     A conditional's branches are its true and false results, so a condition that
-    couldn't be evaluated has no branch: the run ends there, failed. A failed
-    non-fatal step (``continue_on_failure``) follows its ``on_fail`` when set, else
-    continues via ``on_pass``.
+    couldn't be evaluated has no branch: the run ends there, failed. A non-fatal
+    failure (``continue_on_failure``) continues via ``on_pass``; a fatal failure
+    follows its ``on_fail`` as before.
     """
     if ends_process_run(getattr(workflow, 'workflow_type', None), step.step_type):
         return None
     if is_conditional_step_type(step.step_type) and result.branch is None:
         return None
     if continue_on_failure and not result.passed:
-        return step.on_fail or step.on_pass
+        return step.on_pass
     return step.on_pass if result.takes_pass_branch() else step.on_fail
 
 
@@ -807,6 +807,11 @@ def _resolve_role_to_users(
     owner_approver = _OWNER_APPROVER_TOKENS.get(role_spec.lower().replace(' ', '').replace('_', ''))
     if owner_approver:
         return _owner_approvers(db, owner_approver, context, token=role_spec)
+
+    if role_spec == 'reviewers':
+        # Every named reviewer of an Authority Relation review (entity_data.reviewers)
+        reviewers = (context.entity or {}).get('reviewers') or []
+        return [(r['principal'], None) for r in reviewers if isinstance(r, dict) and r.get('principal')]
 
     if role_spec == 'reviewer':
         # Reviewer chosen by the requester (e.g. concept submit-for-review puts
@@ -4365,8 +4370,7 @@ class WorkflowExecutor:
         """Whether the run goes on past this step's result.
 
         A failed best-effort step whose flag is off doesn't fail the run: the result
-        is marked ``non_fatal`` and the run follows the step's ``on_fail`` if set,
-        else its ``on_pass`` (see ``_next_step_id``).
+        is marked ``non_fatal`` and the run continues via its ``on_pass``.
         """
         if result.passed:
             return True

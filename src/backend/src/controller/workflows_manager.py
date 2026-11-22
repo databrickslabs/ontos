@@ -38,6 +38,7 @@ from src.models.process_workflows import (
     TemplateVarGroup,
     TemplateVarsResponse,
     ends_process_run,
+    coerce_flag,
     is_best_effort_step_type,
     is_conditional_step_type,
 )
@@ -132,12 +133,13 @@ def _schedules_changed() -> None:
     notify_schedules_changed()
 
 
-def _fail_flow_not_allowed(step: WorkflowStepCreate) -> CodedMessage:
-    """``fail_flow_on_failure`` is set on a step that must fail the run when it fails (B9)."""
+def _fail_flow_ignored(step: WorkflowStepCreate) -> CodedMessage:
+    """``fail_flow_on_failure: false`` on a step that always fails the run (B9): a warning, the flag is ignored."""
     step_type = getattr(step.step_type, 'value', step.step_type)
     return CodedMessage(
-        f"Step '{step.step_id}': fail_flow_on_failure applies only to notification and webhook steps",
-        'fail_flow_on_failure_not_allowed', step=step.step_id, step_type=step_type,
+        f"Step '{step.step_id}': fail_flow_on_failure: false is ignored; a failure of this step fails the run. "
+        "It applies only to notification and webhook steps",
+        'fail_flow_on_failure_ignored', step=step.step_id, step_type=step_type,
     )
 
 
@@ -770,6 +772,16 @@ class WorkflowsManager:
                         'conditional_branch_missing', step=step.step_id, branch=branch,
                     ))
 
+        # fail_flow_on_failure: false on a step that always fails the run is ignored at run time (B9)
+        for step in workflow.steps:
+            config = step.config or {}
+            if (
+                'fail_flow_on_failure' in config
+                and not is_best_effort_step_type(step.step_type)
+                and not coerce_flag(config['fail_flow_on_failure'], default=True)
+            ):
+                warnings.append(_fail_flow_ignored(step))
+
         # Check for unreachable steps (warning only)
         reachable = set()
         if workflow.steps:
@@ -1086,9 +1098,6 @@ class WorkflowsManager:
         """Validate step configuration based on type."""
         errors = []
         config = step.config or {}
-
-        if 'fail_flow_on_failure' in config and not is_best_effort_step_type(step.step_type):
-            errors.append(_fail_flow_not_allowed(step))
 
         if step.step_type == StepType.VALIDATION:
             if not config.get('rule'):

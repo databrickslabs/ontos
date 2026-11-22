@@ -301,7 +301,8 @@
       "gone": "Het bestand staat niet meer in de map: de documenten zijn bij {{count}} entiteiten verwijderd.",
       "not_text": "Het bestand bevat NUL-tekens; het is geen tekst.",
       "import_error": "Het bestand kon niet worden geïmporteerd; de andere bestanden wel.",
-      "too_many_targets": "De front matter noemt meer dan 50 entiteiten."
+      "too_many_targets": "De front matter noemt meer dan 50 entiteiten.",
+      "path_too_long": "Het pad van het bestand is te lang om te importeren."
     },
     "errors": {
       "markdown_import_path_invalid": "\"{{path}}\" is geen pad in een Unity Catalog-volume. Gebruik /Volumes/<catalog>/<schema>/<volume>/<folder>.",
@@ -309,7 +310,8 @@
       "markdown_import_access_denied": "U kunt \"{{path}}\" niet lezen. Vraag READ VOLUME aan op het volume.",
       "markdown_import_too_many_files": "\"{{path}}\" bevat meer dan {{max}} Markdown-bestanden. Importeer een kleinere map.",
       "failed": "Het importeren is mislukt.",
-      "markdown_import_in_progress": "Er loopt al een andere Markdown-import. Probeer het opnieuw wanneer die klaar is."
+      "markdown_import_in_progress": "Er loopt al een andere Markdown-import. Probeer het opnieuw wanneer die klaar is.",
+      "user_token_required": "Deze import heeft je Databricks-gebruikerstoken nodig en het verzoek heeft er geen."
     },
     "warnings": {
       "empty_folder": "Hier zijn geen Markdown-bestanden gevonden, dus de eerder uit deze map geïmporteerde documenten zijn behouden."

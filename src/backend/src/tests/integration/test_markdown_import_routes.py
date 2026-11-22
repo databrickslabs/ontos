@@ -51,6 +51,13 @@ No front matter here.
 
 
 @pytest.fixture
+def client(client):
+    """The caller has a Databricks user token (the import refuses a request without one)."""
+    client.headers['x-forwarded-access-token'] = 'user-token'
+    return client
+
+
+@pytest.fixture
 def domain(db_session):
     row = DataDomain(name='Customer', description='Customer data', created_by='test@example.com')
     db_session.add(row)
@@ -269,7 +276,21 @@ def test_the_import_reads_the_volume_as_the_user(monkeypatch):
 
     sentinel = object()
     monkeypatch.setattr(metadata_routes, 'get_obo_workspace_client', lambda request: sentinel)
-    assert metadata_routes._user_workspace_client(SimpleNamespace()) is sentinel
+    request = SimpleNamespace(headers={'x-forwarded-access-token': 'user-token'})
+    assert metadata_routes._user_workspace_client(request) is sentinel
+
+
+@pytest.mark.parametrize('route', ['markdown-import', 'markdown-import/preview'])
+def test_a_request_without_the_user_token_is_refused_even_where_the_app_client_may_stand_in(
+        client, volume, route):
+    """Tests run with ENV=LOCAL: the OBO client would be the app's own, which could read
+    (and copy into the database) files the user can't. The import refuses instead."""
+    del client.headers['x-forwarded-access-token']
+
+    response = client.post(f'/api/metadata/{route}', json={'path': ROOT})
+
+    assert response.status_code == 403
+    assert response.json()['detail']['code'] == 'user_token_required'
 
 
 def test_imported_documents_are_in_the_search_index_at_startup(client, db_session, domain):

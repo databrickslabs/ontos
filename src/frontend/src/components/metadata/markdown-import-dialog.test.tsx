@@ -175,4 +175,26 @@ describe('MarkdownImportDialog', () => {
       'Another Markdown import is running. Try again when it ends.',
     )).toBeInTheDocument();
   });
+
+  it('shows the missing-user-token error in the user\'s language', async () => {
+    respond(403, {
+      detail: { code: 'user_token_required', message: 'needs a token', params: {} },
+    });
+    open();
+    expect(await screen.findByText(
+      'This import needs your Databricks user token, and the request has none.',
+    )).toBeInTheDocument();
+  });
+
+  it('shows the reason of a file whose path is too long', async () => {
+    respond(200, {
+      ...RESULT,
+      files: [{
+        path: '/Volumes/main/docs/context/deep.md', status: 'failed', targets: [],
+        unresolved: [], reason: 'path_too_long',
+      }],
+    });
+    open();
+    expect(await screen.findByText("The file's path is too long to import.")).toBeInTheDocument();
+  });
 });

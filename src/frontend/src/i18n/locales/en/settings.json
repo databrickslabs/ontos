@@ -1313,6 +1313,7 @@
       "maturity_bulk_skipped_not_found": "Asset not found",
       "maturity_bulk_skipped_no_levels": "No Asset levels",
       "maturity_bulk_skipped_asset_type": "Not a table or view",
+      "maturity_bulk_skipped_not_stored": "Not stored: the table couldn't be read",
       "maturity_bulk_evaluation_failed": "Evaluation failed (see the server log)",
       "maturity_bulk_run_failed": "The run stopped (see the server log)",
       "maturity_bulk_run_in_progress": "A bulk evaluation is already running.",

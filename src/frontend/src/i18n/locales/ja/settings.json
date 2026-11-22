@@ -1295,6 +1295,7 @@
       "maturity_bulk_skipped_not_found": "アセットが見つかりません",
       "maturity_bulk_skipped_no_levels": "Assetレベルがありません",
       "maturity_bulk_skipped_asset_type": "テーブルでもビューでもありません",
+      "maturity_bulk_skipped_not_stored": "保存されていません: テーブルを読み取れませんでした",
       "maturity_bulk_evaluation_failed": "評価に失敗しました（サーバーログを確認）",
       "maturity_bulk_run_failed": "実行が停止しました（サーバーログを確認）",
       "maturity_bulk_run_in_progress": "一括評価がすでに実行中です。",

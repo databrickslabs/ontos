@@ -2322,8 +2322,13 @@ click **Evaluate assets**. The card polls the run while it goes and then shows i
   second request) is skipped and counted as such. Running the same scope again evaluates
   the assets again, and only a level change is logged and fires `ON_MATURITY_CHANGE`.
 - **Summary.** Evaluated, changed level, skipped (with a reason for each: evaluated since the
-  run started, asset not found, no Asset levels, not a table or view) and errors, each with
-  a code. An error never shows the exception text; the server log has it.
+  run started, asset not found, no Asset levels, not a table or view, not stored) and
+  errors, each with a code. An error never shows the exception text; the server log has it.
+  "Not stored" is an asset whose table the run couldn't read and whose level that table
+  could change: it keeps its stored level and is not counted as evaluated. A run started
+  here reads the tables with the admin's token for the whole run, so a run that outlasts
+  that token counts the tables after it expires as not stored; start it again to evaluate
+  them.
 - **One run at a time.** While a run is going, a new one is refused. The last summary stays
   visible after a restart.
 - **Permission.** Only users with Settings read/write access (admins) can start a run. The

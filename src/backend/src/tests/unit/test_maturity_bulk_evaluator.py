@@ -33,8 +33,16 @@ def _same_session(db):
 
 
 class _Report:
-    def __init__(self, order):
+    def __init__(self, order, stored=True):
         self.achieved_level_order = order
+        self.stored = stored
+
+
+class _NotStored:
+    """An evaluation that stored nothing (unreadable table, uncertain result)."""
+
+    def __init__(self, order):
+        self.order = order
 
 
 class _FakeEvaluator:
@@ -51,6 +59,8 @@ class _FakeEvaluator:
             raise outcome
         if outcome == "missing":
             return None
+        if isinstance(outcome, _NotStored):
+            return _Report(outcome.order, stored=False)
         return _Report(outcome)
 
 
@@ -117,6 +127,13 @@ def test_the_scope_is_normalised_and_checked():
         with pytest.raises(bulk.MaturityBulkScopeError) as info:
             bulk.normalize_scope(*args)
         assert info.value.code == "maturity_bulk_scope_invalid"
+
+
+def test_the_asset_type_scope_error_names_metric_views():
+    with pytest.raises(bulk.MaturityBulkScopeError) as info:
+        bulk.normalize_scope("main", None, ["Dashboard"])
+
+    assert str(info.value) == "Maturity levels apply to table, view and metric view assets."
 
 
 def test_selection_follows_the_scope_and_the_table_and_view_types(db_session):
@@ -319,3 +336,78 @@ def test_a_run_reads_the_uc_tables_with_the_given_identity(db_session):
     stored = maturity_repo.list_snapshots(db_session, entity_type="Asset",
                                           entity_id=asset_id, limit=1)
     assert [s.achieved_level_order for s in stored] == [1]
+
+
+def test_an_evaluation_that_stored_nothing_is_neither_evaluated_nor_changed(db_session):
+    _level(db_session, 1, "Prerequisite")
+    _level(db_session, 2, "1 star")
+    unreadable = _asset(db_session, "bulkns.sales.unreadable")
+    readable = _asset(db_session, "bulkns.sales.readable")
+    _snapshot(db_session, unreadable, 2, minutes_from_now=-30)
+    # The unreadable table reports its certain level 1, below the stored 2, and stores nothing
+    evaluator = _FakeEvaluator({unreadable: _NotStored(1), readable: 1})
+
+    final = _run(db_session, _bulk_scope(catalog="bulkns"), evaluator)
+
+    assert (final["total"], final["processed"]) == (2, 2)
+    assert final["evaluated"] == 1 and final["changed"] == 1
+    assert final["skipped"] == {"maturity_bulk_skipped_not_stored": 1}
+    assert final["error_count"] == 0
+
+
+def test_a_run_that_outlasts_the_token_stores_nothing_for_the_later_tables(db_session):
+    """RunIdentity keeps one client for the run: once the token expires, Unity Catalog
+    answers 401 (Unauthenticated), the table reads as unreadable, and the asset keeps its
+    stored level and is counted as not stored, not as evaluated (and not as an error)."""
+    from unittest.mock import MagicMock
+
+    from databricks.sdk.errors import Unauthenticated
+    from databricks.sdk.service.catalog import ColumnInfo, TableInfo
+    from src.common.run_identity import RunIdentity
+    from src.db_models.compliance import CompliancePolicyDb
+    from src.repositories.maturity_repository import maturity_repo
+
+    _level(db_session, 1, "Has columns")
+    level = db_session.query(MaturityLevelDb).filter_by(entity_type="Asset").one()
+    policy = CompliancePolicyDb(id=str(uuid.uuid4()), name="Columns",
+                                rule="ASSERT obj.column_count > 0", is_active=True)
+    db_session.add(policy)
+    db_session.flush()
+    maturity_repo.add_gate(db_session, maturity_level_id=level.id,
+                           compliance_policy_id=policy.id)
+    db_session.flush()
+    ids = {fqn: _asset(db_session, fqn) for fqn in ("bulktok.sales.a", "bulktok.sales.b")}
+    for asset_id in ids.values():
+        _snapshot(db_session, asset_id, 1, minutes_from_now=-30)
+    calls = []
+    table = TableInfo(full_name="x", columns=[ColumnInfo(name="id", comment="Id",
+                                                         type_text="bigint")])
+
+    def get(full_name):
+        calls.append(full_name)
+        if len(calls) > 1:
+            raise Unauthenticated("Token expired")
+        return table
+
+    user_ws = MagicMock()
+    user_ws.tables.get.side_effect = get
+    built = []
+    identity = RunIdentity(lambda: built.append(1) or user_ws, on_behalf_of_user=True)
+    scope = _bulk_scope(catalog="bulktok")
+
+    snapshot = bulk.start_run(scope, started_by="admin@example.com", max_workers=1)
+    bulk.execute_run(snapshot["id"], scope, evaluated_by="admin@example.com",
+                     session_factory=lambda: _same_session(db_session),
+                     run_identity=identity)
+    final = bulk.get_latest_run(session_factory=lambda: _same_session(db_session))
+
+    assert built == [1]  # the client is built once and not re-resolved
+    assert len(calls) == 2
+    assert final["evaluated"] == 1 and final["error_count"] == 0
+    assert final["skipped"] == {"maturity_bulk_skipped_not_stored": 1}
+    # The table read before the expiry got a new snapshot; the one after it did not
+    counts = [
+        len(maturity_repo.list_snapshots(db_session, entity_type="Asset", entity_id=ids[fqn]))
+        for fqn in calls
+    ]
+    assert counts == [2, 1]

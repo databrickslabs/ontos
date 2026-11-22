@@ -1313,6 +1313,7 @@
       "maturity_bulk_skipped_not_found": "Asset niet gevonden",
       "maturity_bulk_skipped_no_levels": "Geen Asset-niveaus",
       "maturity_bulk_skipped_asset_type": "Geen tabel of view",
+      "maturity_bulk_skipped_not_stored": "Niet opgeslagen: de tabel kon niet worden gelezen",
       "maturity_bulk_evaluation_failed": "Evaluatie mislukt (zie serverlog)",
       "maturity_bulk_run_failed": "De run is gestopt (zie serverlog)",
       "maturity_bulk_run_in_progress": "Er loopt al een bulkevaluatie.",

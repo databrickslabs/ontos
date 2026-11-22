@@ -1313,6 +1313,7 @@
       "maturity_bulk_skipped_not_found": "Asset não encontrado",
       "maturity_bulk_skipped_no_levels": "Sem níveis de Asset",
       "maturity_bulk_skipped_asset_type": "Não é tabela nem view",
+      "maturity_bulk_skipped_not_stored": "Não armazenado: não foi possível ler a tabela",
       "maturity_bulk_evaluation_failed": "Falha na avaliação (veja o log do servidor)",
       "maturity_bulk_run_failed": "A execução parou (veja o log do servidor)",
       "maturity_bulk_run_in_progress": "Já há uma avaliação em massa em andamento.",

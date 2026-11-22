@@ -54,6 +54,9 @@ SKIP_EVALUATED_IN_RUN = "maturity_bulk_skipped_evaluated_in_run"
 SKIP_NOT_FOUND = "maturity_bulk_skipped_not_found"
 SKIP_NO_LEVELS = "maturity_bulk_skipped_no_levels"
 SKIP_ASSET_TYPE = "maturity_bulk_skipped_asset_type"
+# Evaluated, but nothing was stored: the UC table couldn't be read and the result
+# wasn't certain, so the stored level stays (see MaturityEvaluator.evaluate)
+SKIP_NOT_STORED = "maturity_bulk_skipped_not_stored"
 ERROR_EVALUATION_FAILED = "maturity_bulk_evaluation_failed"
 ERROR_RUN_FAILED = "maturity_bulk_run_failed"
 
@@ -102,7 +105,9 @@ def normalize_scope(
         types = tuple(MATURITY_ASSET_TYPES)
     else:
         if any(str(t).strip().lower() not in canonical for t in asset_types):
-            raise MaturityBulkScopeError("Maturity levels apply to table and view assets.")
+            raise MaturityBulkScopeError(
+                "Maturity levels apply to table, view and metric view assets."
+            )
         types = tuple(dict.fromkeys(canonical[str(t).strip().lower()] for t in asset_types))
     return BulkScope(catalog=cat, schema_name=sch, asset_types=types)
 
@@ -279,6 +284,9 @@ def _evaluate_one(
             )
             if report is None:
                 return {"kind": "skipped", "code": SKIP_NOT_FOUND}
+            if not report.stored:
+                # Not an evaluation of the asset's level: neither evaluated nor changed
+                return {"kind": "skipped", "code": SKIP_NOT_STORED}
             return {
                 "kind": "evaluated",
                 "changed": report.achieved_level_order != previous,

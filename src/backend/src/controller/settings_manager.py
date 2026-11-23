@@ -22,8 +22,10 @@ from src.common.instance_identity import (
 from src.common.config import Settings
 from src.common.sanitization import (
     APP_SHORT_NAME_MAX_LEN,
+    APP_TAGLINE_MAX_LEN,
     sanitize_app_display_name,
     validate_branding_url,
+    validate_hex_color,
 )
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -184,6 +186,8 @@ class SettingsManager(ThreadBoundDb):
         self._db = db
         self._settings = settings # Store settings
         self._client = workspace_client
+        # Environment default of "Powered by", before any stored override is applied
+        self._env_show_powered_by = getattr(settings, 'UI_SHOW_POWERED_BY', True)
         # Available jobs derive from workflows on disk
         self._available_jobs: List[str] = []
         self._installations: Dict[str, WorkflowInstallation] = {}
@@ -402,8 +406,11 @@ class SettingsManager(ThreadBoundDb):
                 logger.debug(f"Loaded UI_I18N_ENABLED from database: {self._settings.UI_I18N_ENABLED}")
             
             if 'UI_CUSTOM_LOGO_URL' in all_settings and all_settings['UI_CUSTOM_LOGO_URL'] is not None:
-                self._settings.UI_CUSTOM_LOGO_URL = all_settings['UI_CUSTOM_LOGO_URL']
-                logger.debug("Loaded UI_CUSTOM_LOGO_URL from database")
+                if self._usable_stored_image(
+                    'UI_CUSTOM_LOGO_URL', all_settings['UI_CUSTOM_LOGO_URL']
+                ):
+                    self._settings.UI_CUSTOM_LOGO_URL = all_settings['UI_CUSTOM_LOGO_URL']
+                    logger.debug("Loaded UI_CUSTOM_LOGO_URL from database")
             
             if 'UI_ABOUT_CONTENT' in all_settings and all_settings['UI_ABOUT_CONTENT'] is not None:
                 self._settings.UI_ABOUT_CONTENT = all_settings['UI_ABOUT_CONTENT']
@@ -423,8 +430,25 @@ class SettingsManager(ThreadBoundDb):
                 logger.debug("Loaded UI_APP_SHORT_NAME from database")
 
             if 'UI_FAVICON_URL' in all_settings and all_settings['UI_FAVICON_URL'] is not None:
-                self._settings.UI_FAVICON_URL = all_settings['UI_FAVICON_URL']
-                logger.debug("Loaded UI_FAVICON_URL from database")
+                if self._usable_stored_image('UI_FAVICON_URL', all_settings['UI_FAVICON_URL']):
+                    self._settings.UI_FAVICON_URL = all_settings['UI_FAVICON_URL']
+                    logger.debug("Loaded UI_FAVICON_URL from database")
+
+            for key in self._BRANDING_EXTRA_KEYS:
+                if all_settings.get(key) is None:
+                    continue
+                if key == 'UI_CUSTOM_LOGO_DARK_URL' and not self._usable_stored_image(
+                    key, all_settings[key]
+                ):
+                    continue
+                setattr(self._settings, key, all_settings[key])
+                logger.debug("Loaded %s from database", key)
+
+            if all_settings.get('UI_SHOW_POWERED_BY') is not None:
+                self._settings.UI_SHOW_POWERED_BY = (
+                    all_settings['UI_SHOW_POWERED_BY'].lower() == 'true'
+                )
+                logger.debug("Loaded UI_SHOW_POWERED_BY from database")
 
             # Connector configurations are now managed via the `connections`
             # table and loaded by ConnectionsManager at startup.
@@ -1405,7 +1429,77 @@ class SettingsManager(ThreadBoundDb):
             'ui_app_display_name': self._settings.UI_APP_DISPLAY_NAME,
             'ui_app_short_name': self._settings.UI_APP_SHORT_NAME,
             'ui_favicon_url': self._settings.UI_FAVICON_URL,
+            **{key.lower(): getattr(self._settings, key) for key in self._BRANDING_EXTRA_KEYS},
+            'ui_show_powered_by': self._settings.UI_SHOW_POWERED_BY,
         }
+
+    @staticmethod
+    def _usable_stored_image(key: str, value: str) -> bool:
+        """False (with a warning) for a stored branding image the checks now refuse.
+
+        A value saved before the checks was loaded as it was, and the Settings form sends
+        it back on every save, so one the checks refuse would block every UI save.
+        """
+        try:
+            validate_branding_url(value, field=key.lower())
+        except ValueError:
+            logger.warning(
+                "Ignoring the stored %s: it is not an http(s) URL or a /branding/ or "
+                "/static/ path; set it again in Settings > UI", key,
+            )
+            return False
+        return True
+
+    # Branding keys stored like the other UI_* settings (env default, DB override).
+    _BRANDING_EXTRA_KEYS = (
+        'UI_APP_TAGLINE', 'UI_CUSTOM_LOGO_DARK_URL',
+        'UI_THEME_PRIMARY', 'UI_THEME_PRIMARY_DARK',
+        'UI_THEME_ACCENT', 'UI_THEME_ACCENT_DARK',
+    )
+
+    @staticmethod
+    def _clean_branding_value(key: str, value: Any) -> Optional[str]:
+        """Validate one of ``_BRANDING_EXTRA_KEYS``; raises ``ValueError`` (-> 400)."""
+        field = key.lower()
+        if key == 'UI_APP_TAGLINE':
+            return sanitize_app_display_name(value, max_len=APP_TAGLINE_MAX_LEN, field=field)
+        if key == 'UI_CUSTOM_LOGO_DARK_URL':
+            return validate_branding_url(value or None, field=field)
+        return validate_hex_color(value or None, field=field)
+
+    def _validate_ui_settings(self, settings: dict) -> dict:
+        """Clean every UI customization value present in ``settings`` (nothing is written).
+
+        Raises ``ValueError`` (-> 400) on the first invalid one.
+        """
+        cleaned: dict = {}
+        if 'ui_custom_logo_url' in settings:
+            cleaned['ui_custom_logo_url'] = validate_branding_url(
+                settings.get('ui_custom_logo_url') or None, field='custom logo URL'
+            )
+        if 'ui_app_display_name' in settings:
+            cleaned['ui_app_display_name'] = sanitize_app_display_name(
+                settings.get('ui_app_display_name'), field='application display name'
+            )
+        if 'ui_app_short_name' in settings:
+            cleaned['ui_app_short_name'] = sanitize_app_display_name(
+                settings.get('ui_app_short_name'),
+                max_len=APP_SHORT_NAME_MAX_LEN,
+                field='application short name',
+            )
+        if 'ui_favicon_url' in settings:
+            cleaned['ui_favicon_url'] = validate_branding_url(
+                settings.get('ui_favicon_url') or None, field='favicon URL'
+            )
+        for key in self._BRANDING_EXTRA_KEYS:
+            if key.lower() in settings:
+                cleaned[key.lower()] = self._clean_branding_value(key, settings.get(key.lower()))
+        if 'ui_show_powered_by' in settings:
+            value = settings.get('ui_show_powered_by')
+            if value is not None and not isinstance(value, bool):
+                raise ValueError("ui_show_powered_by must be true, false or null")
+            cleaned['ui_show_powered_by'] = value
+        return cleaned
 
     # Settings the Git service reads: its remote and its export location.
     _GIT_SETTING_ATTRS = (
@@ -1637,6 +1731,8 @@ class SettingsManager(ThreadBoundDb):
             return self.update_settings_with_warnings(settings)
 
     def _update_settings(self, settings: dict, warnings: List[Dict[str, Any]]) -> Settings:
+        # Validate every UI customization value first, so a 400 leaves nothing changed.
+        ui = self._validate_ui_settings(settings)
         git_values_before = self._git_setting_values()
         # Persist configured cluster ID string; do not scan clusters
         cluster_in_payload = 'job_cluster_id' in settings
@@ -1872,9 +1968,7 @@ class SettingsManager(ThreadBoundDb):
             logger.info(f"Updated UI_I18N_ENABLED to: {value}")
         
         if 'ui_custom_logo_url' in settings:
-            value = validate_branding_url(
-                settings.get('ui_custom_logo_url') or None, field='custom logo URL'
-            )
+            value = ui['ui_custom_logo_url']
             app_settings_repo.set(self._db, 'UI_CUSTOM_LOGO_URL', value)
             self._settings.UI_CUSTOM_LOGO_URL = value
             logger.info(f"Updated UI_CUSTOM_LOGO_URL")
@@ -1893,30 +1987,40 @@ class SettingsManager(ThreadBoundDb):
 
         # Branding (issue #240)
         if 'ui_app_display_name' in settings:
-            value = sanitize_app_display_name(
-                settings.get('ui_app_display_name'), field='application display name'
-            )
+            value = ui['ui_app_display_name']
             app_settings_repo.set(self._db, 'UI_APP_DISPLAY_NAME', value)
             self._settings.UI_APP_DISPLAY_NAME = value
             logger.info(f"Updated UI_APP_DISPLAY_NAME")
 
         if 'ui_app_short_name' in settings:
-            value = sanitize_app_display_name(
-                settings.get('ui_app_short_name'),
-                max_len=APP_SHORT_NAME_MAX_LEN,
-                field='application short name',
-            )
+            value = ui['ui_app_short_name']
             app_settings_repo.set(self._db, 'UI_APP_SHORT_NAME', value)
             self._settings.UI_APP_SHORT_NAME = value
             logger.info(f"Updated UI_APP_SHORT_NAME")
 
         if 'ui_favicon_url' in settings:
-            value = validate_branding_url(
-                settings.get('ui_favicon_url') or None, field='favicon URL'
-            )
+            value = ui['ui_favicon_url']
             app_settings_repo.set(self._db, 'UI_FAVICON_URL', value)
             self._settings.UI_FAVICON_URL = value
             logger.info(f"Updated UI_FAVICON_URL")
+
+        for key in self._BRANDING_EXTRA_KEYS:
+            if key.lower() in settings:
+                value = ui[key.lower()]
+                app_settings_repo.set(self._db, key, value)
+                setattr(self._settings, key, value)
+                logger.info("Updated %s", key)
+
+        if 'ui_show_powered_by' in settings:
+            value = ui['ui_show_powered_by']
+            # null clears the override: the environment default applies again at once
+            app_settings_repo.set(
+                self._db, 'UI_SHOW_POWERED_BY', str(value).lower() if value is not None else None
+            )
+            self._settings.UI_SHOW_POWERED_BY = (
+                value if value is not None else self._env_show_powered_by
+            )
+            logger.info("Updated UI_SHOW_POWERED_BY to: %s", value)
 
         # Reinitialize the Git service only when a value it reads changed. The
         # export location comes from the volume settings, so they count too; the

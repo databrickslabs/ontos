@@ -65,8 +65,8 @@ function measureBones(root: HTMLElement, origin: HTMLElement): Bone[] {
   const bones: Bone[] = [];
   const add = (r: DOMRect, textLine: boolean) => {
     if (r.width < 2 || r.height < 2) return;
-    // A text bone is a bar inside the line box, like the shared SkeletonLine
-    const height = textLine ? Math.max(8, Math.min(r.height * 0.7, 16)) : r.height;
+    // A text bone is an h-4 bar (as SkeletonLine) centred in the line box
+    const height = textLine ? Math.min(r.height, 16) : r.height;
     bones.push({
       left: r.left - base.left,
       top: r.top - base.top + (r.height - height) / 2,

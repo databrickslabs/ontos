@@ -190,6 +190,9 @@ html:not([data-mode="advanced"]) .adv-only {
     color: transparent !important;
     text-shadow: none !important;
     caret-color: transparent;
+    /* Only the panel's own frame stays, as in the page skeletons */
+    border-color: transparent !important;
+    box-shadow: none !important;
   }
   [data-skeleton] :is(svg, img, video, canvas) {
     visibility: hidden;

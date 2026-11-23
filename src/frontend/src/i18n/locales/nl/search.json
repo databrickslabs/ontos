@@ -66,6 +66,7 @@
     "resourceDetail": "Resourcedetail",
     "prefixPlaceholder": "bijv. example.org/banking",
     "resourceLoading": "Laden…",
+    "resourceLoadFailed": "De resourcegegevens konden niet worden geladen.",
     "noTriples": "Geen triples voor deze resource.",
     "blankNodeExpanded": "(blank node, hieronder uitgebreid)",
     "hover": {

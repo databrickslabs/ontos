@@ -66,6 +66,7 @@
     "resourceDetail": "Detalle del recurso",
     "prefixPlaceholder": "p. ej., example.org/banking",
     "resourceLoading": "Cargando…",
+    "resourceLoadFailed": "No se pudieron cargar los detalles del recurso.",
     "noTriples": "No hay tripletas para este recurso.",
     "blankNodeExpanded": "(nodo en blanco, expandido a continuación)",
     "hover": {

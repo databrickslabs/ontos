@@ -30,6 +30,7 @@ import { RelativeDate } from '@/components/common/relative-date';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { PrincipalPicker } from '@/components/common/principal-picker';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { buildAudienceTokens, parseAudienceTokens, resolveRoleTokenLabel } from '@/lib/audience';
 import {
   Select,
@@ -129,6 +130,8 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   const [composerProjectId, setComposerProjectId] = useState<string | null>(defaultComposerProjectId);
   
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  // Until the first response, show a placeholder rather than the empty state
+  const [timelineLoaded, setTimelineLoaded] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [filterType, setFilterType] = useState<'all' | 'comments' | 'changes'>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -238,6 +241,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       })
     );
     
+    setTimelineLoaded(true);
     if (response.error) {
       toast({
         title: t('common:toast.error'),
@@ -420,6 +424,8 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     if (isOpen) {
       fetchTeams();
       fetchRoles();
+      // Another entity or filter: don't show the previous one's entries meanwhile
+      setTimelineLoaded(false);
       fetchTimeline();
     }
   }, [isOpen, entityType, entityId, filterType, currentProject?.id]);
@@ -906,7 +912,9 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
           <ScrollArea className="flex-1" ref={scrollAreaRef}>
             {isFormOpen && CommentForm}
             
-            {timeline.length > 0 ? (
+            {!timelineLoaded ? (
+              <ListItemSkeleton count={3} height="h-16" className="p-4 space-y-3" />
+            ) : timeline.length > 0 ? (
               <div className="p-4 space-y-3">
                 {timeline.map(entry => (
                   <TimelineItem

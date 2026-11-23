@@ -66,6 +66,7 @@
     "resourceDetail": "Dettaglio risorsa",
     "prefixPlaceholder": "es. example.org/banking",
     "resourceLoading": "Caricamento…",
+    "resourceLoadFailed": "Impossibile caricare i dettagli della risorsa.",
     "noTriples": "Nessuna tripla per questa risorsa.",
     "blankNodeExpanded": "(nodo vuoto, espanso sotto)",
     "hover": {

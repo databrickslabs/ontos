@@ -203,7 +203,7 @@ describe('DeliveryTargets', () => {
           <DeliveryTargets targets={[sampleTargets[2]]} advanced={true} />
         </BrowserRouter>,
       )
-      const buttons = screen.getAllByRole('button', { name: 'about' })
+      const buttons = screen.getAllByRole('button', { name: 'enrich.deliver.about' })
       expect(buttons.length).toBeGreaterThan(0)
     })
 
@@ -213,7 +213,7 @@ describe('DeliveryTargets', () => {
           <DeliveryTargets targets={[sampleTargets[2]]} advanced={false} />
         </BrowserRouter>,
       )
-      const buttons = screen.queryAllByRole('button', { name: 'about' })
+      const buttons = screen.queryAllByRole('button', { name: 'enrich.deliver.about' })
       expect(buttons.length).toBe(0)
     })
   })

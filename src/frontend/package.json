@@ -85,7 +85,7 @@
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^5.1.0",
     "@vitest/ui": "^5.1.0",
-    "autoprefixer": "^10.4.17",
+    "autoprefixer": "^10.6.2",
     "dagre": "^0.8.5",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",

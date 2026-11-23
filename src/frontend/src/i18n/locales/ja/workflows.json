@@ -361,6 +361,7 @@
       "terminalStepHasNext": "ステップ「{{step}}」はワークフローを終了するため、「{{target}}」へのリンクは無視され、保存時に削除されます。",
       "conditionalBranchMissing": "条件「{{step}}」の{{branch}}の分岐にステップがありません。条件が{{branch}}のとき、ワークフローは成功として終了します。",
       "unreachableSteps": "最初のステップからたどれないステップがあります: {{steps}}。",
+      "assignTagKeyUnknown": "ステップ \"{{step}}\" はタグ \"{{key}}\" を割り当てますが、このタグはタグカタログにありません。タグを作成するまでこのステップは失敗します。",
       "storedEntityTypeUnknown": "トリガーには、もう存在しないエンティティタイプ「{{entityType}}」が含まれています。このタイプでは一度も起動しません。",
       "storedEntityTypeUnsupported": "{{trigger}} トリガーは {{entity}} では一度も起動しません。"
     },
@@ -546,6 +547,7 @@
     "removedStepsHint": "これらのステップはこの実行で実行され、その後ワークフローから削除されました。",
     "stepErrors": {
       "rule_where_evaluation_failed": "ポリシー '{{policyName}}' の WHERE 句を {{entityType}} {{entityId}} で評価できませんでした",
+      "tag_not_found": "タグ '{{tag}}' がタグカタログに見つからなかったため、割り当てませんでした",
       "approval_rejected": "リクエストが却下されました",
       "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
       "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",

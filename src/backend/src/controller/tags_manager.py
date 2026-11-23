@@ -231,7 +231,12 @@ class TagsManager(DeliveryMixin, SearchableAsset):
             db.flush()
         return assigned
 
-    def add_tag_to_entity(self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID, assigned_value: Optional[str], user_email: Optional[str]) -> AssignedTag:
+    def add_tag_to_entity(
+        self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID,
+        assigned_value: Optional[str], user_email: Optional[str], commit: bool = True,
+    ) -> AssignedTag:
+        """Assign a tag to an entity. With ``commit=False`` (a workflow step, inside
+        its savepoint) the change is only flushed."""
         previous = (
             db.query(EntityTagAssociationDb.assigned_value)
             .filter_by(entity_id=entity_id, entity_type=entity_type, tag_id=tag_id)
@@ -263,6 +268,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
                     entity_id=str(entity_id),
                     action="TAG_ASSIGN",
                     username=user_email,
+                    commit=commit,
                     details={
                         "tag": tag_fqn,
                         "assigned_value": stored_value,
@@ -272,7 +278,10 @@ class TagsManager(DeliveryMixin, SearchableAsset):
             except Exception as log_err:
                 logger.warning(f"Failed to log change for tag assign: {log_err}")
         
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         
         return AssignedTag(
             tag_id=tag_db.id,
@@ -286,7 +295,12 @@ class TagsManager(DeliveryMixin, SearchableAsset):
             assigned_at=assoc.assigned_at,
         )
 
-    def remove_tag_from_entity(self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID, user_email: Optional[str] = None) -> bool:
+    def remove_tag_from_entity(
+        self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID,
+        user_email: Optional[str] = None, commit: bool = True,
+    ) -> bool:
+        """Remove a tag from an entity. With ``commit=False`` (a workflow step, inside
+        its savepoint) the change is only flushed."""
         # Get tag info before removal for change log
         tag_db = self._tag_repo.get(db, id=tag_id)
         tag_fqn = None
@@ -305,6 +319,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
                     entity_id=str(entity_id),
                     action="TAG_REMOVE",
                     username=user_email,
+                    commit=commit,
                     details={
                         "tag": tag_fqn or str(tag_id),
                         "summary": f"Tag '{tag_fqn or str(tag_id)}' removed" + (f" by {user_email}" if user_email else ""),
@@ -312,7 +327,10 @@ class TagsManager(DeliveryMixin, SearchableAsset):
                 )
             except Exception as log_err:
                 logger.warning(f"Failed to log change for tag removal: {log_err}")
-            db.commit()
+            if commit:
+                db.commit()
+            else:
+                db.flush()
         return ok
 
     def get_or_create_default_namespace(self, db: Session, *, user_email: Optional[str]) -> TagNamespaceDb:

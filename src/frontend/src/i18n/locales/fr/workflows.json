@@ -361,6 +361,7 @@
       "terminalStepHasNext": "L'étape \"{{step}}\" termine le workflow : son lien vers \"{{target}}\" est ignoré et supprimé à l'enregistrement.",
       "conditionalBranchMissing": "La condition \"{{step}}\" n'a aucune étape sur sa branche {{branch}}. Si la condition est {{branch}}, le workflow se termine avec succès.",
       "unreachableSteps": "Ces étapes ne sont pas accessibles depuis la première étape : {{steps}}.",
+      "assignTagKeyUnknown": "L'étape \"{{step}}\" attribue le tag \"{{key}}\", qui n'est pas dans le catalogue de tags. L'étape échoue tant que le tag n'est pas créé.",
       "storedEntityTypeUnknown": "Le déclencheur liste \"{{entityType}}\", un type d'entité qui n'existe plus. Il ne se déclenche jamais pour lui.",
       "storedEntityTypeUnsupported": "Le déclencheur {{trigger}} ne se déclenche jamais pour {{entity}}."
     },
@@ -546,6 +547,7 @@
     "removedStepsHint": "Ces étapes ont été exécutées dans cette exécution, puis supprimées du workflow.",
     "stepErrors": {
       "rule_where_evaluation_failed": "La clause WHERE de la politique '{{policyName}}' n'a pas pu être évaluée sur {{entityType}} {{entityId}}",
+      "tag_not_found": "L'étiquette '{{tag}}' est introuvable dans le catalogue, elle n'a donc pas été attribuée",
       "approval_rejected": "Demande refusée",
       "output_port_contracts_missing": "Publication impossible : les ports de sortie {{ports}} doivent avoir des contrats de données assignés",
       "output_port_contracts_unapproved": "Publication impossible : ces ports de sortie ont des contrats non approuvés : {{ports}}. Les contrats doivent d'abord être approuvés.",

@@ -219,3 +219,19 @@ def test_resaving_unnamed_and_same_named_checks_keeps_their_object_implementatio
     quality = _export(manager, db_session, cid)['schema'][0]['quality']
     exported = [c['implementation'] for c in quality]
     assert sorted(exported, key=str) == sorted(impls, key=str)
+
+
+def test_editing_an_object_implementation_keeps_it_an_object(db_session):
+    manager = _manager()
+    cid = _upload(manager, db_session, _odcs(schema=[{'name': 'orders', 'quality': [
+        {'id': 'q', 'name': 'custom check', 'type': 'custom', 'engine': 'soda',
+         'implementation': {'checks': ['row_count > 0']}}]}]))
+
+    rules = [r.model_dump(by_alias=True) for r in _api(manager, db_session, cid).quality_rules]
+    rules[0]['implementation'] = '{"checks": ["row_count > 1"]}'  # edited on the page
+    manager.update_contract_with_relations(
+        db_session, cid, DataContractUpdate.model_validate({'qualityRules': rules}),
+        current_user='alice')
+
+    check = _export(manager, db_session, cid)['schema'][0]['quality'][0]
+    assert check['implementation'] == {'checks': ['row_count > 1']}

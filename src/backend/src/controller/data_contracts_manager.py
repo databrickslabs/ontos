@@ -125,10 +125,10 @@ from src.utils.contract_owners import (
 from src.utils.contract_owner_team import (
     ONTOS_OWNER_TEAM_PROPERTY, owner_team_value, pop_owner_team,
 )
-from src.utils.odcs_values import page_text, typed_text, typed_value
+from src.utils.odcs_values import dumps, page_text, strict_loads, typed_text, typed_value
 from src.utils.odcs_quality_operators import (
-    implementation_page_text, implementation_text, odcs_quality_check, operator_columns,
-    tags_text,
+    implementation_page_text, implementation_text, odcs_implementation, odcs_quality_check,
+    operator_columns, tags_text,
 )
 from src.utils.schema_editor_fields import keep_unsent_fields
 from src.utils.property_custom_properties import SCHEMA_PROPERTY_ORDER
@@ -2153,6 +2153,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         for rule_data in quality_rules:
             check = self._build_quality_check_db(rule_data, object_id=schema_obj.id)
             stored = (previous or {}).get(check.name) if check.name else None
+            name_stored = stored
             sent = rule_data.get('implementation') if isinstance(rule_data, dict) else getattr(
                 rule_data, 'implementation', None)
             if stored is None or sent != implementation_page_text(stored):
@@ -2163,6 +2164,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                               None)
             if stored is not None and sent == implementation_page_text(stored):
                 check.implementation = stored
+            elif name_stored is not None and isinstance(sent, str) \
+                    and not isinstance(odcs_implementation(name_stored), str):
+                # an edited object implementation (its JSON text, as the page shows
+                # it) stays an object when the edit is still a JSON object or list
+                try:
+                    edited = strict_loads(sent)
+                except ValueError:
+                    edited = None
+                if isinstance(edited, (dict, list)):
+                    check.implementation = dumps(edited)
             db.add(check)
     
     def _process_semantic_links(self, db, contract_id: str, contract_data, current_user: Optional[str] = None):

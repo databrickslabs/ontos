@@ -4,7 +4,7 @@ import json
 import argparse
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -162,7 +162,7 @@ def update_profiling_run_status(
 ):
     """Update the status of a profiling run."""
     print(f"Updating profiling run status to: {status}")
-    updates = {"status": status, "completed_at": datetime.utcnow()}
+    updates = {"status": status, "completed_at": datetime.now(timezone.utc)}
     
     if summary_stats:
         updates["summary_stats"] = summary_stats
@@ -295,7 +295,7 @@ def insert_suggestion(
             "must_be": must_be,
             "must_be_gt": must_be_gt,
             "must_be_lt": must_be_lt,
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         })
         conn.commit()
     

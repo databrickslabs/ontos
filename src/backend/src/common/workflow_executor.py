@@ -15,7 +15,6 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
@@ -259,6 +258,36 @@ def approver_key(target: str, role_id: Optional[str]) -> str:
 _APPROVAL_RECORD_KEYS = frozenset({
     'approval_result', 'responded_by', 'decisions', 'error_code', 'error_params',
 })
+
+
+# The run context's tags when a step paused the run, kept in the pause record's
+# result_data: tag steps may change them only in the context, and a resume
+# rebuilds the entity from the trigger's snapshot
+_CONTEXT_TAGS_KEY = '_context_tags'
+
+# Reserved keys of result_data that are stored for the engine only: API
+# responses leave them out
+_RESERVED_RESULT_KEYS = frozenset({_CONTEXT_TAGS_KEY})
+
+
+def public_result_data(text: Optional[str]) -> Optional[Dict[str, Any]]:
+    """A step execution's stored result_data as the API returns it: the parsed
+    JSON without the reserved keys. None when nothing was stored."""
+    if not text:
+        return None
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        return data
+    return {k: v for k, v in data.items() if k not in _RESERVED_RESULT_KEYS}
+
+
+def _pause_result_data(result: 'StepResult', context: 'StepContext') -> Optional[Dict[str, Any]]:
+    """The result_data stored for a step that paused the run: its data plus the
+    context's tags, which ``resume_workflow`` puts back."""
+    tags = context.entity.get('tags') if isinstance(context.entity, dict) else None
+    if not isinstance(tags, dict):
+        return result.data
+    return {**(result.data or {}), _CONTEXT_TAGS_KEY: dict(tags)}
 
 
 def _json_object(text: Optional[str]) -> Dict[str, Any]:
@@ -1524,7 +1553,7 @@ class AssignTagStepHandler(StepHandler):
         elif source == 'entity_name':
             return context.entity_name
         elif source == 'timestamp':
-            return datetime.utcnow().isoformat()
+            return utc_now().isoformat()
         else:
             return None
 
@@ -3292,7 +3321,7 @@ class WorkflowExecutor:
                 step_name=step.name,
                 status=step_status.value,
                 passed=result.passed,
-                result_data=result.data,
+                result_data=_pause_result_data(result, context) if result.blocking else result.data,
                 error_message=result.error,
                 message=result.message,
                 duration_ms=duration_ms,
@@ -3584,7 +3613,7 @@ class WorkflowExecutor:
                     'role_id': role_id,
                     'decided_by': user_email or username,
                     'decision': 'approved' if approved else 'rejected',
-                    'at': datetime.utcnow().isoformat(),
+                    'at': utc_now().isoformat(),
                     'reason': reason,
                 })
                 pending.remove(key)
@@ -3731,10 +3760,13 @@ class WorkflowExecutor:
         # of a require_all step (#1119); its pause record is closed
         denied_without_reason = not step_result and not (result_data or {}).get('reason')
         decisions: List[Dict[str, Any]] = []
+        context_tags = None
         if current_step.step_type == StepType.APPROVAL:
             pause_record = self._approval_pause_record(execution_id, current_step, refresh=True)
             if pause_record is not None:
-                stored = _json_object(pause_record.result_data).get('decisions')
+                pause_data = _json_object(pause_record.result_data)
+                context_tags = pause_data.get(_CONTEXT_TAGS_KEY)
+                stored = pause_data.get('decisions')
                 if isinstance(stored, list):
                     decisions = [d for d in stored if isinstance(d, dict)]
                 self._close_approval_pause(pause_record)
@@ -3817,6 +3849,11 @@ class WorkflowExecutor:
             },
             on_behalf_of=on_behalf_of,
         )
+        # The tags the run had when it paused, with those tag steps set or
+        # removed only in the context. Runs paused before they were kept: the
+        # trigger's snapshot, as before
+        if isinstance(context_tags, dict):
+            context.entity['tags'] = dict(context_tags)
 
         # Concept review ping-pong (O2): when the resumed approval step gates an
         # ontology_concept, the approver's decision drives the concept lifecycle
@@ -3947,7 +3984,7 @@ class WorkflowExecutor:
                 step_name=step.name,
                 status=step_status.value,
                 passed=result.passed,
-                result_data=result.data,
+                result_data=_pause_result_data(result, context) if result.blocking else result.data,
                 error_message=result.error,
                 message=result.message,
                 duration_ms=duration_ms,
@@ -4830,7 +4867,7 @@ class WorkflowExecutor:
                 step_name=se.step_name,
                 status=StepExecutionStatus(se.status),
                 passed=se.passed,
-                result_data=json.loads(se.result_data) if se.result_data else None,
+                result_data=public_result_data(se.result_data),
                 error_message=se.error_message,
                 message=se.message,
                 duration_ms=se.duration_ms,

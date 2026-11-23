@@ -34,8 +34,27 @@ import type {
   RunSummary,
   UndoResult,
 } from '@/types/term-mapping';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 
 const FEATURE_ID = 'term-mapping';
+
+// Stand in for the runs and the selected run while they load (see ContentSkeleton)
+const RUNS_SAMPLE: RunSummary[] = [1, 2, 3].map((i) => ({
+  id: `sample-run-${i}`,
+  status: 'suggested' as const,
+  comment: 'Sample run comment',
+  stats: { suggestions_total: 12 },
+  created_at: '2026-01-01T00:00:00Z',
+}));
+const RUN_SAMPLE: Run = {
+  ...RUNS_SAMPLE[0],
+  created_by: 'someone@example.com',
+  ontology_contexts: ['urn:semantic-model:sample'],
+  include_shipped: [],
+  target_filter: {},
+  engines: [],
+  applied_link_ids: [],
+};
 
 const RUN_STATUS_VARIANT: Record<
   RunStatus,
@@ -221,117 +240,115 @@ export default function TermMappingView() {
         </Card>
       );
     }
-    if (runDetailLoading || !selectedRun) {
-      return (
-        <div className="flex justify-center items-center h-full">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      );
-    }
-    const stats = selectedRun.stats;
+    // While the run loads (or reloads), its layout is shown as a skeleton
+    const loading = runDetailLoading || !selectedRun;
+    const run = selectedRun ?? RUN_SAMPLE;
+    const stats = run.stats;
     const pending = (stats.suggestions_pending as number | undefined) ?? 0;
     const accepted = (stats.suggestions_accepted as number | undefined) ?? 0;
     const autoApply = (stats.suggestions_auto_apply as number | undefined) ?? 0;
     return (
-      <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  {t('detail.runLabel')}{' '}
-                  <span className="font-mono text-xs">{selectedRun.id.slice(0, 8)}</span>
-                  <Badge variant={RUN_STATUS_VARIANT[selectedRun.status]}>{selectedRun.status}</Badge>
-                </CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t('detail.createdAt')} <RelativeDate date={selectedRun.created_at} />{' '}
-                  {selectedRun.created_by
-                    ? t('detail.createdBy', { email: selectedRun.created_by })
-                    : ''}
-                </p>
-                {selectedRun.comment && (
-                  <p className="text-sm mt-2 italic">{selectedRun.comment}</p>
-                )}
+      <ContentSkeleton loading={loading}>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    {t('detail.runLabel')}{' '}
+                    <span className="font-mono text-xs">{run.id.slice(0, 8)}</span>
+                    <Badge variant={RUN_STATUS_VARIANT[run.status]}>{run.status}</Badge>
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('detail.createdAt')} <RelativeDate date={run.created_at} />{' '}
+                    {run.created_by
+                      ? t('detail.createdBy', { email: run.created_by })
+                      : ''}
+                  </p>
+                  {run.comment && (
+                    <p className="text-sm mt-2 italic">{run.comment}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchRunDetail(run.id)}
+                    disabled={runDetailLoading}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" /> {t('actions.refresh')}
+                  </Button>
+                  {canWrite && autoApply > 0 && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleApplyAuto}
+                      disabled={actionPending}
+                    >
+                      {actionPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                      {t('actions.applyAuto', { count: autoApply })}
+                    </Button>
+                  )}
+                  {canWrite && (pending > 0 || accepted > 0) && (
+                    <Button
+                      size="sm"
+                      onClick={() => setIsReviewOpen(true)}
+                      disabled={actionPending}
+                    >
+                      {t('actions.generateReview')}
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  )}
+                  {isAdmin && run.status === 'applied' && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleUndo}
+                      disabled={actionPending}
+                    >
+                      <Undo2 className="h-4 w-4 mr-1" /> {t('actions.undo')}
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fetchRunDetail(selectedRun.id)}
-                  disabled={runDetailLoading}
-                >
-                  <RefreshCw className="h-4 w-4 mr-1" /> {t('actions.refresh')}
-                </Button>
-                {canWrite && autoApply > 0 && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleApplyAuto}
-                    disabled={actionPending}
-                  >
-                    {actionPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-                    {t('actions.applyAuto', { count: autoApply })}
-                  </Button>
-                )}
-                {canWrite && (pending > 0 || accepted > 0) && (
-                  <Button
-                    size="sm"
-                    onClick={() => setIsReviewOpen(true)}
-                    disabled={actionPending}
-                  >
-                    {t('actions.generateReview')}
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                )}
-                {isAdmin && selectedRun.status === 'applied' && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleUndo}
-                    disabled={actionPending}
-                  >
-                    <Undo2 className="h-4 w-4 mr-1" /> {t('actions.undo')}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {totalsRow(stats)}
-            {selectedRun.error && (
-              <Alert variant="destructive" className="mt-3">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{selectedRun.error}</AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              {totalsRow(stats)}
+              {run.error && (
+                <Alert variant="destructive" className="mt-3">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{run.error}</AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">{t('detail.sourcesTitle')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div>
-              <Label>{t('detail.customerOntologies')}</Label>
-              <ContextList items={selectedRun.ontology_contexts} />
-            </div>
-            <div>
-              <Label>{t('detail.shippedTaxonomies')}</Label>
-              <ContextList items={selectedRun.include_shipped} />
-            </div>
-            <Separator />
-            <div className="text-xs text-muted-foreground">
-              {t('detail.reviewsLinkPrefix')}{' '}
-              <Link to="/data-asset-reviews" className="underline">
-                {t('detail.reviewsLinkText')}
-              </Link>{' '}
-              {t('detail.reviewsLinkSuffix')}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">{t('detail.sourcesTitle')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div>
+                <Label>{t('detail.customerOntologies')}</Label>
+                <ContextList items={run.ontology_contexts} />
+              </div>
+              <div>
+                <Label>{t('detail.shippedTaxonomies')}</Label>
+                <ContextList items={run.include_shipped} />
+              </div>
+              <Separator />
+              <div className="text-xs text-muted-foreground">
+                {t('detail.reviewsLinkPrefix')}{' '}
+                <Link to="/data-asset-reviews" className="underline">
+                  {t('detail.reviewsLinkText')}
+                </Link>{' '}
+                {t('detail.reviewsLinkSuffix')}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </ContentSkeleton>
     );
   }, [selectedRunId, selectedRun, runDetailLoading, actionPending, canWrite, isAdmin, fetchRunDetail, t]);
 
@@ -368,11 +385,6 @@ export default function TermMappingView() {
                 <AlertDescription>{runsError}</AlertDescription>
               </Alert>
             )}
-            {runsLoading && runs.length === 0 && (
-              <div className="flex justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            )}
             {!runsLoading && runs.length === 0 && !runsError && (
               <p className="text-xs text-muted-foreground text-center py-6">
                 <Trans
@@ -381,37 +393,39 @@ export default function TermMappingView() {
                 />
               </p>
             )}
-            {runs.map((run) => {
-              const stats = (run.stats ?? {}) as Record<string, number | undefined>;
-              const isSelected = run.id === selectedRunId;
-              return (
-                <button
-                  key={run.id}
-                  type="button"
-                  className={`block w-full text-left rounded-md border px-3 py-2 text-sm transition-colors ${
-                    isSelected
-                      ? 'border-primary bg-accent'
-                      : 'border-transparent hover:bg-accent/50'
-                  }`}
-                  onClick={() => setSelectedRunId(run.id)}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs truncate">{run.id.slice(0, 8)}</span>
-                    <Badge variant={RUN_STATUS_VARIANT[run.status]} className="shrink-0">
-                      {run.status}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 truncate" title={run.comment ?? undefined}>
-                    {run.comment || t('recent.noComment')}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    <RelativeDate date={run.created_at} />
-                    {typeof stats.suggestions_total === 'number' &&
-                      ` · ${t('recent.suggestionsCount', { count: stats.suggestions_total })}`}
-                  </p>
-                </button>
-              );
-            })}
+            <ContentSkeleton loading={runsLoading && runs.length === 0} contentClassName="space-y-1">
+              {(runsLoading && runs.length === 0 ? RUNS_SAMPLE : runs).map((run) => {
+                const stats = (run.stats ?? {}) as Record<string, number | undefined>;
+                const isSelected = run.id === selectedRunId;
+                return (
+                  <button
+                    key={run.id}
+                    type="button"
+                    className={`block w-full text-left rounded-md border px-3 py-2 text-sm transition-colors ${
+                      isSelected
+                        ? 'border-primary bg-accent'
+                        : 'border-transparent hover:bg-accent/50'
+                    }`}
+                    onClick={() => setSelectedRunId(run.id)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs truncate">{run.id.slice(0, 8)}</span>
+                      <Badge variant={RUN_STATUS_VARIANT[run.status]} className="shrink-0">
+                        {run.status}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 truncate" title={run.comment ?? undefined}>
+                      {run.comment || t('recent.noComment')}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      <RelativeDate date={run.created_at} />
+                      {typeof stats.suggestions_total === 'number' &&
+                        ` · ${t('recent.suggestionsCount', { count: stats.suggestions_total })}`}
+                    </p>
+                  </button>
+                );
+              })}
+            </ContentSkeleton>
           </CardContent>
         </Card>
 

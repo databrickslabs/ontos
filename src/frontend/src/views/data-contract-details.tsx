@@ -11,7 +11,6 @@ import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, Ke
 import {
   DetailHeaderSkeleton,
   PanelSkeleton,
-  SkeletonBlock,
   SkeletonLine,
   TableSkeleton,
 } from '@/components/common/list-view-skeleton'
@@ -63,6 +62,7 @@ import CommitDraftDialog from '@/components/data-contracts/commit-draft-dialog'
 import VersionNavigator from '@/components/common/version-navigator'
 import { contractActionErrorText } from '@/lib/contract-action-error'
 import type { DataProduct } from '@/types/data-product'
+import { ContentSkeleton } from '@/components/common/content-skeleton'
 import type { DataProfilingRun } from '@/types/data-contract'
 import { useCopilotContext } from '@/hooks/use-copilot-context'
 import { useApi } from '@/hooks/use-api'
@@ -229,6 +229,11 @@ const getStatusColor = (status: string | undefined): 'default' | 'secondary' | '
   return 'default';
 };
 
+// Stands in for the linked products while they load (see ContentSkeleton)
+const LINKED_PRODUCTS_SAMPLE: DataProduct[] = [
+  { apiVersion: 'v1.0.0', kind: 'DataProduct', id: 'sample-1', status: 'active', name: 'Sample data product', version: '1.0.0', description: { purpose: 'A short sample purpose of this data product' } },
+]
+
 export default function DataContractDetails() {
   const { t } = useTranslation(['data-contracts', 'common'])
   const { contractId } = useParams<{ contractId: string }>()
@@ -280,7 +285,8 @@ export default function DataContractDetails() {
 
   // Linked products state
   const [linkedProducts, setLinkedProducts] = useState<DataProduct[]>([])
-  const [loadingProducts, setLoadingProducts] = useState(false)
+  // Fetched on mount, so loading from the start (no "none yet" flash)
+  const [loadingProducts, setLoadingProducts] = useState(true)
   const [isCreateProductDialogOpen, setIsCreateProductDialogOpen] = useState(false)
 
   // Team import state
@@ -1686,16 +1692,16 @@ export default function DataContractDetails() {
     const currentPage = schemaPropPage[schemaName] || 0
     const totalPages = Math.ceil(totalProps / PROPS_PAGE_SIZE)
 
-    if (loadingSchemaProps && props.length === 0) {
-      return <SkeletonBlock height="h-32" className="rounded-md" />
-    }
-    if (props.length === 0 && totalProps === 0) return null
+    // First page loading: placeholder rows in the real columns (DataTable isLoading)
+    const firstLoad = loadingSchemaProps && props.length === 0
+    if (!firstLoad && props.length === 0 && totalProps === 0) return null
     return (
       <div className="space-y-2">
         <DataTable
           columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks, t)}
           data={props}
           searchColumn="name"
+          isLoading={firstLoad}
         />
         {totalPages > 1 && (
           <div className="flex items-center justify-between text-sm text-muted-foreground pt-1">
@@ -2675,31 +2681,31 @@ export default function DataContractDetails() {
           </div>
         </CardHeader>
         <CardContent>
-          {loadingProducts ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          ) : linkedProducts.length === 0 ? (
-            <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-              <Package className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-              <div className="text-muted-foreground mb-2">{t('data-contracts:detailsView.linkedProducts.noneYet', 'No linked data products yet')}</div>
-              <div className="text-sm text-muted-foreground mb-4">
-                {t('data-contracts:detailsView.linkedProducts.emptyHint', 'Create a data product that uses this contract to govern a deliverable')}
-              </div>
-              {contract && ['active', 'approved'].includes((contract.status || '').toLowerCase()) ? (
-                <Button onClick={() => setIsCreateProductDialogOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  {t('data-contracts:detailsView.linkedProducts.createProduct', 'Create Data Product')}
-                </Button>
-              ) : (
-                <div className="text-sm text-muted-foreground italic">
-                  {t('data-contracts:detailsView.linkedProducts.statusRequirement', "Contract must be in 'active' or 'approved' status")}
+          <ContentSkeleton
+            loading={loadingProducts}
+            empty={linkedProducts.length === 0}
+            emptyMessage={
+              <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
+                <Package className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                <div className="text-muted-foreground mb-2">{t('data-contracts:detailsView.linkedProducts.noneYet', 'No linked data products yet')}</div>
+                <div className="text-sm text-muted-foreground mb-4">
+                  {t('data-contracts:detailsView.linkedProducts.emptyHint', 'Create a data product that uses this contract to govern a deliverable')}
                 </div>
-              )}
-            </div>
-          ) : (
+                {contract && ['active', 'approved'].includes((contract.status || '').toLowerCase()) ? (
+                  <Button onClick={() => setIsCreateProductDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    {t('data-contracts:detailsView.linkedProducts.createProduct', 'Create Data Product')}
+                  </Button>
+                ) : (
+                  <div className="text-sm text-muted-foreground italic">
+                    {t('data-contracts:detailsView.linkedProducts.statusRequirement', "Contract must be in 'active' or 'approved' status")}
+                  </div>
+                )}
+              </div>
+            }
+          >
             <div className="space-y-3">
-              {linkedProducts.map((product) => {
+              {(loadingProducts ? LINKED_PRODUCTS_SAMPLE : linkedProducts).map((product) => {
                 // Find output ports that use this contract
                 const linkedPorts = product.outputPorts?.filter(port => port.contractId === contractId) || [];
                 return (
@@ -2733,7 +2739,7 @@ export default function DataContractDetails() {
                 );
               })}
             </div>
-          )}
+          </ContentSkeleton>
         </CardContent>
       </Card>
       )}

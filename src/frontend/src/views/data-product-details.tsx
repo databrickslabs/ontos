@@ -68,6 +68,7 @@ import type { CertificationLevel, PublicationScope } from '@/types/lifecycle';
 import { userHasApprovalPrivilege } from '@/lib/permissions';
 import { omitTags } from '@/lib/tag-payload';
 import { ApprovalEntity } from '@/types/settings';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 
 /**
  * ODPS v1.0.0 Data Product Details View
@@ -387,12 +388,13 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
     }
   };
 
-  if (isLoading) return null;
-
-  const linkedAssets = relationships.filter(r => r.source_id === portId);
+  // While loading, a sample asset badge stands in (see ContentSkeleton)
+  const linkedAssets = isLoading
+    ? [{ id: 'sample', source_id: portId, target_name: 'sample_catalog.sample_schema.sample_table' }]
+    : relationships.filter(r => r.source_id === portId);
 
   return (
-    <div className="mt-2 space-y-1">
+    <ContentSkeleton loading={isLoading} contentClassName="mt-2 space-y-1">
       {linkedAssets.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {linkedAssets.map((rel) => (
@@ -444,7 +446,7 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
           />
         </>
       )}
-    </div>
+    </ContentSkeleton>
   );
 }
 

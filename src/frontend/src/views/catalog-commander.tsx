@@ -31,7 +31,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
-import { HierarchyTreeSkeleton } from '@/components/common/list-view-skeleton';
+import { HierarchyTreeSkeleton, TableSkeleton } from '@/components/common/list-view-skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 // Tabs imports commented out - not currently used
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -1240,8 +1240,9 @@ const CatalogCommander: React.FC = () => {
             <DialogTitle>{t('messages.datasetView', { name: selectedDataset })}</DialogTitle>
           </DialogHeader>
           {loadingData ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+            // Columns aren't known before the preview loads
+            <div className="mt-4">
+              <TableSkeleton columns={6} rows={8} />
             </div>
           ) : datasetContent ? (
             <div className="mt-4 flex-1 overflow-auto h-full">

@@ -223,8 +223,10 @@ export default function LinkContractToPortDialog({
         onOpenChange={setIsCreateContractOpen}
         onSuccess={handleContractCreated}
         prefillData={{
-          domain: product?.domain,
-          domainId: product?.domain,
+          // Domain ids (product.domain is the primary domain's name, which the contract
+          // create would refuse as an unknown id)
+          domainIds: product?.domain_ids,
+          primaryDomainId: product?.primary_domain_id,
           tenant: product?.tenant,
           owner_team_id: product?.owner_team_id
         }}

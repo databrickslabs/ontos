@@ -146,3 +146,20 @@ def test_a_server_field_cleared_through_the_update_api_stays_cleared(db_session,
 
     exported = _servers(_export(manager, db_session, cid))['srv-pg']
     assert 'port' not in exported and exported['host'] == 'db.example.com'
+
+
+def test_a_server_form_save_keeps_the_named_fields_the_form_doesnt_show(db_session, imported):
+    manager, cid = imported
+    # the contract page's server form sends host, port, database, schema and location
+    shown = ('id', 'server', 'type', 'description', 'environment', 'host', 'port',
+             'database', 'schema', 'location', 'properties')
+    api = manager._build_contract_api_model(db_session, db_session.get(DataContractDb, cid))
+    servers = [{k: v for k, v in s.model_dump(by_alias=True, exclude_none=True).items()
+                if k in shown} for s in api.servers]
+
+    manager.update_contract_with_relations(
+        db_session, cid, DataContractUpdate.model_validate({'servers': servers}),
+        current_user='alice')
+
+    assert _servers(_export(manager, db_session, cid))['srv-athena']['catalog'] == \
+        'awsdatacatalog'

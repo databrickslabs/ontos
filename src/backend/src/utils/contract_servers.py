@@ -19,6 +19,8 @@ SERVER_COLUMNS = ('id', 'server', 'type', 'description', 'environment', 'roles',
 # never fills them
 NAMED_FIELDS = ('host', 'port', 'database', 'schema', 'catalog', 'project', 'account',
                 'region', 'location')
+# Named fields the contract page's server form doesn't show: a save keeps them
+FORM_UNSENT_FIELDS = ('catalog', 'project', 'account', 'region')
 # ODCS server fields that are not strings
 _INTEGER_FIELDS = ('port',)
 
@@ -76,9 +78,10 @@ def json_list(text: Optional[str]) -> Optional[List[Any]]:
 
 
 def keep_unsent_server_fields(servers: List[Dict[str, Any]], stored: List[Any]) -> None:
-    """Complete the servers of a contract page save with the stored ``roles``
-    and ``customProperties`` of a server the payload names without them (the
-    server form doesn't edit them). A server is matched by its ODCS id, else by
+    """Complete the servers of a contract page save with the stored ``roles``,
+    ``customProperties`` and ``catalog`` / ``project`` / ``account`` / ``region``
+    of a server the payload names without them (the server form doesn't edit
+    them). A server is matched by its ODCS id, else by
     its ``server`` identifier."""
     by_id = {s.stable_id: s for s in stored if s.stable_id}
     by_name = {s.server: s for s in stored if s.server}
@@ -92,3 +95,8 @@ def keep_unsent_server_fields(servers: List[Dict[str, Any]], stored: List[Any]) 
             server['roles'] = json_list(row.roles_json)
         if server.get('customProperties') is None and row.custom_properties_json:
             server['customProperties'] = json_list(row.custom_properties_json)
+        # named fields the server form neither shows nor sends
+        rows = {p.key: p.value for p in getattr(row, 'properties', None) or []}
+        for key in FORM_UNSENT_FIELDS:
+            if server.get(key) is None and rows.get(key) is not None:
+                server[key] = rows[key]

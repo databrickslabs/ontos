@@ -2,7 +2,7 @@
 -r backend/requirements.in
 
 # Runtime-only deps (not needed for CI/testing)
-filelock>=4.2.4
+filelock>=4.2.10
 bcrypt>=4.0.0
 sse-starlette>=3.6.0,<4.0.0
 reportlab>=5.0.1

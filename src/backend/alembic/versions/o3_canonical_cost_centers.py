@@ -1,7 +1,7 @@
 """Normalize and constrain cost center values.
 
 Revision ID: o3_canonical_cost_centers
-Revises: r3_odcs_roundtrip_fields
+Revises: o3_compliance_llm_check_cache
 Create Date: 2026-11-17
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "o3_canonical_cost_centers"
-down_revision: str | None = "r3_odcs_roundtrip_fields"
+down_revision: str | None = "o3_compliance_llm_check_cache"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

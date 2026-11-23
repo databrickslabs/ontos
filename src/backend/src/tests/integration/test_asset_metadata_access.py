@@ -18,7 +18,6 @@ import pytest
 from src.app import app
 from src.common import workspace_client
 from src.common.features import FeatureAccessLevel
-from src.common.manager_dependencies import get_costs_manager
 from src.controller.assets_manager import AssetsManager
 from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
@@ -27,7 +26,7 @@ from src.db_models.change_log import ChangeLogDb
 from src.db_models.metadata import (
     DocumentMetadataDb, ImportedMarkdownFileDb, LinkMetadataDb, RichTextMetadataDb,
 )
-from src.models.costs import CostItem, CostItemCreate
+from src.models.costs import CostItemCreate
 from src.models.metadata import (
     LinkCreate, MetadataAttachmentCreate, RichText, RichTextCreate,
 )
@@ -68,7 +67,7 @@ def ws(monkeypatch, mock_workspace_client):
 
 
 def _seed(db, entity_type: str, entity_id: str) -> dict:
-    """One note, link, document and cost item on an entity."""
+    """Seed metadata, plus a cost item for the entity kinds that support costs."""
     metadata = MetadataManager()
     note = metadata.create_rich_text(db, data=RichTextCreate(
         entity_type=entity_type, entity_id=entity_id, title='Note', content_markdown='Body',
@@ -82,16 +81,19 @@ def _seed(db, entity_type: str, entity_id: str) -> dict:
     )
     db.add(doc)
     db.commit()
-    cost = CostsManager().create(db, data=CostItemCreate(
-        entity_type=entity_type, entity_id=entity_id, cost_center='OTHER', amount_cents=100,
-        start_month='2026-01-01',
-    ), user_email='seed@example.com')
+    cost = None
+    if entity_type in OTHER_TYPES:
+        cost = CostsManager().create(db, data=CostItemCreate(
+            entity_type=entity_type, entity_id=entity_id, cost_center='OTHER', amount_cents=100,
+            start_month='2026-01-01',
+        ), user_email='seed@example.com')
     # Attached by the attach route, then detached by the detach route.
     shared = metadata.create_shared_rich_text(db, data=RichTextCreate(
         entity_type=entity_type, entity_id='ignored', title='Shared', content_markdown='Body',
     ), user_email='seed@example.com')
     return {
-        'note': str(note.id), 'link': str(link.id), 'doc': str(doc.id), 'cost': str(cost.id),
+        'note': str(note.id), 'link': str(link.id), 'doc': str(doc.id),
+        'cost': str(cost.id) if cost else None,
         'attached': str(shared.id),
     }
 
@@ -101,7 +103,7 @@ def _requests(entity_type: str, entity_id: str, ids: dict):
     q = {'entity_id': entity_id}
     base = f'/api/entities/{entity_type}'
     body = {'entity_type': entity_type, 'entity_id': entity_id}
-    return [
+    requests = [
         ('list notes', 'read', 'GET', f'{base}/rich-texts', {'params': q}),
         ('list links', 'read', 'GET', f'{base}/links', {'params': q}),
         ('list documents', 'read', 'GET', f'{base}/documents', {'params': q}),
@@ -138,6 +140,9 @@ def _requests(entity_type: str, entity_id: str, ids: dict):
          {'json': {**body, 'cost_center': 'OTHER', 'amount_cents': 5,
                    'start_month': '2026-02-01'}}),
     ]
+    # Cost items support domains, products and contracts. Asset access tests cover
+    # metadata only now that the cost API rejects asset ownership.
+    return [request for request in requests if entity_type != 'asset' or 'cost' not in request[0]]
 
 
 _PLACEHOLDER_IDS = dict.fromkeys(('note', 'link', 'doc', 'cost', 'attached'), 'x')
@@ -270,27 +275,6 @@ def test_the_checks_use_the_startup_wired_assets_manager(
     assert calls == [asset.id]
 
 
-def test_the_cost_item_check_uses_the_routes_costs_manager(client, db_session, asset, act_as):
-    """The owner of ``/cost-items/{id}`` is read with the injected ``get_costs_manager``."""
-    ids = _seed(db_session, 'asset', str(asset.id))
-    calls = []
-
-    class Injected(CostsManager):
-        def get_owner(self, db, id):
-            calls.append(id)
-            return super().get_owner(db, id=id)
-
-    app.dependency_overrides[get_costs_manager] = lambda: Injected()
-    try:
-        act_as('Admin')
-        response = client.put(f"/api/cost-items/{ids['cost']}", json={'title': 'C2'})
-    finally:
-        app.dependency_overrides.pop(get_costs_manager, None)
-
-    assert response.status_code == 200, response.text
-    assert ids['cost'] in calls
-
-
 @pytest.mark.parametrize('role', ['Data Steward', 'Data Consumer'])
 @pytest.mark.parametrize('route', ROW_ROUTES)
 def test_without_assets_a_row_by_id_answers_as_an_unknown_row(
@@ -354,9 +338,6 @@ def _unknown_asset_calls(entity_id):
         'upload document': ('POST', '/api/entities/asset/documents', {
             'params': q, 'data': {'title': 'D'},
             'files': {'file': ('d.txt', b'data', 'text/plain')}}),
-        'list costs': ('GET', f'/api/entities/asset/{entity_id}/cost-items', {}),
-        'create cost': ('POST', f'/api/entities/asset/{entity_id}/cost-items', {'json': {
-            **body, 'cost_center': 'OTHER', 'amount_cents': 5, 'start_month': '2026-02-01'}}),
     }
 
 
@@ -751,9 +732,8 @@ def test_a_failing_row_lookup_fails_the_request(client, act_as, monkeypatch):
     assert response.status_code == 500, response.text
 
 
-@pytest.mark.parametrize('row', ['note', 'cost'])
 def test_a_steward_cannot_delete_an_asset_row_its_response_model_cannot_load(
-        client, db_session, asset, act_as, monkeypatch, row):
+        client, db_session, asset, act_as, monkeypatch):
     """The check reads the stored row's entity, not the converted response model."""
     ids = _seed(db_session, 'asset', str(asset.id))
 
@@ -761,11 +741,9 @@ def test_a_steward_cannot_delete_an_asset_row_its_response_model_cannot_load(
         raise ValueError('created_at is missing')
 
     monkeypatch.setattr(RichText, 'from_orm', unloadable)
-    monkeypatch.setattr(CostItem, 'model_validate', unloadable)
     act_as('Data Steward')
-    url = f"/api/rich-texts/{ids['note']}" if row == 'note' else f"/api/cost-items/{ids['cost']}"
 
-    response = client.delete(url)
+    response = client.delete(f"/api/rich-texts/{ids['note']}")
 
     # The asset isn't readable: answered as an unknown row (see above).
     assert response.status_code == 404, response.text

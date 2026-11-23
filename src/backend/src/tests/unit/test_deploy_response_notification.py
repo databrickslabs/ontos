@@ -182,3 +182,65 @@ def test_a_refused_decision_records_and_audits_nothing():
     audit.log_action.assert_not_called()
     notifications.handle_actionable_notification.assert_not_called()
     notifications.create_notification.assert_not_called()
+
+
+class TestDecidedOnce:
+    """Two decisions together decide the request once (#1309 review): the
+    manager locks the request's rows and reads them afresh, so a decision
+    that passed the route's check sees the ``handled`` another one stored."""
+
+    def _request(self, db):
+        import json as _json
+        import uuid as _uuid
+        from datetime import datetime as _dt
+        from src.db_models.notifications import NotificationDb
+
+        row = NotificationDb(
+            id=str(_uuid.uuid4()), type='action_required', title='Contract Deployment Request',
+            recipient='Admin', created_at=_dt.utcnow(), action_type='handle_deploy_request',
+            can_delete=False, read=False,
+            action_payload=_json.dumps({'contract_id': 'c1', 'requester_email': 'r@x.com'}),
+        )
+        db.add(row)
+        db.flush()
+        return row
+
+    def _decide(self, db, decision='approve'):
+        manager = DataContractsManager.__new__(DataContractsManager)
+        notifications = MagicMock()
+        with patch('src.controller.data_contracts_manager.data_contract_repo.get',
+                   return_value=SimpleNamespace(id='c1', name='Orders')):
+            manager.handle_deploy_response(
+                db=db, notifications_manager=notifications, contract_id='c1',
+                approver_email='b@x.com', decision=decision,
+            )
+        return notifications
+
+    def test_a_decision_sees_the_decision_another_one_stored(self, db_session):
+        import json as _json
+        import pytest
+        from sqlalchemy import text
+        from src.controller.data_contracts_manager import DeployRequestAlreadyDecidedError
+
+        row = self._request(db_session)
+        assert 'handled' not in _json.loads(row.action_payload)  # what the session holds
+        # Another transaction decided it and committed while this one waited
+        db_session.execute(
+            text("UPDATE notifications SET action_payload = :p WHERE id = :id"),
+            {'p': _json.dumps({'contract_id': 'c1', 'handled': True, 'decision': 'deny'}),
+             'id': row.id},
+        )
+
+        with pytest.raises(DeployRequestAlreadyDecidedError):
+            self._decide(db_session)
+
+        assert _json.loads(row.action_payload)['decision'] == 'deny'
+
+    def test_the_first_decision_goes_through(self, db_session):
+        import json as _json
+
+        row = self._request(db_session)
+
+        self._decide(db_session)
+
+        assert _json.loads(row.action_payload)['decision'] == 'approve'

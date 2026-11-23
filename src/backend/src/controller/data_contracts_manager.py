@@ -179,6 +179,15 @@ logger = get_logger(__name__)
 DEPLOYMENT_NOT_AVAILABLE_CODE = 'deployment_not_available'
 
 
+class DeployRequestAlreadyDecidedError(CodedValueError):
+    """A decision on a deployment request that another decision already took."""
+
+    code = 'deploy_request_already_decided'
+
+    def __init__(self):
+        super().__init__("This deployment request has already been decided.")
+
+
 class InvalidTagEntryError(CodedValueError):
     """A contract update whose ``tags`` has an entry that is neither a string nor an object."""
 
@@ -6713,16 +6722,24 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         return {"message": f"Publish decision '{decision}' recorded successfully"}
     
     @staticmethod
-    def _deploy_request_notifications(db, contract_id: str) -> List[Any]:
+    def _deploy_request_notifications(db, contract_id: str, *, lock: bool = False) -> List[Any]:
         """The contract's ``handle_deploy_request`` notifications (rows) and
-        their payloads, as ``(row, payload)``."""
+        their payloads, as ``(row, payload)``.
+
+        ``lock`` locks the rows until the transaction ends and reads them
+        afresh (``populate_existing``), so two decisions are taken one after
+        the other: the second one sees the ``handled`` the first one stored.
+        """
         from src.db_models.notifications import NotificationDb
 
-        out = []
-        for row in db.query(NotificationDb).filter(
+        query = db.query(NotificationDb).filter(
             NotificationDb.action_type == 'handle_deploy_request',
             NotificationDb.action_payload.contains(json.dumps(contract_id)),
-        ).all():
+        )
+        if lock:
+            query = query.populate_existing().with_for_update()
+        out = []
+        for row in query.all():
             try:
                 payload = json.loads(row.action_payload or '{}')
             except (TypeError, ValueError):
@@ -6797,6 +6814,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         Raises:
             ValueError: If contract not found or invalid decision
+            DeployRequestAlreadyDecidedError: The request's notifications are
+                all decided (read under a row lock, so of two concurrent
+                decisions the second one gets this)
         """
         from src.models.notifications import NotificationType, Notification
 
@@ -6807,6 +6827,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         decision = decision.lower()
         if decision not in ('approve', 'deny'):
             raise ValueError("Decision must be 'approve' or 'deny'")
+
+        # Decided once: lock the request's rows and re-check ``handled`` under
+        # the lock (the route's check ran before it)
+        request_rows = self._deploy_request_notifications(db, contract_id, lock=True)
+        if request_rows and all(payload.get('handled') for _, payload in request_rows):
+            raise DeployRequestAlreadyDecidedError()
 
         now = utc_now()
         response_message = f"Deploy decision '{decision}' recorded successfully"
@@ -6836,7 +6862,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             notification_desc += f"\n\nApprover message: {message}"
         
         # The request is decided: its notifications no longer let anyone decide it
-        for row, payload in self._deploy_request_notifications(db, contract_id):
+        for row, payload in request_rows:
             if payload.get('handled'):
                 continue
             payload.update({

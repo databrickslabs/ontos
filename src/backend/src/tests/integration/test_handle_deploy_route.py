@@ -94,6 +94,31 @@ class TestDeployApprover:
         assert again.status_code == 409, again.text
         assert again.json()['detail']['code'] == 'deploy_request_already_decided'
 
+    def test_of_two_decisions_together_the_second_gets_409(self, client, db_session):
+        """Another approver decides between this call's check and its write
+        (#1309 review): the write re-checks under the row lock and refuses."""
+        from unittest.mock import patch
+        from src.controller.data_contracts_manager import DataContractsManager
+
+        contract_id = _contract_id(client, db_session)
+        check = DataContractsManager.deploy_request_access
+
+        def check_then_another_decides(manager, db, notifications, cid, user_info):
+            access = check(manager, db, notifications, cid, user_info)
+            manager.handle_deploy_response(
+                db=db, notifications_manager=notifications, contract_id=cid,
+                approver_email='other@example.com', decision='deny',
+            )
+            db.commit()
+            return access
+
+        with patch.object(DataContractsManager, 'deploy_request_access',
+                          check_then_another_decides):
+            response = _decide(client, contract_id)
+
+        assert response.status_code == 409, response.text
+        assert response.json()['detail']['code'] == 'deploy_request_already_decided'
+
     def test_a_request_a_workflow_handles_is_decided_by_the_workflow(self, client, db_session):
         """Only a workflow approval notification: even an admin is refused here."""
         contract_id = _contract_id(client)

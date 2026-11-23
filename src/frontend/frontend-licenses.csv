@@ -53,8 +53,6 @@
 "@floating-ui/dom@1.7.0","MIT","https://github.com/floating-ui/floating-ui"
 "@floating-ui/react-dom@2.1.2","MIT","https://github.com/floating-ui/floating-ui"
 "@floating-ui/utils@0.2.9","MIT","https://github.com/floating-ui/floating-ui"
-"@headless-tree/core@1.4.0","MIT","https://github.com/lukasbach/headless-tree"
-"@headless-tree/react@1.4.0","MIT","https://github.com/lukasbach/headless-tree"
 "@hookform/resolvers@5.0.1","MIT","https://github.com/react-hook-form/resolvers"
 "@isaacs/cliui@8.0.2","ISC","https://github.com/yargs/cliui"
 "@jridgewell/gen-mapping@0.3.8","MIT","https://github.com/jridgewell/gen-mapping"

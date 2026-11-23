@@ -75,6 +75,10 @@ DB_POOL_TIMEOUT=10
 
 **Note:** The `DB_POOL_RECYCLE=3600` default is especially important for Lakebase deployments, as it ensures connections are refreshed before OAuth tokens expire.
 
+**Connection budget per replica:** `DB_POOL_SIZE` + `DB_MAX_OVERFLOW` + `WORKFLOW_SCHEDULER_MAX_WORKERS` + 1, which is 20 with the defaults (5 + 10 + 4 + 1). The last two terms are the workflow scheduler's own engine, apart from the request pool. Multiply by the number of replicas and keep the total under the database's maximum connections, leaving room for other clients. Compare the total with the connection limit of the Lakebase compute (the "Compute specifications" table in the Lakebase documentation, https://docs.databricks.com/aws/en/oltp/projects/manage-computes, or `SHOW max_connections`; for an autoscaling compute the limit follows the smaller of the maximum CU and 8x the minimum CU; some connections are reserved, so the documented figure and `SHOW max_connections` can differ).
+
+**Lakebase limits:** the `max_connections` of a Lakebase compute is roughly 105 at 0.5 CU, 218 at 1 CU, 443 at 2 CU and 894 at 4 CU (approximate figures; check the "Compute specifications" table or `SHOW max_connections` for your compute). With the 20 connections per replica above, a 1 CU compute holds about 10 replicas, before other clients.
+
 ### Application Settings
 
 | Variable | Description | Example | Required |

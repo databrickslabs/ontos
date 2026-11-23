@@ -229,6 +229,21 @@ class TestResolver:
         assert first is second
         assert request.app.state.teams_manager.get_team_rows_for_user.call_count == 1
 
+    def test_cache_key_matches_the_applied_override_lookup(self, auth):
+        # The applied-override lookup is exact; a differently cased email in the same
+        # request must not reuse the result resolved for the other casing.
+        consumer = next(r for r in ROLES if r.name == "Data Consumer")
+        request = _request({})
+        request.app.state.settings_manager.get_applied_role_override_for_user.side_effect = (
+            lambda email: str(consumer.id) if email == "Alice@example.com" else None
+        )
+
+        pinned = effective_permissions_for_request(request, "Alice@example.com", ["admins"], auth)
+        own = effective_permissions_for_request(request, "alice@example.com", ["admins"], auth)
+
+        assert pinned.get("settings", L.NONE) == L.NONE
+        assert own["settings"] == L.ADMIN
+
     def test_a_dangling_applied_override_falls_back_to_the_merged_roles(self, auth):
         request = _request({"alice@example.com": [_team(("alice@example.com", "Data Steward"))]}, applied="gone")
         request.app.state.settings_manager.get_feature_permissions_for_role_id.side_effect = ValueError("not found")
@@ -399,6 +414,17 @@ class TestUserHasFeatureLevel:
         user = UserInfo(email="u@example.com", username="u", user="U", ip="127.0.0.1", groups=["admins"])
 
         assert not user_has_feature_level(broken, user, "teams", L.READ_ONLY, request)
+
+    def test_a_call_without_request_fails_closed(self, auth):
+        # A four-argument call (written before the request was required) denies
+        # instead of raising TypeError outside the fail-closed path.
+        from src.common.authorization import user_has_feature_level
+
+        user = UserInfo(
+            email="u@example.com", username="u", user="U", ip="127.0.0.1", groups=["admins"],
+        )
+
+        assert user_has_feature_level(auth, user, "teams", L.READ_ONLY) is False
 
 
 class TestAdoptEntityIdsStaysGroupBased:

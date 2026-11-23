@@ -23,7 +23,8 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/lib/ontology-utils', () => ({
-  resolveLabel: (c: OntologyConcept) => c.label ?? c.iri,
+  resolveLabel: (c: OntologyConcept, lang?: string) =>
+    (c as any).labels?.[lang ?? 'en'] ?? c.label ?? c.iri,
 }));
 
 vi.mock('@/lib/system-rdf-namespace-labels', () => ({
@@ -82,6 +83,7 @@ const baseProps = {
 beforeEach(() => {
   vi.clearAllMocks();
   storeState.conceptListSearch = '';
+  storeState.expandedConceptGroups = ['urn:parent'];
 });
 
 describe('ConceptsTab view modes', () => {
@@ -200,5 +202,89 @@ describe('ConceptsTab bulk lifecycle actions', () => {
     expect(screen.getByTestId('bulk-status-certify')).not.toHaveAttribute('data-disabled');
     expect(screen.getByTestId('bulk-status-publish')).toHaveAttribute('data-disabled');
     expect(screen.getByTestId('bulk-status-approve')).toHaveAttribute('data-disabled');
+  });
+});
+
+describe('ConceptsTab tree ordering', () => {
+  const mk = (iri: string, label: string, parents: string[] = [], labels?: any) =>
+    ({
+      iri,
+      label,
+      labels,
+      concept_type: 'concept',
+      parent_concepts: parents,
+      child_concepts: [],
+    }) as unknown as OntologyConcept;
+
+  const order = () =>
+    screen
+      .getAllByTestId(/^concept-row-/)
+      .map((r) => r.getAttribute('data-testid')!.replace('concept-row-', ''));
+
+  it('sorts roots and children alphabetically, not in API order', () => {
+    const concepts = [
+      mk('urn:r-zeta', 'Zeta'),
+      mk('urn:r-alpha', 'alpha'),
+      mk('urn:c-two', 'Banana', ['urn:r-alpha']),
+      mk('urn:c-one', 'Apple', ['urn:r-alpha']),
+    ];
+    storeState.expandedConceptGroups = ['urn:r-alpha'];
+    render(<ConceptsTab {...baseProps} filteredConcepts={concepts} viewMode="tree" />);
+    expect(order()).toEqual(['urn:r-alpha', 'urn:c-one', 'urn:c-two', 'urn:r-zeta']);
+  });
+
+  it('sorts by the label in the selected language and breaks ties by IRI', () => {
+    const concepts = [
+      mk('urn:b', 'Apple', [], { pt: 'Zebra' }),
+      mk('urn:a', 'Zulu', [], { pt: 'Abelha' }),
+      mk('urn:d', 'Same', [], { pt: 'Igual' }),
+      mk('urn:c', 'Same', [], { pt: 'Igual' }),
+    ];
+    storeState.expandedConceptGroups = [];
+    render(
+      <ConceptsTab
+        {...baseProps}
+        filteredConcepts={concepts}
+        selectedLanguage="pt"
+        viewMode="tree"
+      />,
+    );
+    expect(order()).toEqual(['urn:a', 'urn:c', 'urn:d', 'urn:b']);
+  });
+
+  it('group-by-domain keeps child concepts before domain properties, each sorted', () => {
+    const prop = (iri: string, label: string) =>
+      ({ ...mk(iri, label), concept_type: 'property', domain: 'urn:root' }) as OntologyConcept;
+    const concepts = [
+      mk('urn:root', 'Root'),
+      prop('urn:p-b', 'Beta prop'),
+      prop('urn:p-a', 'Alpha prop'),
+      mk('urn:c-z', 'Zed child', ['urn:root']),
+      mk('urn:c-m', 'Mid child', ['urn:root']),
+      // A property that is also a hierarchy child must appear once.
+      { ...prop('urn:p-c', 'Gamma prop'), parent_concepts: ['urn:root'] } as OntologyConcept,
+    ];
+    storeState.expandedConceptGroups = ['urn:root'];
+    render(
+      <ConceptsTab
+        {...baseProps}
+        filteredConcepts={concepts}
+        groupByDomain
+        showProperties
+        viewMode="tree"
+      />,
+    );
+    expect(order()).toEqual(['urn:root', 'urn:p-c', 'urn:c-m', 'urn:c-z', 'urn:p-a', 'urn:p-b']);
+  });
+
+  it('group-by-source sorts the concepts inside each group', () => {
+    const inCtx = (iri: string, label: string) =>
+      ({ ...mk(iri, label), source_context: 'scheme-a' }) as OntologyConcept;
+    const concepts = [inCtx('urn:z', 'Zeta'), inCtx('urn:a', 'Alpha'), inCtx('urn:m', 'Mid')];
+    storeState.expandedConceptGroups = ['scheme-a'];
+    render(
+      <ConceptsTab {...baseProps} filteredConcepts={concepts} groupBySource viewMode="tree" />,
+    );
+    expect(order().filter((id) => id.startsWith('urn:'))).toEqual(['urn:a', 'urn:m', 'urn:z']);
   });
 });

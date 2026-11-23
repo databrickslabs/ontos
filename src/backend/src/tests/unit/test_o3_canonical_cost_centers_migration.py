@@ -75,3 +75,21 @@ def test_upgrade_preserves_invalid_classification_and_custom_name(migration, eng
 
     _run_upgrade(migration, engine, monkeypatch)
     assert _rows(engine)[2] == ("legacy-custom", "OTHER", "Tools: Licences")
+
+
+def test_upgrade_bounds_the_combined_custom_name(migration, engine, monkeypatch):
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO cost_items (id, cost_center, custom_center_name)
+                VALUES ('legacy-long', 'tools', :custom_name)
+            """),
+            {"custom_name": "x" * 255},
+        )
+
+    _run_upgrade(migration, engine, monkeypatch)
+
+    row = _rows(engine)[0]
+    assert row[0:2] == ("legacy-long", "OTHER")
+    assert row[2].startswith("Tools: ")
+    assert len(row[2]) == 255

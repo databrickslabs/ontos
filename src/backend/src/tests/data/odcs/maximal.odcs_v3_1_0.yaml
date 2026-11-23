@@ -1,0 +1,1689 @@
+# Maximal ODCS v3.1.0 contract: every field of the v3.1.0 JSON schema, each kind once.
+# Trimmed from the #610 audit document; used by test_odcs_v310_roundtrip_fidelity.py.
+apiVersion: v3.1.0
+kind: DataContract
+id: c0ffee00-0000-4000-8000-000000000001
+name: Audit Max Contract
+version: 1.2.3
+status: active
+tenant: audit-tenant
+tags:
+- contract-tag-a
+- contract-tag-b
+domain: audit-domain
+dataProduct: audit-data-product
+description:
+  usage: usage text
+  purpose: purpose text
+  limitations: limitations text
+  authoritativeDefinitions:
+  - url: https://example.com/desc/def
+    type: businessDefinition
+    description: desc ad description
+    id: desc-ad-0
+  customProperties:
+  - property: descCpStr
+    value: desc-cp-value
+    description: desc cp description
+    id: desc-cp-0
+  - property: descCpNum
+    value: 42
+    id: desc-cp-1
+  - property: descCpObj
+    value:
+      nested:
+      - 1
+      - two
+    id: desc-cp-2
+servers:
+- id: srv-api
+  server: api-server
+  type: api
+  description: api server
+  environment: prod
+  location: https://api.example.com/location
+  roles:
+  - id: srv-role-0
+    role: srv_reader
+    description: server role
+    access: read
+    firstLevelApprovers: a
+    secondLevelApprovers: b
+    customProperties:
+    - property: srv-roleCpStr
+      value: srv-role-cp-value
+      description: srv-role cp description
+      id: srv-role-cp-0
+    - property: srv-roleCpNum
+      value: 42
+      id: srv-role-cp-1
+    - property: srv-roleCpObj
+      value:
+        nested:
+        - 1
+        - two
+      id: srv-role-cp-2
+  customProperties:
+  - property: srv-apiCpStr
+    value: srv-api-cp-value
+    description: srv-api cp description
+    id: srv-api-cp-0
+- id: srv-athena
+  server: athena-server
+  type: athena
+  description: athena server
+  environment: prod
+  stagingDir: https://athena.example.com/stagingDir
+  schema: athena-schema
+  catalog: athena-catalog
+  regionName: athena-regionName
+  customProperties:
+  - property: srv-athenaCpStr
+    value: srv-athena-cp-value
+    description: srv-athena cp description
+    id: srv-athena-cp-0
+- id: srv-azure
+  server: azure-server
+  type: azure
+  description: azure server
+  environment: prod
+  location: https://azure.example.com/location
+  format: azure-format
+  delimiter: azure-delimiter
+  customProperties:
+  - property: srv-azureCpStr
+    value: srv-azure-cp-value
+    description: srv-azure cp description
+    id: srv-azure-cp-0
+- id: srv-bigquery
+  server: bigquery-server
+  type: bigquery
+  description: bigquery server
+  environment: prod
+  project: bigquery-project
+  dataset: bigquery-dataset
+  customProperties:
+  - property: srv-bigqueryCpStr
+    value: srv-bigquery-cp-value
+    description: srv-bigquery cp description
+    id: srv-bigquery-cp-0
+- id: srv-clickhouse
+  server: clickhouse-server
+  type: clickhouse
+  description: clickhouse server
+  environment: prod
+  host: clickhouse-host
+  port: 5432
+  database: clickhouse-database
+  customProperties:
+  - property: srv-clickhouseCpStr
+    value: srv-clickhouse-cp-value
+    description: srv-clickhouse cp description
+    id: srv-clickhouse-cp-0
+- id: srv-databricks
+  server: databricks-server
+  type: databricks
+  description: databricks server
+  environment: prod
+  host: databricks-host
+  catalog: databricks-catalog
+  schema: databricks-schema
+  customProperties:
+  - property: srv-databricksCpStr
+    value: srv-databricks-cp-value
+    description: srv-databricks cp description
+    id: srv-databricks-cp-0
+- id: srv-denodo
+  server: denodo-server
+  type: denodo
+  description: denodo server
+  environment: prod
+  host: denodo-host
+  port: 5432
+  database: denodo-database
+  customProperties:
+  - property: srv-denodoCpStr
+    value: srv-denodo-cp-value
+    description: srv-denodo cp description
+    id: srv-denodo-cp-0
+- id: srv-dremio
+  server: dremio-server
+  type: dremio
+  description: dremio server
+  environment: prod
+  host: dremio-host
+  port: 5432
+  schema: dremio-schema
+  customProperties:
+  - property: srv-dremioCpStr
+    value: srv-dremio-cp-value
+    description: srv-dremio cp description
+    id: srv-dremio-cp-0
+- id: srv-duckdb
+  server: duckdb-server
+  type: duckdb
+  description: duckdb server
+  environment: prod
+  database: duckdb-database
+  schema: duckdb-schema
+  customProperties:
+  - property: srv-duckdbCpStr
+    value: srv-duckdb-cp-value
+    description: srv-duckdb cp description
+    id: srv-duckdb-cp-0
+- id: srv-glue
+  server: glue-server
+  type: glue
+  description: glue server
+  environment: prod
+  account: glue-account
+  database: glue-database
+  location: https://glue.example.com/location
+  format: glue-format
+  customProperties:
+  - property: srv-glueCpStr
+    value: srv-glue-cp-value
+    description: srv-glue cp description
+    id: srv-glue-cp-0
+- id: srv-cloudsql
+  server: cloudsql-server
+  type: cloudsql
+  description: cloudsql server
+  environment: prod
+  host: cloudsql-host
+  port: 5432
+  database: cloudsql-database
+  schema: cloudsql-schema
+  customProperties:
+  - property: srv-cloudsqlCpStr
+    value: srv-cloudsql-cp-value
+    description: srv-cloudsql cp description
+    id: srv-cloudsql-cp-0
+- id: srv-db2
+  server: db2-server
+  type: db2
+  description: db2 server
+  environment: prod
+  host: db2-host
+  port: 5432
+  database: db2-database
+  schema: db2-schema
+  customProperties:
+  - property: srv-db2CpStr
+    value: srv-db2-cp-value
+    description: srv-db2 cp description
+    id: srv-db2-cp-0
+- id: srv-hive
+  server: hive-server
+  type: hive
+  description: hive server
+  environment: prod
+  host: hive-host
+  port: 5432
+  database: hive-database
+  customProperties:
+  - property: srv-hiveCpStr
+    value: srv-hive-cp-value
+    description: srv-hive cp description
+    id: srv-hive-cp-0
+- id: srv-impala
+  server: impala-server
+  type: impala
+  description: impala server
+  environment: prod
+  host: impala-host
+  port: 5432
+  database: impala-database
+  customProperties:
+  - property: srv-impalaCpStr
+    value: srv-impala-cp-value
+    description: srv-impala cp description
+    id: srv-impala-cp-0
+- id: srv-informix
+  server: informix-server
+  type: informix
+  description: informix server
+  environment: prod
+  host: informix-host
+  port: 5432
+  database: informix-database
+  customProperties:
+  - property: srv-informixCpStr
+    value: srv-informix-cp-value
+    description: srv-informix cp description
+    id: srv-informix-cp-0
+- id: srv-zen
+  server: zen-server
+  type: zen
+  description: zen server
+  environment: prod
+  host: zen-host
+  port: 5432
+  database: zen-database
+  customProperties:
+  - property: srv-zenCpStr
+    value: srv-zen-cp-value
+    description: srv-zen cp description
+    id: srv-zen-cp-0
+- id: srv-custom
+  server: custom-server
+  type: custom
+  description: custom server
+  environment: prod
+  account: custom-account
+  catalog: custom-catalog
+  database: custom-database
+  dataset: custom-dataset
+  delimiter: custom-delimiter
+  endpointUrl: https://custom.example.com/endpointUrl
+  format: custom-format
+  host: custom-host
+  location: https://custom.example.com/location
+  path: custom-path
+  port: 5432
+  project: custom-project
+  region: custom-region
+  regionName: custom-regionName
+  schema: custom-schema
+  serviceName: custom-serviceName
+  stagingDir: custom-stagingDir
+  warehouse: custom-warehouse
+  stream: custom-stream
+  customProperties:
+  - property: srv-customCpStr
+    value: srv-custom-cp-value
+    description: srv-custom cp description
+    id: srv-custom-cp-0
+- id: srv-kafka
+  server: kafka-server
+  type: kafka
+  description: kafka server
+  environment: prod
+  host: kafka-host
+  format: kafka-format
+  customProperties:
+  - property: srv-kafkaCpStr
+    value: srv-kafka-cp-value
+    description: srv-kafka cp description
+    id: srv-kafka-cp-0
+- id: srv-kinesis
+  server: kinesis-server
+  type: kinesis
+  description: kinesis server
+  environment: prod
+  region: kinesis-region
+  format: kinesis-format
+  customProperties:
+  - property: srv-kinesisCpStr
+    value: srv-kinesis-cp-value
+    description: srv-kinesis cp description
+    id: srv-kinesis-cp-0
+- id: srv-local
+  server: local-server
+  type: local
+  description: local server
+  environment: prod
+  path: local-path
+  format: local-format
+  customProperties:
+  - property: srv-localCpStr
+    value: srv-local-cp-value
+    description: srv-local cp description
+    id: srv-local-cp-0
+- id: srv-mysql
+  server: mysql-server
+  type: mysql
+  description: mysql server
+  environment: prod
+  host: mysql-host
+  port: 5432
+  database: mysql-database
+  customProperties:
+  - property: srv-mysqlCpStr
+    value: srv-mysql-cp-value
+    description: srv-mysql cp description
+    id: srv-mysql-cp-0
+- id: srv-oracle
+  server: oracle-server
+  type: oracle
+  description: oracle server
+  environment: prod
+  host: oracle-host
+  port: 5432
+  serviceName: oracle-serviceName
+  customProperties:
+  - property: srv-oracleCpStr
+    value: srv-oracle-cp-value
+    description: srv-oracle cp description
+    id: srv-oracle-cp-0
+- id: srv-postgresql
+  server: postgresql-server
+  type: postgresql
+  description: postgresql server
+  environment: prod
+  host: postgresql-host
+  port: 5432
+  database: postgresql-database
+  schema: postgresql-schema
+  customProperties:
+  - property: srv-postgresqlCpStr
+    value: srv-postgresql-cp-value
+    description: srv-postgresql cp description
+    id: srv-postgresql-cp-0
+- id: srv-postgres
+  server: postgres-server
+  type: postgres
+  description: postgres server
+  environment: prod
+  host: postgres-host
+  port: 5432
+  database: postgres-database
+  schema: postgres-schema
+  customProperties:
+  - property: srv-postgresCpStr
+    value: srv-postgres-cp-value
+    description: srv-postgres cp description
+    id: srv-postgres-cp-0
+- id: srv-presto
+  server: presto-server
+  type: presto
+  description: presto server
+  environment: prod
+  host: presto-host
+  catalog: presto-catalog
+  schema: presto-schema
+  customProperties:
+  - property: srv-prestoCpStr
+    value: srv-presto-cp-value
+    description: srv-presto cp description
+    id: srv-presto-cp-0
+- id: srv-pubsub
+  server: pubsub-server
+  type: pubsub
+  description: pubsub server
+  environment: prod
+  project: pubsub-project
+  customProperties:
+  - property: srv-pubsubCpStr
+    value: srv-pubsub-cp-value
+    description: srv-pubsub cp description
+    id: srv-pubsub-cp-0
+- id: srv-redshift
+  server: redshift-server
+  type: redshift
+  description: redshift server
+  environment: prod
+  host: redshift-host
+  database: redshift-database
+  schema: redshift-schema
+  region: redshift-region
+  account: redshift-account
+  customProperties:
+  - property: srv-redshiftCpStr
+    value: srv-redshift-cp-value
+    description: srv-redshift cp description
+    id: srv-redshift-cp-0
+- id: srv-s3
+  server: s3-server
+  type: s3
+  description: s3 server
+  environment: prod
+  location: https://s3.example.com/location
+  endpointUrl: https://s3.example.com/endpointUrl
+  format: s3-format
+  delimiter: s3-delimiter
+  customProperties:
+  - property: srv-s3CpStr
+    value: srv-s3-cp-value
+    description: srv-s3 cp description
+    id: srv-s3-cp-0
+- id: srv-sftp
+  server: sftp-server
+  type: sftp
+  description: sftp server
+  environment: prod
+  location: sftp://sftp.example.com/location/*.json
+  format: sftp-format
+  delimiter: sftp-delimiter
+  customProperties:
+  - property: srv-sftpCpStr
+    value: srv-sftp-cp-value
+    description: srv-sftp cp description
+    id: srv-sftp-cp-0
+- id: srv-snowflake
+  server: snowflake-server
+  type: snowflake
+  description: snowflake server
+  environment: prod
+  host: snowflake-host
+  port: 5432
+  account: snowflake-account
+  database: snowflake-database
+  schema: snowflake-schema
+  warehouse: snowflake-warehouse
+  customProperties:
+  - property: srv-snowflakeCpStr
+    value: srv-snowflake-cp-value
+    description: srv-snowflake cp description
+    id: srv-snowflake-cp-0
+- id: srv-sqlserver
+  server: sqlserver-server
+  type: sqlserver
+  description: sqlserver server
+  environment: prod
+  host: sqlserver-host
+  port: 5432
+  database: sqlserver-database
+  schema: sqlserver-schema
+  customProperties:
+  - property: srv-sqlserverCpStr
+    value: srv-sqlserver-cp-value
+    description: srv-sqlserver cp description
+    id: srv-sqlserver-cp-0
+- id: srv-synapse
+  server: synapse-server
+  type: synapse
+  description: synapse server
+  environment: prod
+  host: synapse-host
+  port: 5432
+  database: synapse-database
+  customProperties:
+  - property: srv-synapseCpStr
+    value: srv-synapse-cp-value
+    description: srv-synapse cp description
+    id: srv-synapse-cp-0
+- id: srv-trino
+  server: trino-server
+  type: trino
+  description: trino server
+  environment: prod
+  host: trino-host
+  port: 5432
+  catalog: trino-catalog
+  schema: trino-schema
+  customProperties:
+  - property: srv-trinoCpStr
+    value: srv-trino-cp-value
+    description: srv-trino cp description
+    id: srv-trino-cp-0
+- id: srv-vertica
+  server: vertica-server
+  type: vertica
+  description: vertica server
+  environment: prod
+  host: vertica-host
+  port: 5432
+  database: vertica-database
+  schema: vertica-schema
+  customProperties:
+  - property: srv-verticaCpStr
+    value: srv-vertica-cp-value
+    description: srv-vertica cp description
+    id: srv-vertica-cp-0
+schema:
+- id: obj1
+  name: orders
+  physicalType: table
+  description: obj1 description
+  businessName: obj1 business name
+  authoritativeDefinitions:
+  - url: https://example.com/obj1/def
+    type: businessDefinition
+    description: obj1 ad description
+    id: obj1-ad-0
+  tags:
+  - obj1-tag
+  - shared-tag
+  customProperties:
+  - property: obj1CpStr
+    value: obj1-cp-value
+    description: obj1 cp description
+    id: obj1-cp-0
+  - property: obj1CpNum
+    value: 42
+    id: obj1-cp-1
+  - property: obj1CpObj
+    value:
+      nested:
+      - 1
+      - two
+    id: obj1-cp-2
+  logicalType: object
+  physicalName: orders_tbl
+  dataGranularityDescription: one row per order
+  properties:
+  - id: p-id
+    name: order_id
+    physicalType: VARCHAR(64)
+    description: p-id description
+    businessName: p-id business name
+    authoritativeDefinitions:
+    - url: https://example.com/p-id/def
+      type: businessDefinition
+      description: p-id ad description
+      id: p-id-ad-0
+    tags:
+    - p-id-tag
+    - shared-tag
+    customProperties:
+    - property: p-idCpStr
+      value: p-id-cp-value
+      description: p-id cp description
+      id: p-id-cp-0
+    - property: p-idCpNum
+      value: 42
+      id: p-id-cp-1
+    - property: p-idCpObj
+      value:
+        nested:
+        - 1
+        - two
+      id: p-id-cp-2
+    logicalType: string
+    physicalName: order_id_col
+    required: true
+    unique: true
+    primaryKey: true
+    partitioned: true
+    classification: confidential
+    encryptedName: order_id_enc
+    transformSourceObjects:
+    - src.table_a
+    - src.table_b
+    transformLogic: SELECT order_id FROM src
+    transformDescription: order_id transform
+    examples:
+    - ex1
+    - ex2
+    criticalDataElement: true
+    quality:
+    - id: p-id-q-lib
+      name: p-id-q-lib name
+      description: p-id-q-lib description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-id-q-lib-tag
+      customProperties:
+      - property: p-id-q-libCpStr
+        value: p-id-q-lib-cp-value
+        description: p-id-q-lib cp description
+        id: p-id-q-lib-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-id-q-lib/def
+        type: businessDefinition
+        description: p-id-q-lib ad description
+        id: p-id-q-lib-ad-0
+      type: library
+      metric: nullValues
+      arguments:
+        properties:
+        - a
+        - b
+      mustBeLessOrEqualTo: 0
+    - id: p-id-q-lib2
+      name: p-id-q-lib2 name
+      description: p-id-q-lib2 description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-id-q-lib2-tag
+      customProperties:
+      - property: p-id-q-lib2CpStr
+        value: p-id-q-lib2-cp-value
+        description: p-id-q-lib2 cp description
+        id: p-id-q-lib2-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-id-q-lib2/def
+        type: businessDefinition
+        description: p-id-q-lib2 ad description
+        id: p-id-q-lib2-ad-0
+      type: library
+      metric: rowCount
+      mustBeBetween:
+      - 10
+      - 20
+      rule: rowCount
+    - id: p-id-q-sql
+      name: p-id-q-sql name
+      description: p-id-q-sql description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-id-q-sql-tag
+      customProperties:
+      - property: p-id-q-sqlCpStr
+        value: p-id-q-sql-cp-value
+        description: p-id-q-sql cp description
+        id: p-id-q-sql-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-id-q-sql/def
+        type: businessDefinition
+        description: p-id-q-sql ad description
+        id: p-id-q-sql-ad-0
+      type: sql
+      query: SELECT COUNT(*) FROM ${table}
+      mustBeGreaterThan: 0
+    - id: p-id-q-custom
+      name: p-id-q-custom name
+      description: p-id-q-custom description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-id-q-custom-tag
+      customProperties:
+      - property: p-id-q-customCpStr
+        value: p-id-q-custom-cp-value
+        description: p-id-q-custom cp description
+        id: p-id-q-custom-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-id-q-custom/def
+        type: businessDefinition
+        description: p-id-q-custom ad description
+        id: p-id-q-custom-ad-0
+      type: custom
+      engine: soda
+      implementation:
+        checks:
+        - row_count > 0: null
+    - id: p-id-q-text
+      name: p-id-q-text name
+      description: p-id-q-text description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-id-q-text-tag
+      customProperties:
+      - property: p-id-q-textCpStr
+        value: p-id-q-text-cp-value
+        description: p-id-q-text cp description
+        id: p-id-q-text-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-id-q-text/def
+        type: businessDefinition
+        description: p-id-q-text ad description
+        id: p-id-q-text-ad-0
+      type: text
+    logicalTypeOptions:
+      minLength: 1
+      maxLength: 64
+      pattern: ^[A-Z0-9]+$
+      format: uuid
+    primaryKeyPosition: 1
+    partitionKeyPosition: 1
+    relationships:
+    - type: foreignKey
+      to: customers.customer_id
+      customProperties:
+      - property: rel-pCpStr
+        value: rel-p-cp-value
+        description: rel-p cp description
+        id: rel-p-cp-0
+      - property: rel-pCpNum
+        value: 42
+        id: rel-p-cp-1
+      - property: rel-pCpObj
+        value:
+          nested:
+          - 1
+          - two
+        id: rel-p-cp-2
+  - id: p-amt
+    name: amount
+    physicalType: DECIMAL(10,2)
+    description: p-amt description
+    businessName: p-amt business name
+    authoritativeDefinitions:
+    - url: https://example.com/p-amt/def
+      type: businessDefinition
+      description: p-amt ad description
+      id: p-amt-ad-0
+    tags:
+    - p-amt-tag
+    - shared-tag
+    customProperties:
+    - property: p-amtCpStr
+      value: p-amt-cp-value
+      description: p-amt cp description
+      id: p-amt-cp-0
+    - property: p-amtCpNum
+      value: 42
+      id: p-amt-cp-1
+    - property: p-amtCpObj
+      value:
+        nested:
+        - 1
+        - two
+      id: p-amt-cp-2
+    logicalType: number
+    physicalName: amount_col
+    required: true
+    unique: true
+    primaryKey: false
+    partitioned: false
+    classification: confidential
+    encryptedName: amount_enc
+    transformSourceObjects:
+    - src.table_a
+    - src.table_b
+    transformLogic: SELECT amount FROM src
+    transformDescription: amount transform
+    examples:
+    - 1.5
+    - 2
+    criticalDataElement: true
+    quality:
+    - id: p-amt-q-lib
+      name: p-amt-q-lib name
+      description: p-amt-q-lib description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-amt-q-lib-tag
+      customProperties:
+      - property: p-amt-q-libCpStr
+        value: p-amt-q-lib-cp-value
+        description: p-amt-q-lib cp description
+        id: p-amt-q-lib-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-amt-q-lib/def
+        type: businessDefinition
+        description: p-amt-q-lib ad description
+        id: p-amt-q-lib-ad-0
+      type: library
+      metric: nullValues
+      arguments:
+        properties:
+        - a
+        - b
+      mustBeLessOrEqualTo: 0
+    logicalTypeOptions:
+      multipleOf: 0.01
+      maximum: 1000
+      exclusiveMaximum: 1001
+      minimum: 0
+      exclusiveMinimum: -1
+      format: f64
+  - id: p-cnt
+    name: item_count
+    physicalType: INT
+    description: p-cnt description
+    businessName: p-cnt business name
+    authoritativeDefinitions:
+    - url: https://example.com/p-cnt/def
+      type: businessDefinition
+      description: p-cnt ad description
+      id: p-cnt-ad-0
+    tags:
+    - p-cnt-tag
+    - shared-tag
+    customProperties:
+    - property: p-cntCpStr
+      value: p-cnt-cp-value
+      description: p-cnt cp description
+      id: p-cnt-cp-0
+    - property: p-cntCpNum
+      value: 42
+      id: p-cnt-cp-1
+    - property: p-cntCpObj
+      value:
+        nested:
+        - 1
+        - two
+      id: p-cnt-cp-2
+    logicalType: integer
+    physicalName: item_count_col
+    required: true
+    unique: true
+    primaryKey: false
+    partitioned: false
+    classification: confidential
+    encryptedName: item_count_enc
+    transformSourceObjects:
+    - src.table_a
+    - src.table_b
+    transformLogic: SELECT item_count FROM src
+    transformDescription: item_count transform
+    examples:
+    - 3
+    criticalDataElement: true
+    quality:
+    - id: p-cnt-q-lib
+      name: p-cnt-q-lib name
+      description: p-cnt-q-lib description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-cnt-q-lib-tag
+      customProperties:
+      - property: p-cnt-q-libCpStr
+        value: p-cnt-q-lib-cp-value
+        description: p-cnt-q-lib cp description
+        id: p-cnt-q-lib-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-cnt-q-lib/def
+        type: businessDefinition
+        description: p-cnt-q-lib ad description
+        id: p-cnt-q-lib-ad-0
+      type: library
+      metric: nullValues
+      arguments:
+        properties:
+        - a
+        - b
+      mustBeLessOrEqualTo: 0
+    logicalTypeOptions:
+      multipleOf: 1
+      maximum: 100
+      minimum: 0
+      format: i32
+  - id: p-ts
+    name: created_at
+    physicalType: TIMESTAMP
+    description: p-ts description
+    businessName: p-ts business name
+    authoritativeDefinitions:
+    - url: https://example.com/p-ts/def
+      type: businessDefinition
+      description: p-ts ad description
+      id: p-ts-ad-0
+    tags:
+    - p-ts-tag
+    - shared-tag
+    customProperties:
+    - property: p-tsCpStr
+      value: p-ts-cp-value
+      description: p-ts cp description
+      id: p-ts-cp-0
+    - property: p-tsCpNum
+      value: 42
+      id: p-ts-cp-1
+    - property: p-tsCpObj
+      value:
+        nested:
+        - 1
+        - two
+      id: p-ts-cp-2
+    logicalType: timestamp
+    physicalName: created_at_col
+    required: true
+    unique: true
+    primaryKey: false
+    partitioned: false
+    classification: confidential
+    encryptedName: created_at_enc
+    transformSourceObjects:
+    - src.table_a
+    - src.table_b
+    transformLogic: SELECT created_at FROM src
+    transformDescription: created_at transform
+    examples:
+    - ex1
+    - ex2
+    criticalDataElement: true
+    quality:
+    - id: p-ts-q-lib
+      name: p-ts-q-lib name
+      description: p-ts-q-lib description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-ts-q-lib-tag
+      customProperties:
+      - property: p-ts-q-libCpStr
+        value: p-ts-q-lib-cp-value
+        description: p-ts-q-lib cp description
+        id: p-ts-q-lib-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-ts-q-lib/def
+        type: businessDefinition
+        description: p-ts-q-lib ad description
+        id: p-ts-q-lib-ad-0
+      type: library
+      metric: nullValues
+      arguments:
+        properties:
+        - a
+        - b
+      mustBeLessOrEqualTo: 0
+    logicalTypeOptions:
+      format: yyyy-MM-ddTHH:mm:ss
+      minimum: '2020-01-01T00:00:00'
+      maximum: '2030-01-01T00:00:00'
+      exclusiveMinimum: '2019-12-31T00:00:00'
+      exclusiveMaximum: '2030-01-02T00:00:00'
+      timezone: true
+      defaultTimezone: UTC
+  - id: p-dt
+    name: order_date
+    physicalType: DATE
+    description: p-dt description
+    businessName: p-dt business name
+    authoritativeDefinitions:
+    - url: https://example.com/p-dt/def
+      type: businessDefinition
+      description: p-dt ad description
+      id: p-dt-ad-0
+    tags:
+    - p-dt-tag
+    - shared-tag
+    customProperties:
+    - property: p-dtCpStr
+      value: p-dt-cp-value
+      description: p-dt cp description
+      id: p-dt-cp-0
+    - property: p-dtCpNum
+      value: 42
+      id: p-dt-cp-1
+    - property: p-dtCpObj
+      value:
+        nested:
+        - 1
+        - two
+      id: p-dt-cp-2
+    logicalType: date
+    physicalName: order_date_col
+    required: true
+    unique: true
+    primaryKey: false
+    partitioned: false
+    classification: confidential
+    encryptedName: order_date_enc
+    transformSourceObjects:
+    - src.table_a
+    - src.table_b
+    transformLogic: SELECT order_date FROM src
+    transformDescription: order_date transform
+    examples:
+    - ex1
+    - ex2
+    criticalDataElement: true
+    quality:
+    - id: p-dt-q-lib
+      name: p-dt-q-lib name
+      description: p-dt-q-lib description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-dt-q-lib-tag
+      customProperties:
+      - property: p-dt-q-libCpStr
+        value: p-dt-q-lib-cp-value
+        description: p-dt-q-lib cp description
+        id: p-dt-q-lib-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-dt-q-lib/def
+        type: businessDefinition
+        description: p-dt-q-lib ad description
+        id: p-dt-q-lib-ad-0
+      type: library
+      metric: nullValues
+      arguments:
+        properties:
+        - a
+        - b
+      mustBeLessOrEqualTo: 0
+    logicalTypeOptions:
+      format: yyyy-MM-dd
+      minimum: '2020-01-01'
+      maximum: '2030-01-01'
+  - id: p-flag
+    name: is_gift
+    physicalType: BOOLEAN
+    description: p-flag description
+    businessName: p-flag business name
+    authoritativeDefinitions:
+    - url: https://example.com/p-flag/def
+      type: businessDefinition
+      description: p-flag ad description
+      id: p-flag-ad-0
+    tags:
+    - p-flag-tag
+    - shared-tag
+    customProperties:
+    - property: p-flagCpStr
+      value: p-flag-cp-value
+      description: p-flag cp description
+      id: p-flag-cp-0
+    - property: p-flagCpNum
+      value: 42
+      id: p-flag-cp-1
+    - property: p-flagCpObj
+      value:
+        nested:
+        - 1
+        - two
+      id: p-flag-cp-2
+    logicalType: boolean
+    physicalName: is_gift_col
+    required: true
+    unique: true
+    primaryKey: false
+    partitioned: false
+    classification: confidential
+    encryptedName: is_gift_enc
+    transformSourceObjects:
+    - src.table_a
+    - src.table_b
+    transformLogic: SELECT is_gift FROM src
+    transformDescription: is_gift transform
+    examples:
+    - true
+    criticalDataElement: true
+    quality:
+    - id: p-flag-q-lib
+      name: p-flag-q-lib name
+      description: p-flag-q-lib description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-flag-q-lib-tag
+      customProperties:
+      - property: p-flag-q-libCpStr
+        value: p-flag-q-lib-cp-value
+        description: p-flag-q-lib cp description
+        id: p-flag-q-lib-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-flag-q-lib/def
+        type: businessDefinition
+        description: p-flag-q-lib ad description
+        id: p-flag-q-lib-ad-0
+      type: library
+      metric: nullValues
+      arguments:
+        properties:
+        - a
+        - b
+      mustBeLessOrEqualTo: 0
+  - id: p-addr
+    name: address
+    physicalType: STRUCT
+    description: p-addr description
+    businessName: p-addr business name
+    authoritativeDefinitions:
+    - url: https://example.com/p-addr/def
+      type: businessDefinition
+      description: p-addr ad description
+      id: p-addr-ad-0
+    tags:
+    - p-addr-tag
+    - shared-tag
+    customProperties:
+    - property: p-addrCpStr
+      value: p-addr-cp-value
+      description: p-addr cp description
+      id: p-addr-cp-0
+    - property: p-addrCpNum
+      value: 42
+      id: p-addr-cp-1
+    - property: p-addrCpObj
+      value:
+        nested:
+        - 1
+        - two
+      id: p-addr-cp-2
+    logicalType: object
+    physicalName: address_col
+    required: true
+    unique: true
+    primaryKey: false
+    partitioned: false
+    classification: confidential
+    encryptedName: address_enc
+    transformSourceObjects:
+    - src.table_a
+    - src.table_b
+    transformLogic: SELECT address FROM src
+    transformDescription: address transform
+    examples:
+    - street: x
+    criticalDataElement: true
+    quality:
+    - id: p-addr-q-lib
+      name: p-addr-q-lib name
+      description: p-addr-q-lib description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-addr-q-lib-tag
+      customProperties:
+      - property: p-addr-q-libCpStr
+        value: p-addr-q-lib-cp-value
+        description: p-addr-q-lib cp description
+        id: p-addr-q-lib-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-addr-q-lib/def
+        type: businessDefinition
+        description: p-addr-q-lib ad description
+        id: p-addr-q-lib-ad-0
+      type: library
+      metric: nullValues
+      arguments:
+        properties:
+        - a
+        - b
+      mustBeLessOrEqualTo: 0
+    logicalTypeOptions:
+      maxProperties: 5
+      minProperties: 1
+      required:
+      - street
+    properties:
+    - id: p-addr-street
+      name: street
+      physicalType: STRING
+      description: p-addr-street description
+      businessName: p-addr-street business name
+      authoritativeDefinitions:
+      - url: https://example.com/p-addr-street/def
+        type: businessDefinition
+        description: p-addr-street ad description
+        id: p-addr-street-ad-0
+      tags:
+      - p-addr-street-tag
+      - shared-tag
+      customProperties:
+      - property: p-addr-streetCpStr
+        value: p-addr-street-cp-value
+        description: p-addr-street cp description
+        id: p-addr-street-cp-0
+      - property: p-addr-streetCpNum
+        value: 42
+        id: p-addr-street-cp-1
+      - property: p-addr-streetCpObj
+        value:
+          nested:
+          - 1
+          - two
+        id: p-addr-street-cp-2
+      logicalType: string
+      physicalName: street_col
+      required: true
+      unique: true
+      primaryKey: false
+      partitioned: false
+      classification: confidential
+      encryptedName: street_enc
+      transformSourceObjects:
+      - src.table_a
+      - src.table_b
+      transformLogic: SELECT street FROM src
+      transformDescription: street transform
+      examples:
+      - ex1
+      - ex2
+      criticalDataElement: true
+      quality:
+      - id: p-addr-street-q-lib
+        name: p-addr-street-q-lib name
+        description: p-addr-street-q-lib description
+        dimension: completeness
+        method: reconciliation
+        schedule: 0 0 * * *
+        scheduler: cron
+        severity: error
+        businessImpact: operational
+        unit: rows
+        tags:
+        - p-addr-street-q-lib-tag
+        customProperties:
+        - property: p-addr-street-q-libCpStr
+          value: p-addr-street-q-lib-cp-value
+          description: p-addr-street-q-lib cp description
+          id: p-addr-street-q-lib-cp-0
+        authoritativeDefinitions:
+        - url: https://example.com/p-addr-street-q-lib/def
+          type: businessDefinition
+          description: p-addr-street-q-lib ad description
+          id: p-addr-street-q-lib-ad-0
+        type: library
+        metric: nullValues
+        arguments:
+          properties:
+          - a
+          - b
+        mustBeLessOrEqualTo: 0
+      logicalTypeOptions:
+        maxLength: 128
+  - id: p-arr
+    name: labels
+    physicalType: ARRAY<STRING>
+    description: p-arr description
+    businessName: p-arr business name
+    authoritativeDefinitions:
+    - url: https://example.com/p-arr/def
+      type: businessDefinition
+      description: p-arr ad description
+      id: p-arr-ad-0
+    tags:
+    - p-arr-tag
+    - shared-tag
+    customProperties:
+    - property: p-arrCpStr
+      value: p-arr-cp-value
+      description: p-arr cp description
+      id: p-arr-cp-0
+    - property: p-arrCpNum
+      value: 42
+      id: p-arr-cp-1
+    - property: p-arrCpObj
+      value:
+        nested:
+        - 1
+        - two
+      id: p-arr-cp-2
+    logicalType: array
+    physicalName: labels_col
+    required: true
+    unique: true
+    primaryKey: false
+    partitioned: false
+    classification: confidential
+    encryptedName: labels_enc
+    transformSourceObjects:
+    - src.table_a
+    - src.table_b
+    transformLogic: SELECT labels FROM src
+    transformDescription: labels transform
+    examples:
+    - - a
+    criticalDataElement: true
+    quality:
+    - id: p-arr-q-lib
+      name: p-arr-q-lib name
+      description: p-arr-q-lib description
+      dimension: completeness
+      method: reconciliation
+      schedule: 0 0 * * *
+      scheduler: cron
+      severity: error
+      businessImpact: operational
+      unit: rows
+      tags:
+      - p-arr-q-lib-tag
+      customProperties:
+      - property: p-arr-q-libCpStr
+        value: p-arr-q-lib-cp-value
+        description: p-arr-q-lib cp description
+        id: p-arr-q-lib-cp-0
+      authoritativeDefinitions:
+      - url: https://example.com/p-arr-q-lib/def
+        type: businessDefinition
+        description: p-arr-q-lib ad description
+        id: p-arr-q-lib-ad-0
+      type: library
+      metric: nullValues
+      arguments:
+        properties:
+        - a
+        - b
+      mustBeLessOrEqualTo: 0
+    logicalTypeOptions:
+      maxItems: 10
+      minItems: 0
+      uniqueItems: true
+    items:
+      id: p-arr-items
+      name: label
+      logicalType: string
+      physicalType: STRING
+      description: array item
+      logicalTypeOptions:
+        maxLength: 16
+      customProperties:
+      - property: p-arr-itemsCpStr
+        value: p-arr-items-cp-value
+        description: p-arr-items cp description
+        id: p-arr-items-cp-0
+      - property: p-arr-itemsCpNum
+        value: 42
+        id: p-arr-items-cp-1
+      - property: p-arr-itemsCpObj
+        value:
+          nested:
+          - 1
+          - two
+        id: p-arr-items-cp-2
+  relationships:
+  - type: foreignKey
+    from: orders.order_id
+    to: customers.customer_id
+    customProperties:
+    - property: rel-oCpStr
+      value: rel-o-cp-value
+      description: rel-o cp description
+      id: rel-o-cp-0
+  - type: foreignKey
+    from:
+    - orders.order_id
+    - orders.amount
+    to:
+    - payments.order_id
+    - payments.amount
+  quality:
+  - id: obj1-q-lib
+    name: obj1-q-lib name
+    description: obj1-q-lib description
+    dimension: completeness
+    method: reconciliation
+    schedule: 0 0 * * *
+    scheduler: cron
+    severity: error
+    businessImpact: operational
+    unit: rows
+    tags:
+    - obj1-q-lib-tag
+    customProperties:
+    - property: obj1-q-libCpStr
+      value: obj1-q-lib-cp-value
+      description: obj1-q-lib cp description
+      id: obj1-q-lib-cp-0
+    authoritativeDefinitions:
+    - url: https://example.com/obj1-q-lib/def
+      type: businessDefinition
+      description: obj1-q-lib ad description
+      id: obj1-q-lib-ad-0
+    type: library
+    metric: nullValues
+    arguments:
+      properties:
+      - a
+      - b
+    mustBeLessOrEqualTo: 0
+  - id: obj1-q-lib2
+    name: obj1-q-lib2 name
+    description: obj1-q-lib2 description
+    dimension: completeness
+    method: reconciliation
+    schedule: 0 0 * * *
+    scheduler: cron
+    severity: error
+    businessImpact: operational
+    unit: rows
+    tags:
+    - obj1-q-lib2-tag
+    customProperties:
+    - property: obj1-q-lib2CpStr
+      value: obj1-q-lib2-cp-value
+      description: obj1-q-lib2 cp description
+      id: obj1-q-lib2-cp-0
+    authoritativeDefinitions:
+    - url: https://example.com/obj1-q-lib2/def
+      type: businessDefinition
+      description: obj1-q-lib2 ad description
+      id: obj1-q-lib2-ad-0
+    type: library
+    metric: rowCount
+    mustBeBetween:
+    - 10
+    - 20
+    rule: rowCount
+  - id: obj1-q-sql
+    name: obj1-q-sql name
+    description: obj1-q-sql description
+    dimension: completeness
+    method: reconciliation
+    schedule: 0 0 * * *
+    scheduler: cron
+    severity: error
+    businessImpact: operational
+    unit: rows
+    tags:
+    - obj1-q-sql-tag
+    customProperties:
+    - property: obj1-q-sqlCpStr
+      value: obj1-q-sql-cp-value
+      description: obj1-q-sql cp description
+      id: obj1-q-sql-cp-0
+    authoritativeDefinitions:
+    - url: https://example.com/obj1-q-sql/def
+      type: businessDefinition
+      description: obj1-q-sql ad description
+      id: obj1-q-sql-ad-0
+    type: sql
+    query: SELECT COUNT(*) FROM ${table}
+    mustBeGreaterThan: 0
+  - id: obj1-q-custom
+    name: obj1-q-custom name
+    description: obj1-q-custom description
+    dimension: completeness
+    method: reconciliation
+    schedule: 0 0 * * *
+    scheduler: cron
+    severity: error
+    businessImpact: operational
+    unit: rows
+    tags:
+    - obj1-q-custom-tag
+    customProperties:
+    - property: obj1-q-customCpStr
+      value: obj1-q-custom-cp-value
+      description: obj1-q-custom cp description
+      id: obj1-q-custom-cp-0
+    authoritativeDefinitions:
+    - url: https://example.com/obj1-q-custom/def
+      type: businessDefinition
+      description: obj1-q-custom ad description
+      id: obj1-q-custom-ad-0
+    type: custom
+    engine: soda
+    implementation:
+      checks:
+      - row_count > 0: null
+  - id: obj1-q-text
+    name: obj1-q-text name
+    description: obj1-q-text description
+    dimension: completeness
+    method: reconciliation
+    schedule: 0 0 * * *
+    scheduler: cron
+    severity: error
+    businessImpact: operational
+    unit: rows
+    tags:
+    - obj1-q-text-tag
+    customProperties:
+    - property: obj1-q-textCpStr
+      value: obj1-q-text-cp-value
+      description: obj1-q-text cp description
+      id: obj1-q-text-cp-0
+    authoritativeDefinitions:
+    - url: https://example.com/obj1-q-text/def
+      type: businessDefinition
+      description: obj1-q-text ad description
+      id: obj1-q-text-ad-0
+    type: text
+support:
+- id: sup-0
+  channel: '#audit'
+  url: https://chat.example.com/audit
+  description: support desc
+  tool: slack
+  scope: interactive
+  invitationUrl: https://chat.example.com/invite
+  customProperties:
+  - property: supCpStr
+    value: sup-cp-value
+    description: sup cp description
+    id: sup-cp-0
+  - property: supCpNum
+    value: 42
+    id: sup-cp-1
+  - property: supCpObj
+    value:
+      nested:
+      - 1
+      - two
+    id: sup-cp-2
+price:
+  id: price-0
+  priceAmount: 9.95
+  priceCurrency: USD
+  priceUnit: megabyte
+team:
+  id: team-0
+  name: Audit Team
+  description: team desc
+  tags:
+  - team-tag
+  customProperties:
+  - property: teamCpStr
+    value: team-cp-value
+    description: team cp description
+    id: team-cp-0
+  - property: teamCpNum
+    value: 42
+    id: team-cp-1
+  - property: teamCpObj
+    value:
+      nested:
+      - 1
+      - two
+    id: team-cp-2
+  authoritativeDefinitions:
+  - url: https://example.com/team/def
+    type: businessDefinition
+    description: team ad description
+    id: team-ad-0
+  members:
+  - id: member-0
+    username: alice@example.com
+    name: Alice
+    description: member desc
+    role: owner
+    dateIn: '2024-01-01'
+    dateOut: '2025-01-01'
+    replacedByUsername: bob@example.com
+    tags:
+    - member-tag
+    customProperties:
+    - property: memberCpStr
+      value: member-cp-value
+      description: member cp description
+      id: member-cp-0
+    - property: memberCpNum
+      value: 42
+      id: member-cp-1
+    - property: memberCpObj
+      value:
+        nested:
+        - 1
+        - two
+      id: member-cp-2
+    authoritativeDefinitions:
+    - url: https://example.com/member/def
+      type: businessDefinition
+      description: member ad description
+      id: member-ad-0
+roles:
+- id: role-0
+  role: audit_reader
+  description: role desc
+  access: read
+  firstLevelApprovers: Reader Manager
+  secondLevelApprovers: Data Gov
+  customProperties:
+  - property: roleCpStr
+    value: role-cp-value
+    description: role cp description
+    id: role-cp-0
+  - property: roleCpNum
+    value: 42
+    id: role-cp-1
+  - property: roleCpObj
+    value:
+      nested:
+      - 1
+      - two
+    id: role-cp-2
+slaDefaultElement: orders.created_at
+slaProperties:
+- id: sla-0
+  property: latency
+  value: 4
+  valueExt: 6
+  unit: d
+  element: orders.created_at
+  driver: operational
+- id: sla-1
+  property: frequency
+  value: daily
+- id: sla-2
+  property: retention
+  value: true
+authoritativeDefinitions:
+- url: https://example.com/root/def
+  type: businessDefinition
+  description: root ad description
+  id: root-ad-0
+customProperties:
+- property: rootCpStr
+  value: root-cp-value
+  description: root cp description
+  id: root-cp-0
+- property: rootCpNum
+  value: 42
+  id: root-cp-1
+- property: rootCpObj
+  value:
+    nested:
+    - 1
+    - two
+  id: root-cp-2
+contractCreatedTs: '2024-05-06T07:08:09.000Z'

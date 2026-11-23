@@ -20,11 +20,11 @@
       "helpText": "Toegang verloopt na de geselecteerde duur. Je kunt verlenging aanvragen voordat het verloopt.",
       "help": "Uw toegang verloopt automatisch na deze periode.",
       "days": "{{count}} dag",
-      "days_plural": "{{count}} dagen",
+      "days_other": "{{count}} dagen",
       "months": "{{count}} maand",
-      "months_plural": "{{count}} maanden",
+      "months_other": "{{count}} maanden",
       "years": "{{count}} jaar",
-      "years_plural": "{{count}} jaren"
+      "years_other": "{{count}} jaren"
     },
     "submit": "Verzoek Verzenden",
     "submitting": "Verzoek Verzenden...",

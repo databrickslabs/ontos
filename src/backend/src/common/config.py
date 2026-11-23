@@ -12,6 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .api_errors import CodedValueError
 from .instance_identity import resolve_instance_identity
+from .sanitization import coerce_branding_url, coerce_hex_color
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -146,6 +147,39 @@ class Settings(BaseSettings):
     # (Lakebase Search BM25/vector) is layered on the "postgres" backend later.
     SEARCH_BACKEND: str = Field("memory", env='SEARCH_BACKEND')
 
+    # Workflow scheduler (#941): runs active workflows with a `scheduled` trigger.
+    # No fixed polling: the thread sleeps until the next known slot and reads the
+    # database only when a slot is due or a workflow changed, so Lakebase can idle.
+    # The instance that saves a workflow picks the change up at once. Every other
+    # instance checks for changes (one small query) when one of its requests is
+    # using the database anyway, at most once per CHANGE_CHECK_SECONDS; without
+    # requests it notices at its next due slot.
+    WORKFLOW_SCHEDULER_ENABLED: bool = Field(True, env='WORKFLOW_SCHEDULER_ENABLED')
+    WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS: int = Field(
+        60, env='WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS',
+    )
+    # Opt-in fallback: also check for changes made through other instances every
+    # N seconds, with or without requests. Each check can wake an idle Lakebase.
+    # 0 (default) = never.
+    WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS: int = Field(
+        0, env='WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS',
+    )
+    # Scheduled runs run on a pool of this many threads per instance, so one long
+    # run doesn't hold up the other scheduled workflows. The scheduler and its runs
+    # use an engine of their own with MAX_WORKERS + 1 connections (no overflow), on
+    # top of DB_POOL_SIZE + DB_MAX_OVERFLOW: count them in the database's limit.
+    # Connections per replica = DB_POOL_SIZE + DB_MAX_OVERFLOW + MAX_WORKERS + 1
+    # (5 + 10 + 4 + 1 = 20 by default); replicas x that must stay under the database's
+    # max connections. A run's own session is on the dedicated engine, but what it
+    # triggers (audit entries, search index updates, tag sync) takes a request-pool
+    # connection for a moment, within DB_POOL_SIZE + DB_MAX_OVERFLOW.
+    # After an in-process restart a run still going after the drain keeps a
+    # connection of the old engine until it ends, on top of these.
+    WORKFLOW_SCHEDULER_MAX_WORKERS: int = Field(4, env='WORKFLOW_SCHEDULER_MAX_WORKERS')
+    # On shutdown, wait up to this many seconds for scheduled runs in progress. A
+    # run cut off by the exit is not run again (each slot runs at most once).
+    WORKFLOW_SCHEDULER_DRAIN_SECONDS: int = Field(30, env='WORKFLOW_SCHEDULER_DRAIN_SECONDS')
+
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')
 
@@ -213,6 +247,13 @@ class Settings(BaseSettings):
     # send an ACTION_REQUIRED notification to the Admin role asking for it to be enabled.
     ALLOW_JOB_ENABLEMENT_REQUESTS: bool = Field(False, env='ALLOW_JOB_ENABLEMENT_REQUESTS')
 
+    # Write table, view and column descriptions saved in Ontos to Unity Catalog as
+    # comments, as the user (on-behalf-of token), so Unity Catalog permissions decide.
+    UC_DESCRIPTION_WRITEBACK_ENABLED: bool = Field(False, env='UC_DESCRIPTION_WRITEBACK_ENABLED')
+    # At most this many rows of a bulk import are tried in Unity Catalog (a row counts
+    # whether its comment is written, kept or skipped), so it caps attempts, not writes
+    UC_DESCRIPTION_IMPORT_WRITE_LIMIT: int = Field(100, env='UC_DESCRIPTION_IMPORT_WRITE_LIMIT')
+
     # Delivery Mode settings
     # Controls how governance changes (GRANTs, tag assignments, etc.) are propagated
     DELIVERY_MODE_DIRECT: bool = Field(False, env='DELIVERY_MODE_DIRECT')  # Apply changes directly to Unity Catalog via SDK
@@ -244,6 +285,16 @@ class Settings(BaseSettings):
     UI_APP_DISPLAY_NAME: Optional[str] = Field(None, env='UI_APP_DISPLAY_NAME')  # Global application display name (overrides default product name in UI copy)
     UI_APP_SHORT_NAME: Optional[str] = Field(None, env='UI_APP_SHORT_NAME')  # Optional short/abbreviated name for compact UI surfaces
     UI_FAVICON_URL: Optional[str] = Field(None, env='UI_FAVICON_URL')  # URL to custom favicon image (http/https)
+    # Branding, part 2: tagline, dark-mode logo and theme colors (#rrggbb).
+    # Unset = today's look. Image values: http(s) URL or a root-relative app asset path.
+    UI_APP_TAGLINE: Optional[str] = Field(None, env='UI_APP_TAGLINE')
+    UI_CUSTOM_LOGO_DARK_URL: Optional[str] = Field(None, env='UI_CUSTOM_LOGO_DARK_URL')
+    UI_THEME_PRIMARY: Optional[str] = Field(None, env='UI_THEME_PRIMARY')
+    UI_THEME_PRIMARY_DARK: Optional[str] = Field(None, env='UI_THEME_PRIMARY_DARK')
+    UI_THEME_ACCENT: Optional[str] = Field(None, env='UI_THEME_ACCENT')
+    UI_THEME_ACCENT_DARK: Optional[str] = Field(None, env='UI_THEME_ACCENT_DARK')
+    # "powered by Ontos" in the sidebar footer; only shown while a custom name or logo is set.
+    UI_SHOW_POWERED_BY: bool = Field(True, env='UI_SHOW_POWERED_BY')
 
     # Replace nested Config class with model_config dictionary
     model_config = SettingsConfigDict(
@@ -251,6 +302,26 @@ class Settings(BaseSettings):
         case_sensitive=True, 
         extra='ignore' # Explicitly ignore extra env vars
     )
+
+    @field_validator(
+        'UI_CUSTOM_LOGO_URL', 'UI_CUSTOM_LOGO_DARK_URL', 'UI_FAVICON_URL',
+        'UI_THEME_PRIMARY', 'UI_THEME_PRIMARY_DARK', 'UI_THEME_ACCENT', 'UI_THEME_ACCENT_DARK',
+        mode='after',
+    )
+    @classmethod
+    def drop_invalid_branding_value(cls, value: Optional[str], info) -> Optional[str]:
+        """Branding images and colors from the environment get the same checks as a
+        Settings save. An invalid one is dropped (with a warning) so it never reaches
+        ``<img src>`` or injected CSS, and the form never re-sends it.
+        """
+        if value is None:
+            return None
+        checked = (
+            coerce_hex_color(value) if 'THEME' in info.field_name else coerce_branding_url(value)
+        )
+        if checked is None and value.strip():
+            logger.warning("Ignoring invalid %s from the environment", info.field_name)
+        return checked
 
     @model_validator(mode='after')
     def compute_databricks_http_path(self) -> 'Settings':

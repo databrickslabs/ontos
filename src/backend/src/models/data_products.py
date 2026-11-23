@@ -230,6 +230,13 @@ class OutputPort(BaseModel):
 
     _parse_server_json = field_validator('server', mode='before')(parse_json_if_string)
 
+    @field_validator('containsPii', 'autoApprove', mode='before')
+    @classmethod
+    def _null_flag_is_false(cls, value):
+        # Both columns are nullable: read NULL as the False default on every reader,
+        # whatever wrote the row.
+        return False if value is None else value
+
     @model_validator(mode='before')
     @classmethod
     def _read_port_status_property(cls, data):
@@ -380,7 +387,15 @@ class DataProduct(BaseModel):
     apiVersion: str = Field("v1.0.0", alias="api_version", description="Version of the ODPS standard")
     kind: str = Field("DataProduct", description="Resource type")
     id: str = Field(..., description="Unique identifier")
-    status: str = Field(..., description="Status (proposed, draft, active, deprecated, retired)")
+    status: str = Field(..., description="Stage key of the product's lifecycle stage group")
+    # Lifecycle Stage Group (#1213); None = the default data product group
+    lifecycle_stage_group_id: Optional[str] = Field(
+        None, alias="lifecycleStageGroupId", serialization_alias="lifecycleStageGroupId",
+    )
+    # Stage Category of ``status`` (draft, review, active, deprecated, retired)
+    status_category: Optional[str] = Field(
+        None, alias="statusCategory", serialization_alias="statusCategory",
+    )
 
     # ODPS v1.0.0 optional fields
     name: Optional[str] = Field(None, description="Name of the data product")
@@ -543,6 +558,13 @@ class DataProduct(BaseModel):
             return []
         return value or []
 
+    @model_validator(mode='wrap')
+    @classmethod
+    def _fill_status_category(cls, data: Any, handler: Any):
+        # Through the session of the ORM row validated from, when there is one
+        from src.controller.lifecycle_service import lifecycle_service
+        return lifecycle_service.fill_status_category(handler(data), data)
+
     model_config = {
         "from_attributes": True,
         "populate_by_name": True
@@ -574,6 +596,8 @@ class DataProductCreate(BaseModel):
     kind: str = Field("DataProduct", description="Resource type")
     id: str = Field(..., description="Unique identifier")
     status: str = Field("draft", description="Initial status")
+    # Lifecycle Stage Group (#1213); None = the default data product group
+    lifecycle_stage_group_id: Optional[str] = Field(None, alias="lifecycleStageGroupId")
 
     # ODPS optional
     name: Optional[str] = Field(None, description="Product name")

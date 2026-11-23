@@ -78,6 +78,7 @@ from src.routes import (
     readiness_routes,
     suggestion_routes,
     certification_levels_routes,
+    lifecycle_stage_groups_routes,
     maturity_routes,
     directory_routes,
     term_mapping_routes,
@@ -231,6 +232,8 @@ async def startup_event():
     
     logger.info("Running application startup event...")
     settings = get_settings()
+    from src.common.workspace_client import warn_if_sp_fallback
+    warn_if_sp_fallback(settings)
     
     try:
         initialize_database()
@@ -344,6 +347,8 @@ async def startup_event():
 # Application Shutdown Event
 async def shutdown_event():
     logger.info("Running application shutdown event...")
+    # stop() joins the scheduler thread and drains the runs: not on the event loop.
+    await asyncio.to_thread(_stop_workflow_scheduler)
     logger.info("Application shutdown complete.")
 
 # --- FastAPI App Instantiation (AFTER defining lifecycle functions) ---
@@ -521,6 +526,7 @@ business_lineage_routes.register_routes(app)
 readiness_routes.register_routes(app)
 suggestion_routes.register_routes(app)
 certification_levels_routes.register_routes(app)
+lifecycle_stage_groups_routes.register_routes(app)
 maturity_routes.register_routes(app)
 data_asset_reviews_routes.register_routes(app)
 data_catalog_routes.register_routes(app)
@@ -627,13 +633,24 @@ def _managers_running() -> bool:
 
 
 def _stop_job_polling() -> None:
-    """Stop the running managers' job poller before they are replaced."""
+    """Stop the running managers' job poller and workflow scheduler before they are replaced."""
     jobs_manager = getattr(app.state, "jobs_manager", None)
     if jobs_manager is not None:
         try:
             jobs_manager.stop_background_polling()
         except Exception as e:
             logger.warning(f"Could not stop the job poller before re-initializing: {e}")
+    _stop_workflow_scheduler()
+
+
+def _stop_workflow_scheduler() -> None:
+    """Stop the workflow scheduler thread (#941), if one runs."""
+    scheduler = getattr(app.state, "workflow_scheduler", None)
+    if scheduler is not None:
+        try:
+            scheduler.stop()
+        except Exception as e:
+            logger.warning(f"Could not stop the workflow scheduler: {e}")
 
 
 def _close_replaced_manager_session(old_session) -> None:

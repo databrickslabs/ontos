@@ -167,6 +167,20 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
     }
   };
 
+  const deleteItem = async (id: string) => {
+    const resp = await fetch(`/api/cost-items/${id}`, { method: 'DELETE' });
+    if (resp.ok) {
+      toast({ title: t('metadata:costs.messages.deleted') });
+      fetchData();
+    } else {
+      toast({
+        title: t('metadata:costs.messages.deleteFailed'),
+        description: await responseErrorMessage(resp, responseMessages),
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -249,7 +263,14 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(it)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => { const resp = await fetch(`/api/cost-items/${it.id}`, { method: 'DELETE' }); if (resp.ok) { toast({ title: t('metadata:costs.messages.deleted') }); fetchData(); } else { toast({ title: t('metadata:costs.messages.deleteFailed'), description: await responseErrorMessage(resp, responseMessages), variant: 'destructive' }); } }}><Trash2 className="h-4 w-4" /></Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => deleteItem(it.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

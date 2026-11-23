@@ -161,8 +161,10 @@ class SearchDataProductsTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "enum": ["active", "draft", "deprecated", "retired"],
-            "description": "Optional filter by product status."
+            "description": (
+                "Optional filter by product status: a stage key (draft, active, deprecated, ... "
+                "by default, or a custom stage)."
+            )
         },
         "limit": {
             "type": "integer",
@@ -314,7 +316,16 @@ def _transition_status(
 
     ``kwargs`` go to ``transition_status``; its ``deprecation`` fills the audit details.
     """
-    action, details = product_status_audit(product_id, status, kwargs.get("deprecation"))
+    from src.controller.lifecycle_service import lifecycle_service
+
+    product = ctx.data_products_manager.get_product(product_id)
+    category = (
+        lifecycle_service.group_for(ctx.db, 'data_product', product).category(status)
+        if product is not None else None
+    )
+    action, details = product_status_audit(
+        product_id, status, kwargs.get("deprecation"), category,
+    )
     with _audited(ctx, tool_name, action, details) as outcome:
         ctx.data_products_manager.transition_status(
             product_id, status, current_user=_caller_email(ctx), **kwargs
@@ -495,11 +506,11 @@ class UpdateDataProductTool(BaseTool):
         "status": {
             "type": "string",
             "description": (
-                "New status (draft, active, deprecated, retired). Applied as a lifecycle "
-                "transition: only an allowed transition, and status change workflows can "
-                "block it."
+                "New status: a stage key of the product's lifecycle stage group (draft, "
+                "active, deprecated, retired, ... by default; a custom group has its own "
+                "stages). Applied as a lifecycle transition: only an allowed transition, "
+                "and status change workflows can block it."
             ),
-            "enum": ["draft", "active", "deprecated", "retired"]
         },
         "deprecation_reason": {
             "type": "string",
@@ -803,8 +814,10 @@ class ListDataProductsTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "enum": ["active", "draft", "deprecated", "retired"],
-            "description": "Optional filter by status",
+            "description": (
+                "Optional filter by status: a stage key (draft, active, deprecated, ... "
+                "by default, or a custom stage)."
+            ),
         },
         "limit": {
             "type": "integer",

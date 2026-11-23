@@ -700,6 +700,33 @@
       "suffix": "oder höher, um diesen Workflow zu sehen und auszuführen. Legen Sie dies unter Einstellungen → Rollen fest."
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "Zeitplan (Quartz-Cron)",
+    "cronHint": "6 oder 7 Felder: Sekunde Minute Stunde Tag-des-Monats Monat Wochentag [Jahr]. Beispiel: {{example}} läuft jeden Tag um 06:00. Die Sekunden müssen 0 sein, und zwischen zwei Läufen müssen mindestens 5 Minuten liegen.",
+    "timezoneLabel": "Zeitzone",
+    "timezoneHint": "Ein IANA-Name wie Europe/Berlin oder America/Sao_Paulo. Leer bedeutet UTC.",
+    "fields": {
+      "second": "Sekunde",
+      "minute": "Minute",
+      "hour": "Stunde",
+      "day_of_month": "Tag-des-Monats",
+      "month": "Monat",
+      "day_of_week": "Wochentag",
+      "year": "Jahr"
+    },
+    "errors": {
+      "schedule_required": "Ein geplanter Auslöser braucht einen Cron-Ausdruck.",
+      "cron_field_count": "Ein Quartz-Cron-Ausdruck hat 6 oder 7 Felder; dieser hat {{fields}}.",
+      "cron_invalid_field": "„{{value}}“ ist im Feld {{field}} nicht gültig.",
+      "cron_day_fields_conflict": "Setzen Sie „?“ in genau eines der Felder Tag-des-Monats und Wochentag.",
+      "cron_seconds_not_zero": "Das Sekundenfeld muss 0 sein: Läufe beginnen zur vollen Minute.",
+      "cron_unsupported_character": "„{{character}}“ im Feld {{field}} wird in Workflow-Zeitplänen nicht unterstützt.",
+      "cron_invalid": "Dies ist kein gültiger Quartz-Cron-Ausdruck.",
+      "cron_no_upcoming_runs": "Dieser Cron-Ausdruck hat keinen anstehenden Lauf.",
+      "cron_interval_too_short": "Zwischen geplanten Läufen müssen mindestens {{minutes}} Minuten liegen.",
+      "timezone_invalid": "Unbekannte Zeitzone „{{timezone}}“: Verwenden Sie einen IANA-Namen wie Europe/Berlin."
+    }
+  },
   "view": {
     "subtitle": "Konfigurieren Sie automatisierte Workflows für Validierung, Genehmigung und Benachrichtigungen.",
     "readOnlyAccess": "(Nur-Lese-Zugriff)",

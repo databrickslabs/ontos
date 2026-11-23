@@ -13,8 +13,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { ColumnProperty, QualityRule, SchemaRelationship } from '@/types/data-contract'
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import QualityRuleFormDialog from './quality-rule-form-dialog'
+import { logicalTypesForVersion } from './odcs-logical-types'
 
-const LOGICAL_TYPES = ['string', 'date', 'number', 'integer', 'object', 'array', 'boolean']
 const CLASSIFICATION_LEVELS = ['public', 'internal', 'confidential', 'restricted', 'pii', '1', '2', '3', '4', '5']
 
 // Helper function to detect which tabs have values for a column property
@@ -130,6 +130,8 @@ interface SchemaPropertyEditorProps {
   properties: ColumnProperty[]
   onChange: (properties: ColumnProperty[]) => void
   readOnly?: boolean
+  /** The contract's ODCS apiVersion: below v3.1.0, no timestamp / time logical type */
+  apiVersion?: string
 }
 
 export interface SchemaPropertyEditorHandle {
@@ -138,7 +140,7 @@ export interface SchemaPropertyEditorHandle {
 }
 
 function SchemaPropertyEditorInner(
-  { properties, onChange, readOnly = false }: SchemaPropertyEditorProps,
+  { properties, onChange, readOnly = false, apiVersion }: SchemaPropertyEditorProps,
   ref: React.Ref<SchemaPropertyEditorHandle>
 ) {
   const { toast } = useToast()
@@ -348,7 +350,8 @@ function SchemaPropertyEditorInner(
     // @ts-ignore
     quality: qualityChecks.length > 0 ? qualityChecks : undefined,
     // @ts-ignore
-    tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
+    // [] (not undefined) when empty, so a save clears the stored tags
+    tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
     // @ts-ignore
     customProperties: Object.keys(customProps).length > 0 ? customProps : undefined,
     relationships: propRelationships.length > 0 ? propRelationships : undefined,
@@ -501,7 +504,7 @@ function SchemaPropertyEditorInner(
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {LOGICAL_TYPES.map((type) => (
+                      {logicalTypesForVersion(apiVersion, logicalType).map((type) => (
                         <SelectItem key={type} value={type}>
                           {type}
                         </SelectItem>

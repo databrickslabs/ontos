@@ -700,6 +700,33 @@
       "suffix": "ou superior para ver e executar este fluxo de trabalho. Defina isso em Configurações → Papéis."
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "Agendamento (cron Quartz)",
+    "cronHint": "6 ou 7 campos: segundo minuto hora dia-do-mês mês dia-da-semana [ano]. Exemplo: {{example}} roda todo dia às 06:00. Os segundos devem ser 0, e as execuções devem ter pelo menos 5 minutos de intervalo.",
+    "timezoneLabel": "Fuso horário",
+    "timezoneHint": "Um nome IANA como Europe/Berlin ou America/Sao_Paulo. Vazio significa UTC.",
+    "fields": {
+      "second": "segundo",
+      "minute": "minuto",
+      "hour": "hora",
+      "day_of_month": "dia-do-mês",
+      "month": "mês",
+      "day_of_week": "dia-da-semana",
+      "year": "ano"
+    },
+    "errors": {
+      "schedule_required": "Um gatilho agendado precisa de uma expressão cron.",
+      "cron_field_count": "Uma expressão cron Quartz tem 6 ou 7 campos; esta tem {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" não é válido no campo {{field}}.",
+      "cron_day_fields_conflict": "Coloque \"?\" em exatamente um dos campos dia-do-mês e dia-da-semana.",
+      "cron_seconds_not_zero": "O campo de segundos deve ser 0: as execuções começam no minuto cheio.",
+      "cron_unsupported_character": "\"{{character}}\" no campo {{field}} não é suportado em agendamentos de workflow.",
+      "cron_invalid": "Esta não é uma expressão cron Quartz válida.",
+      "cron_no_upcoming_runs": "Esta expressão cron não tem nenhuma execução futura.",
+      "cron_interval_too_short": "As execuções agendadas devem ter pelo menos {{minutes}} minutos de intervalo.",
+      "timezone_invalid": "Fuso horário desconhecido \"{{timezone}}\": use um nome IANA como Europe/Berlin."
+    }
+  },
   "view": {
     "subtitle": "Configure fluxos de trabalho automatizados para validação, aprovação e notificações.",
     "readOnlyAccess": "(Acesso somente leitura)",

@@ -1,7 +1,7 @@
 """Normalize and constrain cost center values.
 
 Revision ID: o3_canonical_cost_centers
-Revises: o2_step_execution_message
+Revises: r3_odcs_roundtrip_fields
 Create Date: 2026-11-17
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "o3_canonical_cost_centers"
-down_revision: str | None = "o2_step_execution_message"
+down_revision: str | None = "r3_odcs_roundtrip_fields"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -35,10 +35,14 @@ def upgrade() -> None:
                 'INFRASTRUCTURE', 'HR', 'STORAGE', 'MAINTENANCE', 'OTHER'
             )
                 THEN custom_center_name
-            ELSE initcap(trim(cost_center)) || CASE
-                WHEN nullif(trim(custom_center_name), '') IS NULL THEN ''
-                ELSE ': ' || trim(custom_center_name)
-            END
+            ELSE substr(
+                initcap(trim(cost_center)) || CASE
+                    WHEN nullif(trim(custom_center_name), '') IS NULL THEN ''
+                    ELSE ': ' || trim(custom_center_name)
+                END,
+                1,
+                255
+            )
         END
         WHERE cost_center <> upper(trim(cost_center))
            OR upper(trim(cost_center)) NOT IN (

@@ -18,7 +18,7 @@
   "noResults": "Geen resultaten gevonden",
   "noResultsHint": "Probeer je zoektermen of filters aan te passen",
   "results": "{{count}} resultaat gevonden",
-  "results_plural": "{{count}} resultaten gevonden",
+  "results_other": "{{count}} resultaten gevonden",
   "filters": {
     "all": "Alles",
     "dataProducts": "Dataproducten",

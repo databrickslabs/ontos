@@ -329,5 +329,5 @@ def test_the_update_schema_lists_retired_as_a_status():
     # A deprecated contract retires through change-status, so the tool offers it.
     from src.tools.registry import create_default_registry
     status = create_default_registry().get('update_data_contract').parameters['status']
-    assert 'retired' in status['enum']
+    assert 'enum' not in status  # any stage key of the group (#1213)
     assert 'retired' in status['description']

@@ -422,6 +422,24 @@ def sp_fallback_allowed(settings: Settings) -> bool:
     return getattr(settings, 'OBO_ALLOW_SP_FALLBACK', False) is True
 
 
+def warn_if_sp_fallback(settings: Settings) -> bool:
+    """Log at startup when requests without a user token may read as the app.
+
+    With the fallback, a request with no forwarded token gets the app's client:
+    a user-started compliance run, and the other reads made on behalf of the
+    user, then see what the app's service principal sees, not what the user does.
+    """
+    if not sp_fallback_allowed(settings):
+        return False
+    logger.warning(
+        "On-behalf-of fallback is on (ENV=%s, OBO_ALLOW_SP_FALLBACK=%s): requests without "
+        "a user token read Databricks as the app's service principal, including "
+        "user-started compliance runs. Unset both outside local development.",
+        getattr(settings, 'ENV', None), getattr(settings, 'OBO_ALLOW_SP_FALLBACK', None),
+    )
+    return True
+
+
 def raise_user_token_required() -> NoReturn:
     """Refuse a request that needs the user's token and has none (403, coded)."""
     from fastapi import HTTPException

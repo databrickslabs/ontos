@@ -24,6 +24,11 @@
     "message": "Ocorreu um erro inesperado.",
     "retry": "Tentar novamente"
   },
+  "assetAccess": {
+    "readDenied": "Você não tem acesso a este ativo. Para vê-lo, é preciso acesso de leitura/escrita a Ativos ou acesso a um produto de dados ao qual ele pertença.",
+    "writeDenied": "Alterar as notas, links, documentos e custos de um ativo exige acesso de leitura/escrita a Ativos.",
+    "notFound": "Ativo '{{assetId}}' não encontrado."
+  },
   "internalError": "Ocorreu um erro inesperado. Os detalhes estão no log do servidor (id do erro {{errorId}}).",
   "userTokenRequired": "Esta solicitação precisa do seu token de acesso do Databricks, e nenhum foi recebido. Recarregue a página; se persistir, peça a um administrador para ativar a autorização de usuário do app.",
   "subscription": {

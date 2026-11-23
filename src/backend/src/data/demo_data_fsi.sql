@@ -135,7 +135,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 4c. DATA CONTRACT SCHEMA PROPERTIES
 -- ============================================================================
 
-INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, transform_description) VALUES
+INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, description) VALUES
 -- trades table
 ('00600001-0002-4000-8000-000000000001', '00500001-0002-4000-8000-000000000001', 'trade_id', 'string', true, true, true, false, 1, -1, true, 'Unique trade execution identifier'),
 ('00600002-0002-4000-8000-000000000002', '00500001-0002-4000-8000-000000000001', 'instrument_id', 'string', true, false, false, false, -1, -1, true, 'ISIN or internal security identifier'),

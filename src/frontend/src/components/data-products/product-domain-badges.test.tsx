@@ -44,7 +44,7 @@ describe('ProductDomainBadges', () => {
       />
     );
 
-    expect(screen.getByTitle('Primary domain (primary domain)')).toBeInTheDocument();
+    expect(screen.getByTitle('Primary domain (Primary domain)')).toBeInTheDocument();
   });
 
   it('renders every assigned domain and keeps the primary domain visually distinct', () => {
@@ -58,7 +58,7 @@ describe('ProductDomainBadges', () => {
       />
     );
 
-    expect(screen.getByTitle('Primary domain (primary domain)')).toBeInTheDocument();
+    expect(screen.getByTitle('Primary domain (Primary domain)')).toBeInTheDocument();
     expect(screen.getByTitle('Secondary domain')).toBeInTheDocument();
   });
 
@@ -92,7 +92,7 @@ describe('ProductDomainBadges', () => {
     );
 
     expect(
-      screen.getByTitle('Domain 1 with a very long name that must be truncated (primary domain)')
+      screen.getByTitle('Domain 1 with a very long name that must be truncated (Primary domain)')
     ).toBeInTheDocument();
     expect(screen.getByText('Domain 2 with a very long name that must be truncated')).toHaveClass(
       'truncate'
@@ -125,6 +125,22 @@ describe('ProductDomainBadges', () => {
     );
 
     expect(screen.getByText('Legacy domain')).toBeInTheDocument();
+    expect(onDomainClick).not.toHaveBeenCalled();
+  });
+
+  it('renders unresolved domain ids without navigation', async () => {
+    const user = userEvent.setup();
+    render(
+      <ProductDomainBadges
+        product={{ domain_ids: ['missing-domain'], primary_domain_id: 'missing-domain' }}
+        onDomainClick={onDomainClick}
+      />
+    );
+
+    const unresolved = screen.getByText('missing-domain');
+    expect(unresolved.closest('[role="button"]')).toBeNull();
+
+    await user.click(unresolved);
     expect(onDomainClick).not.toHaveBeenCalled();
   });
 });

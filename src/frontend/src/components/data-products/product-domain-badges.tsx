@@ -12,6 +12,7 @@ interface ProductDomainBadgesProps {
 export default function ProductDomainBadges({ product, onDomainClick }: ProductDomainBadgesProps) {
   const { t } = useTranslation(['data-products']);
   const { getDomainIdByName } = useDomains();
+  // Older or partially migrated product payloads may carry only the primary domain name.
   const legacyDomainId = product.domain ? getDomainIdByName(product.domain) : undefined;
   const domainIds = product.domain_ids ?? (legacyDomainId ? [legacyDomainId] : []);
   const primaryDomainId = product.primary_domain_id ?? legacyDomainId ?? domainIds[0] ?? null;

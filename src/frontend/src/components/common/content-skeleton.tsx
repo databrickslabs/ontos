@@ -59,8 +59,11 @@ interface Bone { left: number; top: number; width: number; height: number }
 
 // Elements drawn as one block instead of their text
 const BLOCK_SELECTOR = 'svg, img, video, canvas, input, textarea, select, [role="img"], [data-skeleton-block]';
-// Text bone height relative to an h-4 line
-const TEXT_BONE_HEIGHT = 1.8;
+// Small text (text-xs and below) gets larger bones, which would look too slim
+// otherwise; larger text is drawn as is, so bones don't spill into the next line
+const SMALL_TEXT_PX = 12;
+// Height of a small text's bone relative to an h-4 line
+const SMALL_TEXT_BONE_HEIGHT = 1.8;
 // Static labels that stay readable and get no bones (see index.css)
 const KEEP_SELECTOR = 'thead, [data-skeleton-keep]';
 
@@ -68,13 +71,15 @@ const KEEP_SELECTOR = 'thead, [data-skeleton-keep]';
 function measureBones(root: HTMLElement, origin: HTMLElement): Bone[] {
   const base = origin.getBoundingClientRect();
   const bones: Bone[] = [];
-  const add = (r: DOMRect, textLine: boolean) => {
+  const add = (r: DOMRect, textLine: boolean, smallText = false) => {
     if (r.width < 2 || r.height < 2) return;
     const left = r.left - base.left;
-    // A text bone is taller than its glyphs, centred in the line box, and
-    // wider than the text: slim texts double, long ones grow by less
-    const height = textLine ? Math.round(Math.min(r.height, 16) * TEXT_BONE_HEIGHT) : r.height;
-    const grow = textLine ? Math.max(Math.sqrt(16 / Math.max(r.width, 16)), 0.1) : 0;
+    // A text bone is an h-4 bar (as SkeletonLine) centred in the line box, as
+    // wide as the text. Small text's bone is taller and wider: slim texts
+    // double, long ones grow by less
+    const lineHeight = Math.min(r.height, 16);
+    const height = !textLine ? r.height : smallText ? Math.round(lineHeight * SMALL_TEXT_BONE_HEIGHT) : lineHeight;
+    const grow = smallText ? Math.max(Math.sqrt(16 / Math.max(r.width, 16)), 0.1) : 0;
     const width = Math.min(r.width * (1 + grow), base.width - left);
     bones.push({
       left,
@@ -95,7 +100,8 @@ function measureBones(root: HTMLElement, origin: HTMLElement): Bone[] {
     if (!node.textContent?.trim() || parent?.closest(BLOCK_SELECTOR) || parent?.closest(KEEP_SELECTOR)) continue;
     range.selectNodeContents(node);
     if (typeof range.getClientRects !== 'function') continue;
-    Array.from(range.getClientRects()).forEach((r) => add(r, true));
+    const smallText = parseFloat(getComputedStyle(parent as Element).fontSize) <= SMALL_TEXT_PX;
+    Array.from(range.getClientRects()).forEach((r) => add(r, true, smallText));
   }
   return bones;
 }

@@ -99,6 +99,8 @@ export interface AdmSchemaState {
   schema: string | null;
   adm_version: string;
   conformance: AdmConformance | null;
+  // ISO time of the stored conformance result; null when none was checked.
+  checked_at?: string | null;
 }
 
 export interface ComputeDnacoResponse {

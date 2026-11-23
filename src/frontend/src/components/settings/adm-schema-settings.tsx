@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Copy, Download, Loader2, Save } from 'lucide-react';
+import { Copy, Download, Loader2, RefreshCw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,7 +25,7 @@ const FEATURE_ID = 'authority-resolution';
  */
 export default function AdmSchemaSettings() {
   const { t } = useTranslation(['authority-resolution', 'common']);
-  const { get, put } = useApi();
+  const { get, post, put } = useApi();
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const isAdmin = !permissionsLoading && hasPermission(FEATURE_ID, FeatureAccessLevel.ADMIN);
@@ -36,6 +36,7 @@ export default function AdmSchemaSettings() {
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [ddlBusy, setDdlBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
   // Findings of the last refused (422) save: the schema is not conformant, nothing changed.
   const [refusal, setRefusal] = useState<AdmConformanceFinding[] | null>(null);
 
@@ -88,6 +89,23 @@ export default function AdmSchemaSettings() {
     setState(data);
     setDraft(data.schema ?? '');
     toast({ title: t('adm.settings.saved') });
+  };
+
+  // Runs the one warehouse-bound conformance check and refreshes the stored result (and its time).
+  const checkNow = async () => {
+    setChecking(true);
+    const { data, error, errorCode, errorParams } = await post<AdmSchemaState>('/api/authority/adm-schema/check', {});
+    setChecking(false);
+    if (error) {
+      toast({
+        title: t('common:toast.failed'),
+        description: authorityErrorMessage(t, error, errorCode, errorParams),
+        variant: 'destructive',
+      });
+      return;
+    }
+    setState(data);
+    toast({ title: t('adm.settings.checkDone') });
   };
 
   const fetchDdl = async (): Promise<string | null> => {
@@ -193,6 +211,11 @@ export default function AdmSchemaSettings() {
         <div className="text-xs uppercase text-muted-foreground">{t('adm.settings.conformanceLabel')}</div>
         {!state.schema && <p className="text-sm text-muted-foreground">{t('adm.settings.notConfigured')}</p>}
         {state.schema && !conformance && <p className="text-sm text-muted-foreground">{t('adm.settings.notChecked')}</p>}
+        {state.schema && state.checked_at && (
+          <p className="text-xs text-muted-foreground">
+            {t('adm.settings.checkedAt', { time: new Date(state.checked_at).toLocaleString() })}
+          </p>
+        )}
         {state.schema && conformance?.status === 'conformant' && (
           <div className="space-y-1">
             <Badge variant="default">{t('adm.settings.conformant', { version: state.adm_version })}</Badge>
@@ -218,6 +241,12 @@ export default function AdmSchemaSettings() {
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {isAdmin && (
+          <Button variant="outline" size="sm" onClick={checkNow} disabled={!state.schema || checking || saving}>
+            {checking ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+            {checking ? t('adm.settings.checking') : t('adm.settings.checkNow')}
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={copyDdl} disabled={!state.schema || ddlBusy}>
           <Copy className="h-4 w-4 mr-1" /> {t('adm.settings.copyDdl')}
         </Button>

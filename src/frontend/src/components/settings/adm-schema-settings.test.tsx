@@ -10,11 +10,12 @@ import AdmSchemaSettings from './adm-schema-settings';
 
 const mockGet = vi.fn();
 const mockPut = vi.fn();
+const mockPost = vi.fn();
 const mockToast = vi.fn();
 let mockIsAdmin = true;
 
 vi.mock('@/hooks/use-api', () => ({
-  useApi: () => ({ get: mockGet, put: mockPut, post: vi.fn(), delete: vi.fn() }),
+  useApi: () => ({ get: mockGet, put: mockPut, post: mockPost, delete: vi.fn() }),
 }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }));
 vi.mock('@/stores/permissions-store', () => ({
@@ -46,6 +47,7 @@ describe('AdmSchemaSettings', () => {
       return { data: 'CREATE TABLE IF NOT EXISTS demo.arf_adm.decisions ();' };
     });
     mockPut.mockResolvedValue({ data: conformant });
+    mockPost.mockResolvedValue({ data: conformant });
   });
 
   afterEach(async () => {
@@ -106,5 +108,47 @@ describe('AdmSchemaSettings', () => {
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('CREATE TABLE IF NOT EXISTS demo.arf_adm.decisions ();'));
     expect(mockGet).toHaveBeenCalledWith('/api/authority/adm-schema/ddl?schema=demo.arf_adm');
+  });
+
+  it('offers Check now to an admin only, and refreshes the stored result and its time', async () => {
+    const checkedNow = { ...conformant, checked_at: '2026-11-23T09:30:00Z' };
+    mockPost.mockResolvedValue({ data: checkedNow });
+    renderWithProviders(<AdmSchemaSettings />);
+
+    fireEvent.click(await screen.findByRole('button', { name: tr('adm.settings.checkNow') }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/api/authority/adm-schema/check', {}));
+    expect(await screen.findByText(tr('adm.settings.checkedAt', { time: new Date('2026-11-23T09:30:00Z').toLocaleString() }))).toBeInTheDocument();
+  });
+
+  it('shows a spinner and disables the button while the check runs', async () => {
+    let finish: (value: unknown) => void = () => {};
+    mockPost.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    renderWithProviders(<AdmSchemaSettings />);
+
+    fireEvent.click(await screen.findByRole('button', { name: tr('adm.settings.checkNow') }));
+
+    const running = await screen.findByRole('button', { name: tr('adm.settings.checking') });
+    expect(running).toBeDisabled();
+    finish({ data: conformant });
+    await waitFor(() => expect(screen.getByRole('button', { name: tr('adm.settings.checkNow') })).toBeEnabled());
+  });
+
+  it('reports a failed check as a coded error toast', async () => {
+    mockPost.mockResolvedValue({ data: {}, error: 'The ADM statement failed.', errorCode: 'adm_query_failed', status: 502 });
+    renderWithProviders(<AdmSchemaSettings />);
+
+    fireEvent.click(await screen.findByRole('button', { name: tr('adm.settings.checkNow') }));
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' })));
+    expect(mockToast.mock.calls[0][0].description).toBeTruthy();
+  });
+
+  it('hides Check now from a non-admin', async () => {
+    mockIsAdmin = false;
+    renderWithProviders(<AdmSchemaSettings />);
+
+    await screen.findByDisplayValue('demo.arf_adm');
+    expect(screen.queryByRole('button', { name: tr('adm.settings.checkNow') })).toBeNull();
   });
 });

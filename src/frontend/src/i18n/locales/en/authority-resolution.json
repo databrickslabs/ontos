@@ -806,7 +806,11 @@
       "saved": "ADM schema saved",
       "copyDdl": "Copy DDL",
       "downloadDdl": "Download DDL",
-      "ddlCopied": "DDL copied to the clipboard"
+      "ddlCopied": "DDL copied to the clipboard",
+      "checkNow": "Check now",
+      "checking": "Checking...",
+      "checkedAt": "Checked {{time}}",
+      "checkDone": "Conformance check complete"
     }
   },
   "dna": {

@@ -145,7 +145,7 @@ def test_read_type_options_takes_only_a_map_and_skips_nulls():
 
 
 def test_a_v302_export_nests_the_options_and_validates(db_session):
-    # v3.0.2 defines logicalTypeOptions too, and its property schema rejects flat keys
+    # v3.0.2 defines logicalTypeOptions too: the nested form is its spec form
     manager, cid = _upload(db_session, _v302(_document(api_version="v3.0.2", nested=False)))
     exported = _export(manager, db_session, cid)
 
@@ -154,6 +154,19 @@ def test_a_v302_export_nests_the_options_and_validates(db_session):
     assert "maxLength" not in columns["code"]
     assert _errors(exported, "odcs-json-schema-v3.0.2.json") == []
     assert _errors(exported, "odcs-json-schema-v3.0.2-strict.json") == []
+
+
+@pytest.mark.parametrize("schema_file", [
+    "odcs-json-schema-v3.0.2.json", "odcs-json-schema-v3.0.2-strict.json",
+])
+def test_flat_type_options_fail_both_bundled_v302_schemas(db_session, schema_file):
+    # the nested form is the spec form; the flat one fails the plain schema too
+    manager, cid = _upload(db_session, _v302(_document(api_version="v3.0.2", nested=False)))
+    exported = _export(manager, db_session, cid)
+    for column in exported["schema"][0]["properties"]:
+        column.update(column.pop("logicalTypeOptions", {}))
+
+    assert any("maxLength" in e for e in _errors(exported, schema_file))
 
 
 @pytest.mark.parametrize("version,nested", [

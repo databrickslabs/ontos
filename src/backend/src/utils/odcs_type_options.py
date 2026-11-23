@@ -90,8 +90,10 @@ def valid_type_options(options: Dict[str, Any]) -> Dict[str, Any]:
 def nests_type_options(api_version: Optional[str]) -> bool:
     """Whether an export of a contract with this ``apiVersion`` writes the options
     under ``logicalTypeOptions``: every ODCS v3.x (and no version, which the export
-    writes as v3.1.0). v3.0.2 already defines ``logicalTypeOptions`` and rejects
-    the flat keys."""
+    writes as v3.1.0). The nested form is the spec form in v3.0.2 as well, which
+    defines ``logicalTypeOptions`` on the property. The flat keys fail the bundled
+    v3.0.2 schemas (plain and ``-strict``: ``unevaluatedProperties: false`` on the
+    property) under a 2019-09 validator."""
     return not api_version or api_version >= 'v3'
 
 

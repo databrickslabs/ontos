@@ -431,10 +431,13 @@ class AssetsManager(SearchableAsset):
         effective_type_id = asset_in.asset_type_id or db_asset.asset_type_id
         if asset_in.properties is not None:
             # Only what the update changes: a stored legacy value that doesn't fit the
-            # schema doesn't block an edit of another field (the dialog sends them back)
-            stored = db_asset.properties or {}
-            changed = {k: v for k, v in asset_in.properties.items() if stored.get(k, _UNSET) != v}
-            self._validate_properties(db, effective_type_id, changed)
+            # schema doesn't block an edit of another field (the dialog sends them back).
+            # A type change checks them all: none was checked against the new type.
+            checked = asset_in.properties
+            if str(effective_type_id) == str(db_asset.asset_type_id):
+                stored = db_asset.properties or {}
+                checked = {k: v for k, v in checked.items() if stored.get(k, _UNSET) != v}
+            self._validate_properties(db, effective_type_id, checked)
 
         update_data = asset_in.model_dump(exclude_unset=True)
         # A status change is a move its lifecycle stage group must allow

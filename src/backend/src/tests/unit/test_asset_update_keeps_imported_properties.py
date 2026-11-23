@@ -183,3 +183,26 @@ def test_a_put_replaces_the_public_properties_as_documented(db_session, osm):
         "team": "sales", METRIC_VIEW_PROPERTY: {"source": "sales"},
     }
     assert "Replaces the stored properties" in AssetUpdate.model_fields["properties"].description
+
+
+def test_a_type_change_checks_every_property_against_the_new_type(db_session, osm):
+    """The dialog sends the stored properties back: on a type change none of them
+    was checked against the new type's schema, so all of them are."""
+    from src.common.errors import ValidationError
+
+    untyped = AssetTypeDb(name="Untyped Thing")
+    db_session.add(untyped)
+    db_session.flush()
+    asset = AssetDb(name="pk", asset_type_id=untyped.id, properties={"isPrimaryKey": "yes"})
+    db_session.add(asset)
+    db_session.flush()
+
+    with pytest.raises(ValidationError):
+        AssetsManager(ontology_schema_manager=osm).update_asset(
+            db_session, asset_id=asset.id,
+            asset_in=AssetUpdate(
+                asset_type_id=_column_type(db_session).id,
+                properties={"isPrimaryKey": "yes"},
+            ),
+            current_user_id="alice@example.com",
+        )

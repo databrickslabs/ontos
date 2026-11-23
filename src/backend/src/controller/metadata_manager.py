@@ -10,7 +10,7 @@ from databricks.sdk.service.catalog import VolumeType
 
 from src.common.logging import get_logger
 from src.common.app_state import get_app_state_manager
-from src.common.config import Settings, resolve_volume
+from src.common.config import Settings, VolumeNotConfiguredError, resolve_volume
 from src.common.database import get_session_factory
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.workspace_client import get_workspace_client
@@ -152,11 +152,12 @@ class MetadataManager(SearchableAsset):
             Filesystem mount path for the volume (e.g., /Volumes/catalog/schema/volume)
             
         Raises:
+            VolumeNotConfiguredError: If no volume is set (a coded ``ValueError``)
             Exception: If volume creation or access fails
         """
         resolved = resolve_volume(settings)
         if not resolved:
-            raise ValueError("DATABRICKS_VOLUME is not configured")
+            raise VolumeNotConfiguredError("DATABRICKS_VOLUME is not configured")
         catalog, schema, volume = resolved
         # Unity Catalog volume name (catalog.schema.volume)
         volume_name = f"{catalog}.{schema}.{volume}"

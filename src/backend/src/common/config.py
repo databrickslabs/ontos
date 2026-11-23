@@ -510,6 +510,41 @@ class VolumeInvalidError(CodedValueError):
     code = 'volume_invalid'
 
 
+class VolumeNotConfiguredError(CodedValueError):
+    """A feature needs the volume setting, and it is empty."""
+
+    code = 'volume_not_configured'
+
+
+def canonical_volume_value(value: Optional[str]) -> Optional[str]:
+    """The volume setting as it is stored: trimmed, and for a path with repeated
+    slashes collapsed and no trailing slash. None when empty.
+
+    The Git export decides local directory or volume from the raw text
+    (``startswith('/Volumes/')``), while ``resolve_volume`` skips empty parts, so
+    ``//Volumes/c/s/v`` passed one and was treated as the other.
+    """
+    raw = (value or '').strip()
+    if raw.startswith('/'):
+        raw = '/' + '/'.join(part for part in raw.split('/') if part)
+    return raw or None
+
+
+def is_local_volume_path(value: Optional[str]) -> bool:
+    """True for a volume setting that is a local directory (development).
+
+    An absolute path outside ``/Volumes``. ``resolve_git_paths`` exports to it
+    directly, so it needs no Unity Catalog volume. A path under ``/Volumes`` in any
+    other casing (``/volumes/c/s/v``) is a malformed volume path, not a directory:
+    ``resolve_volume`` refuses it.
+    """
+    raw = (value or '').strip()
+    if not raw.startswith('/'):
+        return False
+    first = next((part for part in raw.split('/') if part), '')
+    return first.lower() != 'volumes'
+
+
 def resolve_volume(settings: Settings) -> Optional[Tuple[str, str, str]]:
     """(catalog, schema, volume) for ``DATABRICKS_VOLUME``, or None when it isn't set.
 

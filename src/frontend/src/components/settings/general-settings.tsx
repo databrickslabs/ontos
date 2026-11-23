@@ -41,6 +41,7 @@ const hasControlChars = (value: string) => Array.from(value).some((c) => c.charC
 const SERVER_ERROR_KEYS: Record<string, string> = {
   instance_id_invalid: 'settings:general.instanceIdentity.id.invalid',
   instance_name_invalid: 'settings:general.instanceIdentity.name.invalid',
+  volume_invalid: 'settings:general.unityCatalog.volume.invalid',
 };
 
 /** A blank or out-of-range import limit falls back to the default: it never fails the save. */

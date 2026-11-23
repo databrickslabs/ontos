@@ -25,6 +25,9 @@ def manager(db_session):
     settings.enabled_jobs = [WORKFLOW_ID]
     settings.sync_enabled = True
     settings.sync_repository = "https://example.com/org/sync.git"
+    settings.DATABRICKS_CATALOG = "app_ontos"
+    settings.DATABRICKS_SCHEMA = "app_ontos"
+    settings.DATABRICKS_VOLUME = None
     settings.to_dict.return_value = {}
     manager = SettingsManager(db=db_session, settings=settings, workspace_client=MagicMock())
     jobs = MagicMock()

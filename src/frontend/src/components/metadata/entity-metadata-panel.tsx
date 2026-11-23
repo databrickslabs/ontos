@@ -10,12 +10,13 @@ import { RelativeDate } from '@/components/common/relative-date';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Plus, RefreshCcw, Eye, Trash2, FileText, LinkIcon, Paperclip, Pencil, Loader2, Share2, ArrowDownToLine } from 'lucide-react';
 import FilePreviewDialog from '@/components/preview/file-preview-dialog';
-import { responseErrorText } from '@/lib/asset-access-error';
+import { assetAccessErrorText, responseErrorText } from '@/lib/asset-access-error';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
 import { useTranslation } from 'react-i18next';
+import { documentUploadErrorText } from '@/lib/document-upload-error';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useSharedAssets, attachSharedAsset, RichTextItem, LinkItem, DocumentItem, MetadataAttachment } from '@/hooks/use-entity-metadata';
@@ -516,7 +517,12 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     form.append('file', docFile);
                     const endpoint = docIsShared ? '/api/metadata/shared/documents' : `/api/entities/${entityType}/documents?entity_id=${encodeURIComponent(entityId)}`;
                     const resp = await fetch(endpoint, { method: 'POST', body: form });
-                    if (!resp.ok) throw new Error(await responseErrorText(resp));
+                    if (!resp.ok) {
+                      const body = await resp.text();
+                      throw new Error(
+                        assetAccessErrorText(body) ?? documentUploadErrorText(body, t)
+                      );
+                    }
                     setDocTitle(''); setDocDesc(''); setDocFile(null); setDocLevel(50); setDocInheritable(true); setDocIsShared(false); setUploadingDoc(false); setAddingDoc(false);
                     fetchMetadata();
                     if (docIsShared) sharedAssets.refresh();

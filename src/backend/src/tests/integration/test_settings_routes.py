@@ -336,3 +336,27 @@ def test_settings_general_reads_every_key(with_levels):
 def test_no_settings_feature_cannot_read(with_levels):
     client = with_levels({"settings-git": _RW})
     assert client.get("/api/settings").status_code == 403
+
+
+def test_invalid_volume_is_rejected_with_a_code_and_stores_nothing(
+    client: TestClient, test_settings
+):
+    """A volume that can't name a UC volume answers 400 with code + params and changes nothing."""
+    response = client.put(
+        "/api/settings",
+        json={"databricks_volume": "a.b", "databricks_catalog": "other_catalog"},
+    )
+
+    assert response.status_code == 400, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "volume_invalid"
+    assert detail["params"]["value"] == "a.b"
+    assert test_settings.DATABRICKS_VOLUME == "test_volume"
+    assert test_settings.DATABRICKS_CATALOG == "test_catalog"
+
+
+def test_valid_volume_is_saved(client: TestClient, test_settings):
+    response = client.put("/api/settings", json={"databricks_volume": "cat.sch.vol"})
+
+    assert response.status_code == 200, response.text
+    assert test_settings.DATABRICKS_VOLUME == "cat.sch.vol"

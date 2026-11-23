@@ -224,7 +224,7 @@
       "tags": "Tags",
       "ownership": "Propriedade e projeto",
       "rule": "Regra (ODRL)",
-      "justification": "Justificativa (política de autoridade)"
+      "justification": "Justificação (referência de política)"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Verificações que a porta aplica após a regra (e face às quais o coeficiente DNA mede a divergência). Cada uma é uma <strong>Compliance Check</strong> reutilizável.",
@@ -235,7 +235,7 @@
       "dnaSchedule": "Com que frequência o DNA-Coefficient é recalculado em relação às fontes de evidência.",
       "domainContext": "O âmbito delimitado em que esta autoridade vale e os seus parâmetros. Uma solicitação fora do âmbito recebe no_authority; a regra e as verificações leem os parâmetros como ctx.<key>.",
       "rule": "O que a autoridade permite, em ODRL: <strong>restrições</strong> que devem valer, <strong>obrigações</strong> ainda por cumprir (até lá a decisão é <strong>condicional</strong>, p. ex. uma coaprovação) e <strong>proibições</strong>. Compare com valores ou variáveis (<code>ctx.threshold</code>, <code>req.market</code>).",
-      "justification": "A versão da política da qual esta autoridade deriva e as cláusulas que ela implementa. A resolução é recusada se a política não estiver aprovada, estiver retirada ou fora da vigência."
+      "justification": "A referência de política em que esta Authority Relation assenta. A validade é mostrada, não aplicada. As etiquetas de cláusula são texto livre; a regra e as verificações podem citá-las."
     },
     "fields": {
       "name": {
@@ -650,122 +650,91 @@
   },
   "nav": {
     "relations": "Relações de autoridade",
-    "policies": "Políticas de autoridade"
+    "policies": "Referências de política"
   },
   "policy": {
     "list": {
-      "title": "Políticas de autoridade",
-      "description": "A base documentada da qual uma autoridade deriva: tabelas de delegação de autoridade, mandatos do conselho, regulamentos, políticas de compras, SOPs e exceções registradas. As relações de autoridade citam uma versão da política e as cláusulas que implementam; uma resolução sem uma base de política válida não retorna autoridade.",
-      "buttonNew": "Nova política",
-      "confirmDelete": "Excluir {{key}} v{{version}}?",
+      "title": "Referências de política",
+      "description": "Os documentos de origem que as suas Authority Relations citam como justificação. Uma referência são apenas metadados: a Ontos guarda o nome, o ID externo, a versão e a validade, e liga ao documento. Aqui nada é aplicado; os aprovadores verificam o próprio documento.",
+      "buttonNew": "Nova referência",
+      "confirmDelete": "Eliminar {{key}} v{{version}}?",
       "columnCitedBy": "Citada por"
     },
     "fields": {
-      "key": "Chave da política",
+      "key": "ID externo",
       "version": "Versão",
-      "type": "Tipo",
-      "title": "Título",
-      "summary": "Resumo",
-      "owner": "Equipe responsável",
-      "jurisdiction": "Jurisdição",
-      "effectiveFrom": "Vigente desde",
-      "effectiveTo": "Vigente até",
-      "effective": "Vigência",
-      "approvedBy": "Aprovada por",
-      "approvalEvidence": "Evidência de aprovação",
+      "title": "Nome",
+      "summary": "Descrição",
+      "owner": "Equipa responsável",
+      "url": "Ligação ao documento",
+      "validity": "Validade",
+      "validFrom": "Válida a partir de",
+      "validTo": "Válida até",
       "derivedFrom": "Derivada de",
-      "withdrawnReason": "Motivo da retirada",
       "changeSummary": "Resumo das alterações"
     },
-    "type": {
-      "DOA": "Delegação de autoridade",
-      "BOARD_MANDATE": "Mandato do conselho",
-      "REGULATION": "Regulamento",
-      "PROCUREMENT_POLICY": "Política de compras",
-      "SOP": "Procedimento operacional padrão",
-      "EXCEPTION": "Exceção"
+    "validity": {
+      "openEnded": "sem termo",
+      "expired": "Expirada"
     },
-    "status": {
-      "draft": "Rascunho",
-      "approved": "Aprovada",
-      "superseded": "Substituída",
-      "withdrawn": "Retirada"
-    },
-    "openEnded": "sem data de término",
     "editor": {
-      "titleNew": "Nova política de autoridade",
+      "titleNew": "Nova referência de política",
       "titleEdit": "Editar {{key}} v{{version}}",
-      "keyHint": "Identificador estável compartilhado por todas as versões da política, por ex. POL-DOA.",
-      "jurisdictionHint": "O escopo coberto pela política, em JSON, por ex. {\"market\": [\"DE\", \"AT\"]}.",
+      "keyHint": "Identificador partilhado por todas as versões do documento, p. ex. POL-DOA.",
+      "urlHint": "Opcional. Ligação ao documento de origem (http ou https). A Ontos não o abre.",
+      "validityHint": "A validade indicada pelo documento. Apenas informativa: nada é aplicado. As verificações podem lê-la como justification.valid_to.",
       "validation": {
-        "required": "Chave e título são obrigatórios",
-        "title": "A política não é válida",
-        "clauseRef": "Cada cláusula precisa de uma referência (por ex. §7.1).",
-        "clauseDuplicate": "Duas cláusulas têm a mesma referência.",
-        "amount": "O limite de uma cláusula deve ser um número.",
-        "jurisdiction": "A jurisdição deve ser um JSON válido."
+        "required": "O ID externo e o nome são obrigatórios",
+        "title": "A referência não é válida",
+        "clauseRef": "Cada sugestão de cláusula precisa de uma referência (p. ex. §7.1).",
+        "clauseDuplicate": "Duas sugestões de cláusula partilham uma referência."
       }
     },
     "clauses": {
-      "title": "Cláusulas",
-      "hint": "As disposições citáveis da política. As relações de autoridade citam as cláusulas que implementam; itens de regra e verificações citam a cláusula que fazem cumprir, e uma negação a menciona.",
+      "title": "Sugestões de cláusulas",
+      "hint": "Opcional. As Authority Relations e as verificações citam cláusulas em texto livre; estas entradas são apenas sugestões no seletor.",
       "titlePlaceholder": "Título da cláusula",
       "textPlaceholder": "Texto da cláusula",
-      "amount": "Valor limite",
-      "currency": "Moeda",
-      "conditionsPlaceholder": "Condições, uma por linha",
-      "add": "Adicionar cláusula",
-      "remove": "Remover cláusula",
-      "none": "Ainda não há cláusulas.",
+      "add": "Adicionar sugestão",
+      "remove": "Remover sugestão",
+      "none": "Sem sugestões de cláusulas.",
       "ref": "Ref.",
-      "clause": "Cláusula",
-      "limit": "Limite"
+      "clause": "Cláusula"
     },
     "details": {
-      "defaultTitle": "Política de autoridade",
-      "notFound": "Política de autoridade não encontrada.",
-      "backButton": "Voltar às políticas",
+      "defaultTitle": "Referência de política",
+      "notFound": "Referência de política não encontrada.",
+      "backButton": "Voltar às referências",
       "buttonNewVersion": "Nova versão",
-      "buttonApprove": "Aprovar",
-      "buttonWithdraw": "Retirar",
-      "approved": "Política aprovada",
-      "withdrawn": "Política retirada",
-      "withdrawnMsg": "As relações de autoridade ativas que a citam agora precisam de revisão.",
-      "versionCreated": "Versão {{version}} criada como rascunho",
-      "rootProblem": "Esta versão não pode fundamentar uma autoridade agora: {{problem}}.",
-      "cardBasis": "Base da política",
-      "cardDocuments": "Documentos de origem",
-      "noDocuments": "Nenhum documento de origem.",
-      "noDocumentsDraft": "Ainda não há documentos de origem. Envie-os em Metadados, abaixo; cada um é armazenado com seu SHA-256.",
-      "documentsImmutable": "Esta versão não é mais um rascunho: seus documentos são evidência fixa e só mudam por meio de uma nova versão.",
+      "versionCreated": "Versão {{version}} criada",
+      "expiredNote": "A validade indicada por esta referência já passou. Por si só, a referência não bloqueia nada; uma verificação que leia justification.expired pode bloquear.",
+      "cardReference": "Referência",
       "cardDependents": "Citada por ({{count}})",
-      "noDependents": "Nenhuma relação de autoridade cita esta versão."
-    },
-    "approve": {
-      "title": "Aprovar {{key}} v{{version}}",
-      "description": "Uma versão aprovada é imutável e pode fundamentar relações de autoridade a partir da data de vigência.",
-      "approverPlaceholder": "Por padrão, você",
-      "noEvidence": "Nenhuma",
-      "supersedesHint": "Aprovar substitui a v{{version}}: ela continua válida até esta versão entrar em vigor."
-    },
-    "withdraw": {
-      "title": "Retirar {{key}} v{{version}}",
-      "description": "Relações de autoridade que citam esta versão: {{count}}. As ativas passam para revisão, e nenhuma é resolvida até citar uma política válida."
+      "noDependents": "Nenhuma Authority Relation cita esta referência."
     },
     "newVersion": {
-      "title": "Nova versão da política",
-      "description": "Cria um sucessor como rascunho com as mesmas cláusulas. Edite-o e aprove-o para substituir esta versão."
+      "title": "Nova versão da referência",
+      "description": "Cria um novo registo para a nova versão do documento de origem, ligado a este. A validade define-se na nova versão."
     },
     "citation": {
-      "legacy": "Justificativa livre (nenhuma política de autoridade citada)",
-      "none": "Nenhuma política de autoridade citada.",
+      "legacy": "Justificação livre (nenhuma referência de política citada)",
+      "none": "Nenhuma referência de política citada.",
       "derivedFrom": "derivada da versão anterior",
-      "problem": "Sem base de política válida: {{problem}}. As resoluções não retornam autoridade.",
-      "noClauses": "Nenhuma cláusula citada.",
-      "enforces": "Faz cumprir esta cláusula da política",
+      "link": "Abrir documento",
+      "noClauses": "Nenhuma etiqueta de cláusula citada.",
       "clause": "Cláusula",
-      "nonePicker": "Nenhuma política de autoridade",
-      "notApprovedHint": "Esta versão está {{status}}: a relação de autoridade não será resolvida até citar uma versão aprovada e vigente."
+      "clausePlaceholder": "§7.1",
+      "clauseTitle": "Etiqueta de cláusula (texto livre). As sugestões vêm da referência.",
+      "clauses": "Etiquetas de cláusula",
+      "clausesPlaceholder": "§7.1, §7.2",
+      "clausesHint": "Texto livre, separado por vírgulas. As sugestões vêm das cláusulas da referência.",
+      "nonePicker": "Nenhuma referência de política",
+      "expiredHint": "A validade desta referência já passou. Por si só, não bloqueia nada; para a aplicar, adicione o modelo de verificação de justificação.",
+      "enforces": "Aplica esta cláusula da política"
+    },
+    "errors": {
+      "inUse": "A referência é citada por {{names}}. Remova primeiro essas citações.",
+      "notFound": "Referência de política não encontrada."
     }
   },
   "errors": {

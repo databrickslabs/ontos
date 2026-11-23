@@ -1,32 +1,48 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, FileText } from 'lucide-react';
-import type { PolicyCitation, PolicyStatus } from '@/types/authority-resolution';
+import { ExternalLink } from 'lucide-react';
+import type { PolicyCitation } from '@/types/authority-resolution';
 
-const STATUS_CLASS: Record<PolicyStatus, string> = {
-  approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  superseded: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  withdrawn: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+/** The day part of an ISO timestamp, or an em dash. */
+export const formatDay = (iso?: string | null) => (iso ? iso.slice(0, 10) : '—');
+
+/** A link out is rendered only for http(s) URLs (the backend refuses other schemes too). */
+export const safeHttpUrl = (url?: string | null): string | null => {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? url : null;
+  } catch {
+    return null;
+  }
 };
 
-export function PolicyStatusBadge({ status }: { status?: PolicyStatus | null }) {
+/** "from → to" with "open-ended" for no end, and an informational "Expired" badge. */
+export function ValidityLine({ from, to, expired }: { from?: string | null; to?: string | null; expired?: boolean }) {
   const { t } = useTranslation(['authority-resolution']);
-  if (!status) return null;
-  return <Badge variant="outline" className={STATUS_CLASS[status] || ''}>{t(`policy.status.${status}`)}</Badge>;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <span>
+        {formatDay(from)} → {to ? formatDay(to) : t('policy.validity.openEnded')}
+      </span>
+      {expired && <ExpiredBadge />}
+    </span>
+  );
 }
 
-/** First 12 hex chars of a SHA-256, with the full digest on hover. */
-export function ShortHash({ sha256 }: { sha256?: string | null }) {
-  if (!sha256) return <span className="text-muted-foreground">—</span>;
-  return <span className="font-mono text-xs" title={sha256}>{sha256.slice(0, 12)}…</span>;
+export function ExpiredBadge() {
+  const { t } = useTranslation(['authority-resolution']);
+  return (
+    <Badge variant="outline" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300">
+      {t('policy.validity.expired')}
+    </Badge>
+  );
 }
 
 /**
- * The Authority Policy an AR cites: version, status, the cited clauses and
- * the hashed source documents. Without a cited policy, the legacy free-form
+ * The policy reference an AR cites: its name and version, validity, the link out and
+ * the clause labels it cites (free text). Without a reference, the legacy free-form
  * justification chain is shown.
  */
 export default function PolicyCitationView({ citation, legacy }: { citation?: PolicyCitation | null; legacy?: Record<string, any> | null }) {
@@ -43,7 +59,7 @@ export default function PolicyCitationView({ citation, legacy }: { citation?: Po
     return <div className="text-xs text-muted-foreground">{t('policy.citation.none')}</div>;
   }
   const missing = citation.policy_key == null;
-  const cited = citation.clauses || [];
+  const link = safeHttpUrl(citation.url);
   return (
     <div className="space-y-2">
       {missing ? (
@@ -54,7 +70,6 @@ export default function PolicyCitationView({ citation, legacy }: { citation?: Po
             {citation.policy_key} v{citation.version}
           </Link>
           <span className="text-muted-foreground">{citation.title}</span>
-          <PolicyStatusBadge status={citation.status} />
           {citation.parent_policy_id && (
             <Link to={`/authority-resolution/policies/${citation.parent_policy_id}`} className="text-xs text-muted-foreground hover:underline">
               {t('policy.citation.derivedFrom')}
@@ -62,42 +77,25 @@ export default function PolicyCitationView({ citation, legacy }: { citation?: Po
           )}
         </div>
       )}
-      {citation.problem && (
-        <Alert variant="destructive" className="py-2">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-xs">{t('policy.citation.problem', { problem: citation.problem })}</AlertDescription>
-        </Alert>
+      {!missing && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>{t('policy.fields.validity')}:</span>
+          <ValidityLine from={citation.valid_from} to={citation.valid_to} expired={citation.expired} />
+          {link && (
+            <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:underline">
+              <ExternalLink className="h-3 w-3" /> {t('policy.citation.link')}
+            </a>
+          )}
+        </div>
       )}
-      {cited.length > 0 ? (
-        <div className="space-y-1">
-          {cited.map((c) => (
-            <div key={c.ref} className="rounded border p-2 text-xs space-y-0.5">
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="font-mono">{c.ref}</Badge>
-                {c.title && <span className="font-medium">{c.title}</span>}
-                {c.limits?.amount != null && (
-                  <span className="ml-auto text-muted-foreground">
-                    ≤ {c.limits.amount.toLocaleString()} {c.limits.currency || ''}
-                  </span>
-                )}
-              </div>
-              {c.text && <div className="text-muted-foreground">{c.text}</div>}
-            </div>
+      {(citation.clause_refs || []).length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {citation.clause_refs.map((ref) => (
+            <Badge key={ref} variant="secondary" className="font-mono text-xs">{ref}</Badge>
           ))}
         </div>
       ) : (
         !missing && <div className="text-xs text-muted-foreground">{t('policy.citation.noClauses')}</div>
-      )}
-      {(citation.documents || []).length > 0 && (
-        <div className="space-y-0.5">
-          {(citation.documents || []).map((d) => (
-            <div key={d.id} className="text-xs flex items-center gap-2">
-              <FileText className="h-3 w-3" />
-              <a href={`/api/documents/${d.id}/content`} className="hover:underline" target="_blank" rel="noopener noreferrer">{d.filename}</a>
-              <ShortHash sha256={d.sha256} />
-            </div>
-          ))}
-        </div>
       )}
     </div>
   );

@@ -10,6 +10,7 @@ import NativeSelect from '@/components/ui/native-select';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import TagSelector from '@/components/ui/tag-selector';
 import type { AssignedTag } from '@/components/ui/tag-chip';
+import ClauseLabelsInput from '@/components/authority-resolution/clause-labels-input';
 import ScheduleSelect from '@/components/authority-resolution/schedule-select';
 import McpRefEditor from '@/components/authority-resolution/mcp-ref-editor';
 import { InfoHint, SectionTitle } from '@/components/authority-resolution/info-hint';
@@ -170,7 +171,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
     return () => { cancelled = true; };
   }, [open, get]);
 
-  // Every policy version (an AR cites an exact version), for the Justification picker.
+  // Every reference version (an AR cites an exact version), for the Justification picker.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -276,20 +277,11 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   // checks' variables); invalid rows leave it undefined until fixed.
   const draftContext = toDomainContext(scopeRows, paramRows);
   const citedPolicy = policies.find((p) => p.id === policyId);
+  // The reference's clause labels are suggestions only: a clause is free text on the AR.
   const policyClauses = citedPolicy?.clauses || [];
-  // Approved versions first; withdrawn ones only when already cited.
-  const policyOptions = policies
-    .filter((p) => p.status !== 'withdrawn' || p.id === policyId)
-    .sort((a, b) => Number(b.status === 'approved') - Number(a.status === 'approved')
-      || a.policy_key.localeCompare(b.policy_key) || b.version.localeCompare(a.version, undefined, { numeric: true }));
-  const choosePolicy = (id: string) => {
-    setPolicyId(id);
-    // Citations of clauses the new version doesn't have go (AR, rule items, checks).
-    const refs = new Set((policies.find((p) => p.id === id)?.clauses || []).map((c) => c.ref));
-    setClauseRefs((prev) => prev.filter((r) => refs.has(r)));
-    setRuleItems((prev) => prev.map((it) => (it.clause && !refs.has(it.clause) ? { ...it, clause: '' } : it)));
-    setCriteriaRows((prev) => prev.map((r) => (r.clauseRef && !refs.has(r.clauseRef) ? { ...r, clauseRef: '' } : r)));
-  };
+  const policyOptions = [...policies].sort((a, b) =>
+    a.policy_key.localeCompare(b.policy_key) || b.version.localeCompare(a.version, undefined, { numeric: true }));
+  const choosePolicy = (id: string) => setPolicyId(id);
 
   const updateAffirmation = (idx: number, patch: Partial<AffirmationInput>) => {
     setAffirmations((prev) => prev.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
@@ -495,31 +487,15 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
               <option value="">{t('policy.citation.nonePicker')}</option>
               {policyOptions.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.policy_key} v{p.version} — {p.title} ({t(`policy.status.${p.status}`)})
+                  {p.policy_key} v{p.version} — {p.title}{p.expired ? ` (${t('policy.validity.expired')})` : ''}
                 </option>
               ))}
             </NativeSelect>
-            {citedPolicy && citedPolicy.status !== 'approved' && (
-              <p className="text-xs text-amber-600">{t('policy.citation.notApprovedHint', { status: t(`policy.status.${citedPolicy.status}`) })}</p>
+            {citedPolicy?.expired && (
+              <p className="text-xs text-amber-600">{t('policy.citation.expiredHint')}</p>
             )}
-            {policyClauses.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {policyClauses.map((c) => {
-                  const on = clauseRefs.includes(c.ref);
-                  return (
-                    <button
-                      key={c.ref}
-                      type="button"
-                      title={c.text || c.title || c.ref}
-                      aria-pressed={on}
-                      onClick={() => setClauseRefs((prev) => (on ? prev.filter((r) => r !== c.ref) : [...prev, c.ref]))}
-                      className={`rounded border px-2 py-0.5 text-xs ${on ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'}`}
-                    >
-                      <span className="font-mono">{c.ref}</span>{c.title ? ` ${c.title}` : ''}
-                    </button>
-                  );
-                })}
-              </div>
+            {policyId && (
+              <ClauseLabelsInput value={clauseRefs} onChange={setClauseRefs} suggestions={policyClauses} />
             )}
           </div>
 

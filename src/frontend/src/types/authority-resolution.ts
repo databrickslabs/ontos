@@ -461,54 +461,35 @@ export interface ResolveResponse {
   policy?: PolicyCitation | null;
 }
 
-// ------------------------------------------------------- Authority Policy
+// ------------------------------------------------------- Policy reference (ARF 1.2.0)
+// A reference is metadata: nothing about it is enforced. Its validity reaches the
+// Compliance checks as justification.* (see the justification check template).
 
-export type PolicyType = 'DOA' | 'BOARD_MANDATE' | 'REGULATION' | 'PROCUREMENT_POLICY' | 'SOP' | 'EXCEPTION';
-export const POLICY_TYPES: PolicyType[] = ['DOA', 'BOARD_MANDATE', 'REGULATION', 'PROCUREMENT_POLICY', 'SOP', 'EXCEPTION'];
-export type PolicyStatus = 'draft' | 'approved' | 'superseded' | 'withdrawn';
-
+/** A clause label, offered as a suggestion when an AR cites a clause. Free text otherwise. */
 export interface PolicyClause {
   ref: string;                       // e.g. §7.1
   title?: string;
   text?: string;
-  limits?: { amount?: number; currency?: string };
-  conditions?: string[];
-}
-
-export interface PolicyDocument {
-  id: string;
-  title?: string;
-  filename: string;
-  content_type?: string | null;
-  size_bytes?: number | null;
-  sha256?: string | null;
 }
 
 export interface AuthorityPolicy {
   id: string;
-  policy_key: string;
+  policy_key: string;                // external id, shared by every version
   version: string;
   version_family_id?: string | null;
   version_count?: number | null;
   parent_policy_id?: string | null;
   parent_version?: string | null;
   change_summary?: string | null;
-  title: string;
-  policy_type: PolicyType;
-  summary?: string | null;
+  title: string;                     // name
+  summary?: string | null;           // description
   owner_team_id?: string | null;
   owner_team_name?: string | null;
-  jurisdiction?: Record<string, any> | null;
-  effective_from?: string | null;
-  effective_to?: string | null;
-  status: PolicyStatus;
-  root_problem?: string | null;      // why it can't ground an authority now (null = valid)
-  approved_by?: string | null;
-  approved_at?: string | null;
-  approval_evidence_document_id?: string | null;
-  withdrawn_reason?: string | null;
-  clauses: PolicyClause[];
-  documents: PolicyDocument[];
+  url?: string | null;               // link out to the source document
+  valid_from?: string | null;
+  valid_to?: string | null;
+  expired: boolean;                  // computed at read time; informational
+  clauses: PolicyClause[];           // suggestions only
   dependent_count?: number;
   tags?: { fully_qualified_name?: string | null; assigned_value?: string | null }[];
   created_by?: string | null;
@@ -520,17 +501,14 @@ export interface AuthorityPolicy {
 export interface PolicyCitation {
   authority_policy_id: string;
   clause_refs: string[];
-  problem?: string | null;
   policy_key?: string;
   version?: string;
   title?: string;
-  status?: PolicyStatus;
-  policy_type?: PolicyType;
-  effective_from?: string | null;
-  effective_to?: string | null;
+  url?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  expired?: boolean;
   parent_policy_id?: string | null;
-  clauses?: PolicyClause[];
-  documents?: { id: string; filename: string; sha256?: string | null }[];
 }
 
 export interface PolicyDependent {

@@ -334,9 +334,7 @@ export default function CriteriaBuilder({ rows, onChange, readOnly = false, clau
                      disabled={fromTemplate}
                      className="h-8 w-24 text-xs" placeholder={t('criteria.divergence.dimensionPlaceholder')} />
             </div>
-            {(clauses.length > 0 || r.clauseRef) && (
-              <ClauseSelect value={r.clauseRef} clauses={clauses} onChange={(clauseRef) => patch(idx, { clauseRef })} />
-            )}
+            <ClauseSelect value={r.clauseRef} clauses={clauses} onChange={(clauseRef) => patch(idx, { clauseRef })} />
             <label className="flex items-center gap-1 text-xs whitespace-nowrap">
               <input type="checkbox" checked={r.enabled} onChange={(e) => patch(idx, { enabled: e.target.checked })} />
               {t('criteria.divergence.enabled')}

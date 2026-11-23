@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -178,17 +178,29 @@ export function ruleFromItems(items: ItemDraft[]): ArfRule | null {
 
 // ------------------------------------------------------------ component
 
-/** "Implements clause" picker; keeps a cited ref that is no longer on the policy. */
+/**
+ * "Implements clause" label (ARF 1.2.0: free text). The reference's suggested clauses
+ * are offered in a datalist; any label can still be typed.
+ */
 export function ClauseSelect({ value, clauses, onChange }: { value: string; clauses: PolicyClause[]; onChange: (ref: string) => void }) {
   const { t } = useTranslation(['authority-resolution']);
+  const listId = useId();
   return (
     <div className="flex items-center gap-1">
       <Label className="text-xs whitespace-nowrap">{t('policy.citation.clause')}</Label>
-      <NativeSelect className="w-40" selectClassName="h-8 text-xs" value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">—</option>
-        {clauses.map((c) => <option key={c.ref} value={c.ref}>{c.ref}{c.title ? ` ${c.title}` : ''}</option>)}
-        {value && !clauses.some((c) => c.ref === value) && <option value={value}>{value}</option>}
-      </NativeSelect>
+      <Input
+        className="w-40 h-8 text-xs font-mono"
+        value={value}
+        list={clauses.length ? listId : undefined}
+        placeholder={t('policy.citation.clausePlaceholder')}
+        title={t('policy.citation.clauseTitle')}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {clauses.length > 0 && (
+        <datalist id={listId}>
+          {clauses.map((c) => <option key={c.ref} value={c.ref}>{c.title || ''}</option>)}
+        </datalist>
+      )}
     </div>
   );
 }
@@ -351,9 +363,7 @@ export default function RuleEditor({ items, onChange, paramKeys, scopeKeys, doma
               <Input value={it.dimension} onChange={(e) => patch(i, { dimension: e.target.value })}
                      className="h-8 w-24 text-xs" placeholder="policy" />
             </div>
-            {(clauses.length > 0 || it.clause) && (
-              <ClauseSelect value={it.clause} clauses={clauses} onChange={(clause) => patch(i, { clause })} />
-            )}
+            <ClauseSelect value={it.clause} clauses={clauses} onChange={(clause) => patch(i, { clause })} />
           </div>
         </div>
       ))}

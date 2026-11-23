@@ -224,7 +224,7 @@
       "tags": "Tags",
       "ownership": "Verantwortung & Projekt",
       "rule": "Regel (ODRL)",
-      "justification": "Begründung (Autoritätsrichtlinie)"
+      "justification": "Begründung (Richtlinien-Referenz)"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Prüfungen, die das Gate nach der Regel durchsetzt (und gegen die der DNA-Koeffizient Abweichungen misst). Jede ist ein wiederverwendbarer <strong>Compliance Check</strong>.",
@@ -235,7 +235,7 @@
       "dnaSchedule": "Wie oft der DNA-Coefficient gegen die Evidenzquellen neu berechnet wird.",
       "domainContext": "Der begrenzte Geltungsbereich dieser Befugnis und ihre Parameter. Eine Anfrage außerhalb des Geltungsbereichs erhält no_authority; Regel und Prüfungen lesen die Parameter als ctx.<key>.",
       "rule": "Was die Befugnis erlaubt, als ODRL: <strong>Bedingungen</strong>, die gelten müssen, noch zu erfüllende <strong>Pflichten</strong> (bis dahin ist die Entscheidung <strong>bedingt</strong>, z. B. eine Mitgenehmigung) und <strong>Verbote</strong>. Mit Werten oder Variablen vergleichen (<code>ctx.threshold</code>, <code>req.market</code>).",
-      "justification": "Die Richtlinienversion, aus der sich diese Befugnis ableitet, und die Klauseln, die sie umsetzt. Die Auflösung verweigert, wenn die Richtlinie nicht genehmigt, zurückgezogen oder außerhalb ihrer Gültigkeit ist."
+      "justification": "Die Richtlinien-Referenz, auf die sich diese Authority Relation stützt. Die Gültigkeit wird angezeigt, nicht erzwungen. Klauselbezeichnungen sind Freitext; Regel und Prüfungen können sie zitieren."
     },
     "fields": {
       "name": {
@@ -650,122 +650,91 @@
   },
   "nav": {
     "relations": "Autoritätsbeziehungen",
-    "policies": "Autoritätsrichtlinien"
+    "policies": "Richtlinien-Referenzen"
   },
   "policy": {
     "list": {
-      "title": "Autoritätsrichtlinien",
-      "description": "Die dokumentierte Grundlage, aus der sich eine Befugnis ableitet: Zuständigkeitsordnungen, Vorstandsmandate, Vorschriften, Beschaffungsrichtlinien, SOPs und dokumentierte Ausnahmen. Autoritätsbeziehungen zitieren eine Richtlinienversion und die Klauseln, die sie umsetzen; ohne gültige Richtliniengrundlage liefert eine Auflösung keine Befugnis.",
-      "buttonNew": "Neue Richtlinie",
+      "title": "Richtlinien-Referenzen",
+      "description": "Die Quelldokumente, auf die sich Ihre Authority Relations zur Begründung stützen. Eine Referenz ist reine Metadaten: Ontos speichert Name, externe ID, Version und Gültigkeit und verlinkt auf das Dokument. Hier wird nichts erzwungen; die Genehmiger prüfen das Dokument selbst.",
+      "buttonNew": "Neue Referenz",
       "confirmDelete": "{{key}} v{{version}} löschen?",
       "columnCitedBy": "Zitiert von"
     },
     "fields": {
-      "key": "Richtlinienschlüssel",
+      "key": "Externe ID",
       "version": "Version",
-      "type": "Typ",
-      "title": "Titel",
-      "summary": "Zusammenfassung",
+      "title": "Name",
+      "summary": "Beschreibung",
       "owner": "Verantwortliches Team",
-      "jurisdiction": "Geltungsbereich",
-      "effectiveFrom": "Gültig ab",
-      "effectiveTo": "Gültig bis",
-      "effective": "Gültigkeit",
-      "approvedBy": "Genehmigt von",
-      "approvalEvidence": "Genehmigungsnachweis",
+      "url": "Link zum Dokument",
+      "validity": "Gültigkeit",
+      "validFrom": "Gültig ab",
+      "validTo": "Gültig bis",
       "derivedFrom": "Abgeleitet von",
-      "withdrawnReason": "Grund der Rücknahme",
-      "changeSummary": "Änderungszusammenfassung"
+      "changeSummary": "Änderungsbeschreibung"
     },
-    "type": {
-      "DOA": "Zuständigkeitsordnung",
-      "BOARD_MANDATE": "Vorstandsmandat",
-      "REGULATION": "Vorschrift",
-      "PROCUREMENT_POLICY": "Beschaffungsrichtlinie",
-      "SOP": "Standardarbeitsanweisung",
-      "EXCEPTION": "Ausnahme"
+    "validity": {
+      "openEnded": "unbefristet",
+      "expired": "Abgelaufen"
     },
-    "status": {
-      "draft": "Entwurf",
-      "approved": "Genehmigt",
-      "superseded": "Abgelöst",
-      "withdrawn": "Zurückgezogen"
-    },
-    "openEnded": "unbefristet",
     "editor": {
-      "titleNew": "Neue Autoritätsrichtlinie",
+      "titleNew": "Neue Richtlinien-Referenz",
       "titleEdit": "{{key}} v{{version}} bearbeiten",
-      "keyHint": "Stabile Kennung aller Versionen der Richtlinie, z. B. POL-DOA.",
-      "jurisdictionHint": "Der Bereich, den die Richtlinie abdeckt, als JSON, z. B. {\"market\": [\"DE\", \"AT\"]}.",
+      "keyHint": "Kennung, die alle Versionen des Dokuments teilen, z. B. POL-DOA.",
+      "urlHint": "Optional. Link zum Quelldokument (http oder https). Ontos öffnet es nicht.",
+      "validityHint": "Die im Dokument angegebene Gültigkeit. Nur informativ: Es wird nichts erzwungen. Prüfungen können sie als justification.valid_to lesen.",
       "validation": {
-        "required": "Schlüssel und Titel sind erforderlich",
-        "title": "Die Richtlinie ist ungültig",
-        "clauseRef": "Jede Klausel braucht eine Referenz (z. B. §7.1).",
-        "clauseDuplicate": "Zwei Klauseln haben dieselbe Referenz.",
-        "amount": "Ein Klausellimit muss eine Zahl sein.",
-        "jurisdiction": "Der Geltungsbereich muss gültiges JSON sein."
+        "required": "Externe ID und Name sind erforderlich",
+        "title": "Die Referenz ist nicht gültig",
+        "clauseRef": "Jeder Klauselvorschlag braucht eine Referenz (z. B. §7.1).",
+        "clauseDuplicate": "Zwei Klauselvorschläge teilen sich eine Referenz."
       }
     },
     "clauses": {
-      "title": "Klauseln",
-      "hint": "Die zitierbaren Bestimmungen der Richtlinie. Autoritätsbeziehungen zitieren die Klauseln, die sie umsetzen; Regelelemente und Prüfungen zitieren die Klausel, die sie durchsetzen, und eine Ablehnung nennt sie.",
+      "title": "Klauselvorschläge",
+      "hint": "Optional. Authority Relations und Prüfungen zitieren Klauselbezeichnungen als Freitext; diese Einträge sind nur Vorschläge im Auswahlfeld.",
       "titlePlaceholder": "Klauseltitel",
       "textPlaceholder": "Klauseltext",
-      "amount": "Limitbetrag",
-      "currency": "Währung",
-      "conditionsPlaceholder": "Bedingungen, eine pro Zeile",
-      "add": "Klausel hinzufügen",
-      "remove": "Klausel entfernen",
-      "none": "Noch keine Klauseln.",
-      "ref": "Ref.",
-      "clause": "Klausel",
-      "limit": "Limit"
+      "add": "Vorschlag hinzufügen",
+      "remove": "Vorschlag entfernen",
+      "none": "Keine Klauselvorschläge.",
+      "ref": "Ref",
+      "clause": "Klausel"
     },
     "details": {
-      "defaultTitle": "Autoritätsrichtlinie",
-      "notFound": "Autoritätsrichtlinie nicht gefunden.",
-      "backButton": "Zurück zu den Richtlinien",
+      "defaultTitle": "Richtlinien-Referenz",
+      "notFound": "Richtlinien-Referenz nicht gefunden.",
+      "backButton": "Zurück zu den Referenzen",
       "buttonNewVersion": "Neue Version",
-      "buttonApprove": "Genehmigen",
-      "buttonWithdraw": "Zurückziehen",
-      "approved": "Richtlinie genehmigt",
-      "withdrawn": "Richtlinie zurückgezogen",
-      "withdrawnMsg": "Aktive Autoritätsbeziehungen, die sie zitieren, müssen nun geprüft werden.",
-      "versionCreated": "Version {{version}} als Entwurf angelegt",
-      "rootProblem": "Diese Version kann derzeit keine Befugnis begründen: {{problem}}.",
-      "cardBasis": "Richtliniengrundlage",
-      "cardDocuments": "Quelldokumente",
-      "noDocuments": "Keine Quelldokumente.",
-      "noDocumentsDraft": "Noch keine Quelldokumente. Laden Sie sie unten unter Metadaten hoch; jedes wird mit seinem SHA-256 gespeichert.",
-      "documentsImmutable": "Diese Version ist kein Entwurf mehr: Ihre Dokumente sind feste Nachweise und ändern sich nur über eine neue Version.",
+      "versionCreated": "Version {{version}} angelegt",
+      "expiredNote": "Die in dieser Referenz angegebene Gültigkeit ist abgelaufen. Die Referenz blockiert von sich aus nichts; eine Prüfung, die justification.expired liest, kann das.",
+      "cardReference": "Referenz",
       "cardDependents": "Zitiert von ({{count}})",
-      "noDependents": "Keine Autoritätsbeziehung zitiert diese Version."
-    },
-    "approve": {
-      "title": "{{key}} v{{version}} genehmigen",
-      "description": "Eine genehmigte Version ist unveränderlich und kann ab ihrem Gültigkeitsdatum Autoritätsbeziehungen begründen.",
-      "approverPlaceholder": "Standardmäßig Sie",
-      "noEvidence": "Keiner",
-      "supersedesHint": "Die Genehmigung löst v{{version}} ab: Sie bleibt gültig, bis diese Version in Kraft tritt."
-    },
-    "withdraw": {
-      "title": "{{key}} v{{version}} zurückziehen",
-      "description": "Autoritätsbeziehungen, die diese Version zitieren: {{count}}. Aktive werden auf Prüfung gesetzt, und keine wird aufgelöst, bis sie eine gültige Richtlinie zitiert."
+      "noDependents": "Keine Authority Relation zitiert diese Referenz."
     },
     "newVersion": {
-      "title": "Neue Richtlinienversion",
-      "description": "Legt einen Nachfolger mit denselben Klauseln als Entwurf an. Bearbeiten und genehmigen Sie ihn, um diese Version abzulösen."
+      "title": "Neue Version der Referenz",
+      "description": "Legt einen neuen Datensatz für die neue Version des Quelldokuments an, verknüpft mit diesem. Die Gültigkeit wird an der neuen Version gesetzt."
     },
     "citation": {
-      "legacy": "Freitext-Begründung (keine Autoritätsrichtlinie zitiert)",
-      "none": "Keine Autoritätsrichtlinie zitiert.",
+      "legacy": "Freitext-Begründung (keine Richtlinien-Referenz zitiert)",
+      "none": "Keine Richtlinien-Referenz zitiert.",
       "derivedFrom": "abgeleitet von der vorherigen Version",
-      "problem": "Keine gültige Richtliniengrundlage: {{problem}}. Auflösungen liefern keine Befugnis.",
-      "noClauses": "Keine Klauseln zitiert.",
-      "enforces": "Setzt diese Richtlinienklausel durch",
+      "link": "Dokument öffnen",
+      "noClauses": "Keine Klauselbezeichnungen zitiert.",
       "clause": "Klausel",
-      "nonePicker": "Keine Autoritätsrichtlinie",
-      "notApprovedHint": "Diese Version ist {{status}}: Die Autoritätsbeziehung wird erst aufgelöst, wenn sie eine genehmigte, gültige Version zitiert."
+      "clausePlaceholder": "§7.1",
+      "clauseTitle": "Klauselbezeichnung (Freitext). Vorschläge stammen aus der Referenz.",
+      "clauses": "Klauselbezeichnungen",
+      "clausesPlaceholder": "§7.1, §7.2",
+      "clausesHint": "Freitext, durch Kommas getrennt. Vorschläge stammen aus den Klauseln der Referenz.",
+      "nonePicker": "Keine Richtlinien-Referenz",
+      "expiredHint": "Die Gültigkeit dieser Referenz ist abgelaufen. Sie blockiert von sich aus nichts; zum Erzwingen die Prüfvorlage zur Begründung hinzufügen.",
+      "enforces": "Erzwingt diese Klausel der Richtlinie"
+    },
+    "errors": {
+      "inUse": "Die Referenz wird zitiert von {{names}}. Entfernen Sie zuerst diese Zitate.",
+      "notFound": "Richtlinien-Referenz nicht gefunden."
     }
   },
   "errors": {

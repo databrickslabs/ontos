@@ -224,7 +224,7 @@
       "tags": "Tags",
       "ownership": "Ownership & project",
       "rule": "Rule (ODRL)",
-      "justification": "Justification (Authority Policy)"
+      "justification": "Justification (policy reference)"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Checks the gate enforces after the rule (and the DNA-Coefficient measures divergence against). Each is a reusable <strong>Compliance Check</strong>.",
@@ -235,7 +235,7 @@
       "dnaSchedule": "How often the DNA-Coefficient is recomputed against the evidence sources.",
       "domainContext": "The bounded scope this authority holds in, and its parameters. A request outside the scope gets no_authority; the rule and the checks read the parameters as ctx.<key>.",
       "rule": "What the authority permits, as ODRL: <strong>constraints</strong> that must hold, <strong>duties</strong> still to fulfil (the decision is <strong>conditional</strong> until then, e.g. a co-approval) and <strong>prohibitions</strong>. Compare with values or variables (<code>ctx.threshold</code>, <code>req.market</code>).",
-      "justification": "The policy version this authority derives from and the clauses it implements. Resolve refuses when the policy is not approved, withdrawn or outside its effective dates."
+      "justification": "The policy reference this Authority Relation rests on. Its validity is shown, not enforced. Clause labels are free text; the rule and the checks can cite them."
     },
     "fields": {
       "name": {
@@ -650,122 +650,91 @@
   },
   "nav": {
     "relations": "Authority Relations",
-    "policies": "Authority Policies"
+    "policies": "Policy references"
   },
   "policy": {
     "list": {
-      "title": "Authority Policies",
-      "description": "The documented basis an authority derives from: delegation-of-authority schedules, board mandates, regulations, procurement policies, SOPs and recorded exceptions. Authority Relations cite a policy version and the clauses they implement; a resolve without a valid policy root returns no authority.",
-      "buttonNew": "New Policy",
+      "title": "Policy references",
+      "description": "The source documents your Authority Relations cite for their justification. A reference is metadata: Ontos keeps its name, external id, version and validity, and links out to the document. Nothing here is enforced; the approvers check the document itself.",
+      "buttonNew": "New reference",
       "confirmDelete": "Delete {{key}} v{{version}}?",
       "columnCitedBy": "Cited by"
     },
     "fields": {
-      "key": "Policy key",
+      "key": "External ID",
       "version": "Version",
-      "type": "Type",
-      "title": "Title",
-      "summary": "Summary",
+      "title": "Name",
+      "summary": "Description",
       "owner": "Owner team",
-      "jurisdiction": "Jurisdiction",
-      "effectiveFrom": "Effective from",
-      "effectiveTo": "Effective until",
-      "effective": "Effective",
-      "approvedBy": "Approved by",
-      "approvalEvidence": "Approval evidence",
+      "url": "Link to document",
+      "validity": "Validity",
+      "validFrom": "Valid from",
+      "validTo": "Valid to",
       "derivedFrom": "Derived from",
-      "withdrawnReason": "Withdrawal reason",
       "changeSummary": "Change summary"
     },
-    "type": {
-      "DOA": "Delegation of authority",
-      "BOARD_MANDATE": "Board mandate",
-      "REGULATION": "Regulation",
-      "PROCUREMENT_POLICY": "Procurement policy",
-      "SOP": "Standard operating procedure",
-      "EXCEPTION": "Exception"
+    "validity": {
+      "openEnded": "open-ended",
+      "expired": "Expired"
     },
-    "status": {
-      "draft": "Draft",
-      "approved": "Approved",
-      "superseded": "Superseded",
-      "withdrawn": "Withdrawn"
-    },
-    "openEnded": "open-ended",
     "editor": {
-      "titleNew": "New Authority Policy",
+      "titleNew": "New policy reference",
       "titleEdit": "Edit {{key}} v{{version}}",
-      "keyHint": "Stable identifier shared by every version of the policy, e.g. POL-DOA.",
-      "jurisdictionHint": "The scope the policy covers, as JSON, e.g. {\"market\": [\"DE\", \"AT\"]}.",
+      "keyHint": "Identifier shared by every version of the document, e.g. POL-DOA.",
+      "urlHint": "Optional. A link to the source document (http or https). Ontos doesn't open it.",
+      "validityHint": "The validity the document states. Informational: nothing is enforced. Checks can read it as justification.valid_to.",
       "validation": {
-        "required": "Key and title are required",
-        "title": "The policy is not valid",
-        "clauseRef": "Every clause needs a reference (e.g. §7.1).",
-        "clauseDuplicate": "Two clauses share a reference.",
-        "amount": "A clause limit must be a number.",
-        "jurisdiction": "Jurisdiction must be valid JSON."
+        "required": "External ID and name are required",
+        "title": "The reference is not valid",
+        "clauseRef": "Every clause suggestion needs a reference (e.g. §7.1).",
+        "clauseDuplicate": "Two clause suggestions share a reference."
       }
     },
     "clauses": {
-      "title": "Clauses",
-      "hint": "The citable provisions of the policy. Authority Relations cite the clauses they implement; rule items and checks cite the clause they enforce, and a denial names it.",
+      "title": "Clause suggestions",
+      "hint": "Optional. Authority Relations and checks cite clause labels as free text; these entries are only suggestions in their picker.",
       "titlePlaceholder": "Clause title",
       "textPlaceholder": "Clause text",
-      "amount": "Limit amount",
-      "currency": "Currency",
-      "conditionsPlaceholder": "Conditions, one per line",
-      "add": "Add clause",
-      "remove": "Remove clause",
-      "none": "No clauses yet.",
+      "add": "Add suggestion",
+      "remove": "Remove suggestion",
+      "none": "No clause suggestions.",
       "ref": "Ref",
-      "clause": "Clause",
-      "limit": "Limit"
+      "clause": "Clause"
     },
     "details": {
-      "defaultTitle": "Authority Policy",
-      "notFound": "Authority Policy not found.",
-      "backButton": "Back to policies",
+      "defaultTitle": "Policy reference",
+      "notFound": "Policy reference not found.",
+      "backButton": "Back to references",
       "buttonNewVersion": "New version",
-      "buttonApprove": "Approve",
-      "buttonWithdraw": "Withdraw",
-      "approved": "Policy approved",
-      "withdrawn": "Policy withdrawn",
-      "withdrawnMsg": "Active Authority Relations citing it now need review.",
-      "versionCreated": "Version {{version}} drafted",
-      "rootProblem": "This version can't ground an authority now: {{problem}}.",
-      "cardBasis": "Policy basis",
-      "cardDocuments": "Source documents",
-      "noDocuments": "No source documents.",
-      "noDocumentsDraft": "No source documents yet. Upload them under Metadata below; each is stored with its SHA-256.",
-      "documentsImmutable": "This version is no longer a draft: its documents are fixed evidence and change only through a new version.",
+      "versionCreated": "Version {{version}} created",
+      "expiredNote": "The validity this reference states has passed. The reference blocks nothing by itself; a check that reads justification.expired can.",
+      "cardReference": "Reference",
       "cardDependents": "Cited by ({{count}})",
-      "noDependents": "No Authority Relation cites this version."
-    },
-    "approve": {
-      "title": "Approve {{key}} v{{version}}",
-      "description": "An approved version is immutable and can ground Authority Relations from its effective date.",
-      "approverPlaceholder": "Defaults to you",
-      "noEvidence": "None",
-      "supersedesHint": "Approving supersedes v{{version}}: it stays valid until this version takes effect."
-    },
-    "withdraw": {
-      "title": "Withdraw {{key}} v{{version}}",
-      "description": "Authority Relations citing this version: {{count}}. Active ones are set to needs review, and none of them resolves until it cites a valid policy."
+      "noDependents": "No Authority Relation cites this reference."
     },
     "newVersion": {
-      "title": "New policy version",
-      "description": "Drafts a successor with the same clauses. Edit it, then approve it to supersede this version."
+      "title": "New reference version",
+      "description": "Creates a new record for the new version of the source document, linked to this one. The validity is set on the new version."
     },
     "citation": {
-      "legacy": "Free-form justification (no Authority Policy cited)",
-      "none": "No Authority Policy cited.",
+      "legacy": "Free-form justification (no policy reference cited)",
+      "none": "No policy reference cited.",
       "derivedFrom": "derived from the previous version",
-      "problem": "No valid policy root: {{problem}}. Resolves return no authority.",
-      "noClauses": "No clauses cited.",
-      "enforces": "Enforces this policy clause",
+      "link": "Open document",
+      "noClauses": "No clause labels cited.",
       "clause": "Clause",
-      "nonePicker": "No Authority Policy",
-      "notApprovedHint": "This version is {{status}}: the Authority Relation won't resolve until it cites an approved, effective version."
+      "clausePlaceholder": "§7.1",
+      "clauseTitle": "Clause label (free text). Suggestions come from the reference.",
+      "clauses": "Clause labels",
+      "clausesPlaceholder": "§7.1, §7.2",
+      "clausesHint": "Free text, comma-separated. Suggestions come from the reference's clauses.",
+      "nonePicker": "No policy reference",
+      "expiredHint": "This reference's validity has passed. It blocks nothing by itself; add the justification check template to enforce it.",
+      "enforces": "Enforces this policy clause"
+    },
+    "errors": {
+      "inUse": "The reference is cited by {{names}}. Remove those citations first.",
+      "notFound": "Policy reference not found."
     }
   },
   "errors": {

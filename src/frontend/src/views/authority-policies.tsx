@@ -14,13 +14,12 @@ import { VersionCountBadge } from '@/components/common/version-count-badge';
 import { AlertCircle, ChevronDown, Eye, Plus, ScrollText, Trash2 } from 'lucide-react';
 import AuthorityNav from '@/components/authority-resolution/authority-nav';
 import AuthorityPolicyDialog from '@/components/authority-resolution/authority-policy-dialog';
-import { PolicyStatusBadge } from '@/components/authority-resolution/policy-citation-view';
+import { authorityErrorMessage } from '@/components/authority-resolution/authority-errors';
+import { ValidityLine } from '@/components/authority-resolution/policy-citation-view';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import type { AuthorityPolicy } from '@/types/authority-resolution';
 
 const FEATURE_ID = 'authority-resolution';
-
-export const formatDay = (iso?: string | null) => (iso ? iso.slice(0, 10) : '—');
 
 export default function AuthorityPolicies() {
   const { t } = useTranslation(['authority-resolution', 'common']);
@@ -60,8 +59,9 @@ export default function AuthorityPolicies() {
 
   const remove = async (p: AuthorityPolicy) => {
     if (!confirm(t('policy.list.confirmDelete', { key: p.policy_key, version: p.version }))) return;
-    const { error } = await del(`/api/authority/policies/${p.id}`);
-    if (error) toast({ title: t('common:toast.error'), description: error, variant: 'destructive' });
+    const { error, errorCode, errorParams } = await del(`/api/authority/policies/${p.id}`);
+    // The backend refuses a reference that an AR version still cites; its message says which.
+    if (error) toast({ title: t('common:toast.error'), description: authorityErrorMessage(t, error, errorCode, errorParams), variant: 'destructive' });
     else { toast({ title: t('common:toast.deleted'), description: p.title }); fetchPolicies(); }
   };
 
@@ -86,16 +86,6 @@ export default function AuthorityPolicies() {
       ),
     },
     {
-      accessorKey: 'policy_type',
-      header: sortableHeader(t('policy.fields.type')),
-      cell: ({ row }) => <span className="text-sm">{t(`policy.type.${row.original.policy_type}`)}</span>,
-    },
-    {
-      accessorKey: 'status',
-      header: sortableHeader(t('common:labels.status')),
-      cell: ({ row }) => <PolicyStatusBadge status={row.original.status} />,
-    },
-    {
       accessorKey: 'version',
       header: t('common:labels.version'),
       cell: ({ row }) => (
@@ -108,11 +98,11 @@ export default function AuthorityPolicies() {
       enableSorting: false,
     },
     {
-      accessorKey: 'effective_from',
-      header: sortableHeader(t('policy.fields.effective')),
+      accessorKey: 'valid_from',
+      header: sortableHeader(t('policy.fields.validity')),
       cell: ({ row }) => (
         <span className="text-sm text-muted-foreground">
-          {formatDay(row.original.effective_from)} → {row.original.effective_to ? formatDay(row.original.effective_to) : t('policy.openEnded')}
+          <ValidityLine from={row.original.valid_from} to={row.original.valid_to} expired={row.original.expired} />
         </span>
       ),
     },
@@ -130,7 +120,7 @@ export default function AuthorityPolicies() {
                   onClick={(e) => { e.stopPropagation(); navigate(`/authority-resolution/policies/${row.original.id}`); }}>
             <Eye className="h-4 w-4" />
           </Button>
-          {canWrite && (row.original.status === 'draft' || row.original.status === 'withdrawn') && (
+          {canWrite && (
             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title={t('common:actions.delete')}
                     onClick={(e) => { e.stopPropagation(); remove(row.original); }}>
               <Trash2 className="h-4 w-4" />
@@ -158,7 +148,7 @@ export default function AuthorityPolicies() {
       )}
 
       {loading ? (
-        <ListViewSkeleton columns={7} rows={5} toolbarButtons={1} />
+        <ListViewSkeleton columns={5} rows={5} toolbarButtons={1} />
       ) : (
         <DataTable
           columns={columns}

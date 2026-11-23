@@ -224,7 +224,7 @@
       "tags": "タグ",
       "ownership": "所有者とプロジェクト",
       "rule": "ルール (ODRL)",
-      "justification": "根拠（権限ポリシー）"
+      "justification": "根拠（ポリシー参照）"
     },
     "sectionDescriptions": {
       "decisionCriteria": "ルールの後にゲートが適用するチェックです(DNA 係数はこれに対する乖離を測定します)。それぞれ再利用可能な <strong>Compliance Check</strong> です。",
@@ -235,7 +235,7 @@
       "dnaSchedule": "エビデンスソースに対して DNA-Coefficient を再計算する頻度。",
       "domainContext": "この権限が有効な限定されたスコープとそのパラメーターです。スコープ外のリクエストには no_authority が返り、ルールとチェックはパラメーターを ctx.<key> として読みます。",
       "rule": "権限が許可する内容を ODRL で表します: 満たすべき<strong>制約</strong>、まだ履行が必要な<strong>義務</strong>(それまで決定は<strong>条件付き</strong>、例: 共同承認)、そして<strong>禁止</strong>です。値または変数 (<code>ctx.threshold</code>, <code>req.market</code>) と比較します。",
-      "justification": "この権限の根拠となるポリシーのバージョンと、実装する条項です。ポリシーが未承認、撤回済み、または有効期間外の場合、解決は拒否されます。"
+      "justification": "この Authority Relation が根拠とするポリシー参照です。有効期間は表示されるだけで、強制はされません。条項ラベルはフリーテキストで、ルールとチェックから引用できます。"
     },
     "fields": {
       "name": {
@@ -650,122 +650,91 @@
   },
   "nav": {
     "relations": "権限リレーション",
-    "policies": "権限ポリシー"
+    "policies": "ポリシー参照"
   },
   "policy": {
     "list": {
-      "title": "権限ポリシー",
-      "description": "権限の根拠となる文書化された基盤です。職務権限規程、取締役会の委任、法規制、調達ポリシー、SOP、記録された例外などが該当します。権限リレーションはポリシーのバージョンと実装する条項を引用します。有効なポリシー根拠がない解決は「権限なし」を返します。",
-      "buttonNew": "新規ポリシー",
+      "title": "ポリシー参照",
+      "description": "Authority Relation が根拠として引用する元文書です。参照はメタデータだけです。Ontos は名前、外部 ID、バージョン、有効期間を保持し、文書へのリンクを持ちます。ここでは何も強制されず、承認者が文書自体を確認します。",
+      "buttonNew": "新規参照",
       "confirmDelete": "{{key}} v{{version}} を削除しますか？",
       "columnCitedBy": "引用元"
     },
     "fields": {
-      "key": "ポリシーキー",
+      "key": "外部 ID",
       "version": "バージョン",
-      "type": "種類",
-      "title": "タイトル",
-      "summary": "概要",
-      "owner": "所有チーム",
-      "jurisdiction": "適用範囲",
-      "effectiveFrom": "発効日",
-      "effectiveTo": "失効日",
-      "effective": "有効期間",
-      "approvedBy": "承認者",
-      "approvalEvidence": "承認の証跡",
+      "title": "名前",
+      "summary": "説明",
+      "owner": "担当チーム",
+      "url": "文書へのリンク",
+      "validity": "有効期間",
+      "validFrom": "開始日",
+      "validTo": "終了日",
       "derivedFrom": "派生元",
-      "withdrawnReason": "撤回理由",
-      "changeSummary": "変更の概要"
+      "changeSummary": "変更概要"
     },
-    "type": {
-      "DOA": "職務権限規程",
-      "BOARD_MANDATE": "取締役会の委任",
-      "REGULATION": "法規制",
-      "PROCUREMENT_POLICY": "調達ポリシー",
-      "SOP": "標準作業手順",
-      "EXCEPTION": "例外"
+    "validity": {
+      "openEnded": "終了日なし",
+      "expired": "期限切れ"
     },
-    "status": {
-      "draft": "下書き",
-      "approved": "承認済み",
-      "superseded": "置き換え済み",
-      "withdrawn": "撤回済み"
-    },
-    "openEnded": "期限なし",
     "editor": {
-      "titleNew": "新規権限ポリシー",
+      "titleNew": "新規ポリシー参照",
       "titleEdit": "{{key}} v{{version}} を編集",
-      "keyHint": "ポリシーの全バージョンで共有される固定の識別子（例: POL-DOA）。",
-      "jurisdictionHint": "ポリシーの適用範囲を JSON で指定します（例: {\"market\": [\"DE\", \"AT\"]}）。",
+      "keyHint": "文書のすべてのバージョンで共通の識別子（例: POL-DOA）。",
+      "urlHint": "任意。元文書へのリンク（http または https）。Ontos は開きません。",
+      "validityHint": "文書に記載された有効期間。参考情報のみで、強制はされません。チェックは justification.valid_to として参照できます。",
       "validation": {
-        "required": "キーとタイトルは必須です",
-        "title": "ポリシーが無効です",
-        "clauseRef": "各条項には参照が必要です（例: §7.1）。",
-        "clauseDuplicate": "2 つの条項の参照が重複しています。",
-        "amount": "条項の上限は数値である必要があります。",
-        "jurisdiction": "適用範囲は有効な JSON である必要があります。"
+        "required": "外部 ID と名前は必須です",
+        "title": "参照が有効ではありません",
+        "clauseRef": "条項の候補にはそれぞれ参照（例: §7.1）が必要です。",
+        "clauseDuplicate": "同じ参照の条項候補が2つあります。"
       }
     },
     "clauses": {
-      "title": "条項",
-      "hint": "ポリシーの引用可能な規定です。権限リレーションは実装する条項を引用し、ルール項目とチェックは適用する条項を引用します。拒否時にはその条項が示されます。",
-      "titlePlaceholder": "条項のタイトル",
+      "title": "条項の候補",
+      "hint": "任意。Authority Relation やチェックは条項をフリーテキストで引用します。ここでの項目は選択時の候補にすぎません。",
+      "titlePlaceholder": "条項タイトル",
       "textPlaceholder": "条項の本文",
-      "amount": "上限額",
-      "currency": "通貨",
-      "conditionsPlaceholder": "条件（1 行に 1 つ）",
-      "add": "条項を追加",
-      "remove": "条項を削除",
-      "none": "条項はまだありません。",
+      "add": "候補を追加",
+      "remove": "候補を削除",
+      "none": "条項の候補はありません。",
       "ref": "参照",
-      "clause": "条項",
-      "limit": "上限"
+      "clause": "条項"
     },
     "details": {
-      "defaultTitle": "権限ポリシー",
-      "notFound": "権限ポリシーが見つかりません。",
-      "backButton": "ポリシー一覧に戻る",
+      "defaultTitle": "ポリシー参照",
+      "notFound": "ポリシー参照が見つかりません。",
+      "backButton": "参照一覧に戻る",
       "buttonNewVersion": "新しいバージョン",
-      "buttonApprove": "承認",
-      "buttonWithdraw": "撤回",
-      "approved": "ポリシーを承認しました",
-      "withdrawn": "ポリシーを撤回しました",
-      "withdrawnMsg": "このポリシーを引用するアクティブな権限リレーションはレビューが必要になりました。",
-      "versionCreated": "バージョン {{version}} を下書きとして作成しました",
-      "rootProblem": "このバージョンは現在、権限の根拠になれません: {{problem}}。",
-      "cardBasis": "ポリシーの根拠",
-      "cardDocuments": "原本ドキュメント",
-      "noDocuments": "原本ドキュメントはありません。",
-      "noDocumentsDraft": "原本ドキュメントはまだありません。下のメタデータからアップロードしてください。各ドキュメントは SHA-256 とともに保存されます。",
-      "documentsImmutable": "このバージョンは下書きではなくなりました。ドキュメントは確定した証跡であり、新しいバージョンでのみ変更できます。",
+      "versionCreated": "バージョン {{version}} を作成しました",
+      "expiredNote": "この参照に記載された有効期間は過ぎています。参照自体は何もブロックしませんが、justification.expired を読むチェックはブロックできます。",
+      "cardReference": "参照",
       "cardDependents": "引用元 ({{count}})",
-      "noDependents": "このバージョンを引用する権限リレーションはありません。"
-    },
-    "approve": {
-      "title": "{{key}} v{{version}} を承認",
-      "description": "承認済みのバージョンは変更できず、発効日から権限リレーションの根拠になれます。",
-      "approverPlaceholder": "既定ではあなた",
-      "noEvidence": "なし",
-      "supersedesHint": "承認すると v{{version}} が置き換えられます。このバージョンが発効するまでは有効なままです。"
-    },
-    "withdraw": {
-      "title": "{{key}} v{{version}} を撤回",
-      "description": "このバージョンを引用する権限リレーション: {{count}} 件。アクティブなものはレビュー待ちになり、有効なポリシーを引用するまで解決されません。"
+      "noDependents": "この参照を引用している Authority Relation はありません。"
     },
     "newVersion": {
-      "title": "ポリシーの新しいバージョン",
-      "description": "同じ条項を持つ後継バージョンを下書きとして作成します。編集して承認すると、このバージョンが置き換えられます。"
+      "title": "参照の新しいバージョン",
+      "description": "元文書の新しいバージョンとして、この参照に紐づく新しいレコードを作成します。有効期間は新しいバージョンに設定します。"
     },
     "citation": {
-      "legacy": "自由記述の根拠（権限ポリシーの引用なし）",
-      "none": "権限ポリシーは引用されていません。",
+      "legacy": "自由記述の根拠（ポリシー参照なし）",
+      "none": "ポリシー参照は引用されていません。",
       "derivedFrom": "前のバージョンから派生",
-      "problem": "有効なポリシー根拠がありません: {{problem}}。解決は「権限なし」を返します。",
-      "noClauses": "条項は引用されていません。",
-      "enforces": "このポリシー条項を適用します",
+      "link": "文書を開く",
+      "noClauses": "引用された条項ラベルはありません。",
       "clause": "条項",
-      "nonePicker": "権限ポリシーなし",
-      "notApprovedHint": "このバージョンは{{status}}です。承認済みで有効なバージョンを引用するまで、権限リレーションは解決されません。"
+      "clausePlaceholder": "§7.1",
+      "clauseTitle": "条項ラベル（フリーテキスト）。候補は参照から提供されます。",
+      "clauses": "条項ラベル",
+      "clausesPlaceholder": "§7.1, §7.2",
+      "clausesHint": "カンマ区切りのフリーテキスト。候補は参照の条項から提供されます。",
+      "nonePicker": "ポリシー参照なし",
+      "expiredHint": "この参照の有効期間は過ぎています。参照自体ではブロックされません。強制するには根拠チェックのテンプレートを追加してください。",
+      "enforces": "このポリシー条項を適用"
+    },
+    "errors": {
+      "inUse": "この参照は {{names}} から引用されています。先に引用を削除してください。",
+      "notFound": "ポリシー参照が見つかりません。"
     }
   },
   "errors": {

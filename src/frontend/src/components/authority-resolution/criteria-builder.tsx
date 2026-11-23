@@ -17,8 +17,10 @@ import {
   type AuthorityCriterionTemplate,
   type CriterionInput,
   type CriterionProvenance,
+  type PolicyClause,
   type ReusableCheck,
 } from '@/types/authority-resolution';
+import { ClauseSelect } from '@/components/authority-resolution/rule-editor';
 
 /**
  * The AR's decision checks. Each row is owned by the AR version and is a raw
@@ -42,6 +44,8 @@ export interface CriterionRow {
   copiedFrom: CriterionProvenance | null;
   // set on ARF template rows: the server fills the rule from the registry
   templateKey: string | null;
+  // the Authority Policy clause this check enforces ('' when none)
+  clauseRef: string;
   // shared
   name: string;
   failureMessage: string;
@@ -52,7 +56,7 @@ export interface CriterionRow {
 }
 
 export const emptyCriterionRow = (): CriterionRow => ({
-  rawRule: '', copiedFrom: null, templateKey: null, name: '', failureMessage: '',
+  rawRule: '', copiedFrom: null, templateKey: null, clauseRef: '', name: '', failureMessage: '',
   direction: 'actual-exceeds-documented', weight: '1.0', dimension: 'people', enabled: true,
 });
 
@@ -63,6 +67,7 @@ export const rowsFromCriteria = (criteria?: AuthorityCriterion[] | null): Criter
     return {
       rawRule: c.rule || '', copiedFrom,
       templateKey: copiedFrom?.kind === 'template' ? (copiedFrom.key ?? null) : null,
+      clauseRef: c.policy_clause_ref || '',
       name: c.name || '', failureMessage: c.failure_message || '',
       direction: c.direction || 'neutral', weight: String(c.weight ?? 1.0),
       dimension: c.dimension || 'people',
@@ -96,9 +101,10 @@ export function rowsToPayload(rows: CriterionRow[]): CriterionInput[] {
   rows.forEach((r, idx) => {
     // Validated by the caller (hasInvalidWeight); an invalid weight never reaches here.
     const weight = parseWeight(r.weight) as number;
+    const policy_clause_ref = r.clauseRef.trim() || undefined;
     if (r.templateKey) {
       // The server fills name, rule, failure_message, dimension and direction.
-      out.push({ template_key: r.templateKey, weight, order: idx, enabled: r.enabled });
+      out.push({ template_key: r.templateKey, weight, order: idx, enabled: r.enabled, policy_clause_ref });
       return;
     }
     const dimension = (r.dimension || 'people').trim() || 'people';
@@ -109,7 +115,7 @@ export function rowsToPayload(rows: CriterionRow[]): CriterionInput[] {
       rule,
       failure_message: r.failureMessage.trim() || undefined,
       direction: r.direction, weight, dimension, order: idx, enabled: r.enabled,
-      copied_from: r.copiedFrom ?? undefined,
+      copied_from: r.copiedFrom ?? undefined, policy_clause_ref,
     });
   });
   return out;
@@ -117,6 +123,10 @@ export function rowsToPayload(rows: CriterionRow[]): CriterionInput[] {
 
 interface Props {
   rows: CriterionRow[];
+  /** Clauses of the cited Authority Policy; each check may cite the one it enforces. */
+  clauses?: PolicyClause[];
+  /** Clause labels are offered only when the AR cites a policy reference (ARF 1.2.0). */
+  citable?: boolean;
   onChange: (rows: CriterionRow[]) => void;
   /** Hides the Add check menu and the row remove buttons (AR is not editable). */
   readOnly?: boolean;
@@ -127,7 +137,7 @@ interface Props {
 
 type ChecksState = 'loading' | 'ready' | 'failed';
 
-export default function CriteriaBuilder({ rows, onChange, readOnly = false, params = {}, scopeKeys = [] }: Props) {
+export default function CriteriaBuilder({ rows, onChange, readOnly = false, clauses = [], citable = false, params = {}, scopeKeys = [] }: Props) {
   const { t } = useTranslation(['authority-resolution']);
   const { get, post } = useApi();
   const [checks, setChecks] = useState<ReusableCheck[]>([]);
@@ -295,7 +305,7 @@ export default function CriteriaBuilder({ rows, onChange, readOnly = false, para
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1">
               <Label className="text-xs whitespace-nowrap">{t('criteria.divergence.direction')}</Label>
               <NativeSelect
@@ -326,6 +336,7 @@ export default function CriteriaBuilder({ rows, onChange, readOnly = false, para
                      disabled={fromTemplate}
                      className="h-8 w-24 text-xs" placeholder={t('criteria.divergence.dimensionPlaceholder')} />
             </div>
+            {citable && <ClauseSelect value={r.clauseRef} clauses={clauses} onChange={(clauseRef) => patch(idx, { clauseRef })} />}
             <label className="flex items-center gap-1 text-xs whitespace-nowrap">
               <input type="checkbox" checked={r.enabled} onChange={(e) => patch(idx, { enabled: e.target.checked })} />
               {t('criteria.divergence.enabled')}

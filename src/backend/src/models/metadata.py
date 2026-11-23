@@ -11,7 +11,11 @@ from pydantic import BaseModel, Field, HttpUrl
 # ============================================================================
 # ``concept`` (id = the concept IRI) is what the concept page lists documents for;
 # imported Markdown files can name concepts in their front matter.
-ENTITY_TYPE_PATTERN = r"^(data_domain|data_product|data_contract|dataset|asset|concept)$"
+# ``authority_relation`` carries the Authority Resolution metadata panels; widening
+# to every panel kind is #1092. Policy references have no documents (ARF 1.2.0).
+ENTITY_TYPE_PATTERN = (
+    r"^(data_domain|data_product|data_contract|dataset|asset|concept|authority_relation)$"
+)
 
 
 # ============================================================================

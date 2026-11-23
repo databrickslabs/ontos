@@ -10,6 +10,7 @@ import NativeSelect from '@/components/ui/native-select';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import TagSelector from '@/components/ui/tag-selector';
 import type { AssignedTag } from '@/components/ui/tag-chip';
+import ClauseLabelsInput, { pruneClauseLabels } from '@/components/authority-resolution/clause-labels-input';
 import ScheduleSelect from '@/components/authority-resolution/schedule-select';
 import McpRefEditor from '@/components/authority-resolution/mcp-ref-editor';
 import { InfoHint, SectionTitle } from '@/components/authority-resolution/info-hint';
@@ -35,7 +36,7 @@ import {
   ACTION_VOCAB, operandForKey, scopeKey,
   type AuthorityRelation, type AffirmationInput,
   type PrerequisiteInput, type AuthorityRelationSlug,
-  type ResourceRefInput, type EntityRefCandidate, type ResolverAuth,
+  type ResourceRefInput, type EntityRefCandidate, type ResolverAuth, type AuthorityPolicy,
 } from '@/types/authority-resolution';
 import type { BusinessRoleRead } from '@/types/business-role';
 
@@ -112,6 +113,9 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   const [slugCatalog, setSlugCatalog] = useState<AuthorityRelationSlug[]>([]);
   const [resourceRefs, setResourceRefs] = useState<ResourceRefInput[]>([]);
   const [resolverAuth, setResolverAuth] = useState<ResolverAuth>('obo');
+  const [policies, setPolicies] = useState<AuthorityPolicy[]>([]);
+  const [policyId, setPolicyId] = useState('');
+  const [clauseRefs, setClauseRefs] = useState<string[]>([]);
   // The DNA ceiling, the recompute schedule and the app service principal identity are Admin-only.
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const isAdmin = !permissionsLoading && hasPermission('authority-resolution', FeatureAccessLevel.ADMIN);
@@ -134,6 +138,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
     setOwnerTeamId(''); setProjectId(currentProject?.id || '');
     setAffirmations(DEFAULT_AFFIRMATIONS); setTags([]); setScheduleCron(null);
     setPrerequisites([]); setResourceRefs([]); setResolverAuth('obo');
+    setPolicyId(''); setClauseRefs([]);
   };
 
   // Load active Business Roles for the participant role picker (Settings feature).
@@ -162,6 +167,17 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
         if (Array.isArray(data)) setSlugCatalog(data);
         setSlugsLoading(false);
       }
+    })();
+    return () => { cancelled = true; };
+  }, [open, get]);
+
+  // Every reference version (an AR cites an exact version), for the Justification picker.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await get<AuthorityPolicy[]>('/api/authority/policies?include_history=true');
+      if (!cancelled && Array.isArray(data)) setPolicies(data);
     })();
     return () => { cancelled = true; };
   }, [open, get]);
@@ -228,6 +244,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       setTags((relation.tags || []).map((t) => t.fully_qualified_name).filter(Boolean) as string[]);
       setScheduleCron(relation.schedule_cron ?? null);
       setResolverAuth(relation.resolver_auth ?? 'obo');
+      setPolicyId(relation.authority_policy_id || '');
+      setClauseRefs(relation.policy_clause_refs || []);
       setPrerequisites(
         (relation.prerequisites || []).map((p) => ({
           prerequisite_family_slug: p.prerequisite_family_slug,
@@ -258,6 +276,20 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   // The context as authored so far (for the rule editor's validation and the
   // checks' variables); invalid rows leave it undefined until fixed.
   const draftContext = toDomainContext(scopeRows, paramRows);
+  const citedPolicy = policies.find((p) => p.id === policyId);
+  // The reference's clause labels are suggestions only: a clause is free text on the AR.
+  const policyClauses = citedPolicy?.clauses || [];
+  const policyOptions = [...policies].sort((a, b) =>
+    a.policy_key.localeCompare(b.policy_key) || b.version.localeCompare(a.version, undefined, { numeric: true }));
+  // Choosing another reference (or none) prunes the clause labels it doesn't suggest, from the
+  // AR, its rule items and its checks: a label is only meaningful against the reference it was chosen for.
+  const choosePolicy = (id: string) => {
+    setPolicyId(id);
+    const refs = (policies.find((p) => p.id === id)?.clauses || []).map((c) => c.ref);
+    setClauseRefs((prev) => pruneClauseLabels(prev, refs));
+    setRuleItems((prev) => prev.map((it) => (it.clause && !refs.includes(it.clause) ? { ...it, clause: '' } : it)));
+    setCriteriaRows((prev) => prev.map((r) => (r.clauseRef && !refs.includes(r.clauseRef) ? { ...r, clauseRef: '' } : r)));
+  };
 
   const updateAffirmation = (idx: number, patch: Partial<AffirmationInput>) => {
     setAffirmations((prev) => prev.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
@@ -344,6 +376,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       object_id: objectId.trim() || undefined,
       domain_context: dc.value,
       rule,
+      authority_policy_id: policyId || null,
+      policy_clause_refs: policyId ? clauseRefs : [],
       criteria: rowsToPayload(criteriaRows),
       evidence_sources,
       dna_max_threshold: dnaMaxNumber,
@@ -455,6 +489,24 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
           <SectionTitle title={t('editor.sections.domainContext')} info={t('editor.sectionDescriptions.domainContext')} />
           <DomainContextEditor scope={scopeRows} params={paramRows} onScopeChange={setScopeRows} onParamsChange={setParamRows} />
 
+          <SectionTitle title={t('editor.sections.justification')} info={t('editor.sectionDescriptions.justification')} />
+          <div className="space-y-2">
+            <NativeSelect value={policyId} onChange={(e) => choosePolicy(e.target.value)}>
+              <option value="">{t('policy.citation.nonePicker')}</option>
+              {policyOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.policy_key} v{p.version} — {p.title}{p.expired ? ` (${t('policy.validity.expired')})` : ''}
+                </option>
+              ))}
+            </NativeSelect>
+            {citedPolicy?.expired && (
+              <p className="text-xs text-amber-600">{t('policy.citation.expiredHint')}</p>
+            )}
+            {policyId && (
+              <ClauseLabelsInput value={clauseRefs} onChange={setClauseRefs} suggestions={policyClauses} />
+            )}
+          </div>
+
           <SectionTitle
             title={t('editor.sections.rule')}
             info={<Trans i18nKey="editor.sectionDescriptions.rule" ns="authority-resolution" components={{ strong: <strong />, code: <code /> }} />}
@@ -465,6 +517,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             paramKeys={paramRows.map((p) => p.key.trim())}
             scopeKeys={scopeRows.map((r) => scopeKey(operandForKey(r.key)))}
             domainContext={draftContext.value}
+            clauses={policyClauses}
+            citable={!!policyId}
           />
 
           <SectionTitle
@@ -476,6 +530,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             onChange={setCriteriaRows}
             params={draftContext.value?.params}
             scopeKeys={scopeRows.map((r) => scopeKey(operandForKey(r.key)))}
+            clauses={policyClauses}
+            citable={!!policyId}
             readOnly={locked}
           />
           </fieldset>

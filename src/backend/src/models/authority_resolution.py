@@ -76,6 +76,8 @@ class CriterionInput(BaseModel):
     dimension: Optional[str] = None             # DNAco dimension this check scores (people|policy|...)
     order: Optional[int] = None
     enabled: bool = True
+    # The clause of the AR's Authority Policy this check enforces (e.g. "§7.2").
+    policy_clause_ref: Optional[str] = None
     copied_from: Optional[CopiedFrom] = None
     template_key: Optional[str] = None
 
@@ -136,6 +138,9 @@ class AuthorityRelationCreate(BaseModel):
     # ODRL-shaped rule: {permission: {constraint, duty}, prohibition} (src.common.authority_rule).
     rule: Optional[Dict[str, Any]] = None
     justification_chain: Optional[Dict[str, Any]] = None
+    # The Authority Policy version this authority derives from, and the clauses it implements.
+    authority_policy_id: Optional[str] = None
+    policy_clause_refs: Optional[List[str]] = None
     decision_logic: Optional[Dict[str, Any]] = None
     evidence_binding: Optional[EvidenceBinding] = None
     evidence_sources: Optional[List[EvidenceSource]] = None
@@ -179,6 +184,9 @@ class AuthorityRelationUpdate(BaseModel):
     domain_context: Optional[Dict[str, Any]] = None
     rule: Optional[Dict[str, Any]] = None
     justification_chain: Optional[Dict[str, Any]] = None
+    # The Authority Policy version this authority derives from, and the clauses it implements.
+    authority_policy_id: Optional[str] = None
+    policy_clause_refs: Optional[List[str]] = None
     decision_logic: Optional[Dict[str, Any]] = None
     evidence_binding: Optional[EvidenceBinding] = None
     evidence_sources: Optional[List[EvidenceSource]] = None
@@ -257,5 +265,8 @@ class ResolveResponse(BaseModel):
     resolved_refs: List[Dict[str, Any]] = Field(default_factory=list)
     # Each scope constraint checked: ``{operand, operator, expected, actual, passed}``.
     scope_check: List[Dict[str, Any]] = Field(default_factory=list)
-    # Duties still to fulfil when the verdict is ``conditional``: ``{duty, message}``.
+    # Duties still to fulfil when the verdict is ``conditional``: ``{duty, message, clause?}``.
     pending_duties: List[Dict[str, Any]] = Field(default_factory=list)
+    # The cited Authority Policy: ``{authority_policy_id, policy_key, version, status,
+    # clause_refs, problem}`` (``problem`` set when it is no valid root).
+    policy: Optional[Dict[str, Any]] = None

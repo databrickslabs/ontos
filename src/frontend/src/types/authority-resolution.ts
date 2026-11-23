@@ -89,6 +89,7 @@ export interface AuthorityCriterion {
   dimension?: string;                // DNAco dimension (people|policy|…)
   order: number;
   enabled: boolean;
+  policy_clause_ref?: string | null; // the Authority Policy clause this check enforces
   copied_from?: CriterionProvenance | null;
 }
 
@@ -116,6 +117,7 @@ export interface CriterionInput {
   order?: number;
   enabled?: boolean;
   copied_from?: CriterionProvenance;
+  policy_clause_ref?: string;
 }
 
 export interface ReusableCheck {
@@ -144,6 +146,7 @@ export interface DivergenceFacets {
   direction?: string;
   weight?: number;
   dimension?: string;
+  clause?: string;                   // the Authority Policy clause the item implements
 }
 
 export interface OdrlConstraint extends DivergenceFacets {
@@ -215,7 +218,10 @@ export interface AuthorityRelation {
   object_resolves_to?: string[] | null;
   domain_context?: DomainContext | null;
   rule?: ArfRule | null;
-  justification_chain?: Record<string, any> | null;
+  justification_chain?: Record<string, any> | null;   // legacy free-form basis
+  authority_policy_id?: string | null;
+  policy_clause_refs?: string[];
+  policy?: PolicyCitation | null;
   decision_logic?: Record<string, any> | null;
   evidence_binding?: EvidenceBinding | null;
   evidence_sources?: EvidenceSource[] | null;
@@ -399,6 +405,7 @@ export interface PrerequisiteChainEntry {
 export interface PendingDuty {
   duty: string;
   message?: string | null;
+  clause?: string | null;
 }
 
 export interface ScopeCheckEntry {
@@ -451,6 +458,65 @@ export interface ResolveResponse {
   resolved_refs?: ResolvedRefEntry[];
   scope_check?: ScopeCheckEntry[];
   pending_duties?: PendingDuty[];
+  policy?: PolicyCitation | null;
+}
+
+// ------------------------------------------------------- Policy reference (ARF 1.2.0)
+// A reference is metadata: nothing about it is enforced. Its validity reaches the
+// Compliance checks as justification.* (see the justification check template).
+
+/** A clause label, offered as a suggestion when an AR cites a clause. Free text otherwise. */
+export interface PolicyClause {
+  ref: string;                       // e.g. §7.1
+  title?: string;
+  text?: string;
+}
+
+export interface AuthorityPolicy {
+  id: string;
+  policy_key: string;                // external id, shared by every version
+  version: string;
+  version_family_id?: string | null;
+  version_count?: number | null;
+  parent_policy_id?: string | null;
+  parent_version?: string | null;
+  change_summary?: string | null;
+  title: string;                     // name
+  summary?: string | null;           // description
+  owner_team_id?: string | null;
+  owner_team_name?: string | null;
+  url?: string | null;               // link out to the source document
+  valid_from?: string | null;
+  valid_to?: string | null;
+  expired: boolean;                  // computed at read time; informational
+  clauses: PolicyClause[];           // suggestions only
+  dependent_count?: number;
+  tags?: { fully_qualified_name?: string | null; assigned_value?: string | null }[];
+  created_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** What an AR cites (its read view and decision provenance). */
+export interface PolicyCitation {
+  authority_policy_id: string;
+  clause_refs: string[];
+  policy_key?: string;
+  version?: string;
+  title?: string;
+  url?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  expired?: boolean;
+  parent_policy_id?: string | null;
+}
+
+export interface PolicyDependent {
+  id: string;
+  name: string;
+  version: string;
+  status: string;
+  clause_refs: string[];
 }
 
 // Left operands the rule editor offers for the canonical request fields.

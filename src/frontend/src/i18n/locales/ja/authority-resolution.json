@@ -223,7 +223,8 @@
       "dnaSchedule": "DNA-Coefficient のスケジュール",
       "tags": "タグ",
       "ownership": "所有者とプロジェクト",
-      "rule": "ルール (ODRL)"
+      "rule": "ルール (ODRL)",
+      "justification": "根拠（ポリシー参照）"
     },
     "sectionDescriptions": {
       "decisionCriteria": "ルールの後にゲートが適用するチェックです(DNA 係数はこれに対する乖離を測定します)。それぞれ再利用可能な <strong>Compliance Check</strong> です。",
@@ -233,7 +234,8 @@
       "resourceRefs": "フィールド値の取得元。単純なリテラルの代わりに、標準フィールド（<code>actor_identity</code>、<code>object_id</code>、<code>domain_context.{{keyPlaceholder}}</code>）を型付きポインタで裏付けます。<strong> Ontos エンティティ</strong>参照は評価時にナレッジグラフに対して再解決されるため、基になるコンセプト、プロダクト、ドメインが変更されても値は最新に保たれます。<strong> MCP ツール</strong>参照は決定時に Unity Catalog の MCP サービスを呼び出します。基準では解決された値を <code>obj.ref_{{fieldPlaceholder}}</code>（ドットはアンダースコアになります。例: <code>obj.ref_actor_identity</code>）として比較できます。",
       "dnaSchedule": "エビデンスソースに対して DNA-Coefficient を再計算する頻度。",
       "domainContext": "この権限が有効な限定されたスコープとそのパラメーターです。スコープ外のリクエストには no_authority が返り、ルールとチェックはパラメーターを ctx.<key> として読みます。",
-      "rule": "権限が許可する内容を ODRL で表します: 満たすべき<strong>制約</strong>、まだ履行が必要な<strong>義務</strong>(それまで決定は<strong>条件付き</strong>、例: 共同承認)、そして<strong>禁止</strong>です。値または変数 (<code>ctx.threshold</code>, <code>req.market</code>) と比較します。"
+      "rule": "権限が許可する内容を ODRL で表します: 満たすべき<strong>制約</strong>、まだ履行が必要な<strong>義務</strong>(それまで決定は<strong>条件付き</strong>、例: 共同承認)、そして<strong>禁止</strong>です。値または変数 (<code>ctx.threshold</code>, <code>req.market</code>) と比較します。",
+      "justification": "この Authority Relation が根拠とするポリシー参照です。有効期間は表示されるだけで、強制はされません。条項ラベルはフリーテキストで、ルールとチェックから引用できます。"
     },
     "fields": {
       "name": {
@@ -645,6 +647,95 @@
     "none": "ルールなし: チェックのみがこの権限を制御します。",
     "fulfilledWhen": "履行条件:",
     "prohibitedWhen": "禁止条件:"
+  },
+  "nav": {
+    "relations": "権限リレーション",
+    "policies": "ポリシー参照"
+  },
+  "policy": {
+    "list": {
+      "title": "ポリシー参照",
+      "description": "Authority Relation が根拠として引用する元文書です。参照はメタデータだけです。Ontos は名前、外部 ID、バージョン、有効期間を保持し、文書へのリンクを持ちます。ここでは何も強制されず、承認者が文書自体を確認します。",
+      "buttonNew": "新規参照",
+      "confirmDelete": "{{key}} v{{version}} を削除しますか？",
+      "columnCitedBy": "引用元"
+    },
+    "fields": {
+      "key": "外部 ID",
+      "version": "バージョン",
+      "title": "名前",
+      "summary": "説明",
+      "owner": "担当チーム",
+      "url": "文書へのリンク",
+      "validity": "有効期間",
+      "validFrom": "開始日",
+      "validTo": "終了日",
+      "derivedFrom": "派生元",
+      "changeSummary": "変更概要"
+    },
+    "validity": {
+      "openEnded": "終了日なし",
+      "expired": "期限切れ"
+    },
+    "editor": {
+      "titleNew": "新規ポリシー参照",
+      "titleEdit": "{{key}} v{{version}} を編集",
+      "keyHint": "文書のすべてのバージョンで共通の識別子（例: POL-DOA）。",
+      "urlHint": "任意。元文書へのリンク（http または https）。Ontos は開きません。",
+      "validityHint": "文書に記載された有効期間。参考情報のみで、強制はされません。チェックは policy_ref.valid_to として参照できます。",
+      "validation": {
+        "required": "外部 ID と名前は必須です",
+        "title": "参照が有効ではありません",
+        "clauseRef": "条項の候補にはそれぞれ参照（例: §7.1）が必要です。",
+        "clauseDuplicate": "同じ参照の条項候補が2つあります。"
+      }
+    },
+    "clauses": {
+      "title": "条項の候補",
+      "hint": "任意。Authority Relation やチェックは条項をフリーテキストで引用します。ここでの項目は選択時の候補にすぎません。",
+      "titlePlaceholder": "条項タイトル",
+      "textPlaceholder": "条項の本文",
+      "add": "候補を追加",
+      "remove": "候補を削除",
+      "none": "条項の候補はありません。",
+      "ref": "参照",
+      "clause": "条項"
+    },
+    "details": {
+      "defaultTitle": "ポリシー参照",
+      "notFound": "ポリシー参照が見つかりません。",
+      "backButton": "参照一覧に戻る",
+      "buttonNewVersion": "新しいバージョン",
+      "versionCreated": "バージョン {{version}} を作成しました",
+      "expiredNote": "この参照に記載された有効期間は過ぎています。参照自体は何もブロックしませんが、policy_ref.expired を読むチェックはブロックできます。",
+      "cardReference": "参照",
+      "cardDependents": "引用元 ({{count}})",
+      "noDependents": "この参照を引用している Authority Relation はありません。"
+    },
+    "newVersion": {
+      "title": "参照の新しいバージョン",
+      "description": "元文書の新しいバージョンとして、この参照に紐づく新しいレコードを作成します。有効期間は新しいバージョンに設定します。"
+    },
+    "citation": {
+      "legacy": "自由記述の根拠（ポリシー参照なし）",
+      "none": "ポリシー参照は引用されていません。",
+      "derivedFrom": "前のバージョンから派生",
+      "link": "文書を開く",
+      "noClauses": "引用された条項ラベルはありません。",
+      "clause": "条項",
+      "clausePlaceholder": "§7.1",
+      "clauseTitle": "条項ラベル（フリーテキスト）。候補は参照から提供されます。",
+      "clauses": "条項ラベル",
+      "clausesPlaceholder": "§7.1, §7.2",
+      "clausesHint": "カンマ区切りのフリーテキスト。候補は参照の条項から提供されます。",
+      "nonePicker": "ポリシー参照なし",
+      "expiredHint": "この参照の有効期間は過ぎています。参照自体ではブロックされません。強制するには根拠チェックのテンプレートを追加してください。",
+      "enforces": "このポリシー条項を適用"
+    },
+    "errors": {
+      "inUse": "この参照は {{names}} から引用されています。先に引用を削除してください。",
+      "notFound": "ポリシー参照が見つかりません。"
+    }
   },
   "errors": {
     "generic": "問題が発生しました。もう一度お試しください。",

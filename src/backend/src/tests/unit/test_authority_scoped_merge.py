@@ -127,3 +127,21 @@ def test_rule_constraints_are_not_written_as_check_rows(db_session):
     out = mgr.resolve(db_session, rel.id, {"market": "DE", "value": 1000, "payAmount": 1000},
                       record=False, require_active=False)
     assert out["verdict"] == VERDICT_DENIED
+
+
+def test_the_cited_policy_and_its_clauses_are_part_of_the_hash():
+    """Approvers vouch against the cited document: changing the citation changes the definition."""
+    from src.common import authority_definition as d
+
+    def view(policy="p1", refs=("§7.1",), clause="§7.2"):
+        return d.definition_view(
+            {"authority_policy_id": policy, "policy_clause_refs": list(refs)},
+            [{"name": "c", "rule": "ASSERT obj.value > 0", "failure_message": None, "direction": "neutral",
+              "weight": 1.0, "dimension": "people", "display_order": 0, "enabled": True,
+              "policy_clause_ref": clause}],
+        )
+    base = d.definition_hash(view())
+    assert d.definition_hash(view(policy="p2")) != base
+    assert d.definition_hash(view(refs=("§7.2",))) != base
+    assert d.definition_hash(view(clause="§9.9")) != base
+    assert d.definition_hash(view()) == base

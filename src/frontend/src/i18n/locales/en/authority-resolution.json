@@ -223,7 +223,8 @@
       "dnaSchedule": "DNA-Coefficient schedule",
       "tags": "Tags",
       "ownership": "Ownership & project",
-      "rule": "Rule (ODRL)"
+      "rule": "Rule (ODRL)",
+      "justification": "Justification (policy reference)"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Checks the gate enforces after the rule (and the DNA-Coefficient measures divergence against). Each is a reusable <strong>Compliance Check</strong>.",
@@ -233,7 +234,8 @@
       "resourceRefs": "Where field values come from. Instead of a plain literal, back a canonical field (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) with a typed pointer. An <strong> Ontos entity</strong> ref re-resolves against the knowledge graph at eval time so the value stays current when the underlying concept, product, or domain changes. <strong> MCP tool</strong> refs call a Unity Catalog MCP service at decision time; criteria can compare against the resolved value as <code>obj.ref_{{fieldPlaceholder}}</code> (dots become underscores, e.g. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "How often the DNA-Coefficient is recomputed against the evidence sources.",
       "domainContext": "The bounded scope this authority holds in, and its parameters. A request outside the scope gets no_authority; the rule and the checks read the parameters as ctx.<key>.",
-      "rule": "What the authority permits, as ODRL: <strong>constraints</strong> that must hold, <strong>duties</strong> still to fulfil (the decision is <strong>conditional</strong> until then, e.g. a co-approval) and <strong>prohibitions</strong>. Compare with values or variables (<code>ctx.threshold</code>, <code>req.market</code>)."
+      "rule": "What the authority permits, as ODRL: <strong>constraints</strong> that must hold, <strong>duties</strong> still to fulfil (the decision is <strong>conditional</strong> until then, e.g. a co-approval) and <strong>prohibitions</strong>. Compare with values or variables (<code>ctx.threshold</code>, <code>req.market</code>).",
+      "justification": "The policy reference this Authority Relation rests on. Its validity is shown, not enforced. Clause labels are free text; the rule and the checks can cite them."
     },
     "fields": {
       "name": {
@@ -645,6 +647,95 @@
     "none": "No rule: only the checks gate this authority.",
     "fulfilledWhen": "fulfilled when",
     "prohibitedWhen": "prohibited when"
+  },
+  "nav": {
+    "relations": "Authority Relations",
+    "policies": "Policy references"
+  },
+  "policy": {
+    "list": {
+      "title": "Policy references",
+      "description": "The source documents your Authority Relations cite for their justification. A reference is metadata: Ontos keeps its name, external id, version and validity, and links out to the document. Nothing here is enforced; the approvers check the document itself.",
+      "buttonNew": "New reference",
+      "confirmDelete": "Delete {{key}} v{{version}}?",
+      "columnCitedBy": "Cited by"
+    },
+    "fields": {
+      "key": "External ID",
+      "version": "Version",
+      "title": "Name",
+      "summary": "Description",
+      "owner": "Owner team",
+      "url": "Link to document",
+      "validity": "Validity",
+      "validFrom": "Valid from",
+      "validTo": "Valid to",
+      "derivedFrom": "Derived from",
+      "changeSummary": "Change summary"
+    },
+    "validity": {
+      "openEnded": "open-ended",
+      "expired": "Expired"
+    },
+    "editor": {
+      "titleNew": "New policy reference",
+      "titleEdit": "Edit {{key}} v{{version}}",
+      "keyHint": "Identifier shared by every version of the document, e.g. POL-DOA.",
+      "urlHint": "Optional. A link to the source document (http or https). Ontos doesn't open it.",
+      "validityHint": "The validity the document states. Informational: nothing is enforced. Checks can read it as policy_ref.valid_to.",
+      "validation": {
+        "required": "External ID and name are required",
+        "title": "The reference is not valid",
+        "clauseRef": "Every clause suggestion needs a reference (e.g. §7.1).",
+        "clauseDuplicate": "Two clause suggestions share a reference."
+      }
+    },
+    "clauses": {
+      "title": "Clause suggestions",
+      "hint": "Optional. Authority Relations and checks cite clause labels as free text; these entries are only suggestions in their picker.",
+      "titlePlaceholder": "Clause title",
+      "textPlaceholder": "Clause text",
+      "add": "Add suggestion",
+      "remove": "Remove suggestion",
+      "none": "No clause suggestions.",
+      "ref": "Ref",
+      "clause": "Clause"
+    },
+    "details": {
+      "defaultTitle": "Policy reference",
+      "notFound": "Policy reference not found.",
+      "backButton": "Back to references",
+      "buttonNewVersion": "New version",
+      "versionCreated": "Version {{version}} created",
+      "expiredNote": "The validity this reference states has passed. The reference blocks nothing by itself; a check that reads policy_ref.expired can.",
+      "cardReference": "Reference",
+      "cardDependents": "Cited by ({{count}})",
+      "noDependents": "No Authority Relation cites this reference."
+    },
+    "newVersion": {
+      "title": "New reference version",
+      "description": "Creates a new record for the new version of the source document, linked to this one. The validity is set on the new version."
+    },
+    "citation": {
+      "legacy": "Free-form justification (no policy reference cited)",
+      "none": "No policy reference cited.",
+      "derivedFrom": "derived from the previous version",
+      "link": "Open document",
+      "noClauses": "No clause labels cited.",
+      "clause": "Clause",
+      "clausePlaceholder": "§7.1",
+      "clauseTitle": "Clause label (free text). Suggestions come from the reference.",
+      "clauses": "Clause labels",
+      "clausesPlaceholder": "§7.1, §7.2",
+      "clausesHint": "Free text, comma-separated. Suggestions come from the reference's clauses.",
+      "nonePicker": "No policy reference",
+      "expiredHint": "This reference's validity has passed. It blocks nothing by itself; add the justification check template to enforce it.",
+      "enforces": "Enforces this policy clause"
+    },
+    "errors": {
+      "inUse": "The reference is cited by {{names}}. Remove those citations first.",
+      "notFound": "Policy reference not found."
+    }
   },
   "errors": {
     "generic": "Something went wrong. Try again.",

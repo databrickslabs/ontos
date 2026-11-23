@@ -11,6 +11,9 @@ DNA-Coefficient and the approval gate measure):
   ``action``, ``object_type``, ``object_id``, ``object_resolves_to``, and
   ``domain_context`` (the scope and the parameters, normalised before hashing);
 * the ODRL rule (``rule``: constraints, duties and prohibitions, normalised);
+* the cited Authority Policy and its clause references (``authority_policy_id``,
+  ``policy_clause_refs``): approvers vouch against that document, so changing the
+  citation invalidates their affirmations; each check's ``policy_clause_ref`` too;
 * the rule: ``justification_chain``, ``decision_logic``;
 * the evidence: ``evidence_binding``, ``evidence_sources``;
 * the measurement: ``dna_max_threshold`` (the ceiling), ``dna_scoring_config``,
@@ -43,12 +46,13 @@ from typing import Any, Dict, Iterable, List, Mapping
 DEFINITION_FIELDS = (
     "actor_role", "actor_identity", "actor_since", "action",
     "object_type", "object_id", "object_resolves_to", "domain_context", "rule",
+    "authority_policy_id", "policy_clause_refs",
     "justification_chain", "decision_logic", "evidence_binding", "evidence_sources",
     "dna_max_threshold", "dna_scoring_config", "schedule_cron", "resolver_auth",
 )
 
 CRITERION_KEYS = ("name", "rule", "failure_message", "direction", "weight", "dimension",
-                  "display_order", "enabled")
+                  "display_order", "enabled", "policy_clause_ref")
 PREREQUISITE_KEYS = ("prerequisite_family_slug", "required", "display_order")
 RESOURCE_REF_KEYS = ("field_path", "ref_type", "literal_value", "entity_type", "entity_id",
                      "mcp_service_name", "mcp_tool_name", "mcp_params", "mcp_result_pointer")

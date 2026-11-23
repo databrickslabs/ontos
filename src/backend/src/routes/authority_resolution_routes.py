@@ -19,15 +19,17 @@ client: an unexpected failure is logged with an error id and answered with a
 generic message that carries the id (see ``_failure``).
 """
 import re
+from functools import partial
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Query, Request
 
-from src.common.api_errors import CodedValueError, client_failure
+from src.common.api_errors import client_failure, coded_http_error
 from src.common.authorization import PermissionChecker, get_user_details_from_sdk, user_has_feature_level
 from src.common.dependencies import DBSessionDep, AuditCurrentUserDep, DataAssetReviewManagerDep
 from src.common.features import FeatureAccessLevel
 from src.common.manager_dependencies import get_auth_manager
+from src.common.authority_rule import UNCITED_POLICY_REF
 from src.controller.authority_resolution_manager import (
     AR_REVIEW_APPROVE,
     AuthorityPermissionError,
@@ -58,6 +60,9 @@ READ_WRITE = FeatureAccessLevel.READ_WRITE
 ADMIN = FeatureAccessLevel.ADMIN
 
 AUTHORITY_FAILED_CODE = "authority_failed"
+AUTHORITY_FAILED_MESSAGE = "The request failed (error id {errorId}). See the server log."
+# The shared helper with this module's code and message.
+_failure = partial(coded_http_error, failure_code=AUTHORITY_FAILED_CODE, message=AUTHORITY_FAILED_MESSAGE)
 PERMISSION_DENIED_CODE = "authority_permission_denied"
 PERMISSION_DENIED_MESSAGE = "Your Authority Resolution access level does not allow this."
 
@@ -74,36 +79,6 @@ def _denied(required_level: FeatureAccessLevel) -> HTTPException:
         "message": PERMISSION_DENIED_MESSAGE,
         "params": {"required_level": required_level.value},
     })
-
-
-def _failure(tag: str, exc: BaseException, coded_status: int = 400,
-             unexpected_status: int = 500) -> HTTPException:
-    """The client-facing answer for an exception raised while handling a request.
-
-    Our own coded errors keep their message and code (written for the user; the
-    manager never puts exception text in them). A refusal (an access level, or a
-    named role) is a 403 and is logged. Any other exception goes through the
-    shared ``client_failure``: logged once with an error id, answered generically
-    with that id. An id the manager already attached to the exception is reused.
-
-    Raise the result outside the ``except`` block where it is built; a coded
-    error's ``__cause__`` is set here so the coded handler can read its code.
-    """
-    if isinstance(exc, CodedValueError):
-        if isinstance(exc, AuthorityPermissionError):
-            status = 403
-        else:
-            # A refusal can name its own status (a 409 for an immutable or a stale gate).
-            status = getattr(exc, "http_status", None) or coded_status
-        logger.info("[%s] refused: %s", tag, exc.code)
-        error = HTTPException(status_code=status, detail=str(exc))
-        error.__cause__ = exc
-        return error
-    payload = client_failure(
-        tag, exc, code=AUTHORITY_FAILED_CODE,
-        message="The request failed (error id {errorId}). See the server log.",
-    )
-    return HTTPException(status_code=unexpected_status, detail=payload)
 
 
 def _resolve_req_dict(req: ResolveRequest) -> dict:
@@ -444,6 +419,8 @@ async def list_decisions(
             "id": d.id, "source": d.source, "verdict": d.verdict, "reason": d.reason,
             "actor_identity": d.actor_identity, "action": d.action, "object_id": d.object_id,
             "relation_version": d.relation_version, "divergence_magnitude": d.divergence_magnitude,
+            # The prerequisite chain, resolved refs, scope check and cited policy the verdict rested on.
+            "provenance": d.provenance,
             "created_at": d.created_at,
         }
         for d in rows
@@ -733,6 +710,34 @@ async def list_check_templates(
     ]
 
 
+def _validation_policy_ref(db, payload: dict) -> dict:
+    """The ``policy_ref`` a validator evaluates with (ARF 1.2.0).
+
+    A stored AR (``relation_id`` in the body) uses its real reference, looked up now.
+    A sample supplies ``policy_ref`` (``cited``, ``valid_from``, ``valid_to``,
+    ``expired``) to try a validity check; without either, nothing is cited.
+    """
+    relation_id = payload.get("relation_id")
+    if relation_id:
+        relation = manager.resolve_relation_ref(db, str(relation_id))
+        if relation is None:
+            raise HTTPException(status_code=404, detail="Authority Relation not found")
+        return manager._policy_ref_for_relation(db, relation)
+    sample = payload.get("policy_ref")
+    if not isinstance(sample, dict):
+        return dict(UNCITED_POLICY_REF)
+
+    def day(value):
+        return value if isinstance(value, str) else None
+
+    return {
+        "cited": sample.get("cited") is True,
+        "valid_from": day(sample.get("valid_from")),
+        "valid_to": day(sample.get("valid_to")),
+        "expired": sample.get("expired") is True,
+    }
+
+
 @router.post("/authority/criteria/validate")
 async def validate_criterion(
     db: DBSessionDep,
@@ -741,11 +746,12 @@ async def validate_criterion(
 ):
     """Live-validate a single criterion's DSL rule against a sample request object.
 
-    Body: ``{rule, object, params?, context?}``. The ``ASSERT`` keyword is
-    prepended if omitted. The rule sees ``object`` (plus ``context``) as
-    ``obj.<field>`` / ``req.<key>`` and ``params`` as ``ctx.<key>``, as at
-    resolve time, with the same strict semantics (an absent operand is not passed).
-    Returns ``{passed, message}``.
+    Body: ``{rule, object, params?, context?, relation_id?, policy_ref?}``. The ``ASSERT``
+    keyword is prepended if omitted. The rule sees ``object`` (plus ``context``) as
+    ``obj.<field>`` / ``req.<key>``, ``params`` as ``ctx.<key>`` and the reference's
+    validity as ``policy_ref.*``, as at resolve time, with the same strict semantics
+    (an absent operand is not passed). ``relation_id`` uses that AR's real reference;
+    otherwise ``policy_ref`` (a sample) is used. Returns ``{passed, message}``.
     """
     from src.common import authority_rule
     from src.common.compliance_dsl import evaluate_rule_strict
@@ -753,7 +759,9 @@ async def validate_criterion(
     if rule and not rule.upper().startswith("ASSERT"):
         rule = "ASSERT " + rule
     flat = {**(payload.get("object") or {}), **(payload.get("context") or {})}
-    obj = authority_rule.evaluation_object(flat, payload.get("params") or {})
+    obj = authority_rule.evaluation_object(
+        flat, payload.get("params") or {}, policy_ref=_validation_policy_ref(db, payload),
+    )
     failure: Optional[HTTPException] = None
     try:
         outcome = evaluate_rule_strict(rule, obj)
@@ -774,8 +782,9 @@ async def validate_rule(
 ):
     """Validate an AR's domain context and ODRL rule, and try them on a sample request.
 
-    Body: ``{rule?, domain_context?, request?}`` (``request`` is the flat request
-    plus its context, as ``POST /resolve`` builds it). Returns ``{valid, compiled:
+    Body: ``{rule?, domain_context?, request?, relation_id?, policy_ref?}`` (``request``
+    is the flat request plus its context, as ``POST /resolve`` builds it; ``relation_id``
+    or ``policy_ref`` sets the reference the sample is judged against). Returns ``{valid, compiled:
     [{kind, name, rule}], scope?, verdict?, reason?, pending_duties?}``; the verdict
     covers the scope and the rule only (no checks, prerequisites or refs). A rule the
     author must fix is a 400 with the coded ``{code, message, params}`` shape.
@@ -802,7 +811,9 @@ async def validate_rule(
             out.update({"verdict": "no_authority", "reason": reason, "pending_duties": []})
             return out
         probe = SimpleNamespace(id=None, rule=payload.get("rule"), domain_context=domain_context, criteria=[])
-        verdict, reason, pending = manager._evaluate_decision(probe, req)
+        verdict, reason, pending = manager._evaluate_decision(
+            probe, req, None, None, _validation_policy_ref(db, payload),
+        )
         out.update({"verdict": verdict, "reason": reason, "pending_duties": pending})
     return out
 

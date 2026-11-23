@@ -250,9 +250,9 @@ def test_rule_literals_cannot_break_out_of_the_dsl_string():
         {"leftOperand": "arf:market", "operator": "eq", "rightOperand": "DE' OR obj.x = 'y"},
     ]}}
     [c] = arule.compile_rule(rule)
-    obj = arule.evaluation_object({"market": "FR", "x": "y"}, {})
+    obj = arule.evaluation_object({"market": "FR", "x": "y"}, {}, policy_ref=arule.UNCITED_POLICY_REF)
     assert evaluate_rule_on_object(c.rule, obj)[0] is False
-    obj = arule.evaluation_object({"market": "DE' OR obj.x = 'y"}, {})
+    obj = arule.evaluation_object({"market": "DE' OR obj.x = 'y"}, {}, policy_ref=arule.UNCITED_POLICY_REF)
     assert evaluate_rule_on_object(c.rule, obj)[0] is True
 
 
@@ -405,7 +405,7 @@ def test_negative_and_tiny_literals_compile_and_evaluate():
         {"leftOperand": "arf:margin", "operator": "gteq", "rightOperand": -0.05},
         {"leftOperand": "payAmount", "operator": "gt", "rightOperand": 1e-05},
     ]}}
-    obj = arule.evaluation_object({"margin": -0.01, "value": 0.001}, {})
+    obj = arule.evaluation_object({"margin": -0.01, "value": 0.001}, {}, policy_ref=arule.UNCITED_POLICY_REF)
     for c in arule.compile_rule(rule):
         assert evaluate_rule_on_object(c.rule, obj)[0] is True, c.rule
     assert evaluate_rule_on_object("ASSERT obj.v = 3 - 1", {"v": 2})[0] is False  # '-' after a value is not a sign

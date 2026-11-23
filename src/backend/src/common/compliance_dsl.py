@@ -567,7 +567,10 @@ class Parser:
 
 
 # Property roots that read a nested namespace of the evaluated object.
-NAMESPACE_ROOTS = ("ctx", "req")
+NAMESPACE_ROOTS = ("ctx", "req", "policy_ref")
+# Namespaces that never fall back to top-level keys: an object without the namespace
+# (a data product, say) reads absent, not an unrelated top-level key of the same name.
+CLOSED_NAMESPACE_ROOTS = ("policy_ref",)
 
 
 class _Unknown:
@@ -620,6 +623,8 @@ class Evaluator:
             scoped = self.obj.get(node.object) if node.object in NAMESPACE_ROOTS else None
             if isinstance(scoped, dict):
                 value = scoped.get(node.property)
+            elif node.object in CLOSED_NAMESPACE_ROOTS:
+                value = None
             else:
                 value = self.obj.get(node.property)
             if self.strict and (value is None or value == ""):

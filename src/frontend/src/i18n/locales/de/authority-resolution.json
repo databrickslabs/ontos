@@ -223,7 +223,8 @@
       "dnaSchedule": "DNA-Coefficient-Zeitplan",
       "tags": "Tags",
       "ownership": "Verantwortung & Projekt",
-      "rule": "Regel (ODRL)"
+      "rule": "Regel (ODRL)",
+      "justification": "Begründung (Richtlinien-Referenz)"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Prüfungen, die das Gate nach der Regel durchsetzt (und gegen die der DNA-Koeffizient Abweichungen misst). Jede ist ein wiederverwendbarer <strong>Compliance Check</strong>.",
@@ -233,7 +234,8 @@
       "resourceRefs": "Woher Feldwerte stammen. Statt eines einfachen Literals hinterlegen Sie ein kanonisches Feld (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) mit einem typisierten Verweis. Eine <strong>Ontos-Entität</strong>-Referenz wird zur Auswertungszeit erneut gegen den Wissensgraphen aufgelöst, sodass der Wert aktuell bleibt, wenn sich das zugrunde liegende Konzept, Produkt oder die Domäne ändert. <strong>MCP-Tool</strong>-Referenzen rufen zur Entscheidungszeit einen Unity Catalog MCP-Dienst auf; Kriterien können mit dem aufgelösten Wert als <code>obj.ref_{{fieldPlaceholder}}</code> vergleichen (Punkte werden zu Unterstrichen, z. B. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "Wie oft der DNA-Coefficient gegen die Evidenzquellen neu berechnet wird.",
       "domainContext": "Der begrenzte Geltungsbereich dieser Befugnis und ihre Parameter. Eine Anfrage außerhalb des Geltungsbereichs erhält no_authority; Regel und Prüfungen lesen die Parameter als ctx.<key>.",
-      "rule": "Was die Befugnis erlaubt, als ODRL: <strong>Bedingungen</strong>, die gelten müssen, noch zu erfüllende <strong>Pflichten</strong> (bis dahin ist die Entscheidung <strong>bedingt</strong>, z. B. eine Mitgenehmigung) und <strong>Verbote</strong>. Mit Werten oder Variablen vergleichen (<code>ctx.threshold</code>, <code>req.market</code>)."
+      "rule": "Was die Befugnis erlaubt, als ODRL: <strong>Bedingungen</strong>, die gelten müssen, noch zu erfüllende <strong>Pflichten</strong> (bis dahin ist die Entscheidung <strong>bedingt</strong>, z. B. eine Mitgenehmigung) und <strong>Verbote</strong>. Mit Werten oder Variablen vergleichen (<code>ctx.threshold</code>, <code>req.market</code>).",
+      "justification": "Die Richtlinien-Referenz, auf die sich diese Authority Relation stützt. Die Gültigkeit wird angezeigt, nicht erzwungen. Klauselbezeichnungen sind Freitext; Regel und Prüfungen können sie zitieren."
     },
     "fields": {
       "name": {
@@ -645,6 +647,95 @@
     "none": "Keine Regel: nur die Prüfungen steuern diese Befugnis.",
     "fulfilledWhen": "erfüllt, wenn",
     "prohibitedWhen": "verboten, wenn"
+  },
+  "nav": {
+    "relations": "Autoritätsbeziehungen",
+    "policies": "Richtlinien-Referenzen"
+  },
+  "policy": {
+    "list": {
+      "title": "Richtlinien-Referenzen",
+      "description": "Die Quelldokumente, auf die sich Ihre Authority Relations zur Begründung stützen. Eine Referenz ist reine Metadaten: Ontos speichert Name, externe ID, Version und Gültigkeit und verlinkt auf das Dokument. Hier wird nichts erzwungen; die Genehmiger prüfen das Dokument selbst.",
+      "buttonNew": "Neue Referenz",
+      "confirmDelete": "{{key}} v{{version}} löschen?",
+      "columnCitedBy": "Zitiert von"
+    },
+    "fields": {
+      "key": "Externe ID",
+      "version": "Version",
+      "title": "Name",
+      "summary": "Beschreibung",
+      "owner": "Verantwortliches Team",
+      "url": "Link zum Dokument",
+      "validity": "Gültigkeit",
+      "validFrom": "Gültig ab",
+      "validTo": "Gültig bis",
+      "derivedFrom": "Abgeleitet von",
+      "changeSummary": "Änderungsbeschreibung"
+    },
+    "validity": {
+      "openEnded": "unbefristet",
+      "expired": "Abgelaufen"
+    },
+    "editor": {
+      "titleNew": "Neue Richtlinien-Referenz",
+      "titleEdit": "{{key}} v{{version}} bearbeiten",
+      "keyHint": "Kennung, die alle Versionen des Dokuments teilen, z. B. POL-DOA.",
+      "urlHint": "Optional. Link zum Quelldokument (http oder https). Ontos öffnet es nicht.",
+      "validityHint": "Die im Dokument angegebene Gültigkeit. Nur informativ: Es wird nichts erzwungen. Prüfungen können sie als policy_ref.valid_to lesen.",
+      "validation": {
+        "required": "Externe ID und Name sind erforderlich",
+        "title": "Die Referenz ist nicht gültig",
+        "clauseRef": "Jeder Klauselvorschlag braucht eine Referenz (z. B. §7.1).",
+        "clauseDuplicate": "Zwei Klauselvorschläge teilen sich eine Referenz."
+      }
+    },
+    "clauses": {
+      "title": "Klauselvorschläge",
+      "hint": "Optional. Authority Relations und Prüfungen zitieren Klauselbezeichnungen als Freitext; diese Einträge sind nur Vorschläge im Auswahlfeld.",
+      "titlePlaceholder": "Klauseltitel",
+      "textPlaceholder": "Klauseltext",
+      "add": "Vorschlag hinzufügen",
+      "remove": "Vorschlag entfernen",
+      "none": "Keine Klauselvorschläge.",
+      "ref": "Ref",
+      "clause": "Klausel"
+    },
+    "details": {
+      "defaultTitle": "Richtlinien-Referenz",
+      "notFound": "Richtlinien-Referenz nicht gefunden.",
+      "backButton": "Zurück zu den Referenzen",
+      "buttonNewVersion": "Neue Version",
+      "versionCreated": "Version {{version}} angelegt",
+      "expiredNote": "Die in dieser Referenz angegebene Gültigkeit ist abgelaufen. Die Referenz blockiert von sich aus nichts; eine Prüfung, die policy_ref.expired liest, kann das.",
+      "cardReference": "Referenz",
+      "cardDependents": "Zitiert von ({{count}})",
+      "noDependents": "Keine Authority Relation zitiert diese Referenz."
+    },
+    "newVersion": {
+      "title": "Neue Version der Referenz",
+      "description": "Legt einen neuen Datensatz für die neue Version des Quelldokuments an, verknüpft mit diesem. Die Gültigkeit wird an der neuen Version gesetzt."
+    },
+    "citation": {
+      "legacy": "Freitext-Begründung (keine Richtlinien-Referenz zitiert)",
+      "none": "Keine Richtlinien-Referenz zitiert.",
+      "derivedFrom": "abgeleitet von der vorherigen Version",
+      "link": "Dokument öffnen",
+      "noClauses": "Keine Klauselbezeichnungen zitiert.",
+      "clause": "Klausel",
+      "clausePlaceholder": "§7.1",
+      "clauseTitle": "Klauselbezeichnung (Freitext). Vorschläge stammen aus der Referenz.",
+      "clauses": "Klauselbezeichnungen",
+      "clausesPlaceholder": "§7.1, §7.2",
+      "clausesHint": "Freitext, durch Kommas getrennt. Vorschläge stammen aus den Klauseln der Referenz.",
+      "nonePicker": "Keine Richtlinien-Referenz",
+      "expiredHint": "Die Gültigkeit dieser Referenz ist abgelaufen. Sie blockiert von sich aus nichts; zum Erzwingen die Prüfvorlage zur Begründung hinzufügen.",
+      "enforces": "Erzwingt diese Klausel der Richtlinie"
+    },
+    "errors": {
+      "inUse": "Die Referenz wird zitiert von {{names}}. Entfernen Sie zuerst diese Zitate.",
+      "notFound": "Richtlinien-Referenz nicht gefunden."
+    }
   },
   "errors": {
     "generic": "Etwas ist schiefgelaufen. Versuche es erneut.",

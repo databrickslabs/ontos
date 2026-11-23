@@ -476,6 +476,18 @@ async def upload_shared_document(
 ):
     """Upload a new shared document asset. Stored in shared folder."""
     try:
+        # Validate the request before touching the volume, so a rejected
+        # request never leaves an orphaned file behind.
+        payload = DocumentCreate(
+            entity_type="data_domain",  # Shared assets use a generic type
+            entity_id=SHARED_ENTITY_ID,
+            title=title,
+            short_description=short_description,
+            is_shared=True,
+            level=level,
+            inheritable=inheritable,
+        )
+
         # Use shared folder for shared documents
         base_dir = "uploads/__shared__"
         volume_fs_base = manager.ensure_volume_path(ws, settings, base_dir)
@@ -495,15 +507,6 @@ async def upload_shared_document(
 
         ws.files.upload(dest_path, BytesIO(content))
 
-        payload = DocumentCreate(
-            entity_type="data_domain",  # Shared assets use a generic type
-            entity_id=SHARED_ENTITY_ID,
-            title=title,
-            short_description=short_description,
-            is_shared=True,
-            level=level,
-            inheritable=inheritable,
-        )
         result = manager.create_document_record(
             db,
             data=payload,
@@ -527,6 +530,8 @@ async def upload_shared_document(
         return result
     except HTTPException:
         raise
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
     except Exception as e:
         logger.exception("Failed uploading shared document")
         raise HTTPException(status_code=500, detail="Failed to upload shared document")

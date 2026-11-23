@@ -51,13 +51,13 @@ function describe(c: RuleConstraint, t: (k: string) => string): string {
 /** The rule's constraints, duties and prohibitions, one line each. */
 export function RuleView({ rule }: { rule?: ArfRule | null }) {
   const { t } = useTranslation(['authority-resolution']);
-  const lines: { kind: 'constraint' | 'duty' | 'prohibition'; text: string; name?: string; message?: string; action?: string }[] = [];
-  for (const c of rule?.permission?.constraint || []) lines.push({ kind: 'constraint', text: describe(c, t), name: c.name, message: c.message });
+  const lines: { kind: 'constraint' | 'duty' | 'prohibition'; text: string; name?: string; message?: string; action?: string; clause?: string }[] = [];
+  for (const c of rule?.permission?.constraint || []) lines.push({ kind: 'constraint', text: describe(c, t), name: c.name, message: c.message, clause: c.clause });
   for (const d of rule?.permission?.duty || []) {
-    lines.push({ kind: 'duty', action: d.action, text: (d.constraint || []).map((c) => describe(c, t)).join(` ${t('rule.join.andWord')} `), name: d.name, message: d.message });
+    lines.push({ kind: 'duty', action: d.action, text: (d.constraint || []).map((c) => describe(c, t)).join(` ${t('rule.join.andWord')} `), name: d.name, message: d.message, clause: d.clause });
   }
   for (const p of rule?.prohibition || []) {
-    lines.push({ kind: 'prohibition', text: (p.constraint || []).map((c) => describe(c, t)).join(` ${t('rule.join.andWord')} `), name: p.name, message: p.message });
+    lines.push({ kind: 'prohibition', text: (p.constraint || []).map((c) => describe(c, t)).join(` ${t('rule.join.andWord')} `), name: p.name, message: p.message, clause: p.clause });
   }
   if (!lines.length) return <div className="text-muted-foreground text-xs">{t('rule.none')}</div>;
   return (
@@ -70,6 +70,7 @@ export function RuleView({ rule }: { rule?: ArfRule | null }) {
             </Badge>
             {l.action && <span className="font-mono text-xs">{l.action}</span>}
             {l.name && <span className="font-medium">{l.name}</span>}
+            {l.clause && <Badge variant="secondary" className="font-mono text-xs ml-auto">{l.clause}</Badge>}
           </div>
           <div className="font-mono text-xs break-all">
             {l.kind === 'duty' ? `${t('rule.fulfilledWhen')} ` : l.kind === 'prohibition' ? `${t('rule.prohibitedWhen')} ` : ''}{l.text}

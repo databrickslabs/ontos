@@ -223,7 +223,8 @@
       "dnaSchedule": "Planification du DNA-Coefficient",
       "tags": "Tags",
       "ownership": "Propriété et projet",
-      "rule": "Règle (ODRL)"
+      "rule": "Règle (ODRL)",
+      "justification": "Justification (référence de politique)"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Contrôles appliqués après la règle (et par rapport auxquels le coefficient DNA mesure la divergence). Chacun est un <strong>Compliance Check</strong> réutilisable.",
@@ -233,7 +234,8 @@
       "resourceRefs": "D'où viennent les valeurs des champs. Au lieu d'un littéral simple, adossez un champ canonique (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) à un pointeur typé. Une référence à une <strong>entité Ontos</strong> est résolue à nouveau dans le graphe de connaissances lors de l'évaluation, de sorte que la valeur reste à jour lorsque le concept, le produit ou le domaine sous-jacent change. Les références à un <strong>outil MCP</strong> appellent un service MCP Unity Catalog au moment de la décision ; les critères peuvent comparer la valeur résolue sous la forme <code>obj.ref_{{fieldPlaceholder}}</code> (les points deviennent des tirets bas, p. ex. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "Fréquence de recalcul du DNA-Coefficient par rapport aux sources de preuves.",
       "domainContext": "Le périmètre borné dans lequel cette autorité s'applique, et ses paramètres. Une requête hors périmètre reçoit no_authority ; la règle et les contrôles lisent les paramètres comme ctx.<key>.",
-      "rule": "Ce que l'autorité permet, en ODRL : des <strong>contraintes</strong> qui doivent être vraies, des <strong>obligations</strong> à remplir (la décision reste <strong>conditionnelle</strong> d'ici là, p. ex. une co-approbation) et des <strong>interdictions</strong>. Comparez à des valeurs ou à des variables (<code>ctx.threshold</code>, <code>req.market</code>)."
+      "rule": "Ce que l'autorité permet, en ODRL : des <strong>contraintes</strong> qui doivent être vraies, des <strong>obligations</strong> à remplir (la décision reste <strong>conditionnelle</strong> d'ici là, p. ex. une co-approbation) et des <strong>interdictions</strong>. Comparez à des valeurs ou à des variables (<code>ctx.threshold</code>, <code>req.market</code>).",
+      "justification": "La référence de politique sur laquelle repose cette Authority Relation. Sa validité est affichée, non appliquée. Les libellés de clause sont en texte libre ; la règle et les contrôles peuvent les citer."
     },
     "fields": {
       "name": {
@@ -645,6 +647,95 @@
     "none": "Aucune règle : seuls les contrôles encadrent cette autorité.",
     "fulfilledWhen": "remplie quand",
     "prohibitedWhen": "interdit quand"
+  },
+  "nav": {
+    "relations": "Relations d'autorité",
+    "policies": "Références de politique"
+  },
+  "policy": {
+    "list": {
+      "title": "Références de politique",
+      "description": "Les documents sources que vos Authority Relations citent comme justification. Une référence n'est qu'une métadonnée : Ontos conserve son nom, son identifiant externe, sa version et sa validité, et renvoie vers le document. Rien n'est appliqué ici ; les approbateurs vérifient le document eux-mêmes.",
+      "buttonNew": "Nouvelle référence",
+      "confirmDelete": "Supprimer {{key}} v{{version}} ?",
+      "columnCitedBy": "Citée par"
+    },
+    "fields": {
+      "key": "Identifiant externe",
+      "version": "Version",
+      "title": "Nom",
+      "summary": "Description",
+      "owner": "Équipe responsable",
+      "url": "Lien vers le document",
+      "validity": "Validité",
+      "validFrom": "Valide à partir du",
+      "validTo": "Valide jusqu'au",
+      "derivedFrom": "Dérivée de",
+      "changeSummary": "Résumé des changements"
+    },
+    "validity": {
+      "openEnded": "sans échéance",
+      "expired": "Expirée"
+    },
+    "editor": {
+      "titleNew": "Nouvelle référence de politique",
+      "titleEdit": "Modifier {{key}} v{{version}}",
+      "keyHint": "Identifiant commun à toutes les versions du document, par ex. POL-DOA.",
+      "urlHint": "Facultatif. Lien vers le document source (http ou https). Ontos ne l'ouvre pas.",
+      "validityHint": "La validité indiquée par le document. Informative uniquement : rien n'est appliqué. Les contrôles peuvent la lire comme policy_ref.valid_to.",
+      "validation": {
+        "required": "L'identifiant externe et le nom sont obligatoires",
+        "title": "La référence n'est pas valide",
+        "clauseRef": "Chaque suggestion de clause a besoin d'une référence (par ex. §7.1).",
+        "clauseDuplicate": "Deux suggestions de clause partagent une référence."
+      }
+    },
+    "clauses": {
+      "title": "Suggestions de clauses",
+      "hint": "Facultatif. Les Authority Relations et les contrôles citent les clauses en texte libre ; ces entrées ne sont que des suggestions dans le sélecteur.",
+      "titlePlaceholder": "Titre de la clause",
+      "textPlaceholder": "Texte de la clause",
+      "add": "Ajouter une suggestion",
+      "remove": "Retirer la suggestion",
+      "none": "Aucune suggestion de clause.",
+      "ref": "Réf.",
+      "clause": "Clause"
+    },
+    "details": {
+      "defaultTitle": "Référence de politique",
+      "notFound": "Référence de politique introuvable.",
+      "backButton": "Retour aux références",
+      "buttonNewVersion": "Nouvelle version",
+      "versionCreated": "Version {{version}} créée",
+      "expiredNote": "La validité indiquée par cette référence est dépassée. La référence ne bloque rien par elle-même ; un contrôle qui lit policy_ref.expired peut le faire.",
+      "cardReference": "Référence",
+      "cardDependents": "Citée par ({{count}})",
+      "noDependents": "Aucune Authority Relation ne cite cette référence."
+    },
+    "newVersion": {
+      "title": "Nouvelle version de la référence",
+      "description": "Crée un nouvel enregistrement pour la nouvelle version du document source, lié à celui-ci. La validité se définit sur la nouvelle version."
+    },
+    "citation": {
+      "legacy": "Justification libre (aucune référence de politique citée)",
+      "none": "Aucune référence de politique citée.",
+      "derivedFrom": "dérivée de la version précédente",
+      "link": "Ouvrir le document",
+      "noClauses": "Aucun libellé de clause cité.",
+      "clause": "Clause",
+      "clausePlaceholder": "§7.1",
+      "clauseTitle": "Libellé de clause (texte libre). Les suggestions viennent de la référence.",
+      "clauses": "Libellés de clause",
+      "clausesPlaceholder": "§7.1, §7.2",
+      "clausesHint": "Texte libre, séparé par des virgules. Les suggestions viennent des clauses de la référence.",
+      "nonePicker": "Aucune référence de politique",
+      "expiredHint": "La validité de cette référence est dépassée. Elle ne bloque rien par elle-même ; pour l'appliquer, ajoutez le modèle de contrôle de justification.",
+      "enforces": "Applique cette clause de la politique"
+    },
+    "errors": {
+      "inUse": "La référence est citée par {{names}}. Retirez d'abord ces citations.",
+      "notFound": "Référence de politique introuvable."
+    }
   },
   "errors": {
     "generic": "Une erreur s'est produite. Réessayez.",

@@ -223,7 +223,8 @@
       "dnaSchedule": "DNA-Coefficient-schema",
       "tags": "Tags",
       "ownership": "Eigenaarschap & project",
-      "rule": "Regel (ODRL)"
+      "rule": "Regel (ODRL)",
+      "justification": "Onderbouwing (beleidsverwijzing)"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Controles die de gate na de regel afdwingt (en waartegen de DNA-coëfficiënt afwijkingen meet). Elk is een herbruikbare <strong>Compliance Check</strong>.",
@@ -233,7 +234,8 @@
       "resourceRefs": "Waar veldwaarden vandaan komen. In plaats van een gewone letterlijke waarde ondersteun je een canoniek veld (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) met een getypeerde verwijzing. Een <strong> Ontos-entiteit</strong>-verwijzing wordt bij evaluatie opnieuw opgelost tegen de kennisgraaf, zodat de waarde actueel blijft wanneer het onderliggende concept, product of domein verandert. <strong> MCP-tool</strong>-verwijzingen roepen op beslissingstijd een Unity Catalog MCP-service aan; criteria kunnen vergelijken met de opgeloste waarde als <code>obj.ref_{{fieldPlaceholder}}</code> (punten worden underscores, bijv. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "Hoe vaak de DNA-Coefficient opnieuw wordt berekend tegen de bewijsbronnen.",
       "domainContext": "Het afgebakende bereik waarin deze bevoegdheid geldt, en haar parameters. Een verzoek buiten het bereik krijgt no_authority; de regel en de controles lezen de parameters als ctx.<key>.",
-      "rule": "Wat de bevoegdheid toestaat, als ODRL: <strong>voorwaarden</strong> die moeten gelden, nog te vervullen <strong>verplichtingen</strong> (tot dan is de beslissing <strong>voorwaardelijk</strong>, bijv. een mede-goedkeuring) en <strong>verboden</strong>. Vergelijk met waarden of variabelen (<code>ctx.threshold</code>, <code>req.market</code>)."
+      "rule": "Wat de bevoegdheid toestaat, als ODRL: <strong>voorwaarden</strong> die moeten gelden, nog te vervullen <strong>verplichtingen</strong> (tot dan is de beslissing <strong>voorwaardelijk</strong>, bijv. een mede-goedkeuring) en <strong>verboden</strong>. Vergelijk met waarden of variabelen (<code>ctx.threshold</code>, <code>req.market</code>).",
+      "justification": "De beleidsverwijzing waarop deze Authority Relation rust. De geldigheid wordt getoond, niet afgedwongen. Clausulelabels zijn vrije tekst; de regel en de controles kunnen ze citeren."
     },
     "fields": {
       "name": {
@@ -645,6 +647,95 @@
     "none": "Geen regel: alleen de controles bepalen deze bevoegdheid.",
     "fulfilledWhen": "vervuld als",
     "prohibitedWhen": "verboden als"
+  },
+  "nav": {
+    "relations": "Bevoegdheidsrelaties",
+    "policies": "Beleidsverwijzingen"
+  },
+  "policy": {
+    "list": {
+      "title": "Beleidsverwijzingen",
+      "description": "De brondocumenten die je Authority Relations als onderbouwing citeren. Een verwijzing is alleen metadata: Ontos bewaart naam, externe ID, versie en geldigheid en linkt naar het document. Hier wordt niets afgedwongen; de goedkeurders controleren het document zelf.",
+      "buttonNew": "Nieuwe verwijzing",
+      "confirmDelete": "{{key}} v{{version}} verwijderen?",
+      "columnCitedBy": "Geciteerd door"
+    },
+    "fields": {
+      "key": "Externe ID",
+      "version": "Versie",
+      "title": "Naam",
+      "summary": "Beschrijving",
+      "owner": "Verantwoordelijk team",
+      "url": "Link naar document",
+      "validity": "Geldigheid",
+      "validFrom": "Geldig vanaf",
+      "validTo": "Geldig tot",
+      "derivedFrom": "Afgeleid van",
+      "changeSummary": "Samenvatting wijziging"
+    },
+    "validity": {
+      "openEnded": "zonder einddatum",
+      "expired": "Verlopen"
+    },
+    "editor": {
+      "titleNew": "Nieuwe beleidsverwijzing",
+      "titleEdit": "{{key}} v{{version}} bewerken",
+      "keyHint": "Identificatie die alle versies van het document delen, bijv. POL-DOA.",
+      "urlHint": "Optioneel. Link naar het brondocument (http of https). Ontos opent het niet.",
+      "validityHint": "De geldigheid zoals het document die aangeeft. Alleen informatief: er wordt niets afgedwongen. Controles kunnen die lezen als policy_ref.valid_to.",
+      "validation": {
+        "required": "Externe ID en naam zijn verplicht",
+        "title": "De verwijzing is niet geldig",
+        "clauseRef": "Elke clausule-suggestie heeft een verwijzing nodig (bijv. §7.1).",
+        "clauseDuplicate": "Twee clausule-suggesties delen een verwijzing."
+      }
+    },
+    "clauses": {
+      "title": "Clausule-suggesties",
+      "hint": "Optioneel. Authority Relations en controles citeren clausules als vrije tekst; deze items zijn alleen suggesties in de keuzelijst.",
+      "titlePlaceholder": "Clausuletitel",
+      "textPlaceholder": "Clausuletekst",
+      "add": "Suggestie toevoegen",
+      "remove": "Suggestie verwijderen",
+      "none": "Geen clausule-suggesties.",
+      "ref": "Verwijz.",
+      "clause": "Clausule"
+    },
+    "details": {
+      "defaultTitle": "Beleidsverwijzing",
+      "notFound": "Beleidsverwijzing niet gevonden.",
+      "backButton": "Terug naar verwijzingen",
+      "buttonNewVersion": "Nieuwe versie",
+      "versionCreated": "Versie {{version}} aangemaakt",
+      "expiredNote": "De geldigheid die deze verwijzing aangeeft is verstreken. De verwijzing blokkeert zelf niets; een controle die policy_ref.expired leest, kan dat wel.",
+      "cardReference": "Verwijzing",
+      "cardDependents": "Geciteerd door ({{count}})",
+      "noDependents": "Geen Authority Relation citeert deze verwijzing."
+    },
+    "newVersion": {
+      "title": "Nieuwe versie van de verwijzing",
+      "description": "Maakt een nieuw record voor de nieuwe versie van het brondocument, gekoppeld aan deze. De geldigheid wordt op de nieuwe versie ingesteld."
+    },
+    "citation": {
+      "legacy": "Vrije onderbouwing (geen beleidsverwijzing geciteerd)",
+      "none": "Geen beleidsverwijzing geciteerd.",
+      "derivedFrom": "afgeleid van de vorige versie",
+      "link": "Document openen",
+      "noClauses": "Geen clausulelabels geciteerd.",
+      "clause": "Clausule",
+      "clausePlaceholder": "§7.1",
+      "clauseTitle": "Clausulelabel (vrije tekst). Suggesties komen uit de verwijzing.",
+      "clauses": "Clausulelabels",
+      "clausesPlaceholder": "§7.1, §7.2",
+      "clausesHint": "Vrije tekst, door komma's gescheiden. Suggesties komen uit de clausules van de verwijzing.",
+      "nonePicker": "Geen beleidsverwijzing",
+      "expiredHint": "De geldigheid van deze verwijzing is verstreken. Zelf blokkeert ze niets; voeg de onderbouwingscontrole-template toe om het af te dwingen.",
+      "enforces": "Handhaaft deze beleidsclausule"
+    },
+    "errors": {
+      "inUse": "De verwijzing wordt geciteerd door {{names}}. Verwijder eerst die citaten.",
+      "notFound": "Beleidsverwijzing niet gevonden."
+    }
   },
   "errors": {
     "generic": "Er is iets misgegaan. Probeer het opnieuw.",

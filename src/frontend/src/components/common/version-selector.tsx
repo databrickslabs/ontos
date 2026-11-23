@@ -37,7 +37,7 @@ export type EntityVersionRow = {
   updatedAt?: string
 }
 
-export type EntityKind = 'contract' | 'product' | 'authority_relation'
+export type EntityKind = 'contract' | 'product' | 'authority_relation' | 'authority_policy'
 
 type VersionSelectorProps = {
   entityKind: EntityKind
@@ -61,6 +61,7 @@ type VersionSelectorProps = {
 function endpointFor(kind: EntityKind, id: string): string {
   if (kind === 'product') return `/api/data-products/${id}/versions`
   if (kind === 'authority_relation') return `/api/authority/relations/${id}/versions`
+  if (kind === 'authority_policy') return `/api/authority/policies/${id}/versions`
   return `/api/data-contracts/${id}/versions`
 }
 

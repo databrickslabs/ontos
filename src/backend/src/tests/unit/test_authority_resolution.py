@@ -7,6 +7,8 @@ Maturity Level integration.
 """
 import pytest
 
+from src.common.authority_rule import UNCITED_POLICY_REF
+
 from src.common.authority_resolution_dna import (
     Criterion,
     compute_dnaco,
@@ -164,7 +166,7 @@ def test_gate_approves_when_all_criteria_pass():
         _link("ASSERT obj.actor_identity IN ['rsm-east']", order=0),
         _link("ASSERT obj.value <= 0.15 OR obj.escalated = True", order=1),
     )
-    verdict, *_ = mgr._evaluate_decision(rel, {"actor_identity": "rsm-east", "value": 0.10})
+    verdict, *_ = mgr._evaluate_decision(rel, {"actor_identity": "rsm-east", "value": 0.10}, None, None, UNCITED_POLICY_REF)
     assert verdict == VERDICT_APPROVED
 
 
@@ -172,7 +174,7 @@ def test_gate_denies_unauthorized_signer_with_message():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.actor_identity IN ['rsm-east']",
                           message="Signer is not an authorized RSM.", order=0))
-    verdict, reason, _ = mgr._evaluate_decision(rel, {"actor_identity": "intruder"})
+    verdict, reason, _ = mgr._evaluate_decision(rel, {"actor_identity": "intruder"}, None, None, UNCITED_POLICY_REF)
     assert verdict == VERDICT_DENIED
     assert reason == "Signer is not an authorized RSM."
 
@@ -180,28 +182,28 @@ def test_gate_denies_unauthorized_signer_with_message():
 def test_gate_denies_over_threshold_without_escalation():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.value <= 0.15 OR obj.escalated = True", order=0))
-    verdict, *_ = mgr._evaluate_decision(rel, {"value": 0.30, "escalated": False})
+    verdict, *_ = mgr._evaluate_decision(rel, {"value": 0.30, "escalated": False}, None, None, UNCITED_POLICY_REF)
     assert verdict == VERDICT_DENIED
 
 
 def test_gate_allows_over_threshold_with_escalation():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.value <= 0.15 OR obj.escalated = True", order=0))
-    verdict, *_ = mgr._evaluate_decision(rel, {"value": 0.30, "escalated": True})
+    verdict, *_ = mgr._evaluate_decision(rel, {"value": 0.30, "escalated": True}, None, None, UNCITED_POLICY_REF)
     assert verdict == VERDICT_APPROVED
 
 
 def test_gate_denies_missing_cosign():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.cosign_present = True", order=0))
-    verdict, *_ = mgr._evaluate_decision(rel, {"cosign_present": False})
+    verdict, *_ = mgr._evaluate_decision(rel, {"cosign_present": False}, None, None, UNCITED_POLICY_REF)
     assert verdict == VERDICT_DENIED
 
 
 def test_gate_denies_action_mismatch():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.action = 'approve'", order=0))
-    verdict, *_ = mgr._evaluate_decision(rel, {"action": "override"})
+    verdict, *_ = mgr._evaluate_decision(rel, {"action": "override"}, None, None, UNCITED_POLICY_REF)
     assert verdict == VERDICT_DENIED
 
 
@@ -209,7 +211,7 @@ def test_gate_disabled_criterion_is_skipped():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.actor_identity IN ['rsm-east']", enabled=False, order=0),
                     _link("ASSERT TRUE", order=1))
-    verdict, *_ = mgr._evaluate_decision(rel, {"actor_identity": "intruder"})
+    verdict, *_ = mgr._evaluate_decision(rel, {"actor_identity": "intruder"}, None, None, UNCITED_POLICY_REF)
     assert verdict == VERDICT_APPROVED
 
 
@@ -217,10 +219,10 @@ def test_gate_with_no_enabled_check_is_no_authority_not_approval():
     """B5: a version with no enabled check approves nothing; the reason is coded."""
     from src.controller.authority_resolution_manager import NO_ENABLED_CHECKS_MESSAGE, VERDICT_NO_AUTHORITY
     mgr = AuthorityResolutionManager()
-    verdict, reason, _ = mgr._evaluate_decision(_relation(), {"actor_identity": "anyone"})
+    verdict, reason, _ = mgr._evaluate_decision(_relation(), {"actor_identity": "anyone"}, None, None, UNCITED_POLICY_REF)
     assert (verdict, reason) == (VERDICT_NO_AUTHORITY, NO_ENABLED_CHECKS_MESSAGE)
     only_disabled = _relation(_link("ASSERT obj.value <= 1", enabled=False))
-    assert mgr._evaluate_decision(only_disabled, {"value": 9})[0] == VERDICT_NO_AUTHORITY
+    assert mgr._evaluate_decision(only_disabled, {"value": 9}, None, None, UNCITED_POLICY_REF)[0] == VERDICT_NO_AUTHORITY
 
 
 # ------------------------------------------------------------- maturity

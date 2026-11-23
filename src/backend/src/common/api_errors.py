@@ -18,7 +18,7 @@ import logging
 import uuid
 from typing import Any, Dict, Iterator, Optional
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse, Response
@@ -69,13 +69,50 @@ def client_failure(tag: str, exc: BaseException, *, code: str, message: str) -> 
 
 
 class CodedValueError(ValueError):
-    """A ``ValueError`` with a code and parameters for the UI."""
+    """A ``ValueError`` with a code and parameters for the UI.
+
+    ``http_status`` (optional) is the status a route answers the refusal with.
+    """
 
     code: str = ''
+    http_status: Optional[int] = None
 
     def __init__(self, message: str, **params: Any):
         super().__init__(message)
+        self.message: str = message
         self.params: Dict[str, Any] = params
+
+
+REQUEST_FAILED_CODE = 'request_failed'
+REQUEST_FAILED_MESSAGE = 'The request failed (error id {errorId}). See the server log.'
+
+
+def coded_http_error(
+    tag: str,
+    exc: BaseException,
+    *,
+    coded_status: int = 400,
+    unexpected_status: int = 500,
+    failure_code: str = REQUEST_FAILED_CODE,
+    message: str = REQUEST_FAILED_MESSAGE,
+) -> HTTPException:
+    """The HTTP answer for an exception raised while handling a request.
+
+    A ``CodedValueError`` keeps its code and message: the refusal is logged (at info),
+    answered with ``coded_status`` (or its own ``http_status``, e.g. 403 for a
+    permission refusal, 409 for a conflict), and its detail is built from the
+    exception's attributes. Any other exception is logged once with an error id and
+    answered generically with ``failure_code`` and ``message`` (``{errorId}`` is filled
+    in). Raise the result outside the ``except`` block where it is built.
+    """
+    if isinstance(exc, CodedValueError):
+        logger.info("[%s] refused: %s", tag, exc.code)
+        # The detail is the coded message; the handler matches it to the exception and sends the code.
+        error = HTTPException(status_code=exc.http_status or coded_status, detail=exc.message)
+        error.__cause__ = exc
+        return error
+    payload = client_failure(tag, exc, code=failure_code, message=message)
+    return HTTPException(status_code=unexpected_status, detail=payload)
 
 
 class InvalidStatusTransitionError(CodedValueError):

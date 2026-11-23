@@ -6,7 +6,8 @@ evolve here without changing any saved AR.
 
 Templates read request fields as ``obj.<field>`` and, where a comparison needs one, the
 AR's parameters as ``ctx.<param>`` (a template that needs a parameter says so in its
-description). Justification fields come with the policy batch. A co-sign is a duty (the decision
+description). The validity template reads ``policy_ref.*`` (the AR's cited policy
+reference, ARF 1.2.0). A co-sign is a duty (the decision
 is conditional until the co-signer acts), not a check, so it lives in the ODRL rule
 editor, where duties are expressed.
 """
@@ -62,6 +63,23 @@ TEMPLATES: Tuple[CheckTemplate, ...] = (
         rule="ASSERT obj.grantee != obj.actor_identity",
         failure_message="The grantee must not be the requesting actor.",
         dimension="people",
+    ),
+    CheckTemplate(
+        key="justification_within_window",
+        name="Justification reference is within its validity window",
+        description=(
+            "The AR must cite a policy reference, and its validity (valid to) must not have passed "
+            "when the decision is made (policy_ref.cited and policy_ref.expired). As a decision "
+            "check it is enforced at every resolve. To report instead of block, use the same rule as "
+            "the Compliance Check of a maturity gate on Authority Relations: maturity evaluation then "
+            "shows the ARs whose reference has expired, and no decision changes."
+        ),
+        rule="ASSERT policy_ref.cited = True AND policy_ref.expired = False",
+        failure_message=(
+            "The justification reference is missing or outside its validity window; "
+            "cite a current policy reference."
+        ),
+        dimension="policy",
     ),
 )
 

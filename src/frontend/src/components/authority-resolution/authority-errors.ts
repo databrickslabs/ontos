@@ -35,6 +35,10 @@ export function authorityErrorMessage(
       return t('errors.selfAffirmation');
     case 'authority_permission_denied':
       return t('errors.permissionDenied');
+    case 'authority_policy_in_use':
+      return t('policy.errors.inUse', { names: Array.isArray(params?.cited_by) ? params.cited_by.join(', ') : '' });
+    case 'authority_policy_not_found':
+      return t('policy.errors.notFound');
     case 'authority_status_conflict': {
       const reason = typeof params?.reason === 'string' ? params.reason : '';
       return (STATUS_CONFLICT_REASONS as readonly string[]).includes(reason)

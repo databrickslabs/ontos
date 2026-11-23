@@ -74,6 +74,27 @@ def deprecation_details_from_strings(
     )
 
 
+def _category(row: Any, db: Optional[Session] = None) -> Optional[str]:
+    """The Stage Category of ``row``'s stage in its lifecycle stage group."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    return lifecycle_service.category_of_row(row, db)
+
+
+def _target_category(
+    db: Optional[Session], entity_type: str, entity: Any, key: str,
+) -> Optional[str]:
+    """The Stage Category of stage ``key`` in ``entity``'s group (the default group
+    without an entity)."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    group = (
+        lifecycle_service.group_for(db, entity_type, entity) if entity is not None
+        else lifecycle_service.default_group(db, entity_type)
+    )
+    return group.category(key)
+
+
 def _entity_model(entity_type: str):
     if entity_type == 'data_product':
         from src.db_models.data_products import DataProductDb
@@ -193,13 +214,15 @@ def contract_status_audit(
     details: Dict[str, Any] = {
         'contract_id': contract_id, 'from': from_status, 'to': contract.status,
     }
-    if to_status == 'deprecated':
+    # By Stage Category: a custom stage of the deprecated category deprecates too
+    category = _category(contract) or to_status
+    if category == 'deprecated':
         details.update({
             'deprecation_reason': contract.deprecation_reason,
             'sunset_date': contract.sunset_date.isoformat() if contract.sunset_date else None,
             'replacement_contract_id': contract.replacement_contract_id,
         })
-    return LIFECYCLE_AUDIT_ACTIONS.get(to_status, 'CHANGE_STATUS'), details
+    return LIFECYCLE_AUDIT_ACTIONS.get(category, 'CHANGE_STATUS'), details
 
 
 def deprecation_audit_details(deprecation: DeprecationDetails) -> Dict[str, Any]:
@@ -213,13 +236,19 @@ def deprecation_audit_details(deprecation: DeprecationDetails) -> Dict[str, Any]
 
 def product_status_audit(
     product_id: str, new_status: str, deprecation: Optional[DeprecationDetails] = None,
+    category: Optional[str] = None,
 ) -> tuple[str, Dict[str, Any]]:
     """Audit action and details of a product status change, as change-status writes them.
 
-    ``DEPRECATE`` / ``RETIRE`` for those targets (``CHANGE_STATUS`` otherwise); a
-    deprecation adds its reason, sunset date and replacement.
+    ``DEPRECATE`` / ``RETIRE`` for targets in those Stage Categories
+    (``category``; the seeded category of ``new_status`` when not given),
+    ``CHANGE_STATUS`` otherwise; a deprecation adds its reason, sunset date and
+    replacement.
     """
-    target = (new_status or '').lower()
+    from src.common.lifecycle_defaults import DEFAULT_STAGE_CATEGORIES
+
+    key = (new_status or '').lower()
+    target = category or DEFAULT_STAGE_CATEGORIES.get(key, key)
     details: Dict[str, Any] = {'product_id': product_id, 'new_status': new_status}
     if target == 'deprecated':
         details.update(deprecation_audit_details(deprecation or DeprecationDetails()))
@@ -301,7 +330,7 @@ def _check_replacement(
     # Follow the links in effect: those of deprecated or retired entities
     chain = [entity_id, replacement_id]
     current = replacement
-    while current is not None and (current.status or '').lower() in ('deprecated', 'retired'):
+    while current is not None and _category(current, db) in ('deprecated', 'retired'):
         next_id = getattr(current, column, None)
         if not next_id:
             break
@@ -317,7 +346,7 @@ def _check_replacement(
         current = db.get(model, next_id)
     if imported:
         return
-    status = (replacement.status or '').lower()
+    status = _category(replacement, db)
     if status == 'retired':
         raise LifecycleFieldError(
             f"Replacement {replacement_id} is retired", 'replacement_retired',
@@ -326,7 +355,7 @@ def _check_replacement(
     if status == 'deprecated':
         message = f"Replacement {replacement_id} is deprecated"
         if current is not None and current is not replacement and (
-            (current.status or '').lower() not in ('deprecated', 'retired')
+            _category(current, db) not in ('deprecated', 'retired')
         ):
             replaced_by = ' -> '.join(chain[2:])
             raise LifecycleFieldError(
@@ -348,7 +377,8 @@ def check_lifecycle_fields(
     Called after the certified deprecation guard and before the transition's
     gates (``run_status_gates(before_gates=...)``), so nothing is written yet.
     """
-    if new_status != 'deprecated':
+    entity = db.get(_entity_model(entity_type), entity_id) if db is not None else None
+    if _target_category(db, entity_type, entity, new_status) != 'deprecated':
         return
     details = details or DeprecationDetails()
     if not (details.reason or '').strip():
@@ -376,7 +406,15 @@ def apply_lifecycle_fields(
     Returns what changed, for the change log (empty when nothing did).
     """
     replacement_column = _REPLACEMENT_COLUMN[entity_type]
-    if new_status == 'deprecated':
+    from sqlalchemy.orm import object_session
+
+    try:
+        db = object_session(entity_db)
+    except Exception:  # not a mapped row (tests pass plain objects)
+        db = None
+    to_category = _target_category(db, entity_type, entity_db, new_status)
+    from_category = _target_category(db, entity_type, entity_db, current_status)
+    if to_category == 'deprecated':
         details = details or DeprecationDetails()
         entity_db.deprecation_reason = details.reason.strip()
         entity_db.sunset_date = details.sunset_date
@@ -387,7 +425,7 @@ def apply_lifecycle_fields(
             'sunset_date': details.sunset_date.isoformat() if details.sunset_date else None,
             replacement_column: details.replacement_id or None,
         }
-    if current_status == 'deprecated' and new_status == 'active':
+    if from_category == 'deprecated' and to_category == 'active':
         previous = {
             'previous_sunset_date': (
                 entity_db.sunset_date.isoformat() if entity_db.sunset_date else None
@@ -416,7 +454,7 @@ def lifecycle_trigger_data(
     ``replacement_name`` is the id when the replacement can't be read. Unset
     fields are None.
     """
-    if new_status not in ('deprecated', 'retired'):
+    if _target_category(db, entity_type, entity_db, new_status) not in ('deprecated', 'retired'):
         return {}
     column = _REPLACEMENT_COLUMN[entity_type]
     sunset = entity_db.sunset_date
@@ -461,7 +499,7 @@ def lifecycle_custom_properties(entity, entity_type: str) -> Dict[str, str]:
     Only set fields, and only while the entity is deprecated or retired: after
     a reactivation the kept reason / replacement describe a past deprecation.
     """
-    if (getattr(entity, 'status', None) or '').lower() not in ('deprecated', 'retired'):
+    if _category(entity) not in ('deprecated', 'retired'):
         return {}
     props = {}
     for prop, column in _PROPERTY_COLUMNS.items():

@@ -678,7 +678,18 @@ class AssetBase(BaseModel):
     primary_domain_id: Optional[str] = Field(None, description="Primary data domain ID")
     properties: Optional[Dict[str, Any]] = Field(None, description="Type-specific metadata")
     tags: Optional[List[str]] = Field(None, description="Quick tags/classifications")
-    status: AssetStatus = Field(AssetStatus.ACTIVE, description="Lifecycle status")
+    # A stage key of the asset's lifecycle stage group (#1213); a new asset
+    # without one starts in the group's first active stage
+    # No enum: a custom asset group has its own stage keys
+    status: Optional[str] = Field(
+        None,
+        description="A stage key of the asset's lifecycle stage group; the default asset "
+                    "group's stages are draft, active, deprecated and retired",
+        examples=["draft", "active", "deprecated", "retired"],
+    )
+    lifecycle_stage_group_id: Optional[str] = Field(
+        None, description="Lifecycle Stage Group; None = the default asset group",
+    )
 
 
 class AssetCreate(AssetBase):
@@ -695,7 +706,8 @@ class AssetUpdate(BaseModel):
     primary_domain_id: Optional[str] = None
     properties: Optional[Dict[str, Any]] = None
     tags: Optional[List[str]] = None
-    status: Optional[AssetStatus] = None
+    # A stage change is checked against the asset's lifecycle stage group
+    status: Optional[str] = None
 
 
 class CodedWarning(BaseModel):
@@ -756,7 +768,8 @@ class AssetSummary(BaseModel):
     platform: Optional[str] = None
     location: Optional[str] = None
     tags: Optional[List[str]] = None
-    status: AssetStatus
+    status: str
+    lifecycle_stage_group_id: Optional[str] = None
     # Multi-domain assignment (#520): carried on summaries so list rows can show domain
     # badges and edit dialogs (fed an AssetSummary) preserve domains on save.
     domain_ids: List[str] = Field(default_factory=list)

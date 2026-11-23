@@ -121,3 +121,28 @@ def test_an_edited_top_level_server_field_wins_over_a_stale_properties_map():
               'properties': {'host': 'old.example.com', 'port': '5432', 'sslmode': 'require'}}
 
     assert property_values(server) == {'host': 'new.example.com', 'sslmode': 'require'}
+
+
+def test_a_server_field_cleared_through_the_update_api_stays_cleared(db_session, imported):
+    from src.models.data_contracts_api import ServerConfig
+
+    manager, cid = imported
+    db_session.expire_all()
+    rows = db_session.get(DataContractDb, cid).servers
+    # read back the ORM way: the named fields are the server's own fields
+    pg = ServerConfig.model_validate(next(r for r in rows if r.server == 'pg'))
+    assert (pg.host, pg.port, pg.database_schema) == ('db.example.com', 5432, 'public')
+    assert 'port' not in pg.properties
+    body = pg.model_dump(by_alias=True)
+    body['port'] = None
+    body['properties'] = {**body['properties'], 'port': '5432'}  # a client's stale copy
+    others = [ServerConfig.model_validate(r).model_dump(by_alias=True)
+              for r in rows if r.server != 'pg']
+
+    manager.update_contract_with_relations(
+        db_session, cid, DataContractUpdate.model_validate({'servers': [body, *others]}),
+        current_user='alice')
+    db_session.commit()
+
+    exported = _servers(_export(manager, db_session, cid))['srv-pg']
+    assert 'port' not in exported and exported['host'] == 'db.example.com'

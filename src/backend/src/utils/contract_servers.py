@@ -14,6 +14,11 @@ from src.utils.odcs_values import dumps, strict_loads
 # Server fields that are columns of the server row (or JSON columns), not key/value rows
 SERVER_COLUMNS = ('id', 'server', 'type', 'description', 'environment', 'roles',
                   'customProperties', 'properties')
+# The server fields ``ServerConfig`` has its own field for: an update payload
+# (dumped without its nulls) leaves out a cleared one, so the ``properties`` map
+# never fills them
+NAMED_FIELDS = ('host', 'port', 'database', 'schema', 'catalog', 'project', 'account',
+                'region', 'location')
 # ODCS server fields that are not strings
 _INTEGER_FIELDS = ('port',)
 
@@ -22,11 +27,12 @@ def property_values(server: Dict[str, Any]) -> Dict[str, str]:
     """The key/value rows of an ODCS server: the entries of the Ontos
     ``properties`` map (the server form's extra fields), then its type's fields,
     which win: a map read back from a stored server can still hold an edited or
-    cleared field (a top-level key, even null, leaves the map's entry out)."""
+    cleared field (a top-level key, even null, and a ``ServerConfig`` field leave the
+    map's entry out)."""
     values: Dict[str, str] = {}
     extra = server.get('properties')
     extra_items = [(k, v) for k, v in (extra if isinstance(extra, dict) else {}).items()
-                   if k not in server]
+                   if k not in server and k not in NAMED_FIELDS]
     items = extra_items + list(server.items())
     for key, value in items:
         if key in SERVER_COLUMNS or value is None:

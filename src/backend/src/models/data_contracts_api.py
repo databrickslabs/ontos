@@ -321,7 +321,18 @@ class ServerConfig(BaseModel):
             return data
         values = {name: getattr(data, name, None) for name in cls.model_fields if name != 'id'}
         values['id'] = getattr(data, 'stable_id', None)
-        from src.utils.contract_servers import json_list
+        from src.utils.contract_servers import NAMED_FIELDS, json_list
+        # The key/value rows: the fields ServerConfig names are its own fields (as
+        # the contract API returns them), the others the `properties` map
+        rows = {getattr(r, 'key', None): getattr(r, 'value', None)
+                for r in getattr(data, 'properties', None) or []}
+        values['properties'] = {k: v for k, v in rows.items()
+                                if k is not None and k not in NAMED_FIELDS}
+        for key in NAMED_FIELDS:
+            if rows.get(key) is not None:
+                values['database_schema' if key == 'schema' else key] = (
+                    int(rows[key]) if key == 'port' and str(rows[key]).isdigit()
+                    else rows[key])
         values['roles'] = json_list(getattr(data, 'roles_json', None))
         values['customProperties'] = json_list(getattr(data, 'custom_properties_json', None))
         return values

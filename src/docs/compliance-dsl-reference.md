@@ -602,7 +602,8 @@ app log.
 - `status` - Status (draft, active, etc.)
 - `version` - Version number
 - `owner` - Owner email
-- `domain` - Domain assignment
+- `domain` - Name of the primary domain (data products and data contracts); null when there is none, so `x.domain != ''` is also true for an entity without a domain
+- `domain_id` - Id of the primary domain (data products and data contracts); null when there is none
 - `tags` - Tag dictionary
 - `created_at` - Creation timestamp
 - `updated_at` - Last update timestamp

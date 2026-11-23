@@ -289,12 +289,24 @@ class JobsManager(ThreadBoundDb):
             # Wake the polling thread: it may have parked itself after confirming
             # zero installations. None forces a DB re-check on the next cycle.
             self._has_installations = None
+            self._mark_enable_requests_handled(workflow_id)
         except Exception as e:
             logger.error(f"Failed to persist installation record for workflow '{workflow_id}': {e}")
             self._db.rollback()
             # Don't fail the installation if DB persist fails, but log it
 
         return job_id
+
+    def _mark_enable_requests_handled(self, workflow_id: str) -> None:
+        """Installing the job decides the users' requests to enable it: the ``handled``
+        marker takes them out of My actions and lets a later ask through the dedup once the
+        job is removed again (#1527 review). The handle path commits, and rolls back and
+        logs on an error, so it never fails the installation."""
+        if not self._notifications_manager:
+            return
+        self._notifications_manager.handle_actionable_notification(
+            self._db, 'handle_job_enable_request', {'workflow_id': workflow_id},
+        )
 
     def update_workflow(self, workflow_id: str, job_id: int, *, job_cluster_id: Optional[str] = None) -> None:
         wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)

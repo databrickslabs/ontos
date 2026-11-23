@@ -18,7 +18,7 @@ from src.models.assets import (
     AssetRelationshipCreate, AssetRelationshipRead,
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteResult,
-    PHYSICAL_TABLE_ASSET_TYPES, with_internal_properties,
+    PHYSICAL_TABLE_ASSET_TYPES, public_properties, with_internal_properties,
 )
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
 from src.common.errors import ConflictError, NotFoundError, ValidationError
@@ -438,6 +438,12 @@ class AssetsManager(SearchableAsset):
                 stored = db_asset.properties or {}
                 checked = {k: v for k, v in checked.items() if stored.get(k, _UNSET) != v}
             self._validate_properties(db, effective_type_id, checked)
+        elif ('properties' not in asset_in.model_fields_set
+              and str(effective_type_id) != str(db_asset.asset_type_id)):
+            # Omitted, the stored properties are kept: on a type change they must fit
+            # the new type (null clears them, so there is nothing to check)
+            self._validate_properties(
+                db, effective_type_id, public_properties(db_asset.properties))
 
         update_data = asset_in.model_dump(exclude_unset=True)
         # A status change is a move its lifecycle stage group must allow

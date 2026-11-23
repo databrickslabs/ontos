@@ -2140,8 +2140,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db: Database session
             contract_id: Contract UUID
             quality_rules: List of quality rule data (can be Pydantic models or dicts)
-            previous: name -> stored implementation of the checks being replaced;
-                a rule sending back the implementation the API showed keeps it
+            previous: name (or a row key for an unnamed check) -> stored
+                implementation of the checks being replaced; a rule sending back
+                the implementation the API showed keeps it
         """
         # Get the first schema object to attach quality checks to
         schema_obj = db.query(SchemaObjectDb).filter(SchemaObjectDb.contract_id == contract_id).first()
@@ -2151,9 +2152,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         for rule_data in quality_rules:
             check = self._build_quality_check_db(rule_data, object_id=schema_obj.id)
-            stored = (previous or {}).get(check.name)
+            stored = (previous or {}).get(check.name) if check.name else None
             sent = rule_data.get('implementation') if isinstance(rule_data, dict) else getattr(
                 rule_data, 'implementation', None)
+            if stored is None or sent != implementation_page_text(stored):
+                # a check without a name, or a second one of a name: the stored
+                # implementation that shows as the sent text
+                stored = next((v for v in (previous or {}).values()
+                               if sent is not None and sent == implementation_page_text(v)),
+                              None)
             if stored is not None and sent == implementation_page_text(stored):
                 check.implementation = stored
             db.add(check)
@@ -2912,8 +2919,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             DataQualityCheckDb.property_id.is_(None),
                         )
                         for check in replaced:
-                            if check.name and check.implementation is not None:
-                                previous.setdefault(check.name, check.implementation)
+                            if check.implementation is not None:
+                                # unnamed (or same-named) checks under their row id:
+                                # matched by the implementation they show
+                                key = check.name if check.name and check.name not in previous \
+                                    else f'\0{check.id}'
+                                previous[key] = check.implementation
                         replaced.delete()
 
                     # Add new object-level quality rules

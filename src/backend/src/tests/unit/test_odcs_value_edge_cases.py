@@ -199,3 +199,23 @@ def test_editing_a_value_in_the_page_map_stores_the_edit(db_session):
     assert exported['plain'] == {'property': 'plain', 'value': 'edited', 'id': 'cp-plain'}
     assert exported['code'] == {'property': 'code', 'value': '42', 'id': 'cp-code'}
     assert exported['new'] == {'property': 'new', 'value': 'x'}
+
+
+def test_resaving_unnamed_and_same_named_checks_keeps_their_object_implementations(db_session):
+    manager = _manager()
+    impls = [{'checks': ['a > 0']}, {'checks': ['b > 0']}, {'checks': ['c > 0']}]
+    cid = _upload(manager, db_session, _odcs(schema=[{'name': 'orders', 'quality': [
+        {'id': 'q0', 'type': 'custom', 'engine': 'soda', 'implementation': impls[0]},
+        {'id': 'q1', 'name': 'same', 'type': 'custom', 'engine': 'soda',
+         'implementation': impls[1]},
+        {'id': 'q2', 'name': 'same', 'type': 'custom', 'engine': 'soda',
+         'implementation': impls[2]}]}]))
+
+    rules = [r.model_dump(by_alias=True) for r in _api(manager, db_session, cid).quality_rules]
+    manager.update_contract_with_relations(
+        db_session, cid, DataContractUpdate.model_validate({'qualityRules': rules}),
+        current_user='alice')
+
+    quality = _export(manager, db_session, cid)['schema'][0]['quality']
+    exported = [c['implementation'] for c in quality]
+    assert sorted(exported, key=str) == sorted(impls, key=str)

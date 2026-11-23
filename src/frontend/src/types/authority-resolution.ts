@@ -616,9 +616,9 @@ export const EVIDENCE_BOUNDS = {
   sampleSizeDefault: 500,
 } as const;
 
-// Lowercase ADM action codes (approve, escalate, ...). The server bounds the count only;
-// this shape check is the editor's own guard against typos.
-export const ACTION_CODE_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
+// ADM action codes (approve, escalate, budget.approve, scope:region...). The same grammar as
+// the backend (src/common/adm.py ACTION_CODE_PATTERN and the ao1 migration): change all three together.
+export const ACTION_CODE_PATTERN = /^[a-z][a-z0-9_:.-]{0,127}$/;
 
 // `catalog.schema`: two dot-separated identifiers, no whitespace.
 export const ADM_SCHEMA_PATTERN = /^[^.\s]+\.[^.\s]+$/;

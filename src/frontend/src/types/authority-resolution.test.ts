@@ -55,6 +55,9 @@ describe('evidence slice', () => {
     expect(ACTION_CODE_PATTERN.test('Approve')).toBe(false);
     expect(ACTION_CODE_PATTERN.test('2fa')).toBe(false);
     expect(ACTION_CODE_PATTERN.test('bad code')).toBe(false);
+    expect(ACTION_CODE_PATTERN.test('budget.approve:v2')).toBe(true);   // the backend grammar allows : and .
+    expect(ACTION_CODE_PATTERN.test('a'.repeat(128))).toBe(true);    // 1 + 127, the backend bound
+    expect(ACTION_CODE_PATTERN.test('a'.repeat(129))).toBe(false);
     expect(evidenceSliceErrors(valid({ action_codes: ['Approve'] }))).toEqual(['actionCodeInvalid']);
   });
 

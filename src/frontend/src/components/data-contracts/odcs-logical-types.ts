@@ -42,3 +42,35 @@ export function catalogMetadataUrl(
   const query = `path=${encodeURIComponent(path)}&odcs=true${version}`
   return `/api/schema-import/metadata/${connectionId}?${query}`
 }
+
+const DATE_LIKE_LOGICAL_TYPES = new Set(['date', 'timestamp', 'time'])
+
+/** The ODCS logical types that take the date constraints (format, custom format). */
+export function hasDateConstraints(logicalType?: string): boolean {
+  return !!logicalType && DATE_LIKE_LOGICAL_TYPES.has(logicalType)
+}
+
+/** `timezone` is a free-text zone name on a date column (as before). */
+export function takesTimezoneName(logicalType?: string): boolean {
+  return logicalType === 'date'
+}
+
+/** ODCS v3.1 types `timezone` as a boolean on timestamp and time columns. */
+export function takesTimezoneFlag(logicalType?: string): boolean {
+  return logicalType === 'timestamp' || logicalType === 'time'
+}
+
+/**
+ * The `timezone` value a column of this logical type keeps: a trimmed string on a
+ * date, a boolean on timestamp and time (a zone name there is dropped, it isn't
+ * valid ODCS), nothing on any other type.
+ */
+export function timezoneForType(
+  logicalType: string | undefined, value: unknown,
+): string | boolean | undefined {
+  if (takesTimezoneName(logicalType)) {
+    return typeof value === 'string' ? value.trim() || undefined : undefined
+  }
+  if (takesTimezoneFlag(logicalType)) return typeof value === 'boolean' ? value : undefined
+  return undefined
+}

@@ -1,6 +1,6 @@
 fastapi>=0.141.1,<0.142.0
 uvicorn>=0.54.0
-python-multipart>=0.0.32
+python-multipart>=0.0.33
 flask-cors>=6.0.5
 # Databricks Apps images include Dash 2.18.1, which requires Flask and
 # Werkzeug below 3.1. Keep the app environment compatible with the managed

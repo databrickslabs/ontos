@@ -18,7 +18,7 @@
   "noResults": "Nenhum resultado encontrado",
   "noResultsHint": "Tente ajustar os termos de pesquisa ou os filtros",
   "results": "{{count}} resultado encontrado",
-  "results_plural": "{{count}} resultados encontrados",
+  "results_other": "{{count}} resultados encontrados",
   "filters": {
     "all": "Todos",
     "dataProducts": "Produtos de dados",

@@ -138,7 +138,10 @@ export interface WorkflowTrigger {
   unknown_entity_types?: string[];
   from_status?: string;
   to_status?: string;
-  schedule?: string;
+  /** scheduled only: Quartz cron (sec min hour day-of-month month day-of-week [year]) */
+  schedule?: string | null;
+  /** scheduled only: IANA timezone of the schedule; empty means UTC */
+  timezone?: string | null;
   /** before_status_change only; the backend defaults to fail_open */
   on_error?: GateErrorMode;
   disabled_for?: GateExemptions;

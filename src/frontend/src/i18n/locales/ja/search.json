@@ -18,7 +18,7 @@
   "noResults": "結果が見つかりません",
   "noResultsHint": "検索語句やフィルターを調整してみてください",
   "results": "{{count}}件の結果",
-  "results_plural": "{{count}}件の結果",
+  "results_other": "{{count}}件の結果",
   "filters": {
     "all": "すべて",
     "dataProducts": "データ製品",

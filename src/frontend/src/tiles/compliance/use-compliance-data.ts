@@ -5,7 +5,7 @@ import { TileData } from '../types';
 import { useTranslation } from 'react-i18next';
 
 export function useComplianceData(): TileData {
-  const { t } = useTranslation('home');
+  const { t } = useTranslation(['home', 'compliance']);
   const { hasPermission, appliedRoleId, isLoading: permissionsLoading } = usePermissions();
   const [data, setData] = useState<TileData>({
     value: t('home:overview.tiles.compliance.notAvailable'),
@@ -38,18 +38,21 @@ export function useComplianceData(): TileData {
       })
       .then(apiData => {
         const complianceArray = Array.isArray(apiData) ? apiData : [];
-        const latestCompliance = complianceArray.length > 0
-          ? complianceArray[complianceArray.length - 1].compliance
+        // A day without a scored run has compliance null: "No score", never 0 %
+        const latestCompliance: number | null = complianceArray.length > 0
+          ? complianceArray[complianceArray.length - 1].compliance ?? null
           : null;
 
         setData({
           value: latestCompliance !== null
             ? `${latestCompliance}%`
-            : t('home:overview.tiles.compliance.notAvailable'),
+            : complianceArray.length > 0
+              ? t('compliance:runScoreCoverage.noScore')
+              : t('home:overview.tiles.compliance.notAvailable'),
           loading: false,
           error: null,
           customData: {
-            trendData: complianceArray.map((d: any) => d.compliance),
+            trendData: complianceArray.map((d: any) => d.compliance ?? null),
           },
         });
       })

@@ -1,6 +1,62 @@
 {
   "title": "Bienvenido a {{appName}}",
   "tagline": "Gestiona glosario de negocio, contratos de datos, productos de datos, personas y más",
+  "essentials": {
+    "tagline": "Encuentra, entiende y confía en tus datos; luego publica y mantén lo que es tuyo.",
+    "consumer": {
+      "title": "Usar datos",
+      "description": "Empieza por las tablas que tu equipo ya tiene en Unity Catalog."
+    },
+    "producer": {
+      "title": "Compartir datos",
+      "description": "Documenta los activos que posees y haz que los revisen."
+    },
+    "find": {
+      "title": "Encontrar",
+      "description": "Busca activos y conceptos, o explora el catálogo.",
+      "placeholder": "Busca tablas, activos y términos del glosario...",
+      "browseCatalog": "Explorar el Data Catalog"
+    },
+    "understand": {
+      "title": "Entender",
+      "description": "Mira qué es un activo y qué significan sus términos.",
+      "assets": "Activos",
+      "assetsDescription": "Tablas, vistas y otros activos con sus metadatos."
+    },
+    "trust": {
+      "title": "Confiar",
+      "description": "Estado de revisión de los activos y dónde están hoy los datos.",
+      "empty": "Todavía no se ha revisado ningún activo.",
+      "openReviews": "Abrir Revisiones de Activos"
+    },
+    "publish": {
+      "title": "Publicar",
+      "description": "Tus activos que aún no tienen documentación o revisión.",
+      "noAssets": "Todavía no posees ningún activo.",
+      "allDone": "Todos tus activos están documentados y tienen una solicitud de revisión.",
+      "noGapsLoaded": "No hay carencias en los activos cargados hasta ahora.",
+      "noDescription": "Sin descripción",
+      "noReview": "Sin solicitud de revisión",
+      "more": "Mostrando {{shown}} de tus {{total}} activos.",
+      "loadMore": "Cargar más",
+      "pageSize": "Por página",
+      "requestReview": "Solicitar una revisión"
+    },
+    "maintain": {
+      "title": "Mantener",
+      "description": "Tus solicitudes y revisiones abiertas.",
+      "myRequests": "Mis solicitudes pendientes ({{count}})",
+      "noRequests": "No hay solicitudes pendientes.",
+      "openMyRequests": "Abrir Mis Solicitudes",
+      "myReviews": "Mis revisiones de activos abiertas ({{count}})",
+      "noReviews": "No hay revisiones de activos abiertas."
+    },
+    "notices": {
+      "reviewsTruncated": "Solo se leen las {{count}} solicitudes de revisión creadas más recientemente, por lo que estos recuentos y carencias pueden estar incompletos.",
+      "loadError": "No se pudieron cargar estos datos.",
+      "retry": "Reintentar"
+    }
+  },
   "search": {
     "placeholder": "Buscar productos de datos, términos de glosario, contratos..."
   },
@@ -206,9 +262,9 @@
     },
     "products": {
       "available": "{{count}} producto disponible",
-      "available_plural": "{{count}} productos disponibles",
+      "available_other": "{{count}} productos disponibles",
       "subscribed": "{{count}} producto suscrito",
-      "subscribed_plural": "{{count}} productos suscritos",
+      "subscribed_other": "{{count}} productos suscritos",
       "noProducts": "No se encontraron productos de datos.",
       "adjustFilters": "Intenta ajustar tu búsqueda o filtro.",
       "noSubscriptions": "Aún no te has suscrito a ningún producto de datos.",
@@ -221,9 +277,9 @@
     },
     "datasets": {
       "available": "{{count}} dataset disponible",
-      "available_plural": "{{count}} datasets disponibles",
+      "available_other": "{{count}} datasets disponibles",
       "subscribed": "{{count}} dataset suscrito",
-      "subscribed_plural": "{{count}} datasets suscritos",
+      "subscribed_other": "{{count}} datasets suscritos",
       "noDatasets": "No se encontraron datasets.",
       "adjustFilters": "Intenta ajustar tu búsqueda.",
       "noSubscriptions": "Aún no te has suscrito a ningún dataset.",
@@ -244,7 +300,7 @@
     "domainInfo": {
       "parentDomain": "Padre",
       "childDomains": "{{count}} dominio hijo",
-      "childDomains_plural": "{{count}} dominios hijos"
+      "childDomains_other": "{{count}} dominios hijos"
     },
     "tilesPerRow": {
       "placeholder": "Mosaicos",

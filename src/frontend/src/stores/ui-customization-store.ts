@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import {
   applyBranding,
+  applyThemeColors,
+  type BrandingTheme,
   DEFAULT_APP_NAME,
   resolveAppName,
   resolveShortName,
@@ -15,6 +17,13 @@ export interface UICustomizationSettings {
   appDisplayName: string | null;
   appShortName: string | null;
   faviconUrl: string | null;
+  /** Optional subtitle shown next to the name (sidebar, home). */
+  appTagline: string | null;
+  /** Logo for dark mode; falls back to customLogoUrl. */
+  customLogoDarkUrl: string | null;
+  theme: BrandingTheme;
+  /** Show "Powered by Ontos" in the sidebar footer while a custom brand is set. */
+  showPoweredBy: boolean;
   isLoaded: boolean;
 }
 
@@ -27,6 +36,10 @@ interface UICustomizationStore extends UICustomizationSettings {
   getShortName: () => string;
 }
 
+// Long enough for a cold backend or a slow proxy: an aborted request leaves the default
+// branding for the whole session.
+const FETCH_TIMEOUT_MS = 15000;
+
 export const useUICustomizationStore = create<UICustomizationStore>((set, get) => ({
   i18nEnabled: true,
   customLogoUrl: null,
@@ -35,13 +48,22 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
   appDisplayName: null,
   appShortName: null,
   faviconUrl: null,
+  appTagline: null,
+  customLogoDarkUrl: null,
+  theme: {},
+  showPoweredBy: true,
   isLoaded: false,
 
   setSettings: (settings) => set((state) => ({ ...state, ...settings })),
 
   fetchSettings: async () => {
+    // The layout holds its first paint until this settles, so a stalled request must end.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch('/api/settings/ui-customization');
+      const response = await fetch('/api/settings/ui-customization', {
+        signal: controller.signal,
+      });
       if (response.ok) {
         const data = await response.json();
         set({
@@ -52,10 +74,20 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
           appDisplayName: data.app_display_name || null,
           appShortName: data.app_short_name || null,
           faviconUrl: data.favicon_url || null,
+          appTagline: data.app_tagline || null,
+          customLogoDarkUrl: data.custom_logo_dark_url || null,
+          theme: {
+            primary: data.theme?.primary || null,
+            primaryDark: data.theme?.primary_dark || null,
+            accent: data.theme?.accent || null,
+            accentDark: data.theme?.accent_dark || null,
+          },
+          showPoweredBy: data.show_powered_by ?? true,
           isLoaded: true,
         });
 
         injectCustomCss(data.custom_css);
+        applyThemeColors(get().theme);
 
         // Apply branding side effects (title + favicon)
         applyBranding({
@@ -68,10 +100,15 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
         } else {
           localStorage.removeItem('i18n-disabled');
         }
+      } else {
+        // The layout waits for this flag; a refused request keeps the defaults
+        set({ isLoaded: true });
       }
     } catch (error) {
       console.error('Failed to fetch UI customization settings:', error);
       set({ isLoaded: true });
+    } finally {
+      clearTimeout(timer);
     }
   },
 

@@ -20,11 +20,11 @@
       "helpText": "El acceso expirará después de la duración seleccionada. Puede solicitar renovación antes de que expire.",
       "help": "Tu acceso expirará automáticamente después de este período.",
       "days": "{{count}} día",
-      "days_plural": "{{count}} días",
+      "days_other": "{{count}} días",
       "months": "{{count}} mes",
-      "months_plural": "{{count}} meses",
+      "months_other": "{{count}} meses",
       "years": "{{count}} año",
-      "years_plural": "{{count}} años"
+      "years_other": "{{count}} años"
     },
     "submit": "Enviar Solicitud",
     "submitting": "Enviando solicitud...",

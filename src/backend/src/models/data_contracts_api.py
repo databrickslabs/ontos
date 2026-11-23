@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 class SchemaRelationship(BaseModel):
     """ODCS v3.1.0 relationship (foreign key) at schema or property level."""
     id: Optional[str] = None  # internal DB id (populated on read)
+    stableId: Optional[str] = None  # ODCS id (v3.2.0)
     type: str = "foreignKey"
     # from is a reserved word in Python; use Field alias
     from_value: Optional[Union[str, List[str]]] = Field(None, alias='from')
@@ -149,13 +150,15 @@ class QualityRule(BaseModel):
     schedule: Optional[str] = None
     scheduler: Optional[str] = None
     unit: Optional[str] = None
-    tags: Optional[str] = None
+    # Text from the quality rule form, or the ODCS list (stored as JSON); read back as stored
+    tags: Optional[Union[str, List[str]]] = None
 
     # Type-specific fields
     rule: Optional[str] = None  # for library type
     query: Optional[str] = None  # for sql type
     engine: Optional[str] = None  # for custom type
-    implementation: Optional[str] = None  # for custom type (JSON string)
+    # for custom type: a string or, as ODCS allows, an object (stored as JSON)
+    implementation: Optional[Union[str, Dict[str, Any], List[Any]]] = None
 
     # Comparators for all types
     must_be: Optional[str] = None
@@ -257,9 +260,10 @@ class AuthoritativeDefinition(BaseModel):
 
 class SLAProperty(BaseModel):
     """ODCS SLA Property"""
+    id: Optional[str] = None  # ODCS v3.1.0 StableId
     property: str
-    value: Union[str, int, float]
-    valueExt: Optional[Union[str, int, float]] = None
+    value: Any  # any JSON value (ODCS AnyNonCollectionType; kept with its type)
+    valueExt: Optional[Any] = None
     unit: Optional[str] = None
     element: Optional[str] = None
     driver: Optional[str] = None  # regulatory, analytics, operational
@@ -305,6 +309,9 @@ class ServerConfig(BaseModel):
 
     # Additional properties for specific server types
     properties: Dict[str, Any] = Field(default_factory=dict)
+    # ODCS roles and customProperties of the server (lists, as in ODCS)
+    roles: Optional[List[Dict[str, Any]]] = None
+    customProperties: Optional[List[Dict[str, Any]]] = None
 
     @model_validator(mode='before')
     @classmethod
@@ -314,6 +321,24 @@ class ServerConfig(BaseModel):
             return data
         values = {name: getattr(data, name, None) for name in cls.model_fields if name != 'id'}
         values['id'] = getattr(data, 'stable_id', None)
+        from src.utils.contract_servers import NAMED_FIELDS, json_list
+        # The key/value rows: the fields ServerConfig names are its own fields (as
+        # the contract API returns them), the others the `properties` map
+        rows = {getattr(r, 'key', None): getattr(r, 'value', None)
+                for r in getattr(data, 'properties', None) or []}
+        port = str(rows.get('port') or '').strip()
+        if port and not port.isdigit():
+            named = tuple(k for k in NAMED_FIELDS if k != 'port')  # `${PORT}`: kept as text
+        else:
+            named = NAMED_FIELDS
+        values['properties'] = {k: v for k, v in rows.items()
+                                if k is not None and k not in named}
+        for key in named:
+            if rows.get(key) is not None:
+                values['database_schema' if key == 'schema' else key] = (
+                    int(port) if key == 'port' else rows[key])
+        values['roles'] = json_list(getattr(data, 'roles_json', None))
+        values['customProperties'] = json_list(getattr(data, 'custom_properties_json', None))
         return values
 
     @field_validator('properties', mode='before')
@@ -419,6 +444,8 @@ class DataContractBase(BaseModel):
     name: str  # Required for app usability
     version: str = Field('1.0.0')
     status: str = Field('draft')
+    # Lifecycle Stage Group (#1213); None = the default data contract group
+    lifecycle_stage_group_id: Optional[str] = None
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
@@ -537,6 +564,10 @@ class DataContractRead(BaseModel):
     name: str  # Required for app usability
     version: str  # Required by ODCS
     status: str  # Required by ODCS
+    # Lifecycle Stage Group (#1213); ``status`` is a stage key of it
+    lifecycle_stage_group_id: Optional[str] = None
+    # Stage Category of ``status`` (draft, review, active, deprecated, retired)
+    status_category: Optional[str] = None
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     owner_team_name: Optional[str] = None  # Resolved at query time
     project_id: Optional[str] = None  # Project association
@@ -631,6 +662,14 @@ class DataContractRead(BaseModel):
         # under Pydantic v2 because this flag was missing.
         from_attributes = True
 
+    @model_validator(mode='wrap')
+    @classmethod
+    def _fill_status_category(cls, data: Any, handler: Any):
+        # Through the session of the ORM row validated from, when there is one
+        from src.controller.lifecycle_service import lifecycle_service
+        return lifecycle_service.fill_status_category(handler(data), data)
+
+
 
 class DataContractSummary(BaseModel):
     """Lightweight contract model for list endpoints -- no schema, quality, or comments."""
@@ -638,6 +677,10 @@ class DataContractSummary(BaseModel):
     name: str
     version: str
     status: str
+    # Lifecycle Stage Group (#1213); ``status`` is a stage key of it
+    lifecycle_stage_group_id: Optional[str] = None
+    # Stage Category of ``status`` (draft, review, active, deprecated, retired)
+    status_category: Optional[str] = None
     owner_team_id: Optional[str] = None
     owner_team_name: Optional[str] = None
     project_id: Optional[str] = None
@@ -690,6 +733,14 @@ class DataContractSummary(BaseModel):
 
     class Config:
         populate_by_name = True
+
+    @model_validator(mode='wrap')
+    @classmethod
+    def _fill_status_category(cls, data: Any, handler: Any):
+        # Through the session of the ORM row validated from, when there is one
+        from src.controller.lifecycle_service import lifecycle_service
+        return lifecycle_service.fill_status_category(handler(data), data)
+
 
 
 class DataContractCommentCreate(BaseModel):

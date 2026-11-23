@@ -6,7 +6,10 @@ delete path removes them itself (#1431). Every entity kind that renders the
 metadata or cost panels, or can be tagged, calls ``remove_entity_data`` (or
 ``remove_entities_data`` for many ids) from its delete, inside the delete's
 transaction. Shared library records are stored under the shared id, not the
-entity's, and stay.
+entity's, and stay. A document imported from Markdown points at the user's
+source file, which is never deleted: it leaves the search index once the
+delete commits, and the file's stored text goes with the last document that
+uses it.
 
 Not covered here, so a new entity kind knows what is left (#1483): comments
 (ratings are comment rows too), entity subscriptions, entity semantic links,
@@ -55,38 +58,58 @@ def _unique_ids(entity_ids: Iterable) -> List[str]:
 
 
 def remove_entities_rows(
-    db: Session, *, entity_type: str, entity_ids: Iterable,
+    db: Session,
+    *,
+    entity_type: str,
+    entity_ids: Iterable,
+    metadata_manager: Optional[MetadataManager] = None,
 ) -> Tuple[Dict[str, int], List[str]]:
     """Delete the rows of these entities in ``db``'s transaction (no commit).
 
     Returns the rows removed per kind and the volume paths of the removed
-    documents. Callers that delete inside a savepoint queue the paths with
-    ``MetadataManager.delete_document_files_after_commit`` once the savepoint
-    is released, so a rolled-back savepoint keeps the files.
+    uploaded documents. Callers that delete inside a savepoint queue the paths
+    with ``MetadataManager.delete_document_files_after_commit`` once the
+    savepoint is released, so a rolled-back savepoint keeps the files.
+    Imported Markdown documents are left out of the paths (their path is the
+    user's source file); ``MetadataManager.release_imported_documents`` takes
+    them out of search after the commit and frees their files' stored text.
     """
     ids = _unique_ids(entity_ids)
     removed = {key: 0 for key, _ in _TABLES}
     paths: List[str] = []
+    imported: List[Tuple[str, str]] = []
     for start in range(0, len(ids), _CHUNK_SIZE):
         chunk = ids[start:start + _CHUNK_SIZE]
-        paths.extend(
-            path for (path,) in db.query(DocumentMetadataDb.storage_path).filter(
-                DocumentMetadataDb.entity_type == entity_type,
-                DocumentMetadataDb.entity_id.in_(chunk),
-            ).all() if path
-        )
+        for document_id, storage_path, source_path in db.query(
+            DocumentMetadataDb.id, DocumentMetadataDb.storage_path,
+            DocumentMetadataDb.source_path,
+        ).filter(
+            DocumentMetadataDb.entity_type == entity_type,
+            DocumentMetadataDb.entity_id.in_(chunk),
+        ).all():
+            if source_path:
+                imported.append((str(document_id), source_path))
+            elif storage_path:
+                paths.append(storage_path)
         for key, model in _TABLES:
             removed[key] += db.query(model).filter(
                 model.entity_type == entity_type, model.entity_id.in_(chunk),
             ).delete(synchronize_session=False)
+    (metadata_manager or MetadataManager()).release_imported_documents(db, imported)
     return removed, paths
 
 
 def remove_entity_rows(
-    db: Session, *, entity_type: str, entity_id: str,
+    db: Session,
+    *,
+    entity_type: str,
+    entity_id: str,
+    metadata_manager: Optional[MetadataManager] = None,
 ) -> Tuple[Dict[str, int], List[str]]:
     """``remove_entities_rows`` for one entity."""
-    return remove_entities_rows(db, entity_type=entity_type, entity_ids=[entity_id])
+    return remove_entities_rows(
+        db, entity_type=entity_type, entity_ids=[entity_id], metadata_manager=metadata_manager,
+    )
 
 
 def remove_entities_data(
@@ -101,8 +124,11 @@ def remove_entities_data(
 
     The files are kept if the transaction rolls back. Returns the rows removed per kind.
     """
-    removed, paths = remove_entities_rows(db, entity_type=entity_type, entity_ids=entity_ids)
-    (metadata_manager or MetadataManager()).delete_document_files_after_commit(db, paths, ws)
+    manager = metadata_manager or MetadataManager()
+    removed, paths = remove_entities_rows(
+        db, entity_type=entity_type, entity_ids=entity_ids, metadata_manager=manager,
+    )
+    manager.delete_document_files_after_commit(db, paths, ws)
     return removed
 
 

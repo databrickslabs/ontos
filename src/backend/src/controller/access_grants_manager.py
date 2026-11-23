@@ -369,8 +369,10 @@ class AccessGrantsManager:
             self._notify_requester_decision(db, request, approved=False, message=payload.message)
             
             logger.info(f"Denied access request {request.id}")
-        
+
         db.commit()
+        # After the commit: the handle path commits, and rolls back on an error
+        self._mark_request_notifications_handled(db, request)
         
         # Refresh request
         db.refresh(request)
@@ -427,10 +429,11 @@ class AccessGrantsManager:
         db: Session,
         email: str,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
+        status: Optional[str] = None,
     ) -> AccessGrantRequestList:
-        """Get all requests made by a user (any status: pending, approved, denied, etc.)."""
-        requests, total = self._request_repo.get_all_for_user(db, email, limit, offset)
+        """Get the requests made by a user: any status, or only `status` when given."""
+        requests, total = self._request_repo.get_all_for_user(db, email, limit, offset, status)
         return AccessGrantRequestList(
             requests=[AccessGrantRequestResponse.model_validate(r) for r in requests],
             total=total
@@ -450,6 +453,8 @@ class AccessGrantsManager:
         
         result = self._request_repo.cancel(db, request_id)
         db.commit()
+        # A cancelled request has nothing left to decide: after the commit, as in handle_request
+        self._mark_request_notifications_handled(db, request)
         return result
     
     # =========================================================================
@@ -769,6 +774,18 @@ class AccessGrantsManager:
         except Exception as e:
             logger.error(f"Failed to send admin notification for request {request.id}: {e}")
     
+    def _mark_request_notifications_handled(
+        self, db: Session, request: AccessGrantRequestDb,
+    ) -> None:
+        """The admins' request notification is decided: the ``handled`` marker, as the other
+        request decisions write it. Without it, a request notification that was opened in the
+        bell stays in My actions (#1526)."""
+        if not self._notifications_manager:
+            return
+        self._notifications_manager.handle_actionable_notification(
+            db, 'handle_access_grant_request', {'request_id': str(request.id)},
+        )
+
     def _notify_requester_decision(
         self,
         db: Session,

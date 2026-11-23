@@ -795,7 +795,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Come questo deliverable fornisce i dati ai consumatori (ad es. accesso a tabella, endpoint di serving)",
-      "onlyActiveContracts": "Vengono mostrati solo i contratti attivi/approvati/certificati",
+      "onlyActiveContracts": "Vengono mostrati solo i contratti attivi/approvati",
       "containsPiiHint": "Questo deliverable contiene informazioni di identificazione personale?",
       "autoApproveHint": "Approvare automaticamente le richieste di accesso per questo deliverable?",
       "afterCreation": "Dopo aver creato questo deliverable, potrai collegarvi asset (tabelle, viste, dataset, ecc.) dalla pagina dei dettagli."

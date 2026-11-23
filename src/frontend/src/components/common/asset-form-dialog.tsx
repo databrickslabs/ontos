@@ -18,7 +18,8 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
-import { AssetRead, AssetCreate, AssetUpdate } from '@/types/asset';
+import { AssetRead, AssetCreate, AssetUpdate, AssetUpdateResult } from '@/types/asset';
+import { descriptionSyncText } from '@/components/assets/description-sync-notice';
 import { EntityFieldDefinition, EntityTypeSchema } from '@/types/ontology-schema';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
@@ -185,9 +186,18 @@ export function AssetFormDialog({
           primary_domain_id: values.primary_domain_id ?? null,
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
-        const response = await apiPut<AssetRead>(`/api/assets/${asset.id}`, payload);
+        const response = await apiPut<AssetUpdateResult>(`/api/assets/${asset.id}`, payload);
         if (response.error) throw new Error(response.error);
-        toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });
+        // Saved, but e.g. the description could not be written to Unity Catalog
+        const warnings = response.data?.warnings ?? [];
+        if (warnings.length > 0) {
+          toast({
+            title: t('assets:descriptionSync.warningTitle', 'Saved in Ontos, not in Unity Catalog'),
+            description: warnings.map((w) => descriptionSyncText(t, w)).join(' '),
+          });
+        } else {
+          toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });
+        }
         onSuccess(response.data!);
       } else {
         const payload: AssetCreate = {
@@ -201,9 +211,18 @@ export function AssetFormDialog({
           primary_domain_id: values.primary_domain_id ?? null,
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
-        const response = await apiPost<AssetRead>('/api/assets', payload);
+        const response = await apiPost<AssetUpdateResult>('/api/assets', payload);
         if (response.error) throw new Error(response.error);
-        toast({ title: t('common:assetForm.createdToast', { name: assetTypeName }) });
+        // Created, but e.g. the description could not be written to Unity Catalog
+        const warnings = response.data?.warnings ?? [];
+        if (warnings.length > 0) {
+          toast({
+            title: t('assets:descriptionSync.warningTitle', 'Saved in Ontos, not in Unity Catalog'),
+            description: warnings.map((w) => descriptionSyncText(t, w)).join(' '),
+          });
+        } else {
+          toast({ title: t('common:assetForm.createdToast', { name: assetTypeName }) });
+        }
         onSuccess(response.data!);
       }
       onOpenChange(false);
@@ -374,18 +393,34 @@ export function AssetFormDialog({
   );
 }
 
+/** Ontology properties that hold the same path as the asset's Location field */
+const LOCATION_PROPERTIES = new Set(['physicalPath']);
+
+const isBlank = (value: unknown) =>
+  value === undefined || value === null || String(value).trim() === '';
+
 function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; form: any }) {
   const { t } = useTranslation('common');
   const formatLabel = useFormatLabel();
   const fieldName = `prop_${f.name}`;
   const label = formatLabel(f.label);
+  const requiredMessage = t('common:assetForm.fieldRequired', { label });
+  // A required path property is satisfied by the Location field, which holds the same path
+  const requiredRules = !f.is_required
+    ? undefined
+    : LOCATION_PROPERTIES.has(f.name)
+      ? {
+          validate: (value: unknown) =>
+            !isBlank(value) || !isBlank(form.getValues('location')) || requiredMessage,
+        }
+      : { required: requiredMessage };
 
   if (f.field_type === 'select' && f.select_options) {
     return (
       <FormField
         control={form.control}
         name={fieldName}
-        rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
+        rules={requiredRules}
         render={({ field }) => (
           <FormItem>
             <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>
@@ -414,7 +449,7 @@ function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; fo
       <FormField
         control={form.control}
         name={fieldName}
-        rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
+        rules={requiredRules}
         render={({ field }) => (
           <FormItem>
             <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>
@@ -465,7 +500,7 @@ function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; fo
     <FormField
       control={form.control}
       name={fieldName}
-      rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
+      rules={requiredRules}
       render={({ field }) => (
         <FormItem>
           <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>

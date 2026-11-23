@@ -30,6 +30,7 @@ from src.models.process_workflows import (
     WorkflowExecution,
     WorkflowExecutionCreate,
     TriggerContext,
+    TriggerType,
     StepType,
     ExecutionStatus,
     StepExecutionStatus,
@@ -602,9 +603,21 @@ def _requester_email(context: 'StepContext') -> Optional[str]:
     requester = getattr(trigger_context, 'user_email', None)
     if requester:
         return requester
+    if _started_by_no_user(trigger_context):
+        # A scheduled run: nobody made the request. After an approval the acting
+        # user is the approver, who must not stand in for the requester.
+        return None
     if context.user_email:
         _log_requester_fallback(context)
     return context.user_email
+
+
+def _started_by_no_user(trigger_context: Optional[TriggerContext]) -> bool:
+    """True for a run no user started (a ``scheduled`` trigger without a user)."""
+    if trigger_context is None or getattr(trigger_context, 'user_email', None):
+        return False
+    trigger_type = getattr(trigger_context, 'trigger_type', None)
+    return getattr(trigger_type, 'value', trigger_type) == TriggerType.SCHEDULED.value
 
 
 def _log_requester_fallback(context: 'StepContext') -> None:
@@ -1965,7 +1978,13 @@ class CreateAssetReviewStepHandler(StepHandler):
             tc = context.trigger_context
             requester_email = tc.user_email if tc else None
             if not requester_email:
-                requester_email = 'system@app.local'
+                # No user fired the trigger (a scheduled run, or any other trigger
+                # without a user): a review needs a requester, and a made-up
+                # identity must not end up in the review record.
+                return StepResult(
+                    passed=False,
+                    error="A run no user started has no requester to create an asset review for",
+                )
             
             reviewer_email = self._resolve_reviewer(reviewer_role, context, requester_email)
             if not reviewer_email:
@@ -2088,14 +2107,15 @@ class CreateAssetReviewStepHandler(StepHandler):
             return StepResult(passed=False, error=str(e))
     
     def _resolve_reviewer(
-        self, reviewer_role: str, context: StepContext, requester_email: str,
+        self, reviewer_role: str, context: StepContext, requester_email: Optional[str],
     ) -> Optional[str]:
         """The reviewer's email: the one named in the request, else the first
         person ``reviewer_role`` resolves to other than the requester (as the
         approval steps resolve it), else a member of the groups of the role it
         resolves to (or of ``reviewer_role`` itself), else an admin."""
         tc = context.trigger_context
-        requester = requester_email.lower()
+        # No requester (a run no user started): nobody is left out
+        requester = (requester_email or '').lower()
         requested = (tc.entity_data or {}).get('reviewer_email') if tc else None
         if requested and requested.lower() != requester:
             return requested
@@ -3145,6 +3165,7 @@ class WorkflowExecutor:
         trigger_context: Optional[TriggerContext] = None,
         blocking: bool = True,
         execution_id: Optional[str] = None,
+        triggered_by: Optional[str] = None,
     ) -> WorkflowExecution:
         """Execute a workflow against an entity.
         
@@ -3158,6 +3179,9 @@ class WorkflowExecutor:
             trigger_context: Full trigger context
             blocking: If True, run synchronously; if False, queue for async execution
             execution_id: Optional existing execution ID to reuse (for retries)
+            triggered_by: Recorded as the execution's ``triggered_by`` instead of
+                ``user_email``, for runs no user started (``system:scheduler``);
+                ``user_email`` stays the requester the steps resolve
             
         Returns:
             WorkflowExecution with results
@@ -3179,7 +3203,7 @@ class WorkflowExecutor:
             execution_create = WorkflowExecutionCreate(
                 workflow_id=workflow.id,
                 trigger_context=trigger_context,
-                triggered_by=user_email,
+                triggered_by=triggered_by or user_email,
             )
             db_execution = workflow_execution_repo.create(self._db, execution_create)
         
@@ -3980,14 +4004,26 @@ class WorkflowExecutor:
         from src.controller.data_contracts_manager import get_live_contracts_manager
         from src.repositories.data_contracts_repository import data_contract_repo
 
-        target_status = 'approved' if approved else 'draft'
+        from src.controller.lifecycle_service import NAMED_ACTIONS, lifecycle_service
+
         contract = data_contract_repo.get(db=self._db, id=contract_id)
         if not contract:
             return
         current_status = (contract.status or '').lower()
+        action = 'approve' if approved else 'reject'
+        # The approve / reject action's stage (approved / draft by default)
+        target_status = NAMED_ACTIONS[action][0]
         if current_status == target_status:
             return
-        if current_status not in ('proposed', 'under_review'):
+        # A review stage that awaits a decision (proposed / under_review by default)
+        if lifecycle_service.awaits_review_decision(self._db, 'data_contract', contract):
+            try:
+                target_status = lifecycle_service.resolve_action(
+                    self._db, 'data_contract', contract, action,
+                )
+            except ValueError:
+                pass  # transition_status below refuses it and the approver is told
+        if not lifecycle_service.awaits_review_decision(self._db, 'data_contract', contract):
             reason = f"the contract is not under review (status '{current_status}')"
             logger.warning(
                 "Review decision for data contract %s not applied: %s", contract_id, reason,
@@ -4168,13 +4204,25 @@ class WorkflowExecutor:
                 from src.repositories.assets_repository import asset_repo
                 db_asset = asset_repo.get(db=self._db, id=entity_id)
                 if db_asset:
-                    if succeeded:
-                        db_asset.status = 'active'
-                        logger.info(f"Asset {entity_id} status updated to 'active' after review approval")
+                    # Publish on approval, back to the first draft stage on
+                    # rejection, as the asset's lifecycle stage group allows
+                    from src.controller.lifecycle_service import lifecycle_service
+                    action = 'publish' if succeeded else 'reject'
+                    try:
+                        target = lifecycle_service.resolve_action(
+                            self._db, 'asset', db_asset, action,
+                        )
+                    except ValueError as e:
+                        logger.warning(
+                            "Asset %s review %s: its lifecycle has no such move from '%s' (%s)",
+                            entity_id, 'approved' if succeeded else 'rejected',
+                            db_asset.status, e,
+                        )
                     else:
-                        db_asset.status = 'draft'
-                        logger.info(f"Asset {entity_id} status reverted to 'draft' after review rejection")
-                    self._db.commit()
+                        db_asset.status = target
+                        logger.info("Asset %s status set to '%s' after the review", entity_id,
+                                    target)
+                        self._db.commit()
                     
             # Data contract deploy request decided by an approver: record it in
             # the change log, as the legacy handle-deploy flow does. A
@@ -4287,12 +4335,8 @@ class WorkflowExecutor:
             # Don't fail the workflow for status update issues
     
     # A reviewed product goes active through the lifecycle steps it still
-    # needs, or back to draft; each step is a transition_status call.
-    _PRODUCT_ACTIVATION_STEPS = {
-        'proposed': ['under_review', 'approved', 'active'],
-        'under_review': ['approved', 'active'],
-        'approved': ['active'],
-    }
+    # needs (lifecycle_service.review_activation_steps), or back to its reject
+    # stage; each step is a transition_status call.
 
     def _apply_product_review_outcome(
         self,
@@ -4325,14 +4369,23 @@ class WorkflowExecutor:
         product = self._db.get(DataProductDb, product_id)
         if product is None:
             return
+        from src.controller.lifecycle_service import lifecycle_service
+
         current_status = (product.status or 'draft').lower()
-        target_status = 'active' if succeeded else 'draft'
-        if current_status == target_status:
-            return
-        if succeeded:
-            steps = self._PRODUCT_ACTIVATION_STEPS.get(current_status)
-        else:
-            steps = [target_status] if current_status in self._PRODUCT_ACTIVATION_STEPS else None
+        # In review (a review-category stage): walk to an active stage, or move to
+        # the reject action's stage; by Stage Category, so custom groups work too
+        in_review = lifecycle_service.category_of(self._db, 'data_product', product) == 'review'
+        steps = None
+        if in_review and succeeded:
+            steps = lifecycle_service.review_activation_steps(self._db, 'data_product', product)
+        elif in_review:
+            try:
+                steps = [lifecycle_service.resolve_action(
+                    self._db, 'data_product', product, 'reject',
+                )]
+            except ValueError:
+                steps = None
+        target_status = steps[-1] if steps else ('active' if succeeded else 'draft')
         if not steps:
             logger.warning(
                 "Review outcome of data product %s not applied: it is no longer in review "

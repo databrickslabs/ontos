@@ -700,6 +700,33 @@
       "suffix": "or higher to see and run this workflow. Set this in Settings → Roles."
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "Schedule (Quartz cron)",
+    "cronHint": "6 or 7 fields: second minute hour day-of-month month day-of-week [year]. Example: {{example}} runs every day at 06:00. Seconds must be 0, and runs must be at least 5 minutes apart.",
+    "timezoneLabel": "Timezone",
+    "timezoneHint": "An IANA name such as Europe/Berlin or America/Sao_Paulo. Empty means UTC.",
+    "fields": {
+      "second": "second",
+      "minute": "minute",
+      "hour": "hour",
+      "day_of_month": "day-of-month",
+      "month": "month",
+      "day_of_week": "day-of-week",
+      "year": "year"
+    },
+    "errors": {
+      "schedule_required": "A scheduled trigger needs a cron expression.",
+      "cron_field_count": "A Quartz cron expression has 6 or 7 fields; this one has {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" is not valid in the {{field}} field.",
+      "cron_day_fields_conflict": "Put \"?\" in exactly one of day-of-month and day-of-week.",
+      "cron_seconds_not_zero": "The seconds field must be 0: runs start on the minute.",
+      "cron_unsupported_character": "\"{{character}}\" in the {{field}} field is not supported in workflow schedules.",
+      "cron_invalid": "This is not a valid Quartz cron expression.",
+      "cron_no_upcoming_runs": "This cron expression has no upcoming run.",
+      "cron_interval_too_short": "Scheduled runs must be at least {{minutes}} minutes apart.",
+      "timezone_invalid": "Unknown timezone \"{{timezone}}\": use an IANA name such as Europe/Berlin."
+    }
+  },
   "view": {
     "subtitle": "Configure automated workflows for validation, approval, and notifications.",
     "readOnlyAccess": "(Read-only access)",

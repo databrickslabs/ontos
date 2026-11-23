@@ -523,6 +523,11 @@ jobs:
           # In the merge queue the base is the commit the queued batch sits on
           # (an ancestor of the checked-out queue commit, so no extra fetch).
           BASE_REF: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || format('origin/{0}', github.event.pull_request.base.ref) }}
+          # On PRs, merge the base's CURRENT tip into the checkout first. The
+          # pull_request checkout (refs/pull/N/merge) is a snapshot from the
+          # PR's last update, so a head merged into the base since then is
+          # missing from it and two PRs on one parent each pass on their own.
+          MERGE_BASE: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: |
           hatch -e dev run python ../scripts/check-alembic-heads.py
 

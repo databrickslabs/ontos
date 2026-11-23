@@ -143,5 +143,19 @@ describe('ContentSkeleton', () => {
       rerender(<ContentSkeleton loading={false}><Icons /></ContentSkeleton>);
       expect(container.querySelector('[data-skeleton-bones]')).toBeNull();
     });
+
+    it('draws no bones over table headers or data-skeleton-keep', () => {
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+        { left: 0, top: 0, width: 20, height: 20, right: 20, bottom: 20, x: 0, y: 0, toJSON: () => ({}) } as DOMRect,
+      );
+      const { container } = render(
+        <ContentSkeleton loading>
+          <table><thead><tr><th><svg /></th></tr></thead></table>
+          <p data-skeleton-keep=""><svg /></p>
+          <p><svg /></p>
+        </ContentSkeleton>,
+      );
+      expect(container.querySelectorAll('[data-skeleton-bones] > *')).toHaveLength(1);
+    });
   });
 });

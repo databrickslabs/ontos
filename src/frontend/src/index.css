@@ -187,14 +187,17 @@ html:not([data-mode="advanced"]) .adv-only {
     pointer-events: none;
   }
   [data-skeleton] * {
-    color: transparent !important;
-    text-shadow: none !important;
     caret-color: transparent;
     /* Only the panel's own frame stays, as in the page skeletons */
     border-color: transparent !important;
     box-shadow: none !important;
   }
-  [data-skeleton] :is(svg, img, video, canvas) {
+  /* Table headers and [data-skeleton-keep] are static labels and stay readable */
+  [data-skeleton] *:not(thead, thead *, [data-skeleton-keep], [data-skeleton-keep] *) {
+    color: transparent !important;
+    text-shadow: none !important;
+  }
+  [data-skeleton] :is(svg, img, video, canvas):not(thead *, [data-skeleton-keep] *) {
     visibility: hidden;
   }
   [data-skeleton] :is(input, textarea, select)::placeholder {

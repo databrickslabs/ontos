@@ -29,7 +29,7 @@ import { MaturityInline } from '@/components/common/maturity-inline';
 import VersionNavigator from '@/components/common/version-navigator';
 import { DetailHeaderSkeleton, PanelSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
-import { operandKey, type AuthorityRelation, type ResolveResponse, type AuthorityReviewTracking, type AuthorityDnaRun, type AuthorityDecision } from '@/types/authority-resolution';
+import { operandKey, scopeRequestKeys, type AuthorityRelation, type ResolveResponse, type AuthorityReviewTracking, type AuthorityDnaRun, type AuthorityDecision } from '@/types/authority-resolution';
 
 /** Badge variant per verdict: approved solid, conditional muted, refusals red. */
 const verdictVariant = (verdict?: string | null) =>
@@ -730,7 +730,7 @@ export default function AuthorityRelationDetails() {
         open={testOpen}
         onOpenChange={setTestOpen}
         relationId={relationId!}
-        scopeKeys={(relation.domain_context?.scope || []).map((c) => operandKey(c.leftOperand))}
+        scopeKeys={scopeRequestKeys(relation.domain_context?.scope || [])}
       />
 
       <CreateAuthorityRelationDialog

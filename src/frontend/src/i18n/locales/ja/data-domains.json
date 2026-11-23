@@ -67,6 +67,10 @@
     "discardDescription": "未保存の変更があります。このダイアログを閉じると失われます。破棄してもよろしいですか？",
     "continueEditing": "編集を続ける",
     "discardChanges": "変更を破棄",
+    "parentErrors": {
+      "notFound": "選択した親ドメインは存在しません。",
+      "cycle": "ドメインは、自身や自身の祖先ドメインの親にすることはできません。"
+    },
     "toasts": {
       "updated": "ドメインを更新しました",
       "created": "ドメインを作成しました",

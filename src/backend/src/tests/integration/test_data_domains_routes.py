@@ -170,7 +170,9 @@ class TestDataDomainsRoutes:
 
         # Assert
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"].lower()
+        detail = response.json()["detail"]
+        assert detail["code"] == "domain_parent_not_found"
+        assert detail["params"]["parentId"] == sample_domain_data["parent_id"]
 
     def test_create_domain_validation_error(self, client):
         """Test that invalid data returns 422 validation error."""
@@ -366,7 +368,40 @@ class TestDataDomainsRoutes:
 
         # Assert
         assert response.status_code == 400
-        assert "circular" in response.json()["detail"].lower()
+        assert response.json()["detail"]["code"] == "domain_parent_cycle"
+
+    def test_update_domain_own_parent_refused(self, client, sample_domain_data):
+        """A domain cannot be its own parent."""
+        domain_id = client.post("/api/data-domains", json=sample_domain_data).json()["id"]
+
+        response = client.put(f"/api/data-domains/{domain_id}", json={"parent_id": domain_id})
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "domain_parent_cycle"
+
+    def test_update_domain_deep_descendant_as_parent_refused(self, client):
+        """The whole ancestor chain is checked, not only the direct parent."""
+        ids = []
+        for name in ("Root", "Mid", "Leaf"):
+            body = {"name": name}
+            if ids:
+                body["parent_id"] = ids[-1]
+            ids.append(client.post("/api/data-domains", json=body).json()["id"])
+
+        response = client.put(f"/api/data-domains/{ids[0]}", json={"parent_id": ids[2]})
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "domain_parent_cycle"
+
+    def test_update_domain_with_nonexistent_parent_is_404(self, client, sample_domain_data):
+        domain_id = client.post("/api/data-domains", json=sample_domain_data).json()["id"]
+
+        response = client.put(
+            f"/api/data-domains/{domain_id}", json={"parent_id": str(uuid.uuid4())}
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["code"] == "domain_parent_not_found"
 
     def test_update_domain_requires_write_permission(
         self, client, mock_test_user, sample_domain_data

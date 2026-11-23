@@ -67,6 +67,10 @@
     "discardDescription": "Vous avez des modifications non enregistrées qui seront perdues si vous fermez cette boîte de dialogue. Êtes-vous sûr de vouloir les abandonner ?",
     "continueEditing": "Continuer la modification",
     "discardChanges": "Abandonner les modifications",
+    "parentErrors": {
+      "notFound": "Le domaine parent sélectionné n'existe plus.",
+      "cycle": "Un domaine ne peut pas être son propre parent ni le parent d'un de ses ancêtres."
+    },
     "toasts": {
       "updated": "Domaine mis à jour",
       "created": "Domaine créé",

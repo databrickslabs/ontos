@@ -10,6 +10,7 @@ from src.repositories.data_domain_repository import DataDomainRepository
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.data_domains import DataDomainCreate, DataDomainUpdate, DataDomainRead, DataDomainBasicInfo # Added DataDomainBasicInfo
 from src.db_models.data_domains import DataDomain
+from src.common.api_errors import CodedValueError
 from src.common.errors import ConflictError, NotFoundError, AppError # Import custom errors, AppError for validation
 from src.controller.change_log_manager import change_log_manager
 from src.controller.comments_manager import CommentsManager
@@ -25,6 +26,18 @@ from typing import Any
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
+
+
+class DomainParentNotFoundError(CodedValueError):
+    """The parent domain of a create or update does not exist (answered 404)."""
+
+    code = 'domain_parent_not_found'
+
+
+class DomainParentCycleError(CodedValueError):
+    """The new parent is the domain itself or one of its descendants (answered 400)."""
+
+    code = 'domain_parent_cycle'
 
 
 @searchable_asset
@@ -107,7 +120,10 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         if domain_in.parent_id:
             parent_domain = self.repository.get(db, domain_in.parent_id)
             if not parent_domain:
-                raise NotFoundError(f"Parent domain with id '{domain_in.parent_id}' not found.")
+                raise DomainParentNotFoundError(
+                    f"Parent domain with id '{domain_in.parent_id}' not found.",
+                    parentId=str(domain_in.parent_id),
+                )
 
         db_obj_data = domain_in.model_dump(exclude_unset=True, exclude={'tags'}) # Use model_dump for Pydantic v2
         db_obj_data['created_by'] = current_user_id
@@ -204,6 +220,25 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         db_domains = self.repository.get_multi_with_details(db, skip=skip, limit=limit) # Assume repo method loads details
         return [self._convert_db_to_read_model(domain, db) for domain in db_domains]
 
+    def _ensure_no_parent_cycle(self, db: Session, domain_id: UUID, new_parent: DataDomain) -> None:
+        """Refuse a parent that is the domain itself or any of its descendants.
+
+        Walks up from the new parent: if the chain reaches the domain, the move
+        would close a loop.
+        """
+        target = str(domain_id)
+        seen = set()
+        node: Optional[DataDomain] = new_parent
+        while node is not None and str(node.id) not in seen:
+            if str(node.id) == target:
+                raise DomainParentCycleError(
+                    "A domain cannot be its own parent or the parent of one of its ancestors.",
+                    domainId=target,
+                    parentId=str(new_parent.id),
+                )
+            seen.add(str(node.id))
+            node = self.repository.get(db, node.parent_id) if node.parent_id else None
+
     def update_domain(
         self,
         db: Session,
@@ -230,11 +265,13 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
             raise NotFoundError(f"Data domain with id '{domain_id}' not found.")
 
         if domain_in.parent_id:
-            if domain_in.parent_id == domain_id:
-                 raise AppError(f"Cannot set a domain as its own parent.") # Use a more specific error like ValidationError or BadRequest
             parent_domain = self.repository.get(db, domain_in.parent_id)
             if not parent_domain:
-                raise NotFoundError(f"Parent domain with id '{domain_in.parent_id}' not found.")
+                raise DomainParentNotFoundError(
+                    f"Parent domain with id '{domain_in.parent_id}' not found.",
+                    parentId=str(domain_in.parent_id),
+                )
+            self._ensure_no_parent_cycle(db, domain_id, parent_domain)
         
         # obj_in here is Pydantic model, repository.update expects a dict or Pydantic model
         update_data = domain_in.model_dump(exclude_unset=True)
@@ -427,7 +464,10 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         if domain_in.parent_id:
             parent_domain = self.repository.get(db, domain_in.parent_id)
             if not parent_domain:
-                raise NotFoundError(f"Parent domain with id '{domain_in.parent_id}' not found.")
+                raise DomainParentNotFoundError(
+                    f"Parent domain with id '{domain_in.parent_id}' not found.",
+                    parentId=str(domain_in.parent_id),
+                )
 
         db_obj_data = domain_in.model_dump(exclude_unset=True, exclude={'tags'})
         db_obj_data['created_by'] = current_user_id

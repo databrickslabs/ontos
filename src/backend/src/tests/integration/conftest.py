@@ -34,19 +34,8 @@ _ODCS_DOMAIN = (
     'app (candidate): an imported `domain` that matches no native domain is kept only as '
     'the ontosOriginalDomain custom property; the export omits the root `domain`'
 )
-_DOMAIN_NO_PARENT = (
-    'app: POST /api/data-domains with a parent that does not exist answers 500, not 404'
-)
-_DOMAIN_CYCLE = (
-    'app: PUT /api/data-domains accepts a descendant as the new parent; '
-    'the own-parent check answers 500'
-)
 
 QUARANTINE = {
-    'test_data_domains_routes.py::TestDataDomainsRoutes::'
-    'test_create_domain_with_nonexistent_parent_fails': _DOMAIN_NO_PARENT,
-    'test_data_domains_routes.py::TestDataDomainsRoutes::'
-    'test_update_domain_circular_reference_prevention': _DOMAIN_CYCLE,
     'test_odcs_roundtrip.py::test_odcs_upload_then_export_roundtrip': _ODCS_DOMAIN,
 }
 

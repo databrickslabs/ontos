@@ -67,6 +67,10 @@
     "discardDescription": "Sie haben ungespeicherte Änderungen, die verloren gehen, wenn Sie diesen Dialog schließen. Möchten Sie sie wirklich verwerfen?",
     "continueEditing": "Weiter bearbeiten",
     "discardChanges": "Änderungen verwerfen",
+    "parentErrors": {
+      "notFound": "Die gewählte übergeordnete Domäne existiert nicht mehr.",
+      "cycle": "Eine Domäne kann nicht ihre eigene übergeordnete Domäne oder die übergeordnete Domäne eines ihrer Vorfahren sein."
+    },
     "toasts": {
       "updated": "Bereich aktualisiert",
       "created": "Bereich erstellt",

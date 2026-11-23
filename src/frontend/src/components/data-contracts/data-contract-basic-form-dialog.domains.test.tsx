@@ -21,7 +21,8 @@ vi.mock('@/stores/project-store', () => ({
 }));
 
 // Stand-in: one button that picks domains d1 and d3 (primary d3).
-vi.mock('@/components/ui/domain-multi-selector', () => ({
+vi.mock('@/components/ui/domain-multi-selector', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/ui/domain-multi-selector')>()),
   default: ({ onChange }: any) => (
     <button type="button" onClick={() => onChange(['d1', 'd3'], 'd3')}>pick domains</button>
   ),

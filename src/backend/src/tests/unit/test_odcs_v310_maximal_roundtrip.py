@@ -30,9 +30,6 @@ SCHEMA = Path(__file__).parent.parent.parent / "schemas" / "odcs-json-schema-v3.
 KNOWN_GAPS = {
     'schema[].properties[].properties': 'nested columns of an object column are not stored',
     'schema[].properties[].items': 'the ODCS `items` of an array column is not stored',
-    'schema[].properties[].logicalTypeOptions':
-        'the options are read and written flat (v2 style), not under logicalTypeOptions '
-        '(#1635)',
     '*.customProperties[].description': 'custom properties have no description column',
     '*.authoritativeDefinitions[].description':
         'authoritative definitions have no description column',

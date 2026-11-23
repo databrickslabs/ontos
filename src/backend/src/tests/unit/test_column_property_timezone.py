@@ -33,7 +33,8 @@ def test_a_timestamp_timezone_flag_survives_create_and_export(db_session):
     exported = manager.build_odcs_from_db(contract, db_session)
 
     ts = next(p for p in exported["schema"][0]["properties"] if p["name"] == "ts")
-    # The flat `timezone` / `format` keys are the current export shape, not the
-    # intended ODCS one: they move under `logicalTypeOptions` with #1635.
-    assert ts["timezone"] is True
-    assert ts["format"] == "yyyy"
+    options = ts["logicalTypeOptions"]
+    assert options["timezone"] is True
+    assert options["format"] == "yyyy"
+    assert "timezone" not in ts
+    assert "format" not in ts

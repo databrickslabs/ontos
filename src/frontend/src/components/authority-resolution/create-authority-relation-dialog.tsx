@@ -32,7 +32,7 @@ import { useProjectContext } from '@/stores/project-store';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import {
-  ACTION_VOCAB,
+  ACTION_VOCAB, operandForKey, scopeKey,
   type AuthorityRelation, type AffirmationInput,
   type PrerequisiteInput, type AuthorityRelationSlug,
   type ResourceRefInput, type EntityRefCandidate, type ResolverAuth, type AuthorityPolicy,
@@ -531,7 +531,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             items={ruleItems}
             onChange={setRuleItems}
             paramKeys={paramRows.map((p) => p.key.trim())}
-            scopeKeys={scopeRows.map((r) => r.key.trim())}
+            scopeKeys={scopeRows.map((r) => scopeKey(operandForKey(r.key)))}
             domainContext={draftContext.value}
             clauses={policyClauses}
           />
@@ -544,7 +544,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             rows={criteriaRows}
             onChange={setCriteriaRows}
             params={draftContext.value?.params}
-            scopeKeys={scopeRows.map((r) => r.key.trim())}
+            scopeKeys={scopeRows.map((r) => scopeKey(operandForKey(r.key)))}
             clauses={policyClauses}
             readOnly={locked}
           />

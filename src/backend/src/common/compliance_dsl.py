@@ -29,7 +29,7 @@ Example:
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union
 import re
 
 from src.common.api_errors import CodedValueError
@@ -570,11 +570,37 @@ class Parser:
 NAMESPACE_ROOTS = ("ctx", "req")
 
 
-class Evaluator:
-    """Evaluate AST against an object."""
+class _Unknown:
+    """The value of a strict-mode comparison whose operand is absent (three-valued logic).
 
-    def __init__(self, obj: Dict[str, Any]):
+    Only :func:`evaluate_rule_strict` reads it, through the Kleene connectives; it has no
+    truth value of its own, so a stray ``bool()`` on it is an error, not a pass.
+    """
+
+    def __repr__(self) -> str:
+        return "UNKNOWN"
+
+    def __bool__(self) -> bool:
+        raise TypeError("UNKNOWN has no truth value; strict evaluation resolves it")
+
+
+UNKNOWN = _Unknown()
+
+
+class Evaluator:
+    """Evaluate AST against an object.
+
+    ``strict`` (ARF only) reads an absent operand (None or "") as :data:`UNKNOWN` and
+    combines it with Kleene logic (``UNKNOWN OR TRUE`` is TRUE, ``UNKNOWN AND FALSE``
+    is FALSE, ``NOT UNKNOWN`` is UNKNOWN). The default keeps the general DSL semantics,
+    where a missing value compares unequal (so ``NOT (x = y)`` holds for an absent ``x``).
+    ``missing`` collects the ``(root, property)`` reads that were absent.
+    """
+
+    def __init__(self, obj: Dict[str, Any], strict: bool = False):
         self.obj = obj
+        self.strict = strict
+        self.missing: List[Tuple[str, str]] = []
 
     def error(self, msg: str) -> Exception:
         return ValueError(f"Evaluation error: {msg}")
@@ -591,11 +617,15 @@ class Evaluator:
             # ``ctx.x`` / ``req.x`` read a namespace when the object carries it
             # (Authority Relations: AR parameters / request context); any other
             # prefix (``obj.``, ``p.``…) reads the object's top-level key.
-            if node.object in NAMESPACE_ROOTS:
-                scoped = self.obj.get(node.object)
-                if isinstance(scoped, dict):
-                    return scoped.get(node.property)
-            return self.obj.get(node.property)
+            scoped = self.obj.get(node.object) if node.object in NAMESPACE_ROOTS else None
+            if isinstance(scoped, dict):
+                value = scoped.get(node.property)
+            else:
+                value = self.obj.get(node.property)
+            if self.strict and (value is None or value == ""):
+                self.missing.append((node.object, node.property))
+                return UNKNOWN
+            return value
 
         if isinstance(node, FunctionCall):
             return self.evaluate_function(node)
@@ -613,6 +643,9 @@ class Evaluator:
 
     def evaluate_function(self, node: FunctionCall) -> Any:
         """Evaluate function call."""
+        if self.strict and any(self.evaluate(a) is UNKNOWN for a in node.args):
+            return UNKNOWN
+
         if node.name == 'HAS_TAG':
             if len(node.args) != 1:
                 raise self.error("HAS_TAG expects 1 argument")
@@ -650,7 +683,10 @@ class Evaluator:
     def evaluate_unary_op(self, node: UnaryOp) -> Any:
         """Evaluate unary operation."""
         if node.op == TokenType.NOT:
-            return not self.evaluate(node.operand)
+            value = self.evaluate(node.operand)
+            if self.strict:
+                return UNKNOWN if value is UNKNOWN else not value
+            return not value
         raise self.error(f"Unknown unary operator: {node.op}")
 
     def evaluate_binary_op(self, node: BinaryOp) -> Any:
@@ -658,6 +694,8 @@ class Evaluator:
         op = node.op
 
         # Boolean operators
+        if op in (TokenType.AND, TokenType.OR) and self.strict:
+            return self._kleene(op, node)
         if op == TokenType.AND:
             return self.evaluate(node.left) and self.evaluate(node.right)
         if op == TokenType.OR:
@@ -666,6 +704,8 @@ class Evaluator:
         # Comparison operators
         left = self.evaluate(node.left)
         right = self.evaluate(node.right)
+        if self.strict and (left is UNKNOWN or right is UNKNOWN):
+            return UNKNOWN
 
         if op in (TokenType.EQ, TokenType.NEQ):
             # Python considers bool a subclass of int, but DSL booleans must not
@@ -707,8 +747,26 @@ class Evaluator:
 
         raise self.error(f"Unknown binary operator: {op}")
 
+    def _kleene(self, op: TokenType, node: BinaryOp) -> Any:
+        """AND / OR over True, False and UNKNOWN. Both sides are read, so every absent operand is recorded."""
+        left = self._truth(self.evaluate(node.left))
+        right = self._truth(self.evaluate(node.right))
+        if op == TokenType.AND:
+            if left is False or right is False:
+                return False
+            return UNKNOWN if UNKNOWN in (left, right) else True
+        if left is True or right is True:
+            return True
+        return UNKNOWN if UNKNOWN in (left, right) else False
+
+    @staticmethod
+    def _truth(value: Any) -> Any:
+        return UNKNOWN if value is UNKNOWN else bool(value)
+
     def evaluate_case(self, node: CaseExpression) -> Any:
         """Evaluate CASE expression."""
+        if self.strict:
+            return self._case_strict(node)
         subject_value = self.evaluate(node.subject) if node.subject else None
 
         for condition, result in node.when_clauses:
@@ -726,6 +784,40 @@ class Evaluator:
             return self.evaluate(node.else_clause)
 
         return None
+
+    def _case_strict(self, node: CaseExpression) -> Any:
+        """CASE under strict evaluation: an UNKNOWN subject or condition makes the CASE UNKNOWN."""
+        subject_value = self.evaluate(node.subject) if node.subject else None
+        if subject_value is UNKNOWN:
+            return UNKNOWN
+        for condition, result in node.when_clauses:
+            cond = self.evaluate(condition)
+            if cond is UNKNOWN:
+                return UNKNOWN
+            if (subject_value == cond) if node.subject else bool(cond):
+                return self.evaluate(result)
+        if node.else_clause:
+            return self.evaluate(node.else_clause)
+        return None
+
+
+class RuleOutcome(NamedTuple):
+    """An ASSERT evaluated under ARF strict semantics.
+
+    ``passed`` is None when the rule is undecidable because an operand is absent;
+    ``missing`` lists the absent ``(root, property)`` reads; ``message`` is the failure
+    text for a rule that evaluated to False (or an evaluation error).
+    """
+
+    passed: Optional[bool]
+    missing: Tuple[Tuple[str, str], ...]
+    message: Optional[str]
+
+
+def _parse_assert(rule: str) -> Tuple[str, ASTNode]:
+    assert_part = rule.split('ASSERT', 1)[1].strip()
+    tokens = Lexer(assert_part).tokenize()
+    return assert_part, Parser(tokens).parse_expression()
 
 
 def evaluate_rule_on_object(rule: str, obj: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
@@ -751,19 +843,10 @@ def evaluate_rule_on_object(rule: str, obj: Dict[str, Any]) -> Tuple[bool, Optio
         if 'ASSERT' not in rule:
             return False, "Rule must contain ASSERT clause"
 
-        assert_part = rule.split('ASSERT', 1)[1].strip()
-
-        # Tokenize
-        lexer = Lexer(assert_part)
-        tokens = lexer.tokenize()
-
-        # Parse
-        parser = Parser(tokens)
-        ast = parser.parse_expression()
+        assert_part, ast = _parse_assert(rule)
 
         # Evaluate
-        evaluator = Evaluator(obj)
-        result = evaluator.evaluate(ast)
+        result = Evaluator(obj).evaluate(ast)
 
         # Convert to boolean
         passed = bool(result)
@@ -776,6 +859,31 @@ def evaluate_rule_on_object(rule: str, obj: Dict[str, Any]) -> Tuple[bool, Optio
 
     except Exception as e:
         return False, f"DSL evaluation error: {str(e)}"
+
+
+def evaluate_rule_strict(rule: str, obj: Dict[str, Any]) -> RuleOutcome:
+    """Evaluate an ASSERT with ARF strict semantics (three-valued, see :class:`Evaluator`).
+
+    A comparison on an absent operand is UNKNOWN; the connectives combine it with
+    Kleene logic, so ``or: [region eq 'EU', cosign eq true]`` holds when the cosign is
+    present even without a region. An UNKNOWN result is returned as ``passed=None``
+    for the caller to decide: a constraint or check is not satisfied, a prohibition
+    ``NOT(when)`` denies (an authority gate can't approve on an undecidable prohibition,
+    unlike ODRL's "a prohibition that doesn't apply"), and a duty stays unfulfilled.
+    """
+    try:
+        if 'ASSERT' not in rule:
+            return RuleOutcome(False, (), "Rule must contain ASSERT clause")
+        assert_part, ast = _parse_assert(rule)
+        evaluator = Evaluator(obj, strict=True)
+        result = evaluator.evaluate(ast)
+        missing = tuple(dict.fromkeys(evaluator.missing))
+        if result is UNKNOWN:
+            return RuleOutcome(None, missing, None)
+        passed = bool(result)
+        return RuleOutcome(passed, missing, None if passed else f"Assertion failed: {assert_part}")
+    except Exception as e:
+        return RuleOutcome(False, (), f"DSL evaluation error: {e}")
 
 
 class RuleTrailingInputError(CodedValueError):

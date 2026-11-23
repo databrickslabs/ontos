@@ -565,5 +565,16 @@ export const operandForKey = (key: string): string => {
   return k.includes(':') || ODRL_CONTEXT_OPERANDS.includes(k) ? k : `arf:${k}`;
 };
 
+/**
+ * The request field a scope operand reads (mirrors the backend's scope_key): a typed field
+ * reads its canonical field (arf:actor -> actor_identity), not a key the caller picks (#1491-2).
+ */
+export const scopeKey = (operand: string): string =>
+  RULE_REQUEST_OPERANDS.find((o) => o.operand === operand)?.field ?? operandKey(operand);
+
+/** The request fields a scope reads, from stored scope operands. */
+export const scopeRequestKeys = (scope: { leftOperand: string }[]): string[] =>
+  scope.map((c) => scopeKey(c.leftOperand));
+
 export const ACTION_VOCAB = ['approve', 'escalate', 'override', 'delegate', 'veto'];
 export const AFFIRMATION_ROLES = ['business', 'technical', 'governance'];

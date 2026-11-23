@@ -9,6 +9,7 @@ import NativeSelect from '@/components/ui/native-select';
 import { useApi } from '@/hooks/use-api';
 import { CheckCircle2, Loader2, Plus, Trash2, XCircle } from 'lucide-react';
 import { InfoHint } from '@/components/authority-resolution/info-hint';
+import { authorityErrorMessage } from '@/components/authority-resolution/authority-errors';
 import {
   ARF_DIRECTIONS, ODRL_OPERATORS, RULE_REQUEST_OPERANDS, operandForKey, operandKey,
   type ArfRule, type DivergenceFacets, type DomainContext, type OdrlConstraint,
@@ -228,11 +229,12 @@ export default function RuleEditor({ items, onChange, paramKeys, scopeKeys, doma
       return;
     }
     setValidating(true);
-    const { data, error } = await post<{ valid: boolean; error?: string; compiled: { kind: string; name: string; rule: string }[] }>(
+    const { data, error, errorCode, errorParams } = await post<{ valid: boolean; compiled: { kind: string; name: string; rule: string }[] }>(
       '/api/authority/rule/validate', { rule, domain_context: domainContext },
     );
     setValidating(false);
-    setValidation(error ? { valid: false, error } : data);
+    // A rule the author must fix comes back coded ({code, message, params}), like the other AR errors.
+    setValidation(error ? { valid: false, error: authorityErrorMessage(t, error, errorCode, errorParams) } : data);
   };
 
   return (

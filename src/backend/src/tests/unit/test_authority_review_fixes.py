@@ -31,7 +31,7 @@ def _user(email):
 
 def _complete(mgr, db, slug, **kwargs):
     """A complete definition: object, justification, evidence, one enabled check, one approver."""
-    kwargs.setdefault("criteria", [CriterionInput(name="Not blocked", rule="ASSERT obj.actor_identity != 'nobody'")])
+    kwargs.setdefault("criteria", [CriterionInput(name="Not blocked", rule="ASSERT TRUE")])
     kwargs.setdefault("affirmations", [AffirmationInput(role="Approver", principal="approver@x.com")])
     rel = mgr.create_relation(db, AuthorityRelationCreate(
         name=f"Review {slug}", slug=slug, object_id="dp-1",

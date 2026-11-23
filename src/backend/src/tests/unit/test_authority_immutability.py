@@ -41,7 +41,7 @@ def _user(email):
 
 
 def _pass():
-    return [CriterionInput(name="Not blocked", rule="ASSERT obj.actor_identity != 'nobody'")]
+    return [CriterionInput(name="Not blocked", rule="ASSERT TRUE")]
 
 
 def _draft(mgr, db, slug=None, **kwargs):
@@ -143,7 +143,7 @@ def test_put_on_an_active_ar_with_a_new_rule_is_409_and_nothing_changes(db_sessi
     assert exc.value.http_status == 409
     assert "New Version" in str(exc.value)
     fresh = mgr.get_relation(db_session, rel.id)
-    assert [c.rule for c in fresh.criteria] == ["ASSERT obj.actor_identity != 'nobody'"]
+    assert [c.rule for c in fresh.criteria] == ["ASSERT TRUE"]
 
 
 def test_put_on_an_active_ar_with_criteria_emptied_is_refused(db_session):

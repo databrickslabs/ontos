@@ -28,6 +28,15 @@ missing key or a value outside the scope means the AR does not apply). The rule
 is compiled into Compliance-DSL criteria, so the runtime gate and the DNA engine
 evaluate it exactly like the AR's checks. Rules read the request as
 ``obj.<field>`` / ``req.<key>`` and the AR's parameters as ``ctx.<key>``.
+
+Rules evaluate strictly (ARF, #1491-1): an absent operand is UNKNOWN and combines
+with Kleene logic (``or: [a, b]`` holds when ``b`` does, even if ``a`` is absent).
+An UNKNOWN top level fails closed. A constraint or check is not satisfied. A
+prohibition is not known to be inapplicable, so it denies: this is a deliberate
+deviation from ODRL, where a prohibition that cannot be shown to apply does not
+block. An authority gate must not approve on an undecidable prohibition, and the
+denial names the field to send. A duty stays unfulfilled. A ``ctx.<param>`` that is
+absent is an AR configuration fault (a conflict), not a request fault.
 """
 from __future__ import annotations
 
@@ -89,6 +98,21 @@ _DSL_KEYWORDS = frozenset({
 })
 
 
+def ref_param_key(field_path: Any) -> Optional[str]:
+    """The AR parameter a ``domain_context`` resource ref names, or None.
+
+    ``domain_context.<key>`` and ``domain_context.params.<key>`` name ``ctx.<key>``
+    (shared by the parameter check on save, the resolver's ``ctx`` and the ref writer).
+    A single identifier-like segment only; the path is stripped first.
+    """
+    path = str(field_path or "").strip()
+    for prefix in ("domain_context.params.", "domain_context."):
+        if path.startswith(prefix):
+            key = path[len(prefix):].strip()
+            return key if key and "." not in key else None
+    return None
+
+
 def _check_name(name: str, what: str) -> None:
     """A name rules read as ``<ns>.<name>`` must be an identifier and no DSL keyword."""
     if not _IDENT_RE.match(name):
@@ -105,6 +129,13 @@ def operand_key(left_operand: str) -> str:
     """The request-context key an operand reads: its local name
     (``arf:market`` -> ``market``, ``spatial`` -> ``spatial``)."""
     return left_operand.rsplit(":", 1)[-1]
+
+
+def scope_key(left_operand: str) -> str:
+    """The request key a scope operand reads. A typed field reads its canonical
+    field (``arf:actor`` -> ``actor_identity``), the same as a rule's ``obj.`` read,
+    so a caller can't pick the key by sending a same-named context value (#1491-2)."""
+    return REQUEST_OPERANDS.get(left_operand) or operand_key(left_operand)
 
 
 def operand_for_key(key: str) -> str:
@@ -196,7 +227,7 @@ def check_scope(
     """
     results: List[Dict[str, Any]] = []
     for c in normalize_domain_context(domain_context)["scope"]:
-        key = operand_key(c["leftOperand"])
+        key = scope_key(c["leftOperand"])
         entry = {"operand": c["leftOperand"], "operator": c["operator"],
                  "expected": c["rightOperand"], "actual": request_context.get(key)}
         if request_context.get(key) in (None, ""):
@@ -233,6 +264,31 @@ def compare_value(actual: Any, op: str, expected: Any, equivalents: Optional[Cal
 # Rule validation and compilation                                             #
 # --------------------------------------------------------------------------- #
 
+def checked_weight(value: Any, where: str) -> float:
+    """A weight (of a facet or a check) is a finite number of 0 or more (#1491-5).
+
+    Shared by rule facets and checks. A bool is refused, though it is an int in
+    Python. A non-numeric weight used to be saved and then make every resolve a conflict.
+    """
+    if isinstance(value, bool):
+        raise RuleInvalidError(f"{where}: weight must be a number of 0 or more, not a boolean.")
+    try:
+        weight = float(value)
+    except (TypeError, ValueError):
+        raise RuleInvalidError(f"{where}: weight must be a number of 0 or more, not '{value}'.")
+    if not math.isfinite(weight) or weight < 0:
+        raise RuleInvalidError(f"{where}: weight must be a finite number of 0 or more, not '{value}'.")
+    return weight
+
+
+def _facets(src: Dict[str, Any], where: str) -> Dict[str, Any]:
+    """The presentational facets of an authored item, with the weight checked."""
+    out = {k: src[k] for k in _FACETS if src.get(k) is not None}
+    if "weight" in out:
+        out["weight"] = checked_weight(out["weight"], where)
+    return out
+
+
 def _validate_constraint(
     c: Any, *, where: str, allow_reference: bool = True, allow_logical: bool = True,
 ) -> Dict[str, Any]:
@@ -247,7 +303,7 @@ def _validate_constraint(
                 raise RuleInvalidError(f"{where}: '{logical}' needs a list of at least two constraints.")
             out = {logical: [_validate_constraint(p, where=where, allow_reference=allow_reference)
                              for p in parts]}
-            out.update({k: c[k] for k in _FACETS if c.get(k) is not None})
+            out.update(_facets(c, where))
             return out
     left = str(c.get("leftOperand") or "").strip()
     op = str(c.get("operator") or "").strip()
@@ -283,7 +339,7 @@ def _validate_constraint(
         out["rightOperand"] = right
     if c.get("unit"):
         out["unit"] = str(c["unit"])
-    out.update({k: c[k] for k in _FACETS if c.get(k) is not None})
+    out.update(_facets(c, where))
     return out
 
 
@@ -306,7 +362,7 @@ def normalize_rule(rule: Any) -> Optional[Dict[str, Any]]:
         if not fulfilled_by:
             raise RuleInvalidError(f"rule.permission.duty '{d['action']}' needs a constraint that tells when it is fulfilled.")
         duty = {"action": str(d["action"]).strip(), "constraint": fulfilled_by}
-        duty.update({k: d[k] for k in _FACETS if d.get(k) is not None})
+        duty.update(_facets(d, "rule.permission.duty"))
         duties.append(duty)
     prohibitions = []
     for p in rule.get("prohibition") or []:
@@ -316,7 +372,7 @@ def normalize_rule(rule: Any) -> Optional[Dict[str, Any]]:
         if not when:
             raise RuleInvalidError("rule.prohibition: each prohibition needs at least one constraint.")
         prohibition = {"constraint": when}
-        prohibition.update({k: p[k] for k in _FACETS if p.get(k) is not None})
+        prohibition.update(_facets(p, "rule.prohibition"))
         prohibitions.append(prohibition)
     if not (constraints or duties or prohibitions):
         return None
@@ -345,6 +401,45 @@ def _field(left_operand: str) -> str:
     return f"{NS_REQ}.{operand_key(left_operand)}"
 
 
+def _numeric_form(v: Any) -> Any:
+    """The number a numeric-looking string stands for, else None."""
+    if isinstance(v, str) and _NUMBER_RE.match(v.strip()):
+        text = v.strip()
+        return float(text) if "." in text else int(text)
+    return None
+
+
+def _is_number_like(v: Any) -> bool:
+    """A number, or a string that reads as one (not a boolean)."""
+    return _numeric_form(v) is not None or (isinstance(v, (int, float)) and not isinstance(v, bool))
+
+
+def _set_members(values: List[Any]) -> List[Any]:
+    """Literals for a membership test, with each numeric value in both forms.
+
+    A request value that reads as a number is held as one (``_number_or_text``), so
+    ``'1234'`` in a rule must also match ``1234`` and the other way round (#1491-4).
+    A boolean stays itself; only the numeric forms derived from a number are added.
+    """
+    members: List[Any] = []
+    seen: set = set()
+    for v in values:
+        if isinstance(v, bool):
+            forms = [v]
+        else:
+            forms = [v, _numeric_form(v)]
+            if isinstance(v, (int, float)):
+                forms.append(str(int(v)) if float(v).is_integer() else repr(v))
+        for f in forms:
+            if f is None:
+                continue
+            key = (type(f), f)
+            if key not in seen:
+                seen.add(key)
+                members.append(f)
+    return members
+
+
 def constraint_expression(c: Dict[str, Any]) -> str:
     """The Compliance-DSL condition of a validated constraint (no ``ASSERT``)."""
     for logical in ("or", "and"):
@@ -355,11 +450,15 @@ def constraint_expression(c: Dict[str, Any]) -> str:
     right = c.get("rightOperandReference")
     if right is None:
         v = c["rightOperand"]
+        values = v if isinstance(v, list) else [v]
+        if op in ("isAnyOf", "isNoneOf") or (op in ("eq", "neq") and any(_is_number_like(x) for x in values)):
+            # A membership test (#1491-4): ``eq '1234'`` is ``IN ['1234', 1234]``,
+            # ``eq 1234`` is ``IN [1234, '1234']`` (a text field holds the number as text).
+            test = f"{field} IN [" + ", ".join(_literal(x) for x in _set_members(values)) + "]"
+            return test if op in ("isAnyOf", "eq") else f"NOT ({test})"
+        if op in ("lt", "lteq", "gt", "gteq") and _numeric_form(v) is not None:
+            v = _numeric_form(v)
         right = "[" + ", ".join(_literal(x) for x in v) + "]" if isinstance(v, list) else _literal(v)
-    if op == "isAnyOf":
-        return f"{field} IN {right}"
-    if op == "isNoneOf":
-        return f"NOT ({field} IN {right})"
     return f"{field} {_DSL_OPS[op]} {right}"
 
 
@@ -411,6 +510,46 @@ def compile_rule(rule: Any) -> List[Criterion]:
 
 def has_rule(rule: Any) -> bool:
     return bool(normalize_rule(rule))
+
+
+# --------------------------------------------------------------------------- #
+# Parameter references                                                        #
+# --------------------------------------------------------------------------- #
+
+_CTX_REF_RE = re.compile(rf"\b{NS_CTX}\.([A-Za-z_][A-Za-z0-9_]*)")
+_STRING_LITERAL_RE = re.compile(r"'(?:\\.|[^'\\])*'")
+
+
+class UnknownParameterError(RuleInvalidError):
+    """A rule or check reads ``ctx.<name>`` that the AR's parameters don't define (#1491-1)."""
+
+    code = "authority_unknown_parameter"
+
+
+def context_references(texts: Iterable[str]) -> Set[str]:
+    """The names rules read as ``ctx.<name>``, in DSL rule text (string literals skipped)."""
+    names: Set[str] = set()
+    for text in texts:
+        names.update(_CTX_REF_RE.findall(_STRING_LITERAL_RE.sub("''", text or "")))
+    return names
+
+
+def check_parameter_references(texts: Iterable[str], known: Iterable[str]) -> None:
+    """Refuse a ``ctx.<name>`` read that no parameter (or domain-context ref) defines.
+
+    Saved, so an AR can't end up with a rule that reads a parameter it no longer has.
+    The names are in the error's ``parameters``.
+    """
+    unknown = sorted(context_references(texts) - set(known))
+    if not unknown:
+        return
+    refs = ", ".join(f"{NS_CTX}.{n}" for n in unknown)
+    verb = "is not a parameter" if len(unknown) == 1 else "are not parameters"
+    raise UnknownParameterError(
+        f"The rule reads {refs}, which {verb} of this Authority Relation. "
+        "Add the parameter to the domain context, or fix the reference.",
+        parameters=unknown,
+    )
 
 
 # --------------------------------------------------------------------------- #

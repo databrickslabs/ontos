@@ -39,7 +39,7 @@ def _ar(mgr, db, *, slug="tp", scope=None, params=None, rule=None, criteria=None
     # A version with neither a rule nor an enabled check approves nothing (batch 2, B5),
     # so a scope-only test AR gets one passing check unless the test gives its own.
     if criteria is None and rule is None:
-        criteria = [{"name": "Not blocked", "rule": "ASSERT obj.actor_identity != 'nobody'"}]
+        criteria = [{"name": "Not blocked", "rule": "ASSERT TRUE"}]
     return mgr.create_relation(db, AuthorityRelationCreate(
         name=f"AR {slug}", slug=slug,
         domain_context={"scope": scope or [], "params": params or {}},
@@ -340,8 +340,15 @@ def test_rule_validate_route_compiles_and_tries_a_sample():
     out = asyncio.run(validate_rule(None, {**payload, "request": {"market": "FR"}}, True))
     assert (out["verdict"], out["reason"]) == (VERDICT_NO_AUTHORITY, "out of scope: market=FR")
 
-    out = asyncio.run(validate_rule(None, {"rule": {"permission": {"constraint": [{"leftOperand": "x"}]}}}, True))
-    assert out["valid"] is False and out["error"]
+    # A rule the author must fix is a 400 with the coded shape, not English text (#1491-6).
+    from fastapi import HTTPException
+    from src.common.authority_rule import RuleInvalidError
+    with pytest.raises(HTTPException) as bad:
+        asyncio.run(validate_rule(None, {"rule": {"permission": {"constraint": [{"leftOperand": "x"}]}}}, True))
+    assert bad.value.status_code == 400
+    assert isinstance(bad.value.__cause__, RuleInvalidError)
+    assert bad.value.__cause__.code == "authority_invalid"
+    assert "operator" in str(bad.value.__cause__)
 
 
 def test_criteria_validate_route_reads_params_and_context():

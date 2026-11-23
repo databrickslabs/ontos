@@ -746,10 +746,11 @@ async def validate_criterion(
     Body: ``{rule, object, params?, context?}``. The ``ASSERT`` keyword is
     prepended if omitted. The rule sees ``object`` (plus ``context``) as
     ``obj.<field>`` / ``req.<key>`` and ``params`` as ``ctx.<key>``, as at
-    resolve time. Returns ``{passed, message}``.
+    resolve time, with the same strict semantics (an absent operand is not passed).
+    Returns ``{passed, message}``.
     """
     from src.common import authority_rule
-    from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
+    from src.common.compliance_dsl import evaluate_rule_strict
     rule = (payload.get("rule") or "").strip()
     if rule and not rule.upper().startswith("ASSERT"):
         rule = "ASSERT " + rule
@@ -757,8 +758,11 @@ async def validate_criterion(
     obj = authority_rule.evaluation_object(flat, payload.get("params") or {})
     failure: Optional[HTTPException] = None
     try:
-        passed, msg = eval_dsl(rule, obj)
-        return {"passed": passed, "message": msg}
+        outcome = evaluate_rule_strict(rule, obj)
+        if outcome.passed is None:
+            names = ", ".join(f"'{k}'" for _, k in outcome.missing)
+            return {"passed": False, "message": f"The sample has no value for {names}, so the check cannot be decided."}
+        return {"passed": outcome.passed, "message": outcome.message}
     except Exception as e:
         failure = _failure("validate_criterion", e, coded_status=400, unexpected_status=400)
     raise failure
@@ -773,17 +777,21 @@ async def validate_rule(
     """Validate an AR's domain context and ODRL rule, and try them on a sample request.
 
     Body: ``{rule?, domain_context?, request?}`` (``request`` is the flat request
-    plus its context, as ``POST /resolve`` builds it). Returns ``{valid, error?,
-    compiled: [{kind, name, rule}], scope?, verdict?, reason?, pending_duties?}``;
-    the verdict covers the scope and the rule only (no checks, prerequisites or refs).
+    plus its context, as ``POST /resolve`` builds it). Returns ``{valid, compiled:
+    [{kind, name, rule}], scope?, verdict?, reason?, pending_duties?}``; the verdict
+    covers the scope and the rule only (no checks, prerequisites or refs). A rule the
+    author must fix is a 400 with the coded ``{code, message, params}`` shape.
     """
     from types import SimpleNamespace
     from src.common import authority_rule
+    failure: Optional[HTTPException] = None
     try:
         domain_context = authority_rule.normalize_domain_context(payload.get("domain_context"), strict=True)
         compiled = authority_rule.compile_rule(payload.get("rule"))
     except ValueError as e:
-        return {"valid": False, "error": str(e), "compiled": []}
+        failure = _failure("validate_rule", e, coded_status=400, unexpected_status=400)
+    if failure is not None:
+        raise failure
     out = {
         "valid": True,
         "compiled": [{"kind": c.kind, "name": c.code, "rule": c.rule} for c in compiled],

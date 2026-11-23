@@ -118,6 +118,21 @@ def test_the_same_principal_in_other_case_is_one_target(db_session, roles):
     assert out == [('Ana@Example.com', None), ('user:Bob', None)]
 
 
+def test_a_user_with_and_without_the_prefix_is_one_target(db_session, roles):
+    """``user:alice`` and ``alice`` reach the same user: one bell row (#1309
+    review). An email is another identity and keeps its row."""
+    out = _resolve_role_to_users(
+        db_session, 'user:alice,Alice,alice@x.com,user:alice@x.com', _context(),
+    )
+    assert out == [('Alice', None), ('alice@x.com', None)]
+
+
+def test_the_bare_name_is_kept_when_it_comes_first(db_session, roles):
+    """A bare name also reaches a group of that name."""
+    out = _resolve_role_to_users(db_session, 'alice,user:alice', _context())
+    assert out == [('alice', None)]
+
+
 def test_a_group_name_with_a_comma_is_one_group(db_session, roles):
     """The designer writes the comma as %2C (and % as %25)."""
     out = _resolve_role_to_users(

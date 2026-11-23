@@ -803,7 +803,7 @@ def _resolve_role_to_users(
     # role tokens / aliases / business: prefixes still resolve.
     if ',' in role_spec:
         out: List[tuple] = []
-        seen: set = set()
+        seen: Dict[tuple, int] = {}
         for segment in role_spec.split(','):
             seg = segment.strip()
             if not seg:
@@ -811,11 +811,17 @@ def _resolve_role_to_users(
             for identifier, role_uuid in _resolve_role_to_users(db, seg, context):
                 if not identifier:
                     continue
-                # Emails and names ignore case, as on delivery
-                key = (identifier.strip().lower() if not role_uuid else identifier, role_uuid)
+                # One principal, one row: emails and names ignore case and
+                # ``user:alice`` is ``alice``, as on delivery (``is_user``)
+                key = (principal_identity(identifier) if not role_uuid else identifier,
+                       role_uuid)
                 if key not in seen:
-                    seen.add(key)
+                    seen[key] = len(out)
                     out.append((identifier, role_uuid))
+                elif out[seen[key]][0].startswith(_USER_PREFIX) and not role_uuid \
+                        and not identifier.startswith(_USER_PREFIX):
+                    # The bare name also reaches a group of that name: keep it
+                    out[seen[key]] = (identifier, role_uuid)
         return out
 
     # The explicit forms keep their prefix in what is stored, so the delivery

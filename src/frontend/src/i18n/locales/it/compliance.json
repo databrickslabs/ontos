@@ -96,6 +96,15 @@
       "filteredAll": "Filtrato su tutti — ultima esecuzione {{date}}"
     }
   },
+  "runStatus": {
+    "running": "In esecuzione",
+    "succeeded": "Completata",
+    "failed": "Non riuscita"
+  },
+  "resultsPaging": {
+    "shownOfTotal": "Visualizzati {{shown}} risultati su {{total}}.",
+    "loadMore": "Carica altri"
+  },
   "runDetails": {
     "runTitle": "Esecuzione {{id}}",
     "viewPolicy": "Visualizza criterio",
@@ -174,8 +183,30 @@
   "runErrors": {
     "entities_load_failed": "Non è stato possibile caricare le entità {{entityType}}, quindi non è stato possibile valutare la regola.",
     "rule_parse_failed": "Impossibile interpretare la regola: {{detail}}",
+    "run_failed": "L'esecuzione non è riuscita. I dettagli sono nel log dell'app.",
+    "user_token_required": "Questa regola controlla oggetti di Unity Catalog, letti con il tuo accesso a Databricks, e la richiesta non lo aveva, quindi non è stato possibile eseguirla.",
     "workspace_client_unavailable": "Il workspace Databricks non è disponibile e questa regola controlla oggetti di Unity Catalog, quindi non è stato possibile eseguirla.",
     "tags_load_failed": "Non è stato possibile caricare i tag delle entità {{entityType}}, quindi non è stato possibile valutare la regola."
+  },
+  "tableSources": {
+    "notEvaluatedStatus": "Non valutato",
+    "runWarning": "Oggetti non valutati: {{count}}. La regola legge campi da {{sources}}, che non è stato possibile leggere ({{reasons}}). Non contano né come superati né come non superati, né nel punteggio.",
+    "notEvaluated": "Non valutato: impossibile leggere {{fields}} da {{sources}} ({{reason}}).",
+    "reasons": {
+      "no_warehouse": "nessun SQL warehouse configurato",
+      "no_access": "nessun accesso alla tabella di sistema",
+      "query_failed": "la query non è riuscita",
+      "timed_out": "la query era ancora in esecuzione al limite di tempo",
+      "budget_exceeded": "l'esecuzione ha raggiunto il limite di query sul SQL warehouse",
+      "transient": "il SQL warehouse era temporaneamente non disponibile, anche dopo i nuovi tentativi",
+      "not_found": "la tabella di sistema non è stata trovata (lo schema di sistema è abilitato?)",
+      "not_loaded": "i tag di questo tipo di oggetto non vengono ancora letti"
+    }
+  },
+  "runScoreCoverage": {
+    "noScore": "Nessun punteggio",
+    "coverage": "{{evaluated}} oggetti valutati su {{total}}; gli altri non rientrano nel punteggio.",
+    "hiddenResults": "{{count}} risultati riguardano oggetti di Unity Catalog che non puoi leggere, quindi non sono elencati."
   },
   "saveErrors": {
     "rule_trailing_input": "La regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Tutto ciò che segue verrebbe ignorato e la regola verificherebbe meno di quanto dichiara. Rimuovila o correggi la sintassi."

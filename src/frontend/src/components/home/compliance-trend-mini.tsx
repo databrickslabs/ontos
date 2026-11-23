@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface ComplianceTrendMiniProps {
-  data?: number[];
+  // null: a day without a scored run ("No score"), not 0 %
+  data?: (number | null)[];
   className?: string;
 }
 
@@ -9,6 +11,7 @@ export default function ComplianceTrendMini({
   data,
   className = ''
 }: ComplianceTrendMiniProps) {
+  const { t } = useTranslation('compliance');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   // Don't render if no data is provided
@@ -17,6 +20,14 @@ export default function ComplianceTrendMini({
   }
 
   const chartData = data;
+  const scored = chartData.filter((v): v is number => v !== null && v !== undefined);
+  if (scored.length === 0) {
+    return (
+      <div className={`text-xs text-muted-foreground ${className}`}>
+        {t('runScoreCoverage.noScore')}
+      </div>
+    );
+  }
 
   const width = 280;
   const height = 110;
@@ -25,23 +36,42 @@ export default function ComplianceTrendMini({
   const chartHeight = height - padding.top - padding.bottom;
 
   // Calculate min/max for better scaling - ensure minimum range
-  const dataMin = Math.min(...chartData);
-  const dataMax = Math.max(...chartData);
+  const dataMin = Math.min(...scored);
+  const dataMax = Math.max(...scored);
   const minValue = Math.max(0, Math.floor(dataMin / 10) * 10 - 10); // Add padding below, but not below 0
   const maxValue = Math.min(100, Math.ceil(dataMax / 10) * 10 + 10); // Add padding above, but not above 100
   const range = Math.max(maxValue - minValue, 20); // Ensure minimum range of 20 for visibility
 
   // Calculate SVG path for the line chart
-  const points = chartData.map((value, index) => {
-    const x = padding.left + (index / (chartData.length - 1)) * chartWidth;
+  // Days without a score have no point: the line breaks there instead of dropping to 0
+  const slots = chartData.map((value, index) => {
+    if (value === null || value === undefined) return null;
+    const x = padding.left + (index / Math.max(chartData.length - 1, 1)) * chartWidth;
     const y = padding.top + chartHeight - ((value - minValue) / range) * chartHeight;
     return { x, y, value, index };
   });
+  const points = slots.filter((p): p is NonNullable<typeof p> => p !== null);
 
-  const pathD = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
-
-  // Create area fill path
-  const areaD = `${pathD} L ${width - padding.right},${height - padding.bottom} L ${padding.left},${height - padding.bottom} Z`;
+  const segments: (typeof points)[] = [];
+  slots.forEach((p) => {
+    if (p === null) {
+      segments.push([]);
+    } else {
+      if (segments.length === 0) segments.push([]);
+      segments[segments.length - 1].push(p);
+    }
+  });
+  const runs = segments.filter((seg) => seg.length > 0);
+  const baseY = height - padding.bottom;
+  const pathD = runs
+    .map((seg) => `M ${seg.map((p) => `${p.x},${p.y}`).join(' L ')}`)
+    .join(' ');
+  const areaD = runs
+    .map((seg) => {
+      const line = `M ${seg.map((p) => `${p.x},${p.y}`).join(' L ')}`;
+      return `${line} L ${seg[seg.length - 1].x},${baseY} L ${seg[0].x},${baseY} Z`;
+    })
+    .join(' ');
 
   // Calculate day label for hover
   const getDayLabel = (index: number) => {

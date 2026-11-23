@@ -96,6 +96,15 @@
       "filteredAll": "Filtrado por todos — última ejecución {{date}}"
     }
   },
+  "runStatus": {
+    "running": "En ejecución",
+    "succeeded": "Completada",
+    "failed": "Fallida"
+  },
+  "resultsPaging": {
+    "shownOfTotal": "Mostrando {{shown}} de {{total}} resultados.",
+    "loadMore": "Cargar más"
+  },
   "runDetails": {
     "runTitle": "Ejecución {{id}}",
     "viewPolicy": "Ver política",
@@ -174,8 +183,30 @@
   "runErrors": {
     "entities_load_failed": "No se pudieron cargar las entidades {{entityType}}, por lo que no se pudo evaluar la regla.",
     "rule_parse_failed": "No se pudo interpretar la regla: {{detail}}",
+    "run_failed": "La ejecución falló. Los detalles están en el registro de la app.",
+    "user_token_required": "Esta regla comprueba objetos de Unity Catalog, que se leen con tu inicio de sesión en Databricks, y la solicitud no lo tenía, por lo que no se pudo ejecutar.",
     "workspace_client_unavailable": "El workspace de Databricks no está disponible y esta regla comprueba objetos de Unity Catalog, por lo que no se pudo ejecutar.",
     "tags_load_failed": "No se pudieron cargar las etiquetas de las entidades {{entityType}}, por lo que no se pudo evaluar la regla."
+  },
+  "tableSources": {
+    "notEvaluatedStatus": "No evaluado",
+    "runWarning": "Objetos no evaluados: {{count}}. La regla lee campos de {{sources}}, que no se pudieron leer ({{reasons}}). No cuentan como aprobados ni como fallidos, ni en la puntuación.",
+    "notEvaluated": "No evaluado: no se pudo leer {{fields}} de {{sources}} ({{reason}}).",
+    "reasons": {
+      "no_warehouse": "no hay un SQL warehouse configurado",
+      "no_access": "sin acceso a la tabla del sistema",
+      "query_failed": "la consulta falló",
+      "timed_out": "la consulta seguía en ejecución al alcanzar el límite de tiempo",
+      "budget_exceeded": "la ejecución alcanzó su límite de consultas en el SQL warehouse",
+      "transient": "el SQL warehouse no estuvo disponible temporalmente, ni siquiera tras los reintentos",
+      "not_found": "no se encontró la tabla del sistema (¿está habilitado el esquema del sistema?)",
+      "not_loaded": "todavía no se leen las etiquetas de este tipo de objeto"
+    }
+  },
+  "runScoreCoverage": {
+    "noScore": "Sin puntuación",
+    "coverage": "{{evaluated}} de {{total}} objetos evaluados; los demás no cuentan en la puntuación.",
+    "hiddenResults": "{{count}} resultados son de objetos de Unity Catalog que no puede leer, por lo que no se muestran."
   },
   "saveErrors": {
     "rule_trailing_input": "La regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Todo lo que sigue se ignoraría, y la regla comprobaría menos de lo que dice. Elimínelo o corrija la sintaxis."

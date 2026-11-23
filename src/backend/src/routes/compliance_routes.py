@@ -1,11 +1,16 @@
 from typing import Optional
 
 from fastapi import APIRouter, FastAPI, HTTPException, Depends, Body, Query, Request
+from starlette.concurrency import run_in_threadpool
 
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker, user_has_feature_level
 from src.common.manager_dependencies import get_auth_manager
+from src.common.compliance_errors import public_run_error
+from src.common.compliance_result_visibility import viewer_read_checks
+from src.controller.compliance_manager import viewer_run_fields
+from src.common.run_identity import RunIdentity
 from src.controller.authorization_manager import AuthorizationManager
 from src.controller.compliance_manager import ComplianceManager, rule_changes_tags, rule_sends_notifications
 from src.models.compliance import (
@@ -27,6 +32,8 @@ router = APIRouter(prefix="/api", tags=["Compliance"])
 manager = ComplianceManager()
 
 FEATURE_ID = 'compliance'
+# Results per page of a run (the run details page asks for one page at a time)
+RESULTS_PAGE_SIZE = 500
 
 
 def _check_rule(rule: str) -> list:
@@ -242,8 +249,10 @@ def _json_params(value):
 
 
 def _run_error_code(run) -> dict:
-    """The run's error code and parameters, which the UI translates."""
-    return {'error_code': run.error_code, 'error_params': _json_params(run.error_params)}
+    """The run's error code and parameters, which the UI translates. The stored
+    error text is not sent: it can name objects or hosts the reader can't see."""
+    code, params = public_run_error(run.status, run.error_code, _json_params(run.error_params))
+    return {'error_code': code, 'error_params': params}
 
 
 def _run_codes(run) -> dict:
@@ -273,11 +282,16 @@ async def run_policy(
     require_compliance_admin_for_notify(policy.rule, auth_manager, current_user, request)
 
     # For now, implement inline only; async can be backed by Databricks job later
-    run = manager.run_policy_inline(
+    # The user's own token reads Unity Catalog, so the stored results hold only
+    # what they can read; scheduled runs (the compliance-checks job) read as the app
+    # Off the event loop: the run can wait on SQL warehouse statements (tags, lineage)
+    run = await run_in_threadpool(
+        manager.run_policy_inline,
         db, 
         policy=policy, 
         limit=payload.limit,
-        current_user=current_user.username if current_user else None
+        current_user=current_user.username if current_user else None,
+        run_identity=RunIdentity.for_request(request),
     )
     
     audit_manager.log_action(
@@ -290,16 +304,23 @@ async def run_policy(
         details={'policy_id': policy_id, 'policy_name': policy.name, 'run_id': run.id}
     )
     
+    counts = await run_in_threadpool(
+        manager.viewer_run_counts, db, [run], viewer_read_checks(request),
+    )
+    return _run_payload(run, counts[run.id])
+
+
+def _run_payload(run, counts: dict) -> dict:
+    """A run as the API returns it: its counts, its score (None without one) and
+    its coverage over the results the viewer can read, ``hidden_count``, and its
+    codes. ``counts``: the run's entry of ``manager.viewer_run_counts``."""
     return {
         'id': run.id,
         'policy_id': run.policy_id,
         'status': run.status,
         'started_at': run.started_at,
         'finished_at': run.finished_at,
-        'success_count': run.success_count,
-        'failure_count': run.failure_count,
-        'score': run.score,
-        'error_message': run.error_message,
+        **viewer_run_fields(run, counts),
         **_run_codes(run),
     }
 
@@ -307,6 +328,7 @@ async def run_policy(
 @router.get("/compliance/policies/{policy_id}/runs")
 async def list_runs(
     policy_id: str,
+    request: Request,
     db: DBSessionDep,
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
@@ -314,46 +336,42 @@ async def list_runs(
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
     runs = manager.list_runs(db, policy_id=policy_id, limit=50)
-    return [
-        {
-            'id': r.id,
-            'policy_id': r.policy_id,
-            'status': r.status,
-            'started_at': r.started_at,
-            'finished_at': r.finished_at,
-            'success_count': r.success_count,
-            'failure_count': r.failure_count,
-            'score': r.score,
-            'error_message': r.error_message,
-            **_run_codes(r),
-        } for r in runs
-    ]
+    # Counts and scores over the results the viewer can read (their own token, one
+    # listing per schema for all the runs); off the event loop, as it lists UC
+    counts = await run_in_threadpool(
+        manager.viewer_run_counts, db, runs, viewer_read_checks(request),
+    )
+    return [_run_payload(r, counts[r.id]) for r in runs]
 
 
 @router.get("/compliance/runs/{run_id}/results")
 async def get_run_results(
     run_id: str,
+    request: Request,
     db: DBSessionDep,
     only_failed: Optional[bool] = Query(default=False),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=RESULTS_PAGE_SIZE, ge=1, le=RESULTS_PAGE_SIZE),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     run = db.get(ComplianceRunDb, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    results = manager.list_results(db, run_id=run_id, only_failed=bool(only_failed), limit=2000)
+    # Only the Unity Catalog objects the viewer can read, with their own token
+    # (a run reads as its starter or as the app), paged after that filter; the
+    # run's counts and score too. Off the event loop, as it lists UC
+    checks = viewer_read_checks(request)
+
+    def _read():
+        page = manager.viewer_results_page(
+            db, run_id=run_id, checks=checks, only_failed=bool(only_failed),
+            offset=offset, limit=limit,
+        )
+        return page, manager.viewer_run_counts(db, [run], checks)[run.id]
+
+    (results, total, hidden), counts = await run_in_threadpool(_read)
     return {
-        'run': {
-            'id': run.id,
-            'policy_id': run.policy_id,
-            'status': run.status,
-            'started_at': run.started_at,
-            'finished_at': run.finished_at,
-            'success_count': run.success_count,
-            'failure_count': run.failure_count,
-            'score': run.score,
-            'error_message': run.error_message,
-            **_run_codes(run),
-        },
+        'run': _run_payload(run, counts),
         'results': [
             {
                 'id': r.id,
@@ -368,7 +386,12 @@ async def get_run_results(
             } for r in results
         ],
         'only_failed': bool(only_failed),
-        'total': len(results),
+        # Visible results on every page; the page starts at ``offset``
+        'total': total,
+        'offset': offset,
+        'limit': limit,
+        # Results on objects the viewer can't read: counted, not listed
+        'hidden_count': hidden,
     }
 
 

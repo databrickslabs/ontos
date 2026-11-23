@@ -37,7 +37,8 @@ class ComplianceRunDb(Base):
     finished_at = Column(DateTime(timezone=True), nullable=True)
     success_count = Column(Integer, default=0, nullable=False)
     failure_count = Column(Integer, default=0, nullable=False)
-    score = Column(Float, default=0.0, nullable=False)
+    # None for a run without a score: it failed, or evaluated no entity
+    score = Column(Float, nullable=True)
     error_message = Column(Text, nullable=True)
     # Stable code and JSON parameters of an app error, translated by the UI (error_message is the fallback)
     error_code = Column(String, nullable=True)

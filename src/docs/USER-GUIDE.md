@@ -551,7 +551,7 @@ ON_FAIL NOTIFY 'data-governance@company.com'
 ```text
 MATCH (contract:data_contract)
 WHERE contract.status = 'active'
-ASSERT HAS_TAG('slo_defined') AND TAG('slo_freshness') != ''
+ASSERT HAS_TAG('slo_defined') AND HAS_TAG('slo_freshness')
 ON_FAIL FAIL 'Active contracts must have freshness SLOs defined'
 ```
 
@@ -2208,6 +2208,11 @@ Click on a run to see:
 - **Failure Details**: Error messages for failed checks
 - **Actions Taken**: Tags assigned, notifications sent
 - **Historical Trend**: Score over time
+
+The results, counts and score of a run cover only the Unity Catalog objects you can read; the
+others are counted as hidden. The policy list, the compliance stats and the trend are org-wide:
+they use each run's stored score over every object it evaluated, so they are the same for every
+reader and can differ from the score you see in a run's results.
 
 #### Filtering Results
 

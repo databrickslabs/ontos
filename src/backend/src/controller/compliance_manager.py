@@ -1409,9 +1409,10 @@ class ComplianceManager:
                 }
             elif not notified:
                 warning_code, warning_params = 'notifications_failed', {}
-            elif success + failure == 0:
+            elif success + failure + skipped == 0:
                 # Not a failure: the rule ran but selected nothing (#1150).
-                # The warning says why the run has no results.
+                # The warning says why the run has no results. An LLM_CHECK
+                # without a verdict (skipped) means an entity was selected.
                 warning_code = 'no_entities_matched'
             self.complete_run(
                 db, run, success_count=success, failure_count=failure, score=score,

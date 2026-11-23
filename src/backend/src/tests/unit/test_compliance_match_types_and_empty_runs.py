@@ -213,6 +213,39 @@ def _load_failed(*_args, **_kwargs):
     raise error
 
 
+def test_a_run_whose_llm_checks_got_no_verdict_matched_something(db_session, monkeypatch):
+    # The rule matched an entity, but its LLM_CHECK had no model (no endpoint), so
+    # the entity is not evaluated: no passes or failures, and still not "no match"
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from src.common import compliance_llm_check
+
+    monkeypatch.setattr(compliance_llm_check, 'LLM_CHECK_MIN_TEXT_CHARS', 1)
+    policy = CompliancePolicyDb(
+        id=str(uuid.uuid4()), name='Grain documented', is_active=True,
+        rule="MATCH (d:domain)\nASSERT LLM_CHECK(d.description, 'states the grain')",
+    )
+    db_session.add(policy)
+    db_session.flush()
+    iterator = MagicMock()
+    iterator.iterate.side_effect = lambda *a, **k: iter([
+        {'type': 'domain', 'id': 'd1', 'name': 'sales', 'description': 'One row per order.'},
+    ])
+    settings = SimpleNamespace(
+        LLM_ENABLED=True, LLM_ENDPOINT=None, COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN=10,
+    )
+    with patch('src.controller.compliance_manager.create_entity_iterator',
+               return_value=iterator), \
+            patch(NO_CLIENT, return_value=MagicMock()), \
+            patch('src.common.config.get_settings', return_value=settings):
+        run = ComplianceManager().run_policy_inline(db_session, policy=policy)
+
+    assert (run.status, run.success_count, run.failure_count) == ('succeeded', 0, 0)
+    assert run.not_evaluated_count == 1
+    assert compliance_routes._run_codes(run)['warning_code'] != 'no_entities_matched'
+
+
 def test_a_run_that_matches_nothing_is_left_out_of_the_stats(db_session, product):
     # A critical policy with a typo in its MATCH type checked nothing: its run has
     # no score, so it is neither a critical issue nor a 0 % in the overall compliance

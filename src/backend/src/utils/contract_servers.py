@@ -19,11 +19,15 @@ _INTEGER_FIELDS = ('port',)
 
 
 def property_values(server: Dict[str, Any]) -> Dict[str, str]:
-    """The key/value rows of an ODCS server: its type's fields, then the
-    entries of the Ontos ``properties`` map (the server form's extra fields)."""
+    """The key/value rows of an ODCS server: the entries of the Ontos
+    ``properties`` map (the server form's extra fields), then its type's fields,
+    which win: a map read back from a stored server can still hold an edited or
+    cleared field (a top-level key, even null, leaves the map's entry out)."""
     values: Dict[str, str] = {}
     extra = server.get('properties')
-    items = list(server.items()) + list((extra if isinstance(extra, dict) else {}).items())
+    extra_items = [(k, v) for k, v in (extra if isinstance(extra, dict) else {}).items()
+                   if k not in server]
+    items = extra_items + list(server.items())
     for key, value in items:
         if key in SERVER_COLUMNS or value is None:
             continue

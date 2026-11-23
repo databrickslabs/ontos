@@ -111,3 +111,13 @@ def test_a_new_version_keeps_every_server_field(db_session, imported):
     new = manager.clone_contract_for_new_version(db_session, cid, '2.0.0', current_user='alice')
 
     assert _servers(_export(manager, db_session, new.id)) == {s['id']: s for s in SERVERS}
+
+
+def test_an_edited_top_level_server_field_wins_over_a_stale_properties_map():
+    from src.utils.contract_servers import property_values
+
+    # a server read back with every stored row in `properties`, then edited
+    server = {'type': 'postgres', 'host': 'new.example.com', 'port': None,
+              'properties': {'host': 'old.example.com', 'port': '5432', 'sslmode': 'require'}}
+
+    assert property_values(server) == {'host': 'new.example.com', 'sslmode': 'require'}

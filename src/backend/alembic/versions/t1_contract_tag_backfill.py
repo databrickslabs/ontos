@@ -1,7 +1,7 @@
 """Backfill contract tag assignments from the ODCS tag rows
 
 Revision ID: t1_contract_tag_backfill
-Revises: r2_canonical_relationship_types
+Revises: o3_compliance_llm_check_cache
 Create Date: 2026-11-12
 
 #1484: contracts imported from ODCS files kept their tags only in
@@ -27,7 +27,7 @@ import sqlalchemy as sa
 
 
 revision: str = 't1_contract_tag_backfill'
-down_revision: Union[str, None] = 'r2_canonical_relationship_types'
+down_revision: Union[str, None] = 'o3_compliance_llm_check_cache'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

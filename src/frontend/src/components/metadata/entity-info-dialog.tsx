@@ -20,6 +20,7 @@ const INFO_NOTES_SAMPLE: RichTextItem[] = [{
   ...INFO_SAMPLE_BASE, id: 'n1', title: 'Overview',
   content_markdown: '## Overview\n\nA short sample description of this entity, its purpose and who uses it.\n\n## Usage\n\nHow to get access and what the data covers.',
 }];
+const NO_DOCUMENTS: DocumentItem[] = [];
 const INFO_LINKS_SAMPLE: LinkItem[] = [{ ...INFO_SAMPLE_BASE, id: 'l1', title: 'Sample link', url: 'https://example.com/sample', short_description: 'Sample description' }];
 
 interface Props {
@@ -128,9 +129,9 @@ export default function EntityInfoDialog({
     : directMetadata;
   
   // While loading, the body renders a sample in skeleton mode (ContentSkeleton)
-  const richTexts = loading ? INFO_NOTES_SAMPLE : loadedRichTexts;
-  const documents = loading ? [] : loadedDocuments;
-  const links = loading ? INFO_LINKS_SAMPLE : loadedLinks;
+  const richTexts = useMemo(() => (loading ? INFO_NOTES_SAMPLE : loadedRichTexts), [loading, loadedRichTexts]);
+  const documents = useMemo(() => (loading ? NO_DOCUMENTS : loadedDocuments), [loading, loadedDocuments]);
+  const links = useMemo(() => (loading ? INFO_LINKS_SAMPLE : loadedLinks), [loading, loadedLinks]);
 
   const sources = useMerged ? mergedMetadata.sources : {};
 

@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { useState } from 'react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import '@/i18n/config';
 import { ContentSkeleton } from './content-skeleton';
 
@@ -125,5 +125,23 @@ describe('ContentSkeleton', () => {
     rerender(<ContentSkeleton loading><Counter /></ContentSkeleton>);
     rerender(<ContentSkeleton loading={false}><Counter /></ContentSkeleton>);
     expect(screen.getByRole('button')).toHaveTextContent('count 1');
+  });
+
+  describe('bones', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('draws a bone over each block of the laid-out sample, and none once loaded', () => {
+      // jsdom has no layout: give every element a size
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+        { left: 0, top: 0, width: 20, height: 20, right: 20, bottom: 20, x: 0, y: 0, toJSON: () => ({}) } as DOMRect,
+      );
+      const Icons = () => (<p><svg data-testid="a" /><svg data-testid="b" /></p>);
+      const { container, rerender } = render(<ContentSkeleton loading><Icons /></ContentSkeleton>);
+      const bones = container.querySelectorAll('[data-skeleton-bones] > *');
+      expect(bones.length).toBeGreaterThanOrEqual(2);
+      expect((bones[0] as HTMLElement).style.width).toBe('20px');
+      rerender(<ContentSkeleton loading={false}><Icons /></ContentSkeleton>);
+      expect(container.querySelector('[data-skeleton-bones]')).toBeNull();
+    });
   });
 });

@@ -178,58 +178,27 @@ html:not([data-mode="advanced"]) .adv-only {
 }
 
 /* Skeleton mode (components/common/content-skeleton.tsx): the real component,
-   rendered with sample data, drawn as its own skeleton. Every line of text
-   becomes a bar exactly as wide as the text (a thick line-through, so it also
-   covers text placed directly in a div, in any language); glyphs, icons and
-   images are hidden behind blocks; frames and spacing stay as they are, so
-   nothing moves when the data arrives. */
+   rendered with sample data, is laid out but not shown; ContentSkeleton draws
+   skeleton bones (the shared Skeleton style) over its text lines, icons and
+   controls. Frames and spacing stay, so nothing moves when the data arrives. */
 @layer components {
   [data-skeleton] {
     user-select: none;
     pointer-events: none;
-    filter: grayscale(1);
-    animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
   [data-skeleton] * {
     color: transparent !important;
-    text-decoration-line: line-through !important;
-    text-decoration-style: solid !important;
-    text-decoration-color: hsl(var(--muted)) !important;
-    text-decoration-thickness: 0.95em !important;
-    text-decoration-skip-ink: none !important;
     text-shadow: none !important;
     caret-color: transparent;
   }
-  [data-skeleton] svg {
-    background-color: hsl(var(--muted));
-    border-radius: 0.25rem;
-  }
-  [data-skeleton] svg * {
+  [data-skeleton] :is(svg, img, video, canvas) {
     visibility: hidden;
-  }
-  [data-skeleton] img,
-  [data-skeleton] video,
-  [data-skeleton] canvas {
-    background-color: hsl(var(--muted));
-    object-position: -99999px -99999px;
   }
   [data-skeleton] :is(input, textarea, select)::placeholder {
     color: transparent !important;
   }
-  /* A part that can't be drawn this way (a chart, a map) becomes one block */
-  [data-skeleton] [data-skeleton-block] {
-    background-color: hsl(var(--muted)) !important;
-    border-radius: 0.375rem;
+  /* Coloured fills (badges, buttons, status chips) don't show through */
+  [data-skeleton] :is(button, [class*="bg-"]):not([class*="bg-card"]):not([class*="bg-background"]) {
+    background-color: transparent !important;
   }
-  [data-skeleton] [data-skeleton-block] > * {
-    visibility: hidden;
-  }
-}
-
-@keyframes skeleton-pulse {
-  50% { opacity: 0.6; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  [data-skeleton] { animation: none; }
 }

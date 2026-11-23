@@ -8,6 +8,11 @@ The per-AR arbitrary-table evidence path is removed. The shared ADM schema is th
 evidence source, so an Authority Relation declares the slice it reads instead of a table
 and a column map.
 
+The definition hash changes for every AR that had table-linked evidence. This is intended
+(#1294 slice 4, B6): ARF has never shipped, and the table path is invalid by design, so the
+DNA-Coefficient and affirmations of those ARs were measured against evidence that no longer
+exists. Treat them as stale and measure again.
+
 Upgrade
 - Adds ``authority_relations.evidence_slice`` (JSON), ``adm_schema_override`` (the Admin-only
   per-AR schema) and ``dna_position``; adds ``authority_dna_runs.position`` and
@@ -23,6 +28,7 @@ Downgrade
   new columns. The slices are lost on downgrade.
 """
 import json
+import re
 from typing import Any, Mapping, Optional, Sequence, Union
 
 from alembic import op
@@ -37,6 +43,22 @@ depends_on: Union[str, Sequence[str], None] = None
 DEFAULT_WINDOW_DAYS = 90
 DEFAULT_SAMPLE_SIZE = 500
 
+# The action-code grammar of ``src.common.adm.ACTION_CODE_PATTERN``. A migration must not import
+# the app package, so the pattern is repeated here: change both together.
+ACTION_CODE_RE = re.compile(r"^[a-z][a-z0-9_:.\-]{0,127}$")
+
+
+def normalise_action_code(raw: Any) -> Optional[str]:
+    """A legacy free-text action as an ADM action code, or None when nothing valid is left.
+
+    Lowercased, whitespace runs become ``_``, characters outside the grammar are dropped, and
+    the result must start with a letter. ``"Approve Budget!"`` becomes ``approve_budget``;
+    ``"!!!"`` becomes nothing and the AR gets no slice.
+    """
+    text = re.sub(r"\s+", "_", str(raw or "").strip().lower())
+    text = re.sub(r"[^a-z0-9_:.\-]", "", text).lstrip("0123456789_:.-")[:128]
+    return text if ACTION_CODE_RE.match(text) else None
+
 
 def _as_json(value: Any) -> Any:
     if isinstance(value, str):
@@ -50,7 +72,7 @@ def _as_json(value: Any) -> Any:
 def slice_for_row(row: Mapping[str, Any]) -> Optional[dict]:
     """The slice an AR keeps from its table-linked binding (see the module docstring)."""
     had_table = bool(_as_json(row.get("evidence_binding")) or _as_json(row.get("evidence_sources")))
-    action = (row.get("action") or "").strip()
+    action = normalise_action_code(row.get("action"))
     if not had_table or not action:
         return None
     return {
@@ -79,6 +101,7 @@ def upgrade() -> None:
     rows = conn.execute(sa.select(
         rels.c.id, rels.c.action, rels.c.evidence_binding, rels.c.evidence_sources,
     )).mappings().all()
+    # Intentional: the definition hash of an AR with table-linked evidence changes here (see above).
     for row in rows:
         new_slice = slice_for_row(row)
         if new_slice is None:

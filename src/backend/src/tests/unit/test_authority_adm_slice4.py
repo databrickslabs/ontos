@@ -69,7 +69,7 @@ def _manager(monkeypatch, *, conformant=True, observed=None, rows_by_table=None)
     calls = []
     rows_by_table = rows_by_table or {}
 
-    def fake_query(self, sql):
+    def fake_query(self, sql, **kw):
         calls.append(sql)
         if "observed_decision_provenance" in sql:
             return list(observed or [])
@@ -167,7 +167,7 @@ def test_a_failed_read_records_a_generic_failure_on_the_run(db_session, monkeypa
     _set_shared_schema(db_session)
     rel = _ar(mgr, db_session, "read-fails")
 
-    def boom(self, sql):
+    def boom(self, sql, **kw):
         raise AdmQueryError("The ADM statement failed.", state="failed")
 
     monkeypatch.setattr(AuthorityResolutionManager, "_adm_query", boom)
@@ -617,7 +617,7 @@ def test_a_fact_with_no_schema_is_unknown_so_the_rule_fails_closed(db_session, m
 def test_a_fact_read_from_the_schema_decides_and_is_recorded(db_session, monkeypatch):
     inputs = _facts_inputs()
 
-    def fake_query(self, sql):
+    def fake_query(self, sql, **kw):
         if "source_identity_map" in sql:
             return inputs["authority_links"]
         if "`entitlements`" in sql:

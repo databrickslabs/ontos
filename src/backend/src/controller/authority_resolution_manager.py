@@ -37,7 +37,7 @@ from src.common.compliance_dsl import evaluate_rule_strict
 from src.common import authority_rule as arule
 from src.common import mcp_resolver
 from src.common import adm
-from src.common.adm_sql import run_query
+from src.common.adm_sql import ADM_RESULT_TRUNCATED, AdmQueryError, run_query
 from src.controller import authority_adm_manager as adm_manager
 from src.controller.authority_adm_manager import AuthorityAdmManager, AdmNonconformantError, workspace_and_warehouse
 from src.controller import authority_policy_manager as apol
@@ -228,22 +228,40 @@ DEFAULT_DNA_CEILING = 0.3
 ARF_CHECK_CATEGORY = "Authority Decision"
 _ALLOWED_STATUSES = ("draft", "active", "needs_review", "retired")
 
-def _slice_dict(value: Any) -> Optional[Dict[str, Any]]:
-    """An AR's evidence slice as a canonical dict (the slice is hashed in this form)."""
+def _slice_canonical(value: Any) -> Optional[Dict[str, Any]]:
+    """A stored evidence slice in canonical form. It never raises: the definition hash and every
+    read go through it, so a value that no longer validates must not break the AR (validation is
+    on write, in :func:`_slice_dict`; invalid codes are flagged when the sample is read)."""
     if value is None:
         return None
     d = value if isinstance(value, dict) else value.dict()
-    codes = adm.validated_action_codes(d.get("action_codes") or [])
-    if not codes:
-        raise AuthorityInvalidError("The evidence slice needs at least one action code.")
+
+    def number(v: Any, default: int) -> int:
+        try:
+            return int(v) if v else default
+        except (TypeError, ValueError):
+            return default
+
     refs = list(dict.fromkeys(str(r).strip() for r in (d.get("object_refs") or []) if str(r).strip()))
     return {
-        "action_codes": codes,
+        "action_codes": [str(c).strip() for c in (d.get("action_codes") or [])],
         "object_refs": refs,
         "domain_scope": bool(d.get("domain_scope", True)),
-        "window_days": int(d.get("window_days") or 90),
-        "sample_size": int(d.get("sample_size") or 500),
+        "window_days": number(d.get("window_days"), 90),
+        "sample_size": number(d.get("sample_size"), 500),
     }
+
+
+def _slice_dict(value: Any) -> Optional[Dict[str, Any]]:
+    """An evidence slice as written: validated (every action code must match the grammar)."""
+    canonical = _slice_canonical(value)
+    if canonical is None:
+        return None
+    codes = adm.validated_action_codes(canonical["action_codes"])
+    if not codes:
+        raise AuthorityInvalidError("The evidence slice needs at least one action code.")
+    canonical["action_codes"] = codes
+    return canonical
 
 
 def _row_direction(signed: int) -> Optional[str]:
@@ -440,7 +458,7 @@ class AuthorityResolutionManager(SearchableAsset):
         if out.get("rule") is not None:
             out["rule"] = arule.normalize_rule(out["rule"])
         if out.get("evidence_slice") is not None:
-            out["evidence_slice"] = _slice_dict(out["evidence_slice"])
+            out["evidence_slice"] = _slice_canonical(out["evidence_slice"])
         return out
 
     @staticmethod
@@ -2702,14 +2720,38 @@ class AuthorityResolutionManager(SearchableAsset):
         """The ADM schema an AR reads: its own override, else the shared app setting."""
         return relation.adm_schema_override or self._adm.shared_schema(db)
 
-    def _adm_query(self, sql: str) -> List[Dict[str, Any]]:
-        """Run one ADM statement as the app service principal (polled, see ``adm_sql``)."""
-        ws, warehouse_id = workspace_and_warehouse()
-        return run_query(sql, ws=ws, warehouse_id=warehouse_id)
+    def _adm_query(self, sql: str, *, allow_truncated: bool = False) -> List[Dict[str, Any]]:
+        """Run one ADM statement as the app service principal (polled, see ``adm_sql``).
 
-    def _identity_maps(self, schema: str, as_of: datetime) -> Tuple[Dict[str, str], Dict[str, str]]:
-        """``(alias_by_entity, entity_by_alias)`` over every VERIFIED link valid at ``as_of``."""
-        return adm.identity_index(self._adm_query(adm.identity_links_sql(schema, as_of=as_of)))
+        A read that hit the row cap fails closed unless the caller can use a partial read
+        (the sample does, and records the truncation in its basis).
+        """
+        ws, warehouse_id = workspace_and_warehouse()
+        rows = run_query(sql, ws=ws, warehouse_id=warehouse_id)
+        if rows.truncated and not allow_truncated:
+            raise AdmQueryError("The ADM read was truncated.", code=ADM_RESULT_TRUNCATED)
+        return rows
+
+    def _identity_maps(self, schema: str, as_of: datetime, entity_ids: List[str]) -> Tuple[Dict[str, str], Dict[str, str]]:
+        """``(alias_by_entity, entity_by_alias)`` for the sample's actors, from VERIFIED links only.
+
+        Two batched phases, no silent truncation: the links of the actors' entities give their
+        aliases; then every VERIFIED link of those aliases is read, so an alias that also maps to
+        another entity is seen as ambiguous (and dropped) even when that link is not for an actor
+        of this sample.
+        """
+        wanted = sorted({e for e in entity_ids if e})
+        if not wanted:
+            return {}, {}
+        links: List[Dict[str, Any]] = []
+        for batch in adm.chunked(wanted):
+            links += self._adm_query(adm.identity_links_sql(schema, as_of=as_of, entities=batch))
+        aliases = sorted({str(link["source_id"]) for link in links if link.get("source_id")})
+        all_links: List[Dict[str, Any]] = []
+        for batch in adm.chunked(aliases):
+            all_links += self._adm_query(adm.identity_links_sql(schema, as_of=as_of, aliases=batch))
+        alias_by_entity, entity_by_alias = adm.identity_index(all_links)
+        return {e: a for e, a in alias_by_entity.items() if e in set(wanted)}, entity_by_alias
 
     def _collect_evidence(
         self, db: Session, relation: AuthorityRelationDb, run: Optional[AuthorityDnaRunDb] = None,
@@ -2730,11 +2772,12 @@ class AuthorityResolutionManager(SearchableAsset):
                 "No ADM schema is configured. Set the shared ADM schema in Settings, or override it on this Authority Relation.",
             )
         ev = relation.evidence_slice or {}
-        codes = list(ev.get("action_codes") or [])
+        # A stored code that no longer matches the grammar is flagged, not fatal: the valid codes read.
+        codes, invalid_codes = adm.split_action_codes(ev.get("action_codes") or [])
         if not codes:
             raise adm.AdmError(
                 "evidence_slice_empty",
-                "This Authority Relation declares no action codes to read, so its DNA-Coefficient cannot be measured.",
+                "This Authority Relation declares no valid action codes to read, so its DNA-Coefficient cannot be measured.",
             )
         snapshot = (run.started_at if run is not None and run.started_at else self._now())
         snapshot = snapshot if snapshot.tzinfo else snapshot.replace(tzinfo=timezone.utc)
@@ -2749,8 +2792,9 @@ class AuthorityResolutionManager(SearchableAsset):
             window_start=window_start, window_end=window_end, as_of=snapshot, seed=seed,
             sample_size=sample_size,
         )
-        observed = self._adm_query(sql)
-        alias_by_entity, _ = self._identity_maps(schema, snapshot)
+        observed = self._adm_query(sql, allow_truncated=True)
+        alias_by_entity, _ = self._identity_maps(
+            schema, snapshot, [obs.get("actor_entity_id") for obs in observed])
 
         rows: List[Dict[str, Any]] = []
         unknown = 0
@@ -2772,6 +2816,8 @@ class AuthorityResolutionManager(SearchableAsset):
             "action_codes": codes,
             "object_refs": list(ev.get("object_refs") or []),
             "observed": len(observed),
+            "truncated": bool(getattr(observed, "truncated", False)),
+            "invalid_action_codes": invalid_codes,
             "identity_unknown": unknown,
         }
         return _AdmSample(rows=rows, basis=basis)
@@ -2818,6 +2864,7 @@ class AuthorityResolutionManager(SearchableAsset):
         return adm.derive_facts(
             identity={"entity_id": entity} if entity else None,
             entitlements=entitlements, roles=roles, delegations=delegations, at=now,
+            role_id=relation.actor_role,
         )
 
     def _check_schema_override(self, value: Optional[str], current: Optional[str], caller_is_admin: bool) -> Optional[str]:

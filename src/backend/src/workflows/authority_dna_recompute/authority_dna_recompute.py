@@ -25,6 +25,18 @@ from databricks.sdk import WorkspaceClient
 # Reuse the vetted DB-connection scaffolding from the compliance workflow.
 from src.workflows.compliance_checks.compliance_checks import create_engine_from_params
 from src.common.workflow_config import initialize_application_config
+from src.common.adm_sql import AdmQueryError, ADM_NO_WAREHOUSE
+
+
+def require_warehouse(warehouse_id: str) -> None:
+    """Fail the whole job, once, when no SQL warehouse was passed: the ADM schema can't be read
+    without one, so every AR would fail the same way. The job parameter is filled in by Ontos
+    (``databricks_warehouse_id``, from the app's configured warehouse)."""
+    if not (warehouse_id or "").strip():
+        raise AdmQueryError(
+            "No SQL warehouse is configured for the job, so the ADM schema cannot be read.",
+            code=ADM_NO_WAREHOUSE,
+        )
 
 
 def main() -> None:
@@ -46,6 +58,12 @@ def main() -> None:
 
     args, _ = parser.parse_known_args()
     verbose = args.verbose.lower() == "true"
+
+    try:
+        require_warehouse(args.databricks_warehouse_id)
+    except AdmQueryError as e:
+        print(f"ERROR: {e.code}: {e.message}")
+        raise SystemExit(1)
 
     print("\nInitializing workspace client...")
     ws = WorkspaceClient(product=args.product_name, product_version=args.product_version)

@@ -236,11 +236,13 @@ def evaluate_row(criteria: List[Criterion], row: Dict[str, Any]) -> RowDivergenc
                 object_id=str(norm["object_id"]) if norm.get("object_id") is not None else None,
                 value=_to_float(norm.get("value")),
             )
-        w = c.weight if c.weight is not None else 1.0
-        failed = not outcome.passed
-        if failed:
+        w = float(c.weight if c.weight is not None else 1.0)
+        # Only a check with weight above zero can diverge. A weight-0 check is informational:
+        # it is evaluated and shown, but never makes a row diverge or moves the magnitude.
+        gating = (not outcome.passed) and w > 0
+        if gating:
             reasons.append(c.code)
-        contributions.append((c.dimension or "people", float(w), _direction_sign(c.direction), failed))
+        contributions.append((c.dimension or "people", w, _direction_sign(c.direction), gating))
 
     weight_total = sum(w for _, w, _, _ in contributions)
     signed_total = sum(w * sign for _, w, sign, failed in contributions if failed)

@@ -97,7 +97,10 @@ FACT_TYPES: Dict[str, str] = {
 FACT_NAMESPACE = "fact"
 
 _IDENT_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_\-]{0,254}$")
-_ACTION_RE = re.compile(r"^[a-z][a-z0-9_:.\-]{0,127}$")
+# The action-code grammar, shared with the frontend (types/authority-resolution.ts) and the
+# migration that normalises legacy codes (alembic ao1). Change all three together.
+ACTION_CODE_PATTERN = r"^[a-z][a-z0-9_:.\-]{0,127}$"
+_ACTION_RE = re.compile(ACTION_CODE_PATTERN)
 _FACT_REF_RE = re.compile(r"\bfact\.([A-Za-z_][A-Za-z0-9_]*)")
 
 # Keys the observed row sets itself. A context key of the same name never overrides them.
@@ -162,6 +165,7 @@ def _in_list(values: Sequence[str]) -> str:
 
 
 def validated_action_codes(values: Iterable[str]) -> List[str]:
+    """Action codes as written: every one must match :data:`ACTION_CODE_PATTERN` (the write path)."""
     out = []
     for v in values:
         text = str(v).strip()
@@ -170,6 +174,21 @@ def validated_action_codes(values: Iterable[str]) -> List[str]:
         if text not in out:
             out.append(text)
     return out
+
+
+def split_action_codes(values: Iterable[Any]) -> Tuple[List[str], List[str]]:
+    """``(valid, invalid)`` action codes of a stored slice. Never raises: a stored value that
+    no longer matches is flagged for the caller to report, and the valid codes still read."""
+    valid: List[str] = []
+    invalid: List[str] = []
+    for v in values or []:
+        text = str(v).strip()
+        if _ACTION_RE.match(text):
+            if text not in valid:
+                valid.append(text)
+        else:
+            invalid.append(text)
+    return valid, invalid
 
 
 # --------------------------------------------------------------------------- #
@@ -335,23 +354,35 @@ def observed_sample_sql(
     )
 
 
-def identity_links_sql(schema_fqn: str, *, as_of: datetime, aliases: Optional[Sequence[str]] = None) -> str:
-    """VERIFIED identity links valid at ``as_of``. Unverified and rejected links are never read."""
+def identity_links_sql(
+    schema_fqn: str, *, as_of: datetime, aliases: Optional[Sequence[str]] = None,
+    entities: Optional[Sequence[str]] = None,
+) -> str:
+    """VERIFIED identity links valid at ``as_of``, filtered to the given aliases and/or entity ids.
+
+    Unverified and rejected links are never read. There is no row cap: the caller batches
+    its ids (see :func:`chunked`), so a silent truncation can't drop a link.
+    """
     table = table_fqn(schema_fqn, "source_identity_map")
     where = [
         "verification_status = 'VERIFIED'",
         as_of_clause("source_identity_map", at=as_of, valid_at=as_of),
     ]
-    if aliases is not None:
-        if not aliases:
-            where.append("1 = 0")
-        else:
-            where.append(f"source_id IN {_in_list(list(aliases))}")
+    for column, values in (("source_id", aliases), ("entity_id", entities)):
+        if values is None:
+            continue
+        where.append("1 = 0" if not values else f"{column} IN {_in_list(list(values))}")
     return (
         "SELECT identity_link_id, entity_id, source_id, valid_from, valid_to "
         f"FROM {table} WHERE " + " AND ".join(where) + " "
-        "ORDER BY source_id, identity_link_id LIMIT 10000"
+        "ORDER BY source_id, identity_link_id"
     )
+
+
+def chunked(values: Sequence[str], size: int = 200) -> List[List[str]]:
+    """``values`` in batches of at most ``size``, in order (keeps every IN list bounded)."""
+    items = list(values)
+    return [items[i:i + size] for i in range(0, len(items), size)]
 
 
 def identity_index(links: Iterable[Dict[str, Any]]) -> Tuple[Dict[str, str], Dict[str, str]]:
@@ -570,6 +601,7 @@ def role_codes(row: Dict[str, Any]) -> Optional[List[str]]:
 def derive_facts(
     *, identity: Optional[Dict[str, Any]], entitlements: Sequence[Dict[str, Any]],
     roles: Sequence[Dict[str, Any]], delegations: Sequence[Dict[str, Any]], at: datetime,
+    role_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """The ``fact.*`` namespace for one request. Missing inputs give None (an unknown the DSL fails closed on)."""
     entity = (identity or {}).get("entity_id") if identity else None
@@ -584,9 +616,18 @@ def derive_facts(
         "entitlement_valid_from": _iso(parse_timestamp(newest.get("valid_from"))) if newest else None,
         "entitlement_valid_to": _iso(parse_timestamp(newest.get("valid_to"))) if newest else None,
         "role_codes": role_codes(role) if role else None,
-        "delegation_active": any(in_validity(d.get("valid_from"), d.get("valid_to"), at) for d in delegations) if entity else None,
+        "delegation_active": _delegation_active(delegations, role_id, at) if entity and role_id else None,
     }
     return facts
+
+
+def _delegation_active(delegations: Sequence[Dict[str, Any]], role_id: str, at: datetime) -> bool:
+    """A delegation holds for this fact only when it is for the AR's own role and in its validity
+    window. A delegation for any other role doesn't make the fact true (fails closed)."""
+    return any(
+        d.get("role_id") == role_id and in_validity(d.get("valid_from"), d.get("valid_to"), at)
+        for d in delegations
+    )
 
 
 def _iso(value: Optional[datetime]) -> Optional[str]:

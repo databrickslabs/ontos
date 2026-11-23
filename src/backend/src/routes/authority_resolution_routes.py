@@ -826,17 +826,31 @@ async def validate_rule(
     return out
 
 
+# The ADM endpoints are sync: the SQL polling blocks (up to its deadline), and FastAPI runs a
+# sync route in the threadpool, so the event loop stays free.
 @router.get("/authority/adm-schema")
-async def get_adm_schema(
+def get_adm_schema(
     db: DBSessionDep,
     _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
 ):
-    """The shared ADM schema every Authority Relation reads, and its conformance to ADM v0.4."""
+    """The shared ADM schema and its last stored conformance result. Never queries the warehouse."""
     return adm_manager.state(db)
 
 
+@router.post("/authority/adm-schema/check")
+def check_adm_schema(
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, ADMIN)),
+):
+    """Check the configured schema now (one warehouse read) and store the result. Admin only."""
+    try:
+        return adm_manager.check(db, caller_is_admin=True)
+    except Exception as e:
+        raise _failure("check_adm_schema", e, coded_status=400)
+
+
 @router.put("/authority/adm-schema")
-async def put_adm_schema(
+def put_adm_schema(
     db: DBSessionDep,
     payload: AdmSchemaUpdate = Body(...),
     _: bool = Depends(PermissionChecker(FEATURE_ID, ADMIN)),

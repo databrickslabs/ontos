@@ -584,6 +584,8 @@ class JobsManager:
                 'postgres_db': str(getattr(self._settings, 'PGDATABASE', '') or ''),
                 'postgres_port': str(getattr(self._settings, 'PGPORT', '5432') or '5432'),
                 'postgres_schema': str(getattr(self._settings, 'PGSCHEMA', 'public') or 'public'),
+                # The app's SQL warehouse (workflows that read through SQL, e.g. the ARF ADM schema)
+                'databricks_warehouse_id': str(getattr(self._settings, 'DATABRICKS_WAREHOUSE_ID', '') or ''),
                 # Telemetry parameters for WorkspaceClient identification
                 'product_name': 'ontos',
                 'product_version': __version__,
@@ -595,8 +597,8 @@ class JobsManager:
                 if isinstance(wf_params, dict):
                     for param_name, param_value in db_params.items():
                         if param_name in wf_params:
-                            # Only inject if not already set by user config
-                            if param_name not in merged:
+                            # Only inject if not already set by user config (an empty saved value is unset)
+                            if not merged.get(param_name):
                                 merged[param_name] = str(param_value)
             except Exception as e:
                 logger.warning(f"Could not check workflow parameters for {workflow_id}: {e}")

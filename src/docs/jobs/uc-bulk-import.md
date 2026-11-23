@@ -64,7 +64,12 @@ Define how to discover each entity type from UC tags. Each entity type (Contract
 How to handle entities that already exist with the same name:
 
 - **skip** (default): Ignore and log warning if entity name already exists
-- **update**: Overwrite existing entity with discovered data
+- **update**: Change an existing draft product or contract in place: add a port
+  (product) or schema object (contract) for each tagged table the job never imported
+  into it. The job records each table it imports, so a port or schema object you
+  delete in the app is not added back. Products and contracts past draft are skipped;
+  existing domains are left as they are. Drafts that get nothing new are counted as
+  unchanged and keep their `updated_at`.
 - **error**: Fail the job if a conflict is detected
 
 > **Note**: Database connection parameters (host, database name, OAuth instance) are automatically provided by the system from application settings. You don't need to configure these.
@@ -160,7 +165,8 @@ Filter patterns are inherited from parent to child:
 **Products:**
 - Populate minimal required fields: `name`, `version`, `status`, `kind`, `api_version`
 - Create `OutputPortDb` entries linking product to tables
-- If contract exists for same table, set `contract_id` in output port
+- If contract exists for same table, set `contract_id` in output port (newest version
+  of the contract; only on ports of draft products that have no contract yet)
 
 **Domains:**
 - Create basic domain record with `name`, `description` (if available)
@@ -205,6 +211,18 @@ To run immediately:
 - **Red X**: Failed (check logs for errors)
 - **Yellow warning**: Completed with warnings (some entities skipped)
 - **Blue spinner**: Currently running
+
+**Overlapping runs:** one run imports at a time. A run that starts while another
+one is importing (it can't take the job's database lock) imports nothing and
+fails with exit code `3`, so it shows as failed rather than green; errors while
+importing exit with `1`. A run whose lock connection ends mid-run (the database
+then releases its lock, and another run can take it) stops before its next write
+and fails with exit code `1`: each write first checks that the run still holds
+the lock, so two runs never write at the same time. The lock needs a direct
+database connection: a transaction-mode connection pooler doesn't support it.
+The job uses the app's own database host (`PGHOST`) unless the job's
+`postgres_host` parameter is set; a Lakebase pooler host (`...-pooler...`) is
+refused with exit code `1`. A dry run writes nothing and doesn't take the lock.
 
 ## Examples
 
@@ -360,7 +378,7 @@ Enable dry-run to preview results without creating entities:
 **Conflict Strategy Options:**
 
 1. **skip**: First discovered creates entity, rest ignored (safe, recommended)
-2. **update**: Last discovered overwrites entity (use cautiously)
+2. **update**: Adds newly tagged tables to existing drafts (see Conflict Strategy)
 3. **error**: Job fails, requires manual resolution (strictest)
 
 **Best Practice:**

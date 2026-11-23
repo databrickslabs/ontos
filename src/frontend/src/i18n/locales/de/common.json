@@ -10,6 +10,7 @@
     "delete": "Löschen",
     "deleteSelected": "Ausgewählte löschen ({{count}})",
     "edit": "Bearbeiten",
+    "rename": "Umbenennen",
     "add": "Hinzufügen",
     "create": "Erstellen",
     "update": "Aktualisieren",
@@ -42,6 +43,7 @@
     "discard": "Verwerfen",
     "apply": "Anwenden",
     "select": "Auswählen",
+    "done": "Fertig",
     "remove": "Entfernen",
     "link": "Verknüpfen",
     "unlink": "Verknüpfung lösen",
@@ -358,7 +360,10 @@
       "job": "Job",
       "subscription": "Abonnement",
       "user": "Benutzer",
-      "metric_view": "Metric View"
+      "metric_view": "Metric View",
+      "ontology_concept": "Konzept",
+      "ontology_collection": "Sammlung",
+      "concept_changeset": "Konzept-Änderungssatz"
     },
     "stepTypes": {
       "validation": "Validierung",
@@ -480,6 +485,9 @@
     "targetNotPickable": "{{type}} kann hier nicht ausgewählt werden. Es wird auf einer eigenen Seite verwaltet.",
     "noAccessToTarget": "Sie haben keinen Zugriff auf {{type}}. Bitten Sie einen Administrator um Lesezugriff, um darauf zu verknüpfen."
   },
+  "assetFormStoredProperties": {
+    "loadError": "Die gespeicherten Eigenschaften des Assets konnten nicht geladen werden, daher kann es hier nicht gespeichert werden. Schließen Sie den Dialog und versuchen Sie es erneut."
+  },
   "assetForm": {
     "groups": {
       "basic": "Grundinformationen",
@@ -565,16 +573,25 @@
     "removeConfirm": "Möchten Sie diese Beziehung wirklich entfernen? Diese Aktion kann nicht rückgängig gemacht werden."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "{{kind}} auswählen…",
     "latestSuffix": "{{name}} (neueste)",
     "pinVersionTitle": "Eine bestimmte Version anheften",
     "pinVersion": "Version anheften",
     "followLatestTitle": "Immer der neuesten sichtbaren Version der Familie folgen",
     "followLatest": "Neueste verfolgen",
-    "searchPlaceholder": "{{kind}} suchen…",
     "loading": "Wird geladen…",
-    "noMatching": "Keine passenden {{kind}}.",
     "unnamed": "(unbenannt)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Vertrag auswählen…",
+      "search": "Verträge suchen…",
+      "noMatching": "Keine passenden Verträge."
+    },
+    "product": {
+      "select": "Produkt auswählen…",
+      "search": "Produkte suchen…",
+      "noMatching": "Keine passenden Produkte."
+    }
   },
   "entityTree": {
     "title": "Verwandte Entitäten",
@@ -638,6 +655,8 @@
   "edit": "Bearbeiten",
   "error": "Fehler",
   "home": "Startseite",
+  "loading": "Wird geladen…",
+  "optional": "(optional)",
   "refresh": "Aktualisieren",
   "retry": "Erneut versuchen",
   "save": "Speichern",

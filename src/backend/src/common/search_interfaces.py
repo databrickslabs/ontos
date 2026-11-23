@@ -12,6 +12,11 @@ from src.common.logging import get_logger
 _logger = get_logger(__name__)
 
 
+# A key of a search's ``allowed_ids_by_type`` ending in this character names a type
+# prefix: ``asset-*`` is every asset type (``asset-table``, ``asset-view``, ...).
+TYPE_PREFIX_WILDCARD = "*"
+
+
 class SearchIndexItem(BaseModel):
     """Standardized structure for items returned by searchable assets."""
     id: str = Field(..., description="Unique identifier for the search item (e.g., 'product::uuid', 'term::uuid')")
@@ -47,6 +52,15 @@ class SearchableAsset(ABC):
             self._search_manager.upsert_item(item)
         except Exception as e:
             _logger.warning(f"Failed to upsert search index item {item.id}: {e}")
+
+    def _notify_index_upsert_many(self, items: List[SearchIndexItem]) -> None:
+        """Upsert several items in one backend call. Safe no-op if SearchManager not yet wired."""
+        if self._search_manager is None or not items:
+            return
+        try:
+            self._search_manager.upsert_items(items)
+        except Exception as e:
+            _logger.warning(f"Failed to upsert {len(items)} search index items: {e}")
 
     def _notify_index_remove(self, item_id: str) -> None:
         """Remove a single item from the search index. Safe no-op if SearchManager not yet wired."""

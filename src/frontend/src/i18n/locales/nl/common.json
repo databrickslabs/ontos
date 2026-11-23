@@ -42,6 +42,7 @@
     "discard": "Verwerpen",
     "apply": "Toepassen",
     "select": "Selecteren",
+    "done": "Gereed",
     "remove": "Verwijderen",
     "link": "Koppelen",
     "unlink": "Ontkoppelen",
@@ -484,6 +485,9 @@
     "targetNotPickable": "{{type}} kan hier niet worden gekozen. Het wordt op een eigen pagina beheerd.",
     "noAccessToTarget": "U hebt geen toegang tot {{type}}. Vraag een beheerder om leestoegang om ernaar te koppelen."
   },
+  "assetFormStoredProperties": {
+    "loadError": "De opgeslagen eigenschappen van het asset konden niet worden geladen, dus het kan hier niet worden opgeslagen. Sluit het dialoogvenster en probeer het opnieuw."
+  },
   "assetForm": {
     "groups": {
       "basic": "Basisinformatie",
@@ -569,16 +573,25 @@
     "removeConfirm": "Weet je zeker dat je deze relatie wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Selecteer {{kind}}…",
     "latestSuffix": "{{name}} (nieuwste)",
     "pinVersionTitle": "Een specifieke versie vastzetten",
     "pinVersion": "Versie vastzetten",
     "followLatestTitle": "Altijd de nieuwste zichtbare versie van de familie volgen",
     "followLatest": "Nieuwste volgen",
-    "searchPlaceholder": "Zoek {{kind}}s…",
     "loading": "Laden…",
-    "noMatching": "Geen overeenkomende {{kind}}s.",
     "unnamed": "(naamloos)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Selecteer een contract…",
+      "search": "Zoek contracten…",
+      "noMatching": "Geen overeenkomende contracten."
+    },
+    "product": {
+      "select": "Selecteer een product…",
+      "search": "Zoek producten…",
+      "noMatching": "Geen overeenkomende producten."
+    }
   },
   "entityTree": {
     "title": "Gerelateerde entiteiten",
@@ -642,6 +655,8 @@
   "edit": "Bewerken",
   "error": "Fout",
   "home": "Home",
+  "loading": "Laden…",
+  "optional": "(optioneel)",
   "refresh": "Vernieuwen",
   "retry": "Opnieuw proberen",
   "save": "Opslaan",

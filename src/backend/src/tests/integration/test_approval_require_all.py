@@ -396,6 +396,48 @@ class TestWithoutRequireAll:
         assert response.status_code == 200, response.text
         assert response.json()['status'] == 'succeeded'
 
+    def test_resuming_the_step_closes_the_notification_already_opened(
+        self, client, as_user, db_session,
+    ):
+        """An approval resumed on the execution view (no approver decides) is
+        decided: its notification opened in the bell leaves My actions too."""
+        from src.db_models.notifications import NotificationDb
+
+        execution_id = _paused_execution(client, as_user, 'ana@example.com', require_all=False)
+        db_session.expire_all()
+        for notification in db_session.query(NotificationDb).filter_by(
+            action_type='workflow_approval',
+        ).all():
+            if json.loads(notification.action_payload or '{}').get('execution_id') == execution_id:
+                notification.read = True
+        db_session.flush()
+        as_user(ADMIN)
+
+        response = client.post(
+            f'/api/workflows/executions/{execution_id}/resume', json={'approved': True},
+        )
+
+        assert response.status_code == 200, response.text
+        ((_, payload),) = _approval_notifications(db_session, execution_id).values()
+        assert payload['handled'] is True and payload['decision'] == 'approved'
+
+    def test_resuming_leaves_the_next_approval_step_open(self, client, as_user, db_session):
+        """The resume closes the decided step only: the next approver's
+        notification, created as the workflow pauses there, stays open."""
+        execution_id = _paused_execution(
+            client, as_user, 'ana@example.com', require_all=False, then='carl@example.com',
+        )
+        as_user(ADMIN)
+
+        response = client.post(
+            f'/api/workflows/executions/{execution_id}/resume', json={'approved': True},
+        )
+
+        assert response.status_code == 200, response.text
+        notifications = _approval_notifications(db_session, execution_id)
+        assert notifications['ana@example.com'][1]['handled'] is True
+        assert 'handled' not in notifications['carl@example.com'][1]
+
     def test_a_late_approver_gets_409(self, client, as_user, db_session):
         execution_id = _paused_execution(
             client, as_user, 'ana@example.com,ben@example.com', require_all=False,
@@ -646,3 +688,295 @@ class TestCancelNotAtAnApproval:
         assert _requester_notices(db_session) == []
         audits = _cancel_audits(db_session, paused_id)
         assert len(audits) == 1 and 'override' not in audits[0]
+
+
+def _shared_role_execution(client, as_user, db_session, *, loop_back=False):
+    """A require_all step for Carl and a role Carl and Dora are assigned to (#1552).
+
+    ``loop_back``: a rejection asks the same step again (a new round).
+    """
+    role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+    as_user(ADMIN)
+    response = client.post('/api/workflows', json={
+        'name': f'Shared role {uuid.uuid4().hex[:8]}',
+        'trigger': {'type': 'manual', 'entity_types': ['data_product']},
+        'is_active': True,
+        'steps': [
+            {
+                'step_id': 'approve', 'name': 'Approve', 'step_type': 'approval',
+                'config': {'approvers': f'carl@example.com,{role.id}', 'require_all': True},
+                'on_pass': 'ok', 'on_fail': 'approve' if loop_back else 'no',
+            },
+            {'step_id': 'ok', 'name': 'Approved', 'step_type': 'pass'},
+            {'step_id': 'no', 'name': 'Rejected', 'step_type': 'fail'},
+        ],
+    })
+    assert response.status_code == 200, response.text
+    response = client.post(
+        f"/api/workflows/{response.json()['id']}/execute",
+        params={'entity_type': 'data_product', 'entity_id': str(uuid.uuid4())},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()['status'] == 'paused', response.json()
+    return role, response.json()['id']
+
+
+def _my_actions(client, as_user, identity, execution_id):
+    """The open approvals of the execution the user is listed: target -> count."""
+    as_user(identity)
+    response = client.get('/api/notifications')
+    assert response.status_code == 200, response.text
+    targets = {}
+    for n in response.json():
+        payload = n.get('action_payload') or {}
+        if (
+            n.get('action_type') == 'workflow_approval'
+            and payload.get('execution_id') == execution_id and not payload.get('handled')
+        ):
+            target = n.get('recipient_role_id') or n.get('recipient')
+            targets[target] = targets.get(target, 0) + 1
+    return targets
+
+
+class TestSharedTargetDecidedByTheUser:
+    """#1552: a role or group target is one shared row. Who decided the step through
+    another target is recorded on it, and the row leaves only that user's list."""
+
+    def test_the_user_who_decided_no_longer_lists_the_role_row(
+        self, client, as_user, db_session,
+    ):
+        role, execution_id = _shared_role_execution(client, as_user, db_session)
+        assert _my_actions(client, as_user, CARL, execution_id) == {
+            'carl@example.com': 1, role.id: 1,
+        }
+
+        # Carl fills his own user target; the role still waits for a member
+        first = _decide(client, as_user, CARL, execution_id)
+        assert first.json()['status'] == 'paused', first.text
+
+        assert _my_actions(client, as_user, CARL, execution_id) == {}
+
+    def test_another_member_of_the_role_still_lists_it(self, client, as_user, db_session):
+        role, execution_id = _shared_role_execution(client, as_user, db_session)
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+
+        assert _my_actions(client, as_user, DORA, execution_id) == {role.id: 1}
+        response = _decide(client, as_user, DORA, execution_id)
+        assert response.json()['status'] == 'succeeded', response.text
+
+    def test_a_loop_back_round_is_listed_again_for_the_user_who_decided(
+        self, client, as_user, db_session,
+    ):
+        """The new round of the same step has rows of its own: Carl's earlier
+        decision doesn't hide them."""
+        role, execution_id = _shared_role_execution(
+            client, as_user, db_session, loop_back=True,
+        )
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+        assert _my_actions(client, as_user, CARL, execution_id) == {}
+
+        # Dora rejects for the role: the step fails and asks the same step again
+        again = _decide(client, as_user, DORA, execution_id, approved=False, reason='Redo')
+        assert again.json()['status'] == 'paused', again.text
+
+        assert _my_actions(client, as_user, CARL, execution_id) == {
+            'carl@example.com': 1, role.id: 1,
+        }
+        assert _my_actions(client, as_user, DORA, execution_id) == {role.id: 1}
+
+    def test_a_group_target_leaves_the_list_of_the_member_who_decided(
+        self, client, as_user, db_session,
+    ):
+        """The group's row (``recipient`` = the group name) is shared like a role's."""
+        execution_id = _paused_execution(client, as_user, 'carl@example.com,team-x')
+        assert _my_actions(client, as_user, CARL, execution_id) == {
+            'carl@example.com': 1, 'team-x': 1,
+        }
+
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+
+        assert _my_actions(client, as_user, CARL, execution_id) == {}
+        assert _my_actions(client, as_user, DORA, execution_id) == {'team-x': 1}
+
+    def test_a_member_of_two_roles_who_decided_through_one_no_longer_lists_the_other(
+        self, client, as_user, db_session,
+    ):
+        first_role = _role_with_users(db_session, ['carl@example.com'])
+        second_role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        execution_id = _paused_execution(
+            client, as_user, f'{first_role.id},{second_role.id}',
+        )
+        assert _my_actions(client, as_user, CARL, execution_id) == {
+            first_role.id: 1, second_role.id: 1,
+        }
+
+        # Carl fills the first role; the second still waits for a member
+        first = _decide(client, as_user, CARL, execution_id)
+        assert first.json()['status'] == 'paused', first.text
+
+        assert _my_actions(client, as_user, CARL, execution_id) == {}
+        assert _my_actions(client, as_user, DORA, execution_id) == {second_role.id: 1}
+        assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'succeeded'
+
+
+def _bell(client, as_user, identity, execution_id):
+    """Every approval row of the execution in the user's bell, handled or not: target -> count."""
+    as_user(identity)
+    response = client.get('/api/notifications')
+    assert response.status_code == 200, response.text
+    targets = {}
+    for n in response.json():
+        payload = n.get('action_payload') or {}
+        if (
+            n.get('action_type') == 'workflow_approval'
+            and payload.get('execution_id') == execution_id
+        ):
+            target = n.get('recipient_role_id') or n.get('recipient')
+            targets[target] = targets.get(target, 0) + 1
+    return targets
+
+
+class TestSharedTargetDecidedInReverseOrder:
+    """#1552 review: another member fills a shared role B first, then Carl decides through A.
+    B was already handled, so it must still record Carl, or Carl keeps it in the bell."""
+
+    def test_a_shared_row_another_member_filled_first_leaves_the_bell_of_the_decider(
+        self, client, as_user, db_session,
+    ):
+        first_role = _role_with_users(db_session, ['carl@example.com'])
+        second_role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        execution_id = _paused_execution(
+            client, as_user, f'eve@example.com,{first_role.id},{second_role.id}',
+        )
+        assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'paused'
+
+        # Carl fills the first role; Eve still has to decide
+        first = _decide(client, as_user, CARL, execution_id)
+        assert first.json()['status'] == 'paused', first.text
+
+        assert _bell(client, as_user, CARL, execution_id) == {first_role.id: 1}
+        assert _bell(client, as_user, DORA, execution_id) == {second_role.id: 1}
+
+    def test_also_when_the_deciders_decision_ends_the_step(self, client, as_user, db_session):
+        first_role = _role_with_users(db_session, ['carl@example.com'])
+        second_role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        execution_id = _paused_execution(
+            client, as_user, f'{first_role.id},{second_role.id}',
+        )
+        assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'paused'
+
+        last = _decide(client, as_user, CARL, execution_id)
+        assert last.json()['status'] == 'succeeded', last.text
+
+        assert _bell(client, as_user, CARL, execution_id) == {first_role.id: 1}
+        assert _bell(client, as_user, DORA, execution_id) == {second_role.id: 1}
+
+    def test_a_decision_in_a_loop_back_round_leaves_the_earlier_round_alone(
+        self, client, as_user, db_session,
+    ):
+        """Dora's row of round 1 is not Carl's round: deciding round 2 doesn't record him on it."""
+        role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        as_user(ADMIN)
+        response = client.post('/api/workflows', json={
+            'name': f'Loop back {uuid.uuid4().hex[:8]}',
+            'trigger': {'type': 'manual', 'entity_types': ['data_product']},
+            'is_active': True,
+            'steps': [
+                {
+                    'step_id': 'approve', 'name': 'Approve', 'step_type': 'approval',
+                    'config': {'approvers': f'eve@example.com,{role.id}', 'require_all': True},
+                    'on_pass': 'ok', 'on_fail': 'approve',
+                },
+                {'step_id': 'ok', 'name': 'Approved', 'step_type': 'pass'},
+                {'step_id': 'no', 'name': 'Rejected', 'step_type': 'fail'},
+            ],
+        })
+        assert response.status_code == 200, response.text
+        response = client.post(
+            f"/api/workflows/{response.json()['id']}/execute",
+            params={'entity_type': 'data_product', 'entity_id': str(uuid.uuid4())},
+        )
+        execution_id = response.json()['id']
+        # Round 1: Dora fills the role, Eve rejects: the same step asks again
+        assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'paused'
+        again = _decide(client, as_user, EVE, execution_id, approved=False, reason='Redo')
+        assert again.json()['status'] == 'paused', again.text
+
+        # Round 2: Carl fills the role, Eve still has to decide
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+
+        # Round 1's role row (Dora's) and round 2's (Carl's own decision)
+        assert _bell(client, as_user, CARL, execution_id) == {role.id: 2}
+
+    @staticmethod
+    def _looping_execution(client, as_user, approvers):
+        """A require_all step whose rejection asks the same step again."""
+        as_user(ADMIN)
+        response = client.post('/api/workflows', json={
+            'name': f'Loop back {uuid.uuid4().hex[:8]}',
+            'trigger': {'type': 'manual', 'entity_types': ['data_product']},
+            'is_active': True,
+            'steps': [
+                {
+                    'step_id': 'approve', 'name': 'Approve', 'step_type': 'approval',
+                    'config': {'approvers': approvers, 'require_all': True},
+                    'on_pass': 'ok', 'on_fail': 'approve',
+                },
+                {'step_id': 'ok', 'name': 'Approved', 'step_type': 'pass'},
+            ],
+        })
+        assert response.status_code == 200, response.text
+        response = client.post(
+            f"/api/workflows/{response.json()['id']}/execute",
+            params={'entity_type': 'data_product', 'entity_id': str(uuid.uuid4())},
+        )
+        return response.json()['id']
+
+    @pytest.mark.parametrize('dora_fills_round_2', [False, True])
+    def test_a_decision_through_another_target_leaves_the_earlier_round_alone(
+        self, client, as_user, db_session, dora_fills_round_2,
+    ):
+        """Isaac review of #1553: Carl decides round 2 through his own user target, so only
+        the round's shared rows leave his bell; round 1's role row, which Dora filled, stays.
+        With ``dora_fills_round_2`` the role row of round 2 is handled too, at another time."""
+        role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        execution_id = self._looping_execution(
+            client, as_user, f'carl@example.com,eve@example.com,{role.id}',
+        )
+        # Round 1: Dora fills the role, Eve rejects: the same step asks again
+        assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'paused'
+        again = _decide(client, as_user, EVE, execution_id, approved=False, reason='Redo')
+        assert again.json()['status'] == 'paused', again.text
+        if dora_fills_round_2:
+            assert _decide(client, as_user, DORA, execution_id).json()['status'] == 'paused'
+
+        # Round 2: Carl approves his own user target, Eve still has to decide
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+
+        assert _bell(client, as_user, CARL, execution_id).get(role.id) == 1
+
+    def test_a_member_who_decided_nothing_is_not_recorded(self, client, as_user, db_session):
+        """Carl's call ends the step on a stored rejection, his role already filled by Dora:
+        he decided nothing, so the role row stays in his bell."""
+        from src.db_models.process_workflows import WorkflowStepExecutionDb
+
+        role = _role_with_users(db_session, ['carl@example.com', 'dora@example.com'])
+        execution_id = _paused_execution(client, as_user, f'ana@example.com,{role.id}')
+        db_session.expire_all()
+        record = db_session.query(WorkflowStepExecutionDb).filter_by(
+            execution_id=execution_id, step_key='approve',
+        ).one()
+        data = json.loads(record.result_data)
+        data['decisions'] = [
+            {'target': 'ana@example.com', 'role_id': None, 'decided_by': 'ana@example.com',
+             'decision': 'rejected', 'at': '2026-11-04T10:00:00', 'reason': 'No'},
+            {'target': role.id, 'role_id': role.id, 'decided_by': 'dora@example.com',
+             'decision': 'approved', 'at': '2026-11-04T10:01:00', 'reason': None},
+        ]
+        record.result_data = json.dumps(data)
+        db_session.commit()
+
+        response = _decide(client, as_user, CARL, execution_id)
+        assert response.json()['status'] == 'failed', response.text
+
+        assert _bell(client, as_user, CARL, execution_id) == {role.id: 1}

@@ -14,11 +14,19 @@ interface ApprovalsQueue {
   products: { id: string; title?: string; status?: string }[];
 }
 
-export default function RequiredActionsSection() {
+interface RequiredActionsSectionProps {
+  /**
+   * Read the contracts/products approval queue. The queue route answers 403 unless the user
+   * reads data contracts or data products; pass `false` to skip the request for them.
+   */
+  fetchQueue?: boolean;
+}
+
+export default function RequiredActionsSection({ fetchQueue = true }: RequiredActionsSectionProps) {
   const { t, i18n } = useTranslation(['home', 'common']);
   const { notifications, isLoading, fetchNotifications, markAsRead } = useNotificationsStore();
   const [approvals, setApprovals] = useState<ApprovalsQueue>({ contracts: [], products: [] });
-  const [loadingApprovals, setLoadingApprovals] = useState<boolean>(true);
+  const [loadingApprovals, setLoadingApprovals] = useState<boolean>(fetchQueue);
   // A flag, translated at render: the fetch runs once, a language switch must still apply
   const [approvalsError, setApprovalsError] = useState<boolean>(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -32,6 +40,7 @@ export default function RequiredActionsSection() {
   }, [fetchNotifications]);
 
   useEffect(() => {
+    if (!fetchQueue) return;
     const fetchApprovals = async () => {
       setLoadingApprovals(true);
       setApprovalsError(false);
@@ -56,16 +65,19 @@ export default function RequiredActionsSection() {
       }
     };
     fetchApprovals();
-  }, []);
+  }, [fetchQueue]);
 
   // Filter role access requests separately
   const roleRequests = notifications.filter(
     n => n.type === 'action_required' && n.action_type === 'handle_role_request'
   );
 
-  // Filter workflow approval items separately so they get inline approve/deny
+  // Filter workflow approval items separately so they get inline approve/deny.
+  // Decided ones (payload `handled`, set by the backend for this user's or another
+  // target member's decision) stay in the bell history only; `read` alone keeps them.
   const workflowApprovalNotifications = notifications.filter(
     n => n.type === 'action_required' && n.action_type === 'workflow_approval'
+      && !n.action_payload?.handled
   );
 
   // Filter other action items (excluding role requests and workflow approvals)

@@ -63,7 +63,6 @@ from src.repositories.tags_repository import (
     tag_namespace_repo, tag_repo, tag_namespace_permission_repo, entity_tag_repo
 )
 
-from src.common.search_registry import SEARCHABLE_ASSET_MANAGERS
 
 # Import connector registry and connectors for pluggable asset support
 from src.connectors import get_registry
@@ -382,6 +381,27 @@ def initialize_database():
         logger.critical(f"An unexpected error occurred during database initialization: {e}", exc_info=True)
         raise RuntimeError("Application cannot start due to database initialization error.") from e
 
+def start_workflow_scheduler(app: FastAPI, settings) -> None:
+    """Start the workflow scheduler (#941) with its settings, unless it is turned off.
+
+    A failure is logged and doesn't stop the startup.
+    """
+    try:
+        if not settings.WORKFLOW_SCHEDULER_ENABLED:
+            return
+        from src.controller.workflow_scheduler import WorkflowScheduler
+
+        app.state.workflow_scheduler = WorkflowScheduler(
+            change_check_seconds=settings.WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS,
+            idle_recheck_seconds=settings.WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS,
+            max_workers=settings.WORKFLOW_SCHEDULER_MAX_WORKERS,
+            drain_seconds=settings.WORKFLOW_SCHEDULER_DRAIN_SECONDS,
+        )
+        app.state.workflow_scheduler.start()
+    except Exception as e:
+        logger.error(f"Failed to start the workflow scheduler: {e}", exc_info=True)
+
+
 def initialize_managers(app: FastAPI):
     """Initializes and stores manager instances directly in app.state."""
     logger.info("Initializing manager singletons...")
@@ -560,8 +580,7 @@ def initialize_managers(app: FastAPI):
                 # entity_assoc_repo will be used when integrating with other features
             )
             app.state.tags_manager = tags_manager
-            SEARCHABLE_ASSET_MANAGERS.append(tags_manager) # Register for search
-            logger.info("TagsManager initialized and registered for search.")
+            logger.info("TagsManager initialized.")
 
             # Now instantiate DataProductsManager with TagsManager dependency
             app.state.data_products_manager = DataProductsManager(
@@ -589,15 +608,11 @@ def initialize_managers(app: FastAPI):
             logger.error(f"Error initializing TagsManager: {e}", exc_info=True)
             # Decide if this is a fatal error
 
-        # --- Instantiate MetadataManager (if it exists and needs to be in app.state) --- 
-        # This was removed in previous steps as tag CRUD moved to TagsManager
-        # If MetadataManager still has other responsibilities, initialize it here.
-        # For now, assuming it's not strictly needed for basic app startup if its main role was tags.
-        # if hasattr(app.state, 'ws_client'): # Example: if it needs ws_client
-        #     metadata_manager = MetadataManager(ws_client=app.state.ws_client)
-        #     app.state.metadata_manager = metadata_manager
-        #     SEARCHABLE_ASSET_MANAGERS.append(metadata_manager) # If it's searchable
-        #     logger.info("MetadataManager initialized.")
+        # --- MetadataManager (notes, links, documents) ---
+        # On app.state before the SearchManager is built: imported Markdown
+        # documents are searchable.
+        from src.controller.metadata_manager import MetadataManager
+        app.state.metadata_manager = MetadataManager()
 
         # --- OntologySchemaManager ---
         try:
@@ -703,6 +718,9 @@ def initialize_managers(app: FastAPI):
             logger.error(f"Failed to start background job polling: {e}", exc_info=True)
             # Don't fail startup if polling fails to start
 
+        # --- Start the workflow scheduler (#941) ---
+        start_workflow_scheduler(app, settings)
+
         # --- Load demo data if conditions are met ---
         # Only load demo data when:
         # 1. APP_DEMO_MODE is enabled
@@ -770,12 +788,18 @@ async def startup_event_handler(app: FastAPI):
         try:
             from src.repositories.certification_levels_repository import certification_levels_repo
             from src.repositories.maturity_repository import maturity_repo
+            from src.repositories.lifecycle_stage_groups_repository import (
+                lifecycle_stage_groups_repo,
+            )
 
             session_factory = get_session_factory()
             with session_factory() as db_session:
                 certification_levels_repo.seed_defaults(db_session)
                 maturity_repo.seed_defaults(db_session)
+                lifecycle_stage_groups_repo.seed_defaults(db_session)
                 db_session.commit()
+                from src.controller.lifecycle_service import lifecycle_service
+                lifecycle_service.warm(db_session)
             logger.info("Reference data seed step complete.")
         except Exception as e:
             logger.warning(f"Failed seeding reference data: {e}", exc_info=True)
@@ -809,6 +833,10 @@ async def startup_event_handler(app: FastAPI):
                     continue
 
             app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
+            # As app.py does: code without app.state (e.g. a MetadataManager
+            # owned by another manager) finds the index here.
+            from src.common.app_state import set_app_state_manager
+            set_app_state_manager('search_manager', app.state.search_manager)
             app.state.search_manager.build_index()
             for mgr in searchable_managers_instances:
                 mgr.set_search_manager(app.state.search_manager)

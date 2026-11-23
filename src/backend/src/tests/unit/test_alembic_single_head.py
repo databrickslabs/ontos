@@ -33,3 +33,20 @@ def test_the_migration_history_has_a_single_head():
         "`alembic merge -m 'merge heads' <head_a> <head_b>` and the `alembic-branch` "
         "label (see .cursor/rules/11-database-migrations.mdc)."
     )
+
+
+# alembic_version.version_num is VARCHAR(32): a longer revision id fails the stamp at startup
+# on Postgres (StringDataRightTruncation), while SQLite does not enforce the length
+MAX_REVISION_ID_LENGTH = 32
+
+
+def test_every_revision_id_fits_the_alembic_version_column():
+    too_long = sorted(
+        script.revision for script in _script_directory().walk_revisions()
+        if len(script.revision) > MAX_REVISION_ID_LENGTH
+    )
+    assert not too_long, (
+        f"Revision ids longer than {MAX_REVISION_ID_LENGTH} characters: "
+        f"{', '.join(too_long)}. alembic_version.version_num is VARCHAR(32), so stamping "
+        "them fails on Postgres; shorten the slug (`<letter><number>_<short_slug>`)."
+    )

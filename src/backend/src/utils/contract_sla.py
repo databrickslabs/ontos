@@ -5,9 +5,10 @@ response time, data freshness). They have no columns of their own: each one is
 an SLA property named after its API field, so it also goes out with the ODCS
 export and comes back on import. Other SLA properties are left alone.
 """
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from src.db_models.data_contracts import DataContractSlaPropertyDb
+from src.utils.odcs_values import typed_value
 
 # API field (also the SLA property name) -> (unit, number type)
 LEGACY_SLA_FIELDS: Dict[str, tuple] = {
@@ -41,29 +42,40 @@ def legacy_sla_from_rows(rows: Iterable[DataContractSlaPropertyDb]) -> Optional[
         spec = LEGACY_SLA_FIELDS.get(row.property)
         if spec is None or row.value is None:
             continue
-        value = _number(row.value, spec[1])
+        # Text that reads as a number is stored JSON-quoted ('"99.9"')
+        value = _number(typed_value(row.value), spec[1])
         if value is not None:
             sla[row.property] = value
     return sla or None
 
 
-def apply_legacy_sla(db, contract_id: str, sla: Optional[Dict[str, Any]]) -> None:
+def apply_legacy_sla(db, contract_id: str, sla: Optional[Dict[str, Any]],
+                     sla_properties: Optional[List[Any]] = None) -> None:
     """Store the SLA form's values: each of the four fields replaces its SLA
-    property, and a field left empty removes it."""
+    property, and a field left empty removes it. ``sla_properties``: the ODCS
+    SLA properties the same request sent (they replaced them all): only a field
+    with a value whose property they don't have is added; the sent ones keep
+    their id, element, driver and unit."""
+    only_set = sla_properties is not None
+    sent = {p.get('property') for p in sla_properties or [] if isinstance(p, dict)}
     values: Dict[str, Any] = {}
     for key, value in (sla or {}).items():
         field = _SNAKE_TO_FIELD.get(key, key)
         if field in LEGACY_SLA_FIELDS:
             values[field] = value
+    fields = [f for f in LEGACY_SLA_FIELDS
+              if not only_set or (values.get(f) is not None and f not in sent)]
+    if not fields:
+        return
 
     db.query(DataContractSlaPropertyDb).filter(
         DataContractSlaPropertyDb.contract_id == contract_id,
-        DataContractSlaPropertyDb.property.in_(list(LEGACY_SLA_FIELDS)),
+        DataContractSlaPropertyDb.property.in_(fields),
     ).delete(synchronize_session=False)
 
     for field, (unit, _kind) in LEGACY_SLA_FIELDS.items():
         value = values.get(field)
-        if value is None:
+        if value is None or field not in fields:
             continue
         db.add(DataContractSlaPropertyDb(
             contract_id=contract_id, property=field, value=str(value), unit=unit,

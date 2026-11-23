@@ -1,7 +1,9 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import json
+import threading
+import re
 import uuid
 import yaml
 
@@ -11,17 +13,24 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy import func
 
+from src.common.timestamps import utc_now
 from src.common.instance_identity import (
     INSTANCE_ID_SETTING_KEY,
     INSTANCE_NAME_SETTING_KEY,
     validate_instance_id,
     validate_instance_name,
 )
-from src.common.config import Settings
+from types import SimpleNamespace
+
+from src.common.config import (
+    Settings, canonical_volume_value, is_local_volume_path, resolve_volume,
+)
 from src.common.sanitization import (
     APP_SHORT_NAME_MAX_LEN,
+    APP_TAGLINE_MAX_LEN,
     sanitize_app_display_name,
     validate_branding_url,
+    validate_hex_color,
 )
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -31,6 +40,7 @@ from src.models.settings import JobCluster, AppRole, AppRoleCreate, AppRoleUpdat
 from src.models.workflow_installations import WorkflowInstallation
 from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES, ACCESS_LEVEL_ORDER
 from src.common.logging import get_logger
+from src.common.thread_session import ThreadBoundDb, thread_session
 from src.common.api_errors import CodedValueError
 from src.repositories.settings_repository import app_role_repo, role_hierarchy_repo
 from src.repositories.workflow_installations_repository import workflow_installation_repo
@@ -175,12 +185,22 @@ DEFAULT_ROLE_PERMISSIONS = {
     },
 }
 
-class SettingsManager:
+class SettingsManager(ThreadBoundDb):
     def __init__(self, db: Session, settings: Settings, workspace_client: Optional[WorkspaceClient] = None):
         """Inject database session, settings, and optional workspace client."""
         self._db = db
         self._settings = settings # Store settings
         self._client = workspace_client
+        # Environment default of "Powered by", before any stored override is applied
+        self._env_show_powered_by = getattr(settings, 'UI_SHOW_POWERED_BY', True)
+        # DATABRICKS_VOLUME as loaded at startup (environment or .env), before any stored
+        # override is applied: what clearing the override returns to
+        # (in its canonical form, so an old '//Volumes/c/s/v' resolves as a volume)
+        self._startup_volume: Optional[str] = canonical_volume_value(
+            getattr(settings, 'DATABRICKS_VOLUME', None))
+        if self._startup_volume and self._startup_volume != getattr(
+                settings, 'DATABRICKS_VOLUME', None):
+            self._settings.DATABRICKS_VOLUME = self._startup_volume
         # Available jobs derive from workflows on disk
         self._available_jobs: List[str] = []
         self._installations: Dict[str, WorkflowInstallation] = {}
@@ -312,8 +332,13 @@ class SettingsManager:
                 logger.debug(f"Loaded DATABRICKS_SCHEMA from database: {all_settings['DATABRICKS_SCHEMA']}")
             
             if 'DATABRICKS_VOLUME' in all_settings and all_settings['DATABRICKS_VOLUME']:
-                self._settings.DATABRICKS_VOLUME = all_settings['DATABRICKS_VOLUME']
-                logger.debug(f"Loaded DATABRICKS_VOLUME from database: {all_settings['DATABRICKS_VOLUME']}")
+                # Stored values from before the canonical form (e.g. '//Volumes/c/s/v') are
+                # normalised on load, as `_validate_volume_settings` skips unchanged values
+                self._settings.DATABRICKS_VOLUME = (
+                    canonical_volume_value(all_settings['DATABRICKS_VOLUME'])
+                    or all_settings['DATABRICKS_VOLUME'])
+                logger.debug(
+                    f"Loaded DATABRICKS_VOLUME from database: {self._settings.DATABRICKS_VOLUME}")
             
             # Audit log directory
             if 'APP_AUDIT_LOG_DIR' in all_settings and all_settings['APP_AUDIT_LOG_DIR']:
@@ -346,6 +371,18 @@ class SettingsManager:
             if 'ALLOW_JOB_ENABLEMENT_REQUESTS' in all_settings and all_settings['ALLOW_JOB_ENABLEMENT_REQUESTS'] is not None:
                 self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS = all_settings['ALLOW_JOB_ENABLEMENT_REQUESTS'].lower() == 'true'
                 logger.debug(f"Loaded ALLOW_JOB_ENABLEMENT_REQUESTS from database: {self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS}")
+
+            # Write asset descriptions to Unity Catalog
+            stored = all_settings.get('UC_DESCRIPTION_WRITEBACK_ENABLED')
+            if stored is not None:
+                self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED = stored.lower() == 'true'
+            stored = all_settings.get('UC_DESCRIPTION_IMPORT_WRITE_LIMIT')
+            if stored is not None:
+                try:
+                    self._settings.UC_DESCRIPTION_IMPORT_WRITE_LIMIT = int(stored)
+                except (ValueError, TypeError):
+                    logger.warning("Invalid UC_DESCRIPTION_IMPORT_WRITE_LIMIT in database: %s",
+                                   stored)
 
             # Delivery mode settings
             if 'DELIVERY_MODE_DIRECT' in all_settings and all_settings['DELIVERY_MODE_DIRECT'] is not None:
@@ -387,8 +424,11 @@ class SettingsManager:
                 logger.debug(f"Loaded UI_I18N_ENABLED from database: {self._settings.UI_I18N_ENABLED}")
             
             if 'UI_CUSTOM_LOGO_URL' in all_settings and all_settings['UI_CUSTOM_LOGO_URL'] is not None:
-                self._settings.UI_CUSTOM_LOGO_URL = all_settings['UI_CUSTOM_LOGO_URL']
-                logger.debug("Loaded UI_CUSTOM_LOGO_URL from database")
+                if self._usable_stored_image(
+                    'UI_CUSTOM_LOGO_URL', all_settings['UI_CUSTOM_LOGO_URL']
+                ):
+                    self._settings.UI_CUSTOM_LOGO_URL = all_settings['UI_CUSTOM_LOGO_URL']
+                    logger.debug("Loaded UI_CUSTOM_LOGO_URL from database")
             
             if 'UI_ABOUT_CONTENT' in all_settings and all_settings['UI_ABOUT_CONTENT'] is not None:
                 self._settings.UI_ABOUT_CONTENT = all_settings['UI_ABOUT_CONTENT']
@@ -408,8 +448,25 @@ class SettingsManager:
                 logger.debug("Loaded UI_APP_SHORT_NAME from database")
 
             if 'UI_FAVICON_URL' in all_settings and all_settings['UI_FAVICON_URL'] is not None:
-                self._settings.UI_FAVICON_URL = all_settings['UI_FAVICON_URL']
-                logger.debug("Loaded UI_FAVICON_URL from database")
+                if self._usable_stored_image('UI_FAVICON_URL', all_settings['UI_FAVICON_URL']):
+                    self._settings.UI_FAVICON_URL = all_settings['UI_FAVICON_URL']
+                    logger.debug("Loaded UI_FAVICON_URL from database")
+
+            for key in self._BRANDING_EXTRA_KEYS:
+                if all_settings.get(key) is None:
+                    continue
+                if key == 'UI_CUSTOM_LOGO_DARK_URL' and not self._usable_stored_image(
+                    key, all_settings[key]
+                ):
+                    continue
+                setattr(self._settings, key, all_settings[key])
+                logger.debug("Loaded %s from database", key)
+
+            if all_settings.get('UI_SHOW_POWERED_BY') is not None:
+                self._settings.UI_SHOW_POWERED_BY = (
+                    all_settings['UI_SHOW_POWERED_BY'].lower() == 'true'
+                )
+                logger.debug("Loaded UI_SHOW_POWERED_BY from database")
 
             # Connector configurations are now managed via the `connections`
             # table and loaded by ConnectionsManager at startup.
@@ -1320,6 +1377,11 @@ class SettingsManager:
             return self._jobs.list_available_workflows()
         return []
 
+    @property
+    def uc_description_writeback_enabled(self) -> bool:
+        """Whether saves write asset descriptions to Unity Catalog (the admin setting)."""
+        return bool(self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED)
+
     def get_settings(self) -> dict:
         """Get current settings"""
         # Refresh available jobs from filesystem to reflect changes
@@ -1364,6 +1426,9 @@ class SettingsManager:
             'tag_display_format': tag_display_format,
             # Background job enablement requests
             'allow_job_enablement_requests': self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS,
+            # Write asset descriptions to Unity Catalog (as the user)
+            'uc_description_writeback_enabled': self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED,
+            'uc_description_import_write_limit': self._settings.UC_DESCRIPTION_IMPORT_WRITE_LIMIT,
             # Delivery mode settings
             'delivery_mode_direct': self._settings.DELIVERY_MODE_DIRECT,
             'delivery_mode_indirect': self._settings.DELIVERY_MODE_INDIRECT,
@@ -1382,7 +1447,77 @@ class SettingsManager:
             'ui_app_display_name': self._settings.UI_APP_DISPLAY_NAME,
             'ui_app_short_name': self._settings.UI_APP_SHORT_NAME,
             'ui_favicon_url': self._settings.UI_FAVICON_URL,
+            **{key.lower(): getattr(self._settings, key) for key in self._BRANDING_EXTRA_KEYS},
+            'ui_show_powered_by': self._settings.UI_SHOW_POWERED_BY,
         }
+
+    @staticmethod
+    def _usable_stored_image(key: str, value: str) -> bool:
+        """False (with a warning) for a stored branding image the checks now refuse.
+
+        A value saved before the checks was loaded as it was, and the Settings form sends
+        it back on every save, so one the checks refuse would block every UI save.
+        """
+        try:
+            validate_branding_url(value, field=key.lower())
+        except ValueError:
+            logger.warning(
+                "Ignoring the stored %s: it is not an http(s) URL or a /branding/ or "
+                "/static/ path; set it again in Settings > UI", key,
+            )
+            return False
+        return True
+
+    # Branding keys stored like the other UI_* settings (env default, DB override).
+    _BRANDING_EXTRA_KEYS = (
+        'UI_APP_TAGLINE', 'UI_CUSTOM_LOGO_DARK_URL',
+        'UI_THEME_PRIMARY', 'UI_THEME_PRIMARY_DARK',
+        'UI_THEME_ACCENT', 'UI_THEME_ACCENT_DARK',
+    )
+
+    @staticmethod
+    def _clean_branding_value(key: str, value: Any) -> Optional[str]:
+        """Validate one of ``_BRANDING_EXTRA_KEYS``; raises ``ValueError`` (-> 400)."""
+        field = key.lower()
+        if key == 'UI_APP_TAGLINE':
+            return sanitize_app_display_name(value, max_len=APP_TAGLINE_MAX_LEN, field=field)
+        if key == 'UI_CUSTOM_LOGO_DARK_URL':
+            return validate_branding_url(value or None, field=field)
+        return validate_hex_color(value or None, field=field)
+
+    def _validate_ui_settings(self, settings: dict) -> dict:
+        """Clean every UI customization value present in ``settings`` (nothing is written).
+
+        Raises ``ValueError`` (-> 400) on the first invalid one.
+        """
+        cleaned: dict = {}
+        if 'ui_custom_logo_url' in settings:
+            cleaned['ui_custom_logo_url'] = validate_branding_url(
+                settings.get('ui_custom_logo_url') or None, field='custom logo URL'
+            )
+        if 'ui_app_display_name' in settings:
+            cleaned['ui_app_display_name'] = sanitize_app_display_name(
+                settings.get('ui_app_display_name'), field='application display name'
+            )
+        if 'ui_app_short_name' in settings:
+            cleaned['ui_app_short_name'] = sanitize_app_display_name(
+                settings.get('ui_app_short_name'),
+                max_len=APP_SHORT_NAME_MAX_LEN,
+                field='application short name',
+            )
+        if 'ui_favicon_url' in settings:
+            cleaned['ui_favicon_url'] = validate_branding_url(
+                settings.get('ui_favicon_url') or None, field='favicon URL'
+            )
+        for key in self._BRANDING_EXTRA_KEYS:
+            if key.lower() in settings:
+                cleaned[key.lower()] = self._clean_branding_value(key, settings.get(key.lower()))
+        if 'ui_show_powered_by' in settings:
+            value = settings.get('ui_show_powered_by')
+            if value is not None and not isinstance(value, bool):
+                raise ValueError("ui_show_powered_by must be true, false or null")
+            cleaned['ui_show_powered_by'] = value
+        return cleaned
 
     # Settings the Git service reads: its remote and its export location.
     _GIT_SETTING_ATTRS = (
@@ -1535,8 +1670,132 @@ class SettingsManager:
             error_summary = f"Failed to update {len(errors)} workflow(s): " + "; ".join(errors)
             raise RuntimeError(error_summary)
 
+    def _env_volume(self) -> Optional[str]:
+        """The volume the app started with (environment or .env): what applies once the
+        override is cleared."""
+        return self._startup_volume
+
+    def _validate_volume_settings(self, settings: dict) -> None:
+        """Refuse a volume, catalog or schema that can't name a Unity Catalog volume.
+
+        Runs ``resolve_volume`` (a local directory passes as is) on the values the save
+        would leave in effect and raises its ``VolumeInvalidError`` (a coded
+        ``ValueError``, answered as a 400 with the code and params). Nothing is written
+        yet when it raises.
+
+        Only the form of the value is checked, with no workspace call, so a save also
+        works when the workspace can't be reached. A volume that doesn't exist is only
+        found when it is used. The check runs only when the volume, catalog or schema
+        changes: the General form sends all three on every save, and a value stored
+        before this check must not block saving other settings, a catalog or a schema
+        included (a stored volume name does use them, so it is checked again).
+        """
+        keys = ('databricks_catalog', 'databricks_schema', 'databricks_volume')
+        if not any(key in settings for key in keys):
+            return
+        # An empty catalog or schema keeps the one in effect, as the save below does;
+        # an empty volume clears the override and the environment value applies.
+        current = {key: getattr(self._settings, key.upper()) for key in keys}
+        candidate = {key: (settings.get(key) or None) if key in settings else None for key in keys}
+        candidate['databricks_volume'] = canonical_volume_value(candidate['databricks_volume'])
+        effective = {key: candidate[key] or current[key] for key in keys}
+        if 'databricks_volume' in settings and not candidate['databricks_volume']:
+            effective['databricks_volume'] = self._env_volume()
+        if effective == current:
+            return
+        volume = effective['databricks_volume']
+        # A volume this save leaves as it is and that doesn't use the catalog and schema
+        # (a path or a three-part name) can't be what makes the save fail
+        if volume == current['databricks_volume'] and re.search(r'[\s./]', volume or ''):
+            return
+        # A local directory (development) is exported to as it is, as resolve_git_paths
+        # does; a "/Volumes" path in any casing is not one and is checked below.
+        if is_local_volume_path(volume):
+            return
+        resolve_volume(SimpleNamespace(**{key.upper(): value for key, value in effective.items()}))
+
+    # Warnings of the installed compliance job sync, sent with the saved settings
+    COMPLIANCE_JOB_NOT_UPDATED = 'compliance_job_not_updated'
+    COMPLIANCE_JOB_SHAPE_UNEXPECTED = 'compliance_job_shape_unexpected'
+
+    def _refresh_llm_job_parameters(self) -> Optional[Dict[str, Any]]:
+        """Give the installed compliance job the new LLM settings; a warning if it couldn't.
+
+        Scheduled runs read them from the job's defaults, where they are written
+        when the job is installed or updated (LLM_CHECK rules). A job installed
+        before the job took LLM settings also gets their code and task arguments.
+        The settings are saved either way; the warning says what to do.
+        """
+        if not getattr(self, '_jobs', None):
+            return None
+        from src.controller.jobs_manager import JOB_SHAPE_UNEXPECTED, LLM_TASK_ARGUMENTS
+
+        try:
+            outcome = self._jobs.sync_installed_workflow(
+                'compliance_checks', required_arguments=LLM_TASK_ARGUMENTS,
+            )
+        except Exception as e:
+            logger.warning(
+                "Could not update the LLM settings of the installed compliance job: %s", e,
+            )
+            return {
+                'code': self.COMPLIANCE_JOB_NOT_UPDATED, 'params': {},
+                'message': "The Compliance Checks job could not be updated with the LLM "
+                           "settings (the app may lack permission on the job). Scheduled "
+                           "LLM_CHECK rules use the old settings until the job is reinstalled.",
+            }
+        if outcome == JOB_SHAPE_UNEXPECTED:
+            return {
+                'code': self.COMPLIANCE_JOB_SHAPE_UNEXPECTED, 'params': {},
+                'message': "The Compliance Checks job was changed in Databricks, so only its "
+                           "parameters were updated. If scheduled LLM_CHECK rules fail with "
+                           "llm_check_disabled, reinstall the job.",
+            }
+        return None
+
+    def _llm_job_values(self) -> Tuple[Any, Any]:
+        """The LLM settings the installed compliance job gets as parameters."""
+        return (
+            getattr(self._settings, 'LLM_ENABLED', None),
+            getattr(self._settings, 'LLM_ENDPOINT', None),
+        )
+
     def update_settings(self, settings: dict) -> Settings:
         """Update settings"""
+        return self.update_settings_with_warnings(settings)[0]
+
+    def update_settings_with_warnings(
+        self, settings: dict,
+    ) -> Tuple[Settings, List[Dict[str, Any]]]:
+        """Update settings; also what didn't apply, as ``{code, params, message}`` warnings.
+
+        The warnings are returned, not kept on this shared instance, so
+        concurrent saves don't see each other's.
+        """
+        warnings: List[Dict[str, Any]] = []
+        return self._update_settings(settings, warnings), warnings
+
+    # One settings save at a time: a save changes this instance and the installed jobs
+    _save_lock = threading.Lock()
+
+    def update_settings_off_loop(
+        self, settings: dict,
+    ) -> Tuple[Settings, List[Dict[str, Any]]]:
+        """``update_settings_with_warnings`` for a worker thread.
+
+        The save gets its own DB session (this manager's and the jobs manager's
+        ``_db`` on this thread), so it never shares the managers' Session with
+        handlers on the event loop; saves run one at a time.
+        """
+        from src.common.database import get_session_factory
+
+        with self._save_lock, thread_session(get_session_factory()):
+            return self.update_settings_with_warnings(settings)
+
+    def _update_settings(self, settings: dict, warnings: List[Dict[str, Any]]) -> Settings:
+        # Validate every UI customization value first, so a 400 leaves nothing changed.
+        ui = self._validate_ui_settings(settings)
+        self._validate_volume_settings(settings)
         git_values_before = self._git_setting_values()
         # Persist configured cluster ID string; do not scan clusters
         cluster_in_payload = 'job_cluster_id' in settings
@@ -1622,9 +1881,10 @@ class SettingsManager:
             logger.info(f"Updated DATABRICKS_SCHEMA to: {value}")
         
         if 'databricks_volume' in settings:
-            value = settings.get('databricks_volume') or None
+            value = canonical_volume_value(settings.get('databricks_volume'))
             app_settings_repo.set(self._db, 'DATABRICKS_VOLUME', value)
-            self._settings.DATABRICKS_VOLUME = value or self._settings.DATABRICKS_VOLUME
+            # Clearing the override leaves what a restart would load: the environment value.
+            self._settings.DATABRICKS_VOLUME = value or self._env_volume()
             logger.info(f"Updated DATABRICKS_VOLUME to: {value}")
         
         # Handle audit log directory
@@ -1635,6 +1895,8 @@ class SettingsManager:
             logger.info(f"Updated APP_AUDIT_LOG_DIR to: {value}")
         
         # Handle LLM settings
+        # The General form always sends both: the installed job is synced only on a change
+        llm_values_before = self._llm_job_values()
         if 'llm_enabled' in settings:
             value = settings.get('llm_enabled')
             # Convert to string for storage, then back to bool
@@ -1647,6 +1909,11 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'LLM_ENDPOINT', value)
             self._settings.LLM_ENDPOINT = value
             logger.info(f"Updated LLM_ENDPOINT to: {value}")
+
+        if self._llm_job_values() != llm_values_before:
+            warning = self._refresh_llm_job_parameters()
+            if warning:
+                warnings.append(warning)
         
         if 'llm_system_prompt' in settings:
             value = settings.get('llm_system_prompt') or None
@@ -1676,6 +1943,28 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'ALLOW_JOB_ENABLEMENT_REQUESTS', str(value).lower() if value is not None else None)
             self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS = bool(value) if value is not None else self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS
             logger.info(f"Updated ALLOW_JOB_ENABLEMENT_REQUESTS to: {value}")
+
+        if 'uc_description_writeback_enabled' in settings:
+            raw = settings.get('uc_description_writeback_enabled')
+            if not isinstance(raw, bool):
+                raise ValueError("uc_description_writeback_enabled must be true or false")
+            value = raw
+            app_settings_repo.set(self._db, 'UC_DESCRIPTION_WRITEBACK_ENABLED', str(value).lower())
+            self._settings.UC_DESCRIPTION_WRITEBACK_ENABLED = value
+            logger.info("Updated UC_DESCRIPTION_WRITEBACK_ENABLED to: %s", value)
+
+        # Bulk import: most rows tried in Unity Catalog per import (1..10000), written or not
+        if 'uc_description_import_write_limit' in settings:
+            try:
+                int_val = int(settings.get('uc_description_import_write_limit'))
+            except (ValueError, TypeError):
+                raise ValueError(
+                    "uc_description_import_write_limit must be an integer between 1 and 10000")
+            if not (1 <= int_val <= 10000):
+                raise ValueError("uc_description_import_write_limit must be between 1 and 10000")
+            app_settings_repo.set(self._db, 'UC_DESCRIPTION_IMPORT_WRITE_LIMIT', str(int_val))
+            self._settings.UC_DESCRIPTION_IMPORT_WRITE_LIMIT = int_val
+            logger.info("Updated UC_DESCRIPTION_IMPORT_WRITE_LIMIT to: %s", int_val)
 
         # Handle delivery mode settings
         if 'delivery_mode_direct' in settings:
@@ -1743,9 +2032,7 @@ class SettingsManager:
             logger.info(f"Updated UI_I18N_ENABLED to: {value}")
         
         if 'ui_custom_logo_url' in settings:
-            value = validate_branding_url(
-                settings.get('ui_custom_logo_url') or None, field='custom logo URL'
-            )
+            value = ui['ui_custom_logo_url']
             app_settings_repo.set(self._db, 'UI_CUSTOM_LOGO_URL', value)
             self._settings.UI_CUSTOM_LOGO_URL = value
             logger.info(f"Updated UI_CUSTOM_LOGO_URL")
@@ -1764,30 +2051,40 @@ class SettingsManager:
 
         # Branding (issue #240)
         if 'ui_app_display_name' in settings:
-            value = sanitize_app_display_name(
-                settings.get('ui_app_display_name'), field='application display name'
-            )
+            value = ui['ui_app_display_name']
             app_settings_repo.set(self._db, 'UI_APP_DISPLAY_NAME', value)
             self._settings.UI_APP_DISPLAY_NAME = value
             logger.info(f"Updated UI_APP_DISPLAY_NAME")
 
         if 'ui_app_short_name' in settings:
-            value = sanitize_app_display_name(
-                settings.get('ui_app_short_name'),
-                max_len=APP_SHORT_NAME_MAX_LEN,
-                field='application short name',
-            )
+            value = ui['ui_app_short_name']
             app_settings_repo.set(self._db, 'UI_APP_SHORT_NAME', value)
             self._settings.UI_APP_SHORT_NAME = value
             logger.info(f"Updated UI_APP_SHORT_NAME")
 
         if 'ui_favicon_url' in settings:
-            value = validate_branding_url(
-                settings.get('ui_favicon_url') or None, field='favicon URL'
-            )
+            value = ui['ui_favicon_url']
             app_settings_repo.set(self._db, 'UI_FAVICON_URL', value)
             self._settings.UI_FAVICON_URL = value
             logger.info(f"Updated UI_FAVICON_URL")
+
+        for key in self._BRANDING_EXTRA_KEYS:
+            if key.lower() in settings:
+                value = ui[key.lower()]
+                app_settings_repo.set(self._db, key, value)
+                setattr(self._settings, key, value)
+                logger.info("Updated %s", key)
+
+        if 'ui_show_powered_by' in settings:
+            value = ui['ui_show_powered_by']
+            # null clears the override: the environment default applies again at once
+            app_settings_repo.set(
+                self._db, 'UI_SHOW_POWERED_BY', str(value).lower() if value is not None else None
+            )
+            self._settings.UI_SHOW_POWERED_BY = (
+                value if value is not None else self._env_show_powered_by
+            )
+            logger.info("Updated UI_SHOW_POWERED_BY to: %s", value)
 
         # Reinitialize the Git service only when a value it reads changed. The
         # export location comes from the volume settings, so they count too; the
@@ -2545,7 +2842,6 @@ class SettingsManager:
             Exception: For notification/database errors
         """
         from uuid import uuid4
-        from datetime import datetime
         from ..models.notifications import Notification, NotificationType
 
         # 1. Get Role Name (for notification)
@@ -2646,7 +2942,7 @@ class SettingsManager:
 
             # Provide placeholder ID and created_at for Pydantic validation
             placeholder_id = str(uuid4())
-            now = datetime.utcnow()
+            now = utc_now()
 
             requester_notification = Notification(
                 id=placeholder_id,

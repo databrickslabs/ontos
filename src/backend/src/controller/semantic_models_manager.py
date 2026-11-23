@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 import signal
 from contextlib import contextmanager
 import json
+import re
 import shutil
 import urllib.parse
 from filelock import FileLock
@@ -219,6 +220,25 @@ _TEXT_FILTER = (
 def _text_filter_bindings(text_filter: str) -> Dict[str, Any]:
     """The ``bindings`` for a query using ``_TEXT_FILTER`` (none for an empty text)."""
     return {'text_filter': Literal(text_filter)} if text_filter.strip() else {}
+
+
+class ConceptNameIndex:
+    """Concept IRIs by IRI, label and local name (see ``concept_name_index``)."""
+
+    def __init__(self, concepts: set, labels: Dict[str, set], local_names: Dict[str, set]):
+        self._concepts = concepts
+        self._labels = labels
+        self._local_names = local_names
+
+    def find(self, value: str) -> List[str]:
+        """The IRIs ``value`` names: the IRI itself, else by label, else by local name."""
+        value = (value or '').strip()
+        if not value:
+            return []
+        if value in self._concepts:
+            return [value]
+        needle = value.casefold()
+        return sorted(self._labels.get(needle) or self._local_names.get(needle) or ())
 
 
 @searchable_asset
@@ -4107,6 +4127,17 @@ class SemanticModelsManager(SearchableAsset):
         concept_versions_repo.delete_for_collection(self._db, collection_iri)
         concept_versions_repo.delete_by_iris(self._db, subject_iris)
 
+        # Notes, links, documents, cost items and tags of the collection and of
+        # the concepts that lived only in it go with them, in the same
+        # transaction (#1431). A subject that still has triples in another
+        # collection (the same IRI loaded twice, or annotated elsewhere) keeps its.
+        from src.controller.entity_data_cleanup import remove_entities_data, remove_entity_data
+        remove_entity_data(self._db, entity_type="collection", entity_id=collection_iri)
+        remove_entities_data(
+            self._db, entity_type="concept",
+            entity_ids=rdf_triples_repo.subjects_without_triples(self._db, subject_iris),
+        )
+
         # Remove from in-memory graph
         meta_context = self._graph.get_context(URIRef(META_CONTEXT))
         coll_uri = URIRef(collection_iri)
@@ -4600,6 +4631,35 @@ class SemanticModelsManager(SearchableAsset):
             "source_file": source_file,
             "owners": owners,
         }
+
+    def find_concept_iris(self, value: str) -> List[str]:
+        """IRIs of the concepts (OWL/RDFS classes, SKOS concepts) ``value`` names.
+
+        ``value`` is an IRI, a label (``skos:prefLabel`` / ``rdfs:label``), or,
+        when no label matches, the IRI's local name; names compare
+        case-insensitively. Several IRIs mean the name is ambiguous. To look up
+        many names, build ``concept_name_index()`` once and call its ``find``.
+        """
+        return self.concept_name_index().find(value)
+
+    def concept_name_index(self) -> 'ConceptNameIndex':
+        """The concepts by IRI, label and local name, from one pass over the graph."""
+        concept_types = (OWL.Class, RDFS.Class, SKOS.Concept)
+        concepts = {
+            str(subject)
+            for kind in concept_types
+            for subject in self._graph.subjects(RDF.type, kind)
+            if isinstance(subject, URIRef)
+        }
+        labels: Dict[str, set] = {}
+        for predicate in (SKOS.prefLabel, RDFS.label):
+            for subject, label in self._graph.subject_objects(predicate):
+                if isinstance(label, Literal) and str(subject) in concepts:
+                    labels.setdefault(str(label).strip().casefold(), set()).add(str(subject))
+        local_names: Dict[str, set] = {}
+        for iri in concepts:
+            local_names.setdefault(re.split(r'[#/:]', iri)[-1].casefold(), set()).add(iri)
+        return ConceptNameIndex(concepts, labels, local_names)
 
     def get_concept(self, concept_iri: str) -> Optional[Dict[str, Any]]:
         """Get a concept by IRI with all its properties and governance info."""
@@ -5588,6 +5648,11 @@ class SemanticModelsManager(SearchableAsset):
         # which already calls delete_for_collection for the same reason.
         from src.repositories.concept_versions_repository import concept_versions_repo
         concept_versions_repo.delete_by_iri(self._db, concept_iri)
+
+        # And its notes, links, documents, cost items and tags (#1431). A concept
+        # migrated to another collection has moved them to its new IRI first.
+        from src.controller.entity_data_cleanup import remove_entity_data
+        remove_entity_data(self._db, entity_type="concept", entity_id=concept_iri)
 
         # Also remove any ownership records
         for owner in existing.get("owners", []):
@@ -7081,14 +7146,19 @@ class SemanticModelsManager(SearchableAsset):
         target_context.add((new_uri, ONTOS.promotionType, Literal("migrated")))
         target_context.add((new_uri, ONTOS.promotedAt, Literal(now, datatype=XSD.dateTime)))
         
-        # Delete or deprecate original
+        # Delete or deprecate original. A deleted source's notes, links, documents,
+        # cost items and tags move to the migrated concept first (#1431), so the
+        # delete doesn't remove them.
+        from src.controller.entity_data_cleanup import move_entity_data
         status = existing.get("status") or "draft"
         if delete_source:
             if status and status != "draft":
                 raise ValueError("Cannot delete non-draft concept. Will deprecate instead.")
+            move_entity_data(self._db, entity_type="concept", from_id=concept_iri, to_id=new_iri)
             self.delete_concept(concept_iri, migrated_by)
         elif status == "draft":
             # Draft concepts cannot transition to deprecated; delete instead
+            move_entity_data(self._db, entity_type="concept", from_id=concept_iri, to_id=new_iri)
             self.delete_concept(concept_iri, migrated_by)
         else:
             self.update_concept_status(concept_iri, "deprecated", migrated_by)

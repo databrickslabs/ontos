@@ -361,8 +361,13 @@
       "terminalStepHasNext": "Schritt \"{{step}}\" beendet den Workflow, daher wird seine Verknüpfung zu \"{{target}}\" ignoriert und beim Speichern entfernt.",
       "conditionalBranchMissing": "Bedingung \"{{step}}\" hat keinen Schritt für den Zweig {{branch}}. Ist die Bedingung {{branch}}, endet der Workflow als erfolgreich.",
       "unreachableSteps": "Diese Schritte sind vom ersten Schritt aus nicht erreichbar: {{steps}}.",
+      "assignTagKeyUnknown": "Der Schritt \"{{step}}\" weist den Tag \"{{key}}\" zu, der nicht im Tag-Katalog vorhanden ist. Der Schritt schlägt fehl, bis der Tag angelegt ist.",
       "storedEntityTypeUnknown": "Der Trigger enthält \"{{entityType}}\", einen Entity-Typ, den es nicht mehr gibt. Er löst dafür nie aus.",
       "storedEntityTypeUnsupported": "Der Trigger-Typ „{{trigger}}“ löst nie für {{entity}} aus."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "Schritt \"{{step}}\" prüft eine Richtlinie, die LLM_CHECK verwendet. LLM_CHECK wird nur in Compliance-Läufen ausgewertet, daher würde der Schritt jede Entität ablehnen. Wählen Sie eine Richtlinie ohne LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "Schritt \"{{step}}\" hat eine Regel mit LLM_CHECK. LLM_CHECK wird nur in Compliance-Läufen ausgewertet, daher würde der Schritt jede Entität ablehnen. Entfernen Sie LLM_CHECK aus der Regel."
     }
   },
   "approvalResponse": {
@@ -542,6 +547,7 @@
     "removedStepsHint": "Diese Schritte liefen in dieser Ausführung und wurden später aus dem Workflow entfernt.",
     "stepErrors": {
       "rule_where_evaluation_failed": "Die WHERE-Klausel der Richtlinie '{{policyName}}' konnte für {{entityType}} {{entityId}} nicht ausgewertet werden",
+      "tag_not_found": "Die Tag '{{tag}}' wurde im Tag-Katalog nicht gefunden und daher nicht zugewiesen",
       "approval_rejected": "Anfrage abgelehnt",
       "output_port_contracts_missing": "Veröffentlichung nicht möglich: Den Ausgabeports {{ports}} müssen Datenverträge zugewiesen sein",
       "output_port_contracts_unapproved": "Veröffentlichung nicht möglich: Diese Ausgabeports haben nicht genehmigte Verträge: {{ports}}. Die Verträge müssen zuerst genehmigt werden.",
@@ -698,6 +704,33 @@
       "label": "Erforderliche Berechtigung:",
       "prefix": "Benutzer benötigen",
       "suffix": "oder höher, um diesen Workflow zu sehen und auszuführen. Legen Sie dies unter Einstellungen → Rollen fest."
+    }
+  },
+  "triggerSchedule": {
+    "cronLabel": "Zeitplan (Quartz-Cron)",
+    "cronHint": "6 oder 7 Felder: Sekunde Minute Stunde Tag-des-Monats Monat Wochentag [Jahr]. Beispiel: {{example}} läuft jeden Tag um 06:00. Die Sekunden müssen 0 sein, und zwischen zwei Läufen müssen mindestens 5 Minuten liegen.",
+    "timezoneLabel": "Zeitzone",
+    "timezoneHint": "Ein IANA-Name wie Europe/Berlin oder America/Sao_Paulo. Leer bedeutet UTC.",
+    "fields": {
+      "second": "Sekunde",
+      "minute": "Minute",
+      "hour": "Stunde",
+      "day_of_month": "Tag-des-Monats",
+      "month": "Monat",
+      "day_of_week": "Wochentag",
+      "year": "Jahr"
+    },
+    "errors": {
+      "schedule_required": "Ein geplanter Auslöser braucht einen Cron-Ausdruck.",
+      "cron_field_count": "Ein Quartz-Cron-Ausdruck hat 6 oder 7 Felder; dieser hat {{fields}}.",
+      "cron_invalid_field": "„{{value}}“ ist im Feld {{field}} nicht gültig.",
+      "cron_day_fields_conflict": "Setzen Sie „?“ in genau eines der Felder Tag-des-Monats und Wochentag.",
+      "cron_seconds_not_zero": "Das Sekundenfeld muss 0 sein: Läufe beginnen zur vollen Minute.",
+      "cron_unsupported_character": "„{{character}}“ im Feld {{field}} wird in Workflow-Zeitplänen nicht unterstützt.",
+      "cron_invalid": "Dies ist kein gültiger Quartz-Cron-Ausdruck.",
+      "cron_no_upcoming_runs": "Dieser Cron-Ausdruck hat keinen anstehenden Lauf.",
+      "cron_interval_too_short": "Zwischen geplanten Läufen müssen mindestens {{minutes}} Minuten liegen.",
+      "timezone_invalid": "Unbekannte Zeitzone „{{timezone}}“: Verwenden Sie einen IANA-Namen wie Europe/Berlin."
     }
   },
   "view": {

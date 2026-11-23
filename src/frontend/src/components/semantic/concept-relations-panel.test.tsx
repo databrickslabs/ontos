@@ -114,6 +114,26 @@ describe('ConceptRelationsPanel', () => {
     return { ...render(<ConceptRelationsPanel {...props} />), props }
   }
 
+  it('announces a skeleton while the initial relation request is pending', async () => {
+    let resolveRequest: (value: { data: typeof sampleNeighbors }) => void
+    mockGet.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRequest = resolve
+      }),
+    )
+
+    renderPanel()
+
+    expect(screen.getByTestId('concept-relations-loading')).toHaveAttribute('role', 'status')
+    expect(screen.getByText('semantic-models:relations.loading')).toHaveClass('sr-only')
+    expect(screen.queryByText(/No concept-to-concept relations/)).not.toBeInTheDocument()
+
+    resolveRequest!({ data: sampleNeighbors })
+    await waitFor(() => {
+      expect(screen.queryByTestId('concept-relations-loading')).not.toBeInTheDocument()
+    })
+  })
+
   it('renders only meaningful relations (drops rdf:type, label, predicate-direction)', async () => {
     renderPanel()
 

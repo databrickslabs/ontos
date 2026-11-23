@@ -20,11 +20,11 @@
       "helpText": "Der Zugang läuft nach der ausgewählten Dauer ab. Sie können vor Ablauf eine Verlängerung beantragen.",
       "help": "Ihr Zugang läuft nach diesem Zeitraum automatisch ab.",
       "days": "{{count}} Tag",
-      "days_plural": "{{count}} Tage",
+      "days_other": "{{count}} Tage",
       "months": "{{count}} Monat",
-      "months_plural": "{{count}} Monate",
+      "months_other": "{{count}} Monate",
       "years": "{{count}} Jahr",
-      "years_plural": "{{count}} Jahre"
+      "years_other": "{{count}} Jahre"
     },
     "submit": "Anfrage senden",
     "submitting": "Anfrage wird gesendet...",

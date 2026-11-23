@@ -5,6 +5,7 @@ from datetime import datetime
 from databricks.sdk import WorkspaceClient
 from fastapi import APIRouter, Depends, HTTPException, status, Body, Request, BackgroundTasks, Query
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from ..common.workspace_client import get_workspace_client
 from ..controller.settings_manager import SettingsManager
@@ -21,7 +22,7 @@ from ..common.dependencies import (
     CurrentUserDep,
     DBSessionDep,
 )
-from ..common.authorization import get_user_details_from_sdk
+from ..common.authorization import PermissionChecker, get_user_details_from_sdk
 from ..common.manager_dependencies import get_auth_manager
 from ..controller.authorization_manager import AuthorizationManager
 from ..models.users import UserInfo
@@ -29,9 +30,14 @@ from ..models.settings import HandleRoleRequest
 from ..models.notifications import Notification, NotificationType
 from ..controller.notifications_manager import NotificationsManager
 from ..common.config import get_settings
-from ..common.sanitization import sanitize_markdown_input
+from ..common.sanitization import coerce_hex_color, sanitize_markdown_input
 from ..common.search_config_loader import get_search_config_loader
-from ..common.authorization import PermissionChecker, require_demo_admin_or_setup_token
+from ..common.authorization import (
+    PermissionChecker,
+    enforce_feature_permission,
+    has_feature_permission,
+    require_demo_admin_or_setup_token,
+)
 from ..common.features import FeatureAccessLevel
 from ..common.api_errors import CodedValueError
 
@@ -44,15 +50,60 @@ router = APIRouter(prefix="/api", tags=["Settings"])
 
 SETTINGS_FEATURE_ID = "settings" # Define a feature ID for settings
 ROLE_NOT_FOUND = "Role not found"
+UI_SETTINGS_KEY_PREFIX = "ui_"
+
+
+async def require_settings_write(
+    request: Request,
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+) -> None:
+    """Gate ``PUT /api/settings`` per key: ``ui_*`` keys (UI customization and branding)
+    need ``settings-ui`` READ_WRITE, every other key ``settings-general`` READ_WRITE.
+
+    A payload with both kinds needs both; one with no keys needs ``settings-general``.
+    """
+    payload = await request.json()
+    keys = list(payload) if isinstance(payload, dict) else []
+    needs_ui = any(str(k).startswith(UI_SETTINGS_KEY_PREFIX) for k in keys)
+    needs_general = not keys or any(
+        not str(k).startswith(UI_SETTINGS_KEY_PREFIX) for k in keys
+    )
+    if needs_general:
+        await enforce_feature_permission(
+            'settings-general', FeatureAccessLevel.READ_WRITE, user_details, request
+        )
+    if needs_ui:
+        await enforce_feature_permission(
+            'settings-ui', FeatureAccessLevel.READ_WRITE, user_details, request
+        )
+
 
 @router.get('/settings')
 async def get_settings_route(
+    request: Request,
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
     manager: SettingsManager = Depends(get_settings_manager),
-    _: bool = Depends(PermissionChecker('settings-general', FeatureAccessLevel.READ_ONLY)),
 ):
-    """Get all settings including available job clusters"""
+    """Get all settings including available job clusters.
+
+    ``settings-general`` Read-only gets everything. A caller with only ``settings-ui``
+    Read-only gets just the ``ui_*`` keys, which the UI Customization page loads.
+    """
+    if await has_feature_permission(
+        'settings-general', FeatureAccessLevel.READ_ONLY, user_details, request
+    ):
+        ui_only = False
+    else:
+        await enforce_feature_permission(
+            'settings-ui', FeatureAccessLevel.READ_ONLY, user_details, request
+        )
+        ui_only = True
     try:
         settings_data = manager.get_settings() # Renamed variable to avoid conflict
+        if ui_only:
+            return {
+                k: v for k, v in settings_data.items() if k.startswith(UI_SETTINGS_KEY_PREFIX)
+            }
         return settings_data
     except Exception as e:
         logger.error("Error getting settings", exc_info=True)
@@ -67,9 +118,22 @@ async def update_settings(
     current_user: AuditCurrentUserDep,
     settings_payload: dict, # Renamed to avoid conflict with module
     manager: SettingsManager = Depends(get_settings_manager),
-    _: bool = Depends(PermissionChecker('settings-general', FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(require_settings_write),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
 ):
-    """Update settings"""
+    """Update settings (UI customization keys need settings-ui, the rest settings-general)"""
+    # Turning on the Unity Catalog description write-back changes what every user's
+    # save writes to Unity Catalog, so only an admin may turn it on. (Turning it off,
+    # or saving it unchanged, needs only READ_WRITE: the form always sends the value.)
+    if 'uc_description_writeback_enabled' in settings_payload and not isinstance(
+            settings_payload['uc_description_writeback_enabled'], bool):
+        raise HTTPException(
+            status_code=400, detail="uc_description_writeback_enabled must be true or false")
+    if settings_payload.get('uc_description_writeback_enabled') is True \
+            and not manager.uc_description_writeback_enabled:
+        await PermissionChecker('settings-general', FeatureAccessLevel.ADMIN)(
+            request, user_details, auth_manager)
     success = False
     details = {}
     try:
@@ -95,6 +159,12 @@ async def update_settings(
             details['allow_job_enablement_requests'] = settings_payload.get('allow_job_enablement_requests')
         if 'schema_import_child_limit' in settings_payload:
             details['schema_import_child_limit'] = settings_payload.get('schema_import_child_limit')
+        if 'uc_description_writeback_enabled' in settings_payload:
+            details['uc_description_writeback_enabled'] = settings_payload.get(
+                'uc_description_writeback_enabled')
+        if 'uc_description_import_write_limit' in settings_payload:
+            details['uc_description_import_write_limit'] = settings_payload.get(
+                'uc_description_import_write_limit')
         # The Git token itself never goes to the audit log, only what happened to it.
         if settings_payload.get('git_password'):
             details['git_password'] = 'set'
@@ -106,9 +176,14 @@ async def update_settings(
         if 'ontos_instance_name' in settings_payload:
             details['ontos_instance_name'] = settings_payload.get('ontos_instance_name')
 
-        updated = manager.update_settings(settings_payload)
+        # Off the event loop: a save can install, remove or update Databricks jobs and
+        # deploy their code, all blocking calls. It uses its own DB session there.
+        updated, warnings = await run_in_threadpool(
+            manager.update_settings_off_loop, settings_payload,
+        )
         success = True
-        return updated.to_dict()
+        # Saved, with what didn't apply ({code, params, message}; the UI translates the code)
+        return {**updated.to_dict(), 'warnings': warnings}
     except ValueError as e:
         # Validation errors from manager (e.g. invalid branding URL, name too long)
         logger.warning(f"Settings validation error: {e}")
@@ -157,6 +232,10 @@ async def get_ui_customization(_current_user: CurrentUserDep):
     - app_display_name: Global application display name (overrides default product name)
     - app_short_name: Optional short/abbreviated name for compact UI surfaces
     - favicon_url: URL to custom favicon image
+    - app_tagline: Optional subtitle shown next to the name (sidebar, home)
+    - custom_logo_dark_url: Optional logo for dark mode (falls back to custom_logo_url)
+    - theme: primary/accent colors (#rrggbb) for light and dark mode; invalid -> None
+    - show_powered_by: Show "powered by Ontos" in the sidebar while a custom brand is set
     """
     try:
         app_settings = get_settings()
@@ -168,6 +247,15 @@ async def get_ui_customization(_current_user: CurrentUserDep):
             "app_display_name": app_settings.UI_APP_DISPLAY_NAME,
             "app_short_name": app_settings.UI_APP_SHORT_NAME,
             "favicon_url": app_settings.UI_FAVICON_URL,
+            "app_tagline": app_settings.UI_APP_TAGLINE,
+            "custom_logo_dark_url": app_settings.UI_CUSTOM_LOGO_DARK_URL,
+            "theme": {
+                "primary": coerce_hex_color(app_settings.UI_THEME_PRIMARY),
+                "primary_dark": coerce_hex_color(app_settings.UI_THEME_PRIMARY_DARK),
+                "accent": coerce_hex_color(app_settings.UI_THEME_ACCENT),
+                "accent_dark": coerce_hex_color(app_settings.UI_THEME_ACCENT_DARK),
+            },
+            "show_powered_by": app_settings.UI_SHOW_POWERED_BY,
         }
     except Exception as e:
         logger.error("Error getting UI customization settings", exc_info=True)
@@ -869,7 +957,20 @@ async def save_compliance_mapping(
     manager: SettingsManager = Depends(get_settings_manager),
     _: bool = Depends(PermissionChecker('compliance', FeatureAccessLevel.ADMIN)),
 ):
-    """Persist compliance mapping to YAML."""
+    """Persist compliance mapping to YAML.
+
+    422 ``compliance_mapping_policy_uses_llm_check`` when it names a policy with
+    LLM_CHECK: self-service evaluates it without a model, so it would refuse every
+    object of that type.
+    """
+    from src.controller.self_service_manager import (
+        MappingPolicyUsesLlmCheckError, refuse_llm_check_in_mapping,
+    )
+
+    try:
+        refuse_llm_check_in_mapping(db, payload)
+    except MappingPolicyUsesLlmCheckError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     try:
         from src.common.config import get_config_manager
         cfg = get_config_manager()

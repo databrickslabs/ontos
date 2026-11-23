@@ -26,6 +26,7 @@ from src.controller.change_log_manager import ChangeLogManager
 from src.controller.estate_manager import EstateManager
 from src.controller.delivery_service import DeliveryService
 from src.controller.assets_manager import AssetsManager
+from src.controller.costs_manager import CostsManager
 from src.controller.business_roles_manager import BusinessRolesManager
 from src.controller.business_owners_manager import BusinessOwnersManager
 from src.controller.delivery_methods_manager import DeliveryMethodsManager
@@ -202,6 +203,10 @@ def get_assets_manager(request: Request) -> AssetsManager:
         logger.critical("AssetsManager not found in application state!")
         raise HTTPException(status_code=503, detail="Assets service not configured.")
     return manager
+
+def get_costs_manager() -> CostsManager:
+    """The costs routes' manager (stateless: a new one per request)."""
+    return CostsManager()
 
 def get_business_roles_manager(request: Request) -> BusinessRolesManager:
     manager = getattr(request.app.state, 'business_roles_manager', None)

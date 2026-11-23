@@ -11,7 +11,7 @@ import json
 import os
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from openpyxl import Workbook
@@ -19,12 +19,16 @@ from openpyxl import load_workbook
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from src.common.errors import ValidationError
 from src.common.logging import get_logger
 from src.controller.assets_manager import AssetsManager
+from src.controller.uc_description_sync_manager import (
+    preview_import_warning, uc_comment_target_for,
+)
 from src.db_models.assets import AssetDb, AssetRelationshipDb
 from src.models.assets import (
+    CodedWarning, without_internal_properties,
     AssetCreate,
-    AssetStatus,
     AssetUpdate,
     public_properties,
     with_internal_properties,
@@ -74,6 +78,49 @@ IMPORT_COLUMNS = [
 ]
 
 
+def _asset_stage_keys(db: Session) -> List[str]:
+    """The stage keys of every asset lifecycle stage group."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    keys: List[str] = []
+    for group in lifecycle_service.groups(db, 'asset'):
+        keys.extend(k for k in group.stages if k not in keys)
+    return keys
+
+
+def _new_asset_status_error(db: Session, requested: Optional[str]) -> Optional[str]:
+    """Why a bulk row can't create an asset with ``requested``: a new asset starts in
+    the default asset group, so its status must be a stage of that group."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    keys = list(lifecycle_service.default_group(db, 'asset').stages)
+    if not requested or requested in keys:
+        return None
+    return (
+        f"Invalid status for a new asset: '{requested}'. "
+        f"Must be one of: {', '.join(keys)}"
+    )
+
+
+def _bulk_status(db: Session, existing: Any, requested: Optional[str]) -> str:
+    """The status a bulk row gives an existing asset: unchanged without one, else a
+    move its lifecycle stage group must allow (raises ``InvalidStatusTransitionError``)."""
+    from src.controller.lifecycle_service import lifecycle_service
+
+    current = (existing.status or '').lower()
+    if not requested or requested == current:
+        return existing.status
+    return lifecycle_service.check_transition(db, 'asset', existing, requested)[1]
+
+
+def _bulk_status_update(db: Session, existing: Any, requested: Optional[str]) -> Dict[str, str]:
+    """``AssetUpdate`` keyword for a bulk row's status: none without one, so the
+    update leaves the stored status alone instead of writing it back."""
+    if not requested:
+        return {}
+    return {'status': _bulk_status(db, existing, requested)}
+
+
 class ImportAction(str, Enum):
     CREATE = "create"
     UPDATE = "update"
@@ -88,6 +135,8 @@ class ImportPreviewItem(BaseModel):
     action: ImportAction = Field(..., description="What will happen with this row")
     message: Optional[str] = Field(None, description="Error or info message")
     existing_asset_id: Optional[str] = Field(None, description="ID of existing asset if updating")
+    # What the row will do beyond its action, e.g. write its description to Unity Catalog
+    warnings: List[CodedWarning] = Field(default_factory=list)
 
 
 class ImportPreviewResult(BaseModel):
@@ -107,6 +156,9 @@ class ImportResultItem(BaseModel):
     action: ImportAction
     asset_id: Optional[str] = None
     message: Optional[str] = None
+    # What the row's save could not do (it still succeeded), e.g. a description
+    # that was not written to Unity Catalog
+    warnings: List[CodedWarning] = Field(default_factory=list)
 
 
 class ImportResult(BaseModel):
@@ -114,6 +166,9 @@ class ImportResult(BaseModel):
     updated: int = 0
     skipped: int = 0
     errors: int = 0
+    warnings: int = 0
+    # What the import as a whole could not do (it still succeeded); per-row ones are on the items
+    warning_messages: List[CodedWarning] = Field(default_factory=list)
     items: List[ImportResultItem] = Field(default_factory=list)
     error_messages: List[str] = Field(default_factory=list)
 
@@ -139,6 +194,20 @@ def _parse_properties(raw: Optional[str]) -> Optional[Dict[str, Any]]:
         raise ValueError(f"Invalid JSON in properties: {raw[:100]}")
 
 
+def _row_properties_update(
+    properties: Optional[Dict[str, Any]], stored: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """The ``properties`` field of an update row, as ``AssetUpdate`` keyword arguments.
+
+    A row's properties replace the stored ones, as on ``PUT /api/assets/{id}``, but
+    the internal keys are kept (they aren't exported, so the file can't carry them).
+    An empty properties cell sets nothing: the stored properties are kept.
+    """
+    if properties is None:
+        return {}
+    return {"properties": with_internal_properties(properties, stored)}
+
+
 def _format_properties(props: Optional[dict]) -> str:
     props = public_properties(props)
     if not props:
@@ -153,6 +222,51 @@ class AssetBulkManager:
         self._asset_repo = asset_repo
         self._rel_repo = asset_relationship_repo
         logger.debug("AssetBulkManager initialized.")
+
+    def _validate_row_properties(
+        self, db: Session, type_id: UUID, properties: Optional[Dict[str, Any]],
+    ) -> None:
+        """Check a row's properties against the type's JSON schema, as POST/PUT /api/assets do.
+
+        Needs the wired AssetsManager (it carries the ontology); without one
+        there is nothing to check.
+        Raises ValidationError (422) on a violation.
+        """
+        if self._assets_manager is None or not properties:
+            return
+        self._assets_manager._validate_properties(db, type_id, properties)
+
+    def _validate_kept_properties(
+        self, db: Session, type_id: UUID, properties: Optional[Dict[str, Any]], existing: Any,
+    ) -> None:
+        """An empty properties cell keeps the stored properties: when the row changes the
+        asset's type, they must fit the new type's schema. Raises ValidationError (422)."""
+        if properties is not None or str(existing.asset_type_id) == str(type_id):
+            return
+        self._validate_row_properties(db, type_id, public_properties(existing.properties))
+
+    def index_committed_import(self, db: Session, result: "ImportResult") -> None:
+        """Index the assets an import wrote, in one batch. Call only after the DB commit.
+
+        Indexing inside execute_import ran before the request committed: a rollback
+        left index entries for assets that do not exist. Failures here are logged,
+        not raised: the data is already committed.
+        """
+        if self._assets_manager is None:
+            return
+        asset_ids = [
+            UUID(item.asset_id)
+            for item in result.items
+            if item.asset_id and item.action in (ImportAction.CREATE, ImportAction.UPDATE)
+        ]
+        if not asset_ids:
+            return
+        try:
+            self._assets_manager.upsert_search_index_for(db, asset_ids)
+        except Exception:
+            logger.warning(
+                "Failed to index %d assets after bulk import", len(asset_ids), exc_info=True,
+            )
 
     def _set_asset_domains(self, db, asset_id, domain_ids, primary_domain_id, user):
         """Replace an asset's domain assignments from a bulk-import row (no-op if empty)."""
@@ -411,9 +525,20 @@ class AssetBulkManager:
         return cycles
 
     def preview_import(
-        self, db: Session, *, file_bytes: bytes, filename: str
+        self, db: Session, *, file_bytes: bytes, filename: str, write_to_uc: bool = False,
+        read_uc_comment: Optional[
+            Callable[[str, Optional[str]], Optional[Tuple[Optional[str], Optional[str]]]]
+        ] = None,
     ) -> ImportPreviewResult:
-        """Parse and validate file, return preview of what would happen."""
+        """Parse and validate file, return preview of what would happen.
+
+        With ``write_to_uc`` (the Unity Catalog description setting), a row whose
+        import would change a Unity Catalog comment gets a warning: written, replaced,
+        or kept because Unity Catalog has another comment. ``read_uc_comment(table_fqn,
+        column_name)`` reads the comment as the user (``(table_type, comment)``, or None
+        once the preview read enough); without it, or when it fails, the row only says
+        its description will be written. Metric views get no warning.
+        """
         result = ImportPreviewResult()
 
         rows = self._parse_file(file_bytes, filename)
@@ -491,17 +616,27 @@ class AssetBulkManager:
 
             # Validate status
             status_raw = row.get("status", "").strip().lower()
-            if status_raw and status_raw not in [s.value for s in AssetStatus]:
-                item.message = f"Invalid status: '{status_raw}'. Must be one of: {', '.join(s.value for s in AssetStatus)}"
+            stage_keys = _asset_stage_keys(db)
+            if status_raw and status_raw not in stage_keys:
+                item.message = (
+                    f"Invalid status: '{status_raw}'. Must be one of: {', '.join(stage_keys)}"
+                )
                 result.errors += 1
                 result.items.append(item)
                 continue
 
-            # Validate properties JSON
+            # Validate properties JSON and the type's schema
             try:
-                _parse_properties(row.get("properties", ""))
+                preview_props = _parse_properties(row.get("properties", ""))
             except ValueError as e:
                 item.message = str(e)
+                result.errors += 1
+                result.items.append(item)
+                continue
+            try:
+                self._validate_row_properties(db, type_id, preview_props)
+            except ValidationError as e:
+                item.message = str(e.detail)
                 result.errors += 1
                 result.items.append(item)
                 continue
@@ -514,6 +649,13 @@ class AssetBulkManager:
                 except (ValueError, Exception):
                     existing = None
                 if existing:
+                    try:
+                        self._validate_kept_properties(db, type_id, preview_props, existing)
+                    except ValidationError as e:
+                        item.message = str(e.detail)
+                        result.errors += 1
+                        result.items.append(item)
+                        continue
                     item.action = ImportAction.UPDATE
                     item.existing_asset_id = str(existing.id)
                     result.will_update += 1
@@ -534,8 +676,17 @@ class AssetBulkManager:
                     item.existing_asset_id = str(existing.id)
                     result.will_update += 1
                 else:
+                    create_error = _new_asset_status_error(db, status_raw)
+                    if create_error:
+                        item.message = create_error
+                        result.errors += 1
+                        result.items.append(item)
+                        continue
                     item.action = ImportAction.CREATE
                     result.will_create += 1
+
+            if write_to_uc and item.action != ImportAction.ERROR:
+                self._preview_uc_write(item, row, asset_type_raw, existing, read_uc_comment)
 
             result.items.append(item)
 
@@ -546,9 +697,17 @@ class AssetBulkManager:
     # ------------------------------------------------------------------
 
     def execute_import(
-        self, db: Session, *, file_bytes: bytes, filename: str, current_user_id: str
+        self, db: Session, *, file_bytes: bytes, filename: str, current_user_id: str,
+        after_save: Optional[Callable[[UUID, Optional[str], bool], None]] = None,
     ) -> ImportResult:
-        """Parse, validate, and execute the import in a single transaction."""
+        """Parse, validate, and execute the import in one transaction (not committed).
+
+        Each row runs in a savepoint: a row that fails rolls back on its own. The
+        ``after_save(asset_id, previous_description, described)`` records each saved row;
+        ``described`` is False when the file has no description column (the description is
+        then left alone, not cleared),
+        for the caller to write its description to Unity Catalog after the commit.
+        """
         result = ImportResult()
 
         rows = self._parse_file(file_bytes, filename)
@@ -569,6 +728,8 @@ class AssetBulkManager:
 
         # Track created assets for parent wiring
         created_assets: Dict[str, UUID] = {}  # name -> asset id
+        # A file without a description column leaves every description alone
+        has_description_column = "description" in rows[0]
 
         for idx, row in enumerate(rows):
             row_num = idx + 1
@@ -603,13 +764,13 @@ class AssetBulkManager:
 
             # Validate status
             status_raw = row.get("status", "").strip().lower()
-            if status_raw and status_raw not in [s.value for s in AssetStatus]:
+            if status_raw and status_raw not in _asset_stage_keys(db):
                 item.message = f"Invalid status: '{status_raw}'"
                 result.errors += 1
                 result.items.append(item)
                 continue
 
-            # Parse properties
+            # Parse properties, then check them against the type's schema (as the single routes do)
             try:
                 properties = _parse_properties(row.get("properties", ""))
             except ValueError as e:
@@ -617,9 +778,19 @@ class AssetBulkManager:
                 result.errors += 1
                 result.items.append(item)
                 continue
+            # The internal keys (e.g. the Unity Catalog sync mark) are never imported
+            properties = without_internal_properties(properties)
+            try:
+                self._validate_row_properties(db, type_id, properties)
+            except ValidationError as e:
+                item.message = str(e.detail)
+                result.errors += 1
+                result.items.append(item)
+                continue
 
             tags = _parse_tags(row.get("tags", ""))
             description = row.get("description", "").strip() or None
+            description_field = {"description": description} if has_description_column else {}
             platform_val = row.get("platform", "").strip() or None
             location_val = row.get("location", "").strip() or None
             # domain_ids: semicolon-separated; the first entry is treated as primary.
@@ -628,53 +799,41 @@ class AssetBulkManager:
             domain_ids_raw = row.get("domain_ids", "") or row.get("domain_id", "")
             domain_ids_val = [d.strip() for d in domain_ids_raw.split(";") if d.strip()]
             primary_domain_val = domain_ids_val[0] if domain_ids_val else None
-            status_val = AssetStatus(status_raw) if status_raw else AssetStatus.ACTIVE
+            status_val = status_raw or None
 
             # Determine create vs update
             row_id = row.get("id", "").strip()
             try:
-                if row_id:
-                    try:
-                        existing = self._asset_repo.get(db, UUID(row_id))
-                    except (ValueError, Exception):
-                        existing = None
-                    if not existing:
-                        item.message = f"Asset with ID '{row_id}' not found"
-                        result.errors += 1
-                        result.items.append(item)
-                        continue
+                # A row is all or nothing: a failed row rolls back to its savepoint
+                with db.begin_nested():
+                    if row_id:
+                        try:
+                            existing = self._asset_repo.get(db, UUID(row_id))
+                        except (ValueError, Exception):
+                            existing = None
+                        if not existing:
+                            item.message = f"Asset with ID '{row_id}' not found"
+                            result.errors += 1
+                            result.items.append(item)
+                            continue
+                        try:
+                            self._validate_kept_properties(db, type_id, properties, existing)
+                        except ValidationError as e:
+                            item.message = str(e.detail)
+                            result.errors += 1
+                            result.items.append(item)
+                            continue
 
-                    update_data = AssetUpdate(
-                        name=name,
-                        description=description,
-                        asset_type_id=type_id,
-                        platform=platform_val,
-                        location=location_val,
-                        # The internal keys aren't exported, so the file can't carry them
-                        properties=with_internal_properties(properties, existing.properties),
-                        tags=tags,
-                        status=status_val,
-                    )
-                    updated = self._asset_repo.update(
-                        db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
-                    )
-                    db.flush()
-                    self._set_asset_domains(db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
-                    item.action = ImportAction.UPDATE
-                    item.asset_id = str(updated.id)
-                    result.updated += 1
-                    created_assets[name.lower()] = updated.id
-                else:
-                    existing = self._asset_repo.get_by_identity(
-                        db, name=name, asset_type_id=type_id,
-                        platform=platform_val or "", location=location_val or "",
-                    )
-                    if existing:
+                        previous_description = existing.description
                         update_data = AssetUpdate(
-                            description=description,
-                            properties=with_internal_properties(properties, existing.properties),
+                            name=name,
+                            **description_field,
+                            asset_type_id=type_id,
+                            platform=platform_val,
+                            location=location_val,
                             tags=tags,
-                            status=status_val,
+                            **_bulk_status_update(db, existing, status_val),
+                            **_row_properties_update(properties, existing.properties),
                         )
                         updated = self._asset_repo.update(
                             db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
@@ -686,26 +845,66 @@ class AssetBulkManager:
                         result.updated += 1
                         created_assets[name.lower()] = updated.id
                     else:
-                        create_data = {
-                            "name": name,
-                            "description": description,
-                            "asset_type_id": type_id,
-                            "platform": platform_val,
-                            "location": location_val,
-                            "properties": properties,
-                            "tags": tags,
-                            "status": status_val.value,
-                            "created_by": current_user_id,
-                        }
-                        db_asset = AssetDb(**create_data)
-                        db.add(db_asset)
-                        db.flush()
-                        db.refresh(db_asset)
-                        self._set_asset_domains(db, db_asset.id, domain_ids_val, primary_domain_val, current_user_id)
-                        item.action = ImportAction.CREATE
-                        item.asset_id = str(db_asset.id)
-                        result.created += 1
-                        created_assets[name.lower()] = db_asset.id
+                        existing = self._asset_repo.get_by_identity(
+                            db, name=name, asset_type_id=type_id,
+                            platform=platform_val or "", location=location_val or "",
+                        )
+                        if existing:
+                            previous_description = existing.description
+                            update_data = AssetUpdate(
+                                **description_field,
+                                tags=tags,
+                                **_bulk_status_update(db, existing, status_val),
+                                **_row_properties_update(
+                                    properties, existing.properties),
+                            )
+                            updated = self._asset_repo.update(
+                                db=db, db_obj=existing,
+                                obj_in=update_data.model_dump(exclude_unset=True)
+                            )
+                            db.flush()
+                            self._set_asset_domains(
+                                db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
+                            item.action = ImportAction.UPDATE
+                            item.asset_id = str(updated.id)
+                            result.updated += 1
+                            created_assets[name.lower()] = updated.id
+                        else:
+                            previous_description = None
+                            create_error = _new_asset_status_error(db, status_val)
+                            if create_error:
+                                item.message = create_error
+                                result.errors += 1
+                                result.items.append(item)
+                                continue
+                            create_data = {
+                                "name": name,
+                                "description": description,
+                                "asset_type_id": type_id,
+                                "platform": platform_val,
+                                "location": location_val,
+                                "properties": without_internal_properties(properties),
+                                "tags": tags,
+                                "created_by": current_user_id,
+                            }
+                            # A stage of the default asset lifecycle; without one, active
+                            from src.controller.lifecycle_service import lifecycle_service
+                            (create_data["lifecycle_stage_group_id"],
+                             create_data["status"]) = lifecycle_service.stage_for_new(
+                                db, 'asset', None, status_val, default_category='active',
+                            )
+                            db_asset = AssetDb(**create_data)
+                            db.add(db_asset)
+                            db.flush()
+                            db.refresh(db_asset)
+                            self._set_asset_domains(
+                                db, db_asset.id, domain_ids_val, primary_domain_val,
+                                current_user_id)
+                            item.action = ImportAction.CREATE
+                            item.asset_id = str(db_asset.id)
+                            result.created += 1
+                            created_assets[name.lower()] = db_asset.id
+
 
             except Exception as e:
                 item.message = f"Error: {str(e)[:200]}"
@@ -713,6 +912,12 @@ class AssetBulkManager:
                 result.items.append(item)
                 continue
 
+            if after_save is not None:
+                try:
+                    after_save(UUID(item.asset_id), previous_description, has_description_column)
+                except Exception:
+                    logger.warning(
+                        "Post-save step failed for import row %s", item.row, exc_info=True)
             result.items.append(item)
 
         # Wire parent relationships (skip if cycles detected)
@@ -720,6 +925,19 @@ class AssetBulkManager:
             self._wire_parent_relationships(db, rows, type_map, created_assets, result)
 
         return result
+
+    @staticmethod
+    def _preview_uc_write(item: ImportPreviewItem, row: Dict[str, str], asset_type_raw: str,
+                          existing: Optional[AssetDb], read_uc_comment) -> None:
+        target = uc_comment_target_for(
+            row.get("platform", ""), asset_type_raw, row.get("location", ""))
+        if target is None or "description" not in row:
+            # A file without a description column leaves the descriptions alone
+            return
+        description = row.get("description", "").strip() or None
+        warning = preview_import_warning(target, description, existing, read_uc_comment)
+        if warning is not None:
+            item.warnings.append(warning)
 
     def _wire_parent_relationships(
         self,

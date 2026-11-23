@@ -12,7 +12,8 @@ import type { ManagementPort } from '@/types/data-product';
 type ManagementPortFormProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (port: ManagementPort) => Promise<void>;
+  /** Resolve `false` when the change was not saved (e.g. the versioning dialog took over). */
+  onSubmit: (port: ManagementPort) => Promise<void | boolean>;
   initial?: ManagementPort;
 };
 
@@ -76,13 +77,15 @@ export default function ManagementPortFormDialog({ isOpen, onOpenChange, onSubmi
         name: name.trim(),
         content: content.trim(),
         type: type || 'rest',
-        url: url.trim() || undefined,
-        channel: channel.trim() || undefined,
-        description: description.trim() || undefined,
+        // null clears: the backend keeps a field left out
+        url: url.trim() || null,
+        channel: channel.trim() || null,
+        description: description.trim() || null,
       };
 
-      await onSubmit(port);
+      const saved = await onSubmit(port);
       onOpenChange(false);
+      if (saved === false) return;
       toast({
         title: 'Success',
         description: initial ? 'Management port updated' : 'Management port added',

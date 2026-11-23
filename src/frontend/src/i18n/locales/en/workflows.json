@@ -361,8 +361,13 @@
       "terminalStepHasNext": "Step \"{{step}}\" ends the workflow, so its link to \"{{target}}\" is ignored and removed on save.",
       "conditionalBranchMissing": "Conditional \"{{step}}\" has no step on its {{branch}} branch. When the condition is {{branch}}, the workflow ends as succeeded.",
       "unreachableSteps": "These steps can't be reached from the first step: {{steps}}.",
+      "assignTagKeyUnknown": "Step \"{{step}}\" assigns the tag \"{{key}}\", which is not in the tag catalog. The step fails until the tag is created.",
       "storedEntityTypeUnknown": "The trigger lists \"{{entityType}}\", an entity type that no longer exists. It never fires for it.",
       "storedEntityTypeUnsupported": "The {{trigger}} trigger never fires for {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "Step \"{{step}}\" checks a policy that uses LLM_CHECK. LLM_CHECK is only evaluated in compliance runs, so the step would fail every entity. Select a policy without LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "Step \"{{step}}\" has a rule that uses LLM_CHECK. LLM_CHECK is only evaluated in compliance runs, so the step would fail every entity. Remove LLM_CHECK from the rule."
     }
   },
   "approvalResponse": {
@@ -542,6 +547,7 @@
     "removedStepsHint": "These steps ran in this execution and were removed from the workflow later.",
     "stepErrors": {
       "rule_where_evaluation_failed": "The WHERE clause of policy '{{policyName}}' could not be evaluated on {{entityType}} {{entityId}}",
+      "tag_not_found": "Tag '{{tag}}' was not found in the tag catalog, so it was not assigned",
       "approval_rejected": "Request denied",
       "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
       "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",
@@ -698,6 +704,33 @@
       "label": "Required permission:",
       "prefix": "users need",
       "suffix": "or higher to see and run this workflow. Set this in Settings → Roles."
+    }
+  },
+  "triggerSchedule": {
+    "cronLabel": "Schedule (Quartz cron)",
+    "cronHint": "6 or 7 fields: second minute hour day-of-month month day-of-week [year]. Example: {{example}} runs every day at 06:00. Seconds must be 0, and runs must be at least 5 minutes apart.",
+    "timezoneLabel": "Timezone",
+    "timezoneHint": "An IANA name such as Europe/Berlin or America/Sao_Paulo. Empty means UTC.",
+    "fields": {
+      "second": "second",
+      "minute": "minute",
+      "hour": "hour",
+      "day_of_month": "day-of-month",
+      "month": "month",
+      "day_of_week": "day-of-week",
+      "year": "year"
+    },
+    "errors": {
+      "schedule_required": "A scheduled trigger needs a cron expression.",
+      "cron_field_count": "A Quartz cron expression has 6 or 7 fields; this one has {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" is not valid in the {{field}} field.",
+      "cron_day_fields_conflict": "Put \"?\" in exactly one of day-of-month and day-of-week.",
+      "cron_seconds_not_zero": "The seconds field must be 0: runs start on the minute.",
+      "cron_unsupported_character": "\"{{character}}\" in the {{field}} field is not supported in workflow schedules.",
+      "cron_invalid": "This is not a valid Quartz cron expression.",
+      "cron_no_upcoming_runs": "This cron expression has no upcoming run.",
+      "cron_interval_too_short": "Scheduled runs must be at least {{minutes}} minutes apart.",
+      "timezone_invalid": "Unknown timezone \"{{timezone}}\": use an IANA name such as Europe/Berlin."
     }
   },
   "view": {

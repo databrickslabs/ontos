@@ -795,7 +795,7 @@
     },
     "hints": {
       "deliveryMethodHint": "Hoe deze levering data aan consumenten aanbiedt (bijv. Tabeltoegang, Serving Endpoint)",
-      "onlyActiveContracts": "Toont alleen actieve/goedgekeurde/gecertificeerde contracten",
+      "onlyActiveContracts": "Toont alleen actieve/goedgekeurde contracten",
       "containsPiiHint": "Bevat deze levering persoonlijk identificeerbare informatie?",
       "autoApproveHint": "Toegangsverzoeken voor deze levering automatisch goedkeuren?",
       "afterCreation": "Na het aanmaken van deze levering kun je assets (tabellen, views, datasets, enz.) eraan koppelen vanaf de detailpagina."
@@ -1127,8 +1127,8 @@
     "exportSuccessfulDesc": "{{filename}} gedownload",
     "exportFailed": "Export Mislukt",
     "exportFailedDesc": "Exporteren van dataproduct mislukt",
-    "exportDescription": "Door op \"Exporteren\" te klikken wordt dit product gedownload als een ODPS v1.0.0-conform JSON-bestand. Auditvelden (created_at, updated_at) worden uitgesloten voor overdraagbaarheid.",
-    "exportAsJson": "Exporteren als JSON",
+    "exportDescription": "Door op \"Exporteren\" te klikken wordt dit product gedownload als ODPS v1.0.0 YAML-bestand, opgebouwd uit het opgeslagen product zodat een nieuwe import het herstelt.",
+    "exportAsJson": "Exporteren als YAML",
     "currentProduct": "Huidig Product",
     "unnamed": "Naamloos",
     "noProductDesc": "Geen product geselecteerd. Open dit dialoogvenster vanaf een productdetailpagina om te exporteren."

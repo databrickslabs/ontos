@@ -43,6 +43,7 @@
     "discard": "Discard",
     "apply": "Apply",
     "select": "Select",
+    "done": "Done",
     "remove": "Remove",
     "link": "Link",
     "unlink": "Unlink",
@@ -484,6 +485,9 @@
     "targetNotPickable": "{{type}} can't be picked here. It is managed on its own page.",
     "noAccessToTarget": "You don't have access to {{type}}. Ask an administrator for read access to link to it."
   },
+  "assetFormStoredProperties": {
+    "loadError": "The asset's stored properties could not be loaded, so it can't be saved here. Close the dialog and try again."
+  },
   "assetForm": {
     "groups": {
       "basic": "Basic Information",
@@ -569,16 +573,25 @@
     "removeConfirm": "Are you sure you want to remove this relationship? This action cannot be undone."
   },
   "entityVersionPicker": {
-    "selectPlaceholder": "Select {{kind}}…",
     "latestSuffix": "{{name}} (latest)",
     "pinVersionTitle": "Pin a specific version",
     "pinVersion": "Pin version",
     "followLatestTitle": "Always follow the family's latest visible version",
     "followLatest": "Follow latest",
-    "searchPlaceholder": "Search {{kind}}s…",
     "loading": "Loading…",
-    "noMatching": "No matching {{kind}}s.",
     "unnamed": "(unnamed)"
+  },
+  "entityVersionPickerKinds": {
+    "contract": {
+      "select": "Select a contract…",
+      "search": "Search contracts…",
+      "noMatching": "No matching contracts."
+    },
+    "product": {
+      "select": "Select a product…",
+      "search": "Search products…",
+      "noMatching": "No matching products."
+    }
   },
   "entityTree": {
     "title": "Related Entities",
@@ -642,6 +655,8 @@
   "edit": "Edit",
   "error": "Error",
   "home": "Home",
+  "loading": "Loading…",
+  "optional": "(optional)",
   "refresh": "Refresh",
   "retry": "Retry",
   "save": "Save",

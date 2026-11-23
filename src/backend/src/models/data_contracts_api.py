@@ -4,6 +4,8 @@ from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
+from src.common.payload_spellings import CamelCaseSpellingWins
+from src.common.odcs_api_version import normalized_api_version
 
 if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed
@@ -13,6 +15,7 @@ if TYPE_CHECKING:
 class SchemaRelationship(BaseModel):
     """ODCS v3.1.0 relationship (foreign key) at schema or property level."""
     id: Optional[str] = None  # internal DB id (populated on read)
+    stableId: Optional[str] = None  # ODCS id (v3.2.0)
     type: str = "foreignKey"
     # from is a reserved word in Python; use Field alias
     from_value: Optional[Union[str, List[str]]] = Field(None, alias='from')
@@ -45,20 +48,31 @@ class ColumnProperty(BaseModel):
     pattern: Optional[str] = None
 
     # Number/Integer constraints
-    minimum: Optional[Union[int, float]] = None
-    maximum: Optional[Union[int, float]] = None
+    # (on a date / timestamp / time column ODCS bounds are date-time text)
+    minimum: Optional[Union[int, float, str]] = None
+    maximum: Optional[Union[int, float, str]] = None
     multipleOf: Optional[Union[int, float]] = None
     precision: Optional[int] = None
 
     # Date constraints
     format: Optional[str] = None
-    timezone: Optional[str] = None
+    # a zone name on a date; ODCS v3.1 types it as a boolean on timestamp / time
+    timezone: Optional[Union[bool, str]] = None
     customFormat: Optional[str] = None
 
     # Array constraints
     itemType: Optional[str] = None
     minItems: Optional[int] = None
     maxItems: Optional[int] = None
+
+    # Other ODCS logicalTypeOptions (the editors don't show them; utils/odcs_type_options)
+    exclusiveMinimum: Optional[Union[bool, int, float, str]] = None
+    exclusiveMaximum: Optional[Union[bool, int, float, str]] = None
+    uniqueItems: Optional[bool] = None
+    minProperties: Optional[int] = None
+    maxProperties: Optional[int] = None
+    requiredProperties: Optional[List[str]] = None  # an object's logicalTypeOptions.required
+    defaultTimezone: Optional[str] = None
 
     # Semantic concepts for business glossary integration
     semanticConcepts: Optional[List[Dict[str, Any]]] = Field(
@@ -149,13 +163,15 @@ class QualityRule(BaseModel):
     schedule: Optional[str] = None
     scheduler: Optional[str] = None
     unit: Optional[str] = None
-    tags: Optional[str] = None
+    # Text from the quality rule form, or the ODCS list (stored as JSON); read back as stored
+    tags: Optional[Union[str, List[str]]] = None
 
     # Type-specific fields
     rule: Optional[str] = None  # for library type
     query: Optional[str] = None  # for sql type
     engine: Optional[str] = None  # for custom type
-    implementation: Optional[str] = None  # for custom type (JSON string)
+    # for custom type: a string or, as ODCS allows, an object (stored as JSON)
+    implementation: Optional[Union[str, Dict[str, Any], List[Any]]] = None
 
     # Comparators for all types
     must_be: Optional[str] = None
@@ -257,9 +273,10 @@ class AuthoritativeDefinition(BaseModel):
 
 class SLAProperty(BaseModel):
     """ODCS SLA Property"""
+    id: Optional[str] = None  # ODCS v3.1.0 StableId
     property: str
-    value: Union[str, int, float]
-    valueExt: Optional[Union[str, int, float]] = None
+    value: Any  # any JSON value (ODCS AnyNonCollectionType; kept with its type)
+    valueExt: Optional[Any] = None
     unit: Optional[str] = None
     element: Optional[str] = None
     driver: Optional[str] = None  # regulatory, analytics, operational
@@ -305,6 +322,9 @@ class ServerConfig(BaseModel):
 
     # Additional properties for specific server types
     properties: Dict[str, Any] = Field(default_factory=dict)
+    # ODCS roles and customProperties of the server (lists, as in ODCS)
+    roles: Optional[List[Dict[str, Any]]] = None
+    customProperties: Optional[List[Dict[str, Any]]] = None
 
     @model_validator(mode='before')
     @classmethod
@@ -314,6 +334,24 @@ class ServerConfig(BaseModel):
             return data
         values = {name: getattr(data, name, None) for name in cls.model_fields if name != 'id'}
         values['id'] = getattr(data, 'stable_id', None)
+        from src.utils.contract_servers import NAMED_FIELDS, json_list
+        # The key/value rows: the fields ServerConfig names are its own fields (as
+        # the contract API returns them), the others the `properties` map
+        rows = {getattr(r, 'key', None): getattr(r, 'value', None)
+                for r in getattr(data, 'properties', None) or []}
+        port = str(rows.get('port') or '').strip()
+        if port and not port.isdigit():
+            named = tuple(k for k in NAMED_FIELDS if k != 'port')  # `${PORT}`: kept as text
+        else:
+            named = NAMED_FIELDS
+        values['properties'] = {k: v for k, v in rows.items()
+                                if k is not None and k not in named}
+        for key in named:
+            if rows.get(key) is not None:
+                values['database_schema' if key == 'schema' else key] = (
+                    int(port) if key == 'port' else rows[key])
+        values['roles'] = json_list(getattr(data, 'roles_json', None))
+        values['customProperties'] = json_list(getattr(data, 'custom_properties_json', None))
         return values
 
     @field_validator('properties', mode='before')
@@ -415,22 +453,39 @@ class ODCSContract(BaseModel):
         populate_by_name = True
 
 
-class DataContractBase(BaseModel):
+class DataContractBase(CamelCaseSpellingWins):
+    """Create body. A field sent as camelCase and snake_case reads camelCase (as on update)."""
+
     name: str  # Required for app usability
     version: str = Field('1.0.0')
     status: str = Field('draft')
+    # Lifecycle Stage Group (#1213); None = the default data contract group
+    lifecycle_stage_group_id: Optional[str] = None
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
-    apiVersion: str = Field('v3.1.0', alias='api_version')  # Required by ODCS
+    # Required by ODCS. Read as ``apiVersion`` (the documented spelling) or ``api_version``
+    apiVersion: str = Field('v3.1.0', alias='api_version')
     domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
-    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain assignment (primary included)
+    # Multi-domain assignment (primary included). The create dialogs send the fields by
+    # name: every aliased field is read by its name as well as its alias
+    # (``populate_by_name``); when both spellings are sent, the camelCase one wins, as on
+    # update (``CamelCaseSpellingWins``)
+    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')
     primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     descriptionUsage: Optional[str] = Field(None, alias='description_usage')
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
+
+    # Spelling only ('3.0.2' -> 'v3.0.2'); a value outside ODCS is stored as sent
+    _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
+
+    class Config:
+        # The create dialogs and the wizard send the field names (dataProduct, tenant,
+        # domainIds, ...), the documented camelCase input
+        populate_by_name = True
 
 
 class DataContractCreate(DataContractBase):
@@ -489,17 +544,53 @@ class DataContractCreate(DataContractBase):
         )
 
 
-class DataContractUpdate(BaseModel):
+_KEEP_IF_NULL = "Omitted or null: the stored value is kept."
+_DOMAINS_NOTE = (
+    " A non-null domainIds or domainId replaces the whole assignment; domainIds []"
+    " clears it. primaryDomainId alone makes one of the stored domains primary."
+    " Precedence: domainIds (and primaryDomainId) win over the legacy domainId, which"
+    " is then ignored. An empty string is refused (400, invalid_domain_identifier), and so"
+    " is a primaryDomainId that is not one of the domainIds (400,"
+    " primary_domain_not_in_domains)."
+)
+
+
+class DataContractUpdate(CamelCaseSpellingWins):
+    """Contract update. ``apiVersion`` and the domain fields omitted or sent as null
+    keep the stored value.
+
+    Domains: when ``domainIds`` or ``domainId`` is sent with a non-null value, the
+    domain assignment is replaced as a whole (with ``primaryDomainId`` as its primary),
+    so ``domainIds: []`` clears it; ``primaryDomainId`` alone makes one of the stored
+    domains primary (another domain is refused); all of them null or omitted keep it.
+    Precedence: ``domainIds`` / ``primaryDomainId`` win over the legacy ``domainId``
+    (``domainIds: []`` with a ``domainId`` clears the domains). A blank identifier
+    (``""``) is refused with a 400 and the code ``invalid_domain_identifier``, never
+    read as "not sent"; so is a ``primaryDomainId`` that is not one of the ``domainIds``
+    (``primary_domain_not_in_domains``), as when it is sent alone. The legacy ``domain``
+    (a name, not an id) is checked the same way where a caller can send it.
+
+    A field sent under both spellings (``domainIds`` and ``domain_ids``) reads the camelCase
+    one, as on create.
+    """
     name: Optional[str] = None
     version: Optional[str] = None
     status: Optional[str] = None
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     project_id: Optional[str] = None  # Project association
     kind: Optional[str] = None
-    apiVersion: Optional[str] = Field(None, alias='api_version')
-    domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
-    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain replace-all
-    primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
+    apiVersion: Optional[str] = Field(None, alias='api_version', description=_KEEP_IF_NULL)
+    # Legacy single-domain (primary)
+    domainId: Optional[str] = Field(
+        None, alias='domain_id', description=_KEEP_IF_NULL + _DOMAINS_NOTE,
+    )
+    # Multi-domain replace-all
+    domainIds: Optional[List[str]] = Field(
+        None, alias='domain_ids', description=_KEEP_IF_NULL + _DOMAINS_NOTE,
+    )
+    primaryDomainId: Optional[str] = Field(
+        None, alias='primary_domain_id', description=_KEEP_IF_NULL + _DOMAINS_NOTE,
+    )
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None  # Nested description object (flattened in manager)
@@ -531,12 +622,19 @@ class DataContractUpdate(BaseModel):
     class Config:
         populate_by_name = True
 
+    # Spelling only ('3.0.2' -> 'v3.0.2'), as on create
+    _api_version = field_validator('apiVersion', mode='before')(normalized_api_version)
+
 
 class DataContractRead(BaseModel):
     id: str  # Required by ODCS
     name: str  # Required for app usability
     version: str  # Required by ODCS
     status: str  # Required by ODCS
+    # Lifecycle Stage Group (#1213); ``status`` is a stage key of it
+    lifecycle_stage_group_id: Optional[str] = None
+    # Stage Category of ``status`` (draft, review, active, deprecated, retired)
+    status_category: Optional[str] = None
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
     owner_team_name: Optional[str] = None  # Resolved at query time
     project_id: Optional[str] = None  # Project association
@@ -631,6 +729,14 @@ class DataContractRead(BaseModel):
         # under Pydantic v2 because this flag was missing.
         from_attributes = True
 
+    @model_validator(mode='wrap')
+    @classmethod
+    def _fill_status_category(cls, data: Any, handler: Any):
+        # Through the session of the ORM row validated from, when there is one
+        from src.controller.lifecycle_service import lifecycle_service
+        return lifecycle_service.fill_status_category(handler(data), data)
+
+
 
 class DataContractSummary(BaseModel):
     """Lightweight contract model for list endpoints -- no schema, quality, or comments."""
@@ -638,6 +744,10 @@ class DataContractSummary(BaseModel):
     name: str
     version: str
     status: str
+    # Lifecycle Stage Group (#1213); ``status`` is a stage key of it
+    lifecycle_stage_group_id: Optional[str] = None
+    # Stage Category of ``status`` (draft, review, active, deprecated, retired)
+    status_category: Optional[str] = None
     owner_team_id: Optional[str] = None
     owner_team_name: Optional[str] = None
     project_id: Optional[str] = None
@@ -690,6 +800,14 @@ class DataContractSummary(BaseModel):
 
     class Config:
         populate_by_name = True
+
+    @model_validator(mode='wrap')
+    @classmethod
+    def _fill_status_category(cls, data: Any, handler: Any):
+        # Through the session of the ORM row validated from, when there is one
+        from src.controller.lifecycle_service import lifecycle_service
+        return lifecycle_service.fill_status_category(handler(data), data)
+
 
 
 class DataContractCommentCreate(BaseModel):

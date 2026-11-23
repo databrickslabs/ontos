@@ -50,7 +50,7 @@ from src.models.data_contracts_api import (
     DataContractCommentCreate,
     DataContractCommentRead,
 )
-from src.common.api_errors import CodedValueError
+from src.common.api_errors import CodedValueError, InvalidStatusTransitionError
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
 from src.common.authorization import has_feature_permission
@@ -344,14 +344,23 @@ async def approve_contract(
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
-        if from_status not in ('proposed', 'under_review'):
+        # A review decision: from a review-category stage, to the stage the
+        # named action resolves in the contract's lifecycle (409 when none)
+        from src.controller.lifecycle_service import lifecycle_service
+        if not lifecycle_service.awaits_review_decision(db, 'data_contract', contract):
+            raise InvalidReviewDecisionError(contract.status, 'approved')
+        try:
+            target_status = lifecycle_service.resolve_action(
+                db, 'data_contract', contract, 'approve'
+            )
+        except InvalidStatusTransitionError:
             raise InvalidReviewDecisionError(contract.status, 'approved')
         
         # Business logic now in manager
         updated = manager.transition_status(
             db=db,
             contract_id=contract_id,
-            new_status='approved',
+            new_status=target_status,
             current_user=current_user.username if current_user else None
         )
         _decide_waiting_review_workflows(
@@ -398,14 +407,23 @@ async def reject_contract(
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
-        if from_status not in ('proposed', 'under_review'):
+        # A review decision: from a review-category stage, to the stage the
+        # named action resolves in the contract's lifecycle (409 when none)
+        from src.controller.lifecycle_service import lifecycle_service
+        if not lifecycle_service.awaits_review_decision(db, 'data_contract', contract):
+            raise InvalidReviewDecisionError(contract.status, 'draft')
+        try:
+            target_status = lifecycle_service.resolve_action(
+                db, 'data_contract', contract, 'reject'
+            )
+        except InvalidStatusTransitionError:
             raise InvalidReviewDecisionError(contract.status, 'draft')
         
         # Business logic now in manager (ODCS: rejected contracts return to draft)
         updated = manager.transition_status(
             db=db,
             contract_id=contract_id,
-            new_status='draft',
+            new_status=target_status,
             current_user=current_user.username if current_user else None
         )
         _decide_waiting_review_workflows(
@@ -452,7 +470,7 @@ async def change_contract_status(
     """
     Change contract status. Validates transition is allowed per ODCS lifecycle.
     
-    Valid transitions: ``DATA_CONTRACT_TRANSITIONS`` (src.models.lifecycle).
+    Valid transitions: the contract's lifecycle stage group (``lifecycle_service``).
     Certification is a separate field (``/certify``), not a status.
     """
     try:
@@ -1042,7 +1060,8 @@ async def certify_contract_direct(
         if not contract_db:
             raise HTTPException(status_code=404, detail="Contract not found")
 
-        if (contract_db.status or "").lower() != "active":
+        from src.controller.lifecycle_service import lifecycle_service
+        if lifecycle_service.category_of(db, 'data_contract', contract_db) != 'active':
             raise HTTPException(
                 status_code=409,
                 detail=f"Contract must be active to certify. Current status: {contract_db.status}",
@@ -1496,7 +1515,11 @@ async def update_contract(
                 )
 
         # Check if versioning is required for non-draft contracts
-        if db_obj.status and db_obj.status.lower() != 'draft':
+        # A contract that isn't edited in place (past draft and the review awaiting
+        # its decision) is versioned
+        from src.controller.lifecycle_service import lifecycle_service
+        if db_obj.status and \
+                not lifecycle_service.editable_in_place(db, 'data_contract', db_obj):
             # Check if caller explicitly forced the update
             force_update = request.headers.get('X-Force-Update') == 'true'
             
@@ -1663,6 +1686,23 @@ async def delete_contract(
             details=details_for_audit,
         )
 
+def _owner_restorer(request, audit_manager, auth_manager, current_user):
+    """Business owners an Ontos export wrote (ontosOwners) are assigned on import
+    only with the permission and the audit of POST /api/business-owners."""
+    from src.utils.contract_owners import OwnerRestorer
+
+    def audit(details):
+        audit_manager.log_action(
+            db=None, username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="business-owners", action="ASSIGN_OWNER", success=True, details=details,
+        )
+
+    allowed = user_has_feature_level(
+        auth_manager, current_user, 'business-owners', FeatureAccessLevel.READ_WRITE, request)
+    return OwnerRestorer(allowed=allowed, audit=audit)
+
+
 @router.post('/data-contracts/upload', response_model=BatchImportResult)
 async def upload_contract(
     request: Request,
@@ -1697,7 +1737,7 @@ async def upload_contract(
         # requires data-domains write on top of the contract-write permission —
         # otherwise a contract-writer could create domains they cannot manage (#851 review).
         if create_missing_domains and not user_has_feature_level(
-            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE, request
         ):
             raise HTTPException(
                 status_code=403,
@@ -1721,7 +1761,7 @@ async def upload_contract(
         # Feature-admins may see the existing row's id/name on a skipped duplicate;
         # others get a generic skip so the response isn't an existence oracle.
         reveal_dup_detail = user_has_feature_level(
-            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN
+            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN, request
         )
 
         capped = await read_uploads_capped(
@@ -1748,6 +1788,7 @@ async def upload_contract(
             adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
             reveal_dup_detail=reveal_dup_detail,
+            owner_restorer=_owner_restorer(request, audit_manager, auth_manager, current_user),
         )
         for safe_filename in decode_failures:
             result.add(ImportItemResult(
@@ -1820,7 +1861,7 @@ async def import_odcs_json(
 
     try:
         if create_missing_domains and not user_has_feature_level(
-            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE, request
         ):
             raise HTTPException(
                 status_code=403,
@@ -1837,7 +1878,7 @@ async def import_odcs_json(
         )
         details_for_audit["adopt_ids"] = {"requested": adopt_ids, "effective": effective_adopt_ids}
         reveal_dup_detail = user_has_feature_level(
-            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN
+            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN, request
         )
         contract_text = json.dumps(body)
         result = manager.create_contracts_from_files(
@@ -1848,6 +1889,7 @@ async def import_odcs_json(
             adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
             reveal_dup_detail=reveal_dup_detail,
+            owner_restorer=_owner_restorer(request, audit_manager, auth_manager, current_user),
         )
 
         success = result.created > 0
@@ -2032,7 +2074,7 @@ async def get_schema_properties(
     if limit > 0:
         query = query.offset(skip).limit(limit)
     props = query.all()
-    from src.utils.property_custom_properties import custom_properties_by_property
+    from src.utils.property_custom_properties import custom_properties_by_property, decode_value
     custom_props = custom_properties_by_property(db, [p.id for p in props])
 
     items = []
@@ -2055,13 +2097,15 @@ async def get_schema_properties(
             "partitioned": p.partitioned,
             "partitionKeyPosition": p.partition_key_position,
             "classification": p.classification,
-            "description": p.transform_description,
+            "description": p.description,
+            "physicalName": p.physical_name,
             "businessName": p.business_name,
             "criticalDataElement": p.critical_data_element,
             "examples": p.examples,
             "transformLogic": p.transform_logic,
             "transformSourceObjects": p.transform_source_objects,
             "transformDescription": p.transform_description,
+            "tags": decode_value(p.tags) if p.tags else None,
             "encryptedName": p.encrypted_name,
             "customProperties": custom_props.get(p.id, {}),
         }
@@ -2085,7 +2129,7 @@ async def export_odcs(
         db_obj = data_contract_repo.get_with_all(db, id=contract_id)
         if not db_obj:
             raise HTTPException(status_code=404, detail="Contract not found")
-        odcs = manager.build_odcs_from_db(db_obj, db)
+        odcs = manager.build_odcs_from_db(db_obj, db, for_export=True)
 
         # Convert to YAML format for ODCS compliance
         yaml_content = yaml.dump(odcs, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -4405,6 +4449,7 @@ def _relationship_db_to_dict(rel) -> dict:
         pass
     result = {
         'id': rel.id,
+        'stableId': rel.stable_id,  # the ODCS id (v3.2.0); `id` is the row id
         'type': rel.relationship_type,
         'to': to_val,
     }

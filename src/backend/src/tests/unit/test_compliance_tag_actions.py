@@ -204,8 +204,10 @@ class TestRunPolicyInlineTagActions:
             ),
             patch('src.common.workspace_client.get_workspace_client', return_value=MagicMock()),
         ):
+            from src.common.run_identity import RunIdentity
             run = ComplianceManager().run_policy_inline(
-                db_session, policy=policy, current_user='steward@example.com'
+                db_session, policy=policy, current_user='steward@example.com',
+                run_identity=RunIdentity.app(),
             )
 
         assert run.status == 'succeeded'

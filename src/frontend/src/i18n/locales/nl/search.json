@@ -18,7 +18,7 @@
   "noResults": "Geen resultaten gevonden",
   "noResultsHint": "Probeer je zoektermen of filters aan te passen",
   "results": "{{count}} resultaat gevonden",
-  "results_plural": "{{count}} resultaten gevonden",
+  "results_other": "{{count}} resultaten gevonden",
   "filters": {
     "all": "Alles",
     "dataProducts": "Dataproducten",
@@ -66,6 +66,7 @@
     "resourceDetail": "Resourcedetail",
     "prefixPlaceholder": "bijv. example.org/banking",
     "resourceLoading": "Laden…",
+    "resourceLoadFailed": "De resourcegegevens konden niet worden geladen.",
     "noTriples": "Geen triples voor deze resource.",
     "blankNodeExpanded": "(blank node, hieronder uitgebreid)",
     "hover": {

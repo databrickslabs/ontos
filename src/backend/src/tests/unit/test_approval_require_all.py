@@ -77,6 +77,16 @@ def _record(db, execution, approved=True, *names, user='u@example.com'):
 
 
 class TestTally:
+    def test_decision_time_carries_the_utc_offset(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True, 'resolved_targets': _users(('a@x.com', None)),
+        })
+
+        _record(db_session, execution, True, 'a@x.com', user='a@x.com')
+
+        at = datetime.fromisoformat(_stored(db_session, execution)['decisions'][0]['at'])
+        assert at.utcoffset() is not None and at.utcoffset().total_seconds() == 0
+
     def test_pending_until_everyone_approved(self, db_session):
         execution = _paused(db_session, pause_data={
             'require_all': True, 'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
@@ -699,7 +709,7 @@ class TestRoleAssignedUsers:
             title='Approval Required', recipient='Reviewers', recipient_role_id='r-rev',
         )
         manager._repo = MagicMock()
-        manager._repo.get_multi.return_value = [notification]
+        manager._repo.get_addressed_to.return_value = [notification]
 
         listed = manager.get_notifications(db=None, user_info=_user('eve@x.com'))
         hidden = manager.get_notifications(db=None, user_info=_user('ana@x.com'))

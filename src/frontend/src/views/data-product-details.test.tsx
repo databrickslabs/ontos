@@ -7,7 +7,7 @@
  * with the ontology (`portHas*` predicates in `ontos-ontology.ttl`) and with
  * the persona/permissions model.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   PORT_TO_ASSET_PREDICATE,
   selectPortAssetPredicate,
@@ -24,6 +24,7 @@ import {
   canUserModifyProduct,
   resolveDomainLabel,
   isProductActive,
+  putProductUpdate,
 } from './data-product-details';
 import { FeatureAccessLevel } from '@/types/settings';
 
@@ -509,5 +510,47 @@ describe('isProductActive', () => {
     expect(isProductActive(undefined)).toBe(false);
     expect(isProductActive(null)).toBe(false);
     expect(isProductActive('')).toBe(false);
+  });
+});
+
+describe('putProductUpdate', () => {
+  const jsonResponse = (status: number, body: unknown) =>
+    ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response;
+
+  it('reports versioning when deleting a port is a breaking change (409)', async () => {
+    const detail = {
+      requires_versioning: true,
+      change_analysis: { breaking_changes: ["Removed output port 'b'"] },
+      user_can_override: false,
+    };
+    const fetchFn = vi.fn().mockResolvedValue(jsonResponse(409, { detail }));
+
+    const label = 'Failed to delete deliverable';
+    const result = await putProductUpdate('p1', { outputPorts: [] }, false, label, fetchFn);
+
+    expect(result).toEqual({ status: 'versioning', detail });
+    expect(fetchFn.mock.calls[0][1].headers['X-Force-Update']).toBeUndefined();
+  });
+
+  it('applies the update on 200', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonResponse(200, {}));
+
+    const result = await putProductUpdate('p1', { outputPorts: [] }, false, 'x', fetchFn);
+
+    expect(result).toEqual({ status: 'applied' });
+  });
+
+  it('sends X-Force-Update when forced', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonResponse(200, {}));
+
+    await putProductUpdate('p1', {}, true, 'x', fetchFn);
+
+    expect(fetchFn.mock.calls[0][1].headers['X-Force-Update']).toBe('true');
+  });
+
+  it('throws with the failure label on other errors (also a plain 409)', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(jsonResponse(409, { detail: 'conflict' }));
+    const call = putProductUpdate('p1', {}, false, 'Failed to add deliverable', fetchFn);
+    await expect(call).rejects.toThrow('Failed to add deliverable (409)');
   });
 });

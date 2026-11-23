@@ -361,8 +361,13 @@
       "terminalStepHasNext": "El paso \"{{step}}\" finaliza el flujo, así que su enlace a \"{{target}}\" se ignora y se elimina al guardar.",
       "conditionalBranchMissing": "La condición \"{{step}}\" no tiene ningún paso en su rama {{branch}}. Si la condición es {{branch}}, el flujo termina como correcto.",
       "unreachableSteps": "Estos pasos no se pueden alcanzar desde el primer paso: {{steps}}.",
+      "assignTagKeyUnknown": "El paso \"{{step}}\" asigna la etiqueta \"{{key}}\", que no está en el catálogo de etiquetas. El paso falla hasta que se cree la etiqueta.",
       "storedEntityTypeUnknown": "El disparador incluye \"{{entityType}}\", un tipo de entidad que ya no existe. Nunca se activa para él.",
       "storedEntityTypeUnsupported": "El disparador {{trigger}} nunca se activa para {{entity}}."
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "El paso \"{{step}}\" comprueba una política que usa LLM_CHECK. LLM_CHECK solo se evalúa en ejecuciones de cumplimiento, así que el paso haría fallar todas las entidades. Selecciona una política sin LLM_CHECK.",
+      "validationRuleUsesLlmCheck": "El paso \"{{step}}\" tiene una regla que usa LLM_CHECK. LLM_CHECK solo se evalúa en las ejecuciones de cumplimiento, así que el paso fallaría en todas las entidades. Quita LLM_CHECK de la regla."
     }
   },
   "approvalResponse": {
@@ -542,6 +547,7 @@
     "removedStepsHint": "Estos pasos se ejecutaron en esta ejecución y luego se eliminaron del workflow.",
     "stepErrors": {
       "rule_where_evaluation_failed": "No se pudo evaluar la cláusula WHERE de la política '{{policyName}}' en {{entityType}} {{entityId}}",
+      "tag_not_found": "No se encontró la etiqueta '{{tag}}' en el catálogo, así que no se asignó",
       "approval_rejected": "Solicitud denegada",
       "output_port_contracts_missing": "No se puede publicar: los puertos de salida {{ports}} deben tener contratos de datos asignados",
       "output_port_contracts_unapproved": "No se puede publicar: estos puertos de salida tienen contratos no aprobados: {{ports}}. Primero hay que aprobar los contratos.",
@@ -698,6 +704,33 @@
       "label": "Permiso requerido:",
       "prefix": "los usuarios necesitan",
       "suffix": "o superior para ver y ejecutar este flujo de trabajo. Configúralo en Configuración → Roles."
+    }
+  },
+  "triggerSchedule": {
+    "cronLabel": "Programación (cron de Quartz)",
+    "cronHint": "6 o 7 campos: segundo minuto hora día-del-mes mes día-de-la-semana [año]. Ejemplo: {{example}} se ejecuta todos los días a las 06:00. Los segundos deben ser 0 y las ejecuciones deben estar separadas al menos 5 minutos.",
+    "timezoneLabel": "Zona horaria",
+    "timezoneHint": "Un nombre IANA como Europe/Berlin o America/Sao_Paulo. Vacío significa UTC.",
+    "fields": {
+      "second": "segundo",
+      "minute": "minuto",
+      "hour": "hora",
+      "day_of_month": "día-del-mes",
+      "month": "mes",
+      "day_of_week": "día-de-la-semana",
+      "year": "año"
+    },
+    "errors": {
+      "schedule_required": "Un disparador programado necesita una expresión cron.",
+      "cron_field_count": "Una expresión cron de Quartz tiene 6 o 7 campos; esta tiene {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" no es válido en el campo {{field}}.",
+      "cron_day_fields_conflict": "Ponga \"?\" en exactamente uno de los campos día-del-mes y día-de-la-semana.",
+      "cron_seconds_not_zero": "El campo de segundos debe ser 0: las ejecuciones empiezan en el minuto exacto.",
+      "cron_unsupported_character": "\"{{character}}\" en el campo {{field}} no se admite en las programaciones de workflows.",
+      "cron_invalid": "Esta no es una expresión cron de Quartz válida.",
+      "cron_no_upcoming_runs": "Esta expresión cron no tiene ninguna ejecución próxima.",
+      "cron_interval_too_short": "Las ejecuciones programadas deben estar separadas al menos {{minutes}} minutos.",
+      "timezone_invalid": "Zona horaria desconocida \"{{timezone}}\": use un nombre IANA como Europe/Berlin."
     }
   },
   "view": {

@@ -12,7 +12,7 @@ Covers the cascade-bypass admin check used by data-products listing
 5. Fail-closed on auth-manager errors — i.e., a transient resolution
    failure never flips a non-admin into admin.
 """
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -78,8 +78,8 @@ async def test_ontos_role_admin_grants_bypass(mock_settings):
         "data-contracts": FeatureAccessLevel.READ_WRITE,
     }
     with patch(
-        "src.common.authorization.get_user_team_role_overrides",
-        new=AsyncMock(return_value=None),
+        "src.common.authorization.lookup_user_team_roles",
+        new=MagicMock(return_value=[]),
     ):
         result = await is_user_feature_admin(
             user_email="mikhail@example.com",
@@ -106,8 +106,8 @@ async def test_read_write_role_does_not_grant_bypass(mock_settings):
         "data-products": FeatureAccessLevel.READ_WRITE,
     }
     with patch(
-        "src.common.authorization.get_user_team_role_overrides",
-        new=AsyncMock(return_value=None),
+        "src.common.authorization.lookup_user_team_roles",
+        new=MagicMock(return_value=[]),
     ):
         result = await is_user_feature_admin(
             user_email="producer@example.com",
@@ -145,8 +145,8 @@ async def test_auth_manager_failure_falls_back_to_false(mock_settings, caplog):
     auth_manager = MagicMock()
     auth_manager.get_user_effective_permissions.side_effect = RuntimeError("db down")
     with patch(
-        "src.common.authorization.get_user_team_role_overrides",
-        new=AsyncMock(return_value=None),
+        "src.common.authorization.lookup_user_team_roles",
+        new=MagicMock(return_value=[]),
     ):
         result = await is_user_feature_admin(
             user_email="user@example.com",
@@ -185,8 +185,8 @@ async def test_applied_role_override_path_uses_override(mock_settings):
     }
 
     with patch(
-        "src.common.authorization.get_user_team_role_overrides",
-        new=AsyncMock(return_value=None),
+        "src.common.authorization.lookup_user_team_roles",
+        new=MagicMock(return_value=[]),
     ):
         result = await is_user_feature_admin(
             user_email="role-switcher@example.com",

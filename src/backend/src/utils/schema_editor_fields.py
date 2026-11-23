@@ -5,18 +5,28 @@ from the payload. The editor only loads and sends some fields (names, types,
 descriptions, granularity, relationships, semantic concepts, the columns and
 their custom properties); the others are kept from the stored object when the
 payload leaves them out: the ODCS ids, tags, custom properties and quality
-checks of the object, the ids, quality checks, relationships and tags of its
-columns, and authoritative definitions other than semantic concepts.
+checks of the object, the ids, quality checks and relationships of its
+columns, and authoritative definitions other than semantic concepts. A
+column's tags are kept when the payload has no `tags` key (the editor sends
+`[]` to clear them). The editor owns a column's `physicalName` and
+`transformDescription`: it loads them and leaves the key out to clear one, so
+a missing key clears the value.
 """
 from typing import Any, Dict, List, Optional
+
+from src.utils.odcs_type_options import EDITOR_UNSENT_OPTIONS, read_type_options
 
 SEMANTIC_ASSIGNMENT = 'http://databricks.com/ontology/uc/semanticAssignment'
 
 _OBJECT_FIELDS = ('id', 'tags', 'customProperties', 'quality')
+_DATE_TYPES = ('date', 'timestamp', 'time')
+_DATE_BOUNDS = ('minimum', 'maximum')
 _PROPERTY_FIELDS = ('id', 'quality', 'relationships', 'tags', 'itemType')
 
 
 def _sent(payload: Dict[str, Any], key: str) -> bool:
+    # A column's `tags: []` is sent (the editor clears them that way); a missing
+    # key or null is not
     return payload.get(key) is not None
 
 
@@ -33,6 +43,13 @@ def _definitions(sent: Optional[List[Dict[str, Any]]], stored: Optional[List[Dic
         if (d.get('url'), d.get('type')) not in seen:
             merged.append(dict(d))
     return merged or None
+
+
+def _api_relationship(relationship: Dict[str, Any]) -> Dict[str, Any]:
+    """A relationship as the export writes it, in the API form (`stableId`)."""
+    out = {k: v for k, v in relationship.items() if k != 'id'}
+    out['stableId'] = relationship.get('id')
+    return out
 
 
 def keep_unsent_fields(payload: Dict[str, Any], stored: Dict[str, Any]) -> Dict[str, Any]:
@@ -53,9 +70,27 @@ def keep_unsent_fields(payload: Dict[str, Any], stored: Dict[str, Any]) -> Dict[
         column = column.model_dump(by_alias=True, exclude_unset=True) if hasattr(column, 'model_dump') else dict(column)
         previous = stored_columns.get(column.get('name'))
         if previous:
+            items = previous.get('items')
+            if isinstance(items, dict) and previous.get('itemType') is None:
+                # a v3.x export writes the item type as items.logicalType
+                previous = {**previous, 'itemType': items.get('logicalType')}
+            # the stored options the editor doesn't send (a v3.x export has them nested)
+            stored_options = read_type_options(previous)
+            for key in EDITOR_UNSENT_OPTIONS:
+                value = previous.get(key, stored_options.get(key))
+                if not _sent(column, key) and value is not None:
+                    column[key] = value
+            if column.get('logicalType', previous.get('logicalType')) in _DATE_TYPES:
+                # the editor edits bounds as numbers: a date-time bound comes back empty
+                for key in _DATE_BOUNDS:
+                    value = previous.get(key, stored_options.get(key))
+                    if not _sent(column, key) and isinstance(value, str):
+                        column[key] = value
             for key in _PROPERTY_FIELDS:
                 if not _sent(column, key) and previous.get(key) is not None:
                     column[key] = previous[key]
+                    if key == 'relationships':  # export form: `id` is the ODCS id
+                        column[key] = [_api_relationship(r) for r in previous[key]]
             definitions = _definitions(column.get('authoritativeDefinitions'), previous.get('authoritativeDefinitions'))
             if definitions is not None:
                 column['authoritativeDefinitions'] = definitions

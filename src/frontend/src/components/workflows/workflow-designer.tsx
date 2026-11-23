@@ -10,6 +10,7 @@ import ReactFlow, {
   Background,
   MiniMap,
   useNodesState,
+  useReactFlow,
   useEdgesState,
   MarkerType,
   Panel,
@@ -153,6 +154,9 @@ import { EntityTypeMultiselect } from './entity-type-multiselect';
 import { UnknownEntityTypesNotice } from './unknown-entity-types-notice';
 import { workflowIssueNodeIds, workflowWarningText } from './workflow-warnings';
 import { WorkflowWarningsPanel, type WorkflowIssueItem } from './workflow-warnings-panel';
+import {
+  DEFAULT_SCHEDULE_TIMEZONE, TriggerScheduleFields, isScheduleIssue,
+} from './trigger-schedule-fields';
 import {
   TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
 } from './workflow-entry-step';
@@ -728,6 +732,28 @@ const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shie
   { type: 'deliver', label: 'Deliver', icon: Send },
 ];
 
+// Fit options of the canvas: on first load and after Rearrange
+const FIT_VIEW_OPTIONS = { maxZoom: 1, padding: 0.2 };
+
+// Fits the view after a confirmed Rearrange, so a layout taller than the view isn't left
+// partly off-screen. Rendered inside ReactFlow (the hook needs its context). Deferred one
+// tick so the store has the new node positions first.
+export function FitAfterRearrange({ version }: { version: number }) {
+  const { fitView } = useReactFlow();
+  const handled = useRef(version);
+  useEffect(() => {
+    if (version === handled.current) return undefined;
+    // Marked handled when the fit runs, not when it is scheduled: if fitView's identity
+    // changes first, the cleanup cancels the timer and the re-run must schedule it again.
+    const timer = setTimeout(() => {
+      handled.current = version;
+      fitView(FIT_VIEW_OPTIONS);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [version, fitView]);
+  return null;
+}
+
 // Layout helper
 // Label and colour of a step's outgoing edge. A conditional's edges are its true and
 // false branches: a false condition is a branch, not a failure (#1418).
@@ -897,6 +923,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [showRearrangeDialog, setShowRearrangeDialog] = useState(false);
+  const [rearrangeVersion, setRearrangeVersion] = useState(0);
   const [activationConflicts, setActivationConflicts] = useState<WorkflowActivationConflict[]>([]);
   const [showOverlapDialog, setShowOverlapDialog] = useState(false);
   // Preview wizard (issue #405) — design-time dry-run. Only meaningful once
@@ -934,6 +961,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [triggerToStatus, setTriggerToStatus] = useState('');
   const [triggerOnError, setTriggerOnError] = useState<GateErrorMode>('fail_open');
   const [triggerDisabledFor, setTriggerDisabledFor] = useState<GateExemptions>(EMPTY_GATE_EXEMPTIONS);
+  // scheduled only: Quartz cron and IANA timezone, and the backend's error about them
+  const [triggerSchedule, setTriggerSchedule] = useState('');
+  const [triggerTimezone, setTriggerTimezone] = useState(DEFAULT_SCHEDULE_TIMEZONE);
+  const [scheduleIssue, setScheduleIssue] = useState<WorkflowValidationIssue | null>(null);
   // Selected exemptions whose entity was deleted: the backend refuses to save them
   const [missingExemptions, setMissingExemptions] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
@@ -1009,6 +1040,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     description: string;
     triggerType: TriggerType;
     entityTypes: EntityType[];
+    schedule?: string;
+    timezone?: string;
     isActive: boolean;
     steps: WorkflowStepCreate[];
   }
@@ -1077,6 +1110,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     if (name !== originalState.name) return true;
     if (description !== originalState.description) return true;
     if (triggerType !== originalState.triggerType) return true;
+    if (triggerType === 'scheduled' && (triggerSchedule !== (originalState.schedule ?? '')
+      || triggerTimezone !== (originalState.timezone ?? DEFAULT_SCHEDULE_TIMEZONE))) return true;
     if (isActive !== originalState.isActive) return true;
     
     // Compare entity types
@@ -1090,7 +1125,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     return false;
   }, [
     originalState, name, description, triggerType, entityTypes, unknownEntityTypes,
-    storedUnknownTypes.length,
+    storedUnknownTypes.length, triggerSchedule, triggerTimezone,
     isActive, steps, isNew,
   ]);
 
@@ -1216,6 +1251,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             setTriggerToStatus(response.data.trigger.to_status || '');
             setTriggerOnError(response.data.trigger.on_error || 'fail_open');
             setTriggerDisabledFor({ ...EMPTY_GATE_EXEMPTIONS, ...(response.data.trigger.disabled_for || {}) });
+            // The stored timezone as is (empty = UTC): a save that leaves both unchanged
+            // isn't checked again by the backend
+            setTriggerSchedule(response.data.trigger.schedule || '');
+            setTriggerTimezone(response.data.trigger.timezone || '');
             setIsActive(response.data.is_active);
             setWorkflowType((response.data.workflow_type as WorkflowTypeValue) || 'process');
             const loadedSteps = response.data.steps.map(s => ({
@@ -1236,6 +1275,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
               description: response.data.description || '',
               triggerType: response.data.trigger.type,
               entityTypes: [...response.data.trigger.entity_types],
+              schedule: response.data.trigger.schedule || '',
+              timezone: response.data.trigger.timezone || '',
               isActive: response.data.is_active,
               steps: loadedSteps.map(s => ({ ...s })),
             });
@@ -1388,6 +1429,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setNodes(arranged);
     setSteps(prev => withNodePositions(prev, arranged));
     setShowRearrangeDialog(false);
+    setRearrangeVersion(v => v + 1);
   }, [nodes, edges, setNodes]);
 
   // Handle edge reconnection (drag an existing edge endpoint to a different node)
@@ -1583,6 +1625,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
       ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
       ...(triggerType === 'before_status_change' ? { on_error: triggerOnError, disabled_for: triggerDisabledFor } : {}),
+      // Both sent, even empty: an empty schedule gets the backend's schedule_required
+      ...(triggerType === 'scheduled'
+        ? { schedule: triggerSchedule.trim(), timezone: triggerTimezone.trim() || null }
+        : {}),
     },
     workflow_type: workflowType || 'process',
     is_active: isActive,
@@ -1635,12 +1681,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         text: workflowValidationIssueText(issue, t),
         nodeIds: workflowIssueNodeIds(issue, stepIds),
       })),
-      ...[...(workflow?.trigger_warnings ?? []), ...(activeCheck?.warnings ?? [])].map((issue, i) => ({
-        key: `warning-${i}`,
-        tone: 'warning' as const,
-        text: workflowWarningText(issue, t),
-        nodeIds: workflowIssueNodeIds(issue, stepIds),
-      })),
+      // An unknown stored entity type is shown, with a remove button, by the notice in the
+      // trigger settings; the trigger node still gets its amber ring below
+      ...[...(workflow?.trigger_warnings ?? []), ...(activeCheck?.warnings ?? [])]
+        .filter(issue => issue.code !== 'stored_entity_type_unknown')
+        .map((issue, i) => ({
+          key: `warning-${i}`,
+          tone: 'warning' as const,
+          text: workflowWarningText(issue, t),
+          nodeIds: workflowIssueNodeIds(issue, stepIds),
+        })),
     ];
   })();
 
@@ -1741,7 +1791,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         const failedStep = issues
           ?.map(issue => issue.params?.step)
           .find(step => steps.some(s => s.step_id === step));
-        if (typeof failedStep === 'string') {
+        const failedSchedule = issues?.find(issue => isScheduleIssue(issue.code)) ?? null;
+        setScheduleIssue(failedSchedule);
+        if (failedSchedule) {
+          setSelectedNodeId('trigger');  // the error shows at the schedule field
+        } else if (typeof failedStep === 'string') {
           setInvalidStepId(failedStep);
           setSelectedNodeId(failedStep);
         } else if (issues?.some(issue => issue.code.startsWith('trigger_entity_type_'))) {
@@ -1764,6 +1818,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           description,
           triggerType,
           entityTypes: [...entityTypes],
+          schedule: triggerSchedule,
+          timezone: triggerTimezone,
           isActive,
           steps: steps.map(s => ({ ...s })),
         });
@@ -1930,7 +1986,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             edgesUpdatable
             edgesFocusable
             fitView
-            fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
+            fitViewOptions={FIT_VIEW_OPTIONS}
             minZoom={0.3}
             maxZoom={2}
             defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
@@ -1939,6 +1995,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             <Background />
             <Controls />
             <MiniMap />
+            <FitAfterRearrange version={rearrangeVersion} />
             
             {/* Step type toolbar */}
             <Panel position="top-left" className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-2 dark:bg-slate-800/95">
@@ -2159,6 +2216,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       </div>
                     );
                   })()}
+
+                  {triggerType === 'scheduled' && (
+                    <TriggerScheduleFields
+                      schedule={triggerSchedule}
+                      timezone={triggerTimezone}
+                      onScheduleChange={(v) => { setTriggerSchedule(v); setScheduleIssue(null); }}
+                      onTimezoneChange={(v) => { setTriggerTimezone(v); setScheduleIssue(null); }}
+                      issue={scheduleIssue}
+                    />
+                  )}
 
                   {triggerType === 'before_status_change' && (
                     <div className="flex items-start justify-between gap-3">

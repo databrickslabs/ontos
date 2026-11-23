@@ -531,16 +531,16 @@ class MetricViewChangeRequestsManager:
     def _cancel_execution(self, execution_id: str, user_email: str) -> None:
         """Cancel the paused review and close its approval notifications."""
         import json
-        from src.db_models.notifications import NotificationDb
         from src.db_models.process_workflows import WorkflowExecutionDb
+        from src.common.workflow_approvals import open_execution_approvals
 
         execution = self._db.get(WorkflowExecutionDb, execution_id)
         if execution is not None and execution.status == 'paused':
             execution.status = 'cancelled'
             execution.finished_at = _now()
-        for notification in self._db.query(NotificationDb).filter(
-            NotificationDb.action_type == 'workflow_approval', NotificationDb.read.is_(False),
-        ).all():
+        # Read ones too: an approver who opened the notification still sees it
+        # in My actions until it is handled (same rule as the workflow routes)
+        for notification in open_execution_approvals(self._db, execution_id):
             try:
                 payload = notification.action_payload
                 payload = json.loads(payload) if isinstance(payload, str) else (payload or {})

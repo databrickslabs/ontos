@@ -259,7 +259,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 4c. DATA CONTRACT SCHEMA PROPERTIES (type=006)
 -- ============================================================================
 
-INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, transform_description) VALUES
+INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, required, "unique", primary_key, partitioned, primary_key_position, partition_key_position, critical_data_element, description) VALUES
 -- customers table properties
 ('00600001-0000-4000-8000-000000000001', '00500001-0000-4000-8000-000000000001', 'customer_id', 'string', true, true, true, false, 1, -1, true, 'Unique customer identifier (UUID format)'),
 ('00600002-0000-4000-8000-000000000002', '00500001-0000-4000-8000-000000000001', 'email', 'string', true, true, false, false, -1, -1, true, 'Customer email address (primary contact)'),
@@ -1982,9 +1982,9 @@ true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
 -- Contract lifecycle monitoring workflow
 ('02a00004-0000-4000-8000-000000000004', 'Contract Lifecycle Monitor', 'Checks daily that no data contract is deprecated or retired and notifies the owner when one is.', 
-'{"type": "scheduled", "schedule": "0 6 * * *"}',
+'{"type": "scheduled", "schedule": "0 0 6 * * ?"}',
 '{"type": "all"}',
-true, false, 1, 'system@demo', 'system@demo', NOW(), NOW()),
+false, false, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
 -- Full governance workflow with multiple checks
 ('02a00005-0000-4000-8000-000000000005', 'Full Governance Pre-Check', 'Comprehensive pre-creation validation including naming, GDPR controls for PII products, and restricted access for confidential contracts.', 

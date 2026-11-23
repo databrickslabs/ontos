@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from typing import Dict, Any
 
+from src.common.odcs_logical_types import odcs_logical_type
 from src.controller.catalog_commander_manager import CatalogCommanderManager
 
 
@@ -161,8 +162,10 @@ class TestCatalogCommanderManagerSchemaInference:
         ('decimal(10,2)', 'number'),
         ('numeric', 'number'),
         ('date', 'date'),
-        ('timestamp', 'date'),
-        ('time', 'date'),
+        ('timestamp', 'timestamp'),
+        ('timestamp_ntz', 'timestamp'),
+        ('time', 'time'),
+        ('interval day', 'string'),
         ('boolean', 'boolean'),
         ('bool', 'boolean'),
         ('array<string>', 'array'),
@@ -173,8 +176,8 @@ class TestCatalogCommanderManagerSchemaInference:
         (None, 'string'),  # None fallback
     ])
     def test_map_to_odcs_logical_type(self, catalog_manager, databricks_type, expected_logical_type):
-        """Test mapping of Databricks types to ODCS logical types."""
-        result = catalog_manager._map_to_odcs_logical_type(databricks_type)
+        """Test mapping of Databricks types to ODCS logical types (the shared map)."""
+        result = odcs_logical_type(databricks_type)
         assert result == expected_logical_type
 
     def test_get_dataset_handles_partitioned_columns(self, catalog_manager, mock_obo_client):

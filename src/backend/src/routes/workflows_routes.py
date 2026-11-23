@@ -5,8 +5,7 @@ Provides CRUD operations for workflow definitions and execution management.
 """
 
 import json
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Collection, Dict, List, Optional, Union
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
@@ -20,10 +19,15 @@ from src.common.authorization import (
 from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
 from src.models.notifications import Notification
+from src.common.workflow_approvals import (
+    add_decided_by_users, execution_approvals, has_decided, is_handled, open_approval_ids,
+    open_execution_approvals,
+)
 from src.common.logging import get_logger
+from src.common.timestamps import utc_now
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.notifications_manager import NotificationsManager
-from src.common.workflow_executor import WorkflowExecutor
+from src.common.workflow_executor import WorkflowExecutor, public_result_data
 from src.repositories.process_workflows_repository import process_workflow_repo, workflow_execution_repo
 from src.db_models.compliance import CompliancePolicyDb
 from src.db_models.notifications import NotificationDb
@@ -819,13 +823,17 @@ def _with_policy_warnings(
 def _refuse_unrunnable_policy_steps(
     manager: WorkflowsManager, existing: ProcessWorkflow,
 ) -> None:
-    """400 when a stored workflow has policy_check steps with no existing policy.
+    """400 when a stored workflow has policy_check steps with no existing policy,
+    or validation steps whose rule uses LLM_CHECK.
 
     Called before the overlap check: a workflow that can't run is refused outright
     instead of offering an "activate anyway" that would then fail.
     """
+    rule_errors = manager.validation_rule_errors(existing.steps)
     validation = _with_policy_errors(
-        manager, WorkflowValidationResult(valid=True), existing.steps, True,
+        manager,
+        WorkflowValidationResult(valid=not rule_errors, errors=rule_errors),
+        existing.steps, True,
     )
     if not validation.valid:
         raise HTTPException(status_code=400, detail=_invalid_workflow_detail(validation))
@@ -927,6 +935,8 @@ async def update_workflow(
         # Activating without touching the steps: the stored steps must be able to run
         _refuse_unrunnable_policy_steps(manager, existing)
     
+    # The designer leaves out schedule and timezone: keep the stored ones
+    workflow.trigger = manager.with_stored_schedule(workflow.trigger, existing.trigger)
     # Validate if steps are being updated
     if workflow.steps is not None:
         # Create a full workflow for validation
@@ -939,7 +949,7 @@ async def update_workflow(
             workflow_type=workflow.workflow_type or existing.workflow_type,
             steps=workflow.steps,
         )
-        validation = manager.validate_workflow(full_workflow)
+        validation = manager.validate_workflow(full_workflow, stored_trigger=existing.trigger)
         validation = _with_policy_errors(
             manager, validation, full_workflow.steps, full_workflow.is_active,
         )
@@ -948,6 +958,12 @@ async def update_workflow(
     # Only a changed trigger is checked: stored workflows keep working and can be edited.
     # Before the overlap check: a confirmed overlap must not end in a refused trigger.
     trigger_errors = manager.trigger_save_errors(workflow.trigger, existing.trigger)
+    if workflow.trigger is not None and workflow.steps is None:
+        # validate_workflow above checks the schedule only when steps are sent
+        trigger_errors = [
+            *trigger_errors,
+            *manager.changed_schedule_errors(workflow.trigger, existing.trigger),
+        ]
     if trigger_errors:
         raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
             WorkflowValidationResult(valid=False, errors=trigger_errors)))
@@ -1193,7 +1209,8 @@ async def validate_workflow(
         if not existing:
             raise HTTPException(status_code=404, detail="Workflow not found")
         stored_trigger = existing.trigger
-    validation = manager.validate_workflow(workflow)
+        workflow.trigger = manager.with_stored_schedule(workflow.trigger, stored_trigger)
+    validation = manager.validate_workflow(workflow, stored_trigger=stored_trigger)
     trigger_errors = manager.trigger_save_errors(workflow.trigger, stored_trigger)
     if trigger_errors:
         # ``errors`` of a result are plain strings: pass ``issues`` too, keeping their codes
@@ -1369,6 +1386,11 @@ async def resume_workflow_execution(
                 },
             )
 
+        # The step the resume decides, read before the resume moves on
+        decided_step = _pending_step_id(db, execution_id)
+        # Open before the resume: a loop-back into this step opens a new round
+        open_before = open_approval_ids(db, execution_id)
+
         # Resume the workflow
         result = executor.resume_workflow(
             execution_id=execution_id,
@@ -1380,13 +1402,20 @@ async def resume_workflow_execution(
             },
             user_email=user_email,
         )
-        
+
         if not result:
             raise HTTPException(
-                status_code=404, 
+                status_code=404,
                 detail="Execution not found or not in paused state"
             )
-        
+
+        # An approval resumed here (e.g. by an external system) is decided:
+        # close its notifications so My actions stops offering it
+        _mark_step_notifications_handled(
+            db, execution_id, decided_step, approved, user_email, only_ids=open_before,
+        )
+        db.commit()
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',
@@ -1518,17 +1547,6 @@ def _is_for_step(
     return step_id is None or notified_step is None or notified_step == step_id
 
 
-def _is_handled(notification: Union[Notification, NotificationDb]) -> bool:
-    """Whether the approval notification's decision was already recorded."""
-    payload = notification.action_payload
-    if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except ValueError:
-            return False
-    return isinstance(payload, dict) and bool(payload.get('handled'))
-
-
 def _is_own_owner_approval(
     db: Session, execution_id: str, step_id: Optional[str], user_info: UserInfo,
 ) -> bool:
@@ -1627,7 +1645,9 @@ def _assert_caller_authorized_for_execution(
 
     ``for_read``: the check that lets a pending approver read the entity
     (``caller_is_pending_reviewer``, #1117). Notifications already handled
-    (an approver who decided while the step waits for others) don't count.
+    (an approver who decided while the step waits for others) don't count,
+    nor a shared role or group row whose ``decided_by_users`` names the caller
+    (they decided the step through another target, #1552).
 
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
@@ -1636,7 +1656,7 @@ def _assert_caller_authorized_for_execution(
     candidates = [
         n for n in _find_approval_notifications_for_execution(db, execution_id)
         if (n.recipient or n.recipient_role_id) and _is_for_step(n, pending_step)
-        and not (for_read and _is_handled(n))
+        and not (for_read and (is_handled(n) or has_decided(n, user_info)))
     ]
     if not candidates:
         raise HTTPException(
@@ -1679,19 +1699,21 @@ def _mark_step_notifications_handled(
     approved: bool,
     user_email: Optional[str],
     decision: Optional[str] = None,
+    only_ids: Optional[Collection[str]] = None,
 ) -> None:
-    """Mark the unread approval notifications of ``step_id`` as handled.
+    """Mark the approval notifications of ``step_id`` not yet handled as handled.
 
-    Notifications of later steps, created while the workflow resumed, stay
-    open for their approvers. ``decision`` overrides approved / rejected
-    (``cancelled`` when an admin cancels the step).
+    Read ones too: an approver who opened the notification in the bell still
+    sees it in My actions until it is handled. Notifications of later steps,
+    created while the workflow resumed, stay open for their approvers.
+    ``decision`` overrides approved / rejected (``cancelled`` when an admin
+    cancels the step). ``only_ids`` limits the marking to the notifications
+    open before a resume: a workflow that loops back into the same step opens
+    a new round that must stay open.
     """
-    notifications = db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'workflow_approval',
-        NotificationDb.read == False
-    ).all()
-
-    for notif in notifications:
+    for notif in open_execution_approvals(db, execution_id):
+        if only_ids is not None and notif.id not in only_ids:
+            continue
         try:
             payload = notif.action_payload
             if isinstance(payload, str):
@@ -1706,11 +1728,70 @@ def _mark_step_notifications_handled(
                 payload['handled'] = True
                 payload['decision'] = decision or ('approved' if approved else 'rejected')
                 payload['handled_by'] = user_email
-                payload['handled_at'] = datetime.utcnow().isoformat()
+                payload['handled_at'] = utc_now().isoformat()
                 notif.action_payload = json.dumps(payload)
                 db.add(notif)
         except (json.JSONDecodeError, TypeError):
             continue
+
+
+def _record_decider_on_shared_rows(
+    db: Session,
+    execution_id: str,
+    step_id: Optional[str],
+    decisions: List[Dict[str, Any]],
+    *,
+    decider: Optional[UserInfo],
+    decides_for: Optional[Callable[[Optional[str], Optional[str]], bool]],
+    open_ids: Collection[str],
+) -> None:
+    """Record ``decider`` in ``decided_by_users`` on the shared rows of this round they are in.
+
+    One person decides once per step (#1552), so every group or role row of the round the
+    decider is a member of (``decides_for``) leaves their lists, a row another member already
+    filled included; not their own user row, nor the row they filled. The round's rows are
+    those open before the decision (``open_ids``) and those a decision of this round handled
+    (``handled_at`` is that decision's ``at``): an earlier round's rows, and those a loop-back
+    opens, are left alone. Other approvers' own rows don't learn who decided.
+    """
+    from src.common.workflow_executor import approver_key
+
+    # The identity the decision stored (``decided_by`` of the executor's record)
+    decided_by = (getattr(decider, 'email', None) or getattr(decider, 'username', None))
+    if not decided_by or decides_for is None:
+        return
+    own_names = {
+        str(v).strip().lower() for v in (
+            getattr(decider, 'email', None), getattr(decider, 'username', None),
+        ) if v
+    }
+    if not any(str(d.get('decided_by') or '').strip().lower() in own_names for d in decisions):
+        return  # the call ended the step on a stored rejection; this user decided nothing
+    by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
+    for notif in execution_approvals(db, execution_id):
+        try:
+            payload = json.loads(notif.action_payload or '{}')
+        except (TypeError, ValueError):
+            continue
+        if payload.get('execution_id') != execution_id or not _is_for_step(notif, step_id):
+            continue
+        if (notif.recipient or '').strip().lower() in own_names:
+            continue
+        decision = by_key.get(approver_key(
+            notif.recipient or notif.recipient_role_id or '', notif.recipient_role_id,
+        ))
+        filled_by = str((decision or {}).get('decided_by') or '').strip().lower()
+        if filled_by in own_names:
+            continue
+        this_round = notif.id in open_ids or (
+            decision is not None and is_handled(notif)
+            and payload.get('handled_at') == decision.get('at')
+        )
+        if not this_round or not decides_for(notif.recipient, notif.recipient_role_id):
+            continue
+        if add_decided_by_users(payload, [decided_by]):
+            notif.action_payload = json.dumps(payload)
+            db.add(notif)
 
 
 def _mark_decided_approver_notifications(
@@ -1718,20 +1799,22 @@ def _mark_decided_approver_notifications(
     execution_id: str,
     step_id: Optional[str],
     decisions: List[Dict[str, Any]],
+    *,
+    decider: Optional[UserInfo] = None,
+    decides_for: Optional[Callable[[Optional[str], Optional[str]], bool]] = None,
 ) -> None:
     """Mark handled the approval notifications of the targets that decided.
 
     For a require_all step still waiting for others (#1119): the notification
     of each decided target (a user, a group, a role) is handled, the others
-    stay open.
+    stay open. The shared rows of the round ``decider`` is a member of then
+    record that they decided the step (``_record_decider_on_shared_rows``).
     """
     from src.common.workflow_executor import approver_key
 
     by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
-    for notif in db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'workflow_approval',
-        NotificationDb.read == False,  # noqa: E712
-    ).all():
+    open_rows = open_execution_approvals(db, execution_id)
+    for notif in open_rows:
         try:
             payload = json.loads(notif.action_payload or '{}')
         except (TypeError, ValueError):
@@ -1752,6 +1835,10 @@ def _mark_decided_approver_notifications(
         })
         notif.action_payload = json.dumps(payload)
         db.add(notif)
+    _record_decider_on_shared_rows(
+        db, execution_id, step_id, decisions, decider=decider, decides_for=decides_for,
+        open_ids={n.id for n in open_rows},
+    )
 
 
 def _no_longer_pending() -> HTTPException:
@@ -1812,8 +1899,13 @@ def _respond_to_pending_approval(
     execution_id: str,
     approved: bool,
     required: Dict[str, Any],
+    decides_for: Optional[Callable[[Optional[str], Optional[str]], bool]] = None,
 ) -> Dict[str, Any]:
-    """Answer a require_all decision that doesn't end the step (#1119)."""
+    """Answer a require_all decision that doesn't end the step (#1119).
+
+    ``decides_for``: the caller's recipient check, to tell the shared rows they
+    are a member of (see ``_mark_decided_approver_notifications``).
+    """
     if required['outcome'] == 'not_an_approver':
         raise HTTPException(
             status_code=403,
@@ -1836,6 +1928,7 @@ def _respond_to_pending_approval(
         raise _no_longer_pending()
     _mark_decided_approver_notifications(
         db, execution_id, _pending_step_id(db, execution_id), required['decisions'],
+        decider=current_user, decides_for=decides_for,
     )
     audit_manager.log_action(
         db=db,
@@ -1920,10 +2013,11 @@ async def handle_workflow_approval(
         # require_all (#1119): each resolved approver decides once (a user for
         # themselves, any one member for a group or role). The execution stays
         # paused until all have approved; any rejection resumes it as rejected.
+        decides_for = notifications_manager.recipient_matcher(current_user)
         required = executor.record_required_approval(
             execution_id,
             bool(approved),
-            decides_for=notifications_manager.recipient_matcher(current_user),
+            decides_for=decides_for,
             user_email=current_user.email if current_user else None,
             username=current_user.username if current_user else None,
             reason=message,
@@ -1933,7 +2027,7 @@ async def handle_workflow_approval(
         ):
             return _respond_to_pending_approval(
                 db, request, audit_manager, current_user, execution_id, bool(approved),
-                required,
+                required, decides_for,
             )
 
         user_email = current_user.email if current_user else None
@@ -1948,6 +2042,7 @@ async def handle_workflow_approval(
         # Resuming may pause at the next approval step and notify its
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)
+        open_before = open_approval_ids(db, execution_id)
 
         # Resume the workflow. The caller passed the per-execution check, so
         # the decision counts as the approval step's (e.g. for the certified
@@ -1978,7 +2073,15 @@ async def handle_workflow_approval(
                 detail="Execution not found or not in paused state"
             )
 
-        _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
+        _mark_step_notifications_handled(
+            db, execution_id, decided_step, approved, user_email, only_ids=open_before,
+        )
+        if required is not None:
+            # A decision that ends a require_all step: the shared rows of its round too
+            _record_decider_on_shared_rows(
+                db, execution_id, decided_step, required['decisions'],
+                decider=current_user, decides_for=decides_for, open_ids=open_before,
+            )
 
         audit_manager.log_action(
             db=db,
@@ -2342,8 +2445,9 @@ async def get_execution(
             'step_name': se.step_name,
             'status': se.status,
             'passed': se.passed,
-            'result_data': json.loads(se.result_data) if se.result_data else None,
+            'result_data': public_result_data(se.result_data),
             'error_message': se.error_message,
+            'message': se.message,
             'duration_ms': se.duration_ms,
             'started_at': se.started_at.isoformat() if se.started_at else None,
             'finished_at': se.finished_at.isoformat() if se.finished_at else None,

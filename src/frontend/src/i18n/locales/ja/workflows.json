@@ -361,8 +361,13 @@
       "terminalStepHasNext": "ステップ「{{step}}」はワークフローを終了するため、「{{target}}」へのリンクは無視され、保存時に削除されます。",
       "conditionalBranchMissing": "条件「{{step}}」の{{branch}}の分岐にステップがありません。条件が{{branch}}のとき、ワークフローは成功として終了します。",
       "unreachableSteps": "最初のステップからたどれないステップがあります: {{steps}}。",
+      "assignTagKeyUnknown": "ステップ \"{{step}}\" はタグ \"{{key}}\" を割り当てますが、このタグはタグカタログにありません。タグを作成するまでこのステップは失敗します。",
       "storedEntityTypeUnknown": "トリガーには、もう存在しないエンティティタイプ「{{entityType}}」が含まれています。このタイプでは一度も起動しません。",
       "storedEntityTypeUnsupported": "{{trigger}} トリガーは {{entity}} では一度も起動しません。"
+    },
+    "llmCheckIssues": {
+      "policyCheckUsesLlmCheck": "ステップ「{{step}}」は LLM_CHECK を使用するポリシーをチェックします。LLM_CHECK はコンプライアンス実行でのみ評価されるため、このステップはすべてのエンティティを不合格にします。LLM_CHECK を使用しないポリシーを選択してください。",
+      "validationRuleUsesLlmCheck": "ステップ「{{step}}」のルールは LLM_CHECK を使用しています。LLM_CHECK はコンプライアンスの実行でのみ評価されるため、このステップはすべてのエンティティで不合格になります。ルールから LLM_CHECK を外してください。"
     }
   },
   "approvalResponse": {
@@ -542,6 +547,7 @@
     "removedStepsHint": "これらのステップはこの実行で実行され、その後ワークフローから削除されました。",
     "stepErrors": {
       "rule_where_evaluation_failed": "ポリシー '{{policyName}}' の WHERE 句を {{entityType}} {{entityId}} で評価できませんでした",
+      "tag_not_found": "タグ '{{tag}}' がタグカタログに見つからなかったため、割り当てませんでした",
       "approval_rejected": "リクエストが却下されました",
       "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
       "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",
@@ -698,6 +704,33 @@
       "label": "必要な権限:",
       "prefix": "ユーザーには",
       "suffix": "以上が、このワークフローを表示・実行するために必要です。「設定」→「ロール」で設定してください。"
+    }
+  },
+  "triggerSchedule": {
+    "cronLabel": "スケジュール (Quartz cron)",
+    "cronHint": "6 または 7 個のフィールド: 秒 分 時 日 月 曜日 [年]。例: {{example}} は毎日 06:00 に実行されます。秒は 0 にする必要があり、実行間隔は 5 分以上必要です。",
+    "timezoneLabel": "タイムゾーン",
+    "timezoneHint": "Europe/Berlin や America/Sao_Paulo などの IANA 名。空欄の場合は UTC です。",
+    "fields": {
+      "second": "秒",
+      "minute": "分",
+      "hour": "時",
+      "day_of_month": "日",
+      "month": "月",
+      "day_of_week": "曜日",
+      "year": "年"
+    },
+    "errors": {
+      "schedule_required": "スケジュールトリガーには cron 式が必要です。",
+      "cron_field_count": "Quartz cron 式のフィールドは 6 または 7 個です。この式は {{fields}} 個です。",
+      "cron_invalid_field": "「{{value}}」は {{field}} フィールドでは無効です。",
+      "cron_day_fields_conflict": "「?」は日フィールドと曜日フィールドのどちらか一方だけに指定してください。",
+      "cron_seconds_not_zero": "秒フィールドは 0 にする必要があります。実行は分の始まりに開始されます。",
+      "cron_unsupported_character": "{{field}} フィールドの「{{character}}」はワークフローのスケジュールではサポートされていません。",
+      "cron_invalid": "有効な Quartz cron 式ではありません。",
+      "cron_no_upcoming_runs": "この cron 式には今後の実行がありません。",
+      "cron_interval_too_short": "スケジュール実行の間隔は {{minutes}} 分以上必要です。",
+      "timezone_invalid": "不明なタイムゾーン「{{timezone}}」です。Europe/Berlin などの IANA 名を使用してください。"
     }
   },
   "view": {

@@ -21,7 +21,7 @@ import {
   Activity, Server, Shield, BookOpen, Database, FolderOpen, Shapes, Network,
   Package,
 } from 'lucide-react';
-import * as dagre from 'dagre';
+import dagre from 'dagre';
 import type { InstanceHierarchyNode } from '@/types/ontology-schema';
 import { useFormatLabel } from '@/lib/format-label';
 

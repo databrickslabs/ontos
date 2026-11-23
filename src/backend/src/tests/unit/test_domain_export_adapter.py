@@ -54,6 +54,54 @@ def _cp(odcs, key):
     return next((c["value"] for c in odcs.get("customProperties", []) if c.get("property") == key), None)
 
 
+class TestSurfaceOriginalDomain:
+    def test_single_original_becomes_root_domain_without_duplicate(self, db_session, adapter):
+        odcs = {"customProperties": [
+            {"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": ["seller"]},
+            {"property": "other", "value": 1},
+        ]}
+        out = adapter.surface_original_domain(odcs, db_session)
+        assert out["domain"] == "seller"
+        assert [c["property"] for c in out["customProperties"]] == ["other"]
+
+    def test_only_property_removes_empty_custom_properties(self, db_session, adapter):
+        odcs = {"customProperties": [
+            {"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": "seller"}
+        ]}
+        out = adapter.surface_original_domain(odcs, db_session)
+        assert out["domain"] == "seller" and "customProperties" not in out
+
+    def test_several_originals_keep_the_property(self, db_session, adapter):
+        odcs = {"customProperties": [
+            {"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": ["Ghost", "Ops"]}
+        ]}
+        out = adapter.surface_original_domain(odcs, db_session)
+        assert out["domain"] == "Ghost"
+        assert _cp(out, ONTOS_ORIGINAL_DOMAIN_PROPERTY) == ["Ghost", "Ops"]
+
+    def test_an_original_naming_an_existing_domain_is_not_written_back(
+        self, db_session, adapter, domains
+    ):
+        # The user unassigned it: the export must not link it again on re-import.
+        odcs = {"customProperties": [
+            {"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": ["sales"]}
+        ]}
+        out = adapter.surface_original_domain(odcs, db_session)
+        assert "domain" not in out
+        assert _cp(out, ONTOS_ORIGINAL_DOMAIN_PROPERTY) == ["sales"]
+
+    def test_native_domain_wins(self, db_session, adapter):
+        odcs = {"domain": "Native", "customProperties": [
+            {"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": ["seller"]}
+        ]}
+        out = adapter.surface_original_domain(odcs, db_session)
+        assert out["domain"] == "Native"
+        assert _cp(out, ONTOS_ORIGINAL_DOMAIN_PROPERTY) == ["seller"]
+
+    def test_nothing_to_surface(self, db_session, adapter):
+        assert adapter.surface_original_domain({"name": "x"}, db_session) == {"name": "x"}
+
+
 class TestApplyOdcs:
     def test_emits_primary_name_and_ontos_domain_id(self, db_session, adapter, domains):
         _assign(db_session, "c1", [domains["Sales"], domains["Marketing"]], domains["Sales"])

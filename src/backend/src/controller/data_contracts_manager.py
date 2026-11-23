@@ -1640,6 +1640,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )[1].items():
             _upsert_custom_property(odcs, prop, value)
 
+        # No native domain linked: the imported root `domain` goes back out as `domain`
+        if db_session is not None:
+            domain_export_adapter.surface_original_domain(odcs, db_session)
+
         # Build authoritative definitions
         if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:
             auth_defs = []
@@ -3419,7 +3423,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 description = {"purpose": description}
             elif not isinstance(description, dict):
                 description = {}
-            
+
+            # v3.1.0 also allows authoritativeDefinitions inside `description` (the export
+            # writes them there): they are contract-level definitions too
+            desc_auth_defs = description.get('authoritativeDefinitions')
+            if isinstance(desc_auth_defs, list) and desc_auth_defs:
+                root_auth_defs = parsed_odcs.get('authoritativeDefinitions')
+                root_auth_defs = list(root_auth_defs) if isinstance(root_auth_defs, list) else []
+                known = {
+                    (d.get('url'), d.get('type')) for d in root_auth_defs if isinstance(d, dict)
+                }
+                root_auth_defs += [
+                    d for d in desc_auth_defs
+                    if isinstance(d, dict) and (d.get('url'), d.get('type')) not in known
+                ]
+                parsed_odcs['authoritativeDefinitions'] = root_auth_defs
+
             # Reconcile the domain assignment from the parsed payload: best-effort ID→name
             # (authoritative ontosDomainId key first, then legacy keys, then the standard
             # `domain` name). No match → unassigned unless create_missing_domains is set (#851).

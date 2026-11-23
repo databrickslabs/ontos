@@ -1,3 +1,4 @@
+import pytest
 import yaml
 from pathlib import Path
 from fastapi.testclient import TestClient
@@ -121,9 +122,10 @@ def test_odcs_upload_then_export_roundtrip(client: TestClient, db_session: Sessi
     assert rcvr_cc
     assert isinstance(rcvr_cc.get("quality", []), list)
 
-    # Schema-level quality should include countCheck rule
+    # Schema-level quality should include the countCheck check. v3.1.0 names it `metric`
+    # (`rule` is the deprecated spelling), and the export writes the current one.
     assert isinstance(schema.get("quality", []), list)
-    assert any(q.get("rule") == "countCheck" for q in schema.get("quality", []))
+    assert any(q.get("metric") == "countCheck" for q in schema.get("quality", []))
 
     # Schema-level customProperties include business-key
     assert any(
@@ -148,3 +150,41 @@ def test_odcs_upload_then_export_roundtrip(client: TestClient, db_session: Sessi
     assert float(price.get("priceAmount")) == float(reference.get("price", {}).get("priceAmount"))
 
 
+
+
+def _upload_and_export(client: TestClient, doc: dict) -> dict:
+    resp = client.post(
+        "/api/data-contracts/upload",
+        files={"files": ("c.odcs.yaml", yaml.safe_dump(doc).encode(), "application/x-yaml")},
+    )
+    assert resp.status_code == 200, resp.text
+    contract_id = resp.json()["created_ids"][0]
+    export_resp = client.get(f"/api/data-contracts/{contract_id}/odcs/export")
+    assert export_resp.status_code == 200, export_resp.text
+    return yaml.safe_load(export_resp.content)
+
+
+def _minimal_contract(**extra) -> dict:
+    return {
+        "kind": "DataContract", "apiVersion": "v3.1.0", "id": "rt-1511", "version": "1.0.0",
+        "status": "draft", "name": "Round trip 1511", **extra,
+    }
+
+
+def test_unmatched_domain_is_exported_as_the_root_domain(client: TestClient):
+    exported = _upload_and_export(client, _minimal_contract(domain="no-such-domain-1511"))
+
+    assert exported["domain"] == "no-such-domain-1511"
+    properties = [c["property"] for c in exported.get("customProperties", [])]
+    assert "ontosOriginalDomain" not in properties
+
+
+@pytest.mark.parametrize("also_at_root", [False, True])
+def test_description_authoritative_definitions_are_imported_once(client: TestClient, also_at_root):
+    definition = {"type": "privacy-statement", "url": "https://example.com/gdpr-1511.pdf"}
+    extra = {"authoritativeDefinitions": [definition]} if also_at_root else {}
+    exported = _upload_and_export(client, _minimal_contract(
+        description={"purpose": "p", "authoritativeDefinitions": [definition]}, **extra,
+    ))
+
+    assert exported["description"]["authoritativeDefinitions"] == [definition]

@@ -55,12 +55,11 @@ TEMPLATES: Tuple[CheckTemplate, ...] = (
         dimension="policy",
     ),
     CheckTemplate(
-        # The IS NOT NULL test must follow the != inside the AND: a missing grantee
-        # would otherwise pass the != (the DSL treats a missing operand as unequal).
+        # A missing grantee or actor fails the check (ARF rules fail closed on a missing operand).
         key="no_self_grant",
         name="No self-grant",
         description="The grantee must not be the requesting actor (request params grantee, actor_identity).",
-        rule="ASSERT obj.grantee != obj.actor_identity AND obj.grantee IS NOT NULL",
+        rule="ASSERT obj.grantee != obj.actor_identity",
         failure_message="The grantee must not be the requesting actor.",
         dimension="people",
     ),

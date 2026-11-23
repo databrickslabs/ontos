@@ -52,7 +52,7 @@ def _user(email):
 
 
 def _pass():
-    return [CriterionInput(name="Not blocked", rule="ASSERT obj.actor_identity != 'nobody'")]
+    return [CriterionInput(name="Not blocked", rule="ASSERT TRUE")]
 
 
 def _gate(value_limit):

@@ -771,17 +771,21 @@ async def validate_rule(
     """Validate an AR's domain context and ODRL rule, and try them on a sample request.
 
     Body: ``{rule?, domain_context?, request?}`` (``request`` is the flat request
-    plus its context, as ``POST /resolve`` builds it). Returns ``{valid, error?,
-    compiled: [{kind, name, rule}], scope?, verdict?, reason?, pending_duties?}``;
-    the verdict covers the scope and the rule only (no checks, prerequisites or refs).
+    plus its context, as ``POST /resolve`` builds it). Returns ``{valid, compiled:
+    [{kind, name, rule}], scope?, verdict?, reason?, pending_duties?}``; the verdict
+    covers the scope and the rule only (no checks, prerequisites or refs). A rule the
+    author must fix is a 400 with the coded ``{code, message, params}`` shape.
     """
     from types import SimpleNamespace
     from src.common import authority_rule
+    failure: Optional[HTTPException] = None
     try:
         domain_context = authority_rule.normalize_domain_context(payload.get("domain_context"), strict=True)
         compiled = authority_rule.compile_rule(payload.get("rule"))
     except ValueError as e:
-        return {"valid": False, "error": str(e), "compiled": []}
+        failure = _failure("validate_rule", e, coded_status=400, unexpected_status=400)
+    if failure is not None:
+        raise failure
     out = {
         "valid": True,
         "compiled": [{"kind": c.kind, "name": c.code, "rule": c.rule} for c in compiled],

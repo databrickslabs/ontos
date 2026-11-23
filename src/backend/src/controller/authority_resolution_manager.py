@@ -34,7 +34,7 @@ from src.common import authority_definition as definition
 from src.common import authority_resolution_dna as authority_dna
 from src.common.authority_resolution_dna import Criterion, DIR_NONE
 from src.common.authority_check_templates import get_template
-from src.common.compliance_dsl import evaluate_rule_on_object
+from src.common.compliance_dsl import MissingOperandError, evaluate_rule_on_object
 from src.common import authority_rule as arule
 from src.common import mcp_resolver
 from src.common.mcp_resolver import Deadline, McpHttpClient, McpResolverError
@@ -193,6 +193,8 @@ _ALLOWED_TRANSITIONS = {
 
 # Reason code and message when an AR has no enabled decision check (B5).
 REASON_NO_ENABLED_CHECKS = "no_enabled_checks"
+REASON_MISSING_OPERAND = "missing_operand"      # a request value a rule reads is absent (denied)
+REASON_MISSING_PARAMETER = "missing_parameter"  # an AR parameter a rule reads is absent (conflict)
 NO_ENABLED_CHECKS_MESSAGE = "This Authority Relation has no enabled decision checks."
 
 # Controlled vocabulary for the Action element (ARF §3.2 business domain).
@@ -598,6 +600,13 @@ class AuthorityResolutionManager(SearchableAsset):
         _validate_evidence(evidence, data.get("evidence_sources"))
         self._validate_scoping(db, data)
 
+        domain_context = arule.normalize_domain_context(data.get("domain_context"), strict=True)
+        rule = arule.normalize_rule(data.get("rule"))
+        self._check_parameter_references(
+            db, rel_id, domain_context=domain_context, rule=rule,
+            criteria=data.get("criteria") or [], resource_refs=data.get("resource_refs") or [],
+        )
+
         fields = {
             "id": rel_id,
             "slug": data.get("slug"),
@@ -614,8 +623,8 @@ class AuthorityResolutionManager(SearchableAsset):
             "object_type": data.get("object_type"),
             "object_id": data.get("object_id"),
             "object_resolves_to": data.get("object_resolves_to"),
-            "domain_context": arule.normalize_domain_context(data.get("domain_context"), strict=True),
-            "rule": arule.normalize_rule(data.get("rule")),
+            "domain_context": domain_context,
+            "rule": rule,
             "justification_chain": data.get("justification_chain"),
             "evidence_binding": evidence,
             "evidence_sources": data.get("evidence_sources"),
@@ -951,6 +960,13 @@ class AuthorityResolutionManager(SearchableAsset):
         incoming = self._incoming_view(db, relation, data, criteria, affirmations, prerequisites, resource_refs)
         definition_changes = definition.definition_fingerprint(before) != definition.definition_fingerprint(incoming)
         editable = self.is_editable(db, relation)
+        if editable:
+            self._check_parameter_references(
+                db, relation_id,
+                domain_context=data.get("domain_context", relation.domain_context),
+                rule=data["rule"] if "rule" in data else getattr(relation, "rule", None),
+                criteria=criteria, resource_refs=resource_refs,
+            )
         if not editable:
             if definition_changes:
                 raise AuthorityImmutableError(
@@ -1454,6 +1470,36 @@ class AuthorityResolutionManager(SearchableAsset):
                 used.add(match.id)
             rows.append(self._normalise_criterion(item, idx, existing=match))
         return rows
+
+    def _check_parameter_references(
+        self, db: Session, relation_id: str, *, domain_context: Any, rule: Any,
+        criteria: Optional[List[Any]] = None, resource_refs: Optional[List[Any]] = None,
+    ) -> None:
+        """Refuse a ``ctx.<name>`` in the rule or a check that the AR doesn't define (#1491-1).
+
+        Defined: a domain-context parameter, or a ``domain_context.<name>`` resource ref
+        (both are ``ctx.<name>`` at resolve time). ``criteria`` / ``resource_refs`` are
+        the input, or the stored ones when ``None``. Runs before anything is written.
+        """
+        known = set(arule.normalize_domain_context(domain_context)["params"])
+        if resource_refs is None:
+            fields = [r.field_path for r in authority_resource_ref_repo.list_for_relation(db, relation_id=relation_id)]
+        else:
+            fields = [(item.dict() if hasattr(item, "dict") else dict(item)).get("field_path") or ""
+                      for item in resource_refs]
+        for field_path in fields:
+            for prefix in ("domain_context.params.", "domain_context."):
+                if field_path.startswith(prefix):
+                    key = field_path[len(prefix):]
+                    if key and "." not in key:
+                        known.add(key)
+                    break
+        texts = [c.rule for c in arule.compile_rule(rule)]
+        if criteria is None:
+            texts += [row.rule for row in authority_criterion_repo.list_for_relation(db, relation_id=relation_id)]
+        else:
+            texts += [row["rule"] for row in self._criteria_rows(db, relation_id, criteria)]
+        arule.check_parameter_references(texts, known)
 
     def _replace_criteria(self, db: Session, relation_id: str, criteria: List[Any]) -> None:
         """Replace the AR version's own decision checks (ARF 1.2.0, B7 / S12).
@@ -2455,7 +2501,7 @@ class AuthorityResolutionManager(SearchableAsset):
         ``req``, and the AR's params are ``ctx``.
         """
         dc = arule.normalize_domain_context(relation.domain_context)
-        by_key = [(arule.operand_key(c["leftOperand"]), c) for c in dc["scope"]]
+        by_key = [(arule.scope_key(c["leftOperand"]), c) for c in dc["scope"]]
         kept: List[Dict[str, Any]] = []
         skipped = 0
         for row in rows:
@@ -2771,45 +2817,83 @@ class AuthorityResolutionManager(SearchableAsset):
         req: Dict[str, Any],
         resolved_refs: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[str, str, List[Dict[str, Any]]]:
+        """``(verdict, reason, pending_duties)`` of :meth:`_decide`, without its reason code."""
+        verdict, reason, pending, _ = self._decide(relation, req, resolved_refs)
+        return verdict, reason, pending
+
+    @staticmethod
+    def _missing_operand_outcome(c: Criterion, e: MissingOperandError) -> Tuple[str, str, List[Dict[str, Any]], str]:
+        """A criterion read an operand that is absent (#1491-1).
+
+        A missing ``ctx.<param>`` is the AR's own configuration, so it is a conflict
+        (the same answer as a malformed rule). A missing request value is a denial
+        naming the operand: the request can't show that the rule holds.
+        """
+        if e.namespace == arule.NS_CTX:
+            return (VERDICT_CONFLICT,
+                    f"The Authority Relation's parameter '{e.key}' is missing, so '{c.code}' cannot be decided.",
+                    [], REASON_MISSING_PARAMETER)
+        return (VERDICT_DENIED,
+                f"The request has no value for '{e.key}', so '{c.code}' cannot be decided.",
+                [], REASON_MISSING_OPERAND)
+
+    def _decide(
+        self,
+        relation: AuthorityRelationDb,
+        req: Dict[str, Any],
+        resolved_refs: Optional[List[Dict[str, Any]]] = None,
+    ) -> Tuple[str, str, List[Dict[str, Any]], Optional[str]]:
         """Deterministic evaluation of the request against the AR's rule and checks.
 
         Order: prohibitions and permission constraints (ODRL rule), then the
         Compliance Checks; the first failure denies with its message. Duties
         come last: an unfulfilled duty makes the decision ``conditional`` and
         is returned in the pending list. No rule and no checks = an
-        unconstrained gate (approve). Returns ``(verdict, reason, pending_duties)``.
+        unconstrained gate (approve).
+
+        Rules are evaluated strictly (#1491-1): an operand that is absent fails the
+        criterion (a missing request value denies, a missing parameter is a conflict;
+        see :meth:`_missing_operand_outcome`). A missing operand in a duty leaves the
+        duty unfulfilled. Returns ``(verdict, reason, pending_duties, reason_code)``.
         """
         obj = self._evaluation_object(relation, req, resolved_refs)
         try:
             rule_criteria = self._rule_criteria(relation)
         except ValueError as e:
-            return VERDICT_CONFLICT, f"The Authority Relation's rule is malformed: {e}", []
+            return VERDICT_CONFLICT, f"The Authority Relation's rule is malformed: {e}", [], None
         if not rule_criteria and not self._load_criteria(relation):
             # B5: a version with no rule and no enabled check approves nothing.
-            return VERDICT_NO_AUTHORITY, NO_ENABLED_CHECKS_MESSAGE, []
+            return VERDICT_NO_AUTHORITY, NO_ENABLED_CHECKS_MESSAGE, [], None
         duties = [c for c in rule_criteria if c.kind == arule.KIND_DUTY]
         gating = [c for c in rule_criteria if c.kind != arule.KIND_DUTY] + self._load_criteria(relation)
         for c in gating:
             parse_error = authority_dna.rule_parse_error(c.rule)
             if parse_error:
                 # Fail closed, and say it's the AR's configuration, not the request.
-                return VERDICT_CONFLICT, f"Criterion '{c.code}' has a malformed rule: {parse_error}", []
+                return VERDICT_CONFLICT, f"Criterion '{c.code}' has a malformed rule: {parse_error}", [], None
             try:
-                passed, msg = evaluate_rule_on_object(c.rule, obj)
+                passed, msg = evaluate_rule_on_object(c.rule, obj, strict_operands=True)
+            except MissingOperandError as e:
+                return self._missing_operand_outcome(c, e)
             except Exception as e:  # pragma: no cover - malformed author rule
                 logger.warning(f"Criterion '{c.code}' failed to evaluate on AR {relation.id}: {e}")
                 continue
             if not passed:
-                return VERDICT_DENIED, (c.message or msg or f"Criterion '{c.code}' failed"), []
+                return VERDICT_DENIED, (c.message or msg or f"Criterion '{c.code}' failed"), [], None
         pending: List[Dict[str, Any]] = []
         for c in duties:
-            passed, _ = evaluate_rule_on_object(c.rule, obj)
+            try:
+                passed, _ = evaluate_rule_on_object(c.rule, obj, strict_operands=True)
+            except MissingOperandError as e:
+                if e.namespace == arule.NS_CTX:
+                    return self._missing_operand_outcome(c, e)
+                passed = False
             if not passed:
                 pending.append({"duty": c.code, "message": c.message})
         if pending:
             return VERDICT_CONDITIONAL, "permitted once duties are fulfilled: " + ", ".join(
-                d["message"] or d["duty"] for d in pending), pending
-        return VERDICT_APPROVED, "all checks passed", []
+                d["message"] or d["duty"] for d in pending), pending, None
+        return VERDICT_APPROVED, "all checks passed", [], None
 
     def _check_scope(
         self, relation: AuthorityRelationDb, req: Dict[str, Any], rctx: "_ResolveCtx",
@@ -3020,7 +3104,7 @@ class AuthorityResolutionManager(SearchableAsset):
             )
             out["resolver_failure"] = True
             return out
-        verdict, reason, own_pending = self._evaluate_decision(relation, req, resolved_refs)
+        verdict, reason, own_pending, decision_code = self._decide(relation, req, resolved_refs)
         # A conditional prerequisite's duties are this decision's duties too.
         pending = [d for e in chain for d in (e.get("pending_duties") or [])] + own_pending
         if verdict == VERDICT_APPROVED and pending:
@@ -3031,6 +3115,8 @@ class AuthorityResolutionManager(SearchableAsset):
             db, relation, req, verdict, reason, chain, resolved_refs, record,
             scope_check=scope_results, pending_duties=pending, own_pending_duties=own_pending,
         )
+        if decision_code:
+            out["reason_code"] = decision_code
         if verdict == VERDICT_NO_AUTHORITY and reason == NO_ENABLED_CHECKS_MESSAGE:
             out["reason_code"] = REASON_NO_ENABLED_CHECKS
         return out

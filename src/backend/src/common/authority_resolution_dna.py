@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional
 
-from src.common.compliance_dsl import evaluate_rule_on_object
+from src.common.compliance_dsl import MissingOperandError, evaluate_rule_on_object
 
 # Direction flags (ARF `arf:direction`).
 DIR_ACTUAL_EXCEEDS = "actual-exceeds-documented"
@@ -206,7 +206,11 @@ def evaluate_row(criteria: List[Criterion], row: Dict[str, Any]) -> RowDivergenc
         if rule_parse_error(c.rule):
             # A malformed rule must not fabricate divergence.
             continue
-        passed, _ = evaluate_rule_on_object(c.rule, norm)
+        try:
+            passed, _ = evaluate_rule_on_object(c.rule, norm, strict_operands=True)
+        except MissingOperandError:
+            # An evidence row without the operand can't show the criterion holds (#1491-1).
+            passed = False
         if not passed:
             reasons.append(c.code)
             w = c.weight if c.weight is not None else 1.0

@@ -208,7 +208,7 @@ def test_gate_denies_action_mismatch():
 def test_gate_disabled_criterion_is_skipped():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.actor_identity IN ['rsm-east']", enabled=False, order=0),
-                    _link("ASSERT obj.actor_identity != 'nobody'", order=1))
+                    _link("ASSERT TRUE", order=1))
     verdict, *_ = mgr._evaluate_decision(rel, {"actor_identity": "intruder"})
     assert verdict == VERDICT_APPROVED
 
@@ -706,7 +706,7 @@ def test_resolver_auth_defaults_to_obo(db_session):
 def _pass_criteria():
     """One enabled check that passes for any request (a version needs one to resolve, B5)."""
     from src.models.authority_resolution import CriterionInput
-    return [CriterionInput(name="Not blocked", rule="ASSERT obj.actor_identity != 'nobody'")]
+    return [CriterionInput(name="Not blocked", rule="ASSERT TRUE")]
 
 
 def _make_ar(mgr, db, *, slug, name, criteria=None, prerequisites=None):

@@ -570,11 +570,30 @@ class Parser:
 NAMESPACE_ROOTS = ("ctx", "req")
 
 
-class Evaluator:
-    """Evaluate AST against an object."""
+class MissingOperandError(Exception):
+    """Strict evaluation read an operand that is absent or empty (ARF rules, #1491-1).
 
-    def __init__(self, obj: Dict[str, Any]):
+    ``namespace`` is the root as written (``obj``, ``req``, ``ctx``) and ``key`` the
+    property. Not a ``CodedValueError``: the evaluator's caller decides what it means.
+    """
+
+    def __init__(self, namespace: str, key: str):
+        self.namespace = namespace
+        self.key = key
+        super().__init__(f"{namespace}.{key}")
+
+
+class Evaluator:
+    """Evaluate AST against an object.
+
+    ``strict_operands`` (ARF only) raises :class:`MissingOperandError` when an operand
+    reads as None or "". The default keeps the general DSL semantics, where a missing
+    value compares unequal (so ``NOT (x = y)`` holds for an absent ``x``).
+    """
+
+    def __init__(self, obj: Dict[str, Any], strict_operands: bool = False):
         self.obj = obj
+        self.strict_operands = strict_operands
 
     def error(self, msg: str) -> Exception:
         return ValueError(f"Evaluation error: {msg}")
@@ -591,11 +610,15 @@ class Evaluator:
             # ``ctx.x`` / ``req.x`` read a namespace when the object carries it
             # (Authority Relations: AR parameters / request context); any other
             # prefix (``obj.``, ``p.``…) reads the object's top-level key.
-            if node.object in NAMESPACE_ROOTS:
-                scoped = self.obj.get(node.object)
-                if isinstance(scoped, dict):
-                    return scoped.get(node.property)
-            return self.obj.get(node.property)
+            value = None
+            scoped = self.obj.get(node.object) if node.object in NAMESPACE_ROOTS else None
+            if isinstance(scoped, dict):
+                value = scoped.get(node.property)
+            else:
+                value = self.obj.get(node.property)
+            if self.strict_operands and (value is None or value == ""):
+                raise MissingOperandError(node.object, node.property)
+            return value
 
         if isinstance(node, FunctionCall):
             return self.evaluate_function(node)
@@ -728,12 +751,16 @@ class Evaluator:
         return None
 
 
-def evaluate_rule_on_object(rule: str, obj: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+def evaluate_rule_on_object(
+    rule: str, obj: Dict[str, Any], *, strict_operands: bool = False,
+) -> Tuple[bool, Optional[str]]:
     """Evaluate a Compliance DSL rule against a single object.
 
     Args:
         rule: DSL rule string
         obj: Object to evaluate against
+        strict_operands: raise :class:`MissingOperandError` on an absent operand
+            instead of evaluating it as unequal (ARF rules; see ``Evaluator``)
 
     Returns:
         Tuple of (passed, error_message)
@@ -762,7 +789,7 @@ def evaluate_rule_on_object(rule: str, obj: Dict[str, Any]) -> Tuple[bool, Optio
         ast = parser.parse_expression()
 
         # Evaluate
-        evaluator = Evaluator(obj)
+        evaluator = Evaluator(obj, strict_operands=strict_operands)
         result = evaluator.evaluate(ast)
 
         # Convert to boolean
@@ -774,6 +801,8 @@ def evaluate_rule_on_object(rule: str, obj: Dict[str, Any]) -> Tuple[bool, Optio
             # Generate helpful error message
             return False, f"Assertion failed: {assert_part}"
 
+    except MissingOperandError:
+        raise
     except Exception as e:
         return False, f"DSL evaluation error: {str(e)}"
 

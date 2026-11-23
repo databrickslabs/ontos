@@ -6,8 +6,12 @@ from src.controller.authority_resolution_manager import (
     AuthorityResolutionManager,
     STATUS_ACTIVE,
     VERDICT_APPROVED,
+    VERDICT_CONFLICT,
     VERDICT_DENIED,
 )
+import pytest
+
+from src.common.authority_rule import UnknownParameterError
 from src.db_models.authority_resolution import AuthorityCriterionDb
 from src.models.authority_resolution import (
     AffirmationInput,
@@ -30,7 +34,7 @@ def _complete(mgr, db, slug, *, scope=MARKET_DE, rule=RULE, params=None, criteri
         evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
         domain_context={"scope": scope, "params": params if params is not None else {"threshold": 100}},
         rule=rule,
-        criteria=criteria if criteria is not None else [CriterionInput(name="Not blocked", rule="ASSERT obj.actor_identity != 'nobody'")],
+        criteria=criteria if criteria is not None else [CriterionInput(name="Not blocked", rule="ASSERT TRUE")],
         affirmations=[AffirmationInput(role="Approver", principal="approver@x.com")],
     ), current_user="author@x.com", caller_is_admin=True)
     db.commit()
@@ -95,12 +99,21 @@ def test_the_threshold_template_reads_the_ar_parameter_and_fails_closed(db_sessi
     over = mgr.resolve(db_session, rel.id, {"value": 150}, record=False, require_active=False)
     assert over["verdict"] == VERDICT_DENIED and "threshold" in over["reason"]
 
-    no_param = _complete(mgr, db_session, "m-tpl-none", scope=[], rule=None, params={},
-                         criteria=[CriterionInput(template_key="amount_within_threshold")])
-    no_param.status = STATUS_ACTIVE
+    # A template that reads ctx.threshold can't be saved without the parameter (#1491-1).
+    with pytest.raises(UnknownParameterError, match=r"ctx\.threshold"):
+        _complete(mgr, db_session, "m-tpl-none", scope=[], rule=None, params={},
+                  criteria=[CriterionInput(template_key="amount_within_threshold")])
+    db_session.rollback()
+
+    # If the parameter is gone from the stored context anyway, the check is undecidable: a conflict.
+    stale = _complete(mgr, db_session, "m-tpl-stale", scope=[], rule=None, params={"threshold": 100},
+                      criteria=[CriterionInput(template_key="amount_within_threshold")])
+    stale.status = STATUS_ACTIVE
+    stale.domain_context = {"scope": [], "params": {}}
     db_session.commit()
-    assert mgr.resolve(db_session, no_param.id, {"value": 1}, record=False,
-                       require_active=False)["verdict"] == VERDICT_DENIED
+    out = mgr.resolve(db_session, stale.id, {"value": 1}, record=False, require_active=False)
+    assert (out["verdict"], out["reason_code"]) == (VERDICT_CONFLICT, "missing_parameter")
+    assert "'threshold'" in out["reason"]
 
 
 def test_rule_constraints_are_not_written_as_check_rows(db_session):

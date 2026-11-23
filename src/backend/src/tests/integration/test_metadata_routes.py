@@ -214,6 +214,19 @@ class TestDocumentUploadInvalidVolume:
         # The upload routes read the process-wide settings
         monkeypatch.setattr(_config, "_settings", test_settings)
 
+    @pytest.fixture
+    def asset_id(self, db_session: Session) -> str:
+        """An existing asset: the upload route answers 404 for an unknown one (#1354)."""
+        from src.db_models.assets import AssetDb, AssetTypeDb
+
+        asset_type = AssetTypeDb(name="Dashboard (volume upload)", category="analytics")
+        db_session.add(asset_type)
+        db_session.flush()
+        asset = AssetDb(name="sales", asset_type_id=asset_type.id)
+        db_session.add(asset)
+        db_session.flush()
+        return str(asset.id)
+
     def _assert_coded(self, response):
         assert response.status_code == 400, response.text
         detail = response.json()["detail"]
@@ -221,11 +234,20 @@ class TestDocumentUploadInvalidVolume:
         assert detail["params"]["value"] == "a.b"
 
     def test_a_cleared_volume_answers_a_coded_400_not_a_500(
-        self, client: TestClient, test_settings
+        self, client: TestClient, test_settings, asset_id, monkeypatch
     ):
+        from src.common import authorization
+        from src.common.features import FeatureAccessLevel
+
+        async def _resolve(*_args, **_kwargs):
+            rw = FeatureAccessLevel.READ_WRITE
+            return {"data-domains": rw, "assets": rw}
+
+        # With a volume set the routes fail before the permission checks; with none they don't.
+        monkeypatch.setattr(authorization, "resolve_effective_permissions", _resolve)
         test_settings.DATABRICKS_VOLUME = None
         for url, extra in (
-            ("/api/entities/asset/documents", {"params": {"entity_id": "asset-1"}}),
+            ("/api/entities/asset/documents", {"params": {"entity_id": asset_id}}),
             ("/api/metadata/shared/documents", {}),
         ):
             response = client.post(
@@ -237,10 +259,10 @@ class TestDocumentUploadInvalidVolume:
             assert response.status_code == 400, response.text
             assert response.json()["detail"]["code"] == "volume_not_configured"
 
-    def test_entity_document_upload(self, client: TestClient):
+    def test_entity_document_upload(self, client: TestClient, asset_id):
         response = client.post(
             "/api/entities/asset/documents",
-            params={"entity_id": "asset-1"},
+            params={"entity_id": asset_id},
             data={"title": "Snapshot"},
             files={"file": ("snapshot.png", b"\x89PNG", "image/png")},
         )

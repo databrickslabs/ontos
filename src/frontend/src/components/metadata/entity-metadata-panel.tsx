@@ -519,7 +519,9 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     const resp = await fetch(endpoint, { method: 'POST', body: form });
                     if (!resp.ok) {
                       const body = await resp.text();
-                      throw new Error(assetAccessErrorText(body) ?? documentUploadErrorText(body, t));
+                      throw new Error(
+                        assetAccessErrorText(body) ?? documentUploadErrorText(body, t)
+                      );
                     }
                     setDocTitle(''); setDocDesc(''); setDocFile(null); setDocLevel(50); setDocInheritable(true); setDocIsShared(false); setUploadingDoc(false); setAddingDoc(false);
                     fetchMetadata();

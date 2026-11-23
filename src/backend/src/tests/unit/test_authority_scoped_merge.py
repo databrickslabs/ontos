@@ -73,7 +73,7 @@ def test_a_draft_rule_change_resets_the_measurement_and_stales_the_affirmations(
     aff = mgr.to_read_dict(db_session, rel)["affirmations"][0]
     mgr.affirm(db_session, aff["id"], affirmed_by="approver@x.com", user=type("U", (), {
         "email": "approver@x.com", "username": "approver@x.com", "user": "approver@x.com", "groups": []})())
-    mgr.compute_dnaco(db_session, rel.id, rows=[{"actor_identity": "a", "payAmount": 1}])
+    mgr.compute_dnaco(db_session, rel.id, rows=[{"actor_identity": "a", "value": 1}])
     db_session.commit()
     assert mgr.is_fully_affirmed(db_session, rel.id)
 

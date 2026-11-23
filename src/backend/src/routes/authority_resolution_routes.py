@@ -744,10 +744,11 @@ async def validate_criterion(
     Body: ``{rule, object, params?, context?}``. The ``ASSERT`` keyword is
     prepended if omitted. The rule sees ``object`` (plus ``context``) as
     ``obj.<field>`` / ``req.<key>`` and ``params`` as ``ctx.<key>``, as at
-    resolve time. Returns ``{passed, message}``.
+    resolve time, with the same strict semantics (an absent operand is not passed).
+    Returns ``{passed, message}``.
     """
     from src.common import authority_rule
-    from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
+    from src.common.compliance_dsl import evaluate_rule_strict
     rule = (payload.get("rule") or "").strip()
     if rule and not rule.upper().startswith("ASSERT"):
         rule = "ASSERT " + rule
@@ -755,8 +756,11 @@ async def validate_criterion(
     obj = authority_rule.evaluation_object(flat, payload.get("params") or {})
     failure: Optional[HTTPException] = None
     try:
-        passed, msg = eval_dsl(rule, obj)
-        return {"passed": passed, "message": msg}
+        outcome = evaluate_rule_strict(rule, obj)
+        if outcome.passed is None:
+            names = ", ".join(f"'{k}'" for _, k in outcome.missing)
+            return {"passed": False, "message": f"The sample has no value for {names}, so the check cannot be decided."}
+        return {"passed": outcome.passed, "message": outcome.message}
     except Exception as e:
         failure = _failure("validate_criterion", e, coded_status=400, unexpected_status=400)
     raise failure

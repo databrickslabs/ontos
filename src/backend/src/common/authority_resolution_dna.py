@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional
 
-from src.common.compliance_dsl import MissingOperandError, evaluate_rule_on_object
+from src.common.compliance_dsl import evaluate_rule_strict
 
 # Direction flags (ARF `arf:direction`).
 DIR_ACTUAL_EXCEEDS = "actual-exceeds-documented"
@@ -69,6 +69,9 @@ class RowDivergence:
     action: Optional[str] = None
     object_id: Optional[str] = None
     value: Optional[float] = None
+    # True when a criterion read an operand the row doesn't carry: the row is left out of
+    # the sample (an unknown is not a divergence).
+    skipped: bool = False
 
 
 @dataclass
@@ -80,6 +83,8 @@ class DnaResult:
     divergent_count: int
     dimensions: Dict[str, float] = field(default_factory=dict)  # per-dimension score 0-1 (evidence-based)
     rows: List[RowDivergence] = field(default_factory=list)
+    # Rows that lack an operand a criterion reads: not measured, not divergent (see RowDivergence.skipped).
+    skipped_count: int = 0
 
 
 def combine_dimensions(scores: Iterable[float]) -> float:
@@ -206,12 +211,18 @@ def evaluate_row(criteria: List[Criterion], row: Dict[str, Any]) -> RowDivergenc
         if rule_parse_error(c.rule):
             # A malformed rule must not fabricate divergence.
             continue
-        try:
-            passed, _ = evaluate_rule_on_object(c.rule, norm, strict_operands=True)
-        except MissingOperandError:
-            # An evidence row without the operand can't show the criterion holds (#1491-1).
-            passed = False
-        if not passed:
+        outcome = evaluate_rule_strict(c.rule, norm)
+        if outcome.passed is None:
+            # The row lacks an operand the criterion reads: it can't be measured, so it
+            # is skipped (and counted in the run's notes), never a divergence.
+            return RowDivergence(
+                diverged=False, signed=0, skipped=True,
+                actor_identity=str(norm["actor_identity"]) if norm.get("actor_identity") is not None else None,
+                action=str(norm["action"]) if norm.get("action") is not None else None,
+                object_id=str(norm["object_id"]) if norm.get("object_id") is not None else None,
+                value=_to_float(norm.get("value")),
+            )
+        if not outcome.passed:
             reasons.append(c.code)
             w = c.weight if c.weight is not None else 1.0
             weights.append(w)
@@ -247,13 +258,15 @@ def compute_dnaco(criteria: List[Criterion], rows: List[Dict[str, Any]]) -> DnaR
     same way. ``direction`` is the sign of the aggregate authority-level delta.
     """
     evaluated = [evaluate_row(criteria, r) for r in rows]
+    skipped_count = sum(1 for rd in evaluated if rd.skipped)
+    evaluated = [rd for rd in evaluated if not rd.skipped]
     sampled = len(evaluated)
     divergent = [rd for rd in evaluated if rd.diverged]
     dims = {(c.dimension or "people") for c in criteria}
 
     if sampled == 0:
         return DnaResult(magnitude=0.0, direction=DIR_NONE, sampled_count=0, divergent_count=0,
-                         dimensions={d: 0.0 for d in dims}, rows=evaluated)
+                         dimensions={d: 0.0 for d in dims}, rows=evaluated, skipped_count=skipped_count)
 
     dimensions = {
         d: round(min(1.0, sum(rd.dimension_weights.get(d, 0.0) for rd in divergent) / sampled), 4)
@@ -278,6 +291,7 @@ def compute_dnaco(criteria: List[Criterion], rows: List[Dict[str, Any]]) -> DnaR
         divergent_count=len(divergent),
         dimensions=dimensions,
         rows=evaluated,
+        skipped_count=skipped_count,
     )
 
 

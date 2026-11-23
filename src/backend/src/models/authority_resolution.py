@@ -7,7 +7,9 @@ validation and typed response shapes.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from src.common.authority_rule import checked_weight
 
 from src.models.tags import AssignedTagCreate
 
@@ -76,6 +78,12 @@ class CriterionInput(BaseModel):
     enabled: bool = True
     copied_from: Optional[CopiedFrom] = None
     template_key: Optional[str] = None
+
+    @field_validator("weight", mode="before")
+    @classmethod
+    def _weight_is_a_number(cls, value):
+        # The rule module's weight check (#1491-5): a bool is refused, not read as 1.0.
+        return None if value is None else checked_weight(value, "A check")
 
 
 class PrerequisiteInput(BaseModel):

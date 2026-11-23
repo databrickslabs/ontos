@@ -34,7 +34,7 @@ from src.common import authority_definition as definition
 from src.common import authority_resolution_dna as authority_dna
 from src.common.authority_resolution_dna import Criterion, DIR_NONE
 from src.common.authority_check_templates import get_template
-from src.common.compliance_dsl import MissingOperandError, evaluate_rule_on_object
+from src.common.compliance_dsl import evaluate_rule_strict
 from src.common import authority_rule as arule
 from src.common import mcp_resolver
 from src.common.mcp_resolver import Deadline, McpHttpClient, McpResolverError
@@ -478,7 +478,7 @@ class AuthorityResolutionManager(SearchableAsset):
 
     def _incoming_view(
         self, db: Session, relation: AuthorityRelationDb, data: Dict[str, Any],
-        criteria: Optional[List[Any]], affirmations: Optional[List[Any]],
+        criteria_rows: Optional[List[Dict[str, Any]]], affirmations: Optional[List[Any]],
         prerequisites: Optional[List[Any]], resource_refs: Optional[List[Any]],
     ) -> Dict[str, Any]:
         """The definition a PUT would produce, in the same canonical form as the stored one.
@@ -492,7 +492,7 @@ class AuthorityResolutionManager(SearchableAsset):
             scalars["resolver_auth"] = data["resolver_auth"] or RESOLVER_AUTH_OBO
         if "dna_max_threshold" in data and data["dna_max_threshold"] is None:
             scalars["dna_max_threshold"] = DEFAULT_DNA_CEILING
-        crit = stored["criteria"] if criteria is None else self._criteria_rows(db, relation.id, criteria)
+        crit = stored["criteria"] if criteria_rows is None else criteria_rows
         prereqs = stored["prerequisites"] if prerequisites is None else list(
             self._prerequisite_rows(prerequisites).values())
         refs = stored["resource_refs"] if resource_refs is None else self._resource_ref_rows(resource_refs)
@@ -602,9 +602,11 @@ class AuthorityResolutionManager(SearchableAsset):
 
         domain_context = arule.normalize_domain_context(data.get("domain_context"), strict=True)
         rule = arule.normalize_rule(data.get("rule"))
+        # A new AR has no stored checks: its rows are computed once, without a query for its id.
+        criteria_rows = self._criteria_rows(db, rel_id, data.get("criteria") or [], existing=[])
         self._check_parameter_references(
             db, rel_id, domain_context=domain_context, rule=rule,
-            criteria=data.get("criteria") or [], resource_refs=data.get("resource_refs") or [],
+            criteria_rows=criteria_rows, resource_refs=data.get("resource_refs") or [],
         )
 
         fields = {
@@ -653,7 +655,7 @@ class AuthorityResolutionManager(SearchableAsset):
         # N-functional affirmation stakeholders.
         self._replace_affirmations(db, rel_id, data.get("affirmations") or [])
         # Author-configurable decision criteria (Compliance Checks).
-        self._replace_criteria(db, rel_id, data.get("criteria") or [])
+        self._replace_criteria(db, rel_id, criteria_rows)
         # Prerequisite chain (per-family-slug edges).
         prereqs = data.get("prerequisites")
         if prereqs is not None:
@@ -957,15 +959,16 @@ class AuthorityResolutionManager(SearchableAsset):
             data["rule"] = arule.normalize_rule(data["rule"])
 
         before = self._stored_view(db, relation)
-        incoming = self._incoming_view(db, relation, data, criteria, affirmations, prerequisites, resource_refs)
+        criteria_rows = None if criteria is None else self._criteria_rows(db, relation_id, criteria)
+        incoming = self._incoming_view(db, relation, data, criteria_rows, affirmations, prerequisites, resource_refs)
         definition_changes = definition.definition_fingerprint(before) != definition.definition_fingerprint(incoming)
         editable = self.is_editable(db, relation)
-        if editable:
+        if editable and definition_changes:
             self._check_parameter_references(
                 db, relation_id,
                 domain_context=data.get("domain_context", relation.domain_context),
                 rule=data["rule"] if "rule" in data else getattr(relation, "rule", None),
-                criteria=criteria, resource_refs=resource_refs,
+                criteria_rows=criteria_rows, resource_refs=resource_refs,
             )
         if not editable:
             if definition_changes:
@@ -976,7 +979,7 @@ class AuthorityResolutionManager(SearchableAsset):
             # Metadata only: the definition is unchanged, so nothing in it is written.
             for key in ("name", *definition.DEFINITION_FIELDS):
                 data.pop(key, None)
-            criteria = affirmations = prerequisites = resource_refs = None
+            criteria = criteria_rows = affirmations = prerequisites = resource_refs = None
 
         update_data = {k: v for k, v in data.items() if k in _MODEL_COLUMNS}
         # Keep base_name in step with a renamed AR so the family label stays right.
@@ -994,8 +997,8 @@ class AuthorityResolutionManager(SearchableAsset):
             )
         if affirmations is not None:
             self._replace_affirmations(db, relation_id, affirmations)
-        if criteria is not None:
-            self._replace_criteria(db, relation_id, criteria)
+        if criteria_rows is not None:
+            self._replace_criteria(db, relation_id, criteria_rows)
         if prerequisites is not None:
             self._replace_prerequisites(db, relation, prerequisites)
         if resource_refs is not None:
@@ -1362,16 +1365,13 @@ class AuthorityResolutionManager(SearchableAsset):
 
     @staticmethod
     def _checked_weight(value: Any) -> float:
-        """A check weight is a finite number of 0 or more (N5). 0 stays 0; None is 1.0."""
+        """A check weight, validated by the rule module's weight check (N5, #1491-5). 0 stays 0; None is 1.0."""
         if value is None:
             return 1.0
         try:
-            weight = float(value)
-        except (TypeError, ValueError):
-            raise AuthorityInvalidError("A check weight must be a number of 0 or more.")
-        if not math.isfinite(weight) or weight < 0:
-            raise AuthorityInvalidError("A check weight must be a number of 0 or more.", weight=str(value))
-        return weight
+            return arule.checked_weight(value, "A check")
+        except arule.RuleInvalidError as e:
+            raise AuthorityInvalidError(str(e)) from e
 
     @classmethod
     @classmethod
@@ -1447,13 +1447,18 @@ class AuthorityResolutionManager(SearchableAsset):
             "copied_from": copied_from,
         }
 
-    def _criteria_rows(self, db: Session, relation_id: str, criteria: List[Any]) -> List[Dict[str, Any]]:
+    def _criteria_rows(
+        self, db: Session, relation_id: str, criteria: List[Any], existing: Optional[List[Any]] = None,
+    ) -> List[Dict[str, Any]]:
         """The stored form of each input check, matched to the AR's existing checks.
 
         A check matches by its ``id``, or for a template by its template key (the first
-        unmatched one). The save and the definition hash both use this, so they agree.
+        unmatched one). The save computes these rows once and uses them for the
+        definition hash, the parameter check and the write. ``existing`` is None to read
+        the stored checks; a new AR passes ``[]`` and reads nothing.
         """
-        existing = list(authority_criterion_repo.list_for_relation(db, relation_id=relation_id))
+        if existing is None:
+            existing = list(authority_criterion_repo.list_for_relation(db, relation_id=relation_id))
         by_id = {e.id: e for e in existing}
         used: set = set()
         rows: List[Dict[str, Any]] = []
@@ -1473,42 +1478,34 @@ class AuthorityResolutionManager(SearchableAsset):
 
     def _check_parameter_references(
         self, db: Session, relation_id: str, *, domain_context: Any, rule: Any,
-        criteria: Optional[List[Any]] = None, resource_refs: Optional[List[Any]] = None,
+        criteria_rows: Optional[List[Dict[str, Any]]], resource_refs: Optional[List[Any]],
     ) -> None:
         """Refuse a ``ctx.<name>`` in the rule or a check that the AR doesn't define (#1491-1).
 
         Defined: a domain-context parameter, or a ``domain_context.<name>`` resource ref
-        (both are ``ctx.<name>`` at resolve time). ``criteria`` / ``resource_refs`` are
-        the input, or the stored ones when ``None``. Runs before anything is written.
+        (both are ``ctx.<name>`` at resolve time). ``criteria_rows`` (the save's rows) and
+        ``resource_refs`` (the input) are the new state; ``None`` reads the stored ones.
         """
         known = set(arule.normalize_domain_context(domain_context)["params"])
         if resource_refs is None:
             fields = [r.field_path for r in authority_resource_ref_repo.list_for_relation(db, relation_id=relation_id)]
         else:
-            fields = [(item.dict() if hasattr(item, "dict") else dict(item)).get("field_path") or ""
-                      for item in resource_refs]
-        for field_path in fields:
-            for prefix in ("domain_context.params.", "domain_context."):
-                if field_path.startswith(prefix):
-                    key = field_path[len(prefix):]
-                    if key and "." not in key:
-                        known.add(key)
-                    break
+            fields = [(item.dict() if hasattr(item, "dict") else dict(item)).get("field_path") for item in resource_refs]
+        known.update(k for k in (arule.ref_param_key(f) for f in fields) if k)
         texts = [c.rule for c in arule.compile_rule(rule)]
-        if criteria is None:
+        if criteria_rows is None:
             texts += [row.rule for row in authority_criterion_repo.list_for_relation(db, relation_id=relation_id)]
         else:
-            texts += [row["rule"] for row in self._criteria_rows(db, relation_id, criteria)]
+            texts += [row["rule"] for row in criteria_rows]
         arule.check_parameter_references(texts, known)
 
-    def _replace_criteria(self, db: Session, relation_id: str, criteria: List[Any]) -> None:
-        """Replace the AR version's own decision checks (ARF 1.2.0, B7 / S12).
+    def _replace_criteria(self, db: Session, relation_id: str, rows: List[Dict[str, Any]]) -> None:
+        """Replace the AR version's own decision checks with the save's rows (ARF 1.2.0, B7 / S12).
 
         Each check is stored on this version's row, so no Compliance Check is created
         or linked: saving the AR never duplicates checks, and a Compliance edit can't
-        change it. All rows are validated before the existing ones are replaced.
+        change it. ``rows`` come from :meth:`_criteria_rows`, already validated.
         """
-        rows = self._criteria_rows(db, relation_id, criteria)
         authority_criterion_repo.delete_for_relation(db, relation_id=relation_id)
         for row in rows:
             authority_criterion_repo.create(db, obj_in={
@@ -1648,6 +1645,9 @@ class AuthorityResolutionManager(SearchableAsset):
             ref_type = (r.get("ref_type") or "").strip()
             if not field_path:
                 continue
+            if field_path.startswith("domain_context.") and arule.ref_param_key(field_path) is None:
+                raise AuthorityInvalidError(
+                    f"Resource ref '{field_path}' must name one parameter: domain_context.<name>.")
             if ref_type not in self._REF_TYPES:
                 raise AuthorityInvalidError(
                     f"Resource ref for '{field_path}' has unknown ref_type "
@@ -2404,19 +2404,34 @@ class AuthorityResolutionManager(SearchableAsset):
                 rows = self._collect_evidence(relation)
             if not rows:
                 raise AuthorityInvalidError("No evidence rows were read; the DNA-Coefficient cannot be measured.")
-            rows, out_of_scope = self._scoped_evidence(relation, rows)
-            if not rows:
-                raise AuthorityInvalidError(
-                    f"All {out_of_scope} evidence rows are outside the Authority Relation's scope; "
-                    "the DNA-Coefficient cannot be measured."
-                )
             # The ODRL rule and the checks, evaluated per row: every failure
             # (a constraint, a prohibition, an unfulfilled duty, a check) diverges.
             criteria = self._rule_criteria(relation) + self._load_criteria(relation)
             broken = [c.code for c in criteria if authority_dna.rule_parse_error(c.rule)]
             if broken:
                 raise AuthorityInvalidError(f"Criteria with malformed rules: {', '.join(broken)}; fix them before measuring.")
+            # A ctx.<param> the checks read must exist for the run (#1491-1): a configuration
+            # fault fails the run, it is not a divergence on every row.
+            ctx = self._run_ctx(db, relation)
+            absent = sorted(arule.context_references(c.rule for c in criteria) - {k for k, v in ctx.items() if v is not None})
+            if absent:
+                raise AuthorityInvalidError(
+                    f"The checks read {', '.join('ctx.' + k for k in absent)}, which the Authority Relation "
+                    "does not define (no parameter or domain-context ref). Fix the configuration, then measure again.",
+                    parameters=absent,
+                )
+            rows, out_of_scope = self._scoped_evidence(relation, rows, ctx)
+            if not rows:
+                raise AuthorityInvalidError(
+                    f"All {out_of_scope} evidence rows are outside the Authority Relation's scope; "
+                    "the DNA-Coefficient cannot be measured."
+                )
             result = authority_dna.compute_dnaco(criteria, rows)
+            if result.sampled_count == 0:
+                raise AuthorityInvalidError(
+                    f"No evidence row carries the operands the rule and checks read ({result.skipped_count} skipped); "
+                    "the DNA-Coefficient cannot be measured."
+                )
 
             # Combine the evidence-based dimensions with the definition-based
             # 'structural' dimension; overall = probabilistic union (noisy-OR),
@@ -2478,6 +2493,8 @@ class AuthorityResolutionManager(SearchableAsset):
             )
             if out_of_scope:
                 msg += f" {out_of_scope} evidence rows outside the scope were skipped."
+            if result.skipped_count:
+                msg += f" {result.skipped_count} evidence rows missing an operand the checks read were skipped."
             if auto_flagged:
                 msg += f" Exceeded the ceiling ({relation.dna_max_threshold}); status auto-changed to needs_review."
                 self._reindex(db, relation)
@@ -2490,15 +2507,22 @@ class AuthorityResolutionManager(SearchableAsset):
             })
             raise
 
+    def _run_ctx(self, db: Session, relation: AuthorityRelationDb) -> Dict[str, Any]:
+        """The ``ctx`` of an evidence run: the AR's parameters plus its domain-context refs,
+        resolved once for the run (as a resolve resolves them)."""
+        params = arule.normalize_domain_context(relation.domain_context)["params"]
+        resolved = self._materialise_refs(db, relation, {}, _ResolveCtx())
+        return {**params, **self._ref_ctx(resolved)}
+
     def _scoped_evidence(
-        self, relation: AuthorityRelationDb, rows: List[Dict[str, Any]],
+        self, relation: AuthorityRelationDb, rows: List[Dict[str, Any]], ctx: Dict[str, Any],
     ) -> Tuple[List[Dict[str, Any]], int]:
         """Evidence rows as rules see them, and how many fell outside the scope.
 
         A row is skipped when it carries a scope key with a value outside the
         scope; a row without that column is kept (it can't be placed). Each kept
         row is the rules' evaluation object: the row is both ``obj`` and
-        ``req``, and the AR's params are ``ctx``.
+        ``req``, and ``ctx`` is the run's parameters (:meth:`_run_ctx`).
         """
         dc = arule.normalize_domain_context(relation.domain_context)
         by_key = [(arule.scope_key(c["leftOperand"]), c) for c in dc["scope"]]
@@ -2513,7 +2537,7 @@ class AuthorityResolutionManager(SearchableAsset):
             ):
                 skipped += 1
                 continue
-            kept.append(arule.evaluation_object(norm, dc["params"]))
+            kept.append(arule.evaluation_object(norm, ctx))
         return kept, skipped
 
     def recompute_scheduled(self, db: Session) -> Dict[str, Any]:
@@ -2770,7 +2794,7 @@ class AuthorityResolutionManager(SearchableAsset):
         flat = dict(dc["params"])
         for c in dc["scope"]:
             if c.get("operator") in ("eq", "isAnyOf"):
-                flat.setdefault(arule.operand_key(c["leftOperand"]), c.get("rightOperand"))
+                flat.setdefault(arule.scope_key(c["leftOperand"]), c.get("rightOperand"))
         return flat
 
     def _rule_criteria(self, relation: AuthorityRelationDb) -> List[Criterion]:
@@ -2783,13 +2807,9 @@ class AuthorityResolutionManager(SearchableAsset):
         """``domain_context.<key>`` / ``domain_context.params.<key>`` refs as ``ctx.<key>``."""
         out: Dict[str, Any] = {}
         for r in resolved_refs or []:
-            path = r.get("field_path") or ""
-            for prefix in ("domain_context.params.", "domain_context."):
-                if path.startswith(prefix):
-                    key = path[len(prefix):]
-                    if key and "." not in key:
-                        out[key] = r.get("value")
-                    break
+            key = arule.ref_param_key(r.get("field_path"))
+            if key:
+                out[key] = r.get("value")
         return out
 
     def _evaluation_object(
@@ -2822,19 +2842,24 @@ class AuthorityResolutionManager(SearchableAsset):
         return verdict, reason, pending
 
     @staticmethod
-    def _missing_operand_outcome(c: Criterion, e: MissingOperandError) -> Tuple[str, str, List[Dict[str, Any]], str]:
-        """A criterion read an operand that is absent (#1491-1).
+    def _unknown_outcome(c: Criterion, missing: Tuple[Tuple[str, str], ...]) -> Tuple[str, str, List[Dict[str, Any]], str]:
+        """A criterion that can't be decided, because an operand it reads is absent (#1491-1).
 
-        A missing ``ctx.<param>`` is the AR's own configuration, so it is a conflict
-        (the same answer as a malformed rule). A missing request value is a denial
-        naming the operand: the request can't show that the rule holds.
+        A missing ``ctx.<param>`` is the AR's own configuration, so it is a conflict (the
+        answer to a malformed rule). Otherwise the request lacks a value the rule needs:
+        a denial naming the fields to send. Kleene evaluation already made the unknown
+        decide the rule (see ``compliance_dsl.evaluate_rule_strict``).
         """
-        if e.namespace == arule.NS_CTX:
+        params = list(dict.fromkeys(k for ns, k in missing if ns == arule.NS_CTX))
+        fields = list(dict.fromkeys(k for ns, k in missing if ns != arule.NS_CTX))
+        if params:
+            names = ", ".join(f"'{k}'" for k in params)
             return (VERDICT_CONFLICT,
-                    f"The Authority Relation's parameter '{e.key}' is missing, so '{c.code}' cannot be decided.",
+                    f"The Authority Relation's parameter {names} is missing, so '{c.code}' cannot be decided.",
                     [], REASON_MISSING_PARAMETER)
+        names = ", ".join(f"'{k}'" for k in fields)
         return (VERDICT_DENIED,
-                f"The request has no value for '{e.key}', so '{c.code}' cannot be decided.",
+                f"The request has no value for {names}, so '{c.code}' cannot be decided.",
                 [], REASON_MISSING_OPERAND)
 
     def _decide(
@@ -2851,10 +2876,11 @@ class AuthorityResolutionManager(SearchableAsset):
         is returned in the pending list. No rule and no checks = an
         unconstrained gate (approve).
 
-        Rules are evaluated strictly (#1491-1): an operand that is absent fails the
-        criterion (a missing request value denies, a missing parameter is a conflict;
-        see :meth:`_missing_operand_outcome`). A missing operand in a duty leaves the
-        duty unfulfilled. Returns ``(verdict, reason, pending_duties, reason_code)``.
+        Rules evaluate with three-valued strict semantics (#1491-1, see
+        ``compliance_dsl.evaluate_rule_strict``). An UNKNOWN criterion fails closed:
+        a constraint, check or prohibition denies with a reason naming the absent
+        fields, a missing parameter is a conflict. An UNKNOWN duty stays unfulfilled.
+        Returns ``(verdict, reason, pending_duties, reason_code)``.
         """
         obj = self._evaluation_object(relation, req, resolved_refs)
         try:
@@ -2871,24 +2897,17 @@ class AuthorityResolutionManager(SearchableAsset):
             if parse_error:
                 # Fail closed, and say it's the AR's configuration, not the request.
                 return VERDICT_CONFLICT, f"Criterion '{c.code}' has a malformed rule: {parse_error}", [], None
-            try:
-                passed, msg = evaluate_rule_on_object(c.rule, obj, strict_operands=True)
-            except MissingOperandError as e:
-                return self._missing_operand_outcome(c, e)
-            except Exception as e:  # pragma: no cover - malformed author rule
-                logger.warning(f"Criterion '{c.code}' failed to evaluate on AR {relation.id}: {e}")
-                continue
-            if not passed:
-                return VERDICT_DENIED, (c.message or msg or f"Criterion '{c.code}' failed"), [], None
+            outcome = evaluate_rule_strict(c.rule, obj)
+            if outcome.passed is None:
+                return self._unknown_outcome(c, outcome.missing)
+            if not outcome.passed:
+                return VERDICT_DENIED, (c.message or outcome.message or f"Criterion '{c.code}' failed"), [], None
         pending: List[Dict[str, Any]] = []
         for c in duties:
-            try:
-                passed, _ = evaluate_rule_on_object(c.rule, obj, strict_operands=True)
-            except MissingOperandError as e:
-                if e.namespace == arule.NS_CTX:
-                    return self._missing_operand_outcome(c, e)
-                passed = False
-            if not passed:
+            outcome = evaluate_rule_strict(c.rule, obj)
+            if outcome.passed is None and any(ns == arule.NS_CTX for ns, _ in outcome.missing):
+                return self._unknown_outcome(c, outcome.missing)
+            if outcome.passed is not True:
                 pending.append({"duty": c.code, "message": c.message})
         if pending:
             return VERDICT_CONDITIONAL, "permitted once duties are fulfilled: " + ", ".join(
@@ -3402,7 +3421,7 @@ class AuthorityResolutionManager(SearchableAsset):
             scope = arule.normalize_domain_context(relation.domain_context)["scope"]
             matches, conflicts = [], []
             for key, equiv in caller_equiv.items():
-                constraints = [c for c in scope if arule.operand_key(c["leftOperand"]) == key]
+                constraints = [c for c in scope if arule.scope_key(c["leftOperand"]) == key]
                 if constraints:
                     # Every operator, as the scope gate checks it at resolve time.
                     ok = all(arule.compare_value(context[key], c["operator"], c["rightOperand"],

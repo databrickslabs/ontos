@@ -28,6 +28,15 @@ missing key or a value outside the scope means the AR does not apply). The rule
 is compiled into Compliance-DSL criteria, so the runtime gate and the DNA engine
 evaluate it exactly like the AR's checks. Rules read the request as
 ``obj.<field>`` / ``req.<key>`` and the AR's parameters as ``ctx.<key>``.
+
+Rules evaluate strictly (ARF, #1491-1): an absent operand is UNKNOWN and combines
+with Kleene logic (``or: [a, b]`` holds when ``b`` does, even if ``a`` is absent).
+An UNKNOWN top level fails closed. A constraint or check is not satisfied. A
+prohibition is not known to be inapplicable, so it denies: this is a deliberate
+deviation from ODRL, where a prohibition that cannot be shown to apply does not
+block. An authority gate must not approve on an undecidable prohibition, and the
+denial names the field to send. A duty stays unfulfilled. A ``ctx.<param>`` that is
+absent is an AR configuration fault (a conflict), not a request fault.
 """
 from __future__ import annotations
 
@@ -86,6 +95,21 @@ _DSL_KEYWORDS = frozenset({
     "MATCHES", "IN", "CONTAINS", "AND", "OR", "NOT", "HAS_TAG", "TAG", "LENGTH", "UPPER",
     "LOWER", "PASS", "FAIL", "ASSIGN_TAG", "REMOVE_TAG", "NOTIFY", "TRUE", "FALSE",
 })
+
+
+def ref_param_key(field_path: Any) -> Optional[str]:
+    """The AR parameter a ``domain_context`` resource ref names, or None.
+
+    ``domain_context.<key>`` and ``domain_context.params.<key>`` name ``ctx.<key>``
+    (shared by the parameter check on save, the resolver's ``ctx`` and the ref writer).
+    A single identifier-like segment only; the path is stripped first.
+    """
+    path = str(field_path or "").strip()
+    for prefix in ("domain_context.params.", "domain_context."):
+        if path.startswith(prefix):
+            key = path[len(prefix):].strip()
+            return key if key and "." not in key else None
+    return None
 
 
 def _check_name(name: str, what: str) -> None:
@@ -239,11 +263,14 @@ def compare_value(actual: Any, op: str, expected: Any, equivalents: Optional[Cal
 # Rule validation and compilation                                             #
 # --------------------------------------------------------------------------- #
 
-def _checked_weight(value: Any, where: str) -> float:
-    """A facet weight is a finite number of 0 or more (#1491-5). A non-numeric one
-    used to be saved and then make every resolve a conflict."""
+def checked_weight(value: Any, where: str) -> float:
+    """A weight (of a facet or a check) is a finite number of 0 or more (#1491-5).
+
+    Shared by rule facets and checks. A bool is refused, though it is an int in
+    Python. A non-numeric weight used to be saved and then make every resolve a conflict.
+    """
     if isinstance(value, bool):
-        raise RuleInvalidError(f"{where}: weight must be a number of 0 or more.")
+        raise RuleInvalidError(f"{where}: weight must be a number of 0 or more, not a boolean.")
     try:
         weight = float(value)
     except (TypeError, ValueError):
@@ -257,7 +284,7 @@ def _facets(src: Dict[str, Any], where: str) -> Dict[str, Any]:
     """The presentational facets of an authored item, with the weight checked."""
     out = {k: src[k] for k in _FACETS if src.get(k) is not None}
     if "weight" in out:
-        out["weight"] = _checked_weight(out["weight"], where)
+        out["weight"] = checked_weight(out["weight"], where)
     return out
 
 
@@ -381,20 +408,29 @@ def _numeric_form(v: Any) -> Any:
     return None
 
 
+def _is_number_like(v: Any) -> bool:
+    """A number, or a string that reads as one (not a boolean)."""
+    return _numeric_form(v) is not None or (isinstance(v, (int, float)) and not isinstance(v, bool))
+
+
 def _set_members(values: List[Any]) -> List[Any]:
     """Literals for a membership test, with each numeric value in both forms.
 
     A request value that reads as a number is held as one (``_number_or_text``), so
     ``'1234'`` in a rule must also match ``1234`` and the other way round (#1491-4).
+    A boolean stays itself; only the numeric forms derived from a number are added.
     """
     members: List[Any] = []
     seen: set = set()
     for v in values:
-        forms = [v, _numeric_form(v)]
-        if isinstance(v, (int, float)) and not isinstance(v, bool):
-            forms.append(str(int(v)) if float(v).is_integer() else repr(v))
+        if isinstance(v, bool):
+            forms = [v]
+        else:
+            forms = [v, _numeric_form(v)]
+            if isinstance(v, (int, float)):
+                forms.append(str(int(v)) if float(v).is_integer() else repr(v))
         for f in forms:
-            if f is None or isinstance(f, bool):
+            if f is None:
                 continue
             key = (type(f), f)
             if key not in seen:
@@ -414,8 +450,9 @@ def constraint_expression(c: Dict[str, Any]) -> str:
     if right is None:
         v = c["rightOperand"]
         values = v if isinstance(v, list) else [v]
-        if op in ("isAnyOf", "isNoneOf") or (op in ("eq", "neq") and any(_numeric_form(x) is not None for x in values)):
-            # A membership test (#1491-4): ``eq '1234'`` is ``IN ['1234', 1234]``.
+        if op in ("isAnyOf", "isNoneOf") or (op in ("eq", "neq") and any(_is_number_like(x) for x in values)):
+            # A membership test (#1491-4): ``eq '1234'`` is ``IN ['1234', 1234]``,
+            # ``eq 1234`` is ``IN [1234, '1234']`` (a text field holds the number as text).
             test = f"{field} IN [" + ", ".join(_literal(x) for x in _set_members(values)) + "]"
             return test if op in ("isAnyOf", "eq") else f"NOT ({test})"
         if op in ("lt", "lteq", "gt", "gteq") and _numeric_form(v) is not None:

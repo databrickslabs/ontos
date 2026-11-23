@@ -8,10 +8,19 @@ import csv
 import io
 import json
 import uuid
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from rdflib import ConjunctiveGraph, URIRef
 
 from src.controller.asset_bulk_manager import AssetBulkManager
+from src.controller.assets_manager import AssetsManager
+from src.controller.ontology_schema_manager import OntologySchemaManager
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.models.assets import METRIC_VIEW_PROPERTY
+
+TTL = Path(__file__).resolve().parents[2] / "data" / "taxonomies" / "ontos-ontology.ttl"
 
 STORED = {"data_type": "DATE", "nullable": True, METRIC_VIEW_PROPERTY: {"source": "sales"}}
 
@@ -59,3 +68,42 @@ def test_a_row_with_properties_replaces_them_and_keeps_the_internal_keys(db_sess
         asset = _asset(db_session)
         stored = _import(db_session, asset, json.dumps({"nullable": False}), by_id)
         assert stored == {"nullable": False, METRIC_VIEW_PROPERTY: {"source": "sales"}}
+
+
+@pytest.fixture(scope="module")
+def osm():
+    graph = ConjunctiveGraph()
+    graph.get_context(URIRef(OntologySchemaManager.BASE_ONTOLOGY_CONTEXT)).parse(
+        str(TTL), format="turtle")
+    return OntologySchemaManager(SimpleNamespace(_graph=graph))
+
+
+def test_kept_properties_must_fit_the_new_type_of_a_row(db_session, osm):
+    """An empty properties cell keeps the stored properties: a row that also changes
+    the asset's type fails, in the preview and on import, when they don't fit it."""
+    _asset(db_session)  # makes sure the Column type exists
+    untyped = AssetTypeDb(name="Untyped Thing")
+    db_session.add(untyped)
+    db_session.flush()
+    asset = AssetDb(
+        name="pk", asset_type_id=untyped.id, properties={"isPrimaryKey": "yes"},
+        platform="databricks", location=f"main.sales.orders.pk.{uuid.uuid4().hex[:6]}",
+    )
+    db_session.add(asset)
+    db_session.flush()
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["id", "name", "asset_type", "platform", "location", "properties"])
+    writer.writerow([str(asset.id), asset.name, "Column", asset.platform, asset.location, ""])
+    manager = AssetBulkManager(assets_manager=AssetsManager(ontology_schema_manager=osm))
+
+    preview = manager.preview_import(
+        db_session, file_bytes=out.getvalue().encode(), filename="assets.csv")
+    assert (preview.will_update, preview.errors) == (0, 1), preview
+    result = manager.execute_import(
+        db_session, file_bytes=out.getvalue().encode(), filename="assets.csv",
+        current_user_id="alice@example.com",
+    )
+    assert (result.updated, result.errors) == (0, 1), result
+    db_session.expire_all()
+    assert db_session.get(AssetDb, asset.id).asset_type_id == untyped.id

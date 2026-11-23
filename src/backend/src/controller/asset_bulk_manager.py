@@ -236,6 +236,15 @@ class AssetBulkManager:
             return
         self._assets_manager._validate_properties(db, type_id, properties)
 
+    def _validate_kept_properties(
+        self, db: Session, type_id: UUID, properties: Optional[Dict[str, Any]], existing: Any,
+    ) -> None:
+        """An empty properties cell keeps the stored properties: when the row changes the
+        asset's type, they must fit the new type's schema. Raises ValidationError (422)."""
+        if properties is not None or str(existing.asset_type_id) == str(type_id):
+            return
+        self._validate_row_properties(db, type_id, public_properties(existing.properties))
+
     def index_committed_import(self, db: Session, result: "ImportResult") -> None:
         """Index the assets an import wrote, in one batch. Call only after the DB commit.
 
@@ -640,6 +649,13 @@ class AssetBulkManager:
                 except (ValueError, Exception):
                     existing = None
                 if existing:
+                    try:
+                        self._validate_kept_properties(db, type_id, preview_props, existing)
+                    except ValidationError as e:
+                        item.message = str(e.detail)
+                        result.errors += 1
+                        result.items.append(item)
+                        continue
                     item.action = ImportAction.UPDATE
                     item.existing_asset_id = str(existing.id)
                     result.will_update += 1
@@ -797,6 +813,13 @@ class AssetBulkManager:
                             existing = None
                         if not existing:
                             item.message = f"Asset with ID '{row_id}' not found"
+                            result.errors += 1
+                            result.items.append(item)
+                            continue
+                        try:
+                            self._validate_kept_properties(db, type_id, properties, existing)
+                        except ValidationError as e:
+                            item.message = str(e.detail)
                             result.errors += 1
                             result.items.append(item)
                             continue

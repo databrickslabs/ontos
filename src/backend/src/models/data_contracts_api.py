@@ -53,7 +53,8 @@ class ColumnProperty(BaseModel):
 
     # Date constraints
     format: Optional[str] = None
-    timezone: Optional[str] = None
+    # a zone name on a date; ODCS v3.1 types it as a boolean on timestamp / time
+    timezone: Optional[Union[bool, str]] = None
     customFormat: Optional[str] = None
 
     # Array constraints

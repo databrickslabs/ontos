@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useApi } from '@/hooks/use-api';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 export type MarkdownImportStatus =
   'added' | 'updated' | 'unchanged' | 'unlinked' | 'failed' | 'removed';
@@ -248,11 +249,11 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
             onClick={() => runImport('preview')}
             disabled={!path.trim() || running !== null}
           >
-            {running === 'preview' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {running === 'preview' && <ActionSpinner className="mr-2" />}
             {running === 'preview' ? t('markdownImport.previewing') : t('markdownImport.preview')}
           </Button>
           <Button onClick={() => runImport('import')} disabled={!path.trim() || running !== null}>
-            {running === 'import' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {running === 'import' && <ActionSpinner className="mr-2" />}
             {running === 'import' ? t('markdownImport.importing') : t('markdownImport.submit')}
           </Button>
         </DialogFooter>

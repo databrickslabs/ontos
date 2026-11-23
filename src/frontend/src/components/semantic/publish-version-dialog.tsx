@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2 } from 'lucide-react';
+
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // ---------------------------------------------------------------------------
 // PublishVersionDialog — drives the signed-off versioning contract §4
@@ -177,7 +178,7 @@ export function PublishVersionDialog({
             {t('common:actions.cancel', 'Cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {busy && <ActionSpinner className="mr-2" />}
             {t('semantic-models:versionHistory.saveNewVersion', 'Save new version')}
           </Button>
         </DialogFooter>

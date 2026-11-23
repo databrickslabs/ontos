@@ -25,7 +25,6 @@ import {
   KnowledgeCollection,
 } from '@/types/ontology';
 import {
-  Loader2,
   ArrowUp,
   ArrowDown,
   ArrowLeftRight,
@@ -34,6 +33,7 @@ import {
 } from 'lucide-react';
 import { buildSchemeOptionGroups, flattenSchemeTree } from '@/lib/scheme-select-options';
 import { SchemeSelectItems } from './scheme-select-items';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 type PromotionAction = 'promote' | 'demote' | 'migrate';
 
@@ -284,7 +284,7 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
             onClick={handleSubmit}
             disabled={isLoading || !targetCollectionIri}
           >
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading && <ActionSpinner className="mr-2" />}
             {getActionTitle()}
           </Button>
         </DialogFooter>

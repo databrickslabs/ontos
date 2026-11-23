@@ -27,12 +27,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Check, XCircle, ChevronRight, FileText, Eye, ExternalLink } from 'lucide-react';
+import { Check, XCircle, ChevronRight, FileText, Eye, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useUserStore } from '@/stores/user-store';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 /** Lightweight markdown to HTML — handles headers, bold, lists, paragraphs, and inline links. */
 function simpleMarkdown(text: string): string {
@@ -934,7 +935,7 @@ export default function ApprovalWizardDialog({
         {/* Non-visual step: spinner with auto-advancing message */}
         {sessionId && currentStep && isNonVisualStep && (
           <div className="flex flex-col items-center justify-center gap-3 py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <ActionSpinner className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               {previewMode ? (
                 t('workflows:approvalWizard.preview.skipped', {
@@ -1281,11 +1282,11 @@ export default function ApprovalWizardDialog({
 
             <DialogFooter>
               <Button variant="ghost" onClick={abortSession} disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                {loading ? <ActionSpinner /> : <XCircle className="h-4 w-4" />}
                 {t('common:actions.cancel')}
               </Button>
               <Button onClick={submitStep} disabled={loading || !isStepValid}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {loading ? <ActionSpinner /> : <Check className="h-4 w-4" />}
                 {isLastVisualStep ? t('workflows:approvalWizard.completeButton') : t('common:actions.next')}
               </Button>
             </DialogFooter>

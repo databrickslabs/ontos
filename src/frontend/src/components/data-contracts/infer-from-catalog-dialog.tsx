@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2 } from 'lucide-react';
+
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,7 @@ import { useApi } from '@/hooks/use-api';
 import SchemaBrowser from '@/components/schema-importer/schema-browser';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import type { Connection } from '@/types/connections';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 export interface CatalogSchemaResult {
   name: string;
@@ -193,7 +194,7 @@ export default function InferFromCatalogDialog({
             onClick={handleInfer}
             disabled={selectedPaths.size === 0 || isInferring}
           >
-            {isInferring && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isInferring && <ActionSpinner className="mr-2" />}
             {selectedPaths.size > 0
               ? t('data-contracts:infer.inferSchemasButton', {
                   count: selectedPaths.size,

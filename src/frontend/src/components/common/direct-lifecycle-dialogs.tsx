@@ -15,10 +15,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+
 import { useTranslation } from 'react-i18next';
 import type { CertificationLevel } from '@/types/lifecycle';
 import { PUBLICATION_SCOPE_LABELS, type PublicationScope } from '@/types/lifecycle';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 const PUBLICATION_SCOPES: PublicationScope[] = ['none', 'domain', 'organization', 'external'];
 
@@ -80,7 +81,7 @@ export function DirectCertifyDialog({
             onClick={onConfirm}
             disabled={isSubmitting || selectedLevelOrder == null || sorted.length === 0}
           >
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting && <ActionSpinner className="mr-2" />}
             {t('common:actions.confirm')}
           </Button>
         </DialogFooter>
@@ -138,7 +139,7 @@ export function DirectPublishDialog({
             {t('common:actions.cancel')}
           </Button>
           <Button onClick={onConfirm} disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting && <ActionSpinner className="mr-2" />}
             {t('common:actions.confirm')}
           </Button>
         </DialogFooter>

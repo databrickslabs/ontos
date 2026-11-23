@@ -12,7 +12,7 @@
 
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Loader2, Plug2 } from 'lucide-react';
+import { Plug2 } from 'lucide-react';
 
 import SettingsPageWrapper from '@/components/settings/settings-page-wrapper';
 import {
@@ -39,6 +39,7 @@ import type {
   DirectoryTestResult,
   UcHttpConnection,
 } from '@/types/directory';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Provider options enabled in v1. Adding a new one only requires
 // extending this array and the form-state below; the manager picks
@@ -291,11 +292,11 @@ export default function SettingsDirectoryView() {
 
         <div className="flex gap-2">
           <Button onClick={handleSave} disabled={!canSave}>
-            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {saving && <ActionSpinner className="mr-2" />}
             {t('common:actions.save')}
           </Button>
           <Button variant="outline" onClick={handleTest} disabled={!canTest}>
-            {testing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {testing && <ActionSpinner className="mr-2" />}
             {t('directory.testConnection')}
           </Button>
           <Button

@@ -21,9 +21,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Bell } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { useUserStore } from '@/stores/user-store';
 import { subscribeErrorText } from '@/lib/subscribe-error';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // subscribe on behalf of group / SP. The form picks one of:
 //   - "self": current user
@@ -269,7 +270,7 @@ export default function SubscribeDialog({
           <Button onClick={handleSubmit} disabled={submitDisabled}>
             {isSubmitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <ActionSpinner className="mr-2" />
                 {t('data-products:subscribeDialog.subscribing')}
               </>
             ) : (

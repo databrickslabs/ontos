@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, Trash2, AlertTriangle, Box, Table2, Eye, Columns2, Database, Shapes } from 'lucide-react';
+import { Trash2, AlertTriangle, Box, Table2, Eye, Columns2, Database, Shapes } from 'lucide-react';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,6 +15,7 @@ import {
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface DeletePreviewItem {
   id: string;
@@ -272,7 +273,7 @@ export function AssetDeleteDialog({
             onClick={handleDelete}
             disabled={isDeleting || isLoadingPreview || checkedIds.size === 0}
           >
-            {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isDeleting && <ActionSpinner className="mr-2" />}
             {checkedIds.size > 1
               ? t('assets:cascadeDelete.deleteButtonMany', { count: checkedIds.size })
               : t('assets:cascadeDelete.deleteButtonOne')}

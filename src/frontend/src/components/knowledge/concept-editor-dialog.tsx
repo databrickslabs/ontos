@@ -33,7 +33,6 @@ import {
   KnowledgeCollection,
 } from '@/types/ontology';
 import {
-  Loader2,
   Plus,
   X,
   Link2,
@@ -43,6 +42,7 @@ import {
   History,
   Send,
 } from 'lucide-react';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface ConceptEditorDialogProps {
   open: boolean;
@@ -776,7 +776,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
           </Button>
           {canEdit && (
             <Button onClick={handleSubmit} disabled={isLoading || !formData.label || noFittingScheme}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isLoading && <ActionSpinner className="mr-2" />}
               {isNew ? t('common:actions.create') : t('common:actions.save')}
             </Button>
           )}

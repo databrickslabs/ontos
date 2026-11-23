@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { asyncRunProgressText, asyncRunStatusLabel } from '@/lib/schema-import-run-text';
 import {
-  Loader2,
   CheckCircle2,
   XCircle,
   MinusCircle,
@@ -49,6 +48,7 @@ import type {
   StartImportRunResponse,
   SchemaImportRunDetail,
 } from '@/types/schema-import';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // ---------------------------------------------------------------------------
 // Tree helpers
@@ -665,7 +665,7 @@ export default function ImportPreviewDialog({
             <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
               <div className="flex items-center gap-2">
                 {(asyncRun.status === 'pending' || asyncRun.status === 'running') && (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <ActionSpinner className="text-muted-foreground" />
                 )}
                 <span className="font-medium">{asyncRunStatusLabel(asyncRun.status, t)}</span>
                 {asyncRun.total_items ? (
@@ -707,7 +707,7 @@ export default function ImportPreviewDialog({
                     onClick={startAsyncImport}
                     disabled={isStartingAsync || isImporting || toCreate === 0}
                   >
-                    {isStartingAsync && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isStartingAsync && <ActionSpinner className="mr-2" />}
                     {t('database-schema:preview.async.runInBackground')}
                   </Button>
                 )}
@@ -715,7 +715,7 @@ export default function ImportPreviewDialog({
                   onClick={executeImport}
                   disabled={isImporting || isStartingAsync || toCreate === 0}
                 >
-                  {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isImporting && <ActionSpinner className="mr-2" />}
                   {t('database-schema:preview.importAssets', { count: toCreate })}
                 </Button>
               </>

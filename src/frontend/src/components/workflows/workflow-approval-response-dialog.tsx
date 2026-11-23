@@ -21,13 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Check, XCircle, ExternalLink } from 'lucide-react';
+import { Check, XCircle, ExternalLink } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { approvalEntityTypeLabel, approvalFieldLabel, approvalFieldValue } from '@/lib/approval-payload-labels';
 import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 /** Built from GET /api/workflows/for-trigger/for_approval_response (first step used for dialog). */
 interface DefaultResponseWorkflowStep {
@@ -458,7 +459,7 @@ export default function WorkflowApprovalResponseDialog({
                 onClick={() => handleSubmit(false)}
               >
                 {submitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <ActionSpinner />
                 ) : (
                   <XCircle className="h-4 w-4" />
                 )}
@@ -471,7 +472,7 @@ export default function WorkflowApprovalResponseDialog({
                 onClick={() => handleSubmit(true)}
               >
                 {submitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <ActionSpinner />
                 ) : (
                   <Check className="h-4 w-4" />
                 )}

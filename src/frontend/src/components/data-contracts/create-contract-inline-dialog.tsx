@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
-import { Loader2 } from 'lucide-react';
+
 import { internalErrorText } from '@/lib/server-error-text';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 type PrefillData = {
   domain?: string;
@@ -227,7 +228,7 @@ export default function CreateContractInlineDialog({
           <Button onClick={handleSubmit} disabled={isSubmitting}>
             {isSubmitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <ActionSpinner className="mr-2" />
                 {t('data-contracts:createInline.creating', 'Creating...')}
               </>
             ) : (

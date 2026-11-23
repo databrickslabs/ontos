@@ -7,7 +7,7 @@ import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ShieldCheck, Globe, Link2 } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ShieldCheck, Globe, Link2 } from 'lucide-react'
 import {
   DetailHeaderSkeleton,
   PanelSkeleton,
@@ -74,6 +74,7 @@ import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error'
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Status-based editability constants
 // Only draft/proposed contracts can be edited in place
@@ -2141,7 +2142,7 @@ export default function DataContractDetails() {
                         disabled={isRequestingDqxJob}
                         className="mt-1 inline-flex items-center underline underline-offset-2 hover:no-underline disabled:opacity-60"
                       >
-                        {isRequestingDqxJob && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                        {isRequestingDqxJob && <ActionSpinner className="h-3 w-3 mr-1" />}
                         {isRequestingDqxJob ? t('data-contracts:detailsView.schemas.notifyingAdmin', 'Notifying admin...') : t('data-contracts:detailsView.schemas.notifyAdmin', 'Notify admin')}
                       </button>
                     )}
@@ -2151,7 +2152,7 @@ export default function DataContractDetails() {
               {canEditInPlace && (
                 <>
                   <Button size="sm" variant="outline" onClick={() => setIsInferFromCatalogOpen(true)} disabled={isInferringSchema}>
-                    {isInferringSchema ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Database className="h-4 w-4 mr-1.5" />}
+                    {isInferringSchema ? <ActionSpinner className="mr-1.5" /> : <Database className="h-4 w-4 mr-1.5" />}
                     {isInferringSchema ? t('data-contracts:detailsView.schemas.inferring', 'Inferring...') : t('data-contracts:detailsView.schemas.inferFromCatalog', 'Infer from Catalog')}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setIsInferFromAssetOpen(true)} disabled={isInferringSchema}>
@@ -2170,7 +2171,7 @@ export default function DataContractDetails() {
         <CardContent>
           {isProfilingRunning && (
             <Alert className="mb-4">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <ActionSpinner />
               <AlertDescription className="flex items-center justify-between">
                 <span>
                   {t('data-contracts:detailsView.schemas.profilingInProgress', 'DQX profiling in progress... Results will appear here when complete.')}
@@ -2197,7 +2198,7 @@ export default function DataContractDetails() {
           )}
           {isInferringSchema && (
             <Alert className="mb-4">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <ActionSpinner />
               <AlertDescription>
                 {t('data-contracts:detailsView.schemas.inferringSchemaWait', 'Inferring schema... This may take a moment.')}
               </AlertDescription>
@@ -2214,7 +2215,7 @@ export default function DataContractDetails() {
               {canEditInPlace && (
                 <div className="flex gap-3 justify-center flex-wrap">
                   <Button variant="outline" onClick={() => setIsInferFromCatalogOpen(true)} disabled={isInferringSchema}>
-                    {isInferringSchema ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Database className="h-4 w-4 mr-2" />}
+                    {isInferringSchema ? <ActionSpinner className="mr-2" /> : <Database className="h-4 w-4 mr-2" />}
                     {isInferringSchema ? t('data-contracts:detailsView.schemas.inferringSchema', 'Inferring Schema...') : t('data-contracts:detailsView.schemas.inferFromCatalog', 'Infer from Catalog')}
                   </Button>
                   <Button variant="outline" onClick={() => setIsInferFromAssetOpen(true)} disabled={isInferringSchema}>
@@ -2270,7 +2271,7 @@ export default function DataContractDetails() {
                     {canEditInPlace && (
                       <>
                         <Button size="sm" variant="ghost" disabled={loadingEditProperties} onClick={() => handleEditSchema(0)}>
-                          {loadingEditProperties ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                          {loadingEditProperties ? <ActionSpinner /> : <Pencil className="h-4 w-4" />}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => handleDeleteSchema(0)} className="text-destructive hover:text-destructive">
                           <Trash2 className="h-4 w-4" />
@@ -2414,7 +2415,7 @@ export default function DataContractDetails() {
                       {canEditInPlace && (
                         <>
                           <Button size="sm" variant="ghost" disabled={loadingEditProperties} onClick={() => handleEditSchema(selectedSchemaIndex)}>
-                            {loadingEditProperties ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                            {loadingEditProperties ? <ActionSpinner /> : <Pencil className="h-4 w-4" />}
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => handleDeleteSchema(selectedSchemaIndex)} className="text-destructive hover:text-destructive">
                             <Trash2 className="h-4 w-4" />
@@ -2564,7 +2565,7 @@ export default function DataContractDetails() {
                       {canEditInPlace && (
                         <>
                           <Button size="sm" variant="ghost" disabled={loadingEditProperties} onClick={() => handleEditSchema(selectedSchemaIndex)}>
-                            {loadingEditProperties ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                            {loadingEditProperties ? <ActionSpinner /> : <Pencil className="h-4 w-4" />}
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => handleDeleteSchema(selectedSchemaIndex)} className="text-destructive hover:text-destructive">
                             <Trash2 className="h-4 w-4" />

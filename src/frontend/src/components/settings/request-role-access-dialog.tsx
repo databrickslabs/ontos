@@ -8,7 +8,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { useNotificationsStore } from '@/stores/notifications-store';
-import { Loader2, Shield, AlertCircle } from 'lucide-react';
+import { Shield, AlertCircle } from 'lucide-react';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface RequestRoleAccessDialogProps {
   isOpen: boolean;
@@ -151,7 +152,7 @@ export default function RequestRoleAccessDialog({
             onClick={handleSubmit}
             disabled={submitting || !reason.trim()}
           >
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {submitting && <ActionSpinner className="mr-2" />}
             {submitting ? t('settings:roles.requestAccess.sending') : t('settings:roles.requestAccess.send')}
           </Button>
         </DialogFooter>

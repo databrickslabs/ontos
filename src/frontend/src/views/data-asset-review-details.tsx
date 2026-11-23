@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { reviewStatusLabel } from '@/lib/status-labels';
 import { ColumnDef } from "@tanstack/react-table";
-import { Loader2, AlertCircle, ArrowLeft, X, ArrowUpDown, Pencil, Check, Copy } from 'lucide-react';
+import { AlertCircle, ArrowLeft, X, ArrowUpDown, Pencil, Check, Copy } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from "@/hooks/use-toast";
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
@@ -34,6 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 // Import Asset Review Editor Component
 import AssetReviewEditor from '@/components/data-asset-reviews/asset-review-editor';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Concept diff panel for knowledge-concept reviews
 interface ConceptDiffPanelProps {
@@ -371,7 +372,7 @@ export default function DataAssetReviewDetails() {
                                     disabled={isSavingTitle}
                                     aria-label={t('common:actions.save')}
                                 >
-                                    {isSavingTitle ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                    {isSavingTitle ? <ActionSpinner /> : <Check className="h-4 w-4" />}
                                 </Button>
                                 <Button
                                     size="icon"
@@ -430,7 +431,7 @@ export default function DataAssetReviewDetails() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {isUpdatingStatus && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {isUpdatingStatus && <ActionSpinner />}
                     </div>
                 </div>
 

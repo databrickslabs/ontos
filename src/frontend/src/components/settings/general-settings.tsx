@@ -6,11 +6,12 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Save, Settings } from 'lucide-react';
+import { Save, Settings } from 'lucide-react';
 import { SettingsFormSkeleton } from '@/components/common/list-view-skeleton';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useToast } from '@/hooks/use-toast';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface AppSettings {
   databricksCatalog: string;
@@ -566,7 +567,7 @@ export default function GeneralSettings() {
           <div className="pt-4">
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <ActionSpinner className="mr-2" />
               ) : (
                 <Save className="mr-2 h-4 w-4" />
               )}

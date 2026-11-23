@@ -27,8 +27,8 @@ import {
   ChevronDown,
   ChevronRight,
   Upload,
-  Loader2,
 } from 'lucide-react';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface GitFileChange {
   path: string;
@@ -271,7 +271,7 @@ export function GitDiffModal({
             disabled={isPushing || !diffData || diffData.pending_changes_count === 0}
           >
             {isPushing ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <ActionSpinner className="mr-2" />
             ) : (
               <Upload className="mr-2 h-4 w-4" />
             )}

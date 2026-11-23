@@ -4,11 +4,15 @@ import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { useToast } from '@/hooks/use-toast';
 import {
-  CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { MaturityBadge } from '@/components/common/maturity-badge';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import type { MaturityReport, LevelResult } from '@/types/maturity';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface MaturityInlineProps {
   entityType: 'DataProduct' | 'DataContract';
@@ -111,7 +115,7 @@ export function MaturityInline({ entityType, entityId, compact = false }: Maturi
                 title={t('common:maturity.reEvaluate')}
               >
                 {isEvaluating
-                  ? <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  ? <ActionSpinner className="h-3 w-3 text-muted-foreground" />
                   : <RefreshCw className="h-3 w-3 text-muted-foreground hover:text-foreground" />}
               </button>
             </div>
@@ -154,7 +158,7 @@ export function MaturityInline({ entityType, entityId, compact = false }: Maturi
         title={t('common:maturity.reEvaluate')}
       >
         {isEvaluating
-          ? <Loader2 className="h-3 w-3 animate-spin" />
+          ? <ActionSpinner className="h-3 w-3" />
           : <RefreshCw className="h-3 w-3" />}
       </Button>
     </div>

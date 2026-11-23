@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Tags, Pencil, Loader2, RefreshCcw } from 'lucide-react';
+import { Tags, Pencil, RefreshCcw } from 'lucide-react';
 import TagSelector from '@/components/ui/tag-selector';
 import TagChip, { AssignedTag } from '@/components/ui/tag-chip';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
@@ -11,6 +11,7 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Stands in for the tags while they load (see ContentSkeleton)
 const sampleTag = (id: string, name: string): AssignedTag => ({
@@ -120,7 +121,7 @@ const EntityTagsPanel: React.FC<Props> = ({ entityId, entityType }) => {
             />
             <div className="flex gap-2">
               <Button size="sm" onClick={handleSave} disabled={saving}>
-                {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                {saving && <ActionSpinner className="mr-1" />}
                 {t('tags.save') || 'Save'}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setEditing(false)} disabled={saving}>

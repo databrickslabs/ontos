@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Loader2, HeartPulse, Server } from 'lucide-react';
+import { HeartPulse, Server } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import {
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Connection, ConnectorTypeInfo } from '@/types/connections';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface ConnectionFormDialogProps {
   isOpen: boolean;
@@ -626,13 +627,13 @@ export function ConnectionFormDialog({
                   disabled={isTesting}
                 >
                   {isTesting
-                    ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ? <ActionSpinner className="mr-2" />
                     : <HeartPulse className="w-4 h-4 mr-2" />}
                   {t('settings:connectors.testConnection', 'Test Connection')}
                 </Button>
               )}
               <Button type="submit" disabled={isSubmitting || isSystem}>
-                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isSubmitting && <ActionSpinner className="mr-2" />}
                 {isEditing ? t('common:save', 'Save') : t('common:create', 'Create')}
               </Button>
             </DialogFooter>

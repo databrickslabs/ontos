@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2 } from 'lucide-react';
+
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useApi } from '@/hooks/use-api';
 import type { MetricViewChangeRequestDetail } from '@/types/metric-view-change-request';
 import { useChangeRequestText } from './metric-view-change-request-text';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface Props {
     assetId: string;
@@ -136,7 +137,7 @@ export default function ProposeMetricViewChangeDialog({
                         {t('detail.metricView.changeRequests.dialog.saveDraft')}
                     </Button>
                     <Button disabled={saving || !definition.trim()} onClick={() => save(true)}>
-                        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+                        {saving && <ActionSpinner className="mr-2" aria-hidden />}
                         {t('detail.metricView.changeRequests.dialog.saveAndSubmit')}
                     </Button>
                 </DialogFooter>

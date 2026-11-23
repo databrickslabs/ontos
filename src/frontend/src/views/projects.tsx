@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, PlusCircle, AlertCircle, FolderOpen, User, Users, Loader2, ChevronDown } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, AlertCircle, FolderOpen, User, Users, ChevronDown } from 'lucide-react';
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
@@ -23,6 +23,7 @@ import { Toaster } from "@/components/ui/toaster";
 import SettingsPageWrapper from '@/components/settings/settings-page-wrapper';
 import { ProjectFormDialog } from '@/components/projects/project-form-dialog';
 import { useTranslation } from 'react-i18next';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Check API response helper
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -331,7 +332,7 @@ export default function ProjectsView() {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDeletingProjectId(null)}>{t('deleteDialog.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700" disabled={apiIsLoading || permissionsLoading}>
-               {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {t('deleteDialog.delete')}
+               {(apiIsLoading || permissionsLoading) ? <ActionSpinner className="mr-2" /> : null} {t('deleteDialog.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -10,9 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Plus, 
-  MoreHorizontal, 
+import {
+  Plus,
+  MoreHorizontal,
   GitBranch,
   Shield,
   Bell,
@@ -20,7 +20,6 @@ import {
   Code,
   CheckCircle,
   Clock,
-  Loader2,
   Pencil,
   Copy,
   Trash2,
@@ -75,6 +74,7 @@ import { workflowExecutionErrorText } from '@/lib/workflow-execution-error';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
 import { RelativeDate } from '@/components/common/relative-date';
 import { WorkflowRunDialog } from '@/components/workflows/workflow-run-dialog';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface CancelExecutionResponse {
   execution_id: string;
@@ -1729,7 +1729,7 @@ export default function Workflows() {
               {t('common:actions.cancel')}
             </Button>
             <Button onClick={handleDuplicateWorkflow} disabled={isDuplicating || !duplicateName.trim()}>
-              {isDuplicating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isDuplicating && <ActionSpinner className="mr-2" />}
               {t('workflows:view.actions.duplicate')}
             </Button>
           </DialogFooter>
@@ -1767,7 +1767,7 @@ export default function Workflows() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingOverlapActivations([])}>{t('common:actions.cancel')}</Button>
             <Button onClick={confirmOverlappingActivation} disabled={isConfirmingOverlap}>
-              {isConfirmingOverlap && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isConfirmingOverlap && <ActionSpinner className="mr-2" />}
               {t('workflows:view.dialogs.activateAnyway')}
             </Button>
           </DialogFooter>
@@ -1881,7 +1881,7 @@ export default function Workflows() {
               onClick={handleDeleteExecution} 
               disabled={isActionInProgress}
             >
-              {isActionInProgress && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isActionInProgress && <ActionSpinner className="mr-2" />}
               {t('common:actions.delete')}
             </Button>
           </DialogFooter>

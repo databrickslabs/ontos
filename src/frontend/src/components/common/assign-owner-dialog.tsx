@@ -8,13 +8,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import type { OwnerObjectType } from '@/types/business-owner';
 import type { BusinessRoleRead } from '@/types/business-role';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface AssignOwnerDialogProps {
   open: boolean;
@@ -142,7 +143,7 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
             {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={!isValid || submitting}>
-            {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {submitting && <ActionSpinner className="mr-2" />}
             {t('common:assignOwner.title')}
           </Button>
         </DialogFooter>

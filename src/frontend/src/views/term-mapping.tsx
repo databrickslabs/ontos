@@ -5,7 +5,6 @@ import {
   AlertCircle,
   ChevronRight,
   Inbox,
-  Loader2,
   Plus,
   RefreshCw,
   Sparkles,
@@ -35,6 +34,7 @@ import type {
   UndoResult,
 } from '@/types/term-mapping';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 const FEATURE_ID = 'term-mapping';
 
@@ -286,7 +286,7 @@ export default function TermMappingView() {
                       onClick={handleApplyAuto}
                       disabled={actionPending}
                     >
-                      {actionPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                      {actionPending && <ActionSpinner className="mr-1" />}
                       {t('actions.applyAuto', { count: autoApply })}
                     </Button>
                   )}

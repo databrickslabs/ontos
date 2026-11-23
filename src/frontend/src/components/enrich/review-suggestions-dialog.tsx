@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Check, CheckCircle2, ExternalLink, Loader2, X } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, ExternalLink, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
 import { DialogSkeleton } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // ---------------------------------------------------------------------------
 // Inline "Review suggested matches" surface for the Map lane.
@@ -300,7 +301,7 @@ export default function ReviewSuggestionsDialog({
               disabled={submitting || done || !canWrite}
             >
               {submitting ? (
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                <ActionSpinner className="mr-1.5" />
               ) : (
                 <Check className="mr-1.5 h-4 w-4" />
               )}

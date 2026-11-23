@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertCircle, SparklesIcon } from 'lucide-react';
+import { AlertCircle, SparklesIcon } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { serverErrorText, USER_TOKEN_REQUIRED_CODE } from '@/lib/server-error-text';
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +36,7 @@ import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent
 import MdmMatchReview from '@/components/mdm/mdm-match-review';
 import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
 import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Register languages (using base import which has the static method)
 SyntaxHighlighterBase.registerLanguage('sql', sql);
@@ -428,7 +429,7 @@ export default function AssetReviewEditor({
                  {/* Save button is added here, within the form section */}
                  <div className="flex justify-end pt-2">
                      <Button onClick={handleSaveReview} disabled={isSaving}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {t('data-asset-reviews:editor.saveReview')}
+                        {isSaving && <ActionSpinner className="mr-2" />} {t('data-asset-reviews:editor.saveReview')}
                      </Button>
                  </div>
             </div>
@@ -450,7 +451,7 @@ export default function AssetReviewEditor({
                         disabled={isAnalyzing || isLoadingContent || !definition}
                         title={!definition && !isLoadingContent ? t('data-asset-reviews:editor.aiContentRequired') : ""}
                     >
-                        {isAnalyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isAnalyzing && <ActionSpinner className="mr-2" />}
                         {analysisResult ? t('data-asset-reviews:editor.rerunAiAnalysis') : t('data-asset-reviews:editor.runAiAnalysis')}
                     </Button>
                     {analysisError && (

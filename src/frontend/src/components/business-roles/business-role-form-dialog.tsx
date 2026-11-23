@@ -15,11 +15,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Loader2 } from 'lucide-react';
+
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { BusinessRoleRead, BusinessRoleCategory, BusinessRoleStatus } from '@/types/business-role';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 const CATEGORIES: BusinessRoleCategory[] = ['governance', 'technical', 'business', 'operational'];
 const STATUSES: BusinessRoleStatus[] = ['active', 'deprecated'];
@@ -238,7 +239,7 @@ export function BusinessRoleFormDialog({
                 {t('common:actions.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isSubmitting && <ActionSpinner className="mr-2" />}
                 {role ? t('form.update') : t('form.create')}
               </Button>
             </DialogFooter>

@@ -1,9 +1,27 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  Search, Loader2, Check, X, Database, Table2, Eye, Radio,
-  LayoutDashboard, BookOpen, BrainCircuit, Globe, Zap,
-  Box, Server, Shapes, FolderTree, Columns2, FileCode, Brain,
-  Activity, Shield, FolderOpen,
+  Search,
+  Check,
+  X,
+  Database,
+  Table2,
+  Eye,
+  Radio,
+  LayoutDashboard,
+  BookOpen,
+  BrainCircuit,
+  Globe,
+  Zap,
+  Box,
+  Server,
+  Shapes,
+  FolderTree,
+  Columns2,
+  FileCode,
+  Brain,
+  Activity,
+  Shield,
+  FolderOpen,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -22,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { AssetTypeRead } from '@/types/asset';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 export interface AssetSearchResult {
   id: string;
@@ -414,7 +433,7 @@ export function AssetSelector({
                     className="pl-9"
                   />
                   {searchLoading && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                    <ActionSpinner className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   )}
                 </div>
                 <ScrollArea className="flex-1 min-h-0">

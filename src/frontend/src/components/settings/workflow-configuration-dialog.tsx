@@ -8,11 +8,12 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
-import { Loader2 } from 'lucide-react';
+
 import { ContentSkeleton } from '@/components/common/content-skeleton';
 import EntityPatternsField from './entity-patterns-field';
 import TagSyncConfigsField from './tag-sync-configs-field';
 import { WorkflowParameterDefinition, EntityPatternConfig, TagSyncConfig } from '@/types/workflow-configurations';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Stands in for the parameters while they load (see ContentSkeleton)
 const SAMPLE_PARAMETER_DEFS: WorkflowParameterDefinition[] = [
@@ -273,7 +274,7 @@ export default function WorkflowConfigurationDialog({
             {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSave} disabled={loading || saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saving && <ActionSpinner className="mr-2" />}
             {t('settings:workflowConfig.saveButton')}
           </Button>
         </DialogFooter>

@@ -10,16 +10,16 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { useNotificationsStore } from '@/stores/notifications-store';
-import { 
-  Loader2, 
-  Clock, 
-  User, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Clock,
+  User,
+  CheckCircle,
+  XCircle,
   MessageSquare,
   Calendar,
-  Shield
+  Shield,
 } from 'lucide-react';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 type PermissionLevel = 'READ' | 'WRITE' | 'MANAGE';
 
@@ -307,7 +307,7 @@ export default function HandleAccessGrantDialog({
             onClick={() => handleDecision(false)}
             disabled={submitting}
           >
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {submitting && <ActionSpinner className="mr-2" />}
             <XCircle className="mr-2 h-4 w-4" />
             {t('access-grants:handle.deny', 'Deny')}
           </Button>
@@ -316,7 +316,7 @@ export default function HandleAccessGrantDialog({
             onClick={() => handleDecision(true)}
             disabled={submitting}
           >
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {submitting && <ActionSpinner className="mr-2" />}
             <CheckCircle className="mr-2 h-4 w-4" />
             {t('access-grants:handle.approveWithDuration', {
               duration: formatDuration(grantedDuration),

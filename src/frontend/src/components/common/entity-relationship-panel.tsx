@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Link2, ArrowRight, ArrowLeft, Loader2, AlertCircle, ExternalLink,
-  PlusCircle, Trash2,
+  Link2,
+  ArrowRight,
+  ArrowLeft,
+  AlertCircle,
+  ExternalLink,
+  PlusCircle,
+  Trash2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import { AddRelationshipDialog } from '@/components/common/add-relationship-dialog';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface RelationshipRecord {
   id: string;
@@ -348,7 +354,7 @@ export function EntityRelationshipPanel({
               className="bg-red-600 hover:bg-red-700"
               disabled={deleteLoading}
             >
-              {deleteLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {deleteLoading && <ActionSpinner className="mr-2" />}
               {t('common:actions.remove')}
             </AlertDialogAction>
           </AlertDialogFooter>

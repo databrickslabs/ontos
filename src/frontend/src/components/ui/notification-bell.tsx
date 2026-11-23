@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Bell, Info, AlertCircle, CheckCircle2, X, CheckSquare, Loader2 } from 'lucide-react';
+import { Bell, Info, AlertCircle, CheckCircle2, X, CheckSquare } from 'lucide-react';
 import { Button } from './button';
 import { Progress } from './progress';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './dropdown-menu';
@@ -20,6 +20,7 @@ import { useNotificationsStore } from '@/stores/notifications-store';
 import { Notification, NotificationType } from '@/types/notification';
 import { getEntityDetailPathFromPayload } from '@/lib/entity-detail-path';
 import { approvalActionPayload, notificationDescription, notificationTitle } from '@/lib/notification-text';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 /** Only actionable rows should keep the dropdown open on select (Radix default). */
 function shouldPreventMenuCloseOnSelect(notification: Notification): boolean {
@@ -197,7 +198,7 @@ export default function NotificationBell() {
           return <AlertCircle className="h-4 w-4 text-red-500" />;
         if (status === 'cancelled')
           return <X className="h-4 w-4 text-muted-foreground" />;
-        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+        return <ActionSpinner className="text-blue-500" />;
       }
       default:
         return <Info className="h-4 w-4" />;
@@ -212,7 +213,7 @@ export default function NotificationBell() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <ActionSpinner className="h-5 w-5" />
               ) : (
                 <Bell className="h-5 w-5" />
               )}

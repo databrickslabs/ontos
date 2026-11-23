@@ -45,7 +45,6 @@ import {
   // RefreshCw - unused
   Database,
   GitCompare,
-  Loader2,
   AlertCircle,
   Sparkles,
   ArrowLeftRight,
@@ -61,6 +60,7 @@ import {
   MdmMatchType,
   SurvivorshipStrategy,
 } from '@/types/mdm';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface MdmMatchReviewProps {
   assetFqn: string; // mdm://config_id/run_id/candidate_id
@@ -644,7 +644,7 @@ export default function MdmMatchReview({
                     disabled={saving}
                   >
                     {saving ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <ActionSpinner className="mr-2" />
                     ) : (
                       <X className="h-4 w-4 mr-2" />
                     )}
@@ -657,7 +657,7 @@ export default function MdmMatchReview({
                     disabled={saving}
                   >
                     {saving ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <ActionSpinner className="mr-2" />
                     ) : (
                       <Check className="h-4 w-4 mr-2" />
                     )}
@@ -672,7 +672,7 @@ export default function MdmMatchReview({
                       disabled={saving}
                     >
                       {saving ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        <ActionSpinner className="mr-2" />
                       ) : (
                         <ChevronRight className="h-4 w-4 mr-2" />
                       )}

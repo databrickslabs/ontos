@@ -1,6 +1,6 @@
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Sparkles, Info, Check, ChevronsUpDown, X } from 'lucide-react';
+import { Sparkles, Info, Check, ChevronsUpDown, X } from 'lucide-react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import {
@@ -47,6 +47,7 @@ import {
   SHIPPED_OPT_IN_CONTEXTS,
   TARGET_ENTITY_TYPE_LABELS,
 } from '@/types/term-mapping';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 /**
  * A selectable concept-scheme mapping source, as returned by
@@ -620,7 +621,7 @@ export default function RunConfigDialog({
           <Button onClick={handleSubmit} disabled={submitting || modelsLoading}>
             {submitting ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <ActionSpinner className="mr-2" />
                 {t('runConfig.submitting')}
               </>
             ) : (

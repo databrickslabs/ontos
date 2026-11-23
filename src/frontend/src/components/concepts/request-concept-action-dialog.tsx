@@ -4,7 +4,6 @@ import {
   Archive,
   CheckCircle,
   CopyPlus,
-  Loader2,
   Rocket,
   Send,
   ShieldCheck,
@@ -23,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // ---------------------------------------------------------------------------
 // RequestConceptActionDialog: the concept detail page's single "Request"
@@ -289,7 +289,7 @@ export function RequestConceptActionDialog({
             {t('common:actions.cancel', 'Cancel')}
           </Button>
           <Button onClick={handleConfirm} disabled={confirmDisabled}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {busy && <ActionSpinner className="mr-2" />}
             {selected?.confirmLabel ?? t('semantic-models:lifecycle.request', 'Request')}
           </Button>
         </DialogFooter>

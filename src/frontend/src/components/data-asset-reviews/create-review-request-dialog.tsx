@@ -13,8 +13,9 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from "@/hooks/use-toast";
 import { TreeView } from '@/components/ui/tree-view';
 import { CatalogItem, DataAssetReviewRequest, DataAssetReviewRequestCreate, AssetType } from '@/types/data-asset-review';
-import { Loader2, AlertCircle, Folder, FolderOpen, Table, Layout, FunctionSquare } from 'lucide-react';
+import { AlertCircle, Folder, FolderOpen, Table, Layout, FunctionSquare } from 'lucide-react';
 import { PrincipalPicker } from '@/components/common/principal-picker';import { HierarchyTreeSkeleton } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 
 // Define user info type based on backend response
@@ -423,7 +424,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                         <Button type="button" variant="outline" disabled={isSubmitting}>{t('common:actions.cancel')}</Button>
                     </DialogClose>
                     <Button type="submit" onClick={handleSubmit} disabled={isSubmitting || selectedAssetFqns.size === 0}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {t('data-asset-reviews:dialog.submitRequest')}
+                        {isSubmitting && <ActionSpinner className="mr-2" />} {t('data-asset-reviews:dialog.submitRequest')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

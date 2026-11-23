@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { useTranslation } from 'react-i18next';
-import { PlusCircle, MoreHorizontal, HeartPulse, Loader2, Plug } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, HeartPulse, Plug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
@@ -20,6 +20,7 @@ import { FeatureAccessLevel } from '@/types/settings';
 import { Connection } from '@/types/connections';
 import { RelativeDate } from '@/components/common/relative-date';
 import { ConnectionFormDialog } from './connection-form-dialog';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 const SYSTEM_CREATED_BY = 'system';
 
@@ -168,7 +169,7 @@ export default function ConnectorsSettings() {
               title={t('settings:connectors.testConnection', 'Test Connection')}
             >
               {isTesting
-                ? <Loader2 className="w-4 h-4 animate-spin" />
+                ? <ActionSpinner />
                 : <HeartPulse className="w-4 h-4" />}
             </Button>
             <DropdownMenu>

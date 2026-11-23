@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { useNotificationsStore } from '@/stores/notifications-store';
-import { Loader2, FileText, Package, AlertCircle, Clock, Database, Table2 } from 'lucide-react';
+import { FileText, Package, AlertCircle, Clock, Database, Table2 } from 'lucide-react';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 type EntityType = 'data_product' | 'data_contract' | 'table' | 'schema' | 'catalog';
 type PermissionLevel = 'READ' | 'WRITE' | 'MANAGE';
@@ -299,7 +300,7 @@ export default function RequestAccessWithDurationDialog({
             onClick={handleSubmit}
             disabled={submitting || !reason.trim() || loadingConfig}
           >
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {submitting && <ActionSpinner className="mr-2" />}
             {submitting
               ? t('access-grants:request.submitting', 'Sending Request...')
               : t('access-grants:request.submitButtonWithDuration', {

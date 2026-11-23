@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
-import { Loader2 } from 'lucide-react';
+
 
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +26,7 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useFormatLabel } from '@/lib/format-label';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface AssetFormDialogProps {
   isOpen: boolean;
@@ -387,7 +388,7 @@ export function AssetFormDialog({
                   {t('common:actions.cancel')}
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSubmitting && <ActionSpinner className="mr-2" />}
                   {isEdit ? t('common:actions.saveChanges') : t('common:assetForm.createTitle', { name: assetTypeName })}
                 </Button>
               </DialogFooter>

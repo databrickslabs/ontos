@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Loader2, RotateCcw, Save } from 'lucide-react';
+import { RotateCcw, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface SettingsActionBarProps {
   /** Whether the page has pending edits. Bar only renders when true. */
@@ -76,7 +77,7 @@ export default function SettingsActionBar({
       </Button>
       <Button type="button" onClick={onSave} disabled={isSaving}>
         {isSaving ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <ActionSpinner className="mr-2" />
         ) : (
           <Save className="mr-2 h-4 w-4" />
         )}

@@ -16,21 +16,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Folder, 
-  FolderOpen, 
-  Table, 
-  Layout, 
-  Code, 
-  Brain, 
-  HardDrive, 
+import {
+  Folder,
+  FolderOpen,
+  Table,
+  Layout,
+  Code,
+  Brain,
+  HardDrive,
   BarChart3,
   Layers,
   Radio,
   ChevronDown,
   ChevronRight,
-  Loader2,
-  Columns2
+  Columns2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HierarchyTreeSkeleton } from '@/components/common/list-view-skeleton'
@@ -45,6 +44,7 @@ import {
   parseSearchQuery, 
   getTypeFilterDisplayName
 } from '@/lib/uc-search-parser'
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // ============================================================================
 // Props and Types
@@ -828,7 +828,7 @@ export default function UCAssetLookupDialog({
           <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
             {hasChildren ? (
               isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <ActionSpinner className="text-muted-foreground" />
               ) : (
                 <button
                   className="hover:bg-muted rounded p-0.5"

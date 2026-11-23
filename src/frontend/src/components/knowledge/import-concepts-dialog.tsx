@@ -26,7 +26,8 @@ import { buildSchemeOptionGroups, flattenSchemeTree } from '@/lib/scheme-select-
 import { SchemeSelectItems } from './scheme-select-items';
 import { useToast } from '@/hooks/use-toast';
 import type { KnowledgeCollection } from '@/types/ontology';
-import { Loader2, Upload, FileUp, X, Info } from 'lucide-react';
+import { Upload, FileUp, X, Info } from 'lucide-react';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 const ACCEPTED_EXTENSIONS = '.ttl,.rdf,.xml,.owl,.n3,.nt,.jsonld,.json';
 
@@ -932,7 +933,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                 non-empty scheme. */}
             {previewing && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-md border bg-muted/30 px-3 py-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <ActionSpinner className="h-3.5 w-3.5" />
                 {t('semantic-models:import.computingDiff', 'Computing changes…')}
               </div>
             )}
@@ -1014,7 +1015,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                   </Button>
                   {!done && (
                     <Button type="submit" disabled={!canSubmit}>
-                      {isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {isUploading && <ActionSpinner className="mr-2" />}
                       <Upload className="h-4 w-4 mr-2" />
                       {t('semantic-models:import.submitMulti', {
                         count: selectedFiles.length,

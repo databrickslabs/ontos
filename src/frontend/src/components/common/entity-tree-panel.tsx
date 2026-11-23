@@ -1,10 +1,30 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Link2, ChevronRight, ChevronDown, Loader2, AlertCircle, ExternalLink,
-  PlusCircle, Trash2, Box, Table2, Eye, Columns2, LayoutDashboard,
-  Globe, FileCode, Brain, Activity, Server, Shield, BookOpen, Database,
-  FolderOpen, Shapes, Network, ArrowLeft,
+  Link2,
+  ChevronRight,
+  ChevronDown,
+  AlertCircle,
+  ExternalLink,
+  PlusCircle,
+  Trash2,
+  Box,
+  Table2,
+  Eye,
+  Columns2,
+  LayoutDashboard,
+  Globe,
+  FileCode,
+  Brain,
+  Activity,
+  Server,
+  Shield,
+  BookOpen,
+  Database,
+  FolderOpen,
+  Shapes,
+  Network,
+  ArrowLeft,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +44,7 @@ import { useFormatLabel } from '@/lib/format-label';
 import type { InstanceHierarchyNode } from '@/types/ontology-schema';
 import { AddRelationshipDialog } from '@/components/common/add-relationship-dialog';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -192,7 +213,7 @@ function ChildTreeNode({
           tabIndex={0}
         >
           {loading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            <ActionSpinner className="h-3.5 w-3.5 text-muted-foreground" />
           ) : hasChildren ? (
             expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
@@ -309,7 +330,7 @@ function RootTreeNode({
           tabIndex={0}
         >
           {loading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            <ActionSpinner className="h-3.5 w-3.5 text-muted-foreground" />
           ) : !loaded || hasChildren ? (
             expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
@@ -638,7 +659,7 @@ export function EntityTreePanel({
               className="bg-red-600 hover:bg-red-700"
               disabled={deleteLoading}
             >
-              {deleteLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {deleteLoading && <ActionSpinner className="mr-2" />}
               {t('common:actions.remove')}
             </AlertDialogAction>
           </AlertDialogFooter>

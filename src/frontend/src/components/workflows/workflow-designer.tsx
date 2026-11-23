@@ -51,7 +51,6 @@ import {
   ArrowLeft,
   Plus,
   Trash2,
-  Loader2,
   Shield,
   Bell,
   Tag,
@@ -172,6 +171,7 @@ import {
   roleSelectValue,
   splitRoleAndPrincipals,
 } from '@/lib/workflow-principals';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface WorkflowActivationConflict {
   id: string;
@@ -1898,11 +1898,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             disabled={isChecking || isSaving || !workflowType}
             title={t('workflows:designer.checks.buttonHint')}
           >
-            {isChecking ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ListChecks className="h-4 w-4 mr-2" />}
+            {isChecking ? <ActionSpinner className="mr-2" /> : <ListChecks className="h-4 w-4 mr-2" />}
             {t('workflows:designer.checks.button')}
           </Button>
           <Button onClick={() => handleSave()} disabled={isSaving} size="sm" className={isDirty ? 'ring-2 ring-amber-500/50' : ''}>
-            {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            {isSaving ? <ActionSpinner className="mr-2" /> : <Save className="h-4 w-4 mr-2" />}
             {t('common:actions.save')}{isDirty ? ' *' : ''}
           </Button>
         </div>

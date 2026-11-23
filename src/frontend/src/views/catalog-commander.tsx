@@ -15,7 +15,6 @@ import {
   ArrowRight,
   ArrowLeft,
   Info,
-  Loader2,
   MessageSquare,
   PanelRightClose,
   // PanelRightOpen - unused
@@ -23,7 +22,7 @@ import {
   GitCompare,
   RefreshCw,
   Sparkles,
-  Send
+  Send,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +50,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useCopilotContext } from '@/hooks/use-copilot-context';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Tables and views can be previewed; a metric view only answers queries
 // that aggregate its measures, so it has no data preview.
@@ -795,7 +795,7 @@ const CatalogCommander: React.FC = () => {
                 disabled={isLoading}
                 title={t('tooltips.refresh')}
               >
-                <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+                <ActionSpinner icon={RefreshCw} spinning={isLoading} />
               </Button>
             </div>
             <div className="flex-1 min-h-0 overflow-auto border rounded-md bg-muted/20">
@@ -912,7 +912,7 @@ const CatalogCommander: React.FC = () => {
                         disabled={isLoading}
                         title={t('tooltips.refresh')}
                       >
-                        <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+                        <ActionSpinner icon={RefreshCw} spinning={isLoading} />
                       </Button>
                     </div>
                     <div className="flex-1 min-h-0 overflow-auto border rounded-md bg-muted/20">
@@ -1067,7 +1067,7 @@ const CatalogCommander: React.FC = () => {
                               <Sparkles className="w-3 h-3 text-white" />
                             </div>
                             <div className="bg-muted rounded-lg px-3 py-2 flex items-center gap-2">
-                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <ActionSpinner className="w-3 h-3" />
                               <span className="text-xs text-muted-foreground">{t('askPanel.thinking')}</span>
                             </div>
                           </div>
@@ -1099,7 +1099,7 @@ const CatalogCommander: React.FC = () => {
                         className="h-9 w-9 shrink-0"
                       >
                         {askLoading ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <ActionSpinner />
                         ) : (
                           <Send className="w-4 h-4" />
                         )}

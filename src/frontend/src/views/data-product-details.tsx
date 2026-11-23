@@ -16,7 +16,7 @@ import { useApi } from '@/hooks/use-api';
 import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus, ArrowLeft, Package, KeyRound, Plus, FileText, Download, Bell, BellOff, Users, ShieldCheck, Globe } from 'lucide-react';
+import { Pencil, Trash2, AlertCircle, Sparkles, CopyPlus, ArrowLeft, Package, KeyRound, Plus, FileText, Download, Bell, BellOff, Users, ShieldCheck, Globe } from 'lucide-react';
 import {
   DetailHeaderSkeleton,
   PanelSkeleton,
@@ -69,6 +69,7 @@ import { userHasApprovalPrivilege } from '@/lib/permissions';
 import { omitTags } from '@/lib/tag-payload';
 import { ApprovalEntity } from '@/types/settings';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 /**
  * ODPS v1.0.0 Data Product Details View
@@ -1469,7 +1470,7 @@ export default function DataProductDetails() {
           {isReadOnly && canWrite && (
             <Button variant="outline" onClick={handleCloneForEditing} disabled={isCloning} size="sm">
               {isCloning ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <ActionSpinner className="mr-2" />
               ) : (
                 <CopyPlus className="mr-2 h-4 w-4" />
               )}
@@ -1486,7 +1487,7 @@ export default function DataProductDetails() {
           {isPersonalDraft && canWrite && (
             <Button variant="outline" onClick={handleDiscardDraft} disabled={isDiscarding} size="sm">
               {isDiscarding ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <ActionSpinner className="mr-2" />
               ) : (
                 <Trash2 className="mr-2 h-4 w-4" />
               )}
@@ -1512,7 +1513,7 @@ export default function DataProductDetails() {
                 size="sm"
               >
                 {subscriptionLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <ActionSpinner className="mr-2" />
                 ) : (
                   <BellOff className="mr-2 h-4 w-4" />
                 )}
@@ -1526,7 +1527,7 @@ export default function DataProductDetails() {
                 size="sm"
               >
                 {subscriptionLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <ActionSpinner className="mr-2" />
                 ) : (
                   <Bell className="mr-2 h-4 w-4" />
                 )}

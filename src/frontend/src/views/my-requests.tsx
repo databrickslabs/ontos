@@ -14,13 +14,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
-import { Inbox, XCircle, Loader2, ShieldCheck, Package, Bell } from 'lucide-react';
+import { Inbox, XCircle, ShieldCheck, Package, Bell } from 'lucide-react';
 import { RelativeDate } from '@/components/common/relative-date';
 import { ListViewSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import type { DataProduct } from '@/types/data-product';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface AccessGrantRequestItem {
   id: string;
@@ -325,7 +326,7 @@ export default function MyRequests() {
                               title={t('common:actions.cancel')}
                             >
                               {cancellingId === row.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <ActionSpinner />
                               ) : (
                                 <XCircle className="h-4 w-4" />
                               )}

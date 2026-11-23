@@ -6,12 +6,29 @@ import { Button } from './button';
 import { Card } from './card';
 import { ScrollArea } from './scroll-area';
 import {
-  Search, FileText, Database, Book, Shield, Loader2,
-  BookOpen, Shapes, Tag, Send, Server, Table2, Eye, Columns2,
-  LayoutDashboard, Globe, FileCode, Brain, Activity, Package,
+  Search,
+  FileText,
+  Database,
+  Book,
+  Shield,
+  BookOpen,
+  Shapes,
+  Tag,
+  Send,
+  Server,
+  Table2,
+  Eye,
+  Columns2,
+  LayoutDashboard,
+  Globe,
+  FileCode,
+  Brain,
+  Activity,
+  Package,
 } from 'lucide-react';
 import { features } from '@/config/features';
 import { cn } from '@/lib/utils';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface SearchResult {
   id: string;
@@ -180,7 +197,7 @@ export default function SearchBar({ variant = 'default', placeholder }: SearchBa
           <ScrollArea className="h-[300px]">
             {isLoading ? (
               <div className="flex items-center justify-center p-4 gap-2 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <ActionSpinner className="h-5 w-5" />
                 <span>{t('common:states.loading')}</span>
               </div>
             ) : results.length > 0 ? (

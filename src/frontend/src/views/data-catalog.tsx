@@ -17,7 +17,6 @@ import { useTranslation } from 'react-i18next';
 import {
   BookOpen,
   Search,
-  Loader2,
   Table as TableIcon,
   Eye,
   ArrowUpDown,
@@ -58,6 +57,7 @@ import type {
   ColumnSearchResponse,
   HierarchyFilters,
 } from '@/types/data-catalog';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // =============================================================================
 // Types
@@ -396,7 +396,7 @@ const DataCatalog: React.FC = () => {
           }}
           disabled={isLoading}
         >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          <ActionSpinner icon={RefreshCw} spinning={isLoading} className="mr-2" />
           {t('common:refresh', 'Refresh')}
         </Button>
       </div>
@@ -479,7 +479,7 @@ const DataCatalog: React.FC = () => {
             className="pl-9"
           />
           {isSearching && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+            <ActionSpinner className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           )}
         </div>
       </div>

@@ -32,17 +32,17 @@ import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { RelativeDate } from '@/components/common/relative-date';
 import HandleAccessGrantDialog from './handle-access-grant-dialog';
-import { 
-  Shield, 
-  Clock, 
-  Users, 
-  AlertTriangle, 
-  XCircle, 
+import {
+  Shield,
+  Clock,
+  Users,
+  AlertTriangle,
+  XCircle,
   RefreshCw,
   ChevronDown,
   ChevronUp,
-  Loader2
 } from 'lucide-react';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface AccessGrant {
   id: string;
@@ -446,7 +446,7 @@ export default function AccessGrantsPanel({
               disabled={revoking}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {revoking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {revoking && <ActionSpinner className="mr-2" />}
               {t('access-grants:panel.revokeTitle', 'Revoke Access')}
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -7,7 +7,6 @@ import {
   Check,
   ChevronRight,
   HelpCircle,
-  Loader2,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -29,6 +28,7 @@ import { Separator } from '@/components/ui/separator';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { bucketConfidence, type Suggestion } from '@/types/term-mapping';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface Props {
   /** FQN format: term-mapping://{run_id}/{suggestion_id} */
@@ -338,7 +338,7 @@ export default function TermMappingSuggestionReview({
             onClick={() => submitDecision('reject')}
             disabled={disabled || submitting}
           >
-            {submitting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <X className="mr-1 h-4 w-4" />}
+            {submitting ? <ActionSpinner className="mr-1" /> : <X className="mr-1 h-4 w-4" />}
             {t('suggestion.reject')}
           </Button>
           <Button
@@ -346,7 +346,7 @@ export default function TermMappingSuggestionReview({
             onClick={() => submitDecision('accept')}
             disabled={disabled || submitting}
           >
-            {submitting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
+            {submitting ? <ActionSpinner className="mr-1" /> : <Check className="mr-1 h-4 w-4" />}
             {t('suggestion.acceptApply')}
           </Button>
           {hasNext && (

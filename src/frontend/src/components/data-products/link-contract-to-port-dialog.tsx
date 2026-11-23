@@ -5,11 +5,12 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type { OutputPort, DataProduct } from '@/types/data-product';
 import CreateContractInlineDialog from '@/components/data-contracts/create-contract-inline-dialog';
 import EntityVersionPicker, { type ScopeValue } from '@/components/common/entity-version-picker';
 import { omitTags } from '@/lib/tag-payload';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 type LinkContractToPortDialogProps = {
   isOpen: boolean;
@@ -207,7 +208,7 @@ export default function LinkContractToPortDialog({
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <ActionSpinner className="mr-2" />
                   Linking...
                 </>
               ) : (

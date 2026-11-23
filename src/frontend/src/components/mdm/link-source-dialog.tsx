@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus, X, AlertCircle, Wand2, Info } from 'lucide-react';
+import { Plus, X, AlertCircle, Wand2, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -36,6 +36,7 @@ import {
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { MdmSourceLinkCreate } from '@/types/mdm';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 // Simple Levenshtein distance for fuzzy column matching
 function levenshteinDistance(a: string, b: string): number {
@@ -606,7 +607,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
               {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {submitting && <ActionSpinner className="mr-2" />}
               {t('mdm:link.submitButton')}
             </Button>
           </DialogFooter>

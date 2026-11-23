@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Upload, ChevronDown, RefreshCw, Trash2, Loader2, Library, Eye, Copy, Check, Network, FileCode2, Pencil } from 'lucide-react';
+import { Upload, ChevronDown, RefreshCw, Trash2, Library, Eye, Copy, Check, Network, FileCode2, Pencil } from 'lucide-react';
 import type { SemanticModel } from '@/types/ontology';
 import {
   AlertDialog,
@@ -38,6 +38,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { systemRdfNamespaceDisplayLabel, SYSTEM_RDF_NAMESPACE_KEY_SET } from '@/lib/system-rdf-namespace-labels';
 import type { TFunction } from 'i18next';
+import { ActionSpinner } from '@/components/ui/action-spinner';
 
 interface TitleCandidateRow {
   iri: string;
@@ -557,7 +558,7 @@ export default function SemanticModelsSettings() {
               disabled={uploadingId === 'uploading'}
             >
               {uploadingId === 'uploading' ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('settings:semanticModels.actions.uploading')}</>
+                <><ActionSpinner className="mr-2" /> {t('settings:semanticModels.actions.uploading')}</>
               ) : (
                 <><Upload className="h-4 w-4 mr-2" /> {t('common:actions.upload')}</>
               )}
@@ -570,7 +571,7 @@ export default function SemanticModelsSettings() {
               title={t('rebuildGraphTooltip')}
             >
               {isRefreshingGraph ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('rebuildingGraph')}</>
+                <><ActionSpinner className="mr-2" /> {t('rebuildingGraph')}</>
               ) : (
                 <><Network className="h-4 w-4 mr-2" /> {t('rebuildGraph')}</>
               )}
@@ -682,7 +683,7 @@ export default function SemanticModelsSettings() {
               >
                 {titleSaving ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                    <ActionSpinner className="shrink-0" />
                     {t('common:actions.saving')}
                   </>
                 ) : (

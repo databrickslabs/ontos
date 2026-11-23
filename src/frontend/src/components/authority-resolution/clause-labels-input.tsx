@@ -3,6 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import type { PolicyClause } from '@/types/authority-resolution';
 
+/**
+ * The labels still valid after the reference changed: a label survives only if the new
+ * reference suggests it. A cleared reference (no suggestions) clears them all.
+ */
+export const pruneClauseLabels = (labels: string[], suggestedRefs: string[]): string[] =>
+  labels.filter((label) => suggestedRefs.includes(label));
+
 /** Comma-separated labels, trimmed, without empties or repeats. */
 export const parseClauseLabels = (text: string): string[] =>
   [...new Set(text.split(',').map((s) => s.trim()).filter(Boolean))];

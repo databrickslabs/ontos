@@ -125,6 +125,8 @@ interface Props {
   rows: CriterionRow[];
   /** Clauses of the cited Authority Policy; each check may cite the one it enforces. */
   clauses?: PolicyClause[];
+  /** Clause labels are offered only when the AR cites a policy reference (ARF 1.2.0). */
+  citable?: boolean;
   onChange: (rows: CriterionRow[]) => void;
   /** Hides the Add check menu and the row remove buttons (AR is not editable). */
   readOnly?: boolean;
@@ -135,7 +137,7 @@ interface Props {
 
 type ChecksState = 'loading' | 'ready' | 'failed';
 
-export default function CriteriaBuilder({ rows, onChange, readOnly = false, clauses = [], params = {}, scopeKeys = [] }: Props) {
+export default function CriteriaBuilder({ rows, onChange, readOnly = false, clauses = [], citable = false, params = {}, scopeKeys = [] }: Props) {
   const { t } = useTranslation(['authority-resolution']);
   const { get, post } = useApi();
   const [checks, setChecks] = useState<ReusableCheck[]>([]);
@@ -334,7 +336,7 @@ export default function CriteriaBuilder({ rows, onChange, readOnly = false, clau
                      disabled={fromTemplate}
                      className="h-8 w-24 text-xs" placeholder={t('criteria.divergence.dimensionPlaceholder')} />
             </div>
-            <ClauseSelect value={r.clauseRef} clauses={clauses} onChange={(clauseRef) => patch(idx, { clauseRef })} />
+            {citable && <ClauseSelect value={r.clauseRef} clauses={clauses} onChange={(clauseRef) => patch(idx, { clauseRef })} />}
             <label className="flex items-center gap-1 text-xs whitespace-nowrap">
               <input type="checkbox" checked={r.enabled} onChange={(e) => patch(idx, { enabled: e.target.checked })} />
               {t('criteria.divergence.enabled')}

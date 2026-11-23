@@ -215,9 +215,11 @@ interface Props {
   domainContext?: DomainContext;
   /** Clauses of the cited Authority Policy; each item may cite the one it implements. */
   clauses?: PolicyClause[];
+  /** Clause labels are offered only when the AR cites a policy reference (ARF 1.2.0). */
+  citable?: boolean;
 }
 
-export default function RuleEditor({ items, onChange, paramKeys, scopeKeys, domainContext, clauses = [] }: Props) {
+export default function RuleEditor({ items, onChange, paramKeys, scopeKeys, domainContext, clauses = [], citable = false }: Props) {
   const { t } = useTranslation(['authority-resolution']);
   const { post } = useApi();
   const [validating, setValidating] = useState(false);
@@ -363,7 +365,7 @@ export default function RuleEditor({ items, onChange, paramKeys, scopeKeys, doma
               <Input value={it.dimension} onChange={(e) => patch(i, { dimension: e.target.value })}
                      className="h-8 w-24 text-xs" placeholder="policy" />
             </div>
-            <ClauseSelect value={it.clause} clauses={clauses} onChange={(clause) => patch(i, { clause })} />
+            {citable && <ClauseSelect value={it.clause} clauses={clauses} onChange={(clause) => patch(i, { clause })} />}
           </div>
         </div>
       ))}

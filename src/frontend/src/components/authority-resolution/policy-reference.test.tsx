@@ -5,12 +5,20 @@
  * suggestions are trimmed and checked for duplicates.
  */
 import { screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import i18n from '@/i18n/config';
 import { renderWithProviders } from '@/test/utils';
 import PolicyCitationView, { ValidityLine, safeHttpUrl, formatDay } from './policy-citation-view';
-import { parseClauseLabels } from './clause-labels-input';
+import { parseClauseLabels, pruneClauseLabels } from './clause-labels-input';
 import { clausesFromDrafts } from './authority-policy-dialog';
+import CriteriaBuilder, { emptyCriterionRow } from './criteria-builder';
+
+vi.mock('@/hooks/use-api', () => ({
+  useApi: () => ({
+    get: vi.fn().mockResolvedValue({ data: null, error: null }),
+    post: vi.fn().mockResolvedValue({ data: null, error: null }),
+  }),
+}));
 
 const t = (key: string, options?: any) => i18n.t(key, { ns: 'authority-resolution', ...options }) as string;
 
@@ -96,5 +104,26 @@ describe('clausesFromDrafts (reference clause suggestions)', () => {
       { ref: '§1', title: '', text: '' },
       { ref: '§1', title: '', text: '' },
     ]).error).toBe('policy.editor.validation.clauseDuplicate');
+  });
+});
+
+describe('clause labels follow the reference they were chosen against', () => {
+  it('keeps only the labels the new reference suggests (and clears them all without one)', () => {
+    expect(pruneClauseLabels(['§1', '§9'], ['§1', '§2'])).toEqual(['§1']);
+    expect(pruneClauseLabels(['§1'], [])).toEqual([]);
+  });
+});
+
+describe('clause inputs need a cited reference', () => {
+  const row = { ...emptyCriterionRow(), name: 'Bidders', rawRule: 'obj.bidders >= 3' };
+
+  it('hides the clause input when no reference is cited', () => {
+    renderWithProviders(<CriteriaBuilder rows={[row]} onChange={() => {}} />);
+    expect(screen.queryByText(t('policy.citation.clause'))).toBeNull();
+  });
+
+  it('shows the clause input when a reference is cited', () => {
+    renderWithProviders(<CriteriaBuilder rows={[row]} onChange={() => {}} citable clauses={[{ ref: '§7.1' }]} />);
+    expect(screen.getByText(t('policy.citation.clause'))).toBeInTheDocument();
   });
 });

@@ -10,7 +10,7 @@ import NativeSelect from '@/components/ui/native-select';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import TagSelector from '@/components/ui/tag-selector';
 import type { AssignedTag } from '@/components/ui/tag-chip';
-import ClauseLabelsInput from '@/components/authority-resolution/clause-labels-input';
+import ClauseLabelsInput, { pruneClauseLabels } from '@/components/authority-resolution/clause-labels-input';
 import ScheduleSelect from '@/components/authority-resolution/schedule-select';
 import McpRefEditor from '@/components/authority-resolution/mcp-ref-editor';
 import { InfoHint, SectionTitle } from '@/components/authority-resolution/info-hint';
@@ -281,7 +281,15 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   const policyClauses = citedPolicy?.clauses || [];
   const policyOptions = [...policies].sort((a, b) =>
     a.policy_key.localeCompare(b.policy_key) || b.version.localeCompare(a.version, undefined, { numeric: true }));
-  const choosePolicy = (id: string) => setPolicyId(id);
+  // Choosing another reference (or none) prunes the clause labels it doesn't suggest, from the
+  // AR, its rule items and its checks: a label is only meaningful against the reference it was chosen for.
+  const choosePolicy = (id: string) => {
+    setPolicyId(id);
+    const refs = (policies.find((p) => p.id === id)?.clauses || []).map((c) => c.ref);
+    setClauseRefs((prev) => pruneClauseLabels(prev, refs));
+    setRuleItems((prev) => prev.map((it) => (it.clause && !refs.includes(it.clause) ? { ...it, clause: '' } : it)));
+    setCriteriaRows((prev) => prev.map((r) => (r.clauseRef && !refs.includes(r.clauseRef) ? { ...r, clauseRef: '' } : r)));
+  };
 
   const updateAffirmation = (idx: number, patch: Partial<AffirmationInput>) => {
     setAffirmations((prev) => prev.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
@@ -510,6 +518,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             scopeKeys={scopeRows.map((r) => scopeKey(operandForKey(r.key)))}
             domainContext={draftContext.value}
             clauses={policyClauses}
+            citable={!!policyId}
           />
 
           <SectionTitle
@@ -522,6 +531,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             params={draftContext.value?.params}
             scopeKeys={scopeRows.map((r) => scopeKey(operandForKey(r.key)))}
             clauses={policyClauses}
+            citable={!!policyId}
             readOnly={locked}
           />
           </fieldset>

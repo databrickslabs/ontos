@@ -1,0 +1,161 @@
+import { render, screen, fireEvent } from '@testing-library/react';
+import { useState } from 'react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import '@/i18n/config';
+import { ContentSkeleton } from './content-skeleton';
+
+const Owners = ({ names }: { names: string[] }) => (
+  <ul>
+    {names.map((n) => (
+      <li key={n}>
+        {n} <button type="button">Remove</button>
+      </li>
+    ))}
+  </ul>
+);
+
+describe('ContentSkeleton', () => {
+  it('renders the sample in skeleton mode while data is missing', () => {
+    const { container } = render(
+      <ContentSkeleton data={null} sample={['Sample Owner']}>
+        {(names: string[]) => <Owners names={names} />}
+      </ContentSkeleton>,
+    );
+    const bones = container.querySelector('[data-skeleton]') as HTMLElement;
+    expect(bones).not.toBeNull();
+    expect(bones).toHaveAttribute('inert');
+    expect(bones).toHaveAttribute('aria-hidden', 'true');
+    expect(bones).toHaveTextContent('Sample Owner');
+    expect(container.firstElementChild).toHaveAttribute('aria-busy', 'true');
+    // The sample's controls are out of reach; only the status is announced
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent(/loading/i);
+  });
+
+  it('renders the data, not the sample, once loaded', () => {
+    const { container } = render(
+      <ContentSkeleton data={['Ada']} sample={['Sample Owner']}>
+        {(names: string[]) => <Owners names={names} />}
+      </ContentSkeleton>,
+    );
+    expect(container.querySelector('[data-skeleton]')).toBeNull();
+    expect(container.querySelector('[inert]')).toBeNull();
+    expect(screen.getByText('Ada')).toBeInTheDocument();
+    expect(screen.queryByText('Sample Owner')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+  });
+
+  it('keeps showing the skeleton over data while loading is set', () => {
+    const { container } = render(
+      <ContentSkeleton data={['Ada']} sample={['Sample Owner']} loading>
+        {(names: string[]) => <Owners names={names} />}
+      </ContentSkeleton>,
+    );
+    expect(container.querySelector('[data-skeleton]')).toHaveTextContent('Sample Owner');
+  });
+
+  it('drops inert when loading ends', () => {
+    const { container, rerender } = render(
+      <ContentSkeleton loading>
+        <p>Rows</p>
+      </ContentSkeleton>,
+    );
+    expect(container.querySelector('[inert]')).not.toBeNull();
+    rerender(
+      <ContentSkeleton loading={false}>
+        <p>Rows</p>
+      </ContentSkeleton>,
+    );
+    expect(container.querySelector('[inert]')).toBeNull();
+    expect(container.querySelector('[data-skeleton]')).toBeNull();
+  });
+
+  it('shows the empty message once loaded and empty', () => {
+    render(
+      <ContentSkeleton loading={false} empty emptyMessage={<p>No owners yet</p>}>
+        <p>Rows</p>
+      </ContentSkeleton>,
+    );
+    expect(screen.getByText('No owners yet')).toBeInTheDocument();
+    expect(screen.queryByText('Rows')).toBeNull();
+  });
+
+  it('does not show the empty message while loading', () => {
+    render(
+      <ContentSkeleton loading empty emptyMessage={<p>No owners yet</p>}>
+        <p>Rows</p>
+      </ContentSkeleton>,
+    );
+    expect(screen.queryByText('No owners yet')).toBeNull();
+  });
+
+  it('shows the error instead of the content', () => {
+    render(
+      <ContentSkeleton data={null} sample={['x']} error={<p>Could not load</p>}>
+        {(names: string[]) => <Owners names={names} />}
+      </ContentSkeleton>,
+    );
+    expect(screen.getByText('Could not load')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('keeps the same wrapper classes loading or not', () => {
+    const { container, rerender } = render(
+      <ContentSkeleton loading className="space-y-2">
+        <p>Rows</p>
+      </ContentSkeleton>,
+    );
+    expect(container.firstElementChild).toHaveClass('space-y-2');
+    rerender(
+      <ContentSkeleton loading={false} className="space-y-2">
+        <p>Rows</p>
+      </ContentSkeleton>,
+    );
+    expect(container.firstElementChild).toHaveClass('space-y-2');
+  });
+
+  it('keeps the content mounted when loading ends (local state survives)', () => {
+    const Counter = () => {
+      const [n, setN] = useState(0);
+      return <button type="button" onClick={() => setN(n + 1)}>count {n}</button>;
+    };
+    const { rerender } = render(<ContentSkeleton loading={false}><Counter /></ContentSkeleton>);
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByRole('button')).toHaveTextContent('count 1');
+    rerender(<ContentSkeleton loading><Counter /></ContentSkeleton>);
+    rerender(<ContentSkeleton loading={false}><Counter /></ContentSkeleton>);
+    expect(screen.getByRole('button')).toHaveTextContent('count 1');
+  });
+
+  describe('bones', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('draws a bone over each block of the laid-out sample, and none once loaded', () => {
+      // jsdom has no layout: give every element a size
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+        { left: 0, top: 0, width: 20, height: 20, right: 20, bottom: 20, x: 0, y: 0, toJSON: () => ({}) } as DOMRect,
+      );
+      const Icons = () => (<p><svg data-testid="a" /><svg data-testid="b" /></p>);
+      const { container, rerender } = render(<ContentSkeleton loading><Icons /></ContentSkeleton>);
+      const bones = container.querySelectorAll('[data-skeleton-bones] > *');
+      expect(bones.length).toBeGreaterThanOrEqual(2);
+      expect((bones[0] as HTMLElement).style.width).toBe('20px');
+      rerender(<ContentSkeleton loading={false}><Icons /></ContentSkeleton>);
+      expect(container.querySelector('[data-skeleton-bones]')).toBeNull();
+    });
+
+    it('draws no bones over table headers or data-skeleton-keep', () => {
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+        { left: 0, top: 0, width: 20, height: 20, right: 20, bottom: 20, x: 0, y: 0, toJSON: () => ({}) } as DOMRect,
+      );
+      const { container } = render(
+        <ContentSkeleton loading>
+          <table><thead><tr><th><svg /></th></tr></thead></table>
+          <p data-skeleton-keep=""><svg /></p>
+          <p><svg /></p>
+        </ContentSkeleton>,
+      );
+      expect(container.querySelectorAll('[data-skeleton-bones] > *')).toHaveLength(1);
+    });
+  });
+});

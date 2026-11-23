@@ -19,8 +19,22 @@ import { useTranslation } from 'react-i18next';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useSharedAssets, attachSharedAsset, RichTextItem, LinkItem, DocumentItem, MetadataAttachment } from '@/hooks/use-entity-metadata';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 
 export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'concept' | 'collection' | 'compliance_policy' | 'asset';
+
+// Stand in for the notes, links and documents while they load (see ContentSkeleton)
+const SAMPLE_BASE = { entity_id: 'sample', entity_type: 'data_product' as EntityKind, short_description: 'Sample description', level: 50, created_at: '2026-01-01T00:00:00Z' };
+const NOTES_SAMPLE: RichTextItem[] = [
+  { ...SAMPLE_BASE, id: 'n1', title: 'Sample note title', content_markdown: '' },
+  { ...SAMPLE_BASE, id: 'n2', title: 'Another note', content_markdown: '' },
+];
+const LINKS_SAMPLE: LinkItem[] = [
+  { ...SAMPLE_BASE, id: 'l1', title: 'Sample link title', url: 'https://example.com/sample' },
+];
+const DOCUMENTS_SAMPLE: DocumentItem[] = [
+  { ...SAMPLE_BASE, id: 'd1', title: 'Sample document', original_filename: 'sample-document.pdf', size_bytes: 120000, storage_path: '' },
+];
 
 interface Props {
   entityId: string;
@@ -186,11 +200,11 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
           </div>
           {!addingNote ? (
             <div>
-              {loading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t('common:actions.loading')}</div>
-              ) : richTexts.length === 0 ? (
-                <div className="text-sm text-muted-foreground">{t('notes.noNotes')}</div>
-              ) : (
+              <ContentSkeleton
+                loading={loading}
+                empty={richTexts.length === 0}
+                emptyMessage={<div className="text-sm text-muted-foreground">{t('notes.noNotes')}</div>}
+              >
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -203,7 +217,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {richTexts.map(n => (
+                    {(loading ? NOTES_SAMPLE : richTexts).map(n => (
                       <TableRow key={n.id}>
                         <TableCell className="text-xs text-muted-foreground font-mono">{n.level ?? 50}</TableCell>
                         <TableCell className="font-medium">{n.title}</TableCell>
@@ -256,7 +270,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     ))}
                   </TableBody>
                 </Table>
-              )}
+              </ContentSkeleton>
             </div>
           ) : (
             <div className="space-y-2">
@@ -336,11 +350,11 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
           </div>
           {!addingLink ? (
             <div>
-              {loading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t('common:actions.loading')}</div>
-              ) : links.length === 0 ? (
-                <div className="text-sm text-muted-foreground">{t('links.noLinks')}</div>
-              ) : (
+              <ContentSkeleton
+                loading={loading}
+                empty={links.length === 0}
+                emptyMessage={<div className="text-sm text-muted-foreground">{t('links.noLinks')}</div>}
+              >
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -353,7 +367,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {links.map(l => (
+                    {(loading ? LINKS_SAMPLE : links).map(l => (
                       <TableRow key={l.id}>
                         <TableCell className="text-xs text-muted-foreground font-mono">{l.level ?? 50}</TableCell>
                         <TableCell className="font-medium">{l.title}</TableCell>
@@ -406,7 +420,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     ))}
                   </TableBody>
                 </Table>
-              )}
+              </ContentSkeleton>
             </div>
           ) : (
             <div className="space-y-2">
@@ -526,11 +540,11 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
               </div>
             </div>
           )}
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t('common:actions.loading')}</div>
-          ) : documents.length === 0 ? (
-            <div className="text-sm text-muted-foreground">{t('documents.noDocuments')}</div>
-          ) : (
+          <ContentSkeleton
+            loading={loading}
+            empty={documents.length === 0}
+            emptyMessage={<div className="text-sm text-muted-foreground">{t('documents.noDocuments')}</div>}
+          >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -544,7 +558,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {documents.map(d => (
+                {(loading ? DOCUMENTS_SAMPLE : documents).map(d => (
                   <TableRow key={d.id}>
                     <TableCell className="text-xs text-muted-foreground font-mono">{d.level ?? 50}</TableCell>
                     <TableCell className="font-medium">{d.title}</TableCell>
@@ -597,7 +611,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                 ))}
               </TableBody>
             </Table>
-          )}
+          </ContentSkeleton>
         </div>
 
         <FilePreviewDialog

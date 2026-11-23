@@ -36,6 +36,15 @@ export function SkeletonBlock({
   return <Skeleton className={`${height} ${width} ${className}`.trim()} />;
 }
 
+/**
+ * Width (px) for the i-th placeholder: varied like real text, but the same on
+ * every render, so a skeleton doesn't change shape when its parent re-renders.
+ */
+const WIDTH_PATTERN = [0.62, 0.9, 0.74, 0.5, 0.84, 0.68, 0.96, 0.57];
+export function skeletonWidth(index: number, min: number, span: number): number {
+  return Math.round(min + WIDTH_PATTERN[index % WIDTH_PATTERN.length] * span);
+}
+
 /* ============================================================================
  * Templates
  * ==========================================================================*/
@@ -121,11 +130,10 @@ export function TableSkeleton({
   bordered = true,
   showHeader = true,
 }: TableSkeletonProps) {
-  // Pre-compute pseudo-random column widths once per render so they stay stable
-  // within a single mount. (Math.random in JSX runs on every paint otherwise.)
-  const headerWidths = Array.from({ length: columns }, () => Math.round(Math.random() * 40 + 60));
-  const rowWidths = Array.from({ length: rows }, () =>
-    Array.from({ length: columns }, () => Math.round(Math.random() * 60 + 40))
+  // Varied but deterministic widths (see skeletonWidth)
+  const headerWidths = Array.from({ length: columns }, (_, c) => skeletonWidth(c, 60, 40));
+  const rowWidths = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: columns }, (_, c) => skeletonWidth(r * 3 + c, 40, 60))
   );
 
   return (
@@ -348,7 +356,7 @@ export function HierarchyTreeSkeleton({
               <Skeleton
                 key={i}
                 className="h-4"
-                style={{ width: `${Math.round(Math.random() * 30 + 130)}px` }}
+                style={{ width: `${skeletonWidth(g * itemsPerGroup + i, 130, 30)}px` }}
               />
             ))}
           </div>
@@ -926,7 +934,7 @@ export function DocViewerSkeleton({
                   <Skeleton
                     key={i}
                     className="h-3"
-                    style={{ width: `${Math.round(Math.random() * 40 + 100)}px` }}
+                    style={{ width: `${skeletonWidth(i, 100, 40)}px` }}
                   />
                 ))}
               </div>
@@ -1103,7 +1111,7 @@ export function HierarchyDetailSkeleton({
             <Skeleton className="h-4 w-4" />
             <Skeleton
               className="h-4"
-              style={{ width: `${Math.round(Math.random() * 40 + 140)}px` }}
+              style={{ width: `${skeletonWidth(i, 140, 40)}px` }}
             />
           </div>
         ))}

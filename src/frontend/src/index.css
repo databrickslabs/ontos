@@ -176,3 +176,35 @@
 html:not([data-mode="advanced"]) .adv-only {
   display: none !important;
 }
+
+/* Skeleton mode (components/common/content-skeleton.tsx): the real component,
+   rendered with sample data, is laid out but not shown; ContentSkeleton draws
+   skeleton bones (the shared Skeleton style) over its text lines, icons and
+   controls. Frames and spacing stay, so nothing moves when the data arrives. */
+@layer components {
+  [data-skeleton] {
+    user-select: none;
+    pointer-events: none;
+  }
+  [data-skeleton] * {
+    caret-color: transparent;
+    /* Only the panel's own frame stays, as in the page skeletons */
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+  /* Table headers and [data-skeleton-keep] are static labels and stay readable */
+  [data-skeleton] *:not(thead, thead *, [data-skeleton-keep], [data-skeleton-keep] *) {
+    color: transparent !important;
+    text-shadow: none !important;
+  }
+  [data-skeleton] :is(svg, img, video, canvas):not(thead *, [data-skeleton-keep] *) {
+    visibility: hidden;
+  }
+  [data-skeleton] :is(input, textarea, select)::placeholder {
+    color: transparent !important;
+  }
+  /* Coloured fills (badges, buttons, status chips) don't show through */
+  [data-skeleton] :is(button, [class*="bg-"]):not([class*="bg-card"]):not([class*="bg-background"]) {
+    background-color: transparent !important;
+  }
+}

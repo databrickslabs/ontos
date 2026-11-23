@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Plus, RefreshCcw, Trash2, Pencil } from 'lucide-react';
+import { Plus, RefreshCcw, Trash2, Pencil } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import type {
   EntityKind,
   QualityItem,
@@ -25,6 +26,13 @@ import {
   dimensionColors,
   scoreColor,
 } from '@/types/quality';
+
+// Stands in for the measurements while they load (see ContentSkeleton)
+const sampleQuality = (id: string, title: string, score: number): QualityItem => ({
+  id, entity_id: 'sample', entity_type: 'data_product' as EntityKind, title, dimension: 'completeness', source: 'manual',
+  score_percent: score, measured_at: '2026-01-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+});
+const QUALITY_SAMPLE: QualityItem[] = [sampleQuality('q1', 'Sample completeness check', 98), sampleQuality('q2', 'Null rate', 91)];
 
 type Props = {
   entityId: string;
@@ -207,11 +215,12 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
 
         <Separator />
 
-        {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t('metadata:quality.loading')}</div>
-        ) : items.length === 0 ? (
-          <div className="text-sm text-muted-foreground">{t('metadata:quality.noMeasurementsRecorded')}</div>
-        ) : (
+        {/* While loading, a sample in skeleton mode (ContentSkeleton) */}
+        <ContentSkeleton
+          loading={loading}
+          empty={items.length === 0}
+          emptyMessage={<div className="text-sm text-muted-foreground">{t('metadata:quality.noMeasurementsRecorded')}</div>}
+        >
           <Table>
             <TableHeader>
               <TableRow>
@@ -224,7 +233,7 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map(it => (
+              {(loading ? QUALITY_SAMPLE : items).map(it => (
                 <TableRow key={it.id}>
                   <TableCell className="font-medium">{it.title || '—'}</TableCell>
                   <TableCell>
@@ -258,7 +267,7 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
               ))}
             </TableBody>
           </Table>
-        )}
+        </ContentSkeleton>
 
         {/* Create / Edit dialog */}
         <Dialog open={showForm} onOpenChange={setShowForm}>

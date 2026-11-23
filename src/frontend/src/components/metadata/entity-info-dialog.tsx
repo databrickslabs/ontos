@@ -5,13 +5,23 @@ import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
-import { useEntityMetadata, useMergedMetadata, DocumentItem, LinkItem, EntityKind } from '@/hooks/use-entity-metadata';
+import { useEntityMetadata, useMergedMetadata, DocumentItem, LinkItem, RichTextItem, EntityKind } from '@/hooks/use-entity-metadata';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { Bell, Check, Loader2, ArrowLeft, Share2, Star, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { StarRatingInput } from '@/components/ratings/star-rating-input';
 import { RatingSummary } from '@/components/ratings/rating-summary';
 import { useComments } from '@/hooks/use-comments';
 import type { RatingAggregation } from '@/types/comments';
+
+// Stands in for the notes and links while they load (see ContentSkeleton)
+const INFO_SAMPLE_BASE = { entity_id: 'sample', entity_type: 'data_product' as EntityKind };
+const INFO_NOTES_SAMPLE: RichTextItem[] = [{
+  ...INFO_SAMPLE_BASE, id: 'n1', title: 'Overview',
+  content_markdown: '## Overview\n\nA short sample description of this entity, its purpose and who uses it.\n\n## Usage\n\nHow to get access and what the data covers.',
+}];
+const NO_DOCUMENTS: DocumentItem[] = [];
+const INFO_LINKS_SAMPLE: LinkItem[] = [{ ...INFO_SAMPLE_BASE, id: 'l1', title: 'Sample link', url: 'https://example.com/sample', short_description: 'Sample description' }];
 
 interface Props {
   entityType: EntityKind;
@@ -108,7 +118,7 @@ export default function EntityInfoDialog({
     maxLevelInheritance
   );
   
-  const { richTexts, documents, links, loading, error } = useMerged 
+  const { richTexts: loadedRichTexts, documents: loadedDocuments, links: loadedLinks, loading, error } = useMerged 
     ? { 
         richTexts: mergedMetadata.richTexts, 
         documents: mergedMetadata.documents, 
@@ -118,6 +128,11 @@ export default function EntityInfoDialog({
       }
     : directMetadata;
   
+  // While loading, the body renders a sample in skeleton mode (ContentSkeleton)
+  const richTexts = useMemo(() => (loading ? INFO_NOTES_SAMPLE : loadedRichTexts), [loading, loadedRichTexts]);
+  const documents = useMemo(() => (loading ? NO_DOCUMENTS : loadedDocuments), [loading, loadedDocuments]);
+  const links = useMemo(() => (loading ? INFO_LINKS_SAMPLE : loadedLinks), [loading, loadedLinks]);
+
   const sources = useMerged ? mergedMetadata.sources : {};
 
   // Ratings state
@@ -213,14 +228,10 @@ export default function EntityInfoDialog({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6">
-          {loading ? (
-            <div className="flex items-center justify-center h-32 text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              {t('common:actions.loading')}
-            </div>
-          ) : error ? (
+          {error && !loading ? (
             <div className="text-destructive p-4">{error}</div>
           ) : (
+            <ContentSkeleton loading={loading}>
             <div className="space-y-6 pb-6 [&>*:first-child]:mt-0">
               {toc.length > 0 && (
                 <div className="rounded-lg border bg-muted/20 p-4">
@@ -352,6 +363,7 @@ export default function EntityInfoDialog({
                 )}
               </div>
             </div>
+            </ContentSkeleton>
           )}
         </div>
 

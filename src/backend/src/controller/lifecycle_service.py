@@ -255,6 +255,16 @@ def row_session(row: Any) -> Optional[Session]:
         return None
 
 
+_ENTITY_TYPE_BY_TABLE = {
+    'data_products': 'data_product', 'data_contracts': 'data_contract', 'assets': 'asset',
+}
+
+
+def entity_type_of_row(row: Any) -> Optional[str]:
+    """The lifecycle entity type of an ORM ``row`` (None for anything else)."""
+    return _ENTITY_TYPE_BY_TABLE.get(getattr(getattr(row, '__table__', None), 'name', None))
+
+
 # --------------------------------------------------------------------------- the service
 
 _GROUP_NAME_CONSTRAINT = 'uq_lifecycle_stage_groups_type_name'
@@ -369,14 +379,23 @@ class LifecycleService:
             found = self._groups.get(group_id)
         return found
 
-    def _row_group(self, row: Any, db: Optional[Session] = None) -> Optional[Group]:
-        """The group of ``row`` (None without one), loaded through ``db`` or the row's own
-        session. With neither, an id the cache doesn't know (a group another worker
+    def _row_group(
+        self, row: Any, db: Optional[Session] = None, entity_type: Optional[str] = None,
+    ) -> Optional[Group]:
+        """The group of ``row``, loaded through ``db`` or the row's own session. A row
+        without a group belongs to its type's default group, once one is stored
+        (``entity_type``, else the row's table); None when none is, or the type is not
+        known. With no session, an id the cache doesn't know (a group another worker
         created less than ``_CACHE_SECONDS`` ago) logs a warning once and returns None:
         the caller falls back to the seeded stages."""
         group_id = getattr(row, 'lifecycle_stage_group_id', None)
         if not group_id:
-            return None
+            entity_type = entity_type or entity_type_of_row(row)
+            if entity_type is None:
+                return None
+            self._ensure(db or row_session(row))
+            default_id = self._defaults.get(entity_type)
+            return self._groups.get(default_id) if default_id else None
         group_id = str(group_id)
         if db is None:
             db = row_session(row)
@@ -395,7 +414,9 @@ class LifecycleService:
         """For API model validators: set ``model.status_category`` from its group when
         unset, through the session of ``source`` (the ORM row it was validated from)."""
         if getattr(model, 'status_category', None) is None and getattr(model, 'status', None):
-            model.status_category = self.category_of_row(model, db=row_session(source))
+            model.status_category = self.category_of_row(
+                model, db=row_session(source), entity_type=entity_type_of_row(source),
+            )
         return model
 
     def groups(self, db: Session, entity_type: Optional[str] = None) -> List[Group]:
@@ -598,14 +619,18 @@ class LifecycleService:
     def category_of(self, db: Optional[Session], entity_type: str, entity: Any) -> Optional[str]:
         return self.group_for(db, entity_type, entity).category(getattr(entity, 'status', None))
 
-    def category_of_row(self, row: Any, db: Optional[Session] = None) -> Optional[str]:
+    def category_of_row(
+        self, row: Any, db: Optional[Session] = None, entity_type: Optional[str] = None,
+    ) -> Optional[str]:
         """The Stage Category of a product, contract or asset row of any kind.
 
         Uses the row's group when it is cached (loading the cache through ``db``
-        or the row's own session), else the seeded categories of the stage key.
+        or the row's own session), or the type's stored default group for a row
+        without one; else the seeded categories of the stage key. ``entity_type``
+        names the type of a row that isn't an ORM row (an API model).
         """
         key = _normalized(getattr(row, 'status', None))
-        group = self._row_group(row, db)
+        group = self._row_group(row, db, entity_type)
         if group is not None:
             return group.category(key)
         return DEFAULT_STAGE_CATEGORIES.get(key)
@@ -621,14 +646,14 @@ class LifecycleService:
 
     def is_side_draft_stage(self, row: Any, db: Optional[Session] = None) -> bool:
         """A draft-category stage other than its group's first (``sandbox`` by default)."""
-        group = self._row_group(row, db) or _BUILTIN['data_product']
+        group = self._row_group(row, db) or _BUILTIN[entity_type_of_row(row) or 'data_product']
         stage = group.stages.get(_normalized(getattr(row, 'status', None)))
         return bool(stage and stage.category == 'draft' and not stage.is_initial)
 
     def stage_order_of_row(self, row: Any, db: Optional[Session] = None) -> int:
         key = _normalized(getattr(row, 'status', None))
         group = self._row_group(row, db)
-        stages = group.stages if group else _BUILTIN['data_product'].stages
+        stages = (group or _BUILTIN[entity_type_of_row(row) or 'data_product']).stages
         stage = stages.get(key)
         return stage.order if stage else 999
 

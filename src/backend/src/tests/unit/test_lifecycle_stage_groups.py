@@ -1344,3 +1344,69 @@ class TestUncachedGroupLookups:
         assert lifecycle_service.category_of_row(row) is None
         assert warning.call_count == 1
         assert group.id in warning.call_args.args
+
+
+def _custom_default_group(entity_type='data_product'):
+    """A default group whose stage keys are none of the seeded ones."""
+    return {
+        'name': 'Custom default', 'description': None, 'entity_type': entity_type,
+        'is_default_for_type': True,
+        'stages': [
+            _stage('intake', 'draft', 0, initial=True),
+            _stage('scratch', 'draft', 1),
+            _stage('needs_review', 'review', 2),
+            _stage('live', 'active', 3),
+            _stage('gone', 'retired', 4),
+        ],
+        'transitions': [
+            {'from_key': 'intake', 'to_key': 'scratch'},
+            {'from_key': 'scratch', 'to_key': 'intake'},
+            {'from_key': 'intake', 'to_key': 'needs_review'},
+            {'from_key': 'needs_review', 'to_key': 'live'},
+            {'from_key': 'live', 'to_key': 'gone'},
+        ],
+    }
+
+
+class TestRowsWithoutAGroup:
+    """A row with no group belongs to its type's default group, whichever that is."""
+
+    def test_the_category_of_a_row_without_a_group_follows_the_custom_default(
+        self, db_session,
+    ):
+        lifecycle_service.save_group(db_session, _custom_default_group(), 'admin')
+        row = db_session.get(DataProductDb, _product(db_session, 'live'))
+        assert row.lifecycle_stage_group_id is None
+        assert lifecycle_service.category_of(db_session, 'data_product', row) == 'active'
+        assert lifecycle_service.category_of_row(row, db_session) == 'active'
+        assert lifecycle_service.category_of_row(row) == 'active'
+
+    def test_the_stage_order_and_the_side_draft_follow_the_custom_default(self, db_session):
+        lifecycle_service.save_group(db_session, _custom_default_group(), 'admin')
+        live = db_session.get(DataProductDb, _product(db_session, 'live'))
+        scratch = db_session.get(DataProductDb, _product(db_session, 'scratch'))
+        assert lifecycle_service.stage_order_of_row(live, db_session) == 3
+        assert lifecycle_service.is_side_draft_stage(scratch, db_session)
+        assert not lifecycle_service.is_side_draft_stage(live, db_session)
+
+    def test_the_category_filter_agrees_with_the_category_of_the_row(self, db_session):
+        lifecycle_service.save_group(db_session, _custom_default_group(), 'admin')
+        live = _product(db_session, 'live')
+        _product(db_session, 'needs_review')
+        found = db_session.query(DataProductDb.id).filter(
+            lifecycle_service.category_filter(
+                db_session, DataProductDb, 'data_product', ['active'],
+            )
+        ).all()
+        assert [i for (i,) in found] == [live]
+
+    def test_an_api_model_gets_the_category_of_the_default_group(self, db_session):
+        from src.models.data_products import DataProduct
+
+        lifecycle_service.save_group(db_session, _custom_default_group(), 'admin')
+        row = db_session.get(DataProductDb, _product(db_session, 'live'))
+        assert DataProduct.model_validate(row).status_category == 'active'
+
+    def test_the_seeded_categories_apply_while_no_group_is_stored(self, db_session):
+        row = db_session.get(DataProductDb, _product(db_session, 'proposed'))
+        assert lifecycle_service.category_of_row(row, db_session) == 'review'

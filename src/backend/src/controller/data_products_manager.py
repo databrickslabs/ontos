@@ -2991,7 +2991,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Product not found")
         
         # Check if source is in an editable state - if so, don't clone
-        # Edited in place, not cloned: the update route's rule (editable_in_place)
+        # Edited in place, not cloned: the rule of the update gate (editable_in_place)
         if source_product.status and lifecycle_service.editable_in_place(
                 db, 'data_product', source_product):
             raise ValueError("Product is already in an editable state. Edit directly instead of cloning.")

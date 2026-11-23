@@ -6,7 +6,7 @@ Provides CRUD operations for workflow definitions and execution management.
 
 import json
 from datetime import datetime
-from typing import Any, Collection, Dict, List, Optional, Union
+from typing import Any, Callable, Collection, Dict, List, Optional, Union
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
@@ -21,7 +21,8 @@ from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
 from src.models.notifications import Notification
 from src.common.workflow_approvals import (
-    is_handled, open_approval_ids, open_execution_approvals,
+    add_decided_by_users, execution_approvals, has_decided, is_handled, open_approval_ids,
+    open_execution_approvals,
 )
 from src.common.logging import get_logger
 from src.controller.workflows_manager import WorkflowsManager
@@ -1640,7 +1641,9 @@ def _assert_caller_authorized_for_execution(
 
     ``for_read``: the check that lets a pending approver read the entity
     (``caller_is_pending_reviewer``, #1117). Notifications already handled
-    (an approver who decided while the step waits for others) don't count.
+    (an approver who decided while the step waits for others) don't count,
+    nor a shared role or group row whose ``decided_by_users`` names the caller
+    (they decided the step through another target, #1552).
 
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
@@ -1649,7 +1652,7 @@ def _assert_caller_authorized_for_execution(
     candidates = [
         n for n in _find_approval_notifications_for_execution(db, execution_id)
         if (n.recipient or n.recipient_role_id) and _is_for_step(n, pending_step)
-        and not (for_read and is_handled(n))
+        and not (for_read and (is_handled(n) or has_decided(n, user_info)))
     ]
     if not candidates:
         raise HTTPException(
@@ -1728,22 +1731,86 @@ def _mark_step_notifications_handled(
             continue
 
 
+def _record_decider_on_shared_rows(
+    db: Session,
+    execution_id: str,
+    step_id: Optional[str],
+    decisions: List[Dict[str, Any]],
+    *,
+    decider: Optional[UserInfo],
+    decides_for: Optional[Callable[[Optional[str], Optional[str]], bool]],
+    open_ids: Collection[str],
+) -> None:
+    """Record ``decider`` in ``decided_by_users`` on the shared rows of this round they are in.
+
+    One person decides once per step (#1552), so every group or role row of the round the
+    decider is a member of (``decides_for``) leaves their lists, a row another member already
+    filled included; not their own user row, nor the row they filled. The round's rows are
+    those open before the decision (``open_ids``) and those a decision of this round handled
+    (``handled_at`` is that decision's ``at``): an earlier round's rows, and those a loop-back
+    opens, are left alone. Other approvers' own rows don't learn who decided.
+    """
+    from src.common.workflow_executor import approver_key
+
+    # The identity the decision stored (``decided_by`` of the executor's record)
+    decided_by = (getattr(decider, 'email', None) or getattr(decider, 'username', None))
+    if not decided_by or decides_for is None:
+        return
+    own_names = {
+        str(v).strip().lower() for v in (
+            getattr(decider, 'email', None), getattr(decider, 'username', None),
+        ) if v
+    }
+    if not any(str(d.get('decided_by') or '').strip().lower() in own_names for d in decisions):
+        return  # the call ended the step on a stored rejection; this user decided nothing
+    by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
+    for notif in execution_approvals(db, execution_id):
+        try:
+            payload = json.loads(notif.action_payload or '{}')
+        except (TypeError, ValueError):
+            continue
+        if payload.get('execution_id') != execution_id or not _is_for_step(notif, step_id):
+            continue
+        if (notif.recipient or '').strip().lower() in own_names:
+            continue
+        decision = by_key.get(approver_key(
+            notif.recipient or notif.recipient_role_id or '', notif.recipient_role_id,
+        ))
+        filled_by = str((decision or {}).get('decided_by') or '').strip().lower()
+        if filled_by in own_names:
+            continue
+        this_round = notif.id in open_ids or (
+            decision is not None and is_handled(notif)
+            and payload.get('handled_at') == decision.get('at')
+        )
+        if not this_round or not decides_for(notif.recipient, notif.recipient_role_id):
+            continue
+        if add_decided_by_users(payload, [decided_by]):
+            notif.action_payload = json.dumps(payload)
+            db.add(notif)
+
+
 def _mark_decided_approver_notifications(
     db: Session,
     execution_id: str,
     step_id: Optional[str],
     decisions: List[Dict[str, Any]],
+    *,
+    decider: Optional[UserInfo] = None,
+    decides_for: Optional[Callable[[Optional[str], Optional[str]], bool]] = None,
 ) -> None:
     """Mark handled the approval notifications of the targets that decided.
 
     For a require_all step still waiting for others (#1119): the notification
     of each decided target (a user, a group, a role) is handled, the others
-    stay open.
+    stay open. The shared rows of the round ``decider`` is a member of then
+    record that they decided the step (``_record_decider_on_shared_rows``).
     """
     from src.common.workflow_executor import approver_key
 
     by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
-    for notif in open_execution_approvals(db, execution_id):
+    open_rows = open_execution_approvals(db, execution_id)
+    for notif in open_rows:
         try:
             payload = json.loads(notif.action_payload or '{}')
         except (TypeError, ValueError):
@@ -1764,6 +1831,10 @@ def _mark_decided_approver_notifications(
         })
         notif.action_payload = json.dumps(payload)
         db.add(notif)
+    _record_decider_on_shared_rows(
+        db, execution_id, step_id, decisions, decider=decider, decides_for=decides_for,
+        open_ids={n.id for n in open_rows},
+    )
 
 
 def _no_longer_pending() -> HTTPException:
@@ -1824,8 +1895,13 @@ def _respond_to_pending_approval(
     execution_id: str,
     approved: bool,
     required: Dict[str, Any],
+    decides_for: Optional[Callable[[Optional[str], Optional[str]], bool]] = None,
 ) -> Dict[str, Any]:
-    """Answer a require_all decision that doesn't end the step (#1119)."""
+    """Answer a require_all decision that doesn't end the step (#1119).
+
+    ``decides_for``: the caller's recipient check, to tell the shared rows they
+    are a member of (see ``_mark_decided_approver_notifications``).
+    """
     if required['outcome'] == 'not_an_approver':
         raise HTTPException(
             status_code=403,
@@ -1848,6 +1924,7 @@ def _respond_to_pending_approval(
         raise _no_longer_pending()
     _mark_decided_approver_notifications(
         db, execution_id, _pending_step_id(db, execution_id), required['decisions'],
+        decider=current_user, decides_for=decides_for,
     )
     audit_manager.log_action(
         db=db,
@@ -1932,10 +2009,11 @@ async def handle_workflow_approval(
         # require_all (#1119): each resolved approver decides once (a user for
         # themselves, any one member for a group or role). The execution stays
         # paused until all have approved; any rejection resumes it as rejected.
+        decides_for = notifications_manager.recipient_matcher(current_user)
         required = executor.record_required_approval(
             execution_id,
             bool(approved),
-            decides_for=notifications_manager.recipient_matcher(current_user),
+            decides_for=decides_for,
             user_email=current_user.email if current_user else None,
             username=current_user.username if current_user else None,
             reason=message,
@@ -1945,7 +2023,7 @@ async def handle_workflow_approval(
         ):
             return _respond_to_pending_approval(
                 db, request, audit_manager, current_user, execution_id, bool(approved),
-                required,
+                required, decides_for,
             )
 
         user_email = current_user.email if current_user else None
@@ -1994,6 +2072,12 @@ async def handle_workflow_approval(
         _mark_step_notifications_handled(
             db, execution_id, decided_step, approved, user_email, only_ids=open_before,
         )
+        if required is not None:
+            # A decision that ends a require_all step: the shared rows of its round too
+            _record_decider_on_shared_rows(
+                db, execution_id, decided_step, required['decisions'],
+                decider=current_user, decides_for=decides_for, open_ids=open_before,
+            )
 
         audit_manager.log_action(
             db=db,

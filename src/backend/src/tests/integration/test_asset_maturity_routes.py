@@ -328,8 +328,9 @@ class TestAssetMaturityAccess:
 
     @pytest.fixture
     def no_assets_feature(self, monkeypatch):
-        from src.routes import assets_routes
-        monkeypatch.setattr(assets_routes, '_user_has_assets_feature', lambda *a, **k: False)
+        # The read rule lives in the shared module (#1354): patch what it calls
+        from src.common import asset_access
+        monkeypatch.setattr(asset_access, 'user_has_assets_feature', lambda *a, **k: False)
 
     @pytest.mark.parametrize('method,path', _MATURITY_ROUTES)
     def test_a_user_who_cannot_read_the_asset_gets_403(

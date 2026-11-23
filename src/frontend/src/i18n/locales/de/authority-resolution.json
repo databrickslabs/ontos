@@ -40,10 +40,6 @@
     "tileDenied": "Abgelehnt",
     "tileDnaco": "DNA-Coefficient",
     "tileDnacoHint": "0,0 ist der beste Wert",
-    "tileDnacoHintHover": "0,0 ist der beste Wert — Hover für Dimensionen",
-    "dnacoDimensions": "DNAco-Dimensionen",
-    "dnacoFormula": "Gesamt = 1 − ∏(1 − dₙ) = {{value}}",
-    "dnacoFormulaDescription": "Wahrscheinlichkeit einer Divergenz in ≥1 Dimension",
     "activationRequires": "Die Aktivierung erfordert, dass der DNA-Coefficient gemessen wurde und innerhalb seiner Obergrenze ({{threshold}}) liegt und dass alle erforderlichen Bestätigungen abgeschlossen sind{{affirmed}}.",
     "notYetFullyAffirmed": "(noch nicht vollständig bestätigt)",
     "cardApprovers": "Genehmiger (N-funktionales Gate)",
@@ -75,8 +71,6 @@
     "labelDecisionCriteria": "Entscheidungskriterien",
     "criterion": "Kriterium",
     "noCriteria": "Keine Kriterien — das Gate ist unbeschränkt (genehmigt jede Anfrage).",
-    "labelEvidenceSources": "Evidenzquellen",
-    "linkCatalogCommander": "{{ref}} im Catalog Commander öffnen",
     "labelGovernsConceptsHint": "Steuert Geschäftskonzepte",
     "labelPrerequisites": "Erfordert (vorausgesetzte ARs)",
     "required": "erforderlich",
@@ -116,7 +110,19 @@
     "testScopeCheck": "Prüfung des Geltungsbereichs",
     "testScopeMissing": "fehlt",
     "affirmedEarlierDraft": "Für einen älteren Entwurf bestätigt",
-    "dnaStale": "Für einen älteren Entwurf gemessen; neu berechnen"
+    "dnaStale": "Für einen älteren Entwurf gemessen; neu berechnen",
+    "cardDnaco": "__TODO__ DNA-Coefficient",
+    "dnaMeasuredAt": "__TODO__ Measured",
+    "labelEvidenceSlice": "__TODO__ Evidence slice",
+    "noEvidenceSlice": "__TODO__ No evidence slice set.",
+    "labelAdmSchema": "__TODO__ ADM schema",
+    "admSchemaNone": "__TODO__ None configured",
+    "admSchemaOverridden": "__TODO__ overridden for this AR",
+    "evidenceObjects": "__TODO__ {{count}} specific objects",
+    "evidenceAllObjects": "__TODO__ All objects of these actions",
+    "evidenceWindowSample": "__TODO__ Window {{days}} days, sample {{sample}}",
+    "evidenceDomainScoped": "__TODO__ Domain-scoped rows",
+    "evidenceUnscoped": "__TODO__ Rows not domain-scoped"
   },
   "conceptLinks": {
     "failedLink": "Konzept konnte nicht verknüpft werden",
@@ -173,11 +179,6 @@
     "evidence": "Evidenz",
     "ui": "UI"
   },
-  "sourceType": {
-    "delta_table": "Delta-Tabelle",
-    "data_product": "Datenprodukt",
-    "asset": "Asset"
-  },
   "direction": {
     "actual-exceeds-documented": "Tatsächlich übersteigt dokumentiert",
     "documented-exceeds-actual": "Dokumentiert übersteigt tatsächlich",
@@ -201,7 +202,8 @@
       "dayOfWeek": "Wochentag",
       "minuteOfHour": "Minute der Stunde",
       "recomputeFrequency": "Häufigkeit der Neuberechnung",
-      "dnaMaxThreshold": "Maximaler DNA-Coefficient für die Aktivierung"
+      "dnaMaxThreshold": "Maximaler DNA-Coefficient für die Aktivierung",
+      "admSchemaOverride": "__TODO__ Schema override (catalog.schema)"
     },
     "hints": {
       "slug": "Stabiler Schlüssel, mit dem Agenten dieses AR aufrufen. Wird von allen Versionen der Familie geteilt.",
@@ -215,7 +217,6 @@
       "domainContext": "Domain-Context",
       "decisionCriteria": "Compliance Checks",
       "domains": "Domänen",
-      "evidenceSources": "Evidenzquellen",
       "participants": "Teilnehmer",
       "requires": "Erfordert",
       "resourceRefs": "Ressourcenreferenzen",
@@ -224,18 +225,21 @@
       "tags": "Tags",
       "ownership": "Verantwortung & Projekt",
       "rule": "Regel (ODRL)",
-      "justification": "Begründung (Richtlinien-Referenz)"
+      "justification": "Begründung (Richtlinien-Referenz)",
+      "evidenceSlice": "__TODO__ Evidence slice",
+      "admSchema": "__TODO__ ADM schema"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Prüfungen, die das Gate nach der Regel durchsetzt (und gegen die der DNA-Koeffizient Abweichungen misst). Jede ist ein wiederverwendbarer <strong>Compliance Check</strong>.",
-      "evidenceSources": "Binden Sie die vergangenen Entscheidungen, gegen die der DNA-Coefficient gemessen wird. Fügen Sie eine oder mehrere Quellen hinzu — eine <strong>Delta-Tabelle</strong>, ein <strong>Datenprodukt</strong> oder ein <strong>Asset</strong> (Volume-Datei, Tabelle oder View). Jede ordnet ihre Spalten über die Spaltenzuordnung den kanonischen AR-Elementen zu.",
       "participants": "Das N-funktionale Gate und die Überprüfung. <strong>Genehmiger</strong> zählen zum Bestätigungs-Gate. <strong>Prüfer</strong> werden im Überprüfungsprozess befragt, um zu bestätigen, dass die Relation die Realität abbildet. Ein Principal kann beides sein.",
       "requires": "Vorausgesetzte ARs: Jedes muss <strong>genehmigt</strong> aufgelöst werden, bevor dieses entscheidet. Schlüssel ist der Familien-Slug (nicht die Version), damit dieses AR weiterhin funktioniert, wenn eine Voraussetzung eine neue Version erhält. Zum Speichern muss dieses AR einen eigenen Slug haben.",
       "resourceRefs": "Woher Feldwerte stammen. Statt eines einfachen Literals hinterlegen Sie ein kanonisches Feld (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) mit einem typisierten Verweis. Eine <strong>Ontos-Entität</strong>-Referenz wird zur Auswertungszeit erneut gegen den Wissensgraphen aufgelöst, sodass der Wert aktuell bleibt, wenn sich das zugrunde liegende Konzept, Produkt oder die Domäne ändert. <strong>MCP-Tool</strong>-Referenzen rufen zur Entscheidungszeit einen Unity Catalog MCP-Dienst auf; Kriterien können mit dem aufgelösten Wert als <code>obj.ref_{{fieldPlaceholder}}</code> vergleichen (Punkte werden zu Unterstrichen, z. B. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "Wie oft der DNA-Coefficient gegen die Evidenzquellen neu berechnet wird.",
       "domainContext": "Der begrenzte Geltungsbereich dieser Befugnis und ihre Parameter. Eine Anfrage außerhalb des Geltungsbereichs erhält no_authority; Regel und Prüfungen lesen die Parameter als ctx.<key>.",
       "rule": "Was die Befugnis erlaubt, als ODRL: <strong>Bedingungen</strong>, die gelten müssen, noch zu erfüllende <strong>Pflichten</strong> (bis dahin ist die Entscheidung <strong>bedingt</strong>, z. B. eine Mitgenehmigung) und <strong>Verbote</strong>. Mit Werten oder Variablen vergleichen (<code>ctx.threshold</code>, <code>req.market</code>).",
-      "justification": "Die Richtlinien-Referenz, auf die sich diese Authority Relation stützt. Die Gültigkeit wird angezeigt, nicht erzwungen. Klauselbezeichnungen sind Freitext; Regel und Prüfungen können sie zitieren."
+      "justification": "Die Richtlinien-Referenz, auf die sich diese Authority Relation stützt. Die Gültigkeit wird angezeigt, nicht erzwungen. Klauselbezeichnungen sind Freitext; Regel und Prüfungen können sie zitieren.",
+      "evidenceSlice": "__TODO__ The past decisions the DNA-Coefficient is measured against: the ADM observations for these <strong>action codes</strong> over the window. Each observation is read from the shared ADM schema (or this AR's override).",
+      "admSchema": "__TODO__ The shared ADM schema is the default for every Authority Relation. An admin can override it for this AR. The override is checked for conformance when saved."
     },
     "fields": {
       "name": {
@@ -263,23 +267,6 @@
       "project": "Projekt",
       "noTeam": "Kein Team",
       "noProject": "Kein Projekt"
-    },
-    "evidenceSources": {
-      "type": {
-        "deltaTable": "Delta-Tabelle",
-        "dataProduct": "Datenprodukt",
-        "asset": "Asset"
-      },
-      "placeholders": {
-        "deltaTable": "catalog.schema.promotion_decisions",
-        "dataProduct": "Datenprodukt-ID",
-        "asset": "Asset-FQN (Tabelle/View/Volume)",
-        "label": "Optionales Label",
-        "columnMap": "Spaltenzuordnung (JSON)"
-      },
-      "messages": {
-        "dataProductNotYetSupported": "Datenprodukt-Quellen werden erfasst, aber für DNAco noch nicht gelesen (v1)."
-      }
     },
     "affirmations": {
       "selectRoleLabel": "Rolle auswählen…",
@@ -322,7 +309,6 @@
       "appServicePrincipal": "Service Principal der Ontos-App"
     },
     "buttons": {
-      "addEvidenceSource": "Evidenzquelle hinzufügen",
       "addParticipant": "Teilnehmer hinzufügen",
       "addPrerequisite": "Voraussetzung hinzufügen",
       "addResourceRef": "Ressourcenreferenz hinzufügen",
@@ -338,11 +324,38 @@
       "veto": "Veto"
     },
     "validation": {
-      "nameRequired": "Name ist erforderlich",
-      "invalidColumnMap": "Ungültige Spaltenzuordnung",
-      "columnMapError": "Die Spaltenzuordnung für \"{{ref}}\" muss gültiges JSON sein."
+      "nameRequired": "Name ist erforderlich"
     },
-    "immutableNotice": "Aktive und ältere Versionen sind unveränderlich. Erstelle eine neue Version, um die Definition zu ändern."
+    "immutableNotice": "Aktive und ältere Versionen sind unveränderlich. Erstelle eine neue Version, um die Definition zu ändern.",
+    "admSchema": {
+      "placeholder": "__TODO__ Empty uses the shared schema",
+      "shared": "__TODO__ Shared schema: {{schema}}",
+      "sharedNotConfigured": "__TODO__ No shared schema is configured.",
+      "adminOnly": "__TODO__ Only admins can change the override. The effective schema is shown.",
+      "invalidFormat": "__TODO__ Use catalog.schema, for example demo.arf_adm.",
+      "nonconformant": "__TODO__ The override does not conform to the ADM subset. Fix it or clear it."
+    },
+    "evidenceSlice": {
+      "actionCodes": "__TODO__ Action codes",
+      "actionCodesHint": "__TODO__ Lowercase ADM action codes, for example approve. Press Enter or comma to add. Up to {{max}}.",
+      "actionCodePlaceholder": "__TODO__ Add an action code",
+      "objectRefs": "__TODO__ Object refs (optional)",
+      "objectRefsHint": "__TODO__ Narrow to exact object_ref values. Leave empty to read every object of these actions. Up to {{max}}.",
+      "objectRefPlaceholder": "__TODO__ Add an object ref",
+      "domainScope": "__TODO__ Apply the domain-context scope to the observed rows",
+      "windowDays": "__TODO__ Window (days)",
+      "sampleSize": "__TODO__ Sample size",
+      "removeChip": "__TODO__ Remove {{value}}",
+      "invalidToast": "__TODO__ Check the evidence slice.",
+      "errors": {
+        "actionCodesRequired": "__TODO__ Add at least one action code.",
+        "actionCodesTooMany": "__TODO__ Use at most 20 action codes.",
+        "actionCodeInvalid": "__TODO__ Action codes are lowercase, start with a letter, and use letters, digits, _ or -.",
+        "objectRefsTooMany": "__TODO__ Use at most 200 object refs.",
+        "windowDaysRange": "__TODO__ Enter a whole number of days from {{min}} to {{max}}.",
+        "sampleSizeRange": "__TODO__ Enter a whole number from {{min}} to {{max}}."
+      }
+    }
   },
   "criteria": {
     "description": "Abgeleitete und aggregierte Prädikate, die die Regel nicht ausdrückt. Das Gate genehmigt nur, wenn jede Prüfung besteht; eine Prüfung, die bei einer früheren Entscheidung fehlschlägt, zählt als Abweichung im DNA-Koeffizienten, gewichtet und vorzeichenbehaftet nach ihrer Richtung. Regeln lesen die Anfrage als obj.<field> / req.<key> und die Parameter als ctx.<param>.",
@@ -469,10 +482,10 @@
       "decisionCriteria": "Entscheidungskriterien",
       "criterion": "Kriterium",
       "empty": "—",
-      "evidenceSources": "Evidenzquellen",
-      "evidenceBinding": "Evidenzbindung",
       "justificationChain": "Begründungskette",
-      "rule": "Regel"
+      "rule": "Regel",
+      "evidenceSlice": "__TODO__ Evidence slice",
+      "admSchema": "__TODO__ ADM schema"
     },
     "questionnaire": {
       "confirmation": "Bestätigung",
@@ -755,5 +768,56 @@
       "affirmations_stale": "Die Bestätigungen beziehen sich auf einen älteren Entwurf. Bestätige die aktuelle Definition erneut.",
       "transition_not_allowed": "Diese Statusänderung ist vom aktuellen Status aus nicht erlaubt."
     }
+  },
+  "adm": {
+    "errors": {
+      "notConfigured": "__TODO__ No ADM schema is configured. Set it in Settings > Maturity Levels.",
+      "nonconformant": "__TODO__ The ADM schema does not match the ADM subset this version reads. Fix the tables and columns listed below.",
+      "queryFailed": "__TODO__ The ADM schema could not be queried.",
+      "queryTimeout": "__TODO__ The ADM evidence query timed out. Try a smaller window or sample.",
+      "noWarehouse": "__TODO__ No SQL warehouse is available to read the ADM evidence.",
+      "schemaInvalid": "__TODO__ The ADM schema must be catalog.schema.",
+      "evidenceSliceEmpty": "__TODO__ The evidence slice needs at least one action code.",
+      "evidenceSliceInvalid": "__TODO__ The evidence slice is not valid. Check the action codes, object refs, window and sample size."
+    },
+    "findings": {
+      "title": "__TODO__ ADM conformance findings",
+      "missing_table": "__TODO__ Missing table",
+      "missing_column": "__TODO__ Missing column",
+      "type_mismatch": "__TODO__ Type mismatch",
+      "expected": "__TODO__ expected {{value}}",
+      "actual": "__TODO__ found {{value}}"
+    },
+    "settings": {
+      "title": "__TODO__ ADM schema",
+      "description": "__TODO__ The shared schema every Authority Relation reads its decision evidence from. An Authority Relation can override it. The schema must conform to the pinned ADM subset.",
+      "schemaLabel": "__TODO__ Schema (catalog.schema)",
+      "schemaPlaceholder": "__TODO__ catalog.schema",
+      "invalidFormat": "__TODO__ Use catalog.schema, for example demo.arf_adm.",
+      "clearHint": "__TODO__ Leave empty and save to clear the shared schema.",
+      "readOnly": "__TODO__ Only admins can change the ADM schema.",
+      "refusedHint": "__TODO__ The schema was not saved. Create or fix the tables and columns below, then save again.",
+      "conformanceLabel": "__TODO__ Conformance",
+      "notConfigured": "__TODO__ No schema is configured. Authority Relations have no evidence until one is set.",
+      "notChecked": "__TODO__ Not checked yet.",
+      "conformant": "__TODO__ Conformant with {{version}}",
+      "nonconformant": "__TODO__ Not conformant with {{version}}",
+      "unavailable": "__TODO__ Conformance could not be checked",
+      "saved": "__TODO__ ADM schema saved",
+      "copyDdl": "__TODO__ Copy DDL",
+      "downloadDdl": "__TODO__ Download DDL",
+      "ddlCopied": "__TODO__ DDL copied to the clipboard"
+    }
+  },
+  "dna": {
+    "empty": "__TODO__ Not measured yet. Compute the DNA-Coefficient to see the position and the magnitude.",
+    "loading": "__TODO__ Computing the DNA-Coefficient",
+    "magnitudeOfCeiling": "__TODO__ Magnitude {{magnitude}} of ceiling {{ceiling}}",
+    "overCeiling": "__TODO__ Above ceiling",
+    "withinCeiling": "__TODO__ Within ceiling",
+    "combinedPosition": "__TODO__ Combined position {{position}}",
+    "dimensionMagnitude": "__TODO__ magnitude {{value}}",
+    "definitionNote": "__TODO__ Definition completeness. Shown for information; it does not gate activation.",
+    "legacyNote": "__TODO__ Measured before ADM evidence (legacy run). Only the magnitude per dimension is known; no signed position."
   }
 }

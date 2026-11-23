@@ -35,6 +35,22 @@ export function authorityErrorMessage(
       return t('errors.selfAffirmation');
     case 'authority_permission_denied':
       return t('errors.permissionDenied');
+    case 'adm_schema_not_configured':
+      return t('adm.errors.notConfigured');
+    case 'adm_nonconformant':
+      return t('adm.errors.nonconformant');
+    case 'adm_query_failed':
+      return t('adm.errors.queryFailed');
+    case 'adm_query_timeout':
+      return t('adm.errors.queryTimeout');
+    case 'adm_no_warehouse':
+      return t('adm.errors.noWarehouse');
+    case 'adm_schema_invalid':
+      return t('adm.errors.schemaInvalid');
+    case 'evidence_slice_empty':
+      return t('adm.errors.evidenceSliceEmpty');
+    case 'evidence_slice_invalid':
+      return t('adm.errors.evidenceSliceInvalid');
     case 'authority_policy_in_use':
       return t('policy.errors.inUse', { names: Array.isArray(params?.cited_by) ? params.cited_by.join(', ') : '' });
     case 'authority_policy_not_found':

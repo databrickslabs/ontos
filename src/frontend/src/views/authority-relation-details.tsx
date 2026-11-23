@@ -8,12 +8,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink, History, Database, GitBranch } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink, History, GitBranch } from 'lucide-react';
 import { formatDna } from './authority-resolution';
 import { authorityErrorMessage } from '@/components/authority-resolution/authority-errors';
 import { RelativeDate } from '@/components/common/relative-date';
@@ -25,12 +24,13 @@ import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
 import ArConceptLinks from '@/components/authority-resolution/ar-concept-links';
 import { DomainContextView, RuleView } from '@/components/authority-resolution/domain-context-view';
+import DnaPositionDisplay from '@/components/authority-resolution/dna-position-display';
 import PolicyCitationView from '@/components/authority-resolution/policy-citation-view';
 import { MaturityInline } from '@/components/common/maturity-inline';
 import VersionNavigator from '@/components/common/version-navigator';
 import { DetailHeaderSkeleton, PanelSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
-import { operandKey, scopeRequestKeys, type AuthorityRelation, type ResolveResponse, type AuthorityReviewTracking, type AuthorityDnaRun, type AuthorityDecision } from '@/types/authority-resolution';
+import { operandKey, scopeRequestKeys, type AuthorityRelation, type EvidenceSlice, type ResolveResponse, type AuthorityReviewTracking, type AuthorityDnaRun, type AuthorityDecision } from '@/types/authority-resolution';
 
 /** Badge variant per verdict: approved solid, conditional muted, refusals red. */
 const verdictVariant = (verdict?: string | null) =>
@@ -76,67 +76,21 @@ function Tile({ label, value, hint }: { label: string; value: ReactNode; hint?: 
   );
 }
 
-/** Divergence colour bands: green (≤0.3), amber (≤0.6), red. */
-function dnaScoreColor(v: number): string {
-  return v <= 0.3 ? '#16a34a' : v <= 0.6 ? '#d97706' : '#dc2626';
-}
-
-function DnaGauge({ label, value }: { label: string; value: number }) {
-  const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
+/** The ADM evidence an AR reads: action codes, object scope, domain scope, window and sample. */
+function EvidenceSliceSummary({ slice, t }: { slice: EvidenceSlice; t: (key: string, opts?: any) => string }) {
   return (
-    <div className="flex items-center gap-2">
-      <div
-        className="relative flex items-center justify-center shrink-0"
-        style={{
-          width: 40, height: 40, borderRadius: '50%',
-          background: `conic-gradient(${dnaScoreColor(value)} 0% ${pct}%, hsl(var(--muted)) ${pct}% 100%)`,
-        }}
-      >
-        <div className="absolute inset-[5px] rounded-full bg-background flex items-center justify-center text-[10px] font-semibold">
-          {value.toFixed(2)}
-        </div>
+    <div className="space-y-1 text-xs">
+      <div className="flex flex-wrap gap-1">
+        {slice.action_codes.map((c) => <Badge key={c} variant="secondary" className="font-mono">{c}</Badge>)}
       </div>
-      <div className="text-xs capitalize">{label}</div>
+      <div>
+        {slice.object_refs.length > 0
+          ? t('details.evidenceObjects', { count: slice.object_refs.length })
+          : t('details.evidenceAllObjects')}
+      </div>
+      <div>{t('details.evidenceWindowSample', { days: slice.window_days, sample: slice.sample_size })}</div>
+      <div>{slice.domain_scope ? t('details.evidenceDomainScoped') : t('details.evidenceUnscoped')}</div>
     </div>
-  );
-}
-
-/** DNA-Coefficient tile with a per-dimension gauge breakdown on hover. */
-function DnaTile({ relation, t }: { relation: AuthorityRelation; t: (key: string, opts?: any) => string }) {
-  const dims = relation.dna_dimensions || null;
-  const value = formatDna(relation.dna_magnitude, relation.dna_direction);
-  // A value measured on an earlier draft is shown, but flagged for recompute.
-  const stale = relation.dna_current === false && relation.dna_magnitude != null;
-  if (!dims || Object.keys(dims).length === 0) {
-    return <Tile label={t('details.tileDnaco')} value={value} hint={stale ? t('details.dnaStale') : t('details.tileDnacoHint')} />;
-  }
-  return (
-    <HoverCard openDelay={150}>
-      <HoverCardTrigger asChild>
-        <div className="cursor-help">
-          <Tile label={t('details.tileDnaco')} value={value} hint={stale ? t('details.dnaStale') : t('details.tileDnacoHintHover')} />
-        </div>
-      </HoverCardTrigger>
-      <HoverCardContent className="w-72" align="start">
-        <div className="text-xs font-semibold mb-2">{t('details.dnacoDimensions')}</div>
-        <div className="space-y-2">
-          {Object.entries(dims).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => (
-            <DnaGauge key={k} label={k} value={Number(v)} />
-          ))}
-        </div>
-        <div className="text-[11px] text-muted-foreground mt-2">
-          {t('details.dnacoFormula', { value: (relation.dna_magnitude ?? 0).toFixed(2) })}
-          <span className="block opacity-80">{t('details.dnacoFormulaDescription')}</span>
-        </div>
-      </HoverCardContent>
-    </HoverCard>
-  );
-}
-
-function JsonBlock({ data }: { data: any }) {
-  if (data === null || data === undefined) return <span className="text-muted-foreground">—</span>;
-  return (
-    <pre className="text-xs bg-muted rounded p-3 overflow-x-auto">{JSON.stringify(data, null, 2)}</pre>
   );
 }
 
@@ -384,11 +338,33 @@ export default function AuthorityRelationDetails() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <DnaTile relation={relation} t={t} />
+        <Tile
+          label={t('details.tileDnaco')}
+          value={formatDna(relation.dna_magnitude, relation.dna_direction)}
+          hint={relation.dna_current === false && relation.dna_magnitude != null ? t('details.dnaStale') : t('details.tileDnacoHint')}
+        />
         <Tile label={t('details.tileUsage')} value={relation.usage_count ?? 0} />
         <Tile label={t('details.tileApproved')} value={relation.approved_count ?? 0} />
         <Tile label={t('details.tileDenied')} value={relation.denied_count ?? 0} />
       </div>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">{t('details.cardDnaco')}</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <DnaPositionDisplay
+            magnitude={relation.dna_magnitude}
+            position={relation.dna_position}
+            ceiling={relation.dna_max_threshold}
+            dimensions={relation.dna_dimensions}
+            loading={busy === 'compute'}
+          />
+          {relation.dna_measured_at && (
+            <div className="text-xs text-muted-foreground">
+              {t('details.dnaMeasuredAt')} <RelativeDate date={relation.dna_measured_at} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {relation.editable === false && (
         <Alert>
@@ -622,38 +598,23 @@ export default function AuthorityRelationDetails() {
             ) : (
               <div className="text-muted-foreground text-xs">{t('details.noCriteria')}</div>
             )}
-            <div className="pt-2 text-muted-foreground">{t('details.labelEvidenceSources')}</div>
-            {(relation.evidence_sources || []).length > 0 ? (
-              <div className="space-y-1">
-                {(relation.evidence_sources || []).map((s, i) => {
-                  // delta_table / asset sources resolve to a UC table FQN — link to
-                  // Catalog Commander to preview it. data_product refs aren't a table FQN.
-                  const linkable = (s.type === 'delta_table' || s.type === 'asset')
-                    && (s.ref || '').split('.').length >= 3;
-                  return (
-                    <div key={i} className="text-xs">
-                      <Badge variant="outline" className="mr-1">{t(`sourceType.${s.type}`, { defaultValue: s.type })}</Badge>
-                      {linkable ? (
-                        <a
-                          href={`/catalog-commander?table=${encodeURIComponent(s.ref)}`}
-                          className="font-mono text-primary hover:underline inline-flex items-center gap-1"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={t('details.linkCatalogCommander', { ref: s.ref })}
-                        >
-                          <Database className="h-3 w-3" />{s.ref}
-                        </a>
-                      ) : (
-                        <span className="font-mono">{s.ref}</span>
-                      )}
-                      {s.label ? ` — ${s.label}` : ''}
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="pt-2 text-muted-foreground">{t('details.labelEvidenceSlice')}</div>
+            {relation.evidence_slice ? (
+              <EvidenceSliceSummary slice={relation.evidence_slice} t={t} />
             ) : (
-              <JsonBlock data={relation.evidence_binding} />
+              <div className="text-muted-foreground text-xs">{t('details.noEvidenceSlice')}</div>
             )}
+            <div className="pt-2 text-muted-foreground">{t('details.labelAdmSchema')}</div>
+            <div className="text-xs flex flex-wrap items-center gap-2">
+              {relation.adm_schema ? (
+                <span className="font-mono">{relation.adm_schema}</span>
+              ) : (
+                <span className="text-muted-foreground">{t('details.admSchemaNone')}</span>
+              )}
+              {relation.adm_schema_override && (
+                <Badge variant="outline">{t('details.admSchemaOverridden')}</Badge>
+              )}
+            </div>
             <div className="pt-2 text-muted-foreground">{t('details.labelGovernsConceptsHint')}</div>
             <ArConceptLinks familyId={relation.version_family_id || relation.id} />
             <div className="pt-2 text-muted-foreground">{t('details.labelPrerequisites')}</div>

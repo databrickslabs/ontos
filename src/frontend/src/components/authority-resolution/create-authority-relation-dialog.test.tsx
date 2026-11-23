@@ -14,13 +14,15 @@ const mockGet = vi.fn();
 const mockPut = vi.fn();
 const mockPost = vi.fn();
 const mockToast = vi.fn();
+// Toggled per test: the override and the schedule are Admin-only.
+let mockIsAdmin = true;
 
 vi.mock('@/hooks/use-api', () => ({
   useApi: () => ({ get: mockGet, post: mockPost, put: mockPut }),
 }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }));
 vi.mock('@/stores/permissions-store', () => ({
-  usePermissions: () => ({ hasPermission: () => true, isLoading: false }),
+  usePermissions: () => ({ hasPermission: () => mockIsAdmin, isLoading: false }),
 }));
 vi.mock('@/hooks/use-teams', () => ({ useTeams: () => ({ teams: [] }) }));
 vi.mock('@/stores/project-store', () => ({
@@ -46,7 +48,7 @@ const relation = {
   resource_refs: [],
   domains: [],
   tags: [],
-  evidence_sources: [],
+  evidence_slice: null,
   criteria: [
     {
       id: 'c1', name: 'Approver allowlist', rule: "obj.actor_identity IN ['a']",
@@ -64,6 +66,7 @@ function renderDialog(rel: AuthorityRelation) {
 
 describe('CreateAuthorityRelationDialog for a non-editable version', () => {
   beforeEach(() => {
+    mockIsAdmin = true;
     mockGet.mockResolvedValue({ data: [] });
     mockPut.mockResolvedValue({ data: relation });
     mockPost.mockResolvedValue({ data: {} });
@@ -101,3 +104,105 @@ describe('CreateAuthorityRelationDialog for a non-editable version', () => {
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: tr('criteria.errors.weightInvalid') }));
   });
 });
+
+describe('CreateAuthorityRelationDialog evidence slice and ADM schema', () => {
+  const editable = { ...relation, editable: true } as AuthorityRelation;
+
+  beforeEach(() => {
+    mockIsAdmin = true;
+    mockGet.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/authority/adm-schema')) return { data: { schema: 'demo.arf_adm', adm_version: 'ADM v0.4', conformance: null } };
+      return { data: [] };
+    });
+    mockPut.mockResolvedValue({ data: editable });
+    mockPost.mockResolvedValue({ data: editable });
+  });
+
+  afterEach(async () => {
+    vi.clearAllMocks();
+    await i18n.changeLanguage('en');
+  });
+
+  it('enables the ADM schema override for an admin', async () => {
+    renderDialog({ ...editable, adm_schema_override: null });
+
+    expect(await screen.findByText(i18n.t('authority-resolution:editor.admSchema.shared', { schema: 'demo.arf_adm' }))).toBeInTheDocument();
+    expect(document.getElementById('adm-schema-override')).not.toBeDisabled();
+  });
+
+  it('disables the ADM schema override for a non-admin and shows the effective schema read-only', () => {
+    mockIsAdmin = false;
+    renderDialog({ ...editable, adm_schema: 'other.arf_adm', adm_schema_override: null });
+
+    const input = document.getElementById('adm-schema-override') as HTMLInputElement;
+    expect(input).toBeDisabled();
+    expect(input.value).toBe('other.arf_adm');
+    expect(screen.getByText(tr('editor.admSchema.adminOnly'))).toBeInTheDocument();
+  });
+
+  it('sends the stored override unchanged for a non-admin on save', async () => {
+    mockIsAdmin = false;
+    renderDialog({ ...editable, adm_schema_override: 'team.custom_adm' });
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common:actions.save') }));
+
+    await vi.waitFor(() => expect(mockPut).toHaveBeenCalled());
+    expect(mockPut.mock.calls[0][1]).toEqual(expect.objectContaining({ adm_schema_override: 'team.custom_adm' }));
+  });
+
+  it('blocks save with an invalid action code before any request is sent', () => {
+    renderDialog(editable);
+
+    const input = document.getElementById('evidence-action-codes') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Bad Code' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(screen.getByText(tr('editor.evidenceSlice.errors.actionCodeInvalid'))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common:actions.save') }));
+
+    expect(mockPut).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: tr('editor.evidenceSlice.invalidToast') }));
+  });
+
+  it('rejects a window outside 1 to 3650 days', () => {
+    renderDialog(editable);
+
+    fireEvent.change(document.getElementById('evidence-window-days') as HTMLInputElement, { target: { value: '0' } });
+
+    expect(screen.getByText(i18n.t('authority-resolution:editor.evidenceSlice.errors.windowDaysRange', { min: 1, max: 3650 }))).toBeInTheDocument();
+  });
+
+  it('sends the evidence slice shape on save', async () => {
+    renderDialog({
+      ...editable,
+      action: 'approve',
+      evidence_slice: { action_codes: ['approve', 'escalate'], object_refs: ['promo-1'], domain_scope: false, window_days: 30, sample_size: 200 },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common:actions.save') }));
+
+    await vi.waitFor(() => expect(mockPut).toHaveBeenCalled());
+    expect(mockPut.mock.calls[0][1].evidence_slice).toEqual({
+      action_codes: ['approve', 'escalate'], object_refs: ['promo-1'], domain_scope: false, window_days: 30, sample_size: 200,
+    });
+    expect(mockPut.mock.calls[0][1]).not.toHaveProperty('evidence_sources');
+  });
+
+  it('lists the findings of a refused non-conformant override', async () => {
+    mockPut.mockResolvedValue({
+      data: {}, error: 'not conformant', errorCode: 'adm_nonconformant',
+      errorParams: { schema: 'team.bad', findings: [{ code: 'missing_column', table: 'decisions', column: 'approved_at' }] },
+      status: 422,
+    });
+    renderDialog(editable);
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common:actions.save') }));
+
+    expect(await screen.findByText('approved_at', { exact: false })).toBeInTheDocument();
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+      description: tr('adm.errors.nonconformant'), variant: 'destructive',
+    }));
+  });
+});
+

@@ -40,10 +40,6 @@
     "tileDenied": "Denied",
     "tileDnaco": "DNA-Coefficient",
     "tileDnacoHint": "0.0 is best",
-    "tileDnacoHintHover": "0.0 is best — hover for dimensions",
-    "dnacoDimensions": "DNAco dimensions",
-    "dnacoFormula": "Overall = 1 − ∏(1 − dₙ) = {{value}}",
-    "dnacoFormulaDescription": "probability of divergence on ≥1 dimension",
     "activationRequires": "Activation requires the DNA-Coefficient to be measured and within its ceiling ({{threshold}}), and every required affirmation completed{{affirmed}}.",
     "notYetFullyAffirmed": "(not yet fully affirmed)",
     "cardApprovers": "Approvers (N-functional gate)",
@@ -75,8 +71,6 @@
     "labelDecisionCriteria": "Decision criteria",
     "criterion": "Criterion",
     "noCriteria": "No criteria — the gate is unconstrained (approves any request).",
-    "labelEvidenceSources": "Evidence sources",
-    "linkCatalogCommander": "Open {{ref}} in Catalog Commander",
     "labelGovernsConceptsHint": "Governs Business Concepts",
     "labelPrerequisites": "Requires (prerequisite ARs)",
     "required": "required",
@@ -116,7 +110,19 @@
     "testScopeCheck": "Scope check",
     "testScopeMissing": "missing",
     "affirmedEarlierDraft": "Affirmed an earlier draft",
-    "dnaStale": "Measured on an earlier draft; recompute"
+    "dnaStale": "Measured on an earlier draft; recompute",
+    "cardDnaco": "DNA-Coefficient",
+    "dnaMeasuredAt": "Measured",
+    "labelEvidenceSlice": "Evidence slice",
+    "noEvidenceSlice": "No evidence slice set.",
+    "labelAdmSchema": "ADM schema",
+    "admSchemaNone": "None configured",
+    "admSchemaOverridden": "overridden for this AR",
+    "evidenceObjects": "{{count}} specific objects",
+    "evidenceAllObjects": "All objects of these actions",
+    "evidenceWindowSample": "Window {{days}} days, sample {{sample}}",
+    "evidenceDomainScoped": "Domain-scoped rows",
+    "evidenceUnscoped": "Rows not domain-scoped"
   },
   "conceptLinks": {
     "failedLink": "Failed to link concept",
@@ -173,11 +179,6 @@
     "evidence": "Evidence",
     "ui": "UI"
   },
-  "sourceType": {
-    "delta_table": "Delta Table",
-    "data_product": "Data Product",
-    "asset": "Asset"
-  },
   "direction": {
     "actual-exceeds-documented": "Actual exceeds documented",
     "documented-exceeds-actual": "Documented exceeds actual",
@@ -201,7 +202,8 @@
       "dayOfWeek": "Day of week",
       "minuteOfHour": "Minute of hour",
       "recomputeFrequency": "Recompute frequency",
-      "dnaMaxThreshold": "Max DNA-Coefficient to activate"
+      "dnaMaxThreshold": "Max DNA-Coefficient to activate",
+      "admSchemaOverride": "Schema override (catalog.schema)"
     },
     "hints": {
       "slug": "Stable key agents use to call this AR. Shared by every version of the family.",
@@ -215,7 +217,6 @@
       "domainContext": "Domain-Context",
       "decisionCriteria": "Compliance Checks",
       "domains": "Domains",
-      "evidenceSources": "Evidence sources",
       "participants": "Participants",
       "requires": "Requires",
       "resourceRefs": "Resource refs",
@@ -224,18 +225,21 @@
       "tags": "Tags",
       "ownership": "Ownership & project",
       "rule": "Rule (ODRL)",
-      "justification": "Justification (policy reference)"
+      "justification": "Justification (policy reference)",
+      "evidenceSlice": "Evidence slice",
+      "admSchema": "ADM schema"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Checks the gate enforces after the rule (and the DNA-Coefficient measures divergence against). Each is a reusable <strong>Compliance Check</strong>.",
-      "evidenceSources": "Bind the past decisions the DNA-Coefficient is measured against. Add one or more sources — a <strong>Delta table</strong>, a <strong>Data Product</strong>, or an <strong>Asset</strong> (volume file, table, or view). Each maps its columns to the canonical AR elements via the column map.",
       "participants": "The N-functional gate and review. <strong>Approvers</strong> count toward the affirmation gate. <strong> Reviewers</strong> are interviewed during the review process to confirm the relation reflects reality. A principal can be both.",
       "requires": "Prerequisite ARs: each must resolve <strong>approved</strong> before this one decides. Keyed by the family slug (not the version) so this AR keeps working when a prerequisite is version-bumped. Save requires this AR to carry a slug of its own.",
       "resourceRefs": "Where field values come from. Instead of a plain literal, back a canonical field (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) with a typed pointer. An <strong> Ontos entity</strong> ref re-resolves against the knowledge graph at eval time so the value stays current when the underlying concept, product, or domain changes. <strong> MCP tool</strong> refs call a Unity Catalog MCP service at decision time; criteria can compare against the resolved value as <code>obj.ref_{{fieldPlaceholder}}</code> (dots become underscores, e.g. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "How often the DNA-Coefficient is recomputed against the evidence sources.",
       "domainContext": "The bounded scope this authority holds in, and its parameters. A request outside the scope gets no_authority; the rule and the checks read the parameters as ctx.<key>.",
       "rule": "What the authority permits, as ODRL: <strong>constraints</strong> that must hold, <strong>duties</strong> still to fulfil (the decision is <strong>conditional</strong> until then, e.g. a co-approval) and <strong>prohibitions</strong>. Compare with values or variables (<code>ctx.threshold</code>, <code>req.market</code>).",
-      "justification": "The policy reference this Authority Relation rests on. Its validity is shown, not enforced. Clause labels are free text; the rule and the checks can cite them."
+      "justification": "The policy reference this Authority Relation rests on. Its validity is shown, not enforced. Clause labels are free text; the rule and the checks can cite them.",
+      "evidenceSlice": "The past decisions the DNA-Coefficient is measured against: the ADM observations for these <strong>action codes</strong> over the window. Each observation is read from the shared ADM schema (or this AR's override).",
+      "admSchema": "The shared ADM schema is the default for every Authority Relation. An admin can override it for this AR. The override is checked for conformance when saved."
     },
     "fields": {
       "name": {
@@ -263,23 +267,6 @@
       "project": "Project",
       "noTeam": "No team",
       "noProject": "No project"
-    },
-    "evidenceSources": {
-      "type": {
-        "deltaTable": "Delta table",
-        "dataProduct": "Data Product",
-        "asset": "Asset"
-      },
-      "placeholders": {
-        "deltaTable": "catalog.schema.promotion_decisions",
-        "dataProduct": "data product id",
-        "asset": "asset FQN (table/view/volume)",
-        "label": "Optional label",
-        "columnMap": "Column map (JSON)"
-      },
-      "messages": {
-        "dataProductNotYetSupported": "Data Product sources are recorded but not yet read for DNAco (v1)."
-      }
     },
     "affirmations": {
       "selectRoleLabel": "Select a role…",
@@ -322,7 +309,6 @@
       "appServicePrincipal": "Ontos app service principal"
     },
     "buttons": {
-      "addEvidenceSource": "Add evidence source",
       "addParticipant": "Add participant",
       "addPrerequisite": "Add prerequisite",
       "addResourceRef": "Add resource ref",
@@ -338,11 +324,38 @@
       "veto": "Veto"
     },
     "validation": {
-      "nameRequired": "Name is required",
-      "invalidColumnMap": "Invalid column map",
-      "columnMapError": "Column map for \"{{ref}}\" must be valid JSON."
+      "nameRequired": "Name is required"
     },
-    "immutableNotice": "Active and earlier versions are immutable. Create a New Version to change the definition."
+    "immutableNotice": "Active and earlier versions are immutable. Create a New Version to change the definition.",
+    "admSchema": {
+      "placeholder": "Empty uses the shared schema",
+      "shared": "Shared schema: {{schema}}",
+      "sharedNotConfigured": "No shared schema is configured.",
+      "adminOnly": "Only admins can change the override. The effective schema is shown.",
+      "invalidFormat": "Use catalog.schema, for example demo.arf_adm.",
+      "nonconformant": "The override does not conform to the ADM subset. Fix it or clear it."
+    },
+    "evidenceSlice": {
+      "actionCodes": "Action codes",
+      "actionCodesHint": "Lowercase ADM action codes, for example approve. Press Enter or comma to add. Up to {{max}}.",
+      "actionCodePlaceholder": "Add an action code",
+      "objectRefs": "Object refs (optional)",
+      "objectRefsHint": "Narrow to exact object_ref values. Leave empty to read every object of these actions. Up to {{max}}.",
+      "objectRefPlaceholder": "Add an object ref",
+      "domainScope": "Apply the domain-context scope to the observed rows",
+      "windowDays": "Window (days)",
+      "sampleSize": "Sample size",
+      "removeChip": "Remove {{value}}",
+      "invalidToast": "Check the evidence slice.",
+      "errors": {
+        "actionCodesRequired": "Add at least one action code.",
+        "actionCodesTooMany": "Use at most 20 action codes.",
+        "actionCodeInvalid": "Action codes are lowercase, start with a letter, and use letters, digits, _ or -.",
+        "objectRefsTooMany": "Use at most 200 object refs.",
+        "windowDaysRange": "Enter a whole number of days from {{min}} to {{max}}.",
+        "sampleSizeRange": "Enter a whole number from {{min}} to {{max}}."
+      }
+    }
   },
   "criteria": {
     "description": "Derived and aggregate predicates the rule doesn't express. The gate approves only when every check passes; a check that fails for a past decision counts as a divergence in the DNA-Coefficient, weighted and signed by its direction. Rules read the request as obj.<field> / req.<key> and the parameters as ctx.<param>.",
@@ -469,10 +482,10 @@
       "decisionCriteria": "Decision criteria",
       "criterion": "Criterion",
       "empty": "—",
-      "evidenceSources": "Evidence sources",
-      "evidenceBinding": "Evidence binding",
       "justificationChain": "Justification chain",
-      "rule": "Rule"
+      "rule": "Rule",
+      "evidenceSlice": "Evidence slice",
+      "admSchema": "ADM schema"
     },
     "questionnaire": {
       "confirmation": "Confirmation",
@@ -755,5 +768,56 @@
       "affirmations_stale": "Affirmations were given on an earlier draft. Affirm the current definition again.",
       "transition_not_allowed": "This status change is not allowed from the current status."
     }
+  },
+  "adm": {
+    "errors": {
+      "notConfigured": "No ADM schema is configured. Set it in Settings > Maturity Levels.",
+      "nonconformant": "The ADM schema does not match the ADM subset this version reads. Fix the tables and columns listed below.",
+      "queryFailed": "The ADM schema could not be queried.",
+      "queryTimeout": "The ADM evidence query timed out. Try a smaller window or sample.",
+      "noWarehouse": "No SQL warehouse is available to read the ADM evidence.",
+      "schemaInvalid": "The ADM schema must be catalog.schema.",
+      "evidenceSliceEmpty": "The evidence slice needs at least one action code.",
+      "evidenceSliceInvalid": "The evidence slice is not valid. Check the action codes, object refs, window and sample size."
+    },
+    "findings": {
+      "title": "ADM conformance findings",
+      "missing_table": "Missing table",
+      "missing_column": "Missing column",
+      "type_mismatch": "Type mismatch",
+      "expected": "expected {{value}}",
+      "actual": "found {{value}}"
+    },
+    "settings": {
+      "title": "ADM schema",
+      "description": "The shared schema every Authority Relation reads its decision evidence from. An Authority Relation can override it. The schema must conform to the pinned ADM subset.",
+      "schemaLabel": "Schema (catalog.schema)",
+      "schemaPlaceholder": "catalog.schema",
+      "invalidFormat": "Use catalog.schema, for example demo.arf_adm.",
+      "clearHint": "Leave empty and save to clear the shared schema.",
+      "readOnly": "Only admins can change the ADM schema.",
+      "refusedHint": "The schema was not saved. Create or fix the tables and columns below, then save again.",
+      "conformanceLabel": "Conformance",
+      "notConfigured": "No schema is configured. Authority Relations have no evidence until one is set.",
+      "notChecked": "Not checked yet.",
+      "conformant": "Conformant with {{version}}",
+      "nonconformant": "Not conformant with {{version}}",
+      "unavailable": "Conformance could not be checked",
+      "saved": "ADM schema saved",
+      "copyDdl": "Copy DDL",
+      "downloadDdl": "Download DDL",
+      "ddlCopied": "DDL copied to the clipboard"
+    }
+  },
+  "dna": {
+    "empty": "Not measured yet. Compute the DNA-Coefficient to see the position and the magnitude.",
+    "loading": "Computing the DNA-Coefficient",
+    "magnitudeOfCeiling": "Magnitude {{magnitude}} of ceiling {{ceiling}}",
+    "overCeiling": "Above ceiling",
+    "withinCeiling": "Within ceiling",
+    "combinedPosition": "Combined position {{position}}",
+    "dimensionMagnitude": "magnitude {{value}}",
+    "definitionNote": "Definition completeness. Shown for information; it does not gate activation.",
+    "legacyNote": "Measured before ADM evidence (legacy run). Only the magnitude per dimension is known; no signed position."
   }
 }

@@ -24,6 +24,8 @@ import RuleEditor, {
   itemsFromRule, ruleFromItems, type ItemDraft,
 } from '@/components/authority-resolution/rule-editor';
 import { authorityErrorMessage } from '@/components/authority-resolution/authority-errors';
+import EvidenceSliceEditor from '@/components/authority-resolution/evidence-slice-editor';
+import AdmFindingsList from '@/components/authority-resolution/adm-findings-list';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useApi } from '@/hooks/use-api';
 import { usePermissions } from '@/stores/permissions-store';
@@ -37,6 +39,8 @@ import {
   type AuthorityRelation, type AffirmationInput,
   type PrerequisiteInput, type AuthorityRelationSlug,
   type ResourceRefInput, type EntityRefCandidate, type ResolverAuth, type AuthorityPolicy,
+  type AdmConformanceFinding, type AdmSchemaState, type EvidenceSliceDraft,
+  ADM_SCHEMA_PATTERN, draftFromEvidenceSlice, evidenceSliceErrors, evidenceSliceFromDraft, newEvidenceSliceDraft,
 } from '@/types/authority-resolution';
 import type { BusinessRoleRead } from '@/types/business-role';
 
@@ -50,29 +54,9 @@ interface Props {
   onNewVersion?: () => void;
 }
 
-const DEFAULT_COLUMN_MAP = `{
-  "actor_identity": "approver",
-  "action": "action",
-  "value": "discount",
-  "escalated": "escalated",
-  "cosign_present": "cosign",
-  "object_id": "promo_id"
-}`;
-
 // Participants start empty — the author adds them and picks an organizational
 // Business Role (from Settings) per participant.
 const DEFAULT_AFFIRMATIONS: AffirmationInput[] = [];
-
-interface EvidenceSourceInput {
-  type: string;      // delta_table | data_product | asset
-  ref: string;       // table FQN / data product id / asset FQN
-  label: string;
-  columnMap: string; // JSON text
-}
-
-const newEvidenceSource = (): EvidenceSourceInput => ({
-  type: 'delta_table', ref: '', label: '', columnMap: DEFAULT_COLUMN_MAP,
-});
 
 export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCreated, relation, onNewVersion }: Props) {
   const { t } = useTranslation(['authority-resolution', 'common']);
@@ -99,7 +83,11 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   const [ruleItems, setRuleItems] = useState<ItemDraft[]>([]);
   const [dnaMax, setDnaMax] = useState('0.3');
   const [criteriaRows, setCriteriaRows] = useState<CriterionRow[]>([]);
-  const [evidenceSources, setEvidenceSources] = useState<EvidenceSourceInput[]>([]);
+  const [evidenceDraft, setEvidenceDraft] = useState<EvidenceSliceDraft>(newEvidenceSliceDraft());
+  // The per-AR ADM schema override (Admin-only to change), and the shared schema it falls back to.
+  const [admOverride, setAdmOverride] = useState('');
+  const [sharedAdmSchema, setSharedAdmSchema] = useState<string | null>(null);
+  const [admFindings, setAdmFindings] = useState<AdmConformanceFinding[]>([]);
   const [domainIds, setDomainIds] = useState<string[]>([]);
   const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(null);
   const [ownerTeamId, setOwnerTeamId] = useState('');
@@ -134,7 +122,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
     setName(''); setSlug(''); setDescription(''); setActorRole(''); setActorIdentity('');
     setAction('approve'); setObjectType('data_product'); setObjectId('');
     setScopeRows([]); setParamRows([]); setRuleItems([]); setDnaMax('0.3'); setCriteriaRows([]);
-    setEvidenceSources([]); setDomainIds([]); setPrimaryDomainId(null);
+    setEvidenceDraft(newEvidenceSliceDraft()); setAdmOverride(''); setAdmFindings([]);
+    setDomainIds([]); setPrimaryDomainId(null);
     setOwnerTeamId(''); setProjectId(currentProject?.id || '');
     setAffirmations(DEFAULT_AFFIRMATIONS); setTags([]); setScheduleCron(null);
     setPrerequisites([]); setResourceRefs([]); setResolverAuth('obo');
@@ -182,6 +171,17 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
     return () => { cancelled = true; };
   }, [open, get]);
 
+  // The shared ADM schema: the default every AR reads unless it overrides it.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await get<AdmSchemaState>('/api/authority/adm-schema');
+      if (!cancelled) setSharedAdmSchema(typeof data?.schema === 'string' ? data.schema : null);
+    })();
+    return () => { cancelled = true; };
+  }, [open, get]);
+
   // Projects the user can assign (same source as the Data Product dialog).
   useEffect(() => {
     if (open) fetchUserProjects();
@@ -192,7 +192,6 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   useEffect(() => {
     if (!open) return;
     if (relation) {
-      const eb = relation.evidence_binding || null;
       setName(relation.name || '');
       setSlug(relation.slug || '');
       setDescription(relation.description || '');
@@ -206,23 +205,11 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       setRuleItems(itemsFromRule(relation.rule));
       setDnaMax(relation.dna_max_threshold != null ? String(relation.dna_max_threshold) : '0.3');
       setCriteriaRows(rowsFromCriteria(relation.criteria));
-      const srcs = relation.evidence_sources || [];
-      if (srcs.length > 0) {
-        setEvidenceSources(srcs.map((s) => ({
-          type: s.type || 'delta_table',
-          ref: s.ref || '',
-          label: s.label || '',
-          columnMap: JSON.stringify(s.column_map || {}, null, 2),
-        })));
-      } else if (eb?.source_table_fqn) {
-        // Migrate a legacy single binding into the multi-source editor.
-        setEvidenceSources([{
-          type: 'delta_table', ref: eb.source_table_fqn, label: '',
-          columnMap: JSON.stringify(eb.column_map || {}, null, 2),
-        }]);
-      } else {
-        setEvidenceSources([]);
-      }
+      setEvidenceDraft(relation.evidence_slice
+        ? draftFromEvidenceSlice(relation.evidence_slice)
+        : newEvidenceSliceDraft(relation.action || 'approve'));
+      setAdmOverride(relation.adm_schema_override || '');
+      setAdmFindings([]);
       setDomainIds((relation.domains || []).map((d) => d.domain_id));
       setPrimaryDomainId((relation.domains || []).find((d) => d.is_primary)?.domain_id ?? null);
       setOwnerTeamId(relation.owner_team_id || '');
@@ -337,20 +324,17 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       return;
     }
 
-    const evidence_sources: any[] = [];
-    for (const s of evidenceSources) {
-      if (!s.ref.trim()) continue;
-      let parsedMap: Record<string, string> = {};
-      if (s.columnMap.trim()) {
-        try {
-          parsedMap = JSON.parse(s.columnMap);
-        } catch (e) {
-          toast({ title: t('editor.validation.invalidColumnMap'), description: t('editor.validation.columnMapError', { ref: s.ref }), variant: 'destructive' });
-          return;
-        }
-      }
-      evidence_sources.push({ type: s.type, ref: s.ref.trim(), label: s.label.trim() || undefined, column_map: parsedMap });
+    if (evidenceSliceErrors(evidenceDraft).length > 0) {
+      toast({ title: t('editor.evidenceSlice.invalidToast'), variant: 'destructive' });
+      return;
     }
+    const override = admOverride.trim();
+    if (override && !ADM_SCHEMA_PATTERN.test(override)) {
+      toast({ title: t('editor.admSchema.invalidFormat'), variant: 'destructive' });
+      return;
+    }
+    // The override is Admin-only on the server: a non-admin sends the stored value back unchanged.
+    const admOverridePayload = isAdmin ? (override || null) : (relation?.adm_schema_override ?? null);
 
     const dc = toDomainContext(scopeRows, paramRows);
     if (dc.error) {
@@ -379,7 +363,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       authority_policy_id: policyId || null,
       policy_clause_refs: policyId ? clauseRefs : [],
       criteria: rowsToPayload(criteriaRows),
-      evidence_sources,
+      evidence_slice: evidenceSliceFromDraft(evidenceDraft),
+      adm_schema_override: admOverridePayload,
       dna_max_threshold: dnaMaxNumber,
       domain_ids: domainIds,
       primary_domain_id: primaryDomainId,
@@ -416,6 +401,11 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
     if (error) {
       // Pydantic bounds error on dna_max_threshold: show it on the field.
       if (status === 422 && /dna_max_threshold/.test(error)) setDnaServerError(true);
+      // A non-conformant ADM schema override is refused with its findings: list them under the field.
+      if (errorCode === 'adm_nonconformant') {
+        const findings = errorParams?.findings;
+        setAdmFindings(Array.isArray(findings) ? findings as AdmConformanceFinding[] : []);
+      }
       toast({ title: t('common:toast.failed'), description: authorityErrorMessage(t, error, errorCode, errorParams), variant: 'destructive' });
       return;
     }
@@ -563,52 +553,42 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
 
           <fieldset disabled={locked} className="min-w-0 space-y-4 border-0 p-0 m-0">
           <SectionTitle
-            title={t('editor.sections.evidenceSources')}
-            info={<Trans i18nKey="editor.sectionDescriptions.evidenceSources" ns="authority-resolution" components={{ strong: <strong />, }} />}
+            title={t('editor.sections.evidenceSlice')}
+            info={<Trans i18nKey="editor.sectionDescriptions.evidenceSlice" ns="authority-resolution" components={{ strong: <strong />, }} />}
           />
-          {evidenceSources.map((s, idx) => (
-            <div key={idx} className="rounded-md border p-3 space-y-2">
-              <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
-                <NativeSelect
-                  className="w-40"
-                  value={s.type}
-                  onChange={(e) => setEvidenceSources((prev) => prev.map((x, i) => i === idx ? { ...x, type: e.target.value } : x))}
-                >
-                  <option value="delta_table">{t('editor.evidenceSources.type.deltaTable')}</option>
-                  <option value="data_product">{t('editor.evidenceSources.type.dataProduct')}</option>
-                  <option value="asset">{t('editor.evidenceSources.type.asset')}</option>
-                </NativeSelect>
-                <Input
-                  value={s.ref}
-                  onChange={(e) => setEvidenceSources((prev) => prev.map((x, i) => i === idx ? { ...x, ref: e.target.value } : x))}
-                  placeholder={s.type === 'delta_table' ? t('editor.evidenceSources.placeholders.deltaTable') : s.type === 'data_product' ? t('editor.evidenceSources.placeholders.dataProduct') : t('editor.evidenceSources.placeholders.asset')}
-                />
-                <Button variant="ghost" size="icon" onClick={() => setEvidenceSources((prev) => prev.filter((_, i) => i !== idx))}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+          <EvidenceSliceEditor value={evidenceDraft} onChange={setEvidenceDraft} />
+
+          <SectionTitle
+            title={t('editor.sections.admSchema')}
+            info={<Trans i18nKey="editor.sectionDescriptions.admSchema" ns="authority-resolution" components={{ strong: <strong />, }} />}
+          />
+          <div className="space-y-1">
+            <Label htmlFor="adm-schema-override">{t('editor.labels.admSchemaOverride')}</Label>
+            <Input
+              id="adm-schema-override"
+              className="max-w-md font-mono"
+              value={isAdmin ? admOverride : (relation?.adm_schema ?? sharedAdmSchema ?? '')}
+              disabled={!isAdmin}
+              aria-invalid={(isAdmin && admOverride.trim() !== '' && !ADM_SCHEMA_PATTERN.test(admOverride.trim())) || undefined}
+              placeholder={t('editor.admSchema.placeholder')}
+              onChange={(e) => { setAdmOverride(e.target.value); setAdmFindings([]); }}
+            />
+            <p className="text-xs text-muted-foreground">
+              {sharedAdmSchema
+                ? t('editor.admSchema.shared', { schema: sharedAdmSchema })
+                : t('editor.admSchema.sharedNotConfigured')}
+            </p>
+            {!isAdmin && <p className="text-xs text-muted-foreground">{t('editor.admSchema.adminOnly')}</p>}
+            {isAdmin && admOverride.trim() !== '' && !ADM_SCHEMA_PATTERN.test(admOverride.trim()) && (
+              <p className="text-xs text-destructive">{t('editor.admSchema.invalidFormat')}</p>
+            )}
+            {admFindings.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <p className="text-xs text-destructive">{t('editor.admSchema.nonconformant')}</p>
+                <AdmFindingsList findings={admFindings} />
               </div>
-              <Input
-                value={s.label}
-                onChange={(e) => setEvidenceSources((prev) => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
-                placeholder={t('editor.evidenceSources.placeholders.label')}
-              />
-              <div className="space-y-1">
-                <Label className="text-xs">{t('editor.evidenceSources.placeholders.columnMap')}</Label>
-                <Textarea
-                  value={s.columnMap}
-                  onChange={(e) => setEvidenceSources((prev) => prev.map((x, i) => i === idx ? { ...x, columnMap: e.target.value } : x))}
-                  rows={6}
-                  className="font-mono text-xs"
-                />
-              </div>
-              {s.type === 'data_product' && (
-                <p className="text-xs text-muted-foreground">{t('editor.evidenceSources.messages.dataProductNotYetSupported')}</p>
-              )}
-            </div>
-          ))}
-          <Button variant="outline" size="sm" onClick={() => setEvidenceSources((prev) => [...prev, newEvidenceSource()])}>
-            <Plus className="h-4 w-4 mr-1" /> {t('editor.buttons.addEvidenceSource')}
-          </Button>
+            )}
+          </div>
 
           <SectionTitle
             title={t('editor.sections.participants')}

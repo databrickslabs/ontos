@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session, object_session
+from sqlalchemy.orm.exc import UnmappedInstanceError
 
 from src.common.api_errors import CodedValueError, client_failure
 from src.common.review_access import AUTHORITY_RELATION_FQN_PREFIX, authority_relation_fqn
@@ -615,50 +616,35 @@ class AuthorityResolutionManager(SearchableAsset):
 
     @staticmethod
     def _has_justification(relation: AuthorityRelationDb) -> bool:
-        """A cited policy counts when it is a valid root and clauses are cited;
-        without one, the legacy free-form justification chain counts."""
-        policy_id = getattr(relation, "authority_policy_id", None)
-        if not policy_id:
-            return bool(relation.justification_chain)
-        db = object_session(relation)
-        policy = authority_policy_repo.get(db, policy_id) if db is not None else None
-        return bool(policy is not None and apol.policy_root_problem(policy) is None
-                    and (relation.policy_clause_refs or []))
+        """A cited policy reference is the documented basis. Its validity doesn't
+        change this (ARF 1.2.0: references are metadata); without a reference the
+        legacy free-form justification chain counts."""
+        if getattr(relation, "authority_policy_id", None):
+            return True
+        return bool(relation.justification_chain)
 
     def _validate_citation(
         self, db: Session, policy_id: Optional[str], clause_refs: Optional[List[str]],
         criteria: Optional[List[Any]], rule: Optional[Dict[str, Any]],
-        current_policy_id: Optional[str] = None,
     ) -> Optional[List[str]]:
-        """Check an AR's policy citation; returns the cleaned clause refs.
+        """Check an AR's policy reference; returns the cleaned clause labels.
 
-        The policy must exist; a withdrawn one can't be newly cited (an AR
-        already citing it keeps the citation until it is re-pointed). A draft
-        may be cited while both are authored; resolve refuses until it is
-        approved. Every clause the AR, its checks or its rule items cite must
-        be one of the policy's.
+        The reference must exist. Its validity is not checked: a reference is
+        metadata (ARF 1.2.0), and a check can enforce validity if the author adds
+        one. Clause labels are free text, checked against nothing; they need a
+        reference to be cited against.
         """
         refs = [str(r).strip() for r in clause_refs or [] if str(r).strip()]
         cited = list(refs)
         cited += [str((c.dict() if hasattr(c, "dict") else c).get("policy_clause_ref") or "").strip()
                   for c in criteria or []]
         cited += apol._rule_clauses(rule)
-        cited = [r for r in cited if r]
         if not policy_id:
-            if cited:
-                raise AuthorityInvalidError("Cite an Authority Policy before citing its clauses.")
+            if any(cited):
+                raise AuthorityInvalidError("Cite a policy reference before citing its clauses.")
             return refs or None
-        policy = authority_policy_repo.get(db, policy_id)
-        if policy is None:
-            raise AuthorityInvalidError(f"Authority Policy '{policy_id}' not found.")
-        if policy.status == apol.STATUS_WITHDRAWN and policy_id != current_policy_id:
-            raise AuthorityInvalidError(f"Authority Policy {policy.policy_key} v{policy.version} is withdrawn.")
-        known = set(apol.clause_refs(policy))
-        unknown = sorted({r for r in cited if r not in known})
-        if unknown:
-            raise AuthorityInvalidError(
-                f"{policy.policy_key} v{policy.version} has no clause {', '.join(unknown)}."
-            )
+        if authority_policy_repo.get(db, policy_id) is None:
+            raise AuthorityInvalidError(f"Policy reference '{policy_id}' not found.")
         return list(dict.fromkeys(refs)) or None
 
     # ------------------------------------------------------------------ CRUD
@@ -1065,7 +1051,6 @@ class AuthorityResolutionManager(SearchableAsset):
                 db, policy_id, refs,
                 criteria if criteria is not None else existing_criteria,
                 data["rule"] if "rule" in data else relation.rule,
-                current_policy_id=relation.authority_policy_id,
             )
 
         before = self._stored_view(db, relation)
@@ -2662,8 +2647,6 @@ class AuthorityResolutionManager(SearchableAsset):
         on each AR's dna-runs, aggregate DNAco, and Comments timeline, and an
         active AR that drifts past its ceiling is auto-flagged ``needs_review``.
         """
-        # Policies past their effective_to flag the active ARs citing them first.
-        policy_sweep = apol.AuthorityPolicyManager(relation_manager=self).sweep_expired(db)
         relations = authority_relation_repo.list_all(db)
         due = [r for r in relations if getattr(r, "schedule_cron", None)]
         results: List[Dict[str, Any]] = []
@@ -2681,7 +2664,7 @@ class AuthorityResolutionManager(SearchableAsset):
                     "relation_id": r.id, "status": "failed",
                     "error": client_failure_text("scheduled DNA-Coefficient recompute", e),
                 })
-        return {"scheduled": len(due), "results": results, "policy_sweep": policy_sweep}
+        return {"scheduled": len(due), "results": results}
 
     # Canonical request fields the criteria rules reference (``obj.<field>``); the
     # evidence column_map normalises each source's columns onto these names, so the
@@ -2801,10 +2784,6 @@ class AuthorityResolutionManager(SearchableAsset):
     def _check_activation(self, db: Session, relation: AuthorityRelationDb) -> None:
         """The gates for activation: an enabled check (B5); a measurement and the
         approvals of the current definition (B6); the ceiling. Raises AuthorityStatusError."""
-        if relation.authority_policy_id:
-            problem = apol.policy_root_problem(authority_policy_repo.get(db, relation.authority_policy_id))
-            if problem:
-                raise AuthorityStatusError(f"Cannot activate: {problem}.", reason="policy_not_in_force")
         if not self._load_criteria(relation):
             raise AuthorityStatusError(
                 "Add at least one enabled decision check before activating this version.",
@@ -2906,10 +2885,8 @@ class AuthorityResolutionManager(SearchableAsset):
 
     # --------------------------------------------------------- runtime gate
 
-    def _policy_citation(
-        self, db: Session, relation: AuthorityRelationDb, *, with_documents: bool = True,
-    ) -> Optional[Dict[str, Any]]:
-        return apol.AuthorityPolicyManager().citation(db, relation, with_documents=with_documents)
+    def _policy_citation(self, db: Session, relation: AuthorityRelationDb) -> Optional[Dict[str, Any]]:
+        return apol.AuthorityPolicyManager().citation(db, relation)
 
     @staticmethod
     def _flat_domain_context(relation: AuthorityRelationDb) -> Dict[str, Any]:
@@ -2951,9 +2928,22 @@ class AuthorityResolutionManager(SearchableAsset):
             if r.get("iri"):
                 flat[ref_key(r["field_path"]) + "_iri"] = r["iri"]
         params = arule.normalize_domain_context(relation.domain_context)["params"]
-        return arule.evaluation_object(
+        obj = arule.evaluation_object(
             authority_dna.normalize_row(flat), params, extra_ctx=self._ref_ctx(resolved_refs),
         )
+        # ARF 1.2.0: the cited reference's validity, read as the checks see it
+        # (``justification.cited / valid_from / valid_to / expired``), computed now.
+        # It overrides any request key of the same name.
+        # A dry-run probe (validate route) isn't a mapped row: it reads as uncited.
+        try:
+            db = object_session(relation)
+        except UnmappedInstanceError:
+            db = None
+        obj[arule.NS_JUSTIFICATION] = (
+            apol.AuthorityPolicyManager().justification(db, relation) if db is not None
+            else apol.justification_view(None)
+        )
+        return obj
 
     def _evaluate_decision(
         self,
@@ -3200,15 +3190,8 @@ class AuthorityResolutionManager(SearchableAsset):
                 "policy": None,
             }
 
-        # No valid policy root (missing, draft, withdrawn, outside its effective
-        # window): nothing grounds the authority (ADM POLICY_ROOT_MISSING).
         citation = self._policy_citation(db, relation)
-        if citation and citation.get("problem"):
-            return self._finalize_resolve(
-                db, relation, req, VERDICT_NO_AUTHORITY, citation["problem"], [], [], record,
-                policy=citation,
-            )
-        policy_label = f"{citation['policy_key']} v{citation['version']}" if citation else None
+        policy_label = f"{citation['policy_key']} v{citation['version']}" if citation and citation.get("policy_key") else None
 
         # The AR applies only inside its scope; outside it there is no authority
         # to decide with (prerequisites are gated by their own scope).
@@ -3388,8 +3371,8 @@ class AuthorityResolutionManager(SearchableAsset):
         policy: Any = _UNSET,
     ) -> Dict[str, Any]:
         pending_duties = pending_duties or []
-        # The cited policy version, its clauses and document hashes: what the
-        # decision was grounded in, as it stood at decision time.
+        # The cited reference and its clause labels: what the decision was grounded in,
+        # as it stood at decision time.
         if policy is _UNSET:
             policy = self._policy_citation(db, relation)
         provenance: Optional[Dict[str, Any]] = None
@@ -3433,7 +3416,7 @@ class AuthorityResolutionManager(SearchableAsset):
             "resolved_refs": resolved_refs,
             "scope_check": scope_check or [],
             "pending_duties": pending_duties,
-            "policy": {k: v for k, v in policy.items() if k != "documents"} if policy else None,
+            "policy": policy or None,
             # Internal (popped by ``resolve``): this AR's own duties, without the
             # ones inherited from prerequisites (the walker records those per hop).
             "own_pending_duties": own_pending_duties or [],
@@ -3571,9 +3554,6 @@ class AuthorityResolutionManager(SearchableAsset):
             if relation is None:
                 continue
             slug = self._family_slug_of(db, relation)
-            # Resolve would refuse an AR without a valid policy root.
-            policy_problem = (apol.policy_root_problem(authority_policy_repo.get(db, relation.authority_policy_id))
-                              if relation.authority_policy_id else None)
 
             ar_values = self._ar_context_values(db, relation, rctx)
             scope = arule.normalize_domain_context(relation.domain_context)["scope"]
@@ -3621,14 +3601,13 @@ class AuthorityResolutionManager(SearchableAsset):
                 "context_conflicts": conflicts,
                 "domain_overlap": domain_overlap,
                 "unmet_prerequisites": unmet,
-                "policy_problem": policy_problem,
                 "maturity_level_order": relation.maturity_level_order,
                 "dna_magnitude": relation.dna_magnitude,
             })
 
         def _rank(c: Dict[str, Any]) -> Tuple:
             return (
-                bool(c["context_conflicts"] or c["policy_problem"]),
+                bool(c["context_conflicts"]),
                 bool(c["unmet_prerequisites"]),
                 not c["domain_overlap"],
                 c["hops"],
@@ -3645,7 +3624,7 @@ class AuthorityResolutionManager(SearchableAsset):
             best = min(key(r) for r in rows)
             return [r for r in rows if key(r) == best]
 
-        pool = [c for c in candidates if not c["context_conflicts"] and not c["policy_problem"]]
+        pool = [c for c in candidates if not c["context_conflicts"]]
         if wanted_domains and any(c["domain_overlap"] for c in pool):
             pool = [c for c in pool if c["domain_overlap"]]
         # Unmet prerequisites demote: a viable AR beats a nearer blocked one.

@@ -1,25 +1,29 @@
-"""Authority Policy manager (ARF justification basis).
+"""Policy reference manager (ARF justification metadata, ARF 1.2.0, #1294 batch 5).
 
-An Authority Policy is the documented basis an Authority Relation derives its
-authority from (ARF paper §3.7, ADM ``policy_authority_basis``). ARs cite one
-policy *version* and the clauses they implement; checks cite the clause they
-enforce. The resolver refuses (``no_authority``) when the cited policy is not
-a valid root: missing, draft, withdrawn, not yet effective or expired (ADM
-``POLICY_ROOT_MISSING``).
+A Policy reference is the source document an Authority Relation's authority rests
+on, carried as metadata: name, external id, description, version, validity window,
+an optional link out and the owner team. Ontos does not read the document, and
+nothing about a reference is enforced: a draft, expired or superseded reference
+does not change what an AR decides, and it does not gate activation. The AR's
+approvers check the document themselves.
 
-Lifecycle: ``draft`` → ``approved`` → ``superseded`` (a successor version was
-approved; the old one stays valid until the successor takes effect) or
-``withdrawn``. Only drafts are editable. Withdrawing a policy, or a policy
-reaching its ``effective_to``, flips the active ARs citing it to
-``needs_review``. Source documents are Metadata documents on the policy
-(``entity_type = authority_policy``) and carry their SHA-256.
+Validity is exposed to Compliance Checks (``justification.*`` in the evaluation
+object, see :func:`justification_view`) so an author can add a check that enforces
+it at resolve, or run one on a schedule.
+
+Versions: a new version is a new record in the same family (``version_family_id``)
+that points at the one it replaces (``parent_policy_id``). Many ARs can cite one
+reference; the reference lists them (the cited-by list), and a reference cited by
+an AR version can't be deleted.
 """
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.db_models.authority_policy import AuthorityPolicyDb
@@ -32,24 +36,32 @@ logger = get_logger(__name__)
 ENTITY_TYPE = "authority_policy"
 FEATURE_ID = "authority-resolution"
 
-POLICY_TYPES = ("DOA", "BOARD_MANDATE", "REGULATION", "PROCUREMENT_POLICY", "SOP", "EXCEPTION")
+# A new version starts with its own validity window; the rest is carried over.
+_COPY_FIELDS = ("policy_key", "title", "summary", "owner_team_id", "url", "clauses")
+_EDITABLE = ("title", "summary", "owner_team_id", "url", "valid_from", "valid_to", "clauses")
 
-STATUS_DRAFT = "draft"
-STATUS_APPROVED = "approved"
-STATUS_SUPERSEDED = "superseded"
-STATUS_WITHDRAWN = "withdrawn"
-POLICY_STATUSES = (STATUS_DRAFT, STATUS_APPROVED, STATUS_SUPERSEDED, STATUS_WITHDRAWN)
-# Statuses a policy can be a valid root in (inside its effective window).
-_ROOT_STATUSES = (STATUS_APPROVED, STATUS_SUPERSEDED)
 
-# The effective window is set per version (at approval), so it isn't copied.
-_COPY_FIELDS = (
-    "policy_key", "title", "policy_type", "summary", "owner_team_id", "jurisdiction", "clauses",
-)
-_EDITABLE = (
-    "title", "policy_type", "summary", "owner_team_id", "jurisdiction",
-    "effective_from", "effective_to", "clauses",
-)
+class AuthorityPolicyError(CodedValueError):
+    """A reference the author must fix; the message says what. Coded for the UI."""
+
+    code = "authority_policy_invalid"
+    http_status = 400
+
+
+class AuthorityPolicyNotFoundError(AuthorityPolicyError):
+    code = "authority_policy_not_found"
+    http_status = 404
+
+
+class AuthorityPolicyConflictError(AuthorityPolicyError):
+    """A change that the reference's current state refuses (409)."""
+
+    code = "authority_policy_conflict"
+    http_status = 409
+
+
+class AuthorityPolicyInUseError(AuthorityPolicyConflictError):
+    code = "authority_policy_in_use"
 
 
 def utcnow() -> datetime:
@@ -73,62 +85,77 @@ def _iso(dt: Optional[datetime]) -> Optional[str]:
 
 
 def normalize_clauses(clauses: Any) -> List[Dict[str, Any]]:
-    """Validate clauses (unique, non-empty ``ref``) into their stored shape."""
+    """Clause labels (unique, non-empty ``ref``) in their stored shape."""
     out: List[Dict[str, Any]] = []
     seen = set()
     for c in clauses or []:
         if hasattr(c, "model_dump"):
             c = c.model_dump()
         if not isinstance(c, dict):
-            raise ValueError("Each clause must be an object with a 'ref'.")
+            raise AuthorityPolicyError("Each clause must be an object with a 'ref'.")
         ref = str(c.get("ref") or "").strip()
         if not ref:
-            raise ValueError("Each clause needs a reference (e.g. '§7.1').")
+            raise AuthorityPolicyError("Each clause needs a reference (e.g. '§7.1').")
         if ref.casefold() in seen:
-            raise ValueError(f"Clause '{ref}' appears twice.")
+            raise AuthorityPolicyError(f"Clause '{ref}' appears twice.", ref=ref)
         seen.add(ref.casefold())
         clause: Dict[str, Any] = {"ref": ref}
         for k in ("title", "text"):
             v = str(c.get(k) or "").strip()
             if v:
                 clause[k] = v
-        limits = {k: v for k, v in (c.get("limits") or {}).items() if v not in (None, "")}
-        if limits:
-            clause["limits"] = limits
-        conditions = [str(x).strip() for x in c.get("conditions") or [] if str(x).strip()]
-        if conditions:
-            clause["conditions"] = conditions
         out.append(clause)
     return out
 
 
-def clause_refs(policy: Optional[AuthorityPolicyDb]) -> List[str]:
-    return [c.get("ref") for c in (getattr(policy, "clauses", None) or []) if c.get("ref")]
+def _rule_clauses(rule: Any) -> List[str]:
+    """Clause labels cited on an AR rule's constraints, duties and prohibitions."""
+    if not isinstance(rule, dict):
+        return []
+    perm = rule.get("permission") or {}
+    items = list(perm.get("constraint") or []) + list(perm.get("duty") or []) + list(rule.get("prohibition") or [])
+    return [str(i["clause"]) for i in items if isinstance(i, dict) and i.get("clause")]
 
 
-def policy_root_problem(policy: Optional[AuthorityPolicyDb], at: Optional[datetime] = None) -> Optional[str]:
-    """Why ``policy`` can't ground an authority at ``at`` (default now), or None."""
+def justification_view(policy: Optional[AuthorityPolicyDb], at: Optional[datetime] = None) -> Dict[str, Any]:
+    """What Compliance Checks see as ``justification`` (ARF 1.2.0).
+
+    ``cited`` is False when no reference is cited, so a check that requires one
+    fails with its own message. ``expired`` is computed at ``at`` (default now) and
+    is False without a reference or without a ``valid_to``. Nothing here is enforced
+    by the reference itself.
+    """
     if policy is None:
-        return "policy root missing"
-    label = f"{policy.policy_key} v{policy.version}"
-    if policy.status == STATUS_WITHDRAWN:
-        return f"policy root withdrawn: {label}"
-    if policy.status not in _ROOT_STATUSES:
-        return f"policy root not approved: {label} is '{policy.status}'"
+        return {"cited": False, "valid_from": None, "valid_to": None, "expired": False}
+    end = _aware(policy.valid_to)
     at = _aware(at) or utcnow()
-    start, end = _aware(policy.effective_from), _aware(policy.effective_to)
-    if start is None or at < start:
-        return f"policy root not yet effective: {label}"
-    if end is not None and at >= end:
-        return f"policy root expired: {label} ended {end.date().isoformat()}"
-    return None
+    return {
+        "cited": True,
+        "valid_from": _iso(policy.valid_from),
+        "valid_to": _iso(policy.valid_to),
+        "expired": bool(end is not None and at >= end),
+    }
+
+
+def _check_window(valid_from: Any, valid_to: Any) -> None:
+    start, end = _aware(valid_from), _aware(valid_to)
+    if start and end and end <= start:
+        raise AuthorityPolicyError("valid_to must be after valid_from.")
+
+
+def _check_url(url: Optional[str]) -> Optional[str]:
+    """Only http(s) links: the link is rendered as an anchor, so no other scheme."""
+    value = (url or "").strip()
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise AuthorityPolicyError("The link must be an http or https URL.", field="url")
+    return value
 
 
 class AuthorityPolicyManager(SearchableAsset):
-    """Stateless; ``relation_manager`` (the AR manager) flags dependent ARs."""
-
-    def __init__(self, relation_manager: Optional[Any] = None):
-        self.relation_manager = relation_manager
+    """Stateless. Reads and writes references; ARs read them through :meth:`citation`."""
 
     # ------------------------------------------------------------ search
 
@@ -140,19 +167,16 @@ class AuthorityPolicyManager(SearchableAsset):
         if not getattr(policy, "id", None):
             return None
         family_id = policy.version_family_id or policy.id
-        clauses = " ".join(f"{c.get('ref')} {c.get('title') or ''}" for c in policy.clauses or [])
         return SearchIndexItem(
             id=self._search_id(family_id),
             type="authority-policy",
             feature_id=FEATURE_ID,
             title=f"{policy.policy_key} — {policy.title}",
-            description=" ".join(x for x in (policy.summary or "", clauses) if x).strip(),
+            description=policy.summary or "",
             link=f"/authority-resolution/policies/{policy.id}",
             tags=self._tag_names(db, policy.id),
             extra_data={
-                "status": policy.status,
                 "version": policy.version,
-                "policy_type": policy.policy_type,
                 "owner": self._team_name(db, policy.owner_team_id),
             },
         )
@@ -184,7 +208,7 @@ class AuthorityPolicyManager(SearchableAsset):
                     if item:
                         items.append(item)
         except Exception as e:
-            logger.error(f"Error preparing Authority Policies for search: {e}", exc_info=True)
+            logger.error(f"Error preparing Policy references for search: {e}", exc_info=True)
         return items
 
     # ----------------------------------------------------------- helpers
@@ -230,19 +254,14 @@ class AuthorityPolicyManager(SearchableAsset):
 
     @staticmethod
     def _representative(versions: List[AuthorityPolicyDb]) -> Optional[AuthorityPolicyDb]:
-        """The version a list shows for a family: newest approved, else newest."""
-        if not versions:
-            return None
-        return next((v for v in versions if v.status == STATUS_APPROVED), versions[0])
+        """The version a list shows for a family: the newest one."""
+        return versions[0] if versions else None
 
     @staticmethod
     def _validate_fields(data: Dict[str, Any]) -> None:
-        ptype = data.get("policy_type")
-        if ptype is not None and ptype not in POLICY_TYPES:
-            raise ValueError(f"Unknown policy type '{ptype}'; expected one of {', '.join(POLICY_TYPES)}.")
-        start, end = _aware(data.get("effective_from")), _aware(data.get("effective_to"))
-        if start and end and end <= start:
-            raise ValueError("effective_to must be after effective_from.")
+        _check_window(data.get("valid_from"), data.get("valid_to"))
+        if "url" in data:
+            data["url"] = _check_url(data["url"])
 
     # -------------------------------------------------------------- CRUD
 
@@ -266,16 +285,18 @@ class AuthorityPolicyManager(SearchableAsset):
     def get_versions(self, db: Session, policy_id: str) -> List[AuthorityPolicyDb]:
         policy = authority_policy_repo.get(db, policy_id)
         if not policy:
-            raise ValueError("Authority Policy not found")
+            raise AuthorityPolicyNotFoundError("Policy reference not found.")
         return authority_policy_repo.get_family_versions(db, family_id=policy.version_family_id or policy.id)
 
     def create_policy(self, db: Session, payload, current_user: Optional[str] = None) -> AuthorityPolicyDb:
         data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
-        data["policy_type"] = data.get("policy_type") or "DOA"
         self._validate_fields(data)
         key = str(data["policy_key"]).strip()
         if any(p.policy_key == key for p in authority_policy_repo.list_all(db)):
-            raise ValueError(f"A policy with key '{key}' already exists; create a new version of it instead.")
+            raise AuthorityPolicyConflictError(
+                f"A reference with the external id '{key}' already exists; create a new version of it instead.",
+                policy_key=key,
+            )
         pid = str(uuid.uuid4())
         policy = authority_policy_repo.create(db, obj_in={
             "id": pid,
@@ -283,13 +304,11 @@ class AuthorityPolicyManager(SearchableAsset):
             "version": str(data.get("version") or "1").strip(),
             "version_family_id": pid,
             "title": data["title"].strip(),
-            "policy_type": data["policy_type"],
             "summary": data.get("summary"),
             "owner_team_id": data.get("owner_team_id") or None,
-            "jurisdiction": data.get("jurisdiction"),
-            "effective_from": data.get("effective_from"),
-            "effective_to": data.get("effective_to"),
-            "status": STATUS_DRAFT,
+            "url": data.get("url"),
+            "valid_from": data.get("valid_from"),
+            "valid_to": data.get("valid_to"),
             "clauses": normalize_clauses(data.get("clauses")),
             "created_by": current_user,
         })
@@ -298,28 +317,19 @@ class AuthorityPolicyManager(SearchableAsset):
         return policy
 
     def update_policy(self, db: Session, policy_id: str, payload, current_user: Optional[str] = None) -> Optional[AuthorityPolicyDb]:
+        """Corrections to a reference. A changed document is a new version (create_new_version)."""
         policy = authority_policy_repo.get(db, policy_id)
         if not policy:
             return None
-        if policy.status != STATUS_DRAFT:
-            raise PermissionError(
-                f"Policy {policy.policy_key} v{policy.version} is {policy.status}; "
-                "create a new version to change it."
-            )
         data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else dict(payload)
         tags = data.pop("tags", None)
-        merged = {k: getattr(policy, k) for k in ("policy_type", "effective_from", "effective_to")}
-        merged.update(data)
+        merged = {k: getattr(policy, k) for k in ("valid_from", "valid_to")}
+        merged.update({k: data[k] for k in ("valid_from", "valid_to") if k in data})
         self._validate_fields(merged)
         if "clauses" in data:
             data["clauses"] = normalize_clauses(data["clauses"])
-            dropped = set(clause_refs(policy)) - {c["ref"] for c in data["clauses"]}
-            cited = self._cited_refs(db, [policy.id]) & dropped
-            if cited:
-                raise ValueError(
-                    f"Clause(s) {', '.join(sorted(cited))} are cited by Authority Relations; "
-                    "remove the citations first."
-                )
+        if "url" in data:
+            data["url"] = _check_url(data["url"])
         update = {k: v for k, v in data.items() if k in _EDITABLE}
         if "title" in update and update["title"]:
             update["title"] = update["title"].strip()
@@ -329,30 +339,29 @@ class AuthorityPolicyManager(SearchableAsset):
         return policy
 
     def delete_policy(self, db: Session, policy_id: str) -> bool:
-        """Delete a draft or withdrawn version that no AR cites. Raises ``ValueError``."""
+        """Delete a reference that no AR version cites. Raises :class:`AuthorityPolicyError`."""
         policy = authority_policy_repo.get(db, policy_id)
         if not policy:
             return False
-        if policy.status in _ROOT_STATUSES:
-            raise ValueError("An approved policy can't be deleted; withdraw it first.")
         citing = authority_policy_repo.list_citing_relations(db, policy_ids=[policy.id])
         if citing:
             names = ", ".join(sorted({r.name for r in citing}))
-            raise ValueError(f"The policy is cited by {names}; remove those citations first.")
+            raise AuthorityPolicyInUseError(
+                f"The reference is cited by {names}; remove those citations first.",
+                cited_by=sorted({r.name for r in citing}),
+            )
         family_id = policy.version_family_id or policy.id
         others = [v for v in authority_policy_repo.get_family_versions(db, family_id=family_id) if v.id != policy.id]
         if others and policy.id == family_id:
-            raise ValueError("This is the first version of its family; delete the newer versions first.")
+            raise AuthorityPolicyConflictError(
+                "This is the first version of its family; delete the newer versions first.",
+            )
         # Successors keep their lineage pointing at what this version derived from.
         for child in authority_policy_repo.list_children(db, policy_id=policy.id):
             child.parent_policy_id = policy.parent_policy_id
-        from src.controller.metadata_manager import MetadataManager
-        metadata = MetadataManager()
-        _, paths = metadata.remove_all_for_entity(db, entity_type=ENTITY_TYPE, entity_id=policy.id)
         self._set_tags(db, policy.id, [], None)
         authority_policy_repo.remove(db, id=policy.id)
         db.flush()
-        metadata.delete_document_files_after_commit(db, paths)
         if others:
             self._reindex(db, others[0])
         else:
@@ -363,14 +372,17 @@ class AuthorityPolicyManager(SearchableAsset):
         self, db: Session, policy_id: str, new_version: str,
         change_summary: Optional[str] = None, current_user: Optional[str] = None,
     ) -> Optional[AuthorityPolicyDb]:
-        """A draft successor (``wasDerivedFrom`` the source) with the source's clauses."""
+        """A new record for a new version of the source document (``parent_policy_id`` = the source)."""
         source = authority_policy_repo.get(db, policy_id)
         if not source:
             return None
         family_id = source.version_family_id or source.id
         new_version = new_version.strip()
         if any(v.version == new_version for v in authority_policy_repo.get_family_versions(db, family_id=family_id)):
-            raise ValueError(f"Version {new_version} already exists for {source.policy_key}.")
+            raise AuthorityPolicyConflictError(
+                f"Version {new_version} already exists for {source.policy_key}.",
+                version=new_version,
+            )
         fields = {f: getattr(source, f) for f in _COPY_FIELDS}
         fields.update({
             "id": str(uuid.uuid4()),
@@ -378,186 +390,50 @@ class AuthorityPolicyManager(SearchableAsset):
             "version_family_id": family_id,
             "parent_policy_id": source.id,
             "change_summary": change_summary,
-            "status": STATUS_DRAFT,
+            "valid_from": None,
+            "valid_to": None,
             "created_by": current_user,
         })
         policy = authority_policy_repo.create(db, obj_in=fields)
         tags = self._tag_names(db, source.id)
         if tags:
             self._set_tags(db, policy.id, [{"fully_qualified_name": t} for t in tags], current_user)
-        self._log_timeline(db, ENTITY_TYPE, policy.id,
-                           f"Version {new_version} drafted from v{source.version}.")
         self._reindex(db, policy)
         return policy
 
-    # --------------------------------------------------------- lifecycle
-
-    def set_status(
-        self, db: Session, policy_id: str, payload, current_user: Optional[str] = None,
-    ) -> Tuple[Optional[AuthorityPolicyDb], Optional[str]]:
-        """Approve or withdraw a policy version. Returns ``(policy, error)``."""
-        policy = authority_policy_repo.get(db, policy_id)
-        if not policy:
-            return None, "not_found"
-        data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else dict(payload)
-        status = data.get("status")
-        if status == STATUS_APPROVED:
-            return self._approve(db, policy, data, current_user)
-        if status == STATUS_WITHDRAWN:
-            return self._withdraw(db, policy, data.get("reason"), current_user)
-        return policy, f"Status '{status}' can't be set directly; expected '{STATUS_APPROVED}' or '{STATUS_WITHDRAWN}'."
-
-    def _approve(self, db: Session, policy: AuthorityPolicyDb, data: Dict[str, Any], user: Optional[str]):
-        if policy.status != STATUS_DRAFT:
-            return policy, f"Only a draft can be approved; this version is {policy.status}."
-        if not policy.clauses:
-            return policy, "A policy needs at least one clause before it can be approved."
-        start = _aware(data.get("effective_from") or policy.effective_from)
-        # An explicit null clears an end date the draft carries.
-        end = _aware(data["effective_to"] if "effective_to" in data else policy.effective_to)
-        if start is None:
-            return policy, "Approval needs an effective date."
-        if end is not None and end <= start:
-            return policy, "effective_to must be after effective_from."
-        approver = (data.get("approved_by") or user or "").strip()
-        if not approver:
-            return policy, "Approval needs an approver."
-        evidence_id = data.get("approval_evidence_document_id") or policy.approval_evidence_document_id
-        if evidence_id and not any(d["id"] == str(evidence_id) for d in self.documents(db, policy.id)):
-            return policy, "The approval evidence must be a document attached to this policy."
-
-        policy = authority_policy_repo.update(db, db_obj=policy, obj_in={
-            "status": STATUS_APPROVED, "approved_by": approver, "approved_at": utcnow(),
-            "effective_from": start, "effective_to": end,
-            "approval_evidence_document_id": str(evidence_id) if evidence_id else None,
-        })
-        # ``approved_by`` names the approving person or body (it may differ from
-        # who records it); the timeline keeps the authenticated recorder.
-        recorder = f" (recorded by {user})" if user and user != approver else ""
-        self._log_timeline(db, ENTITY_TYPE, policy.id,
-                           f"Approved by {approver}{recorder}, effective {start.date().isoformat()}.")
-
-        # One approved version per family: every other approved version is
-        # superseded and stays a valid root until this one takes effect.
-        family_id = policy.version_family_id or policy.id
-        for older in authority_policy_repo.get_family_versions(db, family_id=family_id):
-            if older.id == policy.id or older.status != STATUS_APPROVED:
-                continue
-            older_end = _aware(older.effective_to)
-            new_end = start if older_end is None or older_end > start else older_end
-            authority_policy_repo.update(db, db_obj=older, obj_in={
-                "status": STATUS_SUPERSEDED, "effective_to": new_end,
-            })
-            self._log_timeline(db, ENTITY_TYPE, older.id,
-                               f"Superseded by v{policy.version} from {start.date().isoformat()}.")
-            label = f"{older.policy_key} v{older.version}"
-            if new_end <= utcnow():
-                # A backdated successor ends the old window now: flag at once.
-                self._flag_dependents(db, [older], f"Cited policy {label} was superseded by "
-                                      f"v{policy.version} (effective {start.date().isoformat()})")
-                continue
-            for rel in authority_policy_repo.list_citing_relations(db, policy_ids=[older.id]):
-                self._log_timeline(
-                    db, "authority_relation", rel.id,
-                    f"Cited policy {label} is superseded by v{policy.version} from "
-                    f"{start.date().isoformat()}; cite the new version before then, "
-                    "or this Authority Relation loses its policy root.",
-                )
-        self._reindex(db, policy)
-        return policy, None
-
-    def _withdraw(self, db: Session, policy: AuthorityPolicyDb, reason: Optional[str], user: Optional[str]):
-        if policy.status not in _ROOT_STATUSES:
-            return policy, f"Only an approved or superseded policy can be withdrawn; this version is {policy.status}."
-        policy = authority_policy_repo.update(db, db_obj=policy, obj_in={
-            "status": STATUS_WITHDRAWN, "withdrawn_reason": (reason or "").strip() or None,
-        })
-        label = f"{policy.policy_key} v{policy.version}"
-        self._log_timeline(db, ENTITY_TYPE, policy.id,
-                           f"Withdrawn by {user or 'unknown'}" + (f": {reason.strip()}" if reason and reason.strip() else "."))
-        self._flag_dependents(db, [policy], f"Cited policy {label} was withdrawn")
-        self._reindex(db, policy)
-        return policy, None
-
-    def _flag_dependents(self, db: Session, policies: List[AuthorityPolicyDb], why: str) -> List[str]:
-        """Active ARs citing ``policies`` → ``needs_review`` (with a timeline note)."""
-        from src.repositories.authority_resolution_repository import authority_relation_repo
-        flagged: List[str] = []
-        for rel in authority_policy_repo.list_citing_relations(db, policy_ids=[p.id for p in policies]):
-            if rel.status != "active":
-                continue
-            authority_relation_repo.update(db, db_obj=rel, obj_in={"status": "needs_review"})
-            self._log_timeline(db, "authority_relation", rel.id,
-                               f"{why}; status set to needs_review until it cites a valid policy.")
-            flagged.append(rel.id)
-            if self.relation_manager is not None:
-                self.relation_manager._reindex(db, rel)
-        return flagged
-
-    def sweep_expired(self, db: Session, at: Optional[datetime] = None) -> Dict[str, Any]:
-        """Flag active ARs whose cited policy has reached its ``effective_to``."""
-        at = _aware(at) or utcnow()
-        expired = [p for p in authority_policy_repo.list_all(db)
-                   if p.status in _ROOT_STATUSES and p.effective_to is not None and _aware(p.effective_to) <= at]
-        flagged: List[str] = []
-        for p in expired:
-            flagged += self._flag_dependents(
-                db, [p], f"Cited policy {p.policy_key} v{p.version} expired on {_aware(p.effective_to).date().isoformat()}")
-        return {"expired_policies": [p.id for p in expired], "flagged_relations": flagged}
-
     # ------------------------------------------------------------- reads
 
-    def _cited_refs(self, db: Session, policy_ids: List[str]) -> set:
-        """Clause refs the citing ARs (and their checks) use."""
-        refs = set()
-        for rel in authority_policy_repo.list_citing_relations(db, policy_ids=policy_ids):
-            refs.update(rel.policy_clause_refs or [])
-            refs.update(c.policy_clause_ref for c in rel.criteria or [] if getattr(c, "policy_clause_ref", None))
-            refs.update(_rule_clauses(rel.rule))
-        return refs
-
-    def documents(self, db: Session, policy_id: str) -> List[Dict[str, Any]]:
-        """The policy's source documents with their SHA-256 (the hashed evidence)."""
-        from src.db_models.metadata import DocumentMetadataDb
-        rows = (db.query(DocumentMetadataDb)
-                .filter(DocumentMetadataDb.entity_type == ENTITY_TYPE, DocumentMetadataDb.entity_id == policy_id)
-                .order_by(DocumentMetadataDb.created_at.asc()).all())
-        return [{
-            "id": str(d.id), "title": d.title, "filename": d.original_filename,
-            "content_type": d.content_type, "size_bytes": d.size_bytes,
-            "sha256": getattr(d, "content_sha256", None),
-        } for d in rows]
-
     def dependents(self, db: Session, policy_id: str) -> List[Dict[str, Any]]:
+        """The cited-by list: Authority Relations (any version) citing this reference."""
         return [{
             "id": r.id, "name": r.name, "version": r.version, "status": r.status,
             "clause_refs": r.policy_clause_refs or [],
         } for r in authority_policy_repo.list_citing_relations(db, policy_ids=[policy_id])]
 
-    def citation(self, db: Session, relation: AuthorityRelationDb, *, with_documents: bool = True) -> Optional[Dict[str, Any]]:
-        """What an AR cites, for its read view and decision provenance."""
+    def justification(self, db: Session, relation: AuthorityRelationDb, at: Optional[datetime] = None) -> Dict[str, Any]:
+        """The ``justification`` the checks see for this AR, computed now (or at ``at``)."""
+        policy_id = getattr(relation, "authority_policy_id", None)
+        policy = authority_policy_repo.get(db, policy_id) if policy_id else None
+        return justification_view(policy, at)
+
+    def citation(self, db: Session, relation: AuthorityRelationDb) -> Optional[Dict[str, Any]]:
+        """What an AR cites, for its read view and decision provenance (no documents)."""
         if not getattr(relation, "authority_policy_id", None):
             return None
         policy = authority_policy_repo.get(db, relation.authority_policy_id)
-        refs = list(relation.policy_clause_refs or [])
         out: Dict[str, Any] = {
-            "authority_policy_id": relation.authority_policy_id, "clause_refs": refs,
-            "problem": policy_root_problem(policy),
+            "authority_policy_id": relation.authority_policy_id,
+            "clause_refs": list(relation.policy_clause_refs or []),
         }
         if policy is None:
             return out
-        by_ref = {c.get("ref"): c for c in policy.clauses or []}
+        view = justification_view(policy)
         out.update({
             "policy_key": policy.policy_key, "version": policy.version, "title": policy.title,
-            "status": policy.status, "policy_type": policy.policy_type,
+            "url": policy.url,
             # ISO strings: the citation is stored in decision provenance (JSON).
-            "effective_from": _iso(policy.effective_from), "effective_to": _iso(policy.effective_to),
-            "parent_policy_id": policy.parent_policy_id,
-            "clauses": [by_ref[r] for r in refs if r in by_ref],
+            "valid_from": view["valid_from"], "valid_to": view["valid_to"], "expired": view["expired"],
         })
-        if with_documents:
-            out["documents"] = [{"id": d["id"], "filename": d["filename"], "sha256": d["sha256"]}
-                                for d in self.documents(db, policy.id)]
         return out
 
     def to_read_dict(self, db: Session, policy: AuthorityPolicyDb) -> Dict[str, Any]:
@@ -570,6 +446,7 @@ class AuthorityPolicyManager(SearchableAsset):
                     for t in TagsManager().list_assigned_tags(db, entity_id=policy.id, entity_type=ENTITY_TYPE)]
         except Exception:  # pragma: no cover - tags are best-effort
             pass
+        view = justification_view(policy)
         return {
             "id": policy.id,
             "policy_key": policy.policy_key,
@@ -580,33 +457,17 @@ class AuthorityPolicyManager(SearchableAsset):
             "parent_version": parent.version if parent else None,
             "change_summary": policy.change_summary,
             "title": policy.title,
-            "policy_type": policy.policy_type,
             "summary": policy.summary,
             "owner_team_id": policy.owner_team_id,
             "owner_team_name": self._team_name(db, policy.owner_team_id),
-            "jurisdiction": policy.jurisdiction,
-            "effective_from": _utc(policy.effective_from),
-            "effective_to": _utc(policy.effective_to),
-            "status": policy.status,
-            "root_problem": policy_root_problem(policy),
-            "approved_by": policy.approved_by,
-            "approved_at": _utc(policy.approved_at),
-            "approval_evidence_document_id": policy.approval_evidence_document_id,
-            "withdrawn_reason": policy.withdrawn_reason,
+            "url": policy.url,
+            "valid_from": _utc(policy.valid_from),
+            "valid_to": _utc(policy.valid_to),
+            "expired": view["expired"],
             "clauses": policy.clauses or [],
-            "documents": self.documents(db, policy.id),
             "dependent_count": len(authority_policy_repo.list_citing_relations(db, policy_ids=[policy.id])),
             "tags": tags,
             "created_by": policy.created_by,
             "created_at": policy.created_at,
             "updated_at": policy.updated_at,
         }
-
-
-def _rule_clauses(rule: Any) -> List[str]:
-    """Clause refs cited on an AR rule's constraints, duties and prohibitions."""
-    if not isinstance(rule, dict):
-        return []
-    perm = rule.get("permission") or {}
-    items = list(perm.get("constraint") or []) + list(perm.get("duty") or []) + list(rule.get("prohibition") or [])
-    return [str(i["clause"]) for i in items if isinstance(i, dict) and i.get("clause")]

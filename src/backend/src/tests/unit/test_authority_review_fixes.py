@@ -247,7 +247,7 @@ def test_the_arf_demo_pack_matches_the_authority_models():
 
     pack = (Path(__file__).resolve().parents[2] / "data" / "demo_data_arf.sql").read_text()
     inserts = _pack_inserts(pack)
-    for table in ("authority_criteria", "authority_prerequisites", "compliance_policies"):
+    for table in ("authority_criteria", "authority_prerequisites", "compliance_policies", "authority_policies"):
         model = Base.metadata.tables[table]
         for columns in inserts[table]:
             unknown = set(columns) - {c.name for c in model.columns}
@@ -258,6 +258,11 @@ def test_the_arf_demo_pack_matches_the_authority_models():
     # The retired shapes are gone from the pack.
     assert all("compliance_policy_id" not in cols for cols in inserts["authority_criteria"])
     assert all("relation_family_slug" not in cols for cols in inserts["authority_prerequisites"])
+    # Policy references are metadata: no approval, lifecycle or document columns (ARF 1.2.0).
+    retired = {"status", "approved_by", "approved_at", "withdrawn_reason", "approval_evidence_document_id",
+               "effective_from", "effective_to", "policy_type", "jurisdiction"}
+    assert all(not (set(cols) & retired) for cols in inserts["authority_policies"])
+    assert len(inserts["authority_policies"]) == 1
     # Every check a maturity gate points at is still defined in the pack.
     import re
     gate_policies = set(re.findall(r"'(0110[0-9a-f-]{32})', true", pack))

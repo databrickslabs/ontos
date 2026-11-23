@@ -67,7 +67,9 @@ KIND_DUTY = "duty"                # unfulfilled duty: the permission is conditio
 # Reserved evaluation namespaces (Compliance DSL ``ctx.x`` / ``req.x``).
 NS_CTX = "ctx"
 NS_REQ = "req"
-RESERVED_KEYS = (NS_CTX, NS_REQ)
+# ARF 1.2.0: the cited policy reference's validity (cited, valid_from, valid_to, expired).
+NS_JUSTIFICATION = "justification"
+RESERVED_KEYS = (NS_CTX, NS_REQ, NS_JUSTIFICATION)
 
 OPERATORS = ("eq", "neq", "lt", "lteq", "gt", "gteq", "isAnyOf", "isNoneOf")
 _DSL_OPS = {"eq": "=", "neq": "!=", "lt": "<", "lteq": "<=", "gt": ">", "gteq": ">="}

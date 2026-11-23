@@ -171,5 +171,7 @@ def test_arf_pack_recovers_all_ar_rows():
     # constraints / duties (authority_relations.rule), not criteria.
     assert len(by_table["authority_criteria"].pk_values) == 7
     assert len(by_table["authority_prerequisites"].pk_values) == 2
+    # Seven policy references (ARF 1.2.0: metadata rows, no lifecycle).
+    assert len(by_table["authority_policies"].pk_values) == 7
     assert len(by_table["authority_resource_refs"].pk_values) == 2
     assert len(by_table["entity_semantic_links"].pk_values) == 1

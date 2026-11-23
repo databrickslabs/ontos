@@ -1,15 +1,19 @@
-"""SQLAlchemy model for the Authority Policy (ARF justification basis).
+"""SQLAlchemy model for a Policy reference (the ARF justification metadata).
 
-An **Authority Policy** is the documented basis an Authority Relation's
-authority derives from: a delegation-of-authority schedule, a board mandate,
-a regulation, a procurement policy, an SOP or a recorded exception (ARF paper
-§3.7 ``arf:PolicyDocument``; ADM ``policy_authority_basis``). ARs cite one
-policy *version* plus the clauses they implement; the source documents are
-Metadata documents on the policy, stored with their SHA-256.
+A **Policy reference** points at the source document an Authority Relation's
+authority rests on (a delegation-of-authority schedule, a board mandate, a
+regulation, an SOP). Ontos keeps the reference only: name, external id,
+description, version, validity window, an optional link out and the owner team.
+The document itself stays where it is, and the AR's approvers check it there.
 
-Versions are immutable once approved: each is a row in a version family
-(``version_family_id``), ``parent_policy_id`` is the PROV ``wasDerivedFrom``
-edge. Approving a successor supersedes its parent.
+References are **not enforced** (ARF 1.2.0, #1294 decision): an expired or
+superseded reference does not change what an AR decides. Validity is exposed to
+Compliance Checks as ``justification.*`` (see ``controller/authority_policy_manager``).
+
+Versions: each source-document version is its own row in a version family
+(``version_family_id``); ``parent_policy_id`` links a new version to the one it
+replaces. ARs cite one row (``authority_relations.authority_policy_id``), and many
+ARs can cite the same reference.
 """
 
 from datetime import datetime
@@ -23,33 +27,25 @@ class AuthorityPolicyDb(Base):
     __tablename__ = 'authority_policies'
 
     id = Column(String, primary_key=True)
-    # Stable per family (e.g. POL-DOA-2026); versions share it.
+    # The external id (e.g. POL-DOA-2026); versions of one document share it.
     policy_key = Column(String, nullable=False, index=True)
     version = Column(String, nullable=False, default='1')
     version_family_id = Column(String, nullable=True, index=True)
-    parent_policy_id = Column(String, nullable=True, index=True)  # prov:wasDerivedFrom
+    parent_policy_id = Column(String, nullable=True, index=True)  # the version it replaces
     change_summary = Column(Text, nullable=True)
 
-    title = Column(String, nullable=False)
-    # DOA | BOARD_MANDATE | REGULATION | PROCUREMENT_POLICY | SOP | EXCEPTION
-    policy_type = Column(String, nullable=False, default='DOA')
-    summary = Column(Text, nullable=True)
+    title = Column(String, nullable=False)  # the name
+    summary = Column(Text, nullable=True)  # the description
     owner_team_id = Column(String, ForeignKey('teams.id', ondelete='SET NULL'), nullable=True, index=True)
-    # The scope the policy covers, e.g. {"market": ["DE", "AT"], "legal_entity": "NBG-CH"}.
-    jurisdiction = Column(JSON, nullable=True)
+    # Link out to the source document (http or https only).
+    url = Column(String, nullable=True)
 
-    effective_from = Column(DateTime(timezone=True), nullable=True)
-    effective_to = Column(DateTime(timezone=True), nullable=True)
+    # The validity window the source document states. Informational: not enforced.
+    valid_from = Column(DateTime(timezone=True), nullable=True)
+    valid_to = Column(DateTime(timezone=True), nullable=True)
 
-    # draft | approved | superseded | withdrawn
-    status = Column(String, nullable=False, default='draft', index=True)
-    approved_by = Column(String, nullable=True)
-    approved_at = Column(DateTime(timezone=True), nullable=True)
-    # A Metadata document on this policy that evidences the approval (minutes, signed memo).
-    approval_evidence_document_id = Column(String, nullable=True)
-    withdrawn_reason = Column(Text, nullable=True)
-
-    # [{ref: "§7.1", title, text, limits: {amount, currency}, conditions: [str]}]
+    # Optional clause labels, offered as suggestions in the AR's clause picker.
+    # Not validated against anything: an AR's clause labels are free text.
     clauses = Column(JSON, nullable=True)
 
     created_by = Column(String, nullable=True)

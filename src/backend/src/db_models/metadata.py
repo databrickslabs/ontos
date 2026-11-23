@@ -120,7 +120,6 @@ class DocumentMetadataDb(Base):
     content_type = Column(String, nullable=True)
     size_bytes = Column(Integer, nullable=True)
     storage_path = Column(String, nullable=False)  # Path in Databricks Volume
-    content_sha256 = Column(String(64), nullable=True)  # hex digest of the uploaded bytes
 
     # Markdown imported from a volume (empty for uploads): the file it came
     # from and the SHA-256 this document was written from. The text is stored

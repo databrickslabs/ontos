@@ -1,64 +1,61 @@
-"""Pydantic models for Authority Policies (the ARF justification basis)."""
+"""Pydantic models for Policy references (the ARF justification metadata, ARF 1.2.0).
+
+A reference is metadata only: nothing it says is enforced (#1294 decision).
+"""
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 from src.models.tags import AssignedTagCreate
 
 
-class PolicyClauseLimits(BaseModel):
-    amount: Optional[float] = None
-    currency: Optional[str] = None
-
-
 class PolicyClause(BaseModel):
-    """One citable clause, e.g. ``§7.1`` "CPO may award up to EUR 2m"."""
+    """An optional clause label, offered as a suggestion in the AR's clause picker."""
     ref: str = Field(..., min_length=1, max_length=64)
-    title: Optional[str] = None
-    text: Optional[str] = None
-    limits: Optional[PolicyClauseLimits] = None
-    conditions: List[str] = Field(default_factory=list)
+    title: Optional[str] = Field(None, max_length=255)
+    text: Optional[str] = Field(None, max_length=4000)
 
 
 class AuthorityPolicyCreate(BaseModel):
-    policy_key: str = Field(..., min_length=1, max_length=128)
-    title: str = Field(..., min_length=1, max_length=255)
+    policy_key: str = Field(..., min_length=1, max_length=128, description="External id, e.g. POL-DOA-2026")
+    title: str = Field(..., min_length=1, max_length=255, description="Name")
     version: str = "1"
-    policy_type: str = "DOA"
-    summary: Optional[str] = None
+    summary: Optional[str] = Field(None, max_length=4000, description="Description")
     owner_team_id: Optional[str] = None
-    jurisdiction: Optional[Dict[str, Any]] = None
-    effective_from: Optional[datetime] = None
-    effective_to: Optional[datetime] = None
+    url: Optional[str] = Field(None, max_length=2048)
+    valid_from: Optional[datetime] = None
+    valid_to: Optional[datetime] = None
     clauses: List[PolicyClause] = Field(default_factory=list)
     tags: Optional[List[AssignedTagCreate]] = None
 
 
 class AuthorityPolicyUpdate(BaseModel):
-    """Edits apply to drafts only; an approved policy changes through a new version."""
+    """Corrections to a reference. Versions change through a new version, not here."""
     title: Optional[str] = Field(None, min_length=1, max_length=255)
-    policy_type: Optional[str] = None
-    summary: Optional[str] = None
+    summary: Optional[str] = Field(None, max_length=4000)
     owner_team_id: Optional[str] = None
-    jurisdiction: Optional[Dict[str, Any]] = None
-    effective_from: Optional[datetime] = None
-    effective_to: Optional[datetime] = None
+    url: Optional[str] = Field(None, max_length=2048)
+    valid_from: Optional[datetime] = None
+    valid_to: Optional[datetime] = None
     clauses: Optional[List[PolicyClause]] = None
     tags: Optional[List[AssignedTagCreate]] = None
 
 
 class PolicyNewVersionRequest(BaseModel):
     new_version: str = Field(..., min_length=1, max_length=32)
-    change_summary: Optional[str] = None
+    change_summary: Optional[str] = Field(None, max_length=1000)
 
 
-class PolicyStatusRequest(BaseModel):
-    """``approved`` needs an effective date (here or on the policy); the approver
-    defaults to the caller. ``withdrawn`` takes an optional reason."""
-    status: str
-    approved_by: Optional[str] = None
-    effective_from: Optional[datetime] = None
-    effective_to: Optional[datetime] = None
-    approval_evidence_document_id: Optional[str] = None
-    reason: Optional[str] = None
+class PolicyCitation(BaseModel):
+    """What an AR cites, as stored in decision provenance (ISO strings, not documents)."""
+    authority_policy_id: str
+    clause_refs: List[str] = Field(default_factory=list)
+    policy_key: Optional[str] = None
+    version: Optional[str] = None
+    title: Optional[str] = None
+    url: Optional[str] = None
+    valid_from: Optional[str] = None
+    valid_to: Optional[str] = None
+    expired: bool = False
+

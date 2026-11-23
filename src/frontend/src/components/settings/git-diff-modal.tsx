@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import {
   Collapsible,
   CollapsibleContent,
@@ -55,7 +56,8 @@ export function GitDiffModal({
 }: GitDiffModalProps) {
   const { t } = useTranslation(['settings', 'common']);
   const [diffData, setDiffData] = useState<GitDiffData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // Starts loading: the first open shows the skeleton, not "No pending changes"
+  const [isLoading, setIsLoading] = useState(true);
   const [commitMessage, setCommitMessage] = useState('');
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
@@ -149,9 +151,7 @@ export function GitDiffModal({
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-10">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
+          <ListItemSkeleton count={4} height="h-10" className="space-y-2 py-4" />
         ) : diffData ? (
           <>
             {/* Stats and Actions */}

@@ -1,3 +1,4 @@
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -123,8 +124,8 @@ export default function TermMappingSuggestionReview({
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-40">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="p-4">
+        <ListItemSkeleton count={4} height="h-16" className="space-y-2" />
       </div>
     );
   }

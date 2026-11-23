@@ -19,6 +19,7 @@ import {
   Link2,
   Unlink,
 } from 'lucide-react';
+import { HierarchyTreeSkeleton } from '@/components/common/list-view-skeleton';
 import {
   Dialog,
   DialogContent,
@@ -632,10 +633,9 @@ export default function ImportPreviewDialog({
           </DialogHeader>
 
           {isLoadingPreview ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <span className="ml-2 text-sm text-muted-foreground">{t('database-schema:preview.analyzing')}</span>
-            </div>
+            <ScrollArea className="max-h-[400px]">
+              <HierarchyTreeSkeleton />
+            </ScrollArea>
           ) : importResult ? (
             <ScrollArea className="max-h-[400px]">
               <div className="space-y-0.5 py-1">

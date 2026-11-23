@@ -1,3 +1,4 @@
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
@@ -270,7 +271,9 @@ const TagSelector: React.FC<TagSelectorProps> = ({
               onWheel={(e) => e.stopPropagation()}
             >
                 {loading ? (
-                  <CommandEmpty>{t('common:states.loadingTags')}</CommandEmpty>
+                  <div className="p-2">
+                    <ListItemSkeleton count={3} height="h-6" className="space-y-1.5" />
+                  </div>
                 ) : (
                   <>
                     {filteredTags.length === 0 && !effectiveAllowCreate && (

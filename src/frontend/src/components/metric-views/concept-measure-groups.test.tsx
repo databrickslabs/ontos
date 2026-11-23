@@ -124,14 +124,12 @@ describe('ConceptMeasureGroups', () => {
             data: { ...conflict, verdict: 'none', groups: [], unresolved: [] },
         });
         const { container, unmount } = renderGroups();
-        await vi.waitFor(() => expect(getMock).toHaveBeenCalled());
-        expect(container).toBeEmptyDOMElement();
+        await vi.waitFor(() => expect(container).toBeEmptyDOMElement());
         unmount();
 
         getMock.mockResolvedValueOnce({ data: {}, error: 'boom' });
         const second = renderGroups();
-        await vi.waitFor(() => expect(getMock).toHaveBeenCalledTimes(2));
-        expect(second.container).toBeEmptyDOMElement();
+        await vi.waitFor(() => expect(second.container).toBeEmptyDOMElement());
     });
 
     it('is translated', async () => {

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Plus, RefreshCcw, Eye, Trash2, FileText, LinkIcon, Paperclip, Pencil, Loader2, Share2, ArrowDownToLine } from 'lucide-react';
+import { Plus, RefreshCcw, Eye, Trash2, FileText, LinkIcon, Paperclip, Pencil, Share2, ArrowDownToLine } from 'lucide-react';
 import FilePreviewDialog from '@/components/preview/file-preview-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -19,6 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useSharedAssets, attachSharedAsset, RichTextItem, LinkItem, DocumentItem, MetadataAttachment } from '@/hooks/use-entity-metadata';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 
 export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'concept' | 'collection' | 'compliance_policy' | 'asset';
 
@@ -769,7 +770,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
             </DialogHeader>
             <div className="overflow-y-auto max-h-[50vh]">
               {sharedAssets.loading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground p-4"><Loader2 className="h-4 w-4 animate-spin" /> {t('sharedAssets.loading')}</div>
+                <div className="p-4"><ListItemSkeleton count={3} height="h-14" className="space-y-2" /></div>
               ) : (
                 <>
                   {showSharedPicker === 'rich_text' && (

@@ -24,6 +24,21 @@ import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { useTranslation } from 'react-i18next';
 import type { MaturityLevel, MaturityGate } from '@/types/maturity';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
+
+// Stands in for the levels while they load (see ContentSkeleton)
+const SAMPLE_LEVELS: MaturityLevel[] = [
+  {
+    id: 'sample-1', level_order: 1, name: 'Bronze', description: 'Basic quality checks passed',
+    icon: 'shield', color: 'blue', entity_type: 'all',
+    gates: [{
+      id: 'sample-gate-1', maturity_level_id: 'sample-1', compliance_policy_id: 'sample-policy-1',
+      compliance_policy_name: 'Owner assigned', compliance_policy_rule: null,
+      required: true, display_order: 1, created_at: null,
+    }],
+    created_at: null, updated_at: null,
+  },
+];
 
 interface CompliancePolicy {
   id: string;
@@ -234,14 +249,6 @@ export default function MaturityLevelsSettings() {
   const getColorClass = (color: string | null) => COLOR_CLASSES[color || 'blue'] || COLOR_CLASSES.blue;
   const getIcon = (iconName: string | null) => ICON_MAP[iconName || 'shield-check'] || ShieldCheck;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -256,139 +263,143 @@ export default function MaturityLevelsSettings() {
         </Button>
       </div>
 
-      <div className="space-y-2">
-        {levels.map((level, index) => {
-          const IconComponent = getIcon(level.icon);
-          const isExpanded = expandedLevel === level.id;
-          return (
-            <div key={level.id} className="border rounded-lg">
-              <div className="flex items-center gap-3 px-4 py-3">
-                <div className="flex flex-col gap-0.5">
-                  <button onClick={() => handleMoveUp(index)} disabled={index === 0}
-                    className="text-muted-foreground hover:text-foreground disabled:opacity-20 text-xs">▲</button>
-                  <button onClick={() => handleMoveDown(index)} disabled={index === levels.length - 1}
-                    className="text-muted-foreground hover:text-foreground disabled:opacity-20 text-xs">▼</button>
-                </div>
-                <button onClick={() => setExpandedLevel(isExpanded ? null : level.id)}
-                  className="flex items-center gap-2 flex-1 text-left">
-                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  <span className="font-mono text-sm text-muted-foreground w-6">{level.level_order}</span>
-                  <Badge variant="outline" className={getColorClass(level.color)}>
-                    <IconComponent className="h-3 w-3 mr-1" />
-                    {level.name}
-                  </Badge>
-                  <span className="text-sm text-muted-foreground flex-1">{level.description || ''}</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {level.entity_type === 'all' ? t('maturityLevels.allTypes') : level.entity_type}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">{t('maturityLevels.gateCount', { count: level.gates?.length || 0 })}</span>
-                </button>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(level)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                    onClick={() => { setDeletingLevel(level); setDeleteDialogOpen(true); }}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-
-              {isExpanded && (
-                <div className="border-t px-4 py-3 bg-muted/30 space-y-2">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {t('maturityLevels.complianceGates')}
-                  </div>
-                  {(level.gates || []).map((gate: MaturityGate) => {
-                    const policy = policies.find(p => p.id === gate.compliance_policy_id);
-                    return (
-                      <div key={gate.id} className="flex items-center gap-3 pl-4 py-1.5 border-b last:border-b-0 border-border/40">
-                        <span className={`h-2 w-2 rounded-full shrink-0 ${gate.required ? 'bg-red-500' : 'bg-amber-500'}`} />
-                        <HoverCard openDelay={200}>
-                          <HoverCardTrigger asChild>
-                            <button className="text-sm font-medium flex-1 text-left hover:underline underline-offset-2 decoration-dashed inline-flex items-center gap-1.5">
-                              {gate.compliance_policy_name || gate.compliance_policy_id}
-                              <Info className="h-3 w-3 text-muted-foreground" />
-                            </button>
-                          </HoverCardTrigger>
-                          <HoverCardContent className="w-80" side="right" align="start">
-                            <div className="space-y-2">
-                              <p className="text-sm font-semibold">{gate.compliance_policy_name}</p>
-                              {(policy?.description || gate.compliance_policy_rule) && (
-                                <p className="text-xs text-muted-foreground">
-                                  {policy?.description || t('maturityLevels.noDescription')}
-                                </p>
-                              )}
-                              {gate.compliance_policy_rule && (
-                                <code className="block text-xs bg-muted px-2 py-1.5 rounded font-mono whitespace-pre-wrap">
-                                  {gate.compliance_policy_rule}
-                                </code>
-                              )}
-                              <div className="flex items-center gap-2 pt-1">
-                                {policy?.severity && (
-                                  <Badge variant="outline" className="text-xs capitalize">{policy.severity}</Badge>
-                                )}
-                                <Badge variant="outline" className="text-xs">
-                                  {gate.required ? t('maturityLevels.required') : t('maturityLevels.advisory')}
-                                </Badge>
-                              </div>
-                              <a href={`/compliance?policy=${gate.compliance_policy_id}`}
-                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline pt-1">
-                                <ExternalLink className="h-3 w-3" />
-                                {t('maturityLevels.viewInCompliance')}
-                              </a>
-                            </div>
-                          </HoverCardContent>
-                        </HoverCard>
-                        <Badge variant="outline" className="text-xs shrink-0">
-                          {gate.required ? t('maturityLevels.required') : t('maturityLevels.advisory')}
-                        </Badge>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0"
-                          onClick={() => handleRemoveGate(level.id, gate.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    );
-                  })}
-
-                  {addingGateToLevel === level.id ? (
-                    <div className="flex items-center gap-2 pl-4 pt-2">
-                      <Select value={selectedPolicyId} onValueChange={setSelectedPolicyId}>
-                        <SelectTrigger className="flex-1 h-8 text-sm">
-                          <SelectValue placeholder={t('maturityLevels.selectPolicyPlaceholder')} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {policies.map(p => (
-                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex items-center gap-1.5">
-                        <Switch checked={gateRequired} onCheckedChange={setGateRequired} id="gate-req" />
-                        <Label htmlFor="gate-req" className="text-xs">{t('maturityLevels.required')}</Label>
-                      </div>
-                      <Button size="sm" variant="outline" className="h-8"
-                        onClick={() => handleAddGate(level.id)} disabled={!selectedPolicyId}>{t('common:actions.add')}</Button>
-                      <Button size="sm" variant="ghost" className="h-8"
-                        onClick={() => { setAddingGateToLevel(null); setSelectedPolicyId(''); }}>{t('common:actions.cancel')}</Button>
+      <ContentSkeleton data={levels} sample={SAMPLE_LEVELS} loading={loading} contentClassName="space-y-2">
+        {(shownLevels) => (
+          <>
+            {shownLevels.map((level, index) => {
+              const IconComponent = getIcon(level.icon);
+              const isExpanded = expandedLevel === level.id;
+              return (
+                <div key={level.id} className="border rounded-lg">
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex flex-col gap-0.5">
+                      <button onClick={() => handleMoveUp(index)} disabled={index === 0}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-20 text-xs">▲</button>
+                      <button onClick={() => handleMoveDown(index)} disabled={index === shownLevels.length - 1}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-20 text-xs">▼</button>
                     </div>
-                  ) : (
-                    <Button variant="ghost" size="sm" className="ml-4 text-xs"
-                      onClick={() => { setAddingGateToLevel(level.id); setSelectedPolicyId(''); setGateRequired(true); }}>
-                      <Plus className="h-3 w-3 mr-1" /> {t('maturityLevels.addGate')}
-                    </Button>
+                    <button onClick={() => setExpandedLevel(isExpanded ? null : level.id)}
+                      className="flex items-center gap-2 flex-1 text-left">
+                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <span className="font-mono text-sm text-muted-foreground w-6">{level.level_order}</span>
+                      <Badge variant="outline" className={getColorClass(level.color)}>
+                        <IconComponent className="h-3 w-3 mr-1" />
+                        {level.name}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground flex-1">{level.description || ''}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {level.entity_type === 'all' ? t('maturityLevels.allTypes') : level.entity_type}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{t('maturityLevels.gateCount', { count: level.gates?.length || 0 })}</span>
+                    </button>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(level)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                        onClick={() => { setDeletingLevel(level); setDeleteDialogOpen(true); }}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="border-t px-4 py-3 bg-muted/30 space-y-2">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {t('maturityLevels.complianceGates')}
+                      </div>
+                      {(level.gates || []).map((gate: MaturityGate) => {
+                        const policy = policies.find(p => p.id === gate.compliance_policy_id);
+                        return (
+                          <div key={gate.id} className="flex items-center gap-3 pl-4 py-1.5 border-b last:border-b-0 border-border/40">
+                            <span className={`h-2 w-2 rounded-full shrink-0 ${gate.required ? 'bg-red-500' : 'bg-amber-500'}`} />
+                            <HoverCard openDelay={200}>
+                              <HoverCardTrigger asChild>
+                                <button className="text-sm font-medium flex-1 text-left hover:underline underline-offset-2 decoration-dashed inline-flex items-center gap-1.5">
+                                  {gate.compliance_policy_name || gate.compliance_policy_id}
+                                  <Info className="h-3 w-3 text-muted-foreground" />
+                                </button>
+                              </HoverCardTrigger>
+                              <HoverCardContent className="w-80" side="right" align="start">
+                                <div className="space-y-2">
+                                  <p className="text-sm font-semibold">{gate.compliance_policy_name}</p>
+                                  {(policy?.description || gate.compliance_policy_rule) && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {policy?.description || t('maturityLevels.noDescription')}
+                                    </p>
+                                  )}
+                                  {gate.compliance_policy_rule && (
+                                    <code className="block text-xs bg-muted px-2 py-1.5 rounded font-mono whitespace-pre-wrap">
+                                      {gate.compliance_policy_rule}
+                                    </code>
+                                  )}
+                                  <div className="flex items-center gap-2 pt-1">
+                                    {policy?.severity && (
+                                      <Badge variant="outline" className="text-xs capitalize">{policy.severity}</Badge>
+                                    )}
+                                    <Badge variant="outline" className="text-xs">
+                                      {gate.required ? t('maturityLevels.required') : t('maturityLevels.advisory')}
+                                    </Badge>
+                                  </div>
+                                  <a href={`/compliance?policy=${gate.compliance_policy_id}`}
+                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline pt-1">
+                                    <ExternalLink className="h-3 w-3" />
+                                    {t('maturityLevels.viewInCompliance')}
+                                  </a>
+                                </div>
+                              </HoverCardContent>
+                            </HoverCard>
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              {gate.required ? t('maturityLevels.required') : t('maturityLevels.advisory')}
+                            </Badge>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0"
+                              onClick={() => handleRemoveGate(level.id, gate.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+
+                      {addingGateToLevel === level.id ? (
+                        <div className="flex items-center gap-2 pl-4 pt-2">
+                          <Select value={selectedPolicyId} onValueChange={setSelectedPolicyId}>
+                            <SelectTrigger className="flex-1 h-8 text-sm">
+                              <SelectValue placeholder={t('maturityLevels.selectPolicyPlaceholder')} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {policies.map(p => (
+                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <div className="flex items-center gap-1.5">
+                            <Switch checked={gateRequired} onCheckedChange={setGateRequired} id="gate-req" />
+                            <Label htmlFor="gate-req" className="text-xs">{t('maturityLevels.required')}</Label>
+                          </div>
+                          <Button size="sm" variant="outline" className="h-8"
+                            onClick={() => handleAddGate(level.id)} disabled={!selectedPolicyId}>{t('common:actions.add')}</Button>
+                          <Button size="sm" variant="ghost" className="h-8"
+                            onClick={() => { setAddingGateToLevel(null); setSelectedPolicyId(''); }}>{t('common:actions.cancel')}</Button>
+                        </div>
+                      ) : (
+                        <Button variant="ghost" size="sm" className="ml-4 text-xs"
+                          onClick={() => { setAddingGateToLevel(level.id); setSelectedPolicyId(''); setGateRequired(true); }}>
+                          <Plus className="h-3 w-3 mr-1" /> {t('maturityLevels.addGate')}
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-        {levels.length === 0 && (
-          <div className="text-center text-muted-foreground py-8 border rounded-lg">
-            {t('maturityLevels.emptyState')}
-          </div>
+              );
+            })}
+            {shownLevels.length === 0 && (
+              <div className="text-center text-muted-foreground py-8 border rounded-lg">
+                {t('maturityLevels.emptyState')}
+              </div>
+            )}
+          </>
         )}
-      </div>
+      </ContentSkeleton>
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

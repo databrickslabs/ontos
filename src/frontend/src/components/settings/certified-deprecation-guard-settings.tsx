@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import GateExemptionsField, {
   EMPTY_GATE_EXEMPTIONS,
@@ -89,28 +90,24 @@ export default function CertifiedDeprecationGuardSettings() {
         <CardDescription>{t('workflow-gates:certifiedGuard.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {loading ? (
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        ) : (
-          <>
-            <GateExemptionsField
-              value={value}
-              onChange={setValue}
-              onMissingChange={onMissingChange}
-              hint={t('workflow-gates:certifiedGuard.hint')}
-            />
-            {canEdit ? (
-              <Button onClick={save} disabled={saving} size="sm">
-                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {t('common:actions.save')}
-              </Button>
-            ) : (
-              <p className="text-xs text-muted-foreground" data-testid="certified-guard-read-only">
-                {t('workflow-gates:certifiedGuard.readOnly')}
-              </p>
-            )}
-          </>
-        )}
+        <ContentSkeleton loading={loading} contentClassName="space-y-4">
+          <GateExemptionsField
+            value={value}
+            onChange={setValue}
+            onMissingChange={onMissingChange}
+            hint={t('workflow-gates:certifiedGuard.hint')}
+          />
+          {canEdit ? (
+            <Button onClick={save} disabled={saving} size="sm">
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('common:actions.save')}
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground" data-testid="certified-guard-read-only">
+              {t('workflow-gates:certifiedGuard.readOnly')}
+            </p>
+          )}
+        </ContentSkeleton>
       </CardContent>
     </Card>
   );

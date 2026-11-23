@@ -4,6 +4,7 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
+import { DialogSkeleton, ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { ColumnDef, Column } from '@tanstack/react-table';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -620,9 +621,7 @@ export default function SemanticModelsSettings() {
             <DialogDescription>{t('rdfSources.titleDialogDescription')}</DialogDescription>
           </DialogHeader>
           {titleCandidatesLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
+            <ListItemSkeleton count={3} height="h-12" className="space-y-3 py-2" />
           ) : (
             <RadioGroup value={titleChoice} onValueChange={setTitleChoice} className="space-y-4">
               {titleCandidates.length > 0 && (
@@ -724,9 +723,9 @@ export default function SemanticModelsSettings() {
           </DialogHeader>
           <div className="flex-1 min-h-0">
             {viewLoading ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                {t('settings:semanticModels.viewDialog.loadingContent')}
+              <div role="status" className="h-full rounded-md border bg-muted/30 p-4">
+                <span className="sr-only">{t('settings:semanticModels.viewDialog.loadingContent')}</span>
+                <DialogSkeleton rows={8} />
               </div>
             ) : (
               <ScrollArea className="h-full rounded-md border bg-muted/30">

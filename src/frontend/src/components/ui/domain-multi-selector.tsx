@@ -1,3 +1,4 @@
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronsUpDown, Star, X } from 'lucide-react';
@@ -251,7 +252,9 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
               onWheel={(e) => e.stopPropagation()}
             >
               {loading ? (
-                <CommandEmpty>{t('common:states.loadingDomains')}</CommandEmpty>
+                <div className="p-2">
+                  <ListItemSkeleton count={3} height="h-6" className="space-y-1.5" />
+                </div>
               ) : filteredDomains.length === 0 ? (
                 <CommandEmpty>{t('common:states.noDomainsFound')}</CommandEmpty>
               ) : (

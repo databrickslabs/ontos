@@ -1,6 +1,7 @@
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { History, Loader2 } from 'lucide-react';
+import { History } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
@@ -275,9 +276,9 @@ export function VersionHistoryPanel({
                     {isExpanded && (
                       <span className="mt-1 block rounded-md border bg-muted/30 p-2 text-xs">
                         {detailLoading === entry.version ? (
-                          <span className="flex items-center gap-2 text-muted-foreground">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            {t('common:loading', 'Loading…')}
+                          <span className="block space-y-1.5" aria-busy="true">
+                            <SkeletonLine height="h-3" width="w-2/3" />
+                            <SkeletonLine height="h-3" width="w-full" />
                           </span>
                         ) : frozen ? (
                           <>

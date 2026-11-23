@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useApi } from '@/hooks/use-api';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { DialogSkeleton } from '@/components/common/list-view-skeleton';
 
 type KGItem = { value: string; type: 'resource' | 'property' };
 type Neighbor = {
@@ -89,7 +90,7 @@ const AppEntityHover: React.FC<{ iri: string; children: React.ReactNode }> = ({ 
       <HoverCardTrigger asChild>{children as any}</HoverCardTrigger>
       <HoverCardContent className="w-96 text-xs">
         {!details ? (
-          <div className="text-muted-foreground">{t('common:states.loading')}</div>
+          <DialogSkeleton rows={4} className="space-y-2" />
         ) : (
           <div className="space-y-1">
             <div className="font-medium text-sm">{details.info?.title || details.name || info.entityId}</div>
@@ -446,7 +447,7 @@ export default function KGSearch({
             <div className="mt-4 pt-4 border-t space-y-2">
               <h4 className="text-sm font-medium">{t('search:kg.resourceDetail', 'Resource detail')}</h4>
               {resourceDescription == null ? (
-                <div className="text-sm text-muted-foreground">{t('search:kg.resourceLoading')}</div>
+                <DialogSkeleton rows={3} className="space-y-2" />
               ) : resourceDescription.triples.length === 0 ? (
                 <div className="text-sm text-muted-foreground">{t('search:kg.noTriples')}</div>
               ) : (

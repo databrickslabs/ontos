@@ -42,6 +42,7 @@ import {
   MaturityLevel,
 } from '@/types/industry-ontology';
 import { cn } from '@/lib/utils';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 
 /**
  * Main dialog component for the Industry Ontology Library.
@@ -414,9 +415,7 @@ export default function OntologyLibraryDialog({
             </div>
             <ScrollArea className="flex-1">
               {isLoadingVerticals ? (
-                <div className="p-4 flex justify-center">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
+                <ListItemSkeleton count={5} height="h-9" className="space-y-1 p-1" />
               ) : (
                 <div className="p-1">
                   {verticals.map((v) => (
@@ -460,9 +459,7 @@ export default function OntologyLibraryDialog({
             </div>
             <ScrollArea className="flex-1">
               {isLoadingOntologies ? (
-                <div className="p-4 flex justify-center">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
+                <ListItemSkeleton count={5} height="h-9" className="space-y-1 p-1" />
               ) : filteredOntologies.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   {selectedVertical ? t('settings:ontologyLibrary.noOntologiesFound') : t('settings:ontologyLibrary.selectVertical')}
@@ -538,9 +535,7 @@ export default function OntologyLibraryDialog({
             </div>
             <ScrollArea className="flex-1">
               {isLoadingModules ? (
-                <div className="p-4 flex justify-center">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
+                <ListItemSkeleton count={5} height="h-9" className="space-y-1 p-1" />
               ) : !selectedOntology ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   {t('settings:ontologyLibrary.selectOntologyPrompt')}

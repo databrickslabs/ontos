@@ -1,3 +1,4 @@
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { StarRating } from './star-rating';
@@ -39,11 +40,9 @@ export function RatingSummary({
 
   if (loading) {
     return (
-      <div className={cn('animate-pulse', className)}>
-        <div className="flex items-center gap-2">
-          <div className="h-4 w-20 bg-muted rounded" />
-          <div className="h-4 w-12 bg-muted rounded" />
-        </div>
+      <div className={cn('flex items-center gap-2', className)}>
+        <SkeletonLine width="w-20" />
+        <SkeletonLine width="w-12" />
       </div>
     );
   }

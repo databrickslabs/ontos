@@ -46,6 +46,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { PrincipalPicker } from '@/components/common/principal-picker';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import { RelativeDate } from '@/components/common/relative-date';
 import { useAppSettingsStore } from '@/stores/app-settings-store';
 import { deleteOrThrow } from '@/lib/delete-or-throw';
@@ -117,10 +118,13 @@ export default function TagsSettings() {
   const [selectedNamespace, setSelectedNamespace] = useState<string>('');
   const [tags, setTags] = useState<Tag[]>([]);
   const [permissions, setPermissions] = useState<TagNamespacePermission[]>([]);
+  const [isLoadingTags, setIsLoadingTags] = useState(false);
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
   
   // Tag display format setting
   const [tagDisplayFormat, setTagDisplayFormat] = useState<'short' | 'long'>('short');
-  const [isLoadingDisplayFormat, setIsLoadingDisplayFormat] = useState(false);
+  // Starts loading: no "short" placeholder before the setting arrives
+  const [isLoadingDisplayFormat, setIsLoadingDisplayFormat] = useState(true);
   const [isSavingDisplayFormat, setIsSavingDisplayFormat] = useState(false);
 
   // Dialog states
@@ -166,6 +170,7 @@ export default function TagsSettings() {
 
   const fetchTags = useCallback(async () => {
     if (!selectedNamespace) return;
+    setIsLoadingTags(true);
     try {
       const response = await get<Tag[]>(`/api/tags?namespace_id=${selectedNamespace}`);
       if (response.data) {
@@ -174,11 +179,14 @@ export default function TagsSettings() {
     } catch (err: any) {
       setError(err.message);
       toast({ variant: 'destructive', title: t('settings:tags.toasts.fetchTagsError'), description: err.message });
+    } finally {
+      setIsLoadingTags(false);
     }
   }, [get, toast, selectedNamespace]);
 
   const fetchPermissions = useCallback(async () => {
     if (!selectedNamespace) return;
+    setIsLoadingPermissions(true);
     try {
       const response = await get<TagNamespacePermission[]>(`/api/tags/namespaces/${selectedNamespace}/permissions`);
       if (response.data) {
@@ -187,6 +195,8 @@ export default function TagsSettings() {
     } catch (err: any) {
       setError(err.message);
       toast({ variant: 'destructive', title: t('settings:tags.toasts.fetchPermissionsError'), description: err.message });
+    } finally {
+      setIsLoadingPermissions(false);
     }
   }, [get, toast, selectedNamespace]);
 
@@ -513,20 +523,24 @@ export default function TagsSettings() {
         <CardContent>
           <div className="flex items-center gap-4">
             <Label htmlFor="display-format-select">{t('settings:tags.display.formatLabel')}</Label>
-            <Select 
-              value={tagDisplayFormat} 
-              onValueChange={(value: 'short' | 'long') => saveDisplayFormat(value)}
-              disabled={isLoadingDisplayFormat || isSavingDisplayFormat}
-            >
-              <SelectTrigger id="display-format-select" className="w-[240px]">
-                <SelectValue placeholder={t('settings:tags.display.formatPlaceholder')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="short" className="whitespace-nowrap">{t('settings:tags.display.short')}</SelectItem>
-                <SelectItem value="long" className="whitespace-nowrap">{t('settings:tags.display.long')}</SelectItem>
-              </SelectContent>
-            </Select>
-            {(isLoadingDisplayFormat || isSavingDisplayFormat) && (
+            {isLoadingDisplayFormat ? (
+              <SkeletonLine height="h-10" width="w-[240px]" />
+            ) : (
+              <Select
+                value={tagDisplayFormat}
+                onValueChange={(value: 'short' | 'long') => saveDisplayFormat(value)}
+                disabled={isSavingDisplayFormat}
+              >
+                <SelectTrigger id="display-format-select" className="w-[240px]">
+                  <SelectValue placeholder={t('settings:tags.display.formatPlaceholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="short" className="whitespace-nowrap">{t('settings:tags.display.short')}</SelectItem>
+                  <SelectItem value="long" className="whitespace-nowrap">{t('settings:tags.display.long')}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            {isSavingDisplayFormat && (
               <Loader2 className="h-4 w-4 animate-spin" />
             )}
           </div>
@@ -622,7 +636,7 @@ export default function TagsSettings() {
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable columns={tagColumns} data={tags} storageKey="tags-settings-sort" />
+              <DataTable columns={tagColumns} data={tags} storageKey="tags-settings-sort" isLoading={isLoadingTags && tags.length === 0} />
             </CardContent>
           </Card>
 
@@ -646,7 +660,7 @@ export default function TagsSettings() {
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable columns={permissionColumns} data={permissions} storageKey="permissions-settings-sort" />
+              <DataTable columns={permissionColumns} data={permissions} storageKey="permissions-settings-sort" isLoading={isLoadingPermissions && permissions.length === 0} />
             </CardContent>
           </Card>
         </>

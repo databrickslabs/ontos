@@ -75,6 +75,7 @@ import SchemaImporterView from './views/schema-importer';
 import SyncDomainsView from './views/sync-domains';
 import OwnerConsumersView from './views/owner-consumers';
 import OntologyGeneratorView from './views/ontology-generator';
+import { GraphCanvasSkeleton } from '@/components/common/list-view-skeleton';
 
 // Dev/prototype components
 const DevLineageView = lazy(() => import('./components/lineage/dev-lineage-route'));
@@ -295,7 +296,7 @@ export default function App() {
               <Route path="/user-docs/:docName" element={<DocumentationViewer />} />
 
               {/* Temporary dev route for lineage column view prototype */}
-              <Route path="/dev/lineage" element={<Suspense fallback={<div className="flex items-center justify-center h-96">Loading…</div>}><DevLineageView /></Suspense>} />
+              <Route path="/dev/lineage" element={<Suspense fallback={<div className="p-4"><GraphCanvasSkeleton showFilterPanel /></div>}><DevLineageView /></Suspense>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

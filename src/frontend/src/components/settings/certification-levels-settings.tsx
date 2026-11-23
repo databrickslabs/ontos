@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Pencil, Trash2, Shield, ShieldCheck, Loader2 } from 'lucide-react';
-import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,6 +44,12 @@ interface CertificationLevel {
   icon: string | null;
   color: string | null;
 }
+
+// Stands in for the levels while they load (see ContentSkeleton)
+const SAMPLE_LEVELS: CertificationLevel[] = [
+  { id: 'sample-1', level_order: 1, name: 'Bronze', description: 'Basic quality checks passed', icon: 'shield', color: 'amber' },
+  { id: 'sample-2', level_order: 2, name: 'Gold', description: 'Reviewed by the data owner', icon: 'shield-check', color: 'purple' },
+];
 
 const ICON_MAP: Record<string, typeof Shield> = {
   shield: Shield,
@@ -199,10 +205,6 @@ export default function CertificationLevelsSettings() {
     return map[color || 'amber'] || map.amber;
   };
 
-  if (loading) {
-    return <ListItemSkeleton count={3} height="h-20" className="space-y-2" />;
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -217,76 +219,80 @@ export default function CertificationLevelsSettings() {
         </Button>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12"></TableHead>
-            <TableHead className="w-16">{t('certificationLevels.table.order')}</TableHead>
-            <TableHead>{t('common:labels.name')}</TableHead>
-            <TableHead>{t('common:labels.description')}</TableHead>
-            <TableHead>{t('certificationLevels.table.preview')}</TableHead>
-            <TableHead className="w-24">{t('common:labels.actions')}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {levels.map((level, index) => {
-            const IconComponent = ICON_MAP[level.icon || 'shield-check'] || ShieldCheck;
-            return (
-              <TableRow key={level.id}>
-                <TableCell>
-                  <div className="flex flex-col gap-0.5">
-                    <button
-                      onClick={() => handleMoveUp(index)}
-                      disabled={index === 0}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-20 text-xs"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      onClick={() => handleMoveDown(index)}
-                      disabled={index === levels.length - 1}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-20 text-xs"
-                    >
-                      ▼
-                    </button>
-                  </div>
-                </TableCell>
-                <TableCell className="font-mono text-muted-foreground">{level.level_order}</TableCell>
-                <TableCell className="font-medium">{level.name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{level.description || '—'}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={getColorClass(level.color)}>
-                    <IconComponent className="h-3 w-3 mr-1" />
-                    {level.name}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(level)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => { setDeletingLevel(level); setDeleteDialogOpen(true); }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </TableCell>
+      <ContentSkeleton data={levels} sample={SAMPLE_LEVELS} loading={loading}>
+        {(shownLevels) => (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12"></TableHead>
+                <TableHead className="w-16">{t('certificationLevels.table.order')}</TableHead>
+                <TableHead>{t('common:labels.name')}</TableHead>
+                <TableHead>{t('common:labels.description')}</TableHead>
+                <TableHead>{t('certificationLevels.table.preview')}</TableHead>
+                <TableHead className="w-24">{t('common:labels.actions')}</TableHead>
               </TableRow>
-            );
-          })}
-          {levels.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                {t('certificationLevels.emptyState')}
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            </TableHeader>
+            <TableBody>
+              {shownLevels.map((level, index) => {
+                const IconComponent = ICON_MAP[level.icon || 'shield-check'] || ShieldCheck;
+                return (
+                  <TableRow key={level.id}>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          onClick={() => handleMoveUp(index)}
+                          disabled={index === 0}
+                          className="text-muted-foreground hover:text-foreground disabled:opacity-20 text-xs"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={() => handleMoveDown(index)}
+                          disabled={index === shownLevels.length - 1}
+                          className="text-muted-foreground hover:text-foreground disabled:opacity-20 text-xs"
+                        >
+                          ▼
+                        </button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-muted-foreground">{level.level_order}</TableCell>
+                    <TableCell className="font-medium">{level.name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{level.description || '—'}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getColorClass(level.color)}>
+                        <IconComponent className="h-3 w-3 mr-1" />
+                        {level.name}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(level)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive"
+                          onClick={() => { setDeletingLevel(level); setDeleteDialogOpen(true); }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {shownLevels.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    {t('certificationLevels.emptyState')}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </ContentSkeleton>
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

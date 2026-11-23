@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import usePermissionsStore, { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
-import { Loader2 } from 'lucide-react';
+import { SettingsFormSkeleton } from '@/components/common/list-view-skeleton';
 import {
   Settings,
   Palette,
@@ -108,11 +108,7 @@ export default function SettingsLayout() {
   const isInitializing = usePermissionsStore((s) => s._isInitializing);
 
   if (permissionsLoading || isInitializing || !initAttempted) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <SettingsFormSkeleton sections={2} fieldsPerSection={3} />;
   }
 
   // Layout gate: users below Read-only on `settings` cannot enter the

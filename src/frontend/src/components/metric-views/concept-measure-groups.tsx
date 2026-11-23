@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Sigma } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useApi } from '@/hooks/use-api';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import type { FingerprintGroup, MetricViewConsistency } from '@/types/metric-view-consistency';
 import { DefinitionSummary, DiffList, iriLabel, measureLabel } from './consistency-parts';
 
@@ -72,20 +73,27 @@ export default function ConceptMeasureGroups({ conceptIri }: { conceptIri: strin
     const { get } = useApi();
     const [data, setData] = useState<MetricViewConsistency | null>(null);
     const [open, setOpen] = useState(true);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
         setData(null);
+        setLoading(true);
         (async () => {
-            const res = await get<MetricViewConsistency>(
-                `/api/metric-views/consistency?concept_iri=${encodeURIComponent(conceptIri)}`,
-            );
-            if (cancelled || !res || res.error || !Array.isArray(res.data?.groups)) return;
-            setData(res.data);
+            try {
+                const res = await get<MetricViewConsistency>(
+                    `/api/metric-views/consistency?concept_iri=${encodeURIComponent(conceptIri)}`,
+                );
+                if (cancelled || !res || res.error || !Array.isArray(res.data?.groups)) return;
+                setData(res.data);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
         })();
         return () => { cancelled = true; };
     }, [conceptIri, get]);
 
+    if (loading) return <ListItemSkeleton count={2} height="h-10" className="space-y-2 mt-4" />;
     if (!data || (data.groups.length === 0 && data.unresolved.length === 0)) return null;
     const conflict = data.verdict === 'conflict';
 

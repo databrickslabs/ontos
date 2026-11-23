@@ -9,9 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { Loader2 } from 'lucide-react';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import EntityPatternsField from './entity-patterns-field';
 import TagSyncConfigsField from './tag-sync-configs-field';
 import { WorkflowParameterDefinition, EntityPatternConfig, TagSyncConfig } from '@/types/workflow-configurations';
+
+// Stands in for the parameters while they load (see ContentSkeleton)
+const SAMPLE_PARAMETER_DEFS: WorkflowParameterDefinition[] = [
+  { name: 'catalog', type: 'string', description: 'Catalog to scan' },
+  { name: 'max_rows', type: 'integer', min_value: 1, max_value: 1000 },
+  { name: 'enabled', type: 'boolean' },
+];
 
 interface WorkflowConfigurationDialogProps {
   open: boolean;
@@ -32,7 +40,8 @@ export default function WorkflowConfigurationDialog({
 
   const [parameterDefs, setParameterDefs] = useState<WorkflowParameterDefinition[]>([]);
   const [configuration, setConfiguration] = useState<Record<string, any>>({});
-  const [loading, setLoading] = useState(false);
+  // Starts loading: the first open shows the skeleton, not "no parameters"
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -248,19 +257,16 @@ export default function WorkflowConfigurationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        ) : (
-          <div className="space-y-6 py-4">
-            {parameterDefs.length === 0 ? (
-              <p className="text-muted-foreground">{t('settings:workflowConfig.noParameters')}</p>
-            ) : (
-              parameterDefs.map(paramDef => renderField(paramDef))
-            )}
-          </div>
-        )}
+        <ContentSkeleton
+          data={parameterDefs}
+          sample={SAMPLE_PARAMETER_DEFS}
+          loading={loading}
+          empty={parameterDefs.length === 0}
+          emptyMessage={<p className="text-muted-foreground">{t('settings:workflowConfig.noParameters')}</p>}
+          contentClassName="space-y-6 py-4"
+        >
+          {(defs) => defs.map(paramDef => renderField(paramDef))}
+        </ContentSkeleton>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>

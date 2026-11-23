@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useApi } from '@/hooks/use-api';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import type {
     MeasureConsistency,
     MeasureMatch,
@@ -79,19 +80,27 @@ export default function MeasureConsistencyList({ assetId }: { assetId: string })
     const { t } = useTranslation('metric-views');
     const { get } = useApi();
     const [data, setData] = useState<MetricViewConsistency | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
         setData(null);
+        setLoading(true);
         (async () => {
-            const res = await get<MetricViewConsistency>(
-                `/api/metric-views/consistency?asset_id=${encodeURIComponent(assetId)}`,
-            );
-            if (cancelled || !res || res.error || !Array.isArray(res.data?.measures)) return;
-            setData(res.data);
+            try {
+                const res = await get<MetricViewConsistency>(
+                    `/api/metric-views/consistency?asset_id=${encodeURIComponent(assetId)}`,
+                );
+                if (cancelled || !res || res.error || !Array.isArray(res.data?.measures)) return;
+                setData(res.data);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
         })();
         return () => { cancelled = true; };
     }, [assetId, get]);
+
+    if (loading) return <ListItemSkeleton count={2} height="h-12" className="space-y-2 mt-4" />;
 
     const shown = (data?.measures ?? []).filter((m) => m.error || m.matches.length > 0);
     if (shown.length === 0) return null;

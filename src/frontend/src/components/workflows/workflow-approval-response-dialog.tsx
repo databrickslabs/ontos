@@ -1,3 +1,4 @@
+import { DialogSkeleton } from '@/components/common/list-view-skeleton';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
@@ -373,8 +374,8 @@ export default function WorkflowApprovalResponseDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {loadingConfig ? (
-          <div className="flex flex-1 items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <div className="flex-1 py-8">
+            <DialogSkeleton rows={4} />
           </div>
         ) : (
           <>

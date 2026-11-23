@@ -1,3 +1,4 @@
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Sparkles, Info, Check, ChevronsUpDown, X } from 'lucide-react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -336,10 +337,7 @@ export default function RunConfigDialog({
               </Badge>
             </div>
             {modelsLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {t('runConfig.loadingOntologies')}
-              </div>
+              <ListItemSkeleton count={2} height="h-8" className="space-y-2" />
             ) : modelsError ? (
               <Alert variant="destructive">
                 <AlertDescription>{modelsError}</AlertDescription>
@@ -513,9 +511,8 @@ export default function RunConfigDialog({
                       />
                       <CommandList className="max-h-60">
                         {assetTypesLoading ? (
-                          <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            {t('runConfig.assetTypesLoading', 'Loading asset types...')}
+                          <div className="p-2">
+                            <ListItemSkeleton count={3} height="h-6" className="space-y-1.5" />
                           </div>
                         ) : (
                           <>

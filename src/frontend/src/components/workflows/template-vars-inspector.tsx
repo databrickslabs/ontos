@@ -1,3 +1,4 @@
+import { DialogSkeleton } from '@/components/common/list-view-skeleton';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Copy, Search, X } from 'lucide-react';
@@ -252,7 +253,7 @@ export default function TemplateVarsInspector({
   if (loading) {
     return (
       <div className="rounded-md border p-3">
-        <p className="text-xs text-muted-foreground">{t('workflows:templateVars.loadingVariables')}</p>
+        <DialogSkeleton rows={3} />
       </div>
     );
   }

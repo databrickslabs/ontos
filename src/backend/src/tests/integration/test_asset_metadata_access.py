@@ -464,6 +464,14 @@ def test_assets_alone_reads_merged_metadata_without_contracts(
 def test_data_domains_still_reads_a_contract_through_merged_metadata(
         client, db_session, asset, act_as, linked_to_an_accessible_product, role):
     """The Steward reads the asset through its product, and the contract with data-domains."""
+    from src.db_models.data_contracts import DataContractDb
+
+    # Merged metadata inherits only from an existing, live contract the caller may read
+    db_session.add(DataContractDb(
+        id='contract-1', name='orders-contract', version='1.0.0', status='active',
+        version_family_id='contract-1',
+    ))
+    db_session.flush()
     note_id = _contract_note(db_session)
     act_as(role)
 

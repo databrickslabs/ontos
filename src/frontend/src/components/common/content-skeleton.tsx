@@ -67,20 +67,32 @@ const SMALL_TEXT_BONE_HEIGHT = 1.8;
 // Static labels that stay readable and get no bones (see index.css)
 const KEEP_SELECTOR = 'thead, [data-skeleton-keep]';
 
+/** Box of the nearest non-inline element around a text (a badge, a cell, …). */
+function textBox(el: HTMLElement | null): DOMRect | undefined {
+  while (el && getComputedStyle(el).display === 'inline') el = el.parentElement;
+  return el?.getBoundingClientRect();
+}
+
 /** Rectangles of the sample's text lines and blocks, relative to `origin`. */
 function measureBones(root: HTMLElement, origin: HTMLElement): Bone[] {
   const base = origin.getBoundingClientRect();
   const bones: Bone[] = [];
-  const add = (r: DOMRect, textLine: boolean, smallText = false) => {
+  const add = (r: DOMRect, textLine: boolean, smallText = false, box?: DOMRect) => {
     if (r.width < 2 || r.height < 2) return;
     const left = r.left - base.left;
     // A text bone is an h-4 bar (as SkeletonLine) centred in the line box, as
-    // wide as the text. Small text's bone is taller and wider: slim texts
-    // double, long ones grow by less
+    // wide as the text. Small text's bone is taller and wider (slim texts
+    // double, long ones grow by less), but stays inside the text's box, e.g.
+    // a badge or a table cell
     const lineHeight = Math.min(r.height, 16);
-    const height = !textLine ? r.height : smallText ? Math.round(lineHeight * SMALL_TEXT_BONE_HEIGHT) : lineHeight;
+    const height = !textLine
+      ? r.height
+      : smallText
+        ? Math.round(Math.max(lineHeight, Math.min(lineHeight * SMALL_TEXT_BONE_HEIGHT, box?.height ?? Infinity)))
+        : lineHeight;
     const grow = smallText ? Math.max(Math.sqrt(16 / Math.max(r.width, 16)), 0.1) : 0;
-    const width = Math.min(r.width * (1 + grow), base.width - left);
+    const right = Math.min(base.right, box ? Math.max(box.right, r.right) : Infinity);
+    const width = Math.min(r.width * (1 + grow), right - r.left);
     bones.push({
       left,
       top: r.top - base.top + (r.height - height) / 2,
@@ -101,7 +113,8 @@ function measureBones(root: HTMLElement, origin: HTMLElement): Bone[] {
     range.selectNodeContents(node);
     if (typeof range.getClientRects !== 'function') continue;
     const smallText = parseFloat(getComputedStyle(parent as Element).fontSize) <= SMALL_TEXT_PX;
-    Array.from(range.getClientRects()).forEach((r) => add(r, true, smallText));
+    const box = smallText ? textBox(parent as HTMLElement) : undefined;
+    Array.from(range.getClientRects()).forEach((r) => add(r, true, smallText, box));
   }
   return bones;
 }

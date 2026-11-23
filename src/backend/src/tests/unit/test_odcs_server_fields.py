@@ -184,3 +184,16 @@ def test_a_stored_port_that_is_no_number_doesnt_break_the_read(db_session, impor
         from src.utils.contract_servers import property_values
         assert property_values(server.model_dump(by_alias=True, exclude_none=True))[
             'port'] == port
+
+
+def test_the_contract_api_reads_a_stored_port_that_is_no_number(db_session, imported):
+    manager, cid = imported
+    db_session.expire_all()
+    row = next(r for r in db_session.get(DataContractDb, cid).servers if r.server == 'pg')
+    next(p for p in row.properties if p.key == 'port').value = '${PORT}'
+    db_session.flush()
+
+    api = manager._build_contract_api_model(db_session, db_session.get(DataContractDb, cid))
+
+    pg = next(s for s in api.servers if s.server == 'pg')
+    assert pg.port is None and pg.properties['port'] == '${PORT}'

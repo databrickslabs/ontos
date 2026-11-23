@@ -7604,7 +7604,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if getattr(s, 'properties', None):
                     for prop in s.properties:
                         properties[prop.key] = prop.value
-                
+                # a port that is no number (`${PORT}`) stays text in `properties`
+                port_text = str(properties.get('port') or '').strip()
+                named = ['host', 'port', 'database', 'schema', 'catalog', 'project', 'account',
+                         'region', 'location']
+                if port_text and not port_text.isdigit():
+                    named.remove('port')
+
                 # Create ServerConfig object
                 server_config = ServerConfig(
                     id=getattr(s, 'stable_id', None),
@@ -7615,7 +7621,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     description=s.description,
                     environment=s.environment,
                     host=properties.get('host'),
-                    port=int(properties.get('port')) if properties.get('port') else None,
+                    port=int(port_text) if port_text.isdigit() else None,
                     database=properties.get('database'),
                     schema=properties.get('schema'),
                     catalog=properties.get('catalog'),
@@ -7623,9 +7629,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     account=properties.get('account'),
                     region=properties.get('region'),
                     location=properties.get('location'),
-                    properties={k: v for k, v in properties.items() if k not in [
-                        'host', 'port', 'database', 'schema', 'catalog', 'project', 'account', 'region', 'location'
-                    ]}
+                    properties={k: v for k, v in properties.items() if k not in named}
                 )
                 servers.append(server_config)
         

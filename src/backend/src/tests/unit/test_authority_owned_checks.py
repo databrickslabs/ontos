@@ -94,9 +94,9 @@ def test_a_compliance_edit_or_delete_does_not_change_the_ar(db_session):
 
 def test_template_registry_has_the_three_plain_field_checks():
     keys = [t.key for t in list_templates()]
-    assert keys == ["mfa_required", "no_sod_conflict", "no_self_grant"]
+    assert keys == ["mfa_required", "no_sod_conflict", "amount_within_threshold", "no_self_grant"]
     for t in list_templates():
-        assert t.rule.startswith("ASSERT obj.")
+        assert t.rule.startswith("ASSERT ")
         assert get_template(t.key) is t
     assert get_template("nope") is None
 
@@ -139,7 +139,7 @@ def test_unknown_template_is_refused(db_session):
 def test_template_route_lists_the_registry():
     from src.routes.authority_resolution_routes import list_check_templates
     rows = asyncio.run(list_check_templates(_=True))
-    assert [r["key"] for r in rows] == ["mfa_required", "no_sod_conflict", "no_self_grant"]
+    assert [r["key"] for r in rows] == ["mfa_required", "no_sod_conflict", "amount_within_threshold", "no_self_grant"]
     assert all({"name", "rule", "failure_message", "dimension", "description"} <= set(r) for r in rows)
 
 

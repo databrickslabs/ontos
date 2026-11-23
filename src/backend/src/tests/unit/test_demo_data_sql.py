@@ -167,7 +167,9 @@ def test_arf_pack_recovers_all_ar_rows():
     by_table = {d.table: d for d in out}
     assert len(by_table["authority_relations"].pk_values) == 6
     assert len(by_table["authority_affirmations"].pk_values) == 12
-    assert len(by_table["authority_criteria"].pk_values) == 10
+    # 7: Trade Promotion's budget check and the two prerequisite gates are rule
+    # constraints / duties (authority_relations.rule), not criteria.
+    assert len(by_table["authority_criteria"].pk_values) == 7
     assert len(by_table["authority_prerequisites"].pk_values) == 2
     assert len(by_table["authority_resource_refs"].pk_values) == 2
     assert len(by_table["entity_semantic_links"].pk_values) == 1

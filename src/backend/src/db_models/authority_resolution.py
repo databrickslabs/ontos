@@ -72,7 +72,11 @@ class AuthorityRelationDb(Base):
     object_resolves_to = Column(JSON, nullable=True)  # cross-domain anchors (list of URIs)
 
     # --- ARF tuple: Domain-Context (the evaluable predicate bag) ------------
-    domain_context = Column(JSON, nullable=True)      # {threshold, currency, market, ...}
+    # {scope: [ODRL constraints {leftOperand, operator, rightOperand}], params: {key: value}}
+    # — the scope the authority holds in and its parameters (``ctx.<key>`` in rules).
+    domain_context = Column(JSON, nullable=True)
+    # ODRL-shaped rule: {permission: {constraint, duty}, prohibition} (src.common.authority_rule).
+    rule = Column(JSON, nullable=True)
 
     # --- ARF tuple: Justification-Chain -------------------------------------
     justification_chain = Column(JSON, nullable=True)  # {policy_id, effective_date, derived_from, doc_url}

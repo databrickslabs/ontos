@@ -164,7 +164,7 @@ def test_gate_approves_when_all_criteria_pass():
         _link("ASSERT obj.actor_identity IN ['rsm-east']", order=0),
         _link("ASSERT obj.value <= 0.15 OR obj.escalated = True", order=1),
     )
-    verdict, _ = mgr._evaluate_decision(rel, {"actor_identity": "rsm-east", "value": 0.10})
+    verdict, *_ = mgr._evaluate_decision(rel, {"actor_identity": "rsm-east", "value": 0.10})
     assert verdict == VERDICT_APPROVED
 
 
@@ -172,7 +172,7 @@ def test_gate_denies_unauthorized_signer_with_message():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.actor_identity IN ['rsm-east']",
                           message="Signer is not an authorized RSM.", order=0))
-    verdict, reason = mgr._evaluate_decision(rel, {"actor_identity": "intruder"})
+    verdict, reason, _ = mgr._evaluate_decision(rel, {"actor_identity": "intruder"})
     assert verdict == VERDICT_DENIED
     assert reason == "Signer is not an authorized RSM."
 
@@ -180,36 +180,36 @@ def test_gate_denies_unauthorized_signer_with_message():
 def test_gate_denies_over_threshold_without_escalation():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.value <= 0.15 OR obj.escalated = True", order=0))
-    verdict, _ = mgr._evaluate_decision(rel, {"value": 0.30, "escalated": False})
+    verdict, *_ = mgr._evaluate_decision(rel, {"value": 0.30, "escalated": False})
     assert verdict == VERDICT_DENIED
 
 
 def test_gate_allows_over_threshold_with_escalation():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.value <= 0.15 OR obj.escalated = True", order=0))
-    verdict, _ = mgr._evaluate_decision(rel, {"value": 0.30, "escalated": True})
+    verdict, *_ = mgr._evaluate_decision(rel, {"value": 0.30, "escalated": True})
     assert verdict == VERDICT_APPROVED
 
 
 def test_gate_denies_missing_cosign():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.cosign_present = True", order=0))
-    verdict, _ = mgr._evaluate_decision(rel, {"cosign_present": False})
+    verdict, *_ = mgr._evaluate_decision(rel, {"cosign_present": False})
     assert verdict == VERDICT_DENIED
 
 
 def test_gate_denies_action_mismatch():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.action = 'approve'", order=0))
-    verdict, _ = mgr._evaluate_decision(rel, {"action": "override"})
+    verdict, *_ = mgr._evaluate_decision(rel, {"action": "override"})
     assert verdict == VERDICT_DENIED
 
 
 def test_gate_disabled_criterion_is_skipped():
     mgr = AuthorityResolutionManager()
     rel = _relation(_link("ASSERT obj.actor_identity IN ['rsm-east']", enabled=False, order=0),
-                    _link("ASSERT obj.actor_identity != 'nobody'", order=1))
-    verdict, _ = mgr._evaluate_decision(rel, {"actor_identity": "intruder"})
+                    _link("ASSERT TRUE", order=1))
+    verdict, *_ = mgr._evaluate_decision(rel, {"actor_identity": "intruder"})
     assert verdict == VERDICT_APPROVED
 
 
@@ -217,7 +217,7 @@ def test_gate_with_no_enabled_check_is_no_authority_not_approval():
     """B5: a version with no enabled check approves nothing; the reason is coded."""
     from src.controller.authority_resolution_manager import NO_ENABLED_CHECKS_MESSAGE, VERDICT_NO_AUTHORITY
     mgr = AuthorityResolutionManager()
-    verdict, reason = mgr._evaluate_decision(_relation(), {"actor_identity": "anyone"})
+    verdict, reason, _ = mgr._evaluate_decision(_relation(), {"actor_identity": "anyone"})
     assert (verdict, reason) == (VERDICT_NO_AUTHORITY, NO_ENABLED_CHECKS_MESSAGE)
     only_disabled = _relation(_link("ASSERT obj.value <= 1", enabled=False))
     assert mgr._evaluate_decision(only_disabled, {"value": 9})[0] == VERDICT_NO_AUTHORITY
@@ -706,7 +706,7 @@ def test_resolver_auth_defaults_to_obo(db_session):
 def _pass_criteria():
     """One enabled check that passes for any request (a version needs one to resolve, B5)."""
     from src.models.authority_resolution import CriterionInput
-    return [CriterionInput(name="Not blocked", rule="ASSERT obj.actor_identity != 'nobody'")]
+    return [CriterionInput(name="Not blocked", rule="ASSERT TRUE")]
 
 
 def _make_ar(mgr, db, *, slug, name, criteria=None, prerequisites=None):
@@ -1484,8 +1484,8 @@ def test_find_authority_by_concept_returns_unique_match(db_session):
     from src.controller.authority_resolution_manager import AuthorityResolutionManager
 
     mgr = AuthorityResolutionManager()
-    _concept_ar(mgr, db_session, slug="tp-de", context={"brand": "Alpha Cola", "market": "DE"})
-    _concept_ar(mgr, db_session, slug="tp-fr", context={"brand": "Alpha Cola", "market": "FR"})
+    _concept_ar(mgr, db_session, slug="tp-de", context={"scope": {"brand": "Alpha Cola", "market": "DE"}})
+    _concept_ar(mgr, db_session, slug="tp-fr", context={"scope": {"brand": "Alpha Cola", "market": "FR"}})
     _concept_ar(mgr, db_session, slug="tp-draft", active=False)
     _concept_ar(mgr, db_session, slug="unrelated", iri="urn:demo:concept:other")
     db_session.commit()

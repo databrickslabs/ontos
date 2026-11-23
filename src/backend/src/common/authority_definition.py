@@ -8,8 +8,9 @@ What the hash covers (anything that changes what the AR decides, or what the
 DNA-Coefficient and the approval gate measure):
 
 * the ARF tuple and scope: ``actor_role``, ``actor_identity``, ``actor_since``,
-  ``action``, ``object_type``, ``object_id``, ``object_resolves_to``,
-  ``domain_context``;
+  ``action``, ``object_type``, ``object_id``, ``object_resolves_to``, and
+  ``domain_context`` (the scope and the parameters, normalised before hashing);
+* the ODRL rule (``rule``: constraints, duties and prohibitions, normalised);
 * the rule: ``justification_chain``, ``decision_logic``;
 * the evidence: ``evidence_binding``, ``evidence_sources``;
 * the measurement: ``dna_max_threshold`` (the ceiling), ``dna_scoring_config``,
@@ -41,7 +42,7 @@ from typing import Any, Dict, Iterable, List, Mapping
 # The AR's own columns that change behaviour (see the module docstring).
 DEFINITION_FIELDS = (
     "actor_role", "actor_identity", "actor_since", "action",
-    "object_type", "object_id", "object_resolves_to", "domain_context",
+    "object_type", "object_id", "object_resolves_to", "domain_context", "rule",
     "justification_chain", "decision_logic", "evidence_binding", "evidence_sources",
     "dna_max_threshold", "dna_scoring_config", "schedule_cron", "resolver_auth",
 )

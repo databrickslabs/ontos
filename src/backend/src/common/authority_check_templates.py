@@ -4,10 +4,11 @@ An author adds one with "Add check > From ARF template". The rule is copied into
 the AR version's own check (no link to a Compliance Check), so the template can
 evolve here without changing any saved AR.
 
-Every template in this module reads only plain ``obj.<field>`` request fields
-(the resolve request's top-level fields and its params). Templates that need the
-``ctx.`` or ``req.`` namespaces, or justification fields, are added in later
-releases; the registry is shaped so they can be appended without changing callers.
+Templates read request fields as ``obj.<field>`` and, where a comparison needs one, the
+AR's parameters as ``ctx.<param>`` (a template that needs a parameter says so in its
+description). Justification fields come with the policy batch. A co-sign is a duty (the decision
+is conditional until the co-signer acts), not a check, so it lives in the ODRL rule
+editor, where duties are expressed.
 """
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -42,12 +43,23 @@ TEMPLATES: Tuple[CheckTemplate, ...] = (
         dimension="policy",
     ),
     CheckTemplate(
-        # The IS NOT NULL test must follow the != inside the AND: a missing grantee
-        # would otherwise pass the != (the DSL treats a missing operand as unequal).
+        key="amount_within_threshold",
+        name="Amount within threshold",
+        description=(
+            "The request amount (request field value) must be at or below the AR's threshold "
+            "parameter. The AR needs a 'threshold' parameter in its domain context (ctx.threshold); "
+            "without it the check fails closed."
+        ),
+        rule="ASSERT obj.value <= ctx.threshold",
+        failure_message="The amount is above the threshold for this decision.",
+        dimension="policy",
+    ),
+    CheckTemplate(
+        # A missing grantee or actor fails the check (ARF rules fail closed on a missing operand).
         key="no_self_grant",
         name="No self-grant",
         description="The grantee must not be the requesting actor (request params grantee, actor_identity).",
-        rule="ASSERT obj.grantee != obj.actor_identity AND obj.grantee IS NOT NULL",
+        rule="ASSERT obj.grantee != obj.actor_identity",
         failure_message="The grantee must not be the requesting actor.",
         dimension="people",
     ),

@@ -45,7 +45,8 @@ export interface AuthorityReviewContext {
   details?: {
     actor_identity?: string | null;
     action?: string | null;
-    domain_context?: Record<string, any> | null;
+    domain_context?: DomainContext | null;
+    rule?: ArfRule | null;
     criteria?: { name?: string | null; rule?: string | null; direction?: string; weight?: number; enabled?: boolean }[];
     evidence_binding?: EvidenceBinding | null;
     evidence_sources?: EvidenceSource[] | null;
@@ -132,6 +133,54 @@ export const ARF_DIRECTIONS: { value: string; label: string }[] = [
   { value: 'neutral', label: 'Neutral' },
 ];
 
+// ODRL-shaped constraint (src/backend/src/common/authority_rule.py). The scope
+// compares with values; rule constraints may also reference a variable
+// (`ctx.<param>` / `req.<key>`).
+export type OdrlOperator = 'eq' | 'neq' | 'lt' | 'lteq' | 'gt' | 'gteq' | 'isAnyOf' | 'isNoneOf';
+
+export interface DivergenceFacets {
+  name?: string;
+  message?: string;
+  direction?: string;
+  weight?: number;
+  dimension?: string;
+}
+
+export interface OdrlConstraint extends DivergenceFacets {
+  leftOperand: string;
+  operator: OdrlOperator;
+  rightOperand?: string | number | boolean | (string | number | boolean)[];
+  rightOperandReference?: string;
+  unit?: string;
+}
+
+// A logical constraint: holds when any (or) / all (and) of its parts hold.
+export interface OdrlLogicalConstraint extends DivergenceFacets {
+  or?: OdrlConstraint[];
+  and?: OdrlConstraint[];
+}
+
+export type RuleConstraint = OdrlConstraint | OdrlLogicalConstraint;
+
+export interface OdrlDuty extends DivergenceFacets {
+  action: string;                    // e.g. arf:obtainCoApproval
+  constraint: RuleConstraint[];      // the duty is fulfilled when these hold
+}
+
+export interface OdrlProhibition extends DivergenceFacets {
+  constraint: RuleConstraint[];      // prohibited when all of these hold
+}
+
+export interface ArfRule {
+  permission?: { constraint?: RuleConstraint[]; duty?: OdrlDuty[] };
+  prohibition?: OdrlProhibition[];
+}
+
+export interface DomainContext {
+  scope: OdrlConstraint[];           // must match the request context
+  params: Record<string, any>;       // read by rules as ctx.<key>
+}
+
 export interface AuthorityRelation {
   id: string;
   slug?: string | null;
@@ -164,7 +213,8 @@ export interface AuthorityRelation {
   object_type?: string | null;
   object_id?: string | null;
   object_resolves_to?: string[] | null;
-  domain_context?: Record<string, any> | null;
+  domain_context?: DomainContext | null;
+  rule?: ArfRule | null;
   justification_chain?: Record<string, any> | null;
   decision_logic?: Record<string, any> | null;
   evidence_binding?: EvidenceBinding | null;
@@ -234,7 +284,7 @@ export interface AuthorityDnaRun {
 export interface AuthorityDecision {
   id: string;
   source: string;                  // mcp | evidence | ui
-  verdict?: string | null;         // approved | denied | null (evidence sample)
+  verdict?: string | null;         // approved | conditional | denied | no_authority | conflict | null (evidence sample)
   reason?: string | null;
   actor_identity?: string | null;
   action?: string | null;
@@ -343,6 +393,20 @@ export interface PrerequisiteChainEntry {
   verdict: string;
   reason?: string | null;
   required: boolean;
+  pending_duties?: PendingDuty[];
+}
+
+export interface PendingDuty {
+  duty: string;
+  message?: string | null;
+}
+
+export interface ScopeCheckEntry {
+  operand: string;
+  operator: OdrlOperator;
+  expected: any;
+  actual: any;
+  passed: boolean;
 }
 
 export interface AffirmationInput {
@@ -376,7 +440,7 @@ export interface AuthorityRelationCreate {
 }
 
 export interface ResolveResponse {
-  verdict: string;                // approved | denied | no_authority | conflict
+  verdict: string;                // approved | conditional | denied | no_authority | conflict
   reason: string;
   relation_id?: string | null;
   relation_slug?: string | null;
@@ -385,7 +449,44 @@ export interface ResolveResponse {
   dna_direction?: string | null;
   prerequisite_chain?: PrerequisiteChainEntry[];
   resolved_refs?: ResolvedRefEntry[];
+  scope_check?: ScopeCheckEntry[];
+  pending_duties?: PendingDuty[];
 }
+
+// Left operands the rule editor offers for the canonical request fields.
+export const RULE_REQUEST_OPERANDS: { operand: string; field: string; kind: 'number' | 'string' | 'boolean' }[] = [
+  { operand: 'payAmount', field: 'value', kind: 'number' },
+  { operand: 'arf:actor', field: 'actor_identity', kind: 'string' },
+  { operand: 'arf:action', field: 'action', kind: 'string' },
+  { operand: 'arf:objectId', field: 'object_id', kind: 'string' },
+  { operand: 'arf:cosignPresent', field: 'cosign_present', kind: 'boolean' },
+  { operand: 'arf:escalated', field: 'escalated', kind: 'boolean' },
+];
+
+export const ODRL_OPERATORS: OdrlOperator[] = ['eq', 'neq', 'lt', 'lteq', 'gt', 'gteq', 'isAnyOf', 'isNoneOf'];
+
+// ODRL core context operands a scope key keeps as is; others get the arf: prefix.
+const ODRL_CONTEXT_OPERANDS = ['spatial', 'purpose', 'dateTime', 'industry', 'language', 'product'];
+
+/** The request-context key an operand reads (`arf:market` -> `market`). */
+export const operandKey = (operand: string): string => operand.split(':').pop() || operand;
+
+/** The operand an authoring key is stored as (mirrors the backend). */
+export const operandForKey = (key: string): string => {
+  const k = key.trim();
+  return k.includes(':') || ODRL_CONTEXT_OPERANDS.includes(k) ? k : `arf:${k}`;
+};
+
+/**
+ * The request field a scope operand reads (mirrors the backend's scope_key): a typed field
+ * reads its canonical field (arf:actor -> actor_identity), not a key the caller picks (#1491-2).
+ */
+export const scopeKey = (operand: string): string =>
+  RULE_REQUEST_OPERANDS.find((o) => o.operand === operand)?.field ?? operandKey(operand);
+
+/** The request fields a scope reads, from stored scope operands. */
+export const scopeRequestKeys = (scope: { leftOperand: string }[]): string[] =>
+  scope.map((c) => scopeKey(c.leftOperand));
 
 export const ACTION_VOCAB = ['approve', 'escalate', 'override', 'delegate', 'veto'];
 export const AFFIRMATION_ROLES = ['business', 'technical', 'governance'];

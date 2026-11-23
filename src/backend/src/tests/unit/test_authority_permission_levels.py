@@ -33,7 +33,7 @@ FEATURE = "authority-resolution"
 
 # An always-passing enabled check: a version needs one to resolve (B5). The DSL
 # treats a missing operand in != as unequal, so this passes for any request.
-PASS_CHECK = {"name": "Not blocked", "rule": "ASSERT obj.actor_identity != 'nobody'"}
+PASS_CHECK = {"name": "Not blocked", "rule": "ASSERT TRUE"}
 
 
 def _make_ar(mgr, db, *, slug=None, name="AR", caller_is_admin=True, **kwargs):

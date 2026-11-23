@@ -567,10 +567,13 @@ class Parser:
 
 
 # Property roots that read a nested namespace of the evaluated object.
-NAMESPACE_ROOTS = ("ctx", "req", "policy_ref", "fact")
+NAMESPACE_ROOTS = ("ctx", "req", "policy_ref")
 # Namespaces that never fall back to top-level keys: an object without the namespace
 # (a data product, say) reads absent, not an unrelated top-level key of the same name.
-CLOSED_NAMESPACE_ROOTS = ("policy_ref", "fact")
+CLOSED_NAMESPACE_ROOTS = ("policy_ref",)
+# ARF strict evaluation only (#1294 slice 4): the resolve-time facts read as ``fact.<name>``.
+# A regular Compliance rule has no such namespace: ``fact.x`` there reads the top-level ``x``.
+STRICT_NAMESPACE_ROOTS = ("fact",)
 
 
 class _Unknown:
@@ -620,10 +623,12 @@ class Evaluator:
             # ``ctx.x`` / ``req.x`` read a namespace when the object carries it
             # (Authority Relations: AR parameters / request context); any other
             # prefix (``obj.``, ``p.``…) reads the object's top-level key.
-            scoped = self.obj.get(node.object) if node.object in NAMESPACE_ROOTS else None
+            roots = NAMESPACE_ROOTS + STRICT_NAMESPACE_ROOTS if self.strict else NAMESPACE_ROOTS
+            closed = CLOSED_NAMESPACE_ROOTS + STRICT_NAMESPACE_ROOTS if self.strict else CLOSED_NAMESPACE_ROOTS
+            scoped = self.obj.get(node.object) if node.object in roots else None
             if isinstance(scoped, dict):
                 value = scoped.get(node.property)
-            elif node.object in CLOSED_NAMESPACE_ROOTS:
+            elif node.object in closed:
                 value = None
             else:
                 value = self.obj.get(node.property)

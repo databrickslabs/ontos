@@ -28,6 +28,8 @@ import { getTargetTypeName } from '@/lib/relationship-type';
 import { assetTypeLocalName, GENERIC_ASSET_TARGET, relationshipTargetSource } from '@/lib/relationship-target-source';
 import { AssetTypeRead } from '@/types/asset';
 import type { RelationshipDefinition } from '@/types/ontology-schema';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
+import { ListItemSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
 
 interface AddRelationshipDialogProps {
   isOpen: boolean;
@@ -136,6 +138,13 @@ function TargetResultRow({ entity, isSelected, onSelect }: {
   );
 }
 
+// Stands in for the results while they load (see ContentSkeleton)
+const TARGET_RESULTS_SAMPLE: TargetEntity[] = [
+  { id: 'sample-1', name: 'Sample table', type: 'Table', location: 'sample.schema' },
+  { id: 'sample-2', name: 'Sample view', type: 'View', location: 'sample.schema' },
+  { id: 'sample-3', name: 'Sample dashboard', type: 'Dashboard' },
+];
+
 function TargetResultsList({ results, loading, selectedId, onSelect, emptyMessage }: {
   results: TargetEntity[];
   loading: boolean;
@@ -143,27 +152,23 @@ function TargetResultsList({ results, loading, selectedId, onSelect, emptyMessag
   onSelect: (entity: TargetEntity) => void;
   emptyMessage?: string;
 }) {
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-  if (results.length === 0 && emptyMessage) {
-    return <p className="text-sm text-muted-foreground text-center py-6">{emptyMessage}</p>;
-  }
   return (
-    <div className="space-y-0.5">
-      {results.map(entity => (
-        <TargetResultRow
-          key={entity.id}
-          entity={entity}
-          isSelected={selectedId === entity.id}
-          onSelect={() => onSelect(entity)}
-        />
-      ))}
-    </div>
+    <ContentSkeleton
+      loading={loading}
+      empty={results.length === 0 && !!emptyMessage}
+      emptyMessage={<p className="text-sm text-muted-foreground text-center py-6">{emptyMessage}</p>}
+    >
+      <div className="space-y-0.5">
+        {(loading ? TARGET_RESULTS_SAMPLE : results).map(entity => (
+          <TargetResultRow
+            key={entity.id}
+            entity={entity}
+            isSelected={selectedId === entity.id}
+            onSelect={() => onSelect(entity)}
+          />
+        ))}
+      </div>
+    </ContentSkeleton>
   );
 }
 
@@ -568,21 +573,25 @@ export function AddRelationshipDialog({
           {/* Relationship type selector */}
           <div className="px-6 pb-3">
             <Label>{t('common:addRelationship.relationshipType')}</Label>
-            <Select value={selectedRelType} onValueChange={handleRelTypeChange}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder={relTypesLoading ? t('common:states.loading') : t('common:addRelationship.selectRelationshipType')} />
-              </SelectTrigger>
-              <SelectContent>
-                {validRelationships.map((r) => (
-                  <SelectItem key={relKey(r)} value={relKey(r)}>
-                    {formatLabel(r.label)} → {r.target_type_label || r.target_type_iri?.split('#')[1] || '?'}
-                  </SelectItem>
-                ))}
-                {validRelationships.length === 0 && !relTypesLoading && (
-                  <SelectItem value="_none" disabled>{t('common:addRelationship.noValidRelationships')}</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+            {relTypesLoading ? (
+              <SkeletonLine height="h-10" width="w-full" className="mt-1" />
+            ) : (
+              <Select value={selectedRelType} onValueChange={handleRelTypeChange}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder={t('common:addRelationship.selectRelationshipType')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {validRelationships.map((r) => (
+                    <SelectItem key={relKey(r)} value={relKey(r)}>
+                      {formatLabel(r.label)} → {r.target_type_label || r.target_type_iri?.split('#')[1] || '?'}
+                    </SelectItem>
+                  ))}
+                  {validRelationships.length === 0 && (
+                    <SelectItem value="_none" disabled>{t('common:addRelationship.noValidRelationships')}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Target selection area -- only shown when a relationship type is selected */}
@@ -701,9 +710,7 @@ export function AddRelationshipDialog({
                     <ScrollArea className="w-44 flex-shrink-0 border rounded-md">
                       <div className="p-1">
                         {typesLoading ? (
-                          <div className="flex items-center justify-center py-8">
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          </div>
+                          <ListItemSkeleton count={6} height="h-7" className="space-y-1.5" />
                         ) : groupedTypes.length === 0 ? (
                           <p className="text-xs text-muted-foreground text-center py-4">{t('common:addRelationship.noMatchingTypes')}</p>
                         ) : (

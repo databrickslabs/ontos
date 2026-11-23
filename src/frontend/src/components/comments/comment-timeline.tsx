@@ -21,6 +21,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 
 interface CommentFormData {
   title: string;
@@ -46,6 +47,12 @@ interface TimelineEntry {
     action?: string;
   };
 }
+
+// Stands in for the comments while they load (see ContentSkeleton)
+const COMMENTS_SAMPLE: TimelineEntry[] = [
+  { id: 's1', type: 'comment', entity_type: 'sample', entity_id: 'sample', title: 'Sample comment', content: 'A comment that spans a line of text.', username: 'user', timestamp: '2026-01-01T00:00:00Z' },
+  { id: 's2', type: 'comment', entity_type: 'sample', entity_id: 'sample', content: 'A second comment, a bit shorter.', username: 'user', timestamp: '2026-01-01T00:00:00Z' },
+];
 
 interface TimelineResponse {
   timeline: TimelineEntry[];
@@ -81,6 +88,7 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
 
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [timelineLoading, setTimelineLoading] = useState(true);
   const [filterType, setFilterType] = useState<'all' | 'comments' | 'changes'>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingComment, setEditingComment] = useState<Comment | null>(null);
@@ -128,6 +136,7 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
 
   const fetchTimeline = useCallback(async () => {
     if (!entityType || !entityId) {
+      setTimelineLoading(false);
       return;
     }
 
@@ -142,6 +151,7 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
         description: t('comments:timeline.loadError', { error: response.error }),
         variant: 'destructive',
       });
+      setTimelineLoading(false);
       return;
     }
 
@@ -150,6 +160,7 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
 
     setTimeline(newTimeline);
     setTotalCount(newCount);
+    setTimelineLoading(false);
 
     // Notify parent of count change
     if (onCountChange) {
@@ -683,9 +694,35 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
         <ScrollArea className="flex-1" ref={scrollAreaRef}>
           {isFormOpen && CommentForm}
 
-          {timeline.length > 0 ? (
+          <ContentSkeleton
+            loading={timelineLoading}
+            empty={timeline.length === 0}
+            emptyMessage={
+              <div className="p-4 text-center text-muted-foreground">
+                {filterType === 'comments' ? (
+                  <>
+                    <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">{t('comments:empty.commentsTitle')}</p>
+                    <p className="text-xs">{t('comments:empty.commentsSubtitle')}</p>
+                  </>
+                ) : filterType === 'changes' ? (
+                  <>
+                    <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">{t('comments:empty.changesTitle')}</p>
+                    <p className="text-xs">{t('comments:empty.changesSubtitle')}</p>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">{t('comments:empty.allTitle')}</p>
+                    <p className="text-xs">{t('comments:empty.allSubtitle')}</p>
+                  </>
+                )}
+              </div>
+            }
+          >
             <div className="p-4 space-y-3">
-              {timeline.map(entry => (
+              {(timelineLoading ? COMMENTS_SAMPLE : timeline).map(entry => (
                 <TimelineItem
                   key={entry.id}
                   entry={entry}
@@ -693,29 +730,7 @@ export const CommentTimeline: React.FC<CommentTimelineProps> = ({
                 />
               ))}
             </div>
-          ) : (
-            <div className="p-4 text-center text-muted-foreground">
-              {filterType === 'comments' ? (
-                <>
-                  <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">{t('comments:empty.commentsTitle')}</p>
-                  <p className="text-xs">{t('comments:empty.commentsSubtitle')}</p>
-                </>
-              ) : filterType === 'changes' ? (
-                <>
-                  <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">{t('comments:empty.changesTitle')}</p>
-                  <p className="text-xs">{t('comments:empty.changesSubtitle')}</p>
-                </>
-              ) : (
-                <>
-                  <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">{t('comments:empty.allTitle')}</p>
-                  <p className="text-xs">{t('comments:empty.allSubtitle')}</p>
-                </>
-              )}
-            </div>
-          )}
+          </ContentSkeleton>
         </ScrollArea>
       </div>
     </div>

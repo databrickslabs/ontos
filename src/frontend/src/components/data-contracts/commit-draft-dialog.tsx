@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { SkeletonBlock } from '@/components/common/list-view-skeleton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -191,8 +192,9 @@ export default function CommitDraftDialog({
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <div className="space-y-6 py-4">
+            <SkeletonBlock height="h-24" />
+            <SkeletonBlock height="h-16" />
           </div>
         ) : error && !diffData ? (
           <Alert variant="destructive">

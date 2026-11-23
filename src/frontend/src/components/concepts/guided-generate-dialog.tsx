@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Loader2, Plus, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useDomains } from '@/hooks/use-domains';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 // ---------------------------------------------------------------------------
 // Guided "Generate" dialog (Concept Builder v2, Define > Generate).
@@ -162,12 +163,9 @@ export function GuidedGenerateDialog({ open, onOpenChange }: GuidedGenerateDialo
               {t('semantic-models:define.guided.domainLabel', 'What domain are you working in?')}
             </Label>
             {domainsLoading ? (
-              <div
-                className="flex items-center gap-2 text-sm text-muted-foreground"
-                data-testid="guided-domains-loading"
-              >
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {t('semantic-models:define.guided.domainsLoading', 'Loading data domains...')}
+              <div data-testid="guided-domains-loading" aria-busy="true">
+                <span className="sr-only" role="status">{t('semantic-models:define.guided.domainsLoading', 'Loading data domains...')}</span>
+                <SkeletonLine height="h-9" width="w-full" />
               </div>
             ) : domains.length > 0 ? (
               <Select value={selectedDomainId} onValueChange={handleDomainSelect}>

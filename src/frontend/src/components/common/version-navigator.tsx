@@ -8,6 +8,7 @@ import VersionSelector, {
   EntityVersionRow,
   fetchEntityVersions,
 } from './version-selector'
+import { SkeletonLine } from '@/components/common/list-view-skeleton'
 
 /**
  * Combines a previous / next chevron pair with the shared `VersionSelector`
@@ -33,16 +34,32 @@ export default function VersionNavigator({
 }: VersionNavigatorProps) {
   const { t } = useTranslation('common')
   const [versions, setVersions] = useState<EntityVersionRow[]>([])
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     fetchEntityVersions(entityKind, currentEntityId).then((rows) => {
-      if (!cancelled) setVersions(rows)
+      if (!cancelled) {
+        setVersions(rows)
+        setLoaded(true)
+      }
     })
     return () => {
       cancelled = true
     }
   }, [entityKind, currentEntityId])
+
+  if (!loaded) {
+    // Same footprint as the loaded nav: two chevrons around the version selector
+    return (
+      <div className="flex items-center gap-1" role="status" aria-busy="true">
+        <span className="sr-only">{t('common:states.loading')}</span>
+        <SkeletonLine height="h-8" width="w-8" />
+        <SkeletonLine height="h-8" width="w-28" />
+        <SkeletonLine height="h-8" width="w-8" />
+      </div>
+    )
+  }
 
   // Family-of-one: hide the whole nav block.
   if (versions.length <= 1) return null

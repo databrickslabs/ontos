@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFormatLabel } from '@/lib/format-label';
 import { getOtherTypeName } from '@/lib/relationship-type';
 import type { RelationshipDefinition, EntityRelationships } from '@/types/ontology-schema';
+import { ListItemSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
 
 interface LinkCandidate {
   id: string;
@@ -192,9 +193,17 @@ export function LineageEditor({
         </DialogHeader>
 
         {isLoadingSchema ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mr-2" />
-            <span className="text-sm text-muted-foreground">{t('common:lineageEditor.loadingTypes')}</span>
+          <div className="space-y-3 py-2" role="status" aria-busy="true">
+            <span className="sr-only">{t('common:lineageEditor.loadingTypes')}</span>
+            <div className="flex items-center gap-1" aria-hidden="true">
+              <SkeletonLine height="h-6" width="w-24" />
+              <SkeletonLine height="h-6" width="w-24" />
+              <SkeletonLine height="h-6" width="w-24" />
+            </div>
+            <div aria-hidden="true">
+              <SkeletonLine height="h-9" width="w-full" />
+              <ListItemSkeleton count={3} height="h-14" className="space-y-1.5 mt-3" />
+            </div>
           </div>
         ) : schemaError ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2">
@@ -399,9 +408,7 @@ function CandidateSearchStep({
 
       <div className="space-y-1.5">
         {isSearching ? (
-          <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> {t('common:lineageEditor.searching')}
-          </div>
+          <ListItemSkeleton count={3} height="h-14" className="space-y-1.5" />
         ) : candidates.length === 0 ? (
           <div className="text-sm text-muted-foreground p-3">
             {t('common:lineageEditor.noCandidates')}

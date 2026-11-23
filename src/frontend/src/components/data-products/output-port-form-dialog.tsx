@@ -9,8 +9,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Info } from 'lucide-react';
+import { Plus, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import type { OutputPort, DataProduct } from '@/types/data-product';
 import type { DataContractListItem } from '@/types/data-contract';
 import type { DeliveryMethodRead } from '@/types/delivery-method';
@@ -222,10 +223,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
             <div className="space-y-2">
               <Label htmlFor="deliveryMethod">{t('data-products:outputPortForm.labels.deliveryMethod')}</Label>
               {isLoadingDeliveryMethods ? (
-                <div className="flex items-center gap-2 p-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-muted-foreground">Loading...</span>
-                </div>
+                <SkeletonLine height="h-10" width="w-full" />
               ) : (
                 <Select value={deliveryMethodId} onValueChange={setDeliveryMethodId}>
                   <SelectTrigger>
@@ -310,9 +308,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
                 {contractSelectionMode === 'existing' && (
                   <div className="ml-6 space-y-2">
                     {isLoadingContracts ? (
-                      <div className="flex items-center justify-center p-4">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      </div>
+                      <SkeletonLine height="h-10" width="w-full" />
                     ) : (
                       <>
                         <Select value={contractId} onValueChange={setContractId}>

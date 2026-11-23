@@ -17,7 +17,7 @@ interface QuickAction {
 }
 
 export default function QuickActions() {
-  const { t } = useTranslation(['home', 'features']);
+  const { t } = useTranslation(['home', 'features', 'common']);
   const { isLoading: permissionsLoading, hasPermission } = usePermissions();
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
   const hiddenFeatures = useNavHiddenFeatures();
@@ -98,15 +98,20 @@ export default function QuickActions() {
   const visibleGroups = groupOrder.filter(group => groupedActions[group]?.length);
 
   if (permissionsLoading) {
+    // Two groups of group label + 2x2 buttons, as the loaded list
     return (
-      <div className="space-y-4 p-6">
-        <SkeletonLine height="h-3" width="w-24" />
-        <div className="grid grid-cols-2 gap-2">
-          <SkeletonLine height="h-10" />
-          <SkeletonLine height="h-10" />
-          <SkeletonLine height="h-10" />
-          <SkeletonLine height="h-10" />
-        </div>
+      <div className="space-y-4" aria-busy="true">
+        <span className="sr-only" role="status">{t('common:states.loading')}</span>
+        {[0, 1].map((g) => (
+          <div key={g}>
+            <SkeletonLine height="h-4" width="w-20" className="mb-2" />
+            <div className="grid grid-cols-2 gap-2">
+              {[0, 1, 2, 3].map((i) => (
+                <SkeletonLine key={i} height="h-8" />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }

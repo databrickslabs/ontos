@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
-import { Loader2 } from 'lucide-react'
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton'
 import type { TeamMemberForImport, TeamMember } from '@/types/data-contract'
 
 type ImportTeamMembersDialogProps = {
@@ -41,8 +41,8 @@ export default function ImportTeamMembersDialog({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [members, setMembers] = useState<MemberSelection[]>([])
 
-  // Fetch team members when dialog opens
-  useEffect(() => {
+  // Fetch team members when dialog opens (layout effect: loading shows before the first paint)
+  useLayoutEffect(() => {
     if (isOpen && entityId && teamId) {
       setLoading(true)
       const apiPath = entityType === 'product'
@@ -143,9 +143,7 @@ export default function ImportTeamMembersDialog({
 
         <div className="py-4">
           {loading ? (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
+            <ListItemSkeleton count={3} height="h-12" className="space-y-3 border rounded-lg p-4" />
           ) : members.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               {t('data-contracts:team.noMembersFound', 'No members found in this team')}

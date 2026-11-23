@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { SkeletonLine, skeletonWidth } from '@/components/common/list-view-skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useApi } from '@/hooks/use-api';
 import { cn } from '@/lib/utils';
@@ -204,9 +205,11 @@ export function HierarchyTreeNode({
             />
           ))}
           {loading && (
-            <div className="flex items-center gap-2 py-2" style={{ paddingLeft: paddingLeft + 16 }}>
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">{t('common:states.loading')}</span>
+            <div className="space-y-1 py-1" style={{ paddingLeft: paddingLeft + 24 }} aria-busy="true">
+              <span className="sr-only" role="status">{t('common:states.loading')}</span>
+              {[0, 1, 2].map((i) => (
+                <SkeletonLine key={i} height="h-4" width="" style={{ width: `${skeletonWidth(i, 110, 60)}px` }} />
+              ))}
             </div>
           )}
           {!loading && loaded && children.length === 0 && hasChildren && (

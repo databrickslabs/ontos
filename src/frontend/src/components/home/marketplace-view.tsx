@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Database, Search, Bell, X, LayoutList, Network, Package, Grid2X2, ExternalLink } from 'lucide-react';
+import { SkeletonBlock, TileGridSkeleton } from '@/components/common/list-view-skeleton';
+import { Database, Search, Bell, X, LayoutList, Network, Package, Grid2X2, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDomains } from '@/hooks/use-domains';
 import { type DataProduct } from '@/types/data-product';
@@ -568,9 +569,9 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
         </div>
 
         {domainsLoading || domainDetailsLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground h-[220px] justify-center border rounded-lg bg-muted/20">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">{t('marketplace.loadingDomains')}</span>
+          <div className="h-[220px] border rounded-lg bg-muted/20 p-4" aria-busy="true">
+            <span className="sr-only" role="status">{t('marketplace.loadingDomains')}</span>
+            <SkeletonBlock height="h-full" />
           </div>
         ) : domainBrowserStyle === 'pills' ? (
           /* Pills View */
@@ -689,8 +690,9 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
         {/* Products */}
         <div className="mt-4">
           {productsLoading || matchesLoading ? (
-            <div className="flex items-center justify-center h-48">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div aria-busy="true">
+              <span className="sr-only" role="status">{t('common:states.loading')}</span>
+              <TileGridSkeleton count={6} columns={tilesPerRow} />
             </div>
           ) : productsError ? (
             <Alert variant="destructive">

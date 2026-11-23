@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertCircle, XCircle, CheckCircle } from 'lucide-react';
 import SchemaPropertyEditor from '@/components/data-contracts/schema-property-editor';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
 import type { ColumnProperty } from '@/types/data-contract';
 import { useProjectContext } from '@/stores/project-store';
 
@@ -53,6 +54,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
   const [columns, setColumns] = useState<ColumnProperty[]>([]);
   const [createContract, setCreateContract] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workflowErrors, setWorkflowErrors] = useState<PreCreationError | null>(null);
   const [success, setSuccess] = useState<any | null>(null);
@@ -66,7 +68,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
     }
     (async () => {
       try {
-        setLoading(true);
+        setBootstrapping(true);
         const res = await fetch('/api/self-service/bootstrap');
         const data = await res.json();
         if (data?.defaults) {
@@ -76,7 +78,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
       } catch (e) {
         // ignore
       } finally {
-        setLoading(false);
+        setBootstrapping(false);
       }
     })();
   }, [isOpen]);
@@ -147,7 +149,8 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
         </DialogHeader>
 
         {/* Top fields outside scroll area to prevent dropdown clipping */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
+        {/* Catalog and schema defaults come from the bootstrap */}
+        <ContentSkeleton loading={bootstrapping} className="flex-shrink-0" contentClassName="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label>{t('data-contracts:selfService.whatToCreateLabel', 'What to create')}</Label>
             <Select value={createType} onValueChange={(v) => setCreateType(v as CreateType)}>
@@ -167,7 +170,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
             <Label>{t('common:labels.schema', 'Schema')}</Label>
             <Input value={schema} onChange={(e) => setSchema(e.target.value)} placeholder={t('data-contracts:selfService.schemaPlaceholder', 'e.g. sandbox')} />
           </div>
-        </div>
+        </ContentSkeleton>
 
         <div className="grid gap-4 overflow-y-auto flex-1 min-h-0 pr-2">
           {createType === 'table' && (

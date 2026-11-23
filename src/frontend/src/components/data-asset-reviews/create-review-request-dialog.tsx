@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { TreeView } from '@/components/ui/tree-view';
 import { CatalogItem, DataAssetReviewRequest, DataAssetReviewRequestCreate, AssetType } from '@/types/data-asset-review';
 import { Loader2, AlertCircle, Folder, FolderOpen, Table, Layout, FunctionSquare } from 'lucide-react';
-import { PrincipalPicker } from '@/components/common/principal-picker';
+import { PrincipalPicker } from '@/components/common/principal-picker';import { HierarchyTreeSkeleton } from '@/components/common/list-view-skeleton';
+
 
 // Define user info type based on backend response
 interface UserInfo {
@@ -391,8 +392,9 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                          <Label className="text-sm font-medium block p-2 border-b">{t('data-asset-reviews:dialog.selectAssetsLabel')}</Label>
                          <div className="h-[300px] overflow-y-auto p-2">
                             {isLoadingCatalog ? (
-                                 <div className="flex justify-center items-center h-full">
-                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                 <div className="h-full" aria-busy="true">
+                                    <span className="sr-only" role="status">{t('common:states.loading')}</span>
+                                    <HierarchyTreeSkeleton groups={3} itemsPerGroup={2} />
                                 </div>
                             ) : catalogError ? (
                                 <Alert variant="destructive">

@@ -7,6 +7,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
 
 import DataDomainDetailsView from './data-domain-details';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const api = vi.hoisted(() => ({
   get: vi.fn(),
@@ -30,12 +31,15 @@ describe('DataDomainDetailsView assigned entities', () => {
       return { data: [] };
     });
     render(
-      <MemoryRouter initialEntries={['/settings/data-domains/d-1']}>
-        <Routes>
-          <Route path="/settings/data-domains/:domainId" element={<DataDomainDetailsView />} />
-          <Route path="/assets/:assetId" element={<AssetPage />} />
-        </Routes>
-      </MemoryRouter>,
+      // The app root provides tooltips; panels render theirs while loading too
+      <TooltipProvider>
+        <MemoryRouter initialEntries={['/settings/data-domains/d-1']}>
+          <Routes>
+            <Route path="/settings/data-domains/:domainId" element={<DataDomainDetailsView />} />
+            <Route path="/assets/:assetId" element={<AssetPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TooltipProvider>,
     );
 
     fireEvent.click(await screen.findByText('Ledger'));

@@ -17,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import {
   Box, Table2, Eye, Columns2, LayoutDashboard, Globe, FileCode, Brain,
   Activity, Server, Shield, BookOpen, Database, Shapes, Package, Tag, Send,
@@ -25,6 +25,7 @@ import {
 import * as dagre from 'dagre';
 import type { LineageGraph, LineageGraphNode, LineageGraphEdge } from '@/types/ontology-schema';
 import { TYPE_COLOR } from '@/components/lineage/constants';
+import { GraphCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import { useFormatLabel } from '@/lib/format-label';
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -345,12 +346,7 @@ export function LineageFlowGraph({
   }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
   if (isLoading) {
-    return (
-      <div className={`flex items-center justify-center ${className || 'h-64'}`}>
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">{t('common:lineageFlow.loadingLineage')}</span>
-      </div>
-    );
+    return <GraphCanvasSkeleton showToolbar={false} height={className || 'h-[500px]'} />;
   }
 
   if (error) {

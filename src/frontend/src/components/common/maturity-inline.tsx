@@ -7,6 +7,7 @@ import {
   CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw,
 } from 'lucide-react';
 import { MaturityBadge } from '@/components/common/maturity-badge';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import type { MaturityReport, LevelResult } from '@/types/maturity';
 
 interface MaturityInlineProps {
@@ -71,7 +72,19 @@ export function MaturityInline({ entityType, entityId, compact = false }: Maturi
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
   if (isLoading) {
-    return <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />;
+    return (
+      <div role="status" aria-busy="true" className={compact ? 'flex flex-col items-center gap-1' : undefined}>
+        <span className="sr-only">{t('common:states.loading')}</span>
+        {compact ? (
+          <>
+            <SkeletonLine height="h-4" width="w-16" />
+            <SkeletonLine height="h-2.5" width="w-10" />
+          </>
+        ) : (
+          <SkeletonLine height="h-5" width="w-28" />
+        )}
+      </div>
+    );
   }
 
   if (!report) {

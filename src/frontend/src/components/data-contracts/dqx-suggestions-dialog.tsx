@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DataTable } from '@/components/ui/data-table'
 import { ColumnDef, RowSelectionState } from '@tanstack/react-table'
 import { useToast } from '@/hooks/use-toast'
-import { CheckCircle2, XCircle, Loader2, Sparkles } from 'lucide-react'
+import { CheckCircle2, XCircle, Sparkles } from 'lucide-react'
+import { ContentSkeleton } from '@/components/common/content-skeleton'
 import type { SuggestedQualityCheck, DataContract } from '@/types/data-contract'
 import CreateVersionDialog from '@/components/data-products/create-version-dialog'
 
@@ -234,75 +235,75 @@ export default function DqxSuggestionsDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {loading ? (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : pendingCount === 0 ? (
-            <Alert>
-              <CheckCircle2 className="h-4 w-4" />
-              <AlertDescription>
-                {t('data-contracts:dqx.noPending', 'No pending suggestions. All suggestions have been reviewed.')}
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <div className="flex-1 overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b">
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-medium">
-                    {t('data-contracts:dqx.pendingCount', { count: pendingCount, defaultValue: '{{count}} pending suggestions' })}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    {t('data-contracts:dqx.selectedCount', { count: selectedIds.size, defaultValue: '{{count}} selected' })}
-                  </span>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => handleSelectAll()}>
-                  {selectedIds.size === pendingCount ? t('data-contracts:dqx.deselectAll', 'Deselect All') : t('data-contracts:dqx.selectAll', 'Select All')}
-                </Button>
+          <ContentSkeleton
+            loading={loading}
+            empty={pendingCount === 0}
+            emptyMessage={
+              <Alert>
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertDescription>
+                  {t('data-contracts:dqx.noPending', 'No pending suggestions. All suggestions have been reviewed.')}
+                </AlertDescription>
+              </Alert>
+            }
+            className="flex flex-1 min-h-0 flex-col"
+            contentClassName="flex-1 overflow-hidden flex flex-col"
+          >
+            <div className="flex items-center justify-between mb-4 pb-3 border-b">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium">
+                  {t('data-contracts:dqx.pendingCount', { count: pendingCount, defaultValue: '{{count}} pending suggestions' })}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {t('data-contracts:dqx.selectedCount', { count: selectedIds.size, defaultValue: '{{count}} selected' })}
+                </span>
               </div>
+              <Button variant="ghost" size="sm" onClick={() => handleSelectAll()}>
+                {selectedIds.size === pendingCount ? t('data-contracts:dqx.deselectAll', 'Deselect All') : t('data-contracts:dqx.selectAll', 'Select All')}
+              </Button>
+            </div>
 
-              <div className="flex-1 overflow-y-auto">
-                {schemaNames.length === 1 ? (
-                  // Single schema - simple view
-                  <div className="space-y-3">
-                    <div className="font-medium text-sm pb-2">
-                      {schemaNames[0]}
-                    </div>
-                    <DataTable
-                      columns={createColumns()}
-                      data={suggestionsBySchema[schemaNames[0]]}
-                      rowSelection={rowSelection}
-                      onRowSelectionChange={setRowSelection}
-                    />
+            <div className="flex-1 overflow-y-auto">
+              {schemaNames.length === 1 ? (
+                // Single schema - simple view
+                <div className="space-y-3">
+                  <div className="font-medium text-sm pb-2">
+                    {schemaNames[0]}
                   </div>
-                ) : (
-                  // Multiple schemas - use tabs
-                  <Tabs defaultValue={schemaNames[0]} className="w-full">
-                    <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
-                      {schemaNames.map(schemaName => (
-                        <TabsTrigger key={schemaName} value={schemaName} className="flex-shrink-0">
-                          {schemaName}
-                          <Badge variant="secondary" className="ml-2 text-xs">
-                            {suggestionsBySchema[schemaName].length}
-                          </Badge>
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
+                  <DataTable
+                    columns={createColumns()}
+                    data={suggestionsBySchema[schemaNames[0]]}
+                    rowSelection={rowSelection}
+                    onRowSelectionChange={setRowSelection}
+                  />
+                </div>
+              ) : (
+                // Multiple schemas - use tabs
+                <Tabs defaultValue={schemaNames[0]} className="w-full">
+                  <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
                     {schemaNames.map(schemaName => (
-                      <TabsContent key={schemaName} value={schemaName} className="mt-4">
-                        <DataTable
-                          columns={createColumns()}
-                          data={suggestionsBySchema[schemaName]}
-                          rowSelection={rowSelection}
-                          onRowSelectionChange={setRowSelection}
-                        />
-                      </TabsContent>
+                      <TabsTrigger key={schemaName} value={schemaName} className="flex-shrink-0">
+                        {schemaName}
+                        <Badge variant="secondary" className="ml-2 text-xs">
+                          {suggestionsBySchema[schemaName].length}
+                        </Badge>
+                      </TabsTrigger>
                     ))}
-                  </Tabs>
-                )}
-              </div>
+                  </TabsList>
+                  {schemaNames.map(schemaName => (
+                    <TabsContent key={schemaName} value={schemaName} className="mt-4">
+                      <DataTable
+                        columns={createColumns()}
+                        data={suggestionsBySchema[schemaName]}
+                        rowSelection={rowSelection}
+                        onRowSelectionChange={setRowSelection}
+                      />
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              )}
             </div>
-          )}
+          </ContentSkeleton>
 
           <DialogFooter className="flex items-center justify-between border-t pt-4">
             <Button variant="outline" onClick={() => onOpenChange(false)}>

@@ -3,7 +3,7 @@ import { useTranslation, Trans } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PanelSkeleton } from '@/components/common/list-view-skeleton';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 import {
   Table,
   TableBody,
@@ -221,7 +221,28 @@ export default function AccessGrantsPanel({
   };
 
   if (loading) {
-    return <PanelSkeleton rows={2} rowHeight="h-10" />;
+    // The real card's frame and header, with the body skeleton when expanded
+    return (
+      <Card aria-busy="true">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            <span>{t('access-grants:panel.title', 'Access Grants')}</span>
+          </CardTitle>
+          <CardDescription>
+            {t('access-grants:panel.description', 'Users with time-limited access to this resource')}
+          </CardDescription>
+        </CardHeader>
+        {expanded && (
+          <CardContent className="space-y-2">
+            <span className="sr-only" role="status">{t('common:states.loading')}</span>
+            {[0, 1].map((i) => (
+              <SkeletonLine key={i} height="h-10" />
+            ))}
+          </CardContent>
+        )}
+      </Card>
+    );
   }
 
   const hasContent = grants.length > 0 || pendingRequests.length > 0;

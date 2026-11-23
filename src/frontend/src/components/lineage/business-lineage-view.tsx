@@ -25,8 +25,9 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Loader2, AlertCircle, Network, Maximize, ZoomIn, ZoomOut, Info } from 'lucide-react';
+import { AlertCircle, Network, Maximize, ZoomIn, ZoomOut, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { GraphCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import { cn } from '@/lib/utils';
 
 import type { LineageGraph } from '@/types/ontology-schema';
@@ -383,11 +384,9 @@ function BusinessLineageViewInner({
 
   if (loading) {
     return (
-      <div className={cn('flex items-center justify-center bg-muted/20 rounded-md', className)}>
-        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span className="text-sm">{t('data-catalog:lineage.loadingLineage')}</span>
-        </div>
+      <div className={cn('rounded-md border bg-background p-3', className)} aria-busy="true">
+        <span className="sr-only" role="status">{t('data-catalog:lineage.loadingLineage')}</span>
+        <GraphCanvasSkeleton height="h-[500px]" showToolbar={showToolbar} />
       </div>
     );
   }

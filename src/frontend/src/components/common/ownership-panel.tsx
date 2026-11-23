@@ -29,6 +29,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import type { BusinessOwnerRead, OwnerObjectType } from '@/types/business-owner';
 import { ContentSkeleton } from '@/components/common/content-skeleton';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 
 export interface ImportedContact {
   username?: string;
@@ -377,9 +378,8 @@ export function OwnershipPanel({
           </DialogHeader>
           <div className="py-4 max-h-[300px] overflow-y-auto">
             {teamMembersLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
+              // Shaped like the member rows below
+              <ListItemSkeleton count={3} height="h-12" className="space-y-2" />
             ) : teamMembers.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">{t('common:ownership.noTeamMembers')}</p>
             ) : (

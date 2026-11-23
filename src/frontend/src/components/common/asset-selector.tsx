@@ -20,6 +20,8 @@ import { useApi } from '@/hooks/use-api';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { AssetTypeRead } from '@/types/asset';
+import { ContentSkeleton } from '@/components/common/content-skeleton';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 
 export interface AssetSearchResult {
   id: string;
@@ -88,6 +90,13 @@ function getIconComponent(iconName?: string | null): React.ElementType {
   return ICON_MAP[iconName] || Box;
 }
 
+// Stands in for the results while they load (see ContentSkeleton)
+const ASSET_RESULTS_SAMPLE: AssetSearchResult[] = [
+  { id: 'sample-1', name: 'Sample table', asset_type_name: 'Table', location: 'sample.schema' },
+  { id: 'sample-2', name: 'Sample view', asset_type_name: 'View', location: 'sample.schema' },
+  { id: 'sample-3', name: 'Sample dashboard', asset_type_name: 'Dashboard' },
+];
+
 // --- Reusable sub-components ---
 
 function AssetResultRow({ asset, isSelected, onToggle }: {
@@ -128,27 +137,23 @@ function AssetResultsList({ results, loading, selected, onToggle, emptyMessage }
   onToggle: (asset: AssetSearchResult) => void;
   emptyMessage?: string;
 }) {
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-  if (results.length === 0 && emptyMessage) {
-    return <p className="text-sm text-muted-foreground text-center py-6">{emptyMessage}</p>;
-  }
   return (
-    <div className="space-y-0.5">
-      {results.map(asset => (
-        <AssetResultRow
-          key={asset.id}
-          asset={asset}
-          isSelected={selected.has(asset.id)}
-          onToggle={() => onToggle(asset)}
-        />
-      ))}
-    </div>
+    <ContentSkeleton
+      loading={loading}
+      empty={results.length === 0 && !!emptyMessage}
+      emptyMessage={<p className="text-sm text-muted-foreground text-center py-6">{emptyMessage}</p>}
+    >
+      <div className="space-y-0.5">
+        {(loading ? ASSET_RESULTS_SAMPLE : results).map(asset => (
+          <AssetResultRow
+            key={asset.id}
+            asset={asset}
+            isSelected={selected.has(asset.id)}
+            onToggle={() => onToggle(asset)}
+          />
+        ))}
+      </div>
+    </ContentSkeleton>
   );
 }
 
@@ -432,9 +437,7 @@ export function AssetSelector({
                 <ScrollArea className="w-48 flex-shrink-0 border rounded-md">
                   <div className="p-1">
                     {typesLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      </div>
+                      <ListItemSkeleton count={6} height="h-7" className="space-y-1.5" />
                     ) : groupedTypes.length === 0 ? (
                       <p className="text-xs text-muted-foreground text-center py-4">{t('common:assetSelector.noAssetTypes')}</p>
                     ) : (

@@ -142,9 +142,15 @@ def test_a_step_tag_goes_on_top_of_the_stored_tags(db_session):
 def test_a_step_tag_on_an_update_with_null_tags_goes_on_top_of_the_stored_ones(db_session):
     contract = _contract(db_session)
     _tag(db_session, contract, ['stored'])
+    # In the tag catalog (an assign-tag step refuses a tag that isn't), not assigned yet
+    namespace = TagNamespaceDb(name='gate')
+    db_session.add(namespace)
+    db_session.flush()
+    db_session.add(TagDb(name='reviewed', namespace_id=namespace.id, status='active'))
+    db_session.flush()
     context = _context(contract, _payload(status='active', tags=None))
     assigned = AssignTagStepHandler(
-        db_session, {'key': 'reviewed', 'value': 'yes'},
+        db_session, {'key': 'gate/reviewed', 'value': 'yes'},
     ).execute(context)
     policy = _policy(
         db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('stored') AND HAS_TAG('reviewed')",

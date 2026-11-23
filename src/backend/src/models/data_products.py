@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, field_serializer, field_validator, model_
 from .tags import AssignedTag, AssignedTagCreate
 
 from src.common.logging import get_logger
+from src.utils.odcs_values import typed_value
 logger = get_logger(__name__)
 
 # Server-managed publication fields (see DataProduct.publication_scope).
@@ -30,6 +31,22 @@ _PUBLISH_HINT = (
 # ODPS has no status on an output port; the ODPS export carries Ontos's port status
 # as this port custom property, and imports read it back.
 ONTOS_PORT_STATUS_PROPERTY = "ontosPortStatus"
+# Likewise for the other stored port fields ODPS has no place for, and the owner team
+# (carried by name on the product; the import looks the team up).
+ONTOS_PORT_SERVER_PROPERTY = "ontosServer"
+ONTOS_PORT_CONTAINS_PII_PROPERTY = "ontosContainsPii"
+ONTOS_PORT_AUTO_APPROVE_PROPERTY = "ontosAutoApprove"
+ONTOS_OWNER_TEAM_PROPERTY = "ontosOwnerTeam"
+
+_PORT_FIELD_ALIASES = {'containsPii': 'contains_pii', 'autoApprove': 'auto_approve'}
+
+# Port custom property -> the OutputPort field it fills on import.
+_PORT_PROPERTY_FIELDS = {
+    ONTOS_PORT_STATUS_PROPERTY: 'status',
+    ONTOS_PORT_SERVER_PROPERTY: 'server',
+    ONTOS_PORT_CONTAINS_PII_PROPERTY: 'containsPii',
+    ONTOS_PORT_AUTO_APPROVE_PROPERTY: 'autoApprove',
+}
 
 
 # ============================================================================
@@ -100,6 +117,19 @@ class CustomProperty(BaseModel):
     property: str = Field(..., description="Property name in camelCase")
     value: Any = Field(None, description="Property value (can be any type, including null)")
     description: Optional[str] = Field(None, description="Optional description")
+
+    @model_validator(mode='before')
+    @classmethod
+    def _typed_stored_value(cls, data):
+        # A stored row holds the value as `typed_text` wrote it (plain text as is, any
+        # other value as JSON): read it back with its type. API input is typed already.
+        if isinstance(data, dict) or not hasattr(data, '_sa_instance_state'):
+            return data
+        return {
+            'property': data.property,
+            'value': typed_value(data.value),
+            'description': data.description,
+        }
 
     # Normalize the legacy literal string "null" back to None. Older writes
     # persisted a null value via json.dumps(None) == "null" (fixed on the write
@@ -240,21 +270,24 @@ class OutputPort(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def _read_port_status_property(cls, data):
-        # An ODPS export carries the port status as the ontosPortStatus custom
-        # property; a bare `status` (older exports, the API) wins when both are set.
+        # An ODPS export carries the port status, server, PII and auto-approve flags as
+        # ontos* custom properties; a bare field (older exports, the API) wins when both
+        # are set.
         if not isinstance(data, dict) or not isinstance(data.get('customProperties'), list):
             return data
         props = data['customProperties']
-        status_props = [
+        ours = [
             cp for cp in props
-            if isinstance(cp, dict) and cp.get('property') == ONTOS_PORT_STATUS_PROPERTY
+            if isinstance(cp, dict) and cp.get('property') in _PORT_PROPERTY_FIELDS
         ]
-        if not status_props:
+        if not ours:
             return data
         data = dict(data)
-        if data.get('status') is None:
-            data['status'] = status_props[0].get('value')
-        data['customProperties'] = [cp for cp in props if cp not in status_props] or None
+        for cp in ours:  # the first property of a name wins
+            field = _PORT_PROPERTY_FIELDS[cp['property']]
+            if data.get(field) is None and data.get(_PORT_FIELD_ALIASES.get(field)) is None:
+                data[field] = cp.get('value')
+        data['customProperties'] = [cp for cp in props if cp not in ours] or None
         return data
 
     @field_validator('deliveryMethodId', mode='before')
@@ -629,6 +662,9 @@ class DataProductCreate(BaseModel):
     managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports", description="Management ports")
     support: Optional[List[Support]] = Field(None, alias="support_channels", description="Support channels")
     team: Optional[Team] = Field(None, description="Team")
+    productCreatedTs: Optional[datetime] = Field(
+        None, description="Creation timestamp (kept from an imported ODPS document)"
+    )
 
     # Versioning
     parent_product_id: Optional[str] = Field(None, alias="parentProductId", description="Parent version ID for version lineage")

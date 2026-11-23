@@ -6,9 +6,10 @@ Handles product creation, updates, versioning, contract integration, and search 
 """
 
 import asyncio
+import json
 import uuid
 from contextlib import nullcontext
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Any, Set
 from uuid import UUID
 from pathlib import Path
@@ -79,6 +80,51 @@ def _canonical_uuid(value: str) -> Optional[str]:
         return None
 
 
+def _odps_custom_property(cp: Any) -> Dict[str, Any]:
+    """A stored custom property as an ODPS ``customProperties`` item (the API model
+    reads the value back with its JSON type)."""
+    item: Dict[str, Any] = {"property": cp.property, "value": cp.value}
+    if getattr(cp, 'description', None):
+        item["description"] = cp.description
+    return item
+
+
+def _port_ontos_properties(port: Any) -> List[Dict[str, Any]]:
+    """The stored output port fields ODPS has no place for, as ``ontos*`` custom properties."""
+    props: List[Dict[str, Any]] = []
+    if port.status:
+        props.append({"property": ONTOS_PORT_STATUS_PROPERTY, "value": port.status})
+    server = port.server.model_dump(by_alias=True, exclude_none=True) if port.server else None
+    if server:
+        props.append({"property": ONTOS_PORT_SERVER_PROPERTY, "value": server})
+    if port.containsPii:
+        props.append({"property": ONTOS_PORT_CONTAINS_PII_PROPERTY, "value": True})
+    if port.autoApprove:
+        props.append({"property": ONTOS_PORT_AUTO_APPROVE_PROPERTY, "value": True})
+    return props
+
+
+def _odps_authoritative_definition(ad: Any) -> Dict[str, Any]:
+    item = {"url": ad.url, "type": ad.type}
+    if getattr(ad, 'description', None):
+        item["description"] = ad.description
+    return item
+
+
+def _odps_timestamp(value: Any) -> Optional[str]:
+    """ISO 8601 UTC timestamp for ``productCreatedTs`` (naive values are UTC)."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _odps_non_empty(**fields: Any) -> Dict[str, Any]:
+    """The given fields, without the ones that are None or empty (False and 0 stay)."""
+    return {k: v for k, v in fields.items() if v is not None and v != '' and v != []}
+
+
 def _upsert_custom_property(data: Dict[str, Any], prop: str, value: Any) -> None:
     """Set a customProperties entry on a product/contract payload dict, tolerating the
     list-of-{property,value} form and the legacy {key: value} dict form."""
@@ -123,6 +169,10 @@ from src.models.data_products import (
     SubscribersListResponse,
     OnBehalfOf,
     ONTOS_PORT_STATUS_PROPERTY,
+    ONTOS_PORT_SERVER_PROPERTY,
+    ONTOS_PORT_CONTAINS_PII_PROPERTY,
+    ONTOS_PORT_AUTO_APPROVE_PROPERTY,
+    ONTOS_OWNER_TEAM_PROPERTY,
 )
 from src.models.assets import public_properties
 from src.models.import_results import BatchImportResult, ImportItemResult
@@ -408,6 +458,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_data['status'] = stage_key
             product_data['lifecycle_stage_group_id'] = group_id
             product_data.pop('lifecycleStageGroupId', None)
+
+            # An exported owner team is an owner: restore it before the check below
+            self._apply_imported_owner_team(db_session, product_data)
 
             # Stamp the creator as the single-user owner when no other owner is
             # supplied. Without this, a freshly created product has no
@@ -2558,9 +2611,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if not original_product:
             raise ValueError(f"Original data product with ID {original_product_id} not found.")
 
-        # Create new product data (exclude id, created_at, updated_at)
+        # Create new product data (exclude id, created_at, updated_at; the new version
+        # gets its own creation timestamp)
         new_product_data = original_product.model_dump(
-            exclude={'id', 'created_at', 'updated_at'}
+            exclude={'id', 'created_at', 'updated_at', 'productCreatedTs'}
         )
 
         # Generate new ID and set new version
@@ -4245,6 +4299,56 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         return members_list
 
+    @staticmethod
+    def _owner_team_value(session: Session, team_id: Optional[str]) -> Optional[Dict[str, str]]:
+        """The ``ontosOwnerTeam`` value for the owner team: ``{id, name}`` (the shape
+        contracts use), only ``{id}`` when the team no longer exists, None when unset."""
+        if not team_id:
+            return None
+        try:
+            team = team_repo.get(session, id=UUID(str(team_id)))
+        except (ValueError, TypeError):
+            team = None
+        return {"id": str(team.id), "name": team.name} if team else {"id": str(team_id)}
+
+    @staticmethod
+    def _resolve_owner_team(session: Session, value: Any) -> Optional[str]:
+        """The id of the existing team an ``ontosOwnerTeam`` value names: ``{id, name}``
+        by id, then by name; a bare name (older exports) by name."""
+        if isinstance(value, str):
+            value = {"name": value}
+        if not isinstance(value, dict):
+            return None
+        team_id = value.get("id")
+        if isinstance(team_id, str) and team_id:
+            try:
+                team = team_repo.get(session, id=UUID(team_id))
+            except (ValueError, TypeError):
+                team = None
+            if team:
+                return str(team.id)
+        name = value.get("name")
+        team = team_repo.get_by_name(session, name=name) if isinstance(name, str) and name else None
+        return str(team.id) if team else None
+
+    @classmethod
+    def _apply_imported_owner_team(cls, session: Session, product_data: Dict[str, Any]) -> None:
+        """Set ``owner_team_id`` from an exported ``ontosOwnerTeam`` custom property.
+
+        Only when the payload names no owner team and the property names an existing
+        team (the property is then consumed); otherwise it stays a plain custom property.
+        """
+        props = product_data.get('customProperties')
+        if not isinstance(props, list) or product_data.get('owner_team_id'):
+            return
+        for item in props:
+            if isinstance(item, dict) and item.get('property') == ONTOS_OWNER_TEAM_PROPERTY:
+                team_id = cls._resolve_owner_team(session, item.get('value'))
+                if team_id:
+                    product_data['owner_team_id'] = team_id
+                    props.remove(item)
+                return
+
     def build_odps_export(
         self,
         product_id: str,
@@ -4280,6 +4384,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         domain_export_adapter.apply_odcs(odps, session, "data_product", product_id)
         if product.tenant:
             odps["tenant"] = product.tenant
+        created_ts = _odps_timestamp(product.productCreatedTs)
+        if created_ts:
+            odps["productCreatedTs"] = created_ts
+
+        tag_names = [
+            t.tag_name if getattr(t, 'namespace_name', None) in (None, 'default')
+            else t.fully_qualified_name
+            for t in (product.tags or []) if getattr(t, 'tag_name', None)
+        ]
+        if tag_names:
+            odps["tags"] = tag_names
 
         if product.description:
             desc: Dict[str, Any] = {}
@@ -4303,24 +4418,35 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         if product.outputPorts:
             odps["outputPorts"] = [
-                {k: v for k, v in {
-                    "name": p.name, "version": p.version,
-                    "contractId": p.contractId,
-                    # ODPS has no port status: carried as a custom property.
-                    "customProperties": (
-                        [{"property": ONTOS_PORT_STATUS_PROPERTY, "value": p.status}]
-                        if p.status else None
-                    ),
-                }.items() if v}
+                _odps_non_empty(
+                    name=p.name, description=p.description, type=p.type,
+                    version=p.version, contractId=p.contractId,
+                    sbom=[_odps_non_empty(type=b.type, url=b.url) for b in p.sbom or []],
+                    inputContracts=[
+                        {"id": c.id, "version": c.version} for c in p.inputContracts or []
+                    ],
+                    # ODPS has no port status, server, PII or auto-approve: carried as
+                    # custom properties.
+                    customProperties=_port_ontos_properties(p) or None,
+                )
                 for p in product.outputPorts
+            ]
+
+        if product.managementPorts:
+            odps["managementPorts"] = [
+                _odps_non_empty(
+                    name=p.name, content=p.content, type=p.type, url=p.url,
+                    channel=p.channel, description=p.description,
+                )
+                for p in product.managementPorts
             ]
 
         if product.support:
             odps["support"] = [
-                {k: v for k, v in {
-                    "channel": s.channel, "url": s.url,
-                    "tool": s.tool, "scope": s.scope,
-                }.items() if v}
+                _odps_non_empty(
+                    channel=s.channel, url=s.url, description=s.description,
+                    tool=s.tool, scope=s.scope, invitationUrl=s.invitationUrl,
+                )
                 for s in product.support
             ]
 
@@ -4328,10 +4454,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         team_members = []
         if product.team and product.team.members:
             team_members = [
-                {k: v for k, v in {
-                    "username": m.username, "role": m.role,
-                    "name": getattr(m, 'name', None),
-                }.items() if v}
+                _odps_non_empty(
+                    username=m.username, role=m.role, name=getattr(m, 'name', None),
+                    description=m.description,
+                    dateIn=m.dateIn.isoformat() if m.dateIn else None,
+                    dateOut=m.dateOut.isoformat() if m.dateOut else None,
+                    replacedByUsername=m.replacedByUsername,
+                )
                 for m in product.team.members
             ]
         team_members = self._merge_business_owners_into_team(
@@ -4342,12 +4471,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             odps["team"] = {"members": team_members}
             if team_name:
                 odps["team"]["name"] = team_name
+            if product.team and product.team.description:
+                odps["team"]["description"] = product.team.description
 
         if product.customProperties:
-            rebuilt_props = [
-                {"property": cp.property, "value": cp.value}
-                for cp in product.customProperties
-            ]
+            rebuilt_props = [_odps_custom_property(cp) for cp in product.customProperties]
             # Preserve the additionalDomains entry apply_odcs injected above; a plain
             # overwrite here drops additional domains on export/round-trip.
             odps["customProperties"] = domain_export_adapter.merge_custom_properties(
@@ -4361,11 +4489,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             _upsert_custom_property(odps, prop, value)
         for prop, value in lifecycle_props.items():
             _upsert_custom_property(odps, prop, value)
+        owner_team = self._owner_team_value(session, product.owner_team_id)
+        if owner_team:
+            _upsert_custom_property(odps, ONTOS_OWNER_TEAM_PROPERTY, owner_team)
 
         if product.authoritativeDefinitions:
             odps["authoritativeDefinitions"] = [
-                {"url": ad.url, "type": ad.type}
-                for ad in product.authoritativeDefinitions
+                _odps_authoritative_definition(ad) for ad in product.authoritativeDefinitions
             ]
 
         # Extension: include entity relationship-based dataset hierarchy

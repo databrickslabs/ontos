@@ -1127,8 +1127,8 @@
     "exportSuccessfulDesc": "Downloaded {{filename}}",
     "exportFailed": "Export Failed",
     "exportFailedDesc": "Failed to export data product",
-    "exportDescription": "Clicking \"Export\" will download this product as an ODPS v1.0.0 compliant JSON file. Audit fields (created_at, updated_at) will be excluded for portability.",
-    "exportAsJson": "Export as JSON",
+    "exportDescription": "Clicking \"Export\" will download this product as an ODPS v1.0.0 YAML file, built from the stored product so a re-import restores it.",
+    "exportAsJson": "Export as YAML",
     "currentProduct": "Current Product",
     "unnamed": "Unnamed",
     "noProductDesc": "No product selected. Open this dialog from a product details page to export."

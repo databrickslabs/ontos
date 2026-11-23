@@ -46,6 +46,7 @@ from src.db_models.data_products import (
     DataProductSubscriptionDb
 )
 from src.common.logging import get_logger
+from src.utils.odcs_values import typed_text
 
 logger = get_logger(__name__)
 
@@ -54,16 +55,12 @@ def _serialize_custom_property_value(value: Any) -> Optional[str]:
     """Serialize an ODPS custom-property value for the TEXT column.
 
     A null value is persisted as SQL NULL rather than the literal string
-    ``"null"`` — ``json.dumps(None)`` would otherwise yield ``"null"``, which
-    read back as a bogus string (e.g. UNRESOLVED placeholders imported with
-    ``value: null``). Strings are stored verbatim; every other type is
-    JSON-encoded to survive the round-trip.
+    ``"null"`` (e.g. UNRESOLVED placeholders imported with ``value: null``).
+    Plain text is stored as is; every other value, and text that would read
+    back as another type (``"42"``, ``"true"``), as JSON (``typed_text``, as
+    for contracts), so the value keeps its JSON type through the round-trip.
     """
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value
-    return json.dumps(value)
+    return typed_text(value)
 
 
 def _port_type_of(port: Dict[str, Any], default: Optional[str]) -> Optional[str]:
@@ -150,6 +147,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 draft_owner_id=getattr(obj_in, 'draft_owner_id', None),
                 consumer_principals=cp_json,
             )
+            # An imported ODPS document carries its own creation timestamp; without
+            # one the column's server default (now) applies.
+            created_ts = getattr(obj_in, 'productCreatedTs', None)
+            if created_ts is not None:
+                db_obj.product_created_ts = created_ts
 
             # 2. Create Structured Description (One-to-One)
             if obj_in.description:

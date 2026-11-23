@@ -120,6 +120,16 @@ def test_an_unreadable_schema_refuses_every_version(monkeypatch, tmp_path, conte
         odcs_api_version._schema_api_versions.cache_clear()
 
 
+def test_v3_2_0_is_accepted_and_v3_9_0_is_not_on_create_and_update_models():
+    """v3.2.0 has no vendored schema yet (it validates against the v3.1.0 one) but is ODCS."""
+    for model in (DataContractCreate, DataContractUpdate):
+        parsed = model.model_validate({"name": "Orders", "apiVersion": "3.2.0"})
+        assert parsed.apiVersion == "v3.2.0"
+        with pytest.raises(ValidationError) as err:
+            model.model_validate({"name": "Orders", "apiVersion": "v3.9.0"})
+        assert err.value.errors()[0]["type"] == "odcs_api_version_unsupported"
+
+
 def test_api_version_defaults():
     assert DataContractCreate.model_validate({"name": "Orders"}).apiVersion == "v3.1.0"
     assert DataContractUpdate.model_validate({"name": "Orders"}).apiVersion is None
@@ -161,6 +171,14 @@ def test_an_update_may_move_to_an_odcs_version(manager, db_session):
     cid = _contract(db_session, "v9")
 
     assert _update(manager, db_session, cid, "3.0.2").api_version == "v3.0.2"
+
+
+def test_an_update_may_move_to_v3_2_0_but_not_to_v3_9_0(manager, db_session):
+    cid = _contract(db_session, "v3.1.0")
+
+    assert _update(manager, db_session, cid, "v3.2.0").api_version == "v3.2.0"
+    with pytest.raises(UnsupportedOdcsApiVersionError):
+        _update(manager, db_session, cid, "v3.9.0")
 
 
 def test_an_update_to_a_version_outside_odcs_is_refused(manager, db_session):
@@ -271,6 +289,20 @@ def test_a_self_service_contract_stores_the_odcs_spelling(manager, db_session, s
         odcs["apiVersion"] = sent
 
     assert manager.create_from_odcs_dict(db_session, odcs, "alice").api_version == stored
+
+
+def test_a_file_import_accepts_v3_2_0_and_refuses_v3_9_0(manager, db_session):
+    odcs = {"name": f"imported-{uuid.uuid4().hex[:8]}", "version": "1.0.0", "kind": "DataContract"}
+
+    created = manager.create_from_upload(
+        db=db_session, parsed_odcs={**odcs, "apiVersion": "v3.2.0"}, current_user="alice",
+    )
+    assert created.api_version == "v3.2.0"
+    with pytest.raises(UnsupportedOdcsApiVersionError):
+        manager.create_from_upload(
+            db=db_session, parsed_odcs={**odcs, "name": odcs["name"] + "x", "apiVersion": "v3.9.0"},
+            current_user="alice",
+        )
 
 
 def test_a_file_import_outside_odcs_is_refused(manager, db_session):

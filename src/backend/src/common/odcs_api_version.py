@@ -13,6 +13,11 @@ logger = get_logger(__name__)
 
 UNSUPPORTED_CODE = "odcs_api_version_unsupported"
 
+# ODCS versions accepted although the vendored schema's enum doesn't list them yet (a
+# v3.2.0 contract still validates against the v3.1.0 schema). The ODCS v3.2.0 work (version
+# registry + vendored v3.2.0 schema) replaces this set.
+VERSIONS_WITHOUT_VENDORED_SCHEMA: FrozenSet[str] = frozenset({"v3.2.0"})
+
 
 class UnsupportedOdcsApiVersionError(CodedValueError):
     """An apiVersion outside the ODCS enum (or null)."""
@@ -34,14 +39,16 @@ def _schema_api_versions() -> FrozenSet[str]:
 
 def odcs_api_versions() -> FrozenSet[str]:
     """The apiVersion enum of the ODCS JSON schema contracts are validated against
-    (``odcs_validation.ODCS_SCHEMA_PATH``), so a newer schema brings its versions.
+    (``odcs_validation.ODCS_SCHEMA_PATH``), so a newer schema brings its versions, plus
+    ``VERSIONS_WITHOUT_VENDORED_SCHEMA``.
 
     Fails closed: when the schema is missing or unreadable, the error is logged and no
-    version is accepted (every check answers ``odcs_api_version_unsupported``, never a
-    500). The failure is not cached, so a fixed file is read on the next call.
+    version is accepted, the named set included (every check answers
+    ``odcs_api_version_unsupported``, never a 500). The failure is not cached, so a fixed
+    file is read on the next call.
     """
     try:
-        return _schema_api_versions()
+        return _schema_api_versions() | VERSIONS_WITHOUT_VENDORED_SCHEMA
     except (OSError, ValueError, KeyError, TypeError):
         logger.error(
             "ODCS schema %s unreadable: no contract apiVersion is accepted",

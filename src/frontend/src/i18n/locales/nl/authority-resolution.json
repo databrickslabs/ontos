@@ -40,10 +40,6 @@
     "tileDenied": "Geweigerd",
     "tileDnaco": "DNA-Coefficient",
     "tileDnacoHint": "0.0 is het beste",
-    "tileDnacoHintHover": "0.0 is het beste — beweeg erover voor dimensies",
-    "dnacoDimensions": "DNAco-dimensies",
-    "dnacoFormula": "Totaal = 1 − ∏(1 − dₙ) = {{value}}",
-    "dnacoFormulaDescription": "kans op divergentie op ≥1 dimensie",
     "activationRequires": "Activering vereist dat de DNA-Coefficient is gemeten en binnen de bovengrens ({{threshold}}) valt, en dat elke vereiste bevestiging is voltooid{{affirmed}}.",
     "notYetFullyAffirmed": "(nog niet volledig bevestigd)",
     "cardApprovers": "Goedkeurders (N-functionele poort)",
@@ -75,8 +71,6 @@
     "labelDecisionCriteria": "Beslissingscriteria",
     "criterion": "Criterium",
     "noCriteria": "Geen criteria — de poort is onbeperkt (keurt elk verzoek goed).",
-    "labelEvidenceSources": "Bewijsbronnen",
-    "linkCatalogCommander": "{{ref}} openen in Catalog Commander",
     "labelGovernsConceptsHint": "Stuurt bedrijfsconcepten aan",
     "labelPrerequisites": "Vereist (voorafgaande ARs)",
     "required": "vereist",
@@ -116,7 +110,19 @@
     "testScopeCheck": "Bereikcontrole",
     "testScopeMissing": "ontbreekt",
     "affirmedEarlierDraft": "Bevestigd op een eerder concept",
-    "dnaStale": "Gemeten op een eerder concept; opnieuw berekenen"
+    "dnaStale": "Gemeten op een eerder concept; opnieuw berekenen",
+    "cardDnaco": "__TODO__ DNA-Coefficient",
+    "dnaMeasuredAt": "__TODO__ Measured",
+    "labelEvidenceSlice": "__TODO__ Evidence slice",
+    "noEvidenceSlice": "__TODO__ No evidence slice set.",
+    "labelAdmSchema": "__TODO__ ADM schema",
+    "admSchemaNone": "__TODO__ None configured",
+    "admSchemaOverridden": "__TODO__ overridden for this AR",
+    "evidenceObjects": "__TODO__ {{count}} specific objects",
+    "evidenceAllObjects": "__TODO__ All objects of these actions",
+    "evidenceWindowSample": "__TODO__ Window {{days}} days, sample {{sample}}",
+    "evidenceDomainScoped": "__TODO__ Domain-scoped rows",
+    "evidenceUnscoped": "__TODO__ Rows not domain-scoped"
   },
   "conceptLinks": {
     "failedLink": "Koppelen van concept mislukt",
@@ -173,11 +179,6 @@
     "evidence": "Bewijs",
     "ui": "UI"
   },
-  "sourceType": {
-    "delta_table": "Delta-tabel",
-    "data_product": "Dataproduct",
-    "asset": "Asset"
-  },
   "direction": {
     "actual-exceeds-documented": "Werkelijkheid overschrijdt gedocumenteerd",
     "documented-exceeds-actual": "Gedocumenteerd overschrijdt werkelijkheid",
@@ -201,7 +202,8 @@
       "dayOfWeek": "Dag van de week",
       "minuteOfHour": "Minuut van het uur",
       "recomputeFrequency": "Herberekeningsfrequentie",
-      "dnaMaxThreshold": "Max. DNA-Coefficient om te activeren"
+      "dnaMaxThreshold": "Max. DNA-Coefficient om te activeren",
+      "admSchemaOverride": "__TODO__ Schema override (catalog.schema)"
     },
     "hints": {
       "slug": "Stabiele sleutel waarmee agents deze AR aanroepen. Gedeeld door elke versie van de familie.",
@@ -215,7 +217,6 @@
       "domainContext": "Domeincontext",
       "decisionCriteria": "Compliance Checks",
       "domains": "Domeinen",
-      "evidenceSources": "Bewijsbronnen",
       "participants": "Deelnemers",
       "requires": "Vereist",
       "resourceRefs": "Resourceverwijzingen",
@@ -224,18 +225,21 @@
       "tags": "Tags",
       "ownership": "Eigenaarschap & project",
       "rule": "Regel (ODRL)",
-      "justification": "Onderbouwing (beleidsverwijzing)"
+      "justification": "Onderbouwing (beleidsverwijzing)",
+      "evidenceSlice": "__TODO__ Evidence slice",
+      "admSchema": "__TODO__ ADM schema"
     },
     "sectionDescriptions": {
       "decisionCriteria": "Controles die de gate na de regel afdwingt (en waartegen de DNA-coëfficiënt afwijkingen meet). Elk is een herbruikbare <strong>Compliance Check</strong>.",
-      "evidenceSources": "Koppel de eerdere beslissingen waartegen de DNA-Coefficient wordt gemeten. Voeg een of meer bronnen toe — een <strong>Delta-tabel</strong>, een <strong>Dataproduct</strong> of een <strong>Asset</strong> (volumebestand, tabel of view). Elke bron wijst zijn kolommen toe aan de canonieke AR-elementen via de kolomtoewijzing.",
       "participants": "De N-functionele poort en beoordeling. <strong>Goedkeurders</strong> tellen mee voor de bevestigingspoort. <strong> Beoordelaars</strong> worden tijdens het beoordelingsproces geïnterviewd om te bevestigen dat de relatie de werkelijkheid weergeeft. Een principal kan beide zijn.",
       "requires": "Voorafgaande ARs: elk moet <strong>goedgekeurd</strong> oplossen voordat deze beslist. Gekeyd op de familie-slug (niet de versie), zodat deze AR blijft werken wanneer een voorafgaande AR een nieuwe versie krijgt. Opslaan vereist dat deze AR een eigen slug heeft.",
       "resourceRefs": "Waar veldwaarden vandaan komen. In plaats van een gewone letterlijke waarde ondersteun je een canoniek veld (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) met een getypeerde verwijzing. Een <strong> Ontos-entiteit</strong>-verwijzing wordt bij evaluatie opnieuw opgelost tegen de kennisgraaf, zodat de waarde actueel blijft wanneer het onderliggende concept, product of domein verandert. <strong> MCP-tool</strong>-verwijzingen roepen op beslissingstijd een Unity Catalog MCP-service aan; criteria kunnen vergelijken met de opgeloste waarde als <code>obj.ref_{{fieldPlaceholder}}</code> (punten worden underscores, bijv. <code>obj.ref_actor_identity</code>).",
       "dnaSchedule": "Hoe vaak de DNA-Coefficient opnieuw wordt berekend tegen de bewijsbronnen.",
       "domainContext": "Het afgebakende bereik waarin deze bevoegdheid geldt, en haar parameters. Een verzoek buiten het bereik krijgt no_authority; de regel en de controles lezen de parameters als ctx.<key>.",
       "rule": "Wat de bevoegdheid toestaat, als ODRL: <strong>voorwaarden</strong> die moeten gelden, nog te vervullen <strong>verplichtingen</strong> (tot dan is de beslissing <strong>voorwaardelijk</strong>, bijv. een mede-goedkeuring) en <strong>verboden</strong>. Vergelijk met waarden of variabelen (<code>ctx.threshold</code>, <code>req.market</code>).",
-      "justification": "De beleidsverwijzing waarop deze Authority Relation rust. De geldigheid wordt getoond, niet afgedwongen. Clausulelabels zijn vrije tekst; de regel en de controles kunnen ze citeren."
+      "justification": "De beleidsverwijzing waarop deze Authority Relation rust. De geldigheid wordt getoond, niet afgedwongen. Clausulelabels zijn vrije tekst; de regel en de controles kunnen ze citeren.",
+      "evidenceSlice": "__TODO__ The past decisions the DNA-Coefficient is measured against: the ADM observations for these <strong>action codes</strong> over the window. Each observation is read from the shared ADM schema (or this AR's override).",
+      "admSchema": "__TODO__ The shared ADM schema is the default for every Authority Relation. An admin can override it for this AR. The override is checked for conformance when saved."
     },
     "fields": {
       "name": {
@@ -263,23 +267,6 @@
       "project": "Project",
       "noTeam": "Geen team",
       "noProject": "Geen project"
-    },
-    "evidenceSources": {
-      "type": {
-        "deltaTable": "Delta-tabel",
-        "dataProduct": "Dataproduct",
-        "asset": "Asset"
-      },
-      "placeholders": {
-        "deltaTable": "catalog.schema.promotion_decisions",
-        "dataProduct": "dataproduct-id",
-        "asset": "asset-FQN (tabel/view/volume)",
-        "label": "Optioneel label",
-        "columnMap": "Kolomtoewijzing (JSON)"
-      },
-      "messages": {
-        "dataProductNotYetSupported": "Dataproductbronnen worden vastgelegd maar nog niet gelezen voor DNAco (v1)."
-      }
     },
     "affirmations": {
       "selectRoleLabel": "Selecteer een rol…",
@@ -322,7 +309,6 @@
       "appServicePrincipal": "Service principal van de Ontos-app"
     },
     "buttons": {
-      "addEvidenceSource": "Bewijsbron toevoegen",
       "addParticipant": "Deelnemer toevoegen",
       "addPrerequisite": "Vereiste toevoegen",
       "addResourceRef": "Resourceverwijzing toevoegen",
@@ -338,11 +324,38 @@
       "veto": "Veto"
     },
     "validation": {
-      "nameRequired": "Naam is verplicht",
-      "invalidColumnMap": "Ongeldige kolomtoewijzing",
-      "columnMapError": "De kolomtoewijzing voor \"{{ref}}\" moet geldige JSON zijn."
+      "nameRequired": "Naam is verplicht"
     },
-    "immutableNotice": "Actieve en eerdere versies zijn onveranderlijk. Maak een nieuwe versie aan om de definitie te wijzigen."
+    "immutableNotice": "Actieve en eerdere versies zijn onveranderlijk. Maak een nieuwe versie aan om de definitie te wijzigen.",
+    "admSchema": {
+      "placeholder": "__TODO__ Empty uses the shared schema",
+      "shared": "__TODO__ Shared schema: {{schema}}",
+      "sharedNotConfigured": "__TODO__ No shared schema is configured.",
+      "adminOnly": "__TODO__ Only admins can change the override. The effective schema is shown.",
+      "invalidFormat": "__TODO__ Use catalog.schema, for example demo.arf_adm.",
+      "nonconformant": "__TODO__ The override does not conform to the ADM subset. Fix it or clear it."
+    },
+    "evidenceSlice": {
+      "actionCodes": "__TODO__ Action codes",
+      "actionCodesHint": "__TODO__ Lowercase ADM action codes, for example approve. Press Enter or comma to add. Up to {{max}}.",
+      "actionCodePlaceholder": "__TODO__ Add an action code",
+      "objectRefs": "__TODO__ Object refs (optional)",
+      "objectRefsHint": "__TODO__ Narrow to exact object_ref values. Leave empty to read every object of these actions. Up to {{max}}.",
+      "objectRefPlaceholder": "__TODO__ Add an object ref",
+      "domainScope": "__TODO__ Apply the domain-context scope to the observed rows",
+      "windowDays": "__TODO__ Window (days)",
+      "sampleSize": "__TODO__ Sample size",
+      "removeChip": "__TODO__ Remove {{value}}",
+      "invalidToast": "__TODO__ Check the evidence slice.",
+      "errors": {
+        "actionCodesRequired": "__TODO__ Add at least one action code.",
+        "actionCodesTooMany": "__TODO__ Use at most 20 action codes.",
+        "actionCodeInvalid": "__TODO__ Action codes are lowercase, start with a letter, and use letters, digits, _ or -.",
+        "objectRefsTooMany": "__TODO__ Use at most 200 object refs.",
+        "windowDaysRange": "__TODO__ Enter a whole number of days from {{min}} to {{max}}.",
+        "sampleSizeRange": "__TODO__ Enter a whole number from {{min}} to {{max}}."
+      }
+    }
   },
   "criteria": {
     "description": "Afgeleide en geaggregeerde predicaten die de regel niet uitdrukt. De gate keurt alleen goed als elke controle slaagt; een controle die faalt voor een eerdere beslissing telt als afwijking in de DNA-coëfficiënt, gewogen en met het teken van haar richting. Regels lezen het verzoek als obj.<field> / req.<key> en de parameters als ctx.<param>.",
@@ -469,10 +482,10 @@
       "decisionCriteria": "Beslissingscriteria",
       "criterion": "Criterium",
       "empty": "—",
-      "evidenceSources": "Bewijsbronnen",
-      "evidenceBinding": "Bewijskoppeling",
       "justificationChain": "Rechtvaardigingsketen",
-      "rule": "Regel"
+      "rule": "Regel",
+      "evidenceSlice": "__TODO__ Evidence slice",
+      "admSchema": "__TODO__ ADM schema"
     },
     "questionnaire": {
       "confirmation": "Bevestiging",
@@ -755,5 +768,60 @@
       "affirmations_stale": "De bevestigingen gelden voor een eerder concept. Bevestig de huidige definitie opnieuw.",
       "transition_not_allowed": "Deze statuswijziging is vanuit de huidige status niet toegestaan."
     }
+  },
+  "adm": {
+    "errors": {
+      "notConfigured": "__TODO__ No ADM schema is configured. Set it in Settings > Maturity Levels.",
+      "nonconformant": "__TODO__ The ADM schema does not match the ADM subset this version reads. Fix the tables and columns listed below.",
+      "queryFailed": "__TODO__ The ADM schema could not be queried.",
+      "queryTimeout": "__TODO__ The ADM evidence query timed out. Try a smaller window or sample.",
+      "noWarehouse": "__TODO__ No SQL warehouse is available to read the ADM evidence.",
+      "schemaInvalid": "__TODO__ The ADM schema must be catalog.schema.",
+      "evidenceSliceEmpty": "__TODO__ The evidence slice needs at least one action code.",
+      "evidenceSliceInvalid": "__TODO__ The evidence slice is not valid. Check the action codes, object refs, window and sample size."
+    },
+    "findings": {
+      "title": "__TODO__ ADM conformance findings",
+      "missing_table": "__TODO__ Missing table",
+      "missing_column": "__TODO__ Missing column",
+      "type_mismatch": "__TODO__ Type mismatch",
+      "expected": "__TODO__ expected {{value}}",
+      "actual": "__TODO__ found {{value}}"
+    },
+    "settings": {
+      "title": "__TODO__ ADM schema",
+      "description": "__TODO__ The shared schema every Authority Relation reads its decision evidence from. An Authority Relation can override it. The schema must conform to the pinned ADM subset.",
+      "schemaLabel": "__TODO__ Schema (catalog.schema)",
+      "schemaPlaceholder": "__TODO__ catalog.schema",
+      "invalidFormat": "__TODO__ Use catalog.schema, for example demo.arf_adm.",
+      "clearHint": "__TODO__ Leave empty and save to clear the shared schema.",
+      "readOnly": "__TODO__ Only admins can change the ADM schema.",
+      "refusedHint": "__TODO__ The schema was not saved. Create or fix the tables and columns below, then save again.",
+      "conformanceLabel": "__TODO__ Conformance",
+      "notConfigured": "__TODO__ No schema is configured. Authority Relations have no evidence until one is set.",
+      "notChecked": "__TODO__ Not checked yet.",
+      "conformant": "__TODO__ Conformant with {{version}}",
+      "nonconformant": "__TODO__ Not conformant with {{version}}",
+      "unavailable": "__TODO__ Conformance could not be checked",
+      "saved": "__TODO__ ADM schema saved",
+      "copyDdl": "__TODO__ Copy DDL",
+      "downloadDdl": "__TODO__ Download DDL",
+      "ddlCopied": "__TODO__ DDL copied to the clipboard",
+      "checkNow": "__TODO__ Check now",
+      "checking": "__TODO__ Checking...",
+      "checkedAt": "__TODO__ Checked {{time}}",
+      "checkDone": "__TODO__ Conformance check complete"
+    }
+  },
+  "dna": {
+    "empty": "__TODO__ Not measured yet. Compute the DNA-Coefficient to see the position and the magnitude.",
+    "loading": "__TODO__ Computing the DNA-Coefficient",
+    "magnitudeOfCeiling": "__TODO__ Magnitude {{magnitude}} of ceiling {{ceiling}}",
+    "overCeiling": "__TODO__ Above ceiling",
+    "withinCeiling": "__TODO__ Within ceiling",
+    "combinedPosition": "__TODO__ Combined position {{position}}",
+    "dimensionMagnitude": "__TODO__ magnitude {{value}}",
+    "definitionNote": "__TODO__ Definition completeness. Shown for information; it does not gate activation.",
+    "legacyNote": "__TODO__ Measured before ADM evidence (legacy run). Only the magnitude per dimension is known; no signed position."
   }
 }

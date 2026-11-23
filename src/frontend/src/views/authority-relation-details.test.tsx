@@ -55,7 +55,7 @@ const relation = {
   resource_refs: [],
   domains: [],
   tags: [],
-  evidence_sources: [],
+  evidence_slice: null,
 };
 
 const tr = (key: string) => i18n.t(`authority-resolution:${key}`);
@@ -130,6 +130,28 @@ describe('AuthorityRelationDetails', () => {
     renderDetails();
 
     expect(await screen.findByText(tr('details.dnaStale'))).toBeInTheDocument();
+  });
+
+  it('shows the evidence slice and the effective ADM schema', async () => {
+    serveRelation({
+      ...relation,
+      editable: true,
+      evidence_slice: { action_codes: ['approve', 'escalate'], object_refs: [], domain_scope: true, window_days: 90, sample_size: 500 },
+      adm_schema: 'demo.arf_adm',
+      adm_schema_override: null,
+    });
+    renderDetails();
+
+    expect(await screen.findByText('demo.arf_adm')).toBeInTheDocument();
+    expect(screen.getByText('escalate')).toBeInTheDocument();
+    expect(screen.getByText(tr('details.evidenceAllObjects'))).toBeInTheDocument();
+  });
+
+  it('marks a run measured before ADM evidence as a legacy magnitude-only result', async () => {
+    serveRelation({ ...relation, editable: true, dna_dimensions: { people: 0.15, policy: 0.2 } });
+    renderDetails();
+
+    expect(await screen.findByText(tr('dna.legacyNote'))).toBeInTheDocument();
   });
 
   it('maps a coded status conflict on activate to the translated reason', async () => {

@@ -14,27 +14,20 @@ from src.common.authority_rule import checked_weight
 from src.models.tags import AssignedTagCreate
 
 
-class EvidenceBinding(BaseModel):
-    """Legacy single evidence binding: one UC Delta table + a column→AR-element map."""
-    source_table_fqn: str
-    column_map: Dict[str, str] = Field(default_factory=dict)
-    row_filter: Optional[str] = None
+class EvidenceSlice(BaseModel):
+    """The slice of the shared ADM schema's observations an AR reads (ARF 1.2.0, #1294 slice 4).
 
-
-class EvidenceSource(BaseModel):
-    """One typed evidence source bound to an AR.
-
-    ``type`` is ``delta_table`` (ref = table FQN), ``asset`` (ref = an asset that
-    resolves to a table/view FQN), or ``data_product`` (ref = data product id;
-    resolved to its output-port table — declared-only in v1). ``column_map`` maps
-    canonical AR elements (actual_approver, documented_approver, value, escalated,
-    cosign_present, action, object_id) to this source's raw column names.
+    ``action_codes`` are the ADM ``action_code`` values in scope; ``object_refs`` narrows
+    them to specific ``object_ref`` values (empty = every object of those actions).
+    ``domain_scope`` applies the AR's domain-context scope to each observed row. The window
+    is ``window_days`` back from the run; ``sample_size`` caps the deterministic sample.
+    There is no table reference: the schema is the app setting, or the AR's own override.
     """
-    type: str = "delta_table"
-    ref: str
-    label: Optional[str] = None
-    column_map: Dict[str, str] = Field(default_factory=dict)
-    row_filter: Optional[str] = None
+    action_codes: List[str] = Field(..., min_length=1, max_length=20)
+    object_refs: List[str] = Field(default_factory=list, max_length=200)
+    domain_scope: bool = True
+    window_days: int = Field(90, ge=1, le=3650)
+    sample_size: int = Field(500, ge=1, le=5000)
 
 
 class AffirmationInput(BaseModel):
@@ -142,8 +135,9 @@ class AuthorityRelationCreate(BaseModel):
     authority_policy_id: Optional[str] = None
     policy_clause_refs: Optional[List[str]] = None
     decision_logic: Optional[Dict[str, Any]] = None
-    evidence_binding: Optional[EvidenceBinding] = None
-    evidence_sources: Optional[List[EvidenceSource]] = None
+    evidence_slice: Optional[EvidenceSlice] = None
+    # Admin-only: another ADM v0.4 conformant schema ("catalog.schema") for this AR.
+    adm_schema_override: Optional[str] = Field(None, max_length=255)
     dna_max_threshold: float = Field(0.3, ge=0, le=1, allow_inf_nan=False)
     dna_scoring_config: Optional[Dict[str, Any]] = None
     schedule_cron: Optional[str] = None
@@ -188,8 +182,8 @@ class AuthorityRelationUpdate(BaseModel):
     authority_policy_id: Optional[str] = None
     policy_clause_refs: Optional[List[str]] = None
     decision_logic: Optional[Dict[str, Any]] = None
-    evidence_binding: Optional[EvidenceBinding] = None
-    evidence_sources: Optional[List[EvidenceSource]] = None
+    evidence_slice: Optional[EvidenceSlice] = None
+    adm_schema_override: Optional[str] = Field(None, max_length=255)
     dna_max_threshold: Optional[float] = Field(None, ge=0, le=1, allow_inf_nan=False)
     dna_scoring_config: Optional[Dict[str, Any]] = None
     schedule_cron: Optional[str] = None
@@ -213,6 +207,11 @@ class NewVersionRequest(BaseModel):
 
 class StatusChangeRequest(BaseModel):
     status: str                                 # active|draft|needs_review|retired
+
+
+class AdmSchemaUpdate(BaseModel):
+    """The shared ADM schema setting: ``catalog.schema``, or null to clear it."""
+    adm_schema: Optional[str] = Field(None, max_length=255)
 
 
 class AffirmRequest(BaseModel):

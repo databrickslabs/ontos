@@ -8,8 +8,8 @@ Design notes:
 * The manager is a stateless singleton (mirrors ``ComplianceManager``); the DB
   session is passed per call.
 * The DNAco scoring itself is a pure function in ``src.common.authority_resolution_dna`` so
-  it is unit-testable without a DB or a warehouse. Evidence reading is
-  best-effort and isolated in ``_read_evidence_rows``.
+  it is unit-testable without a DB or a warehouse. Evidence is read from the
+  shared ADM schema (ARF 1.2.0 slice 4) in ``_collect_evidence``; no other table is read.
 * Runtime resolution is deterministic — it evaluates request parameters against
   the AR's compiled ``decision_logic`` and never (re)computes the DNAco. The
   DNAco is an *activation-time* gate only.
@@ -18,7 +18,7 @@ import math
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -28,7 +28,6 @@ from src.common.review_access import AUTHORITY_RELATION_FQN_PREFIX, authority_re
 from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src.models.tags import AssignedTagCreate
-from src.models.authority_resolution import EvidenceBinding, EvidenceSource
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common import authority_definition as definition
 from src.common import authority_resolution_dna as authority_dna
@@ -37,6 +36,10 @@ from src.common.authority_check_templates import get_template
 from src.common.compliance_dsl import evaluate_rule_strict
 from src.common import authority_rule as arule
 from src.common import mcp_resolver
+from src.common import adm
+from src.common.adm_sql import ADM_RESULT_TRUNCATED, AdmQueryError, run_query
+from src.controller import authority_adm_manager as adm_manager
+from src.controller.authority_adm_manager import AuthorityAdmManager, AdmNonconformantError, workspace_and_warehouse
 from src.controller import authority_policy_manager as apol
 from src.common.mcp_resolver import Deadline, McpHttpClient, McpResolverError
 from src.db_models.authority_resolution import (
@@ -225,68 +228,56 @@ DEFAULT_DNA_CEILING = 0.3
 ARF_CHECK_CATEGORY = "Authority Decision"
 _ALLOWED_STATUSES = ("draft", "active", "needs_review", "retired")
 
-# Evidence SQL runs as the app service principal, so table names and row
-# filters are restricted to a grammar that cannot reach other tables.
-_FQN_PART = r"(?:[A-Za-z0-9_\-]+|`[^`]+`)"
-_FQN_RE = re.compile(rf"^{_FQN_PART}(?:\.{_FQN_PART}){{0,2}}$")
-_FILTER_TOKEN_RE = re.compile(
-    r"\s*(?:(?P<str>'(?:[^']|'')*')|(?P<num>-?\d+(?:\.\d+)?)|(?P<op><>|!=|<=|>=|=|<|>)"
-    r"|(?P<punct>[(),])|(?P<ident>`[^`]+`|[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*))"
-)
-_FILTER_KEYWORDS = {"AND", "OR", "NOT", "IS", "NULL", "IN", "LIKE", "BETWEEN", "TRUE", "FALSE"}
-_FILTER_FORBIDDEN = {
-    "SELECT", "UNION", "FROM", "JOIN", "WITH", "INSERT", "UPDATE", "DELETE", "DROP", "CREATE",
-    "ALTER", "GRANT", "REVOKE", "MERGE", "INTO", "TABLE", "VALUES", "CALL", "EXEC", "EXECUTE",
-    "INTERSECT", "EXCEPT", "LATERAL", "USE", "SET", "SHOW", "DESCRIBE",
-}
-
-
-def validate_table_fqn(fqn: str) -> str:
-    fqn = (fqn or "").strip()
-    if not _FQN_RE.match(fqn):
-        raise AuthorityInvalidError(f"Evidence table '{fqn}' must be a plain catalog.schema.table name.")
-    return fqn
-
-
-def validate_row_filter(row_filter: Optional[str]) -> Optional[str]:
-    """Allow only simple predicates: columns, literals, comparison operators,
-    AND/OR/NOT/IS/NULL/IN/LIKE/BETWEEN and parentheses. No subqueries, no
-    function calls, no statement separators or comments."""
-    if row_filter is None or not str(row_filter).strip():
+def _slice_canonical(value: Any) -> Optional[Dict[str, Any]]:
+    """A stored evidence slice in canonical form. It never raises: the definition hash and every
+    read go through it, so a value that no longer validates must not break the AR (validation is
+    on write, in :func:`_slice_dict`; invalid codes are flagged when the sample is read)."""
+    if value is None:
         return None
-    text = str(row_filter)
-    if "\\" in text:
-        # Databricks SQL honours backslash escapes in literals; ANSI-only lexing
-        # here could disagree on where a string ends.
-        raise AuthorityInvalidError("Evidence row_filter may not contain backslashes.")
-    pos, prev_ident = 0, False
-    while pos < len(text):
-        if text[pos:].strip() == "":
-            break
-        m = _FILTER_TOKEN_RE.match(text, pos)
-        if not m or m.end() == pos:
-            raise AuthorityInvalidError(f"Evidence row_filter has unsupported syntax near: {text[pos:pos + 20]!r}")
-        ident = m.group("ident")
-        if ident is not None and not ident.startswith("`"):
-            word = ident.upper()
-            if word in _FILTER_FORBIDDEN:
-                raise AuthorityInvalidError(f"Evidence row_filter may not use '{ident}'.")
-        if m.group("punct") == "(" and prev_ident:
-            raise AuthorityInvalidError("Evidence row_filter may not call functions.")
-        prev_ident = ident is not None and ident.upper() not in _FILTER_KEYWORDS
-        pos = m.end()
-    return text
+    d = value if isinstance(value, dict) else value.dict()
+
+    def number(v: Any, default: int) -> int:
+        try:
+            return int(v) if v else default
+        except (TypeError, ValueError):
+            return default
+
+    refs = list(dict.fromkeys(str(r).strip() for r in (d.get("object_refs") or []) if str(r).strip()))
+    return {
+        "action_codes": [str(c).strip() for c in (d.get("action_codes") or [])],
+        "object_refs": refs,
+        "domain_scope": bool(d.get("domain_scope", True)),
+        "window_days": number(d.get("window_days"), 90),
+        "sample_size": number(d.get("sample_size"), 500),
+    }
 
 
-def _validate_evidence(binding: Optional[Dict[str, Any]], sources: Optional[List[Any]]) -> None:
-    if binding and binding.get("source_table_fqn"):
-        validate_table_fqn(binding["source_table_fqn"])
-        validate_row_filter(binding.get("row_filter"))
-    for src in sources or []:
-        s = src.dict() if hasattr(src, "dict") else dict(src or {})
-        if (s.get("type") or "delta_table") in ("delta_table", "asset") and s.get("ref"):
-            validate_table_fqn(s["ref"])
-        validate_row_filter(s.get("row_filter"))
+def _slice_dict(value: Any) -> Optional[Dict[str, Any]]:
+    """An evidence slice as written: validated (every action code must match the grammar)."""
+    canonical = _slice_canonical(value)
+    if canonical is None:
+        return None
+    codes = adm.validated_action_codes(canonical["action_codes"])
+    if not codes:
+        raise AuthorityInvalidError("The evidence slice needs at least one action code.")
+    canonical["action_codes"] = codes
+    return canonical
+
+
+def _row_direction(signed: int) -> Optional[str]:
+    """The direction of one row's weighted position (the per-row decision's direction)."""
+    if signed > 0:
+        return authority_dna.DIR_ACTUAL_EXCEEDS
+    if signed < 0:
+        return authority_dna.DIR_DOCUMENTED_EXCEEDS
+    return None
+
+
+@dataclass
+class _AdmSample:
+    """The rows read from the ADM schema for one DNA run, and how they were read."""
+    rows: List[Dict[str, Any]]
+    basis: Dict[str, Any]
 
 
 def _without_clause(c: Any) -> Any:
@@ -347,6 +338,8 @@ class _ResolveCtx:
 
 
 class AuthorityResolutionManager(SearchableAsset):
+    _adm = AuthorityAdmManager()
+
     # ------------------------------------------------------- search index
     # One index entry per version family (the representative row the list
     # view shows), keyed by family id so new versions don't duplicate hits.
@@ -464,14 +457,8 @@ class AuthorityResolutionManager(SearchableAsset):
             out["domain_context"] = arule.normalize_domain_context(out["domain_context"])
         if out.get("rule") is not None:
             out["rule"] = arule.normalize_rule(out["rule"])
-        if out.get("evidence_sources") is not None:
-            out["evidence_sources"] = [
-                EvidenceSource(**(e if isinstance(e, dict) else e.dict())).dict()
-                for e in out["evidence_sources"]
-            ]
-        if out.get("evidence_binding") is not None:
-            b = out["evidence_binding"]
-            out["evidence_binding"] = EvidenceBinding(**(b if isinstance(b, dict) else b.dict())).dict()
+        if out.get("evidence_slice") is not None:
+            out["evidence_slice"] = _slice_canonical(out["evidence_slice"])
         return out
 
     @staticmethod
@@ -607,8 +594,7 @@ class AuthorityResolutionManager(SearchableAsset):
         checks = [
             self._has_justification(relation),                        # documented basis
             bool(relation.object_id),                                 # governs a concrete object
-            bool(relation.evidence_sources
-                 or (relation.evidence_binding or {}).get("source_table_fqn")),  # evidence bound
+            bool((relation.evidence_slice or {}).get("action_codes")),  # evidence slice declared
             any(getattr(c, "enabled", True) for c in (relation.criteria or [])) or arule.has_rule(getattr(relation, "rule", None)),  # has an enabled decision check or rule
             any(getattr(a, "is_approver", True) for a in (relation.affirmations or [])),  # has an approver
         ]
@@ -660,10 +646,8 @@ class AuthorityResolutionManager(SearchableAsset):
         self._validate_business_roles(db, data.get("affirmations") or [])
         rel_id = str(uuid.uuid4())
 
-        evidence = data.get("evidence_binding")
-        if evidence is not None and hasattr(evidence, "dict"):
-            evidence = evidence.dict()
-        _validate_evidence(evidence, data.get("evidence_sources"))
+        evidence_slice = _slice_dict(data.get("evidence_slice"))
+        schema_override = self._check_schema_override(data.get("adm_schema_override"), None, caller_is_admin)
         self._validate_scoping(db, data)
 
         domain_context = arule.normalize_domain_context(data.get("domain_context"), strict=True)
@@ -699,8 +683,8 @@ class AuthorityResolutionManager(SearchableAsset):
                 db, data.get("authority_policy_id") or None, data.get("policy_clause_refs"),
                 data.get("criteria"), arule.normalize_rule(data.get("rule")),
             ),
-            "evidence_binding": evidence,
-            "evidence_sources": data.get("evidence_sources"),
+            "evidence_slice": evidence_slice,
+            "adm_schema_override": schema_override,
             "dna_max_threshold": data.get("dna_max_threshold", 0.3),
             "dna_scoring_config": data.get("dna_scoring_config"),
             "schedule_cron": data.get("schedule_cron"),
@@ -814,7 +798,7 @@ class AuthorityResolutionManager(SearchableAsset):
 
     # Settings only an Admin may set or change (permission matrix, ARF 1.2.0):
     # the MCP identity, the DNA ceiling and the recompute schedule.
-    _ADMIN_ONLY_FIELDS = ("resolver_auth", "dna_max_threshold", "schedule_cron")
+    _ADMIN_ONLY_FIELDS = ("resolver_auth", "dna_max_threshold", "schedule_cron", "adm_schema_override")
 
     @staticmethod
     def _refuse_admin_only_changes(
@@ -1019,10 +1003,11 @@ class AuthorityResolutionManager(SearchableAsset):
         prerequisites = data.pop("prerequisites", None)
         resource_refs = data.pop("resource_refs", None)
 
-        evidence = data.get("evidence_binding")
-        if evidence is not None and hasattr(evidence, "dict"):
-            data["evidence_binding"] = evidence.dict()
-        _validate_evidence(data.get("evidence_binding"), data.get("evidence_sources"))
+        if "evidence_slice" in data:
+            data["evidence_slice"] = _slice_dict(data["evidence_slice"])
+        if "adm_schema_override" in data:
+            data["adm_schema_override"] = self._check_schema_override(
+                data["adm_schema_override"], relation.adm_schema_override, caller_is_admin)
 
         self._validate_scoping(db, data)
         if "resolver_auth" in data:
@@ -1205,7 +1190,7 @@ class AuthorityResolutionManager(SearchableAsset):
         "object_type", "object_id", "object_resolves_to",
         "domain_context", "rule", "justification_chain", "authority_policy_id", "policy_clause_refs",
         "decision_logic",
-        "evidence_binding", "evidence_sources",
+        "evidence_slice", "adm_schema_override",
         "dna_max_threshold", "dna_scoring_config", "schedule_cron",
         "resolver_auth", "owner_team_id", "project_id",
     )
@@ -1597,6 +1582,12 @@ class AuthorityResolutionManager(SearchableAsset):
         else:
             texts += [row["rule"] for row in criteria_rows]
         arule.check_parameter_references(texts, known)
+        unknown_facts = adm.unknown_fact_references(texts)
+        if unknown_facts:
+            raise AuthorityInvalidError(
+                f"The rule reads {', '.join('fact.' + n for n in unknown_facts)}, which is not a resolve-time fact.",
+                parameters=unknown_facts,
+            )
 
     def _replace_criteria(self, db: Session, relation_id: str, rows: List[Dict[str, Any]]) -> None:
         """Replace the AR version's own decision checks with the save's rows (ARF 1.2.0, B7 / S12).
@@ -2280,8 +2271,8 @@ class AuthorityResolutionManager(SearchableAsset):
                     }
                     for c in sorted(relation.criteria or [], key=lambda x: (x.display_order or 0))
                 ],
-                "evidence_binding": relation.evidence_binding,
-                "evidence_sources": relation.evidence_sources,
+                "evidence_slice": relation.evidence_slice,
+                "adm_schema": self.effective_schema(db, relation),
                 "justification_chain": relation.justification_chain,
             }
         return ctx
@@ -2477,11 +2468,16 @@ class AuthorityResolutionManager(SearchableAsset):
         except Exception as e:  # pragma: no cover - timeline logging is best-effort
             logger.warning(f"Could not write AR timeline comment for {relation_id}: {e}")
 
-    def compute_dnaco(self, db: Session, relation_id: str, rows: Optional[List[Dict[str, Any]]] = None) -> Optional[AuthorityDnaRunDb]:
-        """Compute the DNA-Coefficient over the AR's bound evidence.
+    def compute_dnaco(
+        self, db: Session, relation_id: str, rows: Optional[List[Dict[str, Any]]] = None,
+        *, requested_by: Optional[str] = None,
+    ) -> Optional[AuthorityDnaRunDb]:
+        """Compute the DNA-Coefficient over the AR's ADM evidence (ARF 1.2.0, #1294 slice 4).
 
-        ``rows`` may be supplied directly (used by tests); otherwise they are
-        read best-effort from the bound Delta table.
+        ``rows`` may be supplied directly (tests); otherwise the sample is read from the
+        shared ADM schema (or the AR's override) as the app service principal. The run
+        records how it was read (``sample_basis``), including who asked for it, and keeps
+        one decision row per sampled observation.
         """
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
@@ -2496,11 +2492,18 @@ class AuthorityResolutionManager(SearchableAsset):
         })
 
         try:
+            basis: Dict[str, Any] = {
+                "requested_by": requested_by,
+                "reader": RESOLVER_AUTH_APP_SP,
+                "adm_version": adm.ADM_VERSION,
+                "method_version": adm.DNA_METHOD_VERSION,
+            }
             if rows is None:
-                # Read + normalise across all bound evidence sources (falls back to
-                # the legacy single ``evidence_binding``); rows are keyed by the
-                # canonical request fields the criteria rules reference.
-                rows = self._collect_evidence(relation)
+                sample = self._collect_evidence(db, relation, run)
+                rows = sample.rows
+                basis.update(sample.basis)
+            else:
+                basis["source"] = "supplied"
             if not rows:
                 raise AuthorityInvalidError("No evidence rows were read; the DNA-Coefficient cannot be measured.")
             # The ODRL rule and the checks, evaluated per row: every failure
@@ -2534,17 +2537,16 @@ class AuthorityResolutionManager(SearchableAsset):
                     "the DNA-Coefficient cannot be measured."
                 )
 
-            # Combine the evidence-based dimensions with the definition-based
-            # 'structural' dimension; overall = probabilistic union (noisy-OR),
-            # which scales into [0,1] instead of merely clipping a sum.
-            dimensions = dict(result.dimensions)
-            dimensions["structural"] = self._structural_score(relation)
-            overall = authority_dna.combine_dimensions(dimensions.values())
+            # Per-dimension {position, magnitude, weight}, and the definition-based 'structural'
+            # completeness, which is shown but doesn't gate (the ceiling gates the magnitude).
+            dimensions: Dict[str, Dict[str, Any]] = {
+                d: {"position": s.position, "magnitude": s.magnitude, "weight": s.weight}
+                for d, s in result.dimensions.items()
+            }
+            dimensions["structural"] = {"position": 0.0, "magnitude": self._structural_score(relation), "weight": 0.0, "kind": "definition"}
 
-            # Persist per-row divergences as evidence AR Decisions (the DNAco sample).
+            # One decision row per sampled observation (ARF 1.2.0 S5/N3): divergent or not.
             for rd in result.rows:
-                if not rd.diverged:
-                    continue
                 authority_decision_repo.create(db, obj_in={
                     "id": str(uuid.uuid4()),
                     "relation_id": relation_id,
@@ -2555,31 +2557,41 @@ class AuthorityResolutionManager(SearchableAsset):
                     "action": rd.action,
                     "object_id": rd.object_id,
                     "verdict": None,
-                    "reason": ", ".join(rd.reasons),
-                    "divergence_magnitude": 1.0,
-                    "direction": None,
+                    "reason": ", ".join(rd.reasons) or None,
+                    "divergence_magnitude": 1.0 if rd.diverged else 0.0,
+                    "direction": _row_direction(rd.signed),
+                    "provenance": {"observation_id": rd.ref, "signed": rd.signed, "diverged": rd.diverged},
                 })
 
+            basis.update({
+                "sampled": result.sampled_count,
+                "divergent": result.divergent_count,
+                "skipped": result.skipped_count,
+                "out_of_scope": out_of_scope,
+            })
             run = authority_dna_run_repo.update(db, db_obj=run, obj_in={
                 "status": "succeeded",
                 "finished_at": self._now(),
                 "sampled_count": result.sampled_count,
                 "divergent_count": result.divergent_count,
-                "magnitude": overall,
+                "magnitude": result.magnitude,
+                "position": result.position,
                 "direction": result.direction,
                 "per_dimension_scores": dimensions,
+                "sample_basis": basis,
             })
 
             # Roll the run up onto the Definition's aggregate DNAco.
             agg = {
-                "dna_magnitude": overall,
+                "dna_magnitude": result.magnitude,
+                "dna_position": result.position,
                 "dna_direction": result.direction,
                 "dna_dimensions": dimensions,
                 "dna_measured_at": self._now(),
             }
-            # An active AR whose divergence exceeded its ceiling is auto-flagged.
+            # An active AR whose magnitude exceeded its ceiling is auto-flagged.
             auto_flagged = False
-            if relation.status == STATUS_ACTIVE and overall > self._ceiling(relation):
+            if relation.status == STATUS_ACTIVE and result.magnitude > self._ceiling(relation):
                 agg["status"] = STATUS_NEEDS_REVIEW
                 auto_flagged = True
                 # Coming back to active needs fresh affirmations (S3).
@@ -2587,10 +2599,13 @@ class AuthorityResolutionManager(SearchableAsset):
             authority_relation_repo.update(db, db_obj=relation, obj_in=agg)
 
             # Record the run on the entity timeline (Comments).
-            dims_str = ", ".join(f"{k} {v:.2f}" for k, v in sorted(dimensions.items()))
+            dims_str = ", ".join(
+                f"{k} {v['position']:+.2f}" for k, v in sorted(dimensions.items()) if v.get("kind") != "definition"
+            )
             msg = (
-                f"DNA-Coefficient computed: {overall:.2f} "
-                f"({result.divergent_count}/{result.sampled_count} divergent; {dims_str})."
+                f"DNA-Coefficient computed: magnitude {result.magnitude:.2f} "
+                f"({result.divergent_count}/{result.sampled_count} sampled decisions diverge), "
+                f"position {result.position:+.2f} ({dims_str})."
             )
             if out_of_scope:
                 msg += f" {out_of_scope} evidence rows outside the scope were skipped."
@@ -2622,12 +2637,14 @@ class AuthorityResolutionManager(SearchableAsset):
         """Evidence rows as rules see them, and how many fell outside the scope.
 
         A row is skipped when it carries a scope key with a value outside the
-        scope; a row without that column is kept (it can't be placed). Each kept
+        scope; a row without that column is kept (it can't be placed). The scope
+        applies only when the AR's slice asks for ``domain_scope``. Each kept
         row is the rules' evaluation object: the row is both ``obj`` and
         ``req``, and ``ctx`` is the run's parameters (:meth:`_run_ctx`).
         """
         dc = arule.normalize_domain_context(relation.domain_context)
-        by_key = [(arule.scope_key(c["leftOperand"]), c) for c in dc["scope"]]
+        scoped = (relation.evidence_slice or {}).get("domain_scope", True)
+        by_key = [(arule.scope_key(c["leftOperand"]), c) for c in dc["scope"]] if scoped else []
         kept: List[Dict[str, Any]] = []
         skipped = 0
         for row in rows:
@@ -2643,20 +2660,32 @@ class AuthorityResolutionManager(SearchableAsset):
         return kept, skipped
 
     def recompute_scheduled(self, db: Session) -> Dict[str, Any]:
-        """Recompute the DNA-Coefficient for every AR that has a ``schedule_cron``.
+        """Recompute the DNA-Coefficient for every AR whose own ``schedule_cron`` is due.
 
-        Invoked by the scheduled ``authority_dna_recompute`` Databricks workflow
-        (its own cron drives cadence) and by the manual trigger endpoint. Each
-        recompute is isolated; one failure does not abort the batch. Results land
-        on each AR's dna-runs, aggregate DNAco, and Comments timeline, and an
-        active AR that drifts past its ceiling is auto-flagged ``needs_review``.
+        Invoked by the scheduled ``authority_dna_recompute`` Databricks workflow (which
+        runs on its own cadence) and by the Admin trigger endpoint. An AR is due when its
+        cron's latest fire time is after its last measurement. Retired ARs are skipped, and
+        so is an AR whose cron doesn't parse. Each recompute is isolated; one failure does
+        not abort the batch. An active AR that drifts past its ceiling is auto-flagged.
         """
+        now = self._now()
         relations = authority_relation_repo.list_all(db)
-        due = [r for r in relations if getattr(r, "schedule_cron", None)]
+        scheduled = [r for r in relations if getattr(r, "schedule_cron", None)]
         results: List[Dict[str, Any]] = []
-        for r in due:
+        for r in scheduled:
+            if r.status == STATUS_RETIRED:
+                results.append({"relation_id": r.id, "status": "skipped", "reason": "retired"})
+                continue
             try:
-                run = self.compute_dnaco(db, r.id)
+                due = self._is_due(r, now)
+            except CodedValueError:
+                results.append({"relation_id": r.id, "status": "skipped", "reason": "invalid_schedule"})
+                continue
+            if not due:
+                results.append({"relation_id": r.id, "status": "skipped", "reason": "not_due"})
+                continue
+            try:
+                run = self.compute_dnaco(db, r.id, requested_by="scheduled")
                 results.append({
                     "relation_id": r.id,
                     "run_id": run.id if run else None,
@@ -2668,95 +2697,194 @@ class AuthorityResolutionManager(SearchableAsset):
                     "relation_id": r.id, "status": "failed",
                     "error": client_failure_text("scheduled DNA-Coefficient recompute", e),
                 })
-        return {"scheduled": len(due), "results": results}
+        return {"scheduled": len(scheduled), "results": results}
 
-    # Canonical request fields the criteria rules reference (``obj.<field>``); the
-    # evidence column_map normalises each source's columns onto these names, so the
-    # same criterion evaluates against a live request and a historical evidence row.
-    _CANONICAL_ELEMENTS = (
-        "actor_identity", "action", "value", "escalated", "cosign_present", "object_id",
-    )
+    @staticmethod
+    def _is_due(relation: AuthorityRelationDb, now: datetime) -> bool:
+        """True when the AR's cron has fired since it was last measured (or it never was)."""
+        from src.common.quartz_cron import previous_run
 
-    def _resolve_evidence_sources(self, relation: AuthorityRelationDb) -> List[Dict[str, Any]]:
-        """Resolve an AR's bound evidence to a list of readable Delta tables.
+        last_fire = previous_run(relation.schedule_cron, None, now)
+        if last_fire is None:
+            return False
+        measured = relation.dna_measured_at
+        if measured is None:
+            return True
+        if measured.tzinfo is None:
+            measured = measured.replace(tzinfo=timezone.utc)
+        return measured < last_fire
 
-        Each entry is ``{table_fqn, column_map, row_filter}``. ``delta_table`` and
-        ``asset`` sources resolve to their ``ref`` (a table/view FQN); ``data_product``
-        sources are declared-only in v1 (logged, not read). Falls back to the legacy
-        single ``evidence_binding`` when no sources are declared.
+    # --------------------------------------------------- the shared ADM schema
+
+    def effective_schema(self, db: Session, relation: AuthorityRelationDb) -> Optional[str]:
+        """The ADM schema an AR reads: its own override, else the shared app setting."""
+        return relation.adm_schema_override or self._adm.shared_schema(db)
+
+    def _adm_query(self, sql: str, *, allow_truncated: bool = False) -> List[Dict[str, Any]]:
+        """Run one ADM statement as the app service principal (polled, see ``adm_sql``).
+
+        A read that hit the row cap fails closed unless the caller can use a partial read
+        (the sample does, and records the truncation in its basis).
         """
-        out: List[Dict[str, Any]] = []
-        for s in (relation.evidence_sources or []):
-            stype = (s or {}).get("type") or "delta_table"
-            ref = (s or {}).get("ref")
-            if not ref:
-                continue
-            if stype in ("delta_table", "asset"):
-                out.append({"table_fqn": ref, "column_map": s.get("column_map") or {}, "row_filter": s.get("row_filter")})
-            elif stype == "data_product":
-                logger.info(f"AR evidence source data_product '{ref}' is declared-only in v1 (not read).")
-        if not out:
-            b = relation.evidence_binding or {}
-            if b.get("source_table_fqn"):
-                out.append({"table_fqn": b["source_table_fqn"], "column_map": b.get("column_map") or {}, "row_filter": b.get("row_filter")})
-        return out
+        ws, warehouse_id = workspace_and_warehouse()
+        rows = run_query(sql, ws=ws, warehouse_id=warehouse_id)
+        if rows.truncated and not allow_truncated:
+            raise AdmQueryError("The ADM read was truncated.", code=ADM_RESULT_TRUNCATED)
+        return rows
 
-    def _collect_evidence(self, relation: AuthorityRelationDb) -> List[Dict[str, Any]]:
-        """Read rows from every resolvable evidence source and normalise them to the
-        canonical request fields (with types coerced), so an author's criterion
-        rules evaluate against evidence rows exactly as against a live request.
+    def _identity_maps(self, schema: str, as_of: datetime, entity_ids: List[str]) -> Tuple[Dict[str, str], Dict[str, str]]:
+        """``(alias_by_entity, entity_by_alias)`` for the sample's actors, from VERIFIED links only.
+
+        Two batched phases, no silent truncation: the links of the actors' entities give their
+        aliases; then every VERIFIED link of those aliases is read, so an alias that also maps to
+        another entity is seen as ambiguous (and dropped) even when that link is not for an actor
+        of this sample.
         """
-        sources = self._resolve_evidence_sources(relation)
-        combined: List[Dict[str, Any]] = []
-        for src in sources:
-            cm = src.get("column_map") or {}
-            raw = self._read_evidence_rows({"source_table_fqn": src["table_fqn"], "row_filter": src.get("row_filter")})
-            for r in raw:
-                # Keep the source's own columns (rules may reference them directly)
-                # and overlay each column_map alias -> source column.
-                row = dict(r)
-                for alias, col in cm.items():
-                    row[alias] = r.get(col)
-                combined.append(authority_dna.normalize_row(row))
-        return combined
+        wanted = sorted({e for e in entity_ids if e})
+        if not wanted:
+            return {}, {}
+        links: List[Dict[str, Any]] = []
+        for batch in adm.chunked(wanted):
+            links += self._adm_query(adm.identity_links_sql(schema, as_of=as_of, entities=batch))
+        aliases = sorted({str(link["source_id"]) for link in links if link.get("source_id")})
+        all_links: List[Dict[str, Any]] = []
+        for batch in adm.chunked(aliases):
+            all_links += self._adm_query(adm.identity_links_sql(schema, as_of=as_of, aliases=batch))
+        alias_by_entity, entity_by_alias = adm.identity_index(all_links)
+        return {e: a for e, a in alias_by_entity.items() if e in set(wanted)}, entity_by_alias
 
-    def _read_evidence_rows(self, binding: Dict[str, Any], limit: int = 500) -> List[Dict[str, Any]]:
-        """Read the bound UC Delta table via the SQL warehouse.
+    def _collect_evidence(
+        self, db: Session, relation: AuthorityRelationDb, run: Optional[AuthorityDnaRunDb] = None,
+    ) -> "_AdmSample":
+        """Read the AR's sample from the shared ADM schema (ARF 1.2.0 slice 4, #1294).
 
-        Raises on any failure (no warehouse, missing table, permission denied,
-        invalid filter) so ``compute_dnaco`` records a failed run instead of a
-        fabricated 0.0 from an empty sample.
+        Only the observations in the slice are read: action codes, object refs, the window
+        (whole days back from the run's day), as of the run's snapshot, DNA-contributing
+        only. The order is a seeded hash of the observation id, so the same AR version over
+        the same window reads the same sample. Each observation's actor is canonicalised
+        through the VERIFIED identity links; an actor without one is unknown and its row
+        is skipped by the checks that read it.
         """
-        table = (binding or {}).get("source_table_fqn")
-        if not table:
-            return []
-        table = validate_table_fqn(table)
-        row_filter = validate_row_filter((binding or {}).get("row_filter"))
-        from src.common.config import get_settings
-        from src.common.workspace_client import get_workspace_client
-
-        settings = get_settings()
-        warehouse_id = (
-            getattr(settings, "DATABRICKS_WAREHOUSE_ID", None)
-            or getattr(settings, "DATABRICKS_SQL_WAREHOUSE_ID", None)
-        )
-        if not warehouse_id:
-            raise RuntimeError("No SQL warehouse configured; cannot read AR evidence.")
-        try:
-            ws = get_workspace_client(settings)
-            where = f" WHERE {row_filter}" if row_filter else ""
-            stmt = f"SELECT * FROM {table}{where} LIMIT {int(limit)}"
-            resp = ws.statement_execution.execute_statement(
-                warehouse_id=warehouse_id, statement=stmt, wait_timeout="30s",
+        schema = self.effective_schema(db, relation)
+        if not schema:
+            raise adm.AdmError(
+                adm_manager.ADM_NOT_CONFIGURED,
+                "No ADM schema is configured. Set the shared ADM schema in Settings, or override it on this Authority Relation.",
             )
-            manifest = getattr(resp, "manifest", None)
-            result = getattr(resp, "result", None)
-            if not manifest or not result or not getattr(result, "data_array", None):
-                return []
-            columns = [c.name for c in manifest.schema.columns]
-            return [dict(zip(columns, r)) for r in result.data_array]
-        except Exception as e:  # pragma: no cover - depends on live warehouse
-            raise RuntimeError(f"Evidence read failed for table '{table}': {e}") from e
+        ev = relation.evidence_slice or {}
+        # A stored code that no longer matches the grammar is flagged, not fatal: the valid codes read.
+        codes, invalid_codes = adm.split_action_codes(ev.get("action_codes") or [])
+        if not codes:
+            raise adm.AdmError(
+                "evidence_slice_empty",
+                "This Authority Relation declares no valid action codes to read, so its DNA-Coefficient cannot be measured.",
+            )
+        snapshot = (run.started_at if run is not None and run.started_at else self._now())
+        snapshot = snapshot if snapshot.tzinfo else snapshot.replace(tzinfo=timezone.utc)
+        window_end = snapshot.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        window_days = int(ev.get("window_days") or 90)
+        window_start = window_end - timedelta(days=window_days)
+        sample_size = int(ev.get("sample_size") or 500)
+        seed = adm.sample_seed(relation.id, relation.version, window_start, window_end)
+
+        sql = adm.observed_sample_sql(
+            schema, action_codes=codes, object_refs=list(ev.get("object_refs") or []),
+            window_start=window_start, window_end=window_end, as_of=snapshot, seed=seed,
+            sample_size=sample_size,
+        )
+        observed = self._adm_query(sql, allow_truncated=True)
+        alias_by_entity, _ = self._identity_maps(
+            schema, snapshot, [obs.get("actor_entity_id") for obs in observed])
+
+        rows: List[Dict[str, Any]] = []
+        unknown = 0
+        for obs in observed:
+            entity = obs.get("actor_entity_id")
+            alias = alias_by_entity.get(entity) if entity else None
+            if alias is None:
+                unknown += 1
+            rows.append(adm.observation_row(
+                obs, actor_identity=alias, identity_status="VERIFIED" if alias else "UNKNOWN",
+            ))
+        basis = {
+            "schema": schema,
+            "schema_source": "override" if relation.adm_schema_override else "shared",
+            "as_of": snapshot.isoformat(),
+            "window": {"start": window_start.isoformat(), "end": window_end.isoformat(), "days": window_days},
+            "seed": seed,
+            "sample_size": sample_size,
+            "action_codes": codes,
+            "object_refs": list(ev.get("object_refs") or []),
+            "observed": len(observed),
+            "truncated": bool(getattr(observed, "truncated", False)),
+            "invalid_action_codes": invalid_codes,
+            "identity_unknown": unknown,
+        }
+        return _AdmSample(rows=rows, basis=basis)
+
+    def _facts_for(self, db: Session, relation: AuthorityRelationDb, req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """The resolve-time ``fact.*`` namespace, read only when the AR's rules name one.
+
+        ``None`` = no rule reads a fact (nothing to read). A read that fails, or no schema,
+        gives an empty namespace: every fact is unknown and a rule that reads one fails closed.
+        Facts are current at the resolve (ADM section 4.2): a revoked, unverified or expired
+        entitlement is not current.
+        """
+        try:
+            rule_texts = [c.rule for c in self._rule_criteria(relation)]
+        except ValueError:
+            rule_texts = []  # a malformed rule is reported by _decide as a conflict
+        texts = rule_texts + [c.rule for c in self._load_criteria(relation)]
+        if not adm.fact_references(texts):
+            return None
+        schema = self.effective_schema(db, relation)
+        if not schema:
+            return {}
+        now = self._now()
+        now = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
+        try:
+            caller = req.get("actor_identity")
+            entity: Optional[str] = None
+            if caller:
+                _, entity_by_alias = adm.identity_index(self._adm_query(
+                    adm.identity_links_sql(schema, as_of=now, aliases=[str(caller)])))
+                entity = entity_by_alias.get(str(caller))
+            entitlements: List[Dict[str, Any]] = []
+            delegations: List[Dict[str, Any]] = []
+            roles: List[Dict[str, Any]] = []
+            if entity and relation.actor_role:
+                entitlements = self._adm_query(adm.entitlements_sql(schema, entity_id=entity, role_id=relation.actor_role, as_of=now))
+            if relation.actor_role:
+                roles = self._adm_query(adm.roles_sql(schema, role_id=relation.actor_role, as_of=now))
+            if entity:
+                delegations = self._adm_query(adm.delegations_sql(schema, entity_id=entity, as_of=now))
+        except CodedValueError as exc:
+            logger.warning("ADM facts unavailable for AR %s (%s); facts are unknown", relation.id, exc.code)
+            return {}
+        return adm.derive_facts(
+            identity={"entity_id": entity} if entity else None,
+            entitlements=entitlements, roles=roles, delegations=delegations, at=now,
+            role_id=relation.actor_role,
+        )
+
+    def _check_schema_override(self, value: Optional[str], current: Optional[str], caller_is_admin: bool) -> Optional[str]:
+        """An AR's ADM schema override. Admin only; the schema must pass the conformance check."""
+        text = (value or "").strip() or None
+        if text == (current or None):
+            return text
+        if text is None:
+            return None
+        if not caller_is_admin:
+            raise AuthorityPermissionError(
+                "Only an Admin can set the ADM schema for one Authority Relation.",
+                field="adm_schema_override", required_level="Admin",
+            )
+        parsed = adm.parse_schema_fqn(text)
+        schema = f"{parsed[0]}.{parsed[1]}"
+        report = self._adm.conformance(schema)
+        if report["status"] != "conformant":
+            raise AdmNonconformantError(schema, report)
+        return schema
 
     # ------------------------------------------------------------- lifecycle
 
@@ -2927,6 +3055,7 @@ class AuthorityResolutionManager(SearchableAsset):
         req: Dict[str, Any],
         resolved_refs: Optional[List[Dict[str, Any]]],
         policy_ref: Dict[str, Any],
+        facts: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """The request as rules see it: ``obj.<field>`` (normalised), ``req.<key>``,
         ``ctx.<param>``, ``obj.ref_<field_path>`` and ``policy_ref.*`` (ARF 1.2.0).
@@ -2940,7 +3069,7 @@ class AuthorityResolutionManager(SearchableAsset):
         params = arule.normalize_domain_context(relation.domain_context)["params"]
         return arule.evaluation_object(
             authority_dna.normalize_row(flat), params, extra_ctx=self._ref_ctx(resolved_refs),
-            policy_ref=policy_ref,
+            policy_ref=policy_ref, facts=facts,
         )
 
     def _evaluate_decision(
@@ -2983,6 +3112,7 @@ class AuthorityResolutionManager(SearchableAsset):
         resolved_refs: Optional[List[Dict[str, Any]]],
         policy_label: Optional[str],
         policy_ref: Dict[str, Any],
+        facts: Optional[Dict[str, Any]] = None,
     ) -> Tuple[str, str, List[Dict[str, Any]], Optional[str]]:
         """Deterministic evaluation of the request against the AR's rule and checks.
 
@@ -2999,7 +3129,7 @@ class AuthorityResolutionManager(SearchableAsset):
         fields, a missing parameter is a conflict. An UNKNOWN duty stays unfulfilled.
         Returns ``(verdict, reason, pending_duties, reason_code)``.
         """
-        obj = self._evaluation_object(relation, req, resolved_refs, policy_ref)
+        obj = self._evaluation_object(relation, req, resolved_refs, policy_ref, facts=facts)
         try:
             rule_criteria = self._rule_criteria(relation)
         except ValueError as e:
@@ -3253,8 +3383,9 @@ class AuthorityResolutionManager(SearchableAsset):
             )
             out["resolver_failure"] = True
             return out
+        facts = self._facts_for(db, relation, req)
         verdict, reason, own_pending, decision_code = self._decide(
-            relation, req, resolved_refs, policy_label, policy_ref)
+            relation, req, resolved_refs, policy_label, policy_ref, facts=facts)
         # A conditional prerequisite's duties are this decision's duties too.
         pending = [d for e in chain for d in (e.get("pending_duties") or [])] + own_pending
         if verdict == VERDICT_APPROVED and pending:
@@ -3264,7 +3395,7 @@ class AuthorityResolutionManager(SearchableAsset):
         out = self._finalize_resolve(
             db, relation, req, verdict, reason, chain, resolved_refs, record,
             scope_check=scope_results, pending_duties=pending, own_pending_duties=own_pending,
-            policy=citation,
+            policy=citation, facts=facts,
         )
         if decision_code:
             out["reason_code"] = decision_code
@@ -3371,6 +3502,7 @@ class AuthorityResolutionManager(SearchableAsset):
         pending_duties: Optional[List[Dict[str, Any]]] = None,
         own_pending_duties: Optional[List[Dict[str, Any]]] = None,
         policy: Any = _UNSET,
+        facts: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         pending_duties = pending_duties or []
         # The cited reference and its clause labels: what the decision was grounded in,
@@ -3378,7 +3510,7 @@ class AuthorityResolutionManager(SearchableAsset):
         if policy is _UNSET:
             policy = self._policy_citation(db, relation)
         provenance: Optional[Dict[str, Any]] = None
-        if chain or resolved_refs or scope_check or pending_duties or policy:
+        if chain or resolved_refs or scope_check or pending_duties or policy or facts:
             provenance = {}
             if policy:
                 provenance["policy"] = policy
@@ -3390,6 +3522,9 @@ class AuthorityResolutionManager(SearchableAsset):
                 provenance["scope_check"] = scope_check
             if pending_duties:
                 provenance["pending_duties"] = pending_duties
+            if facts:
+                # The facts the verdict read, as they stood at the resolve (ADM section 4.2).
+                provenance["facts"] = {"at": self._now().isoformat(), "values": facts}
         if record:
             authority_decision_repo.create(db, obj_in={
                 "id": str(uuid.uuid4()),
@@ -3721,9 +3856,11 @@ class AuthorityResolutionManager(SearchableAsset):
             "policy_clause_refs": getattr(relation, "policy_clause_refs", None) or [],
             "policy": self._policy_citation(db, relation),
             "decision_logic": relation.decision_logic,
-            "evidence_binding": relation.evidence_binding,
-            "evidence_sources": relation.evidence_sources,
+            "evidence_slice": relation.evidence_slice,
+            "adm_schema_override": relation.adm_schema_override,
+            "adm_schema": self.effective_schema(db, relation),
             "dna_magnitude": relation.dna_magnitude,
+            "dna_position": relation.dna_position,
             "dna_direction": relation.dna_direction,
             "dna_dimensions": relation.dna_dimensions,
             "dna_measured_at": relation.dna_measured_at,

@@ -29,7 +29,7 @@ from src.controller.authority_resolution_manager import (
 from src.models.authority_resolution import (
     AffirmationInput,
     AuthorityRelationCreate,
-    EvidenceSource,
+    EvidenceSlice,
     AuthorityRelationUpdate,
     CriterionInput,
     ResourceRefInput,
@@ -50,8 +50,7 @@ def _draft(mgr, db, slug=None, **kwargs):
     kwargs.setdefault("affirmations", [AffirmationInput(role="Approver", principal="approver@x.com")])
     kwargs.setdefault("object_id", "dp-1")
     kwargs.setdefault("justification_chain", {"policy_id": "pol-1"})
-    kwargs.setdefault("evidence_sources", [EvidenceSource(
-        type="delta_table", ref="c.s.t", column_map={"actor_identity": "actor"})])
+    kwargs.setdefault("evidence_slice", EvidenceSlice(action_codes=["approve"]))
     rel = mgr.create_relation(db, AuthorityRelationCreate(name="Imm AR", slug=slug, **kwargs),
                               current_user="author@x.com", caller_is_admin=True)
     db.commit()

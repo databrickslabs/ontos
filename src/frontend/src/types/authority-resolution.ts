@@ -48,26 +48,69 @@ export interface AuthorityReviewContext {
     domain_context?: DomainContext | null;
     rule?: ArfRule | null;
     criteria?: { name?: string | null; rule?: string | null; direction?: string; weight?: number; enabled?: boolean }[];
-    evidence_binding?: EvidenceBinding | null;
-    evidence_sources?: EvidenceSource[] | null;
+    evidence_slice?: EvidenceSlice | null;
+    adm_schema?: string | null;
     justification_chain?: Record<string, any> | null;
   } | null;
 }
 
-export interface EvidenceBinding {
-  source_table_fqn: string;
-  column_map: Record<string, string>;
-  row_filter?: string | null;
+// The slice of the shared ADM schema's observations an AR reads (ARF 1.2.0, #1294 slice 4).
+// There is no table reference: the schema is the app setting, or the AR's own override.
+export interface EvidenceSlice {
+  action_codes: string[];            // 1..20 lowercase ADM action codes, e.g. approve
+  object_refs: string[];             // 0..200 exact object_ref values; empty = all objects of those actions
+  domain_scope: boolean;             // applies the AR's domain-context scope to observed rows
+  window_days: number;               // 1..3650
+  sample_size: number;               // 1..5000
 }
 
-export type EvidenceSourceType = 'delta_table' | 'data_product' | 'asset';
+// One dimension of a DNA-Coefficient run (ARF 1.2.0 slice 4). `kind: 'definition'` marks the
+// structural entry: its magnitude is the AR definition completeness and does not gate.
+export interface DnaDimension {
+  position: number;                  // -1..+1, signed direction of the divergence
+  magnitude: number;                 // 0..1, share of sampled decisions that diverge
+  weight: number;
+  kind?: 'definition';
+}
 
-export interface EvidenceSource {
-  type: EvidenceSourceType;
-  ref: string;
-  label?: string | null;
-  column_map?: Record<string, string>;
-  row_filter?: string | null;
+// NEW runs store a DnaDimension per dimension; LEGACY runs (before slice 4) store a bare
+// magnitude (the old noisy-OR value) with no signed position.
+export type DnaDimensionValue = DnaDimension | number;
+
+export interface AdmConformanceFinding {
+  code: 'missing_table' | 'missing_column' | 'type_mismatch';
+  table: string;
+  column?: string;
+  expected?: string;
+  actual?: string;
+}
+
+export interface AdmConformance {
+  status: 'conformant' | 'nonconformant' | 'unavailable';
+  schema: string;
+  adm_version: string;
+  findings: AdmConformanceFinding[];
+  error_code?: string | null;
+  checked_tables: string[];
+}
+
+// GET/PUT /api/authority/adm-schema. `schema` is the app-wide `catalog.schema` (or null).
+export interface AdmSchemaState {
+  schema: string | null;
+  adm_version: string;
+  conformance: AdmConformance | null;
+  // ISO time of the stored conformance result; null when none was checked.
+  checked_at?: string | null;
+}
+
+export interface ComputeDnacoResponse {
+  run_id: string;
+  status: string;
+  sampled_count: number;
+  divergent_count: number;
+  magnitude: number;
+  position: number | null;
+  direction: string | null;
 }
 
 // Provenance of a criterion copied from elsewhere. Stored as a label only:
@@ -223,15 +266,19 @@ export interface AuthorityRelation {
   policy_clause_refs?: string[];
   policy?: PolicyCitation | null;
   decision_logic?: Record<string, any> | null;
-  evidence_binding?: EvidenceBinding | null;
-  evidence_sources?: EvidenceSource[] | null;
-  dna_magnitude?: number | null;
+  evidence_slice?: EvidenceSlice | null;
+  // Per-AR override of the shared ADM schema (`catalog.schema`). Admin-only to change.
+  adm_schema_override?: string | null;
+  // The EFFECTIVE schema: the override, else the shared one. Null when neither is set.
+  adm_schema?: string | null;
+  dna_magnitude?: number | null;     // 0..1, share of sampled decisions that diverge; the ceiling gates on it
+  dna_position?: number | null;      // -1..+1 combined signed position
   dna_direction?: string | null;
-  dna_dimensions?: Record<string, number> | null;   // {dimension: score} incl. structural
+  dna_dimensions?: Record<string, DnaDimensionValue> | null;   // {dimension: entry} incl. structural
   dna_measured_at?: string | null;
   // False with dna_magnitude set: measured on an earlier draft.
   dna_current?: boolean;
-  dna_max_threshold?: number | null;
+  dna_max_threshold?: number | null; // the ceiling (magnitude must stay at or below it)
   schedule_cron?: string | null;
   resolver_auth?: ResolverAuth;
   fully_affirmed?: boolean;
@@ -439,7 +486,8 @@ export interface AuthorityRelationCreate {
   domain_context?: Record<string, any>;
   justification_chain?: Record<string, any>;
   decision_logic?: Record<string, any>;
-  evidence_binding?: EvidenceBinding;
+  evidence_slice?: EvidenceSlice;
+  adm_schema_override?: string | null;
   dna_max_threshold?: number;
   domain_ids?: string[];
   primary_domain_id?: string | null;
@@ -556,3 +604,121 @@ export const scopeRequestKeys = (scope: { leftOperand: string }[]): string[] =>
 
 export const ACTION_VOCAB = ['approve', 'escalate', 'override', 'delegate', 'veto'];
 export const AFFIRMATION_ROLES = ['business', 'technical', 'governance'];
+
+// ------------------------------------------------ Evidence slice + ADM schema (ARF 1.2.0, #1294 slice 4)
+
+export const EVIDENCE_BOUNDS = {
+  actionCodesMax: 20,
+  objectRefsMax: 200,
+  windowDaysMin: 1,
+  windowDaysMax: 3650,
+  windowDaysDefault: 90,
+  sampleSizeMin: 1,
+  sampleSizeMax: 5000,
+  sampleSizeDefault: 500,
+} as const;
+
+// ADM action codes (approve, escalate, budget.approve, scope:region...). The same grammar as
+// the backend (src/common/adm.py ACTION_CODE_PATTERN and the ao1 migration): change all three together.
+export const ACTION_CODE_PATTERN = /^[a-z][a-z0-9_:.-]{0,127}$/;
+
+// `catalog.schema`: two dot-separated identifiers, no whitespace.
+export const ADM_SCHEMA_PATTERN = /^[^.\s]+\.[^.\s]+$/;
+
+/** The editor's text state for a slice; numbers stay text until validated. */
+export interface EvidenceSliceDraft {
+  action_codes: string[];
+  object_refs: string[];
+  domain_scope: boolean;
+  window_days: string;
+  sample_size: string;
+}
+
+export type EvidenceSliceError =
+  | 'actionCodesRequired'
+  | 'actionCodesTooMany'
+  | 'actionCodeInvalid'
+  | 'objectRefsTooMany'
+  | 'windowDaysRange'
+  | 'sampleSizeRange';
+
+export const newEvidenceSliceDraft = (actionCode = 'approve'): EvidenceSliceDraft => ({
+  action_codes: [actionCode],
+  object_refs: [],
+  domain_scope: true,
+  window_days: String(EVIDENCE_BOUNDS.windowDaysDefault),
+  sample_size: String(EVIDENCE_BOUNDS.sampleSizeDefault),
+});
+
+const isIntIn = (text: string, lo: number, hi: number): boolean => {
+  const n = Number(text.trim());
+  return text.trim() !== '' && Number.isInteger(n) && n >= lo && n <= hi;
+};
+
+/** Validates a draft against the server bounds; an empty list means the slice is valid. */
+export function evidenceSliceErrors(draft: EvidenceSliceDraft): EvidenceSliceError[] {
+  const errors: EvidenceSliceError[] = [];
+  if (draft.action_codes.length === 0) errors.push('actionCodesRequired');
+  if (draft.action_codes.length > EVIDENCE_BOUNDS.actionCodesMax) errors.push('actionCodesTooMany');
+  if (draft.action_codes.some((c) => !ACTION_CODE_PATTERN.test(c))) errors.push('actionCodeInvalid');
+  if (draft.object_refs.length > EVIDENCE_BOUNDS.objectRefsMax) errors.push('objectRefsTooMany');
+  if (!isIntIn(draft.window_days, EVIDENCE_BOUNDS.windowDaysMin, EVIDENCE_BOUNDS.windowDaysMax)) errors.push('windowDaysRange');
+  if (!isIntIn(draft.sample_size, EVIDENCE_BOUNDS.sampleSizeMin, EVIDENCE_BOUNDS.sampleSizeMax)) errors.push('sampleSizeRange');
+  return errors;
+}
+
+/** The wire shape of a valid draft (call evidenceSliceErrors first). */
+export function evidenceSliceFromDraft(draft: EvidenceSliceDraft): EvidenceSlice {
+  return {
+    action_codes: draft.action_codes,
+    object_refs: draft.object_refs,
+    domain_scope: draft.domain_scope,
+    window_days: Number(draft.window_days.trim()),
+    sample_size: Number(draft.sample_size.trim()),
+  };
+}
+
+export const draftFromEvidenceSlice = (slice: EvidenceSlice): EvidenceSliceDraft => ({
+  action_codes: [...slice.action_codes],
+  object_refs: [...(slice.object_refs || [])],
+  domain_scope: slice.domain_scope ?? true,
+  window_days: String(slice.window_days ?? EVIDENCE_BOUNDS.windowDaysDefault),
+  sample_size: String(slice.sample_size ?? EVIDENCE_BOUNDS.sampleSizeDefault),
+});
+
+const clampRange = (x: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, x));
+
+export interface DnaDimensionRow {
+  name: string;
+  /** Signed position -1..+1; null for a legacy (magnitude-only) dimension. */
+  position: number | null;
+  magnitude: number;
+  weight: number | null;
+  /** The structural entry: its magnitude is definition completeness and does not gate. */
+  definition: boolean;
+  legacy: boolean;
+}
+
+/** Normalises both dimension shapes (new entries and legacy bare numbers) into rows, sorted by name. */
+export function dnaDimensionRows(dims: Record<string, DnaDimensionValue> | null | undefined): DnaDimensionRow[] {
+  if (!dims) return [];
+  return Object.entries(dims)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, v]): DnaDimensionRow => {
+      if (typeof v === 'number') {
+        return { name, position: null, magnitude: clampRange(v, 0, 1), weight: null, definition: false, legacy: true };
+      }
+      return {
+        name,
+        position: typeof v.position === 'number' ? clampRange(v.position, -1, 1) : null,
+        magnitude: clampRange(Number(v.magnitude) || 0, 0, 1),
+        weight: typeof v.weight === 'number' ? v.weight : null,
+        definition: v.kind === 'definition',
+        legacy: typeof v.position !== 'number',
+      };
+    });
+}
+
+/** True when any dimension is a pre-slice-4 bare number (no signed position). */
+export const isLegacyDnaDimensions = (dims: Record<string, DnaDimensionValue> | null | undefined): boolean =>
+  dnaDimensionRows(dims).some((r) => r.legacy);

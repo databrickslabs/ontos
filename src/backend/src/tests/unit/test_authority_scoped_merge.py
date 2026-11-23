@@ -18,7 +18,7 @@ from src.models.authority_resolution import (
     AuthorityRelationCreate,
     AuthorityRelationUpdate,
     CriterionInput,
-    EvidenceSource,
+    EvidenceSlice,
 )
 
 MARKET_DE = [{"leftOperand": "arf:market", "operator": "eq", "rightOperand": "DE"}]
@@ -31,7 +31,7 @@ def _complete(mgr, db, slug, *, scope=MARKET_DE, rule=RULE, params=None, criteri
     rel = mgr.create_relation(db, AuthorityRelationCreate(
         name=f"Merge {slug}", slug=slug, object_id="dp-1",
         justification_chain={"policy_id": "p"},
-        evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
+        evidence_slice=EvidenceSlice(action_codes=["approve"]),
         domain_context={"scope": scope, "params": params if params is not None else {"threshold": 100}},
         rule=rule,
         criteria=criteria if criteria is not None else [CriterionInput(name="Not blocked", rule="ASSERT TRUE")],

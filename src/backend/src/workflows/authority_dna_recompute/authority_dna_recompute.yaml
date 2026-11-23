@@ -25,6 +25,8 @@ tasks:
         - "{{job.parameters.postgres_port}}"
         - "--postgres_schema"
         - "{{job.parameters.postgres_schema}}"
+        - "--databricks_warehouse_id"
+        - "{{job.parameters.databricks_warehouse_id}}"
         - "--product_name"
         - "{{job.parameters.product_name}}"
         - "--product_version"
@@ -44,6 +46,7 @@ parameters:
   postgres_db: ""
   postgres_port: "5432"
   postgres_schema: "public"
+  databricks_warehouse_id: ""
   product_name: "ontos"
   product_version: "0.0.0"
 

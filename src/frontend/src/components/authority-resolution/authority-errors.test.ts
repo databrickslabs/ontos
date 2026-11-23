@@ -26,6 +26,21 @@ describe('authorityErrorMessage', () => {
     }
   });
 
+  it('maps the ADM schema and evidence slice codes to their translated text', () => {
+    for (const code of [
+      'adm_schema_not_configured', 'adm_nonconformant', 'adm_query_failed', 'adm_query_timeout',
+      'adm_no_warehouse', 'adm_schema_invalid', 'evidence_slice_empty', 'evidence_slice_invalid',
+    ]) {
+      const text = authorityErrorMessage(t, 'server text', code);
+      expect(text).not.toBe('server text');
+      expect(text).toBe(i18n.t(`authority-resolution:adm.errors.${ {
+        adm_schema_not_configured: 'notConfigured', adm_nonconformant: 'nonconformant',
+        adm_query_failed: 'queryFailed', adm_query_timeout: 'queryTimeout', adm_no_warehouse: 'noWarehouse',
+        adm_schema_invalid: 'schemaInvalid', evidence_slice_empty: 'evidenceSliceEmpty', evidence_slice_invalid: 'evidenceSliceInvalid',
+      }[code] }`));
+    }
+  });
+
   it('falls back to the server message for an unknown status reason or code', () => {
     expect(authorityErrorMessage(t, 'server text', 'authority_status_conflict', { reason: 'new_reason' })).toBe('server text');
     expect(authorityErrorMessage(t, 'server text', 'authority_invalid')).toBe('server text');

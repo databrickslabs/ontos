@@ -190,13 +190,15 @@ class ComputeDnaCoefficientTool(BaseTool):
     name = "compute_dna_coefficient"
     description = (
         "Recompute the DNA-Coefficient for an Authority Relation (ARF) by re-"
-        "evaluating its authored criteria against the bound evidence sources. "
-        "The DNA-Coefficient is a divergence measure (0.0 = documented authority "
-        "matches lived practice, higher = worse) that gates the AR's activation. "
-        "Use when new evidence has landed or the criteria have changed and the "
-        "cached value is suspected stale. The AR row's dna_magnitude / "
-        "dna_direction / dna_dimensions / dna_measured_at are updated in place "
-        "and a new AuthorityDnaRun record is persisted."
+        "evaluating its authored criteria against the observed decisions in its "
+        "evidence slice, read from the shared ADM schema. The magnitude is the "
+        "share of sampled decisions that diverge (0.0 = documented authority "
+        "matches lived practice, higher = worse) and gates the AR's activation; "
+        "the signed position says which way they diverge. Use when new evidence "
+        "has landed or the criteria have changed and the cached value is suspected "
+        "stale. The AR row's dna_magnitude / dna_position / dna_direction / "
+        "dna_dimensions / dna_measured_at are updated in place and a new "
+        "AuthorityDnaRun record is persisted."
     )
     parameters = {
         "ar_id": {"type": "string", "description": "Authority Relation id or slug to recompute. By slug the family's active version is used; by UUID that exact version is recomputed."},

@@ -71,7 +71,10 @@ NS_REQ = "req"
 # A request field named ``policy_ref`` is dropped (anti-spoofing); a field named
 # ``justification`` stays an ordinary ``obj.justification`` field.
 NS_POLICY_REF = "policy_ref"
-RESERVED_KEYS = (NS_CTX, NS_REQ, NS_POLICY_REF)
+# ARF 1.2.0 slice 4 (#1294): resolve-time facts read from the shared ADM schema
+# (``fact.entitlement_current``, ``fact.role_codes``...). Set by the resolver only.
+NS_FACT = "fact"
+RESERVED_KEYS = (NS_CTX, NS_REQ, NS_POLICY_REF, NS_FACT)
 # What the checks see when no reference is cited, or none is known (a dry-run sample).
 UNCITED_POLICY_REF: Dict[str, Any] = {"cited": False, "valid_from": None, "valid_to": None, "expired": False}
 
@@ -583,6 +586,7 @@ def evaluation_object(
     strip: Iterable[str] = (),
     *,
     policy_ref: Dict[str, Any],
+    facts: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """The object rules evaluate against: the one builder for resolve, DNA and the validators.
 
@@ -605,4 +609,6 @@ def evaluation_object(
     obj[NS_REQ] = {k: v for k, v in clean.items() if v is not None}
     obj[NS_CTX] = ctx
     obj[NS_POLICY_REF] = dict(policy_ref)
+    # Always present (empty when no facts were read), so an absent fact reads as unknown.
+    obj[NS_FACT] = dict(facts or {})
     return obj

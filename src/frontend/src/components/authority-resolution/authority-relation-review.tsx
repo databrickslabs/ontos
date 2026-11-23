@@ -39,7 +39,7 @@ function DetailBlock({ label, data }: { label: string; data: any }) {
 /**
  * Role-specific Authority Relation review editor. Business/interviewee reviewers
  * answer a structured-elicitation questionnaire; technical/governance reviewers
- * additionally inspect the compiled rule + bound evidence. Reused inline on the
+ * additionally inspect the compiled rule + evidence slice. Reused inline on the
  * AR detail view and by the Asset Review editor (asset_type = authority_relation).
  */
 export default function AuthorityRelationReview({ relationId, reviewer, onCompleted }: Props) {
@@ -149,8 +149,8 @@ export default function AuthorityRelationReview({ relationId, reviewer, onComple
               </div>
             ) : <span className="text-sm text-muted-foreground">{t('review.details.empty')}</span>}
           </div>
-          <DetailBlock label={t('review.details.evidenceSources')} data={ctx.details.evidence_sources} />
-          <DetailBlock label={t('review.details.evidenceBinding')} data={ctx.details.evidence_binding} />
+          <DetailBlock label={t('review.details.evidenceSlice')} data={ctx.details.evidence_slice} />
+          <DetailBlock label={t('review.details.admSchema')} data={ctx.details.adm_schema} />
           <DetailBlock label={t('review.details.justificationChain')} data={ctx.details.justification_chain} />
         </div>
       )}

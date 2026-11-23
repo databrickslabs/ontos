@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 import json
 import re
 import uuid
@@ -116,6 +116,29 @@ def _yaml_rule_refusal(rule: Optional[str]) -> Optional[str]:
         return None
     if refused:
         return f"llm_check_tag_action: a rule with LLM_CHECK can't use {', '.join(refused)}"
+    return None
+
+
+def _yaml_mapping_refusal(raw: Dict[str, Any], mapping: Any) -> Optional[str]:
+    """Why a YAML policy with LLM_CHECK is not loaded: the self-service mapping lists it.
+
+    Self-service evaluates the mapping's policies without a model, so the policy
+    would fail every object there. The policy save and the mapping save refuse the
+    same pair (``refuse_llm_check_where_it_cannot_run``).
+    """
+    from types import SimpleNamespace
+
+    from src.controller.self_service_manager import mapping_object_types_of
+
+    if not rule_uses_llm_check(raw.get('rule')):
+        return None
+    policy = SimpleNamespace(id=raw.get('id'), slug=raw.get('slug'), name=raw.get('name'))
+    object_types = mapping_object_types_of(mapping, policy)
+    if object_types:
+        return (
+            "llm_check_policy_in_self_service: the self-service compliance mapping "
+            f"lists it for {', '.join(object_types)}"
+        )
     return None
 
 
@@ -358,11 +381,14 @@ class ComplianceManager:
 
     # --- Policy CRUD ---
     def load_from_yaml(self, db: Session, yaml_path: str) -> None:
+        from src.controller.self_service_manager import load_compliance_mapping
+
+        mapping = load_compliance_mapping()
         with open(yaml_path) as f:
             data = yaml.safe_load(f) or []
             for raw in data:
                 model = CompliancePolicy(**{k: v for k, v in raw.items() if k not in {'examples', 'sample_runs'}})
-                refused = _yaml_rule_refusal(model.rule)
+                refused = _yaml_rule_refusal(model.rule) or _yaml_mapping_refusal(raw, mapping)
                 if refused:
                     # Not stored (a stored one stays as it is): runs would refuse it anyway
                     logger.warning(
@@ -925,14 +951,26 @@ class ComplianceManager:
 
     @staticmethod
     def policy_gate_uses(db: Session, policy_id: str) -> Dict[str, int]:
-        """Where a policy is evaluated without a model: workflow policy_check steps
-        and maturity gates (counts). ``LLM_CHECK`` always fails there."""
+        """Where a policy is evaluated without a model: policy_check steps of ACTIVE
+        workflows and maturity gates (counts). ``LLM_CHECK`` always fails there.
+
+        An inactive workflow isn't counted: it saves with a warning, and can't be
+        activated while its step uses an ``LLM_CHECK`` policy.
+        """
         from src.common.workflow_step_config import policy_id_of
         from src.db_models.maturity import MaturityGateDb
-        from src.db_models.process_workflows import WorkflowStepDb
+        from src.db_models.process_workflows import ProcessWorkflowDb, WorkflowStepDb
 
         steps = 0
-        for step in db.query(WorkflowStepDb).filter(WorkflowStepDb.step_type == 'policy_check'):
+        active_steps = (
+            db.query(WorkflowStepDb)
+            .join(ProcessWorkflowDb, WorkflowStepDb.workflow_id == ProcessWorkflowDb.id)
+            .filter(
+                WorkflowStepDb.step_type == 'policy_check',
+                ProcessWorkflowDb.is_active.is_(True),
+            )
+        )
+        for step in active_steps:
             try:
                 config = json.loads(step.config) if isinstance(step.config, str) else step.config
             except (TypeError, ValueError):

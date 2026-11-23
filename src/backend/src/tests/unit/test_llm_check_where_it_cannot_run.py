@@ -10,6 +10,8 @@ refused with a code.
 import asyncio
 import os
 import uuid
+
+import yaml
 from unittest.mock import MagicMock
 
 os.environ['TESTING'] = 'true'
@@ -91,14 +93,40 @@ def test_creating_an_active_workflow_on_an_llm_check_policy_is_refused(db_sessio
     assert issue['code'] == 'policy_check_policy_uses_llm_check'
 
 
+def test_policy_gate_uses_counts_steps_of_active_workflows_only(db_session):
+    policy = _policy(db_session, PLAIN_RULE)
+    workflows = WorkflowsManager(db_session)
+    workflows.create_workflow(_workflow(policy.id, is_active=False))
+    assert ComplianceManager.policy_gate_uses(db_session, policy.id)['workflowSteps'] == 0
+
+    workflows.create_workflow(_workflow(policy.id, is_active=True))
+    assert ComplianceManager.policy_gate_uses(db_session, policy.id)['workflowSteps'] == 1
+
+
+def test_an_llm_check_rule_is_saved_for_a_policy_only_inactive_workflows_check(db_session):
+    from src.routes import compliance_routes
+
+    policy = _policy(db_session, PLAIN_RULE)
+    workflows = WorkflowsManager(db_session)
+    stored = workflows.create_workflow(_workflow(policy.id, is_active=False))
+    compliance_routes.refuse_llm_check_where_it_cannot_run(db_session, policy.id, LLM_RULE)
+
+    # That workflow can't be activated afterwards: the step fails closed
+    policy.rule = LLM_RULE
+    db_session.flush()
+    assert [e.code for e in workflows.policy_reference_errors(stored.steps)] == [
+        'policy_check_policy_uses_llm_check',
+    ]
+
+
 def test_policy_gate_uses_counts_steps_and_gates(db_session):
     from src.db_models.maturity import MaturityGateDb, MaturityLevelDb
 
     policy = _policy(db_session, PLAIN_RULE)
     other = _policy(db_session, PLAIN_RULE)
     workflows = WorkflowsManager(db_session)
-    workflows.create_workflow(_workflow(policy.id, is_active=False))
-    workflows.create_workflow(_workflow(other.id, is_active=False))
+    workflows.create_workflow(_workflow(policy.id, is_active=True))
+    workflows.create_workflow(_workflow(other.id, is_active=True))
     level = MaturityLevelDb(name='L1', level_order=901, entity_type='all')
     db_session.add(level)
     db_session.flush()
@@ -310,3 +338,33 @@ def test_activating_a_stored_workflow_with_an_llm_check_validation_step_is_refus
     # A validation step without LLM_CHECK activates
     plain = manager.create_workflow(_validation_workflow("ASSERT obj.description != ''"))
     _refuse_unrunnable_policy_steps(manager, plain)
+
+
+def test_the_yaml_load_skips_an_llm_check_policy_the_self_service_mapping_lists(
+    db_session, tmp_path,
+):
+    from unittest.mock import patch
+
+    listed, free, plain = (str(uuid.uuid4()) for _ in range(3))
+
+    def entry(policy_id, name, rule, **extra):
+        return {
+            'id': policy_id, 'name': name, 'description': 'd', 'rule': rule,
+            'category': 'general', 'severity': 'low', **extra,
+        }
+
+    path = tmp_path / 'policies.yaml'
+    path.write_text(yaml.safe_dump([
+        entry(listed, 'Listed by slug', LLM_RULE, slug='judged-docs'),
+        entry(free, 'Not listed', LLM_RULE),
+        entry(plain, 'Listed plain', PLAIN_RULE),
+    ]))
+    mapping = {'table': {'policies': ['judged-docs', plain]}}
+
+    with patch('src.controller.self_service_manager.load_compliance_mapping',
+               return_value=mapping):
+        ComplianceManager().load_from_yaml(db_session, str(path))
+
+    assert db_session.get(CompliancePolicyDb, listed) is None
+    assert db_session.get(CompliancePolicyDb, free) is not None
+    assert db_session.get(CompliancePolicyDb, plain) is not None

@@ -252,8 +252,11 @@ daily quota is shared).
   one is activated), a maturity gate on such a policy
   (`maturity_gate_policy_uses_llm_check`), a compliance mapping that lists such a
   policy (422 `compliance_mapping_policy_uses_llm_check`), and an `LLM_CHECK` rule
-  for a policy that steps or gates already use (409 `llm_check_policy_in_use`) or
-  that the compliance mapping lists (409 `llm_check_policy_in_self_service`).
+  for a policy that steps of active workflows or maturity gates already use (409
+  `llm_check_policy_in_use`; inactive workflows don't count, they can't be activated
+  afterwards) or that the compliance mapping lists (409
+  `llm_check_policy_in_self_service`). The default-policies YAML load skips such a
+  policy when the mapping lists it.
 - Fails closed: with an empty text (no call), LLM features off
   (`llm_check_disabled`), no endpoint (`llm_check_no_endpoint`), a refusal, an
   empty or unfinished reply, or a reply whose first line is not `PASS: <reason>`

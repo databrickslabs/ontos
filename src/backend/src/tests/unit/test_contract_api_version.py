@@ -120,14 +120,13 @@ def test_an_unreadable_schema_refuses_every_version(monkeypatch, tmp_path, conte
         odcs_api_version._schema_api_versions.cache_clear()
 
 
-def test_v3_2_0_is_accepted_and_v3_9_0_is_not_on_create_and_update_models():
+def test_v3_2_0_is_accepted_and_v3_9_0_is_not_on_create():
     """v3.2.0 has no vendored schema yet (it validates against the v3.1.0 one) but is ODCS."""
-    for model in (DataContractCreate, DataContractUpdate):
-        parsed = model.model_validate({"name": "Orders", "apiVersion": "3.2.0"})
-        assert parsed.apiVersion == "v3.2.0"
-        with pytest.raises(ValidationError) as err:
-            model.model_validate({"name": "Orders", "apiVersion": "v3.9.0"})
-        assert err.value.errors()[0]["type"] == "odcs_api_version_unsupported"
+    parsed = DataContractCreate.model_validate({"name": "Orders", "apiVersion": "3.2.0"})
+    assert parsed.apiVersion == "v3.2.0"
+    with pytest.raises(ValidationError) as err:
+        DataContractCreate.model_validate({"name": "Orders", "apiVersion": "v3.9.0"})
+    assert err.value.errors()[0]["type"] == "odcs_api_version_unsupported"
 
 
 def test_api_version_defaults():

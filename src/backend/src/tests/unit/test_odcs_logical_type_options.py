@@ -391,7 +391,10 @@ def test_invalid_or_unknown_nested_options_are_not_stored(db_session):
 MISMATCHED = {
     "ts": ("timestamp", {"timezone": "UTC", "minimum": 5}),
     "day": ("date", {"maximum": 10, "format": "yyyy-MM-dd"}),
-    "amount": ("number", {"minimum": "2020-01-01", "maximum": 9, "exclusiveMinimum": True}),
+    "amount": ("number", {"minimum": "2020-01-01", "maximum": 9, "exclusiveMinimum": True,
+                          "format": "f64"}),
+    # a number / integer format is an enum (f32, f64 / i8 ... u128)
+    "qty": ("integer", {"format": "#,##0", "maximum": 5}),
 }
 
 
@@ -415,6 +418,9 @@ def test_options_of_another_value_type_export_as_custom_properties(
     props = {cp["property"]: cp["value"] for cp in columns["amount"]["customProperties"]}
     assert props["ontos.minimum"] == "2020-01-01"
     assert columns["amount"]["logicalTypeOptions"]["maximum"] == 9
+    assert columns["amount"]["logicalTypeOptions"]["format"] == "f64"
+    assert columns["qty"]["logicalTypeOptions"] == {"maximum": 5}
+    assert columns["qty"]["customProperties"] == [{"property": "ontos.format", "value": "#,##0"}]
     assert columns["day"]["logicalTypeOptions"] == {"format": "yyyy-MM-dd"}
     if version >= "v3.1.0":
         ts = {cp["property"]: cp["value"] for cp in columns["ts"]["customProperties"]}

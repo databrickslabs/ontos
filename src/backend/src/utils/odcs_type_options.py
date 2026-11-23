@@ -107,6 +107,11 @@ _DATE_TYPES = frozenset(('date', 'timestamp', 'time'))
 _INTEGER_OPTIONS = frozenset(('minLength', 'maxLength', 'minItems', 'maxItems',
                               'minProperties', 'maxProperties'))
 _TEXT_OPTIONS = frozenset(('pattern', 'format', 'defaultTimezone'))
+# A number / integer `format` is an enum (bit width, Rust float / integer types)
+_NUMBER_FORMATS = {
+    'number': frozenset(('f32', 'f64')),
+    'integer': frozenset(('i8', 'i16', 'i32', 'i64', 'i128', 'u8', 'u16', 'u32', 'u64', 'u128')),
+}
 
 
 def _fits(key: str, value: Any, logical_type: Optional[str], api_version: Optional[str]) -> bool:
@@ -115,6 +120,8 @@ def _fits(key: str, value: Any, logical_type: Optional[str], api_version: Option
     logicalType, doesn't)."""
     if key in _INTEGER_OPTIONS:
         return _int(value)
+    if key == 'format' and logical_type in _NUMBER_FORMATS:
+        return value in _NUMBER_FORMATS[logical_type]
     if key in _TEXT_OPTIONS:
         return _text(value)
     if key in ('uniqueItems', 'timezone'):  # timezone: a boolean on timestamp / time

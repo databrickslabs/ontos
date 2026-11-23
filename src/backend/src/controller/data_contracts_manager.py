@@ -170,6 +170,15 @@ from src.common.api_errors import CodedValueError
 logger = get_logger(__name__)
 
 
+class InvalidTagEntryError(CodedValueError):
+    """A contract update whose ``tags`` has an entry that is neither a string nor an object."""
+
+    code = 'invalid_tag_entry'
+
+    def __init__(self, index: int):
+        super().__init__(f"tags[{index}] must be a string or an object", index=index)
+
+
 class InvalidVersionFormatError(CodedValueError):
     """A new contract version that isn't ``X.Y.Z`` (or ``X.Y.Z-draft`` for a personal draft)."""
 
@@ -2782,6 +2791,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             # Extract tags (handled separately)
             tags_data = data_dict.get('tags')
+            if isinstance(tags_data, list):
+                # Refuse a list with an unreadable entry; applying the readable
+                # subset would silently drop the others from the stored tags.
+                for i, tag in enumerate(tags_data):
+                    if not isinstance(tag, (str, dict)):
+                        raise InvalidTagEntryError(i)
             
             # Determine whether the caller supplied a domain assignment (multi-domain).
             domains_provided = any(
@@ -2978,14 +2993,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     if tags_data and not tag_creates:
                         logger.warning("No readable tag in the update of contract %s; its tags are kept", contract_id)
                     else:
-                        # Set tags for the contract entity
-                        self._tags_manager.set_tags_for_entity(
-                            db,
-                            entity_id=contract_id,
-                            entity_type="data_contract",
-                            tags=tag_creates,
-                            user_email=current_user
-                        )
+                        # Set tags for the contract entity inside a savepoint: a failed
+                        # write is rolled back on its own and the update's transaction stays usable.
+                        with db.begin_nested():
+                            self._tags_manager.set_tags_for_entity(
+                                db,
+                                entity_id=contract_id,
+                                entity_type="data_contract",
+                                tags=tag_creates,
+                                user_email=current_user,
+                                commit=False,
+                            )
                         logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
                 except Exception as e:
                     logger.error(f"Failed to update tags for contract {contract_id}: {e}")

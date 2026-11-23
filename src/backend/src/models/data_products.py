@@ -532,6 +532,18 @@ class DataProduct(BaseModel):
                 coerced.append(item)
         return coerced
 
+    @model_validator(mode='before')
+    @classmethod
+    def drop_null_tags(cls, data):
+        """``tags: null`` in a payload means "not sent" (only ``[]`` clears the tags).
+
+        Without this, ``parse_tags`` would read it as ``[]``, which marks the field as set
+        and makes a whole-product PUT remove every tag (#1435).
+        """
+        if isinstance(data, dict) and 'tags' in data and data['tags'] is None:
+            data = {k: v for k, v in data.items() if k != 'tags'}
+        return data
+
     # Field validators to parse JSON strings from database
     @field_validator('tags', mode='before')
     def parse_tags(cls, value):

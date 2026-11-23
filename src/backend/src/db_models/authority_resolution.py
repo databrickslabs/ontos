@@ -87,15 +87,21 @@ class AuthorityRelationDb(Base):
     # --- Ontos-compiled deterministic runtime rule --------------------------
     decision_logic = Column(JSON, nullable=True)      # {allowed_principals, threshold, required_affirmations, ...}
 
-    # --- Evidence binding (v1: a single UC Delta table + column map) --------
-    evidence_binding = Column(JSON, nullable=True)    # legacy single source: {source_table_fqn, column_map, row_filter}
-    # Multiple typed evidence sources: [{type: delta_table|data_product|asset, ref, column_map, row_filter}]
-    evidence_sources = Column(JSON, nullable=True)
+    # --- Evidence (ARF 1.2.0 slice 4, #1294): the shared ADM schema is the only source ---
+    # The slice of the ADM observations this AR reads: {action_codes, object_refs, domain_scope,
+    # window_days, sample_size}. The schema comes from the app setting, unless
+    # ``adm_schema_override`` (Admin-only, conformance-checked) names another ADM schema.
+    evidence_slice = Column(JSON, nullable=True)
+    adm_schema_override = Column(String, nullable=True)  # "catalog.schema"
 
     # --- DNA-Coefficient (aggregate, rolled up from decisions/evidence) -----
-    dna_magnitude = Column(Float, nullable=True)      # 0.0 = best; higher = worse (additive over dimensions)
+    # dna_magnitude: share of sampled decisions that diverge on any dimension (0 = best).
+    dna_magnitude = Column(Float, nullable=True)
+    # dna_position: the signed weighted mean in [-1, +1] (negative = documented exceeds actual).
+    dna_position = Column(Float, nullable=True)
     dna_direction = Column(String, nullable=True)     # actual-exceeds-documented | documented-exceeds-actual | balanced
-    dna_dimensions = Column(JSON, nullable=True)      # {dimension: score} incl. structural + evidence dims
+    # {dimension: {position, magnitude, weight}} (legacy runs hold {dimension: float}).
+    dna_dimensions = Column(JSON, nullable=True)
     dna_measured_at = Column(DateTime(timezone=True), nullable=True)
     dna_max_threshold = Column(Float, default=0.3, nullable=False)  # activation ceiling (magnitude must be <= this)
     dna_scoring_config = Column(JSON, nullable=True)  # admin/per-domain tunable weights
@@ -245,7 +251,12 @@ class AuthorityDnaRunDb(Base):
     divergent_count = Column(Integer, default=0, nullable=False)
     magnitude = Column(Float, default=0.0, nullable=False)
     direction = Column(String, nullable=True)
-    per_dimension_scores = Column(JSON, nullable=True)  # {dimension: score} for this run
+    per_dimension_scores = Column(JSON, nullable=True)  # {dimension: {position, magnitude, weight}} for this run
+    # Signed position of this run in [-1, +1]; NULL on runs from before slice 4.
+    position = Column(Float, nullable=True)
+    # How the sample was read: schema, ADM version, as-of, window, seed, sample size, requester,
+    # identity and method version (ADM section 8.6). NULL on runs from before slice 4.
+    sample_basis = Column(JSON, nullable=True)
     error_message = Column(Text, nullable=True)
     # Definition hash the run measured; activation requires it to match the current hash (B6).
     definition_hash = Column(String, nullable=True)

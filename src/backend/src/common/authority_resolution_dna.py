@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from src.common.compliance_dsl import evaluate_rule_strict
 
@@ -61,51 +61,62 @@ class Criterion:
 
 @dataclass
 class RowDivergence:
-    """The verdict for one evidence row."""
+    """The verdict for one evidence row.
+
+    ``contributions`` holds one ``(dimension, weight, sign, failed)`` tuple per check that
+    was evaluated on the row. ``sign`` is the check's direction (+1 actual-exceeds-documented,
+    -1 documented-exceeds-actual, 0 neutral). The engine reads these, not ``reasons``, so the
+    per-dimension position and the per-row magnitude come from the same evaluation.
+    """
     diverged: bool
-    signed: int                                  # +1 actual-exceeds-doc, -1 doc-exceeds-actual, 0 neutral
+    signed: int                                  # sign of the row's weighted position: +1, -1 or 0
     reasons: List[str] = field(default_factory=list)
-    weight: float = 1.0                          # max weight across this row's failed criteria
-    dimension_weights: Dict[str, float] = field(default_factory=dict)  # {dimension: max weight of failed criteria this row}
     actor_identity: Optional[str] = None
     action: Optional[str] = None
     object_id: Optional[str] = None
     value: Optional[float] = None
+    # The observation the row came from (ADM ``observation_id``), for provenance.
+    ref: Optional[str] = None
+    contributions: List[Tuple[str, float, int, bool]] = field(default_factory=list)
     # True when a criterion read an operand the row doesn't carry: the row is left out of
     # the sample (an unknown is not a divergence).
     skipped: bool = False
 
 
 @dataclass
+class DimensionScore:
+    """One DNAco dimension (ADM section 8.2 style, but author-defined: ``people``, ``policy``...)."""
+    position: float        # signed, weighted mean over the sample, in [-1, +1]
+    magnitude: float       # share of sampled rows that failed a check of this dimension, in [0, 1]
+    weight: float          # total weight of the dimension's evaluated checks
+
+
+@dataclass
 class DnaResult:
-    """The rolled-up DNA-Coefficient for a sample of rows."""
-    magnitude: float                             # 0.0 = best, higher = worse (<= 1.0)
+    """The DNA-Coefficient for a sample of rows (ADM v0.4 section 8, the signed form).
+
+    ``magnitude`` is the share of sampled rows that diverge on *any* dimension, counted per
+    row, so a row that diverges one way on one dimension and the other way on another still
+    counts once and nothing cancels. ``position`` is the weighted signed mean over all
+    checks, in [-1, +1]. The activation ceiling gates on ``magnitude``.
+    """
+    magnitude: float
+    position: float
     direction: str
     sampled_count: int
     divergent_count: int
-    dimensions: Dict[str, float] = field(default_factory=dict)  # per-dimension score 0-1 (evidence-based)
+    dimensions: Dict[str, DimensionScore] = field(default_factory=dict)
     rows: List[RowDivergence] = field(default_factory=list)
     # Rows that lack an operand a criterion reads: not measured, not divergent (see RowDivergence.skipped).
     skipped_count: int = 0
 
 
 def combine_dimensions(scores: Iterable[float]) -> float:
-    """Combine per-dimension divergence scores into one overall DNAco in [0, 1].
+    """Combine per-dimension divergence scores into one overall value in [0, 1].
 
-    Uses the **probabilistic union** (noisy-OR): ``1 - Π(1 - d_i)``. Each
-    dimension is an independent chance that authority diverges from documented
-    practice; the overall is the probability that it diverges on *at least one*
-    dimension. Properties that a plain capped sum lacks:
-
-    * Always in ``[0, 1]`` with no arbitrary clipping — it *scales* rather than
-      truncates, so resolution isn't lost once the dimensions sum past 1.0.
-    * Monotonic: adding a dimension (or raising one) never lowers the overall.
-    * No dilution: a single dimension at ``1.0`` forces the overall to ``1.0``
-      (unlike an average, where clean dimensions would drag a real divergence
-      down). A clean dimension (``0.0``) leaves the overall unchanged.
-
-    Example: ``people=0.225, policy=0.375, structural=0.0``
-    → ``1 - (0.775 · 0.625 · 1.0) = 0.5156``.
+    Retained for the legacy (noisy-OR) runs that persisted it, and as a reference for
+    the probabilistic union. The DNA-Coefficient no longer uses it (#1294 slice 4, S5): the
+    magnitude is the per-row share in :func:`compute_dnaco`.
     """
     product = 1.0
     for s in scores:
@@ -202,13 +213,14 @@ def rule_parse_error(rule: Optional[str]) -> Optional[str]:
 
 def evaluate_row(criteria: List[Criterion], row: Dict[str, Any]) -> RowDivergence:
     """Decide whether a single evidence row diverges, by running each criterion's
-    rule against it: a criterion that **fails** is a divergence, contributing its
-    ``weight`` to the row and its ``direction`` to the aggregate sign."""
+    rule against it: a criterion that **fails** is a divergence on its dimension.
+
+    Every evaluated check contributes ``(dimension, weight, sign, failed)``; the sign is
+    the check's direction, zeroed when the check passes.
+    """
     norm = normalize_row(row)
     reasons: List[str] = []
-    weights: List[float] = []
-    signed = 0
-    dim_weights: Dict[str, float] = {}
+    contributions: List[Tuple[str, float, int, bool]] = []
     for c in criteria:
         if rule_parse_error(c.rule):
             # A malformed rule must not fabricate divergence.
@@ -224,70 +236,93 @@ def evaluate_row(criteria: List[Criterion], row: Dict[str, Any]) -> RowDivergenc
                 object_id=str(norm["object_id"]) if norm.get("object_id") is not None else None,
                 value=_to_float(norm.get("value")),
             )
-        if not outcome.passed:
+        w = c.weight if c.weight is not None else 1.0
+        failed = not outcome.passed
+        if failed:
             reasons.append(c.code)
-            w = c.weight if c.weight is not None else 1.0
-            weights.append(w)
-            signed += _direction_sign(c.direction)
-            dim = c.dimension or "people"
-            dim_weights[dim] = max(dim_weights.get(dim, 0.0), w)
+        contributions.append((c.dimension or "people", float(w), _direction_sign(c.direction), failed))
 
-    diverged = len(reasons) > 0
-    signed = (signed > 0) - (signed < 0)   # clamp to {-1, 0, +1}
-    value = _to_float(norm.get("value"))
+    weight_total = sum(w for _, w, _, _ in contributions)
+    signed_total = sum(w * sign for _, w, sign, failed in contributions if failed)
+    position = signed_total / weight_total if weight_total > 0 else 0.0
     return RowDivergence(
-        diverged=diverged,
-        signed=signed,
+        diverged=bool(reasons),
+        signed=(position > 0) - (position < 0),
         reasons=reasons,
-        weight=max(weights) if weights else 1.0,
-        dimension_weights=dim_weights,
         actor_identity=str(norm["actor_identity"]) if norm.get("actor_identity") is not None else None,
         action=str(norm["action"]) if norm.get("action") is not None else None,
         object_id=str(norm["object_id"]) if norm.get("object_id") is not None else None,
-        value=value,
+        value=_to_float(norm.get("value")),
+        ref=str(norm["observation_id"]) if norm.get("observation_id") is not None else None,
+        contributions=contributions,
     )
 
 
 def compute_dnaco(criteria: List[Criterion], rows: List[Dict[str, Any]]) -> DnaResult:
-    """Roll a sample of evidence rows up into per-dimension DNAco scores.
+    """Roll a sample of evidence rows up into the signed DNA-Coefficient.
 
-    Criteria are grouped by their ``dimension`` (e.g. ``people``). For each
-    dimension, its score is the weighted fraction of rows that failed a criterion
-    of that dimension (``0.0`` best, capped at ``1.0``). The evidence-side
-    ``magnitude`` is the **probabilistic-union** combine
-    (:func:`combine_dimensions`, ``1 - Π(1 - d_i)``) — the manager adds
-    non-evidence dimensions like ``structural`` and recomputes the overall the
-    same way. ``direction`` is the sign of the aggregate authority-level delta.
+    Per dimension, the **position** is the weighted signed mean of the checks over the
+    sample, in [-1, +1]: a failed check contributes its direction times its weight, a
+    passed check contributes zero. The combined position uses every dimension's weight.
+
+    The **magnitude** is the share of sampled rows that fail a check on any dimension,
+    counted once per row (no cancellation between dimensions or directions). It replaces
+    the earlier noisy-OR over per-dimension scores (#1294 S5, N3). The per-dimension
+    magnitude is the share of rows failing a check of that dimension.
+
+    ``direction`` is the sign of the combined position when there is any divergence.
     """
     evaluated = [evaluate_row(criteria, r) for r in rows]
     skipped_count = sum(1 for rd in evaluated if rd.skipped)
     evaluated = [rd for rd in evaluated if not rd.skipped]
     sampled = len(evaluated)
     divergent = [rd for rd in evaluated if rd.diverged]
-    dims = {(c.dimension or "people") for c in criteria}
+    dims = sorted({(c.dimension or "people") for c in criteria})
 
     if sampled == 0:
-        return DnaResult(magnitude=0.0, direction=DIR_NONE, sampled_count=0, divergent_count=0,
-                         dimensions={d: 0.0 for d in dims}, rows=evaluated, skipped_count=skipped_count)
+        return DnaResult(
+            magnitude=0.0, position=0.0, direction=DIR_NONE, sampled_count=0, divergent_count=0,
+            dimensions={d: DimensionScore(0.0, 0.0, 0.0) for d in dims}, rows=evaluated,
+            skipped_count=skipped_count,
+        )
+
+    weight = {d: 0.0 for d in dims}
+    signed = {d: 0.0 for d in dims}
+    failing_rows = {d: 0 for d in dims}
+    for rd in evaluated:
+        failed_here = set()
+        for dim, w, sign, failed in rd.contributions:
+            weight[dim] += w
+            if failed:
+                signed[dim] += w * sign
+                failed_here.add(dim)
+        for dim in failed_here:
+            failing_rows[dim] += 1
 
     dimensions = {
-        d: round(min(1.0, sum(rd.dimension_weights.get(d, 0.0) for rd in divergent) / sampled), 4)
+        d: DimensionScore(
+            position=round(max(-1.0, min(1.0, signed[d] / weight[d])), 4) if weight[d] > 0 else 0.0,
+            magnitude=round(failing_rows[d] / sampled, 4),
+            weight=round(weight[d], 4),
+        )
         for d in dims
     }
-    magnitude = combine_dimensions(dimensions.values())
+    total_weight = sum(weight.values())
+    combined = round(max(-1.0, min(1.0, sum(signed.values()) / total_weight)), 4) if total_weight > 0 else 0.0
+    magnitude = round(len(divergent) / sampled, 4)
 
-    signed_total = sum(rd.signed for rd in divergent)
     if not divergent:
         direction = DIR_NONE
-    elif signed_total > 0:
+    elif combined > 0:
         direction = DIR_ACTUAL_EXCEEDS
-    elif signed_total < 0:
+    elif combined < 0:
         direction = DIR_DOCUMENTED_EXCEEDS
     else:
         direction = DIR_BALANCED
 
     return DnaResult(
         magnitude=magnitude,
+        position=combined,
         direction=direction,
         sampled_count=sampled,
         divergent_count=len(divergent),

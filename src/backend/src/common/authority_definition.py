@@ -15,7 +15,9 @@ DNA-Coefficient and the approval gate measure):
   ``policy_clause_refs``): approvers vouch against that document, so changing the
   citation invalidates their affirmations; each check's ``policy_clause_ref`` too;
 * the rule: ``justification_chain``, ``decision_logic``;
-* the evidence: ``evidence_binding``, ``evidence_sources``;
+* the evidence (ARF 1.2.0 slice 4): the slice the AR reads (``evidence_slice``) and the
+  per-AR ADM schema override (``adm_schema_override``). Changing either is a definition
+  change, so it resets the measurement and the affirmations;
 * the measurement: ``dna_max_threshold`` (the ceiling), ``dna_scoring_config``,
   ``schedule_cron``;
 * the identity the resolver calls with: ``resolver_auth``;
@@ -47,7 +49,7 @@ DEFINITION_FIELDS = (
     "actor_role", "actor_identity", "actor_since", "action",
     "object_type", "object_id", "object_resolves_to", "domain_context", "rule",
     "authority_policy_id", "policy_clause_refs",
-    "justification_chain", "decision_logic", "evidence_binding", "evidence_sources",
+    "justification_chain", "decision_logic", "evidence_slice", "adm_schema_override",
     "dna_max_threshold", "dna_scoring_config", "schedule_cron", "resolver_auth",
 )
 

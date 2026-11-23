@@ -20,7 +20,7 @@ from src.models.authority_resolution import (
     AuthorityRelationCreate,
     AuthorityRelationUpdate,
     CriterionInput,
-    EvidenceSource,
+    EvidenceSlice,
 )
 from src.repositories.authority_resolution_repository import authority_dna_run_repo
 
@@ -36,7 +36,7 @@ def _complete(mgr, db, slug, **kwargs):
     rel = mgr.create_relation(db, AuthorityRelationCreate(
         name=f"Review {slug}", slug=slug, object_id="dp-1",
         justification_chain={"policy_id": "pol-1"},
-        evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
+        evidence_slice=EvidenceSlice(action_codes=["approve"]),
         **kwargs,
     ), current_user="author@x.com", caller_is_admin=True)
     db.commit()
@@ -61,21 +61,21 @@ def test_stored_and_resent_unchanged_definition_hash_alike(db_session):
     mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
         criteria=[CriterionInput(name="Cap", rule="obj.value <= 10", order=0),
                   CriterionInput(name="Who", rule="obj.actor_identity != 'x'", order=1)],
-        evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
+        evidence_slice=EvidenceSlice(action_codes=["approve"]),
     ), current_user="someone@x.com")
     db_session.commit()
     assert mgr.definition_hash(db_session, rel) == before
     assert rel.definition_edited_by == "author@x.com"
 
 
-def test_description_only_edit_of_an_active_ar_with_evidence_sources_is_not_refused(db_session):
+def test_description_only_edit_of_an_active_ar_with_evidence_slice_is_not_refused(db_session):
     mgr = AuthorityResolutionManager()
     rel = _complete(mgr, db_session, "rv-meta")
     rel.status = STATUS_ACTIVE
     db_session.commit()
     updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
         description="a new note",
-        evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
+        evidence_slice=EvidenceSlice(action_codes=["approve"]),
     ))
     assert updated.description == "a new note"
     assert updated.status == STATUS_ACTIVE
@@ -89,7 +89,7 @@ def test_a_real_change_to_evidence_is_still_a_definition_change(db_session):
     db_session.commit()
     with pytest.raises(AuthorityImmutableError):
         mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
-            evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "b"})]))
+            evidence_slice=EvidenceSlice(action_codes=["escalate"])))
 
 
 # ----------------------------------------------- item 1: provenance from legacy saves

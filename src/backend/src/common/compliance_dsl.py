@@ -567,10 +567,10 @@ class Parser:
 
 
 # Property roots that read a nested namespace of the evaluated object.
-NAMESPACE_ROOTS = ("ctx", "req", "policy_ref")
+NAMESPACE_ROOTS = ("ctx", "req", "policy_ref", "fact")
 # Namespaces that never fall back to top-level keys: an object without the namespace
 # (a data product, say) reads absent, not an unrelated top-level key of the same name.
-CLOSED_NAMESPACE_ROOTS = ("policy_ref",)
+CLOSED_NAMESPACE_ROOTS = ("policy_ref", "fact")
 
 
 class _Unknown:

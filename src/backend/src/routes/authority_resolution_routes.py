@@ -23,6 +23,7 @@ from functools import partial
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Query, Request
+from fastapi.responses import PlainTextResponse
 
 from src.common.api_errors import client_failure, coded_http_error
 from src.common.authorization import PermissionChecker, get_user_details_from_sdk, user_has_feature_level
@@ -30,6 +31,8 @@ from src.common.dependencies import DBSessionDep, AuditCurrentUserDep, DataAsset
 from src.common.features import FeatureAccessLevel
 from src.common.manager_dependencies import get_auth_manager
 from src.common.authority_rule import UNCITED_POLICY_REF
+from src.common import adm
+from src.controller.authority_adm_manager import AdmNonconformantError, AuthorityAdmManager
 from src.controller.authority_resolution_manager import (
     AR_REVIEW_APPROVE,
     AuthorityPermissionError,
@@ -44,6 +47,7 @@ from src.models.authority_resolution import (
     AffirmRequest,
     ResolveRequest,
     FindAuthorityForConceptRequest,
+    AdmSchemaUpdate,
 )
 from src.models.users import UserInfo
 
@@ -52,6 +56,7 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Authority Resolution"])
 manager = AuthorityResolutionManager()
+adm_manager = AuthorityAdmManager()
 
 FEATURE_ID = "authority-resolution"
 COMPLIANCE_FEATURE_ID = "compliance"
@@ -267,11 +272,13 @@ async def create_relation_version(
 async def compute_dnaco(
     relation_id: str,
     db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
     _: bool = Depends(PermissionChecker(FEATURE_ID, READ_WRITE)),
 ):
     failure: Optional[HTTPException] = None
+    requester = current_user.username if current_user else None
     try:
-        run = manager.compute_dnaco(db, relation_id)
+        run = manager.compute_dnaco(db, relation_id, requested_by=requester)
     except Exception as e:
         # Persist the failed run row before the error rolls the request back.
         db.commit()
@@ -282,7 +289,8 @@ async def compute_dnaco(
         raise HTTPException(status_code=404, detail="Authority Relation not found")
     return {
         "run_id": run.id, "status": run.status, "sampled_count": run.sampled_count,
-        "divergent_count": run.divergent_count, "magnitude": run.magnitude, "direction": run.direction,
+        "divergent_count": run.divergent_count, "magnitude": run.magnitude,
+        "position": run.position, "direction": run.direction,
     }
 
 
@@ -816,6 +824,49 @@ async def validate_rule(
         )
         out.update({"verdict": verdict, "reason": reason, "pending_duties": pending})
     return out
+
+
+@router.get("/authority/adm-schema")
+async def get_adm_schema(
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
+):
+    """The shared ADM schema every Authority Relation reads, and its conformance to ADM v0.4."""
+    return adm_manager.state(db)
+
+
+@router.put("/authority/adm-schema")
+async def put_adm_schema(
+    db: DBSessionDep,
+    payload: AdmSchemaUpdate = Body(...),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, ADMIN)),
+):
+    """Set (or clear, with null) the shared ADM schema. Admin only; the schema must conform.
+
+    A non-conformant schema is refused with its findings, so the Settings page can show
+    what to fix.
+    """
+    try:
+        return adm_manager.set_shared_schema(db, payload.adm_schema, caller_is_admin=True)
+    except AdmNonconformantError as e:
+        raise HTTPException(status_code=422, detail={
+            "code": e.code, "message": e.message,
+            "params": {"schema": e.params.get("schema"), "findings": (e.report or {}).get("findings", [])},
+        })
+    except Exception as e:
+        raise _failure("put_adm_schema", e, coded_status=400)
+
+
+@router.get("/authority/adm-schema/ddl")
+async def get_adm_schema_ddl(
+    schema: str = Query(..., max_length=255),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, READ_ONLY)),
+):
+    """The DDL that creates the pinned ADM v0.4 subset in ``schema`` (idempotent, Delta)."""
+    try:
+        return PlainTextResponse(adm_manager.ddl(schema), media_type="text/plain")
+    except adm.AdmError as e:
+        raise _failure("adm_schema_ddl", e, coded_status=400)
 
 
 @router.post("/authority/recompute-scheduled")

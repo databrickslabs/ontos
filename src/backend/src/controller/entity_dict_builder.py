@@ -132,11 +132,10 @@ def build_authority_relation_dict(db: Session, relation_id: str) -> Optional[Dic
     # Object resolution
     base["has_object"] = bool(relation.object_id)
 
-    # Evidence binding (either a legacy single binding or the multi-source list)
-    sources = relation.evidence_sources or []
-    legacy = relation.evidence_binding or {}
-    base["evidence_source_count"] = len(sources)
-    base["has_evidence"] = bool(sources) or bool(legacy.get("source_table_fqn"))
+    # Evidence (ARF 1.2.0 slice 4): the AR declares a slice of the shared ADM schema.
+    slice_codes = (relation.evidence_slice or {}).get("action_codes") or []
+    base["evidence_source_count"] = 1 if slice_codes else 0
+    base["has_evidence"] = bool(slice_codes)
 
     # DNA-Coefficient (divergence; 0.0 = best). Measured = a run has landed.
     base["dna_measured"] = relation.dna_magnitude is not None

@@ -8,6 +8,12 @@ Maturity Level integration.
 import pytest
 
 from src.common.authority_rule import UNCITED_POLICY_REF
+from src.controller.authority_resolution_manager import _AdmSample
+
+
+def _sample(rows):
+    """What ``_collect_evidence`` returns: the rows an ADM read produced (no basis here)."""
+    return _AdmSample(rows=list(rows), basis={})
 
 from src.common.authority_resolution_dna import (
     Criterion,
@@ -101,11 +107,14 @@ def test_criterion_weights_raise_magnitude():
         {"actor_identity": "rsm-east", "value": 0.10, "escalated": False},
         {"actor_identity": "rsm-east", "value": 0.10, "escalated": False},
     ]
-    # Default weight: 1 of 4 diverges -> 0.25
+    # Magnitude is the share of decisions that diverge: 1 of 4 -> 0.25, whatever the weight.
     assert compute_dnaco([THRESHOLD], rows).magnitude == 0.25
-    # Weighted: the breach counts triple, capped at 1.0 -> 0.75
+    # The weight moves the position: the breach counts three times over the checks' total
+    # weight (3 + 3 + 3 + 3 = 12), so +3 / 12 = +0.25.
     weighted = _crit(THRESHOLD.rule, direction=DIR_ACTUAL_EXCEEDS, weight=3.0, name="threshold")
-    assert compute_dnaco([weighted], rows).magnitude == 0.75
+    weighted_result = compute_dnaco([weighted], rows)
+    assert weighted_result.magnitude == 0.25
+    assert weighted_result.position == 0.25
 
 
 def test_percent_string_and_bool_string_coerce():
@@ -121,18 +130,22 @@ def test_no_criteria_scores_zero():
     assert result.divergent_count == 0
 
 
-def test_dimensions_combine_by_probabilistic_union():
-    people = _crit("ASSERT obj.actor_identity IN ['ok']", dimension="people", name="ppl")
-    policy = _crit("ASSERT obj.value <= 10", dimension="policy", name="pol")
+def test_magnitude_counts_each_row_once_so_nothing_cancels():
+    """Two rows diverge on different dimensions in opposite directions: both count
+    (magnitude 1.0), while the signed position nets to zero (S5, N3)."""
+    people = _crit("ASSERT obj.actor_identity IN ['ok']", direction=DIR_ACTUAL_EXCEEDS, dimension="people", name="ppl")
+    policy = _crit("ASSERT obj.value <= 10", direction=DIR_DOCUMENTED_EXCEEDS, dimension="policy", name="pol")
     rows = [
-        {"actor_identity": "bad", "value": 5},    # people fails only
-        {"actor_identity": "ok", "value": 50},    # policy fails only
+        {"actor_identity": "bad", "value": 5},    # people fails (+1), policy passes
+        {"actor_identity": "ok", "value": 50},    # policy fails (-1), people passes
     ]
     r = compute_dnaco([people, policy], rows)
-    assert r.dimensions["people"] == 0.5      # 1 of 2 rows
-    assert r.dimensions["policy"] == 0.5      # 1 of 2 rows
-    # Noisy-OR: 1 - (1-0.5)(1-0.5) = 0.75 (scales into [0,1], not a capped sum).
-    assert r.magnitude == 0.75
+    assert r.dimensions["people"].magnitude == 0.5      # 1 of 2 rows
+    assert r.dimensions["policy"].magnitude == 0.5      # 1 of 2 rows
+    assert r.dimensions["people"].position == 0.5       # +1 on one of two rows
+    assert r.dimensions["policy"].position == -0.5      # -1 on one of two rows
+    assert r.magnitude == 1.0                           # both rows diverge; no cancellation
+    assert r.position == 0.0                            # the signed position nets out
 
 
 def test_combine_dimensions_properties():
@@ -281,11 +294,14 @@ def test_configurable_criteria_gate_and_divergence(db_session):
     db_session.commit()
     assert run.divergent_count == 1
     assert run.direction == DIR_ACTUAL_EXCEEDS
-    # people dimension = 1.5 / 2 rows; structural also scored; overall = noisy-OR.
-    assert run.per_dimension_scores["people"] == 0.75
+    # Magnitude: 1 of 2 sampled decisions diverges (per row). Position: the breach (weight 1.5)
+    # over every check's total weight (1.0 + 1.5 on each of 2 rows = 5) = +1.5 / 5 = +0.3.
+    # Structural is shown, not gating.
+    assert run.magnitude == 0.5
+    assert run.per_dimension_scores["people"]["magnitude"] == 0.5
+    assert run.per_dimension_scores["people"]["position"] == 0.3
     assert "structural" in run.per_dimension_scores
-    from src.common.authority_resolution_dna import combine_dimensions
-    assert run.magnitude == combine_dimensions(run.per_dimension_scores.values())
+    assert run.position == 0.3
 
 
 def test_structural_dimension_scores_incompleteness(db_session):
@@ -293,21 +309,21 @@ def test_structural_dimension_scores_incompleteness(db_session):
     relation complete except for its justification-chain scores 1/5 = 0.2."""
     from src.controller.authority_resolution_manager import AuthorityResolutionManager
     from src.models.authority_resolution import (
-        AuthorityRelationCreate, EvidenceSource, CriterionInput, AffirmationInput,
+        AuthorityRelationCreate, EvidenceSlice, CriterionInput, AffirmationInput,
     )
     mgr = AuthorityResolutionManager()
     rel = mgr.create_relation(db_session, AuthorityRelationCreate(
         name="Structural AR", object_id="dp-9",
-        evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
+        evidence_slice=EvidenceSlice(action_codes=["approve"]),
         criteria=[CriterionInput(name="Authorized", rule="obj.actor_identity IN ['x']", dimension="people")],
         affirmations=[AffirmationInput(role="Governance Lead", principal="g@x.com", is_approver=True, is_reviewer=False)],
     ))
     db_session.commit()
     run = mgr.compute_dnaco(db_session, rel.id, rows=[{"actor_identity": "x"}])  # one clean row
     db_session.commit()
-    assert run.per_dimension_scores["structural"] == 0.2   # only justification_chain missing
-    assert run.per_dimension_scores["people"] == 0.0       # no divergent rows
-    assert run.magnitude == 0.2
+    assert run.per_dimension_scores["structural"]["magnitude"] == 0.2   # only justification_chain missing
+    assert run.per_dimension_scores["people"]["magnitude"] == 0.0       # no divergent rows
+    assert run.magnitude == 0.0      # the structural completeness doesn't gate the magnitude
 
 
 def test_update_does_not_bump_version(db_session):
@@ -333,7 +349,7 @@ def test_create_new_version_snapshots_definition(db_session):
     into a fresh draft row in the same family, resetting measured/observed state."""
     from src.controller.authority_resolution_manager import AuthorityResolutionManager
     from src.models.authority_resolution import (
-        AuthorityRelationCreate, CriterionInput, AffirmationInput, EvidenceSource,
+        AuthorityRelationCreate, CriterionInput, AffirmationInput, EvidenceSlice,
     )
     from src.db_models.business_owners import BusinessOwnerDb
     from src.db_models.business_roles import BusinessRoleDb
@@ -348,7 +364,7 @@ def test_create_new_version_snapshots_definition(db_session):
     db_session.flush()
     src = mgr.create_relation(db_session, AuthorityRelationCreate(
         name="Versioned AR", object_id="dp-1", domain_ids=[domain.id], primary_domain_id=domain.id,
-        evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
+        evidence_slice=EvidenceSlice(action_codes=["approve"]),
         criteria=[CriterionInput(name="Authorized", rule="obj.actor_identity IN ['rsm-east']",
                                  direction=DIR_ACTUAL_EXCEEDS, weight=1.5, dimension="people")],
         affirmations=[AffirmationInput(role="Governance Lead", principal="g@x.com",
@@ -375,7 +391,7 @@ def test_create_new_version_snapshots_definition(db_session):
     assert v2.base_name == "Versioned AR"
     # Definition copied over.
     assert v2.object_id == "dp-1"
-    assert v2.evidence_sources == src.evidence_sources
+    assert v2.evidence_slice == src.evidence_slice
     # Measured/observed state reset on the new draft.
     assert v2.dna_magnitude is None
     assert v2.usage_count == 0
@@ -458,7 +474,7 @@ def test_authority_maturity_feature_integration(db_session):
     from src.controller.maturity_evaluator import MaturityEvaluator
     from src.controller.authority_resolution_manager import AuthorityResolutionManager
     from src.models.authority_resolution import (
-        AuthorityRelationCreate, EvidenceSource,
+        AuthorityRelationCreate, EvidenceSlice,
     )
 
     # Seed the generic "all" model AND the ARF-specific ladder.
@@ -485,7 +501,7 @@ def test_authority_maturity_feature_integration(db_session):
     # (2) add an object -> L2 Object-Resolved (no evidence/DNA stops it there).
     rel2 = mgr.create_relation(db_session, AuthorityRelationCreate(
         name="AR2", object_id="dp-1",
-        evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
+        evidence_slice=EvidenceSlice(action_codes=["approve"]),
     ))
     db_session.commit()
     mgr.compute_dnaco(db_session, rel2.id, rows=[{"actor_identity": "a", "value": 0.0}])  # measured, no divergence
@@ -524,10 +540,10 @@ async def test_compute_dna_coefficient_tool_by_uuid(db_session, monkeypatch):
     ctx = ToolContext(db=db_session, settings=MagicMock())
     # Patch the tool's module-level manager so it doesn't read a real Delta table.
     import src.tools.authority_resolution as artools
-    monkeypatch.setattr(artools._manager, "_collect_evidence", lambda _rel: [
+    monkeypatch.setattr(artools._manager, "_collect_evidence", lambda *_a, **_k: _sample([
         {"actor_identity": "a", "value": 0.22},   # breaches
         {"actor_identity": "a", "value": 0.10},   # clean
-    ])
+    ]))
 
     result = await tool.execute(ctx, ar_id=rel.id)
     assert result.success is True, result.error
@@ -557,7 +573,7 @@ async def test_compute_dna_coefficient_tool_resolves_slug_and_handles_not_found(
         name="DNAco-tool AR by slug", slug="dnaco-tool-slug",
     ))
     db_session.commit()
-    monkeypatch.setattr(artools._manager, "_collect_evidence", lambda _rel: [{"actor_identity": "a", "value": 0.0}])
+    monkeypatch.setattr(artools._manager, "_collect_evidence", lambda *_a, **_k: _sample([{"actor_identity": "a", "value": 0.0}]))
 
     tool = ComputeDnaCoefficientTool()
     ctx = ToolContext(db=db_session, settings=MagicMock())
@@ -1763,20 +1779,6 @@ def test_empty_evidence_sample_fails_the_run_and_leaves_dna_unmeasured(db_sessio
     assert exc.value.params["reason"] == "not_measured"
 
 
-def test_collect_evidence_keeps_raw_columns_and_applies_aliases(monkeypatch):
-    from types import SimpleNamespace
-    from src.controller.authority_resolution_manager import AuthorityResolutionManager
-
-    mgr = AuthorityResolutionManager()
-    monkeypatch.setattr(mgr, "_read_evidence_rows", lambda binding: [{"approver": "a@x", "budget_usd": 5}])
-    rel = SimpleNamespace(evidence_sources=[{"type": "delta_table", "ref": "c.s.t",
-                                             "column_map": {"actor_identity": "approver"}}],
-                          evidence_binding=None)
-    rows = mgr._collect_evidence(rel)
-    assert rows[0]["actor_identity"] == "a@x"
-    assert rows[0]["budget_usd"] == 5
-
-
 def test_zero_dna_ceiling_is_respected(db_session):
     from src.controller.authority_resolution_manager import AuthorityResolutionManager
     from src.models.authority_resolution import AuthorityRelationCreate, AffirmationInput
@@ -1844,47 +1846,15 @@ def test_editing_a_draft_check_clears_the_measurement_and_the_recompute_scores_t
     rel = mgr.create_relation(db_session, AuthorityRelationCreate(
         name="Draft AR", criteria=[CriterionInput(name="loose", rule="obj.value <= 100")]))
     db_session.commit()
-    monkeypatch.setattr(mgr, "_collect_evidence", lambda _rel: [{"actor_identity": "a", "value": 50}])
+    monkeypatch.setattr(mgr, "_collect_evidence", lambda *_a, **_k: _sample([{"actor_identity": "a", "value": 50}]))
     first = mgr.compute_dnaco(db_session, rel.id)
-    assert first.per_dimension_scores.get("people", 0.0) == 0.0  # the loose rule passes every row
+    assert first.per_dimension_scores.get("people", {}).get("magnitude", 0.0) == 0.0  # the loose rule passes every row
 
     updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(
         criteria=[CriterionInput(name="strict", rule="obj.value <= 10", failure_message="over")]))
     assert updated.dna_magnitude is None
     run = mgr.compute_dnaco(db_session, rel.id)
-    assert run.per_dimension_scores["people"] > 0  # the strict rule diverges on every row
-
-
-@pytest.mark.parametrize("bad", [
-    "1=1 UNION SELECT * FROM secrets.hr.salaries",
-    "x = 1; DROP TABLE t",
-    "x = 1 -- comment",
-    "read_files('/Volumes/x') IS NOT NULL",
-    "x IN (SELECT y FROM other)",
-    "a = 'x\\'' UNION SELECT * FROM other_cat.s.t --'",
-])
-def test_row_filter_rejects_injection(bad):
-    from src.controller.authority_resolution_manager import validate_row_filter
-    with pytest.raises(ValueError):
-        validate_row_filter(bad)
-
-
-def test_row_filter_and_fqn_accept_simple_predicates():
-    from src.controller.authority_resolution_manager import validate_row_filter, validate_table_fqn
-    assert validate_row_filter("region = 'EMEA' AND (amount >= 10 OR flag IS NULL) AND k IN ('a', 'b')")
-    assert validate_table_fqn("demo.commercial.promotion_approvals")
-    with pytest.raises(ValueError):
-        validate_table_fqn("t; DROP TABLE x")
-
-
-def test_evidence_with_bad_filter_rejected_at_write_time(db_session):
-    from src.controller.authority_resolution_manager import AuthorityResolutionManager
-    from src.models.authority_resolution import AuthorityRelationCreate, EvidenceSource
-
-    with pytest.raises(ValueError):
-        AuthorityResolutionManager().create_relation(db_session, AuthorityRelationCreate(
-            name="Inject AR", evidence_sources=[EvidenceSource(
-                ref="c.s.t", row_filter="1=1 UNION SELECT * FROM x")]))
+    assert run.per_dimension_scores["people"]["magnitude"] > 0  # the strict rule diverges on every row
 
 
 def test_delete_protects_family_anchor_moves_slug_and_cleans_up(db_session):

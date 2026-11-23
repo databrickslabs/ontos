@@ -2,12 +2,13 @@
 Authority Relation DNA Recompute Workflow
 
 Recomputes the DNA-Coefficient for every Authority Relation (ARF) that has a
-``schedule_cron`` set. The Databricks job's own schedule drives cadence; when it
-runs, it recomputes all scheduled ARs via the same AuthorityResolutionManager
-routine used by the manual trigger endpoint.
+``schedule_cron`` set and whose cron has fired since its last measurement. The Databricks
+job's own schedule drives cadence; the per-AR cron decides which ARs are due, retired ARs
+are skipped, and the sample is read from the shared ADM schema through the job's SQL
+warehouse. The same AuthorityResolutionManager routine serves the Admin trigger endpoint.
 
 Reuses the Lakebase OAuth + engine helpers from the compliance_checks workflow to
-avoid duplicating the DB-connection boilerplate.
+avoid duplicating the DB-connection boilerplate, and the shared workflow config helper.
 """
 
 import sys
@@ -23,6 +24,7 @@ from databricks.sdk import WorkspaceClient
 
 # Reuse the vetted DB-connection scaffolding from the compliance workflow.
 from src.workflows.compliance_checks.compliance_checks import create_engine_from_params
+from src.common.workflow_config import initialize_application_config
 
 
 def main() -> None:
@@ -36,6 +38,8 @@ def main() -> None:
     parser.add_argument("--postgres_db", type=str, required=True)
     parser.add_argument("--postgres_port", type=str, default="5432")
     parser.add_argument("--postgres_schema", type=str, default="public")
+    # The SQL warehouse the ADM evidence is read through (the shared ADM schema).
+    parser.add_argument("--databricks_warehouse_id", type=str, default="")
     # Telemetry parameters (passed from app)
     parser.add_argument("--product_name", type=str, default="ontos")
     parser.add_argument("--product_version", type=str, default="0.0.0")
@@ -46,6 +50,10 @@ def main() -> None:
     print("\nInitializing workspace client...")
     ws = WorkspaceClient(product=args.product_name, product_version=args.product_version)
     print("  ✓ Workspace client initialized")
+
+    print("\nInitializing application settings...")
+    initialize_application_config(ws, warehouse_id=args.databricks_warehouse_id or None)
+    print("  ✓ Application settings initialized")
 
     print("\nConnecting to database...")
     engine = create_engine_from_params(

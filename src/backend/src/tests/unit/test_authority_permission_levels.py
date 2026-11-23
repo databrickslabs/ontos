@@ -379,7 +379,7 @@ def test_failed_dna_run_stores_a_generic_message(db_session, monkeypatch):
     rel = _make_ar(mgr, db_session, slug="levels-dna-error")
     db_session.commit()
 
-    def warehouse_error(_relation):
+    def warehouse_error(*_args, **_kwargs):
         raise RuntimeError("Table hr.payroll.salaries not found for principal a@example.com")
 
     monkeypatch.setattr(mgr, "_collect_evidence", warehouse_error)
@@ -650,7 +650,7 @@ def test_failed_run_and_its_response_share_one_error_id(db_session, monkeypatch)
     rel = _make_ar(mgr, db_session, slug="fu-dna-id")
     db_session.commit()
 
-    def warehouse_error(_relation):
+    def warehouse_error(*_args, **_kwargs):
         raise RuntimeError("secret table hr.payroll")
 
     monkeypatch.setattr(mgr, "_collect_evidence", warehouse_error)
